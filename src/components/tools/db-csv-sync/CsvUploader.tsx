@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import dynamic from "next/dynamic";
 import { UploadCloud, FileSpreadsheet, Trash2, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
@@ -6,6 +7,11 @@ import { ColumnsList } from "@/components/shared/ColumnsList";
 import { CsvParser } from "@/services/parsers/CsvParser";
 import type { ParsedFileDataset } from "@/types/parsers";
 import styles from "./CsvUploader.module.css";
+
+const SpatialMapPreview = dynamic(
+  () => import("@/components/shared/SpatialMapPreview").then((m) => m.SpatialMapPreview),
+  { ssr: false }
+);
 
 interface CsvUploaderProps {
   onSuccess: (data: ParsedFileDataset) => void;
@@ -186,6 +192,16 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
             columns={data.attributes}
             title="Encabezados / Columnas del Archivo CSV"
           />
+
+          {/* Interactive Spatial Map Preview if CSV contains Geometry (EWKB / WKT / GeoJSON) */}
+          {data.geojson && data.geojson.features && data.geojson.features.length > 0 && (
+            <div className={styles.mapSection}>
+              <SpatialMapPreview
+                geojson={data.geojson}
+                title="VISTA PREVIA ESPACIAL DEL ARCHIVO CSV"
+              />
+            </div>
+          )}
 
           <div className={styles.proceedRow}>
             <Button variant="primary" onClick={() => onSuccess(data)}>

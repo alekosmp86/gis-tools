@@ -233,6 +233,10 @@
   padding-top: 8px;
 }
 
+.mapSection {
+  margin-top: 12px;
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }

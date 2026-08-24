@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import dynamic from "next/dynamic";
 import { UploadCloud, FileCheck, Trash2, ArrowRight, Layers, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
@@ -7,6 +8,11 @@ import { ShapefileParser } from "@/services/parsers/ShapefileParser";
 import type { ShapefileUploaderProps } from "@/types/shp";
 import type { ParsedFileDataset } from "@/types/parsers";
 import styles from "./ShapefileUploader.module.css";
+
+const SpatialMapPreview = dynamic(
+  () => import("@/components/shared/SpatialMapPreview").then((m) => m.SpatialMapPreview),
+  { ssr: false }
+);
 
 export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
   onSuccess,
@@ -183,6 +189,16 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
             columns={data.attributes}
             title="Atributos Encontrados en DBF"
           />
+
+          {/* Interactive Spatial Map Preview if Shapefile/GeoJSON contains geometry */}
+          {data.geojson && data.geojson.features && data.geojson.features.length > 0 && (
+            <div className={styles.mapSection}>
+              <SpatialMapPreview
+                geojson={data.geojson}
+                title="VISTA PREVIA ESPACIAL DE CAPA VECTORIAL"
+              />
+            </div>
+          )}
 
           <div className={styles.proceedRow}>
             <Button variant="primary" onClick={() => onSuccess(data as unknown as import("@/types/shp").ParsedShapefileData)}>
