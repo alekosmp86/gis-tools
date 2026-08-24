@@ -1,18 +1,18 @@
 import React from "react";
-import type { ButtonProps } from "@/types/ui";
+import { ButtonVariant, type ButtonProps } from "@/types/ui";
 import styles from "./Button.module.css";
 
 export const Button: React.FC<ButtonProps> = ({
   children,
-  variant = "primary",
+  variant = ButtonVariant.PRIMARY,
   isDisabled = false,
   className = "",
   ...props
 }) => {
   const variantClass =
-    variant === "primary"
+    variant === ButtonVariant.PRIMARY
       ? styles.primary
-      : variant === "secondary"
+      : variant === ButtonVariant.SECONDARY
       ? styles.secondary
       : styles.ghost;
 

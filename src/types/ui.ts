@@ -17,6 +17,14 @@ export const BadgeVariant = {
 
 export type BadgeVariant = (typeof BadgeVariant)[keyof typeof BadgeVariant];
 
+export const ButtonVariant = {
+  PRIMARY: "primary",
+  SECONDARY: "secondary",
+  GHOST: "ghost",
+} as const;
+
+export type ButtonVariant = (typeof ButtonVariant)[keyof typeof ButtonVariant];
+
 export interface BadgeProps {
   children: React.ReactNode;
   variant?: BadgeVariant;
@@ -25,7 +33,7 @@ export interface BadgeProps {
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: ButtonVariant;
   isDisabled?: boolean;
 }
 
