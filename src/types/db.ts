@@ -8,6 +8,15 @@ export interface DbConfig {
   table_name: string;
 }
 
+export type SafeDbConfig = Omit<DbConfig, "password">;
+
+export interface SavedDbProfile {
+  id: string;
+  name: string;
+  config: SafeDbConfig;
+  updatedAt: number;
+}
+
 export interface DbColumnMetadata {
   column_name: string;
   data_type: string;

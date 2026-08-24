@@ -57,6 +57,59 @@
   font-weight: 500;
 }
 
+.profilesBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(6, 182, 212, 0.05);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  gap: 16px;
+  overflow: hidden;
+}
+
+.profilesLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.profilesControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.profileSelect {
+  flex: 1;
+  min-width: 0;
+  max-width: 520px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(13, 17, 23, 0.8);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 0.85rem;
+  outline: none;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.profileSelect:focus {
+  border-color: var(--accent-cyan);
+}
+
 .inputGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -75,29 +128,37 @@
   gap: 12px;
 }
 
-.checkboxLabel {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.saveSectionTitle {
   font-size: 0.825rem;
+  font-weight: 500;
   color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
 }
 
-.checkboxLabel input[type="checkbox"] {
-  accent-color: var(--accent-cyan);
-  cursor: pointer;
-}
-
-.storageButtons {
+.saveProfileGroup {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.profileNameInput {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(13, 17, 23, 0.8);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 0.8rem;
+  outline: none;
+  min-width: 220px;
+}
+
+.profileNameInput:focus {
+  border-color: var(--accent-cyan);
 }
 
 .deleteBtnText {
   color: var(--accent-rose);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .actionsRow {
@@ -135,5 +196,14 @@
 @media (max-width: 768px) {
   .inputGrid {
     grid-template-columns: 1fr;
+  }
+
+  .profilesControls {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .profileNameInput {
+    min-width: 140px;
   }
 }

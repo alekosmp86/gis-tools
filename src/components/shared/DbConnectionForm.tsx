@@ -1,5 +1,19 @@
 import React from "react";
-import { Database, Server, User, Key, Table, Layers, Loader2, Save, Trash2, ShieldCheck, ArrowRight } from "lucide-react";
+import {
+  Database,
+  Server,
+  User,
+  Key,
+  Table,
+  Layers,
+  Loader2,
+  Save,
+  Trash2,
+  ShieldCheck,
+  ArrowRight,
+  Bookmark,
+  Plus,
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { AlertMessage } from "@/components/shared/AlertMessage";
@@ -15,14 +29,18 @@ export const DbConnectionForm: React.FC<DbConnectionFormProps> = ({ onSuccess })
     columnsLoaded,
     totalRowsLoaded,
     isConnected,
-    hasSavedConfig,
-    autoSave,
+    savedProfiles,
+    activeProfileId,
+    profileNameInput,
     isPending,
-    setAutoSave,
+    setProfileNameInput,
     handleChange,
+    handleSelectProfile,
+    handleResetForm,
     handleConnectAndFetchColumns,
-    handleSaveConfigManual,
-    handleClearSavedConfig,
+    handleSaveNewProfile,
+    handleUpdateActiveProfile,
+    handleDeleteProfile,
     handleProceed,
   } = useDbConnectionForm(onSuccess);
 
@@ -40,14 +58,62 @@ export const DbConnectionForm: React.FC<DbConnectionFormProps> = ({ onSuccess })
             </p>
           </div>
 
-          {hasSavedConfig && (
+          {savedProfiles.length > 0 && (
             <div className={styles.savedNotice}>
               <ShieldCheck size={14} color="var(--accent-emerald)" />
-              <span>Configuración guardada activa</span>
+              <span>{savedProfiles.length} {savedProfiles.length === 1 ? "perfil guardado" : "perfiles guardados"}</span>
             </div>
           )}
         </div>
       </div>
+
+      {/* Profiles Dropdown Bar */}
+      {savedProfiles.length > 0 && (
+        <div className={styles.profilesBar}>
+          <div className={styles.profilesLabel}>
+            <Bookmark size={15} color="var(--accent-cyan)" />
+            <span>Perfiles guardados:</span>
+          </div>
+
+          <div className={styles.profilesControls}>
+            <select
+              value={activeProfileId}
+              onChange={(e) => handleSelectProfile(e.target.value)}
+              className={styles.profileSelect}
+              aria-label="Cargar perfil guardado"
+            >
+              <option value="">➕ Nueva conexión (ingresar datos vacíos)...</option>
+              {savedProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  📌 {profile.name}
+                </option>
+              ))}
+            </select>
+
+            {activeProfileId ? (
+              <Button
+                variant="ghost"
+                onClick={() => handleDeleteProfile(activeProfileId)}
+                type="button"
+                title="Eliminar este perfil de almacenamiento local"
+              >
+                <Trash2 size={15} color="var(--accent-rose)" />
+                <span className={styles.deleteBtnText}>Eliminar perfil</span>
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                onClick={handleResetForm}
+                type="button"
+                title="Limpiar formulario para una nueva conexión"
+              >
+                <Plus size={14} />
+                <span>Limpiar campos</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Inputs Grid */}
       <div className={styles.inputGrid}>
@@ -110,27 +176,29 @@ export const DbConnectionForm: React.FC<DbConnectionFormProps> = ({ onSuccess })
         />
       </div>
 
-      {/* LocalStorage Preference Controls */}
+      {/* Manual Profile Save Bar */}
       <div className={styles.prefRow}>
-        <label className={styles.checkboxLabel}>
-          <input
-            type="checkbox"
-            checked={autoSave}
-            onChange={(e) => setAutoSave(e.target.checked)}
-          />
-          <span>Recordar esta configuración en este equipo (excepto contraseña)</span>
-        </label>
+        <span className={styles.saveSectionTitle}>Guardar perfil en este equipo:</span>
 
-        <div className={styles.storageButtons}>
-          <Button variant="ghost" onClick={handleSaveConfigManual} type="button">
-            <Save size={14} />
-            <span>Guardar ahora</span>
+        <div className={styles.saveProfileGroup}>
+          <input
+            type="text"
+            placeholder="Nombre del perfil (ej. Catastro Local)"
+            value={profileNameInput}
+            onChange={(e) => setProfileNameInput(e.target.value)}
+            className={styles.profileNameInput}
+            aria-label="Nombre del perfil de conexión"
+          />
+
+          <Button variant="ghost" onClick={handleSaveNewProfile} type="button" title="Guardar como un nuevo perfil separado">
+            <Plus size={14} />
+            <span>Guardar como nuevo</span>
           </Button>
 
-          {hasSavedConfig && (
-            <Button variant="ghost" onClick={handleClearSavedConfig} type="button">
-              <Trash2 size={14} color="var(--accent-rose)" />
-              <span className={styles.deleteBtnText}>Borrar guardada</span>
+          {activeProfileId && (
+            <Button variant="ghost" onClick={handleUpdateActiveProfile} type="button" title="Actualizar datos del perfil seleccionado actualmente">
+              <Save size={14} />
+              <span>Actualizar activo</span>
             </Button>
           )}
         </div>

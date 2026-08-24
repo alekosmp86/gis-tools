@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { INITIAL_DB_CONFIG } from "@/data/dbConfigData";
 import { useFetchDbColumns } from "@/hooks/useDbQueries";
 import {
-  saveDbConfigToLocalStorage,
-  loadDbConfigFromLocalStorage,
-  clearDbConfigFromLocalStorage,
+  loadDbProfilesFromLocalStorage,
+  saveDbProfileToLocalStorage,
+  deleteDbProfileFromLocalStorage,
+  generateDefaultProfileName,
 } from "@/services/localStorageDbConfig";
 import { AlertType } from "@/types/ui";
-import type { DbConfig, DbColumnMetadata, DbConnectionFormProps } from "@/types/db";
+import type { DbConfig, DbColumnMetadata, DbConnectionFormProps, SavedDbProfile } from "@/types/db";
 
 export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"]) {
   const [config, setConfig] = useState<DbConfig>(INITIAL_DB_CONFIG);
@@ -19,16 +20,22 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
   const [columnDetailsLoaded, setColumnDetailsLoaded] = useState<DbColumnMetadata[]>([]);
   const [totalRowsLoaded, setTotalRowsLoaded] = useState<number | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [hasSavedConfig, setHasSavedConfig] = useState<boolean>(false);
-  const [autoSave, setAutoSave] = useState(true);
+  const [savedProfiles, setSavedProfiles] = useState<SavedDbProfile[]>([]);
+  const [activeProfileId, setActiveProfileId] = useState<string>("");
+  const [profileNameInput, setProfileNameInput] = useState<string>("");
 
   // Client-side hydration from localStorage post-mount
   useEffect(() => {
-    const saved = loadDbConfigFromLocalStorage();
-    if (saved) {
+    const profiles = loadDbProfilesFromLocalStorage();
+    if (profiles.length > 0) {
       queueMicrotask(() => {
-        setConfig((prev) => ({ ...prev, ...saved, password: "" }));
-        setHasSavedConfig(true);
+        setSavedProfiles(profiles);
+        const first = profiles[0];
+        if (first) {
+          setConfig((prev) => ({ ...prev, ...first.config, password: "" }));
+          setActiveProfileId(first.id);
+          setProfileNameInput(first.name);
+        }
       });
     }
   }, []);
@@ -37,6 +44,37 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
 
   const handleChange = (field: keyof DbConfig, value: string) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
+    setStatusMessage(null);
+    setIsConnected(false);
+    setColumnsLoaded([]);
+    setColumnDetailsLoaded([]);
+    setTotalRowsLoaded(null);
+    // Unbind active profile when user edits form parameters
+    setActiveProfileId("");
+  };
+
+  const handleSelectProfile = (profileId: string) => {
+    if (!profileId) {
+      handleResetForm();
+      return;
+    }
+    const found = savedProfiles.find((p) => p.id === profileId);
+    if (found) {
+      setConfig((prev) => ({ ...prev, ...found.config, password: "" }));
+      setActiveProfileId(found.id);
+      setProfileNameInput(found.name);
+      setStatusMessage(null);
+      setIsConnected(false);
+      setColumnsLoaded([]);
+      setColumnDetailsLoaded([]);
+      setTotalRowsLoaded(null);
+    }
+  };
+
+  const handleResetForm = () => {
+    setConfig(INITIAL_DB_CONFIG);
+    setActiveProfileId("");
+    setProfileNameInput("");
     setStatusMessage(null);
     setIsConnected(false);
     setColumnsLoaded([]);
@@ -63,11 +101,6 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
         setTotalRowsLoaded(data.totalRows);
         setIsConnected(true);
 
-        if (autoSave) {
-          saveDbConfigToLocalStorage(config);
-          setHasSavedConfig(true);
-        }
-
         setStatusMessage({
           type: AlertType.SUCCESS,
           text: `Conexión establecida con éxito. Se encontraron ${data.columns.length} columnas y ${data.totalRows} registros en '${data.schema}.${data.tableName}'.`,
@@ -80,21 +113,57 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
     });
   };
 
-  const handleSaveConfigManual = () => {
-    saveDbConfigToLocalStorage(config);
-    setHasSavedConfig(true);
+  const handleSaveNewProfile = () => {
+    const nameToUse = profileNameInput.trim() || generateDefaultProfileName(config);
+    // Passing undefined forces creation of a brand new profile
+    const updated = saveDbProfileToLocalStorage(config, nameToUse, undefined);
+    setSavedProfiles(updated);
+    const newProf = updated[0];
+    if (newProf) {
+      setActiveProfileId(newProf.id);
+      setProfileNameInput(newProf.name);
+    }
+
     setStatusMessage({
       type: AlertType.SUCCESS,
-      text: "Configuración de conexión guardada en el almacenamiento local (sin contraseña).",
+      text: `Nuevo perfil '${nameToUse}' guardado. Total perfiles guardados: ${updated.length}.`,
     });
   };
 
-  const handleClearSavedConfig = () => {
-    clearDbConfigFromLocalStorage();
-    setHasSavedConfig(false);
+  const handleUpdateActiveProfile = () => {
+    if (!activeProfileId) {
+      handleSaveNewProfile();
+      return;
+    }
+    const nameToUse = profileNameInput.trim() || generateDefaultProfileName(config);
+    const updated = saveDbProfileToLocalStorage(config, nameToUse, activeProfileId);
+    setSavedProfiles(updated);
+
     setStatusMessage({
       type: AlertType.SUCCESS,
-      text: "Configuración guardada eliminada del almacenamiento local.",
+      text: `Perfil '${nameToUse}' actualizado correctamente.`,
+    });
+  };
+
+  const handleDeleteProfile = (profileId: string) => {
+    const target = savedProfiles.find((p) => p.id === profileId);
+    const updated = deleteDbProfileFromLocalStorage(profileId);
+    setSavedProfiles(updated);
+
+    if (activeProfileId === profileId) {
+      const next = updated[0];
+      if (next) {
+        setActiveProfileId(next.id);
+        setConfig((prev) => ({ ...prev, ...next.config, password: "" }));
+        setProfileNameInput(next.name);
+      } else {
+        handleResetForm();
+      }
+    }
+
+    setStatusMessage({
+      type: AlertType.SUCCESS,
+      text: target ? `Perfil '${target.name}' eliminado.` : "Perfil eliminado.",
     });
   };
 
@@ -111,14 +180,18 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
     columnDetailsLoaded,
     totalRowsLoaded,
     isConnected,
-    hasSavedConfig,
-    autoSave,
+    savedProfiles,
+    activeProfileId,
+    profileNameInput,
     isPending: fetchColumnsMutation.isPending,
-    setAutoSave,
+    setProfileNameInput,
     handleChange,
+    handleSelectProfile,
+    handleResetForm,
     handleConnectAndFetchColumns,
-    handleSaveConfigManual,
-    handleClearSavedConfig,
+    handleSaveNewProfile,
+    handleUpdateActiveProfile,
+    handleDeleteProfile,
     handleProceed,
   };
 }
