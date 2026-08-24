@@ -46,6 +46,11 @@
   font-size: 0.95rem;
 }
 
+.progressArea {
+  width: 100%;
+  max-width: 520px;
+}
+
 .resultsContent {
   display: flex;
   flex-direction: column;

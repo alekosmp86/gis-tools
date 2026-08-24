@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, AlertTriangle, Database, Layers, BarChart2 } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Database, Layers, BarChart2, HelpCircle, Copy } from "lucide-react";
 import { DiscrepancyFilter, type DiscrepanciesSummaryBarProps } from "@/types/comparison";
 import styles from "./DiscrepanciesSummaryBar.module.css";
 
@@ -19,16 +19,18 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         className={`${styles.kpiCard} ${activeFilter === DiscrepancyFilter.ALL ? styles.active : ""}`}
       >
         <div className={styles.cardHeader}>
-          <span className={styles.cardTitle}>Total Analizados</span>
+          <span className={styles.cardTitle}>Total Evaluados</span>
           <div className={styles.iconTotal}>
             <BarChart2 size={18} />
           </div>
         </div>
         <div className={styles.cardValue}>{summary.totalAnalyzed.toLocaleString()}</div>
-        <div className={styles.cardSub}>Registros evaluados</div>
+        <div className={styles.cardSub}>
+          DB: {summary.totalDbRecords} | Archivo: {summary.totalFileRecords}
+        </div>
       </div>
 
-      {/* Discrepancies Card */}
+      {/* Attribute Discrepancies Card */}
       <div
         role="button"
         tabIndex={0}
@@ -70,6 +72,46 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         <div className={styles.cardSub}>Registros idénticos</div>
       </div>
 
+      {/* Null SUID Card */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelectFilter(DiscrepancyFilter.NULL_SUID)}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelectFilter(DiscrepancyFilter.NULL_SUID)}
+        className={`${styles.kpiCard} ${activeFilter === DiscrepancyFilter.NULL_SUID ? styles.active : ""}`}
+      >
+        <div className={styles.cardHeader}>
+          <span className={styles.cardTitle}>SUIDs Nulos / Vacíos</span>
+          <div className={styles.iconNull}>
+            <HelpCircle size={18} />
+          </div>
+        </div>
+        <div className={`${styles.cardValue} ${styles.valNull}`}>
+          {summary.nullSuidCount.toLocaleString()}
+        </div>
+        <div className={styles.cardSub}>Sin clave identificadora</div>
+      </div>
+
+      {/* Duplicate SUID Card */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelectFilter(DiscrepancyFilter.DUPLICATE_SUID)}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelectFilter(DiscrepancyFilter.DUPLICATE_SUID)}
+        className={`${styles.kpiCard} ${activeFilter === DiscrepancyFilter.DUPLICATE_SUID ? styles.active : ""}`}
+      >
+        <div className={styles.cardHeader}>
+          <span className={styles.cardTitle}>SUIDs Duplicados</span>
+          <div className={styles.iconDuplicate}>
+            <Copy size={18} />
+          </div>
+        </div>
+        <div className={`${styles.cardValue} ${styles.valDuplicate}`}>
+          {summary.duplicateSuidCount.toLocaleString()}
+        </div>
+        <div className={styles.cardSub}>Claves repetidas encontradas</div>
+      </div>
+
       {/* Only in DB Card */}
       <div
         role="button"
@@ -89,7 +131,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         <div className={`${styles.cardValue} ${styles.valError}`}>
           {summary.onlyInDbCount.toLocaleString()}
         </div>
-        <div className={styles.cardSub}>Faltantes en Shapefile</div>
+        <div className={styles.cardSub}>Faltantes en archivo fuente</div>
       </div>
 
       {/* Only in SHP Card */}
@@ -103,7 +145,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         }`}
       >
         <div className={styles.cardHeader}>
-          <span className={styles.cardTitle}>Solo en Shapefile</span>
+          <span className={styles.cardTitle}>Solo en Archivo Fuente</span>
           <div className={styles.iconShp}>
             <Layers size={18} />
           </div>

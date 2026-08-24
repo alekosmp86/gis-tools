@@ -60,6 +60,14 @@
   color: var(--accent-cyan);
 }
 
+.noteText {
+  font-size: 0.725rem;
+  font-weight: 400;
+  font-family: var(--font-sans, sans-serif);
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
 .fieldNameCell {
   font-family: var(--font-mono);
   font-weight: 600;
@@ -110,4 +118,28 @@
   background: rgba(6, 182, 212, 0.12);
   color: #38bdf8;
   border: 1px solid rgba(6, 182, 212, 0.25);
+}
+
+.badgeNull {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.725rem;
+  font-family: var(--font-mono);
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(167, 139, 250, 0.12);
+  color: #a78bfa;
+  border: 1px solid rgba(167, 139, 250, 0.25);
+}
+
+.badgeDuplicate {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.725rem;
+  font-family: var(--font-mono);
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(251, 146, 60, 0.12);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.25);
 }

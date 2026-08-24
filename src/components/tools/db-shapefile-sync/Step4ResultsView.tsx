@@ -3,15 +3,18 @@ import { Loader2, ArrowLeft, Database, Table, FileCode } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { AlertMessage } from "@/components/shared/AlertMessage";
+import { ProgressBar } from "@/components/shared/ProgressBar";
 import { DiscrepanciesSummaryBar } from "./DiscrepanciesSummaryBar";
 import { DiscrepanciesTable } from "./DiscrepanciesTable";
 import { SqlPatchDrawer } from "./SqlPatchDrawer";
-import { useComparisonQuery } from "@/hooks/useComparisonQuery";
+import { useComparisonProgress } from "@/hooks/useComparisonProgress";
 import { DiscrepancyFilter, ResultsViewTab } from "@/types/comparison";
 import type { ParsedFileDataset } from "@/types/parsers";
 import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
 import type { ColumnMappingConfig } from "@/types/gis";
+import { useQuery } from "@tanstack/react-query";
+import { runDatasetComparison } from "@/services/comparisonEngine";
 import styles from "./Step4ResultsView.module.css";
 
 interface Step4ResultsViewProps {
@@ -27,17 +30,32 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   mappingConfig,
   onBackToMapping,
 }) => {
-  const { data: summary, isLoading: loading, error } = useComparisonQuery(
-    dbConfig,
-    fileDataset,
-    mappingConfig
-  );
+  const { progress, onProgress, resetProgress } = useComparisonProgress();
+
+  const { data: summary, isLoading: loading, error } = useQuery({
+    queryKey: [
+      "datasetComparison",
+      dbConfig.db_name,
+      dbConfig.table_name,
+      fileDataset.fileName,
+      mappingConfig.suidColumn,
+      mappingConfig.fieldsToCompare,
+    ],
+    queryFn: () => {
+      resetProgress();
+      return runDatasetComparison(dbConfig, fileDataset, mappingConfig, onProgress);
+    },
+    enabled: Boolean(dbConfig && fileDataset && mappingConfig),
+  });
 
   const [activeFilter, setActiveFilter] = useState<DiscrepancyFilter>(DiscrepancyFilter.ALL);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeViewTab, setActiveViewTab] = useState<ResultsViewTab>(ResultsViewTab.TABLE);
 
-  const errorMessage = error instanceof Error ? error.message : error ? "Error en el análisis." : null;
+  const errorMessage =
+    error instanceof Error ? error.message : error ? "Error en el análisis." : null;
+
+  const showProgress = loading && progress.phase !== "";
 
   return (
     <div className={`glass-panel ${styles.container}`}>
@@ -48,7 +66,12 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
         <div>
           <h2 className={styles.title}>4. Resultados de Análisis y Discrepancias</h2>
           <p className={styles.subtitle}>
-            Correlación realizada entre la tabla <code>{dbConfig.schema_name}.{dbConfig.table_name}</code> y el archivo <code>{fileDataset.fileName}</code> usando la clave SUID <code>{mappingConfig.suidColumn}</code>.
+            Correlación realizada entre la tabla{" "}
+            <code>
+              {dbConfig.schema_name}.{dbConfig.table_name}
+            </code>{" "}
+            y el archivo <code>{fileDataset.fileName}</code> usando la clave SUID{" "}
+            <code>{mappingConfig.suidColumn}</code>.
           </p>
         </div>
       </div>
@@ -56,8 +79,21 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
       {/* Loading State */}
       {loading && (
         <div className={styles.loadingArea}>
-          <Loader2 size={36} className={styles.spin} />
-          <span>Consultando registros PostGIS y correlacionando atributos contra el archivo...</span>
+          {showProgress ? (
+            <div className={styles.progressArea}>
+              <ProgressBar
+                phase={progress.phase}
+                current={progress.current}
+                total={progress.total}
+                pct={progress.pct}
+              />
+            </div>
+          ) : (
+            <>
+              <Loader2 size={36} className={styles.spin} />
+              <span>Consultando registros PostGIS...</span>
+            </>
+          )}
         </div>
       )}
 
@@ -117,7 +153,8 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
           {/* SQL Patch Script Drawer */}
           {activeViewTab === ResultsViewTab.SQL && (
             <SqlPatchDrawer
-              sqlScript={summary.sqlPatchScript}
+              sqlUpdateScript={summary.sqlUpdateScript}
+              sqlInsertScript={summary.sqlInsertScript}
               tableName={dbConfig.table_name}
             />
           )}

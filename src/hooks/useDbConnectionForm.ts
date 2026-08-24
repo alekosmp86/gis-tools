@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { INITIAL_DB_CONFIG } from "@/data/dbConfigData";
 import { useFetchDbColumns } from "@/hooks/useDbQueries";
 import {
@@ -12,18 +12,7 @@ import type { DbConfig } from "@/types/db";
 export function useDbConnectionForm(
   onSuccess: (config: DbConfig, columns: string[], totalRows: number) => void
 ) {
-  const [config, setConfig] = useState<DbConfig>(() => {
-    const saved = loadDbConfigFromLocalStorage();
-    if (saved) {
-      return {
-        ...INITIAL_DB_CONFIG,
-        ...saved,
-        password: "",
-      };
-    }
-    return INITIAL_DB_CONFIG;
-  });
-
+  const [config, setConfig] = useState<DbConfig>(INITIAL_DB_CONFIG);
   const [statusMessage, setStatusMessage] = useState<{
     type: AlertType;
     text: string;
@@ -31,10 +20,19 @@ export function useDbConnectionForm(
   const [columnsLoaded, setColumnsLoaded] = useState<string[]>([]);
   const [totalRowsLoaded, setTotalRowsLoaded] = useState<number | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [hasSavedConfig, setHasSavedConfig] = useState<boolean>(() => {
-    return loadDbConfigFromLocalStorage() !== null;
-  });
+  const [hasSavedConfig, setHasSavedConfig] = useState<boolean>(false);
   const [autoSave, setAutoSave] = useState(true);
+
+  // Client-side hydration from localStorage post-mount (scheduled asynchronously to avoid cascading render warnings)
+  useEffect(() => {
+    const saved = loadDbConfigFromLocalStorage();
+    if (saved) {
+      queueMicrotask(() => {
+        setConfig((prev) => ({ ...prev, ...saved, password: "" }));
+        setHasSavedConfig(true);
+      });
+    }
+  }, []);
 
   const fetchColumnsMutation = useFetchDbColumns();
 

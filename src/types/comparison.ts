@@ -8,6 +8,8 @@ export const DiscrepancyType = {
   GEOMETRY_MISMATCH: "GEOMETRY_MISMATCH",
   ONLY_IN_DB: "ONLY_IN_DB",
   ONLY_IN_SHP: "ONLY_IN_SHP",
+  NULL_SUID: "NULL_SUID",
+  DUPLICATE_SUID: "DUPLICATE_SUID",
 } as const;
 
 export type DiscrepancyType = (typeof DiscrepancyType)[keyof typeof DiscrepancyType];
@@ -19,6 +21,8 @@ export const DiscrepancyFilter = {
   GEOMETRY_MISMATCH: "GEOMETRY_MISMATCH",
   ONLY_IN_DB: "ONLY_IN_DB",
   ONLY_IN_SHP: "ONLY_IN_SHP",
+  NULL_SUID: "NULL_SUID",
+  DUPLICATE_SUID: "DUPLICATE_SUID",
 } as const;
 
 export type DiscrepancyFilter = (typeof DiscrepancyFilter)[keyof typeof DiscrepancyFilter];
@@ -44,17 +48,25 @@ export interface DiscrepancyItem {
   dbRecord?: Record<string, unknown>;
   shpFeatureProps?: Record<string, unknown>;
   shpGeometry?: unknown;
+  note?: string;
 }
 
 export interface ComparisonSummary {
+  totalDbRecords: number;
+  totalFileRecords: number;
   totalAnalyzed: number;
   exactMatchesCount: number;
   attributeMismatchCount: number;
   geometryMismatchCount: number;
   onlyInDbCount: number;
   onlyInShpCount: number;
+  nullSuidCount: number;
+  duplicateSuidCount: number;
   items: DiscrepancyItem[];
-  sqlPatchScript: string;
+  /** UPDATE statements for attribute mismatches (records exist in both but differ) */
+  sqlUpdateScript: string;
+  /** INSERT statements for records present only in the file source (missing from DB) */
+  sqlInsertScript: string;
 }
 
 export interface IComparisonEngine {
@@ -79,6 +91,7 @@ export interface DiscrepanciesTableProps {
 }
 
 export interface SqlPatchDrawerProps {
-  sqlScript: string;
+  sqlUpdateScript: string;
+  sqlInsertScript: string;
   tableName: string;
 }

@@ -1,6 +1,6 @@
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
 }
 
@@ -8,7 +8,7 @@
   background: rgba(9, 13, 22, 0.6);
   border: 1px solid var(--border-color);
   border-radius: 14px;
-  padding: 20px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -34,7 +34,7 @@
 }
 
 .cardTitle {
-  font-size: 0.8rem;
+  font-size: 0.775rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -53,6 +53,14 @@
   color: #34d399;
 }
 
+.iconNull {
+  color: #a78bfa;
+}
+
+.iconDuplicate {
+  color: #fb923c;
+}
+
 .iconDb {
   color: #fb7185;
 }
@@ -62,7 +70,7 @@
 }
 
 .cardValue {
-  font-size: 1.8rem;
+  font-size: 1.7rem;
   font-weight: 800;
   font-family: var(--font-mono);
   color: var(--text-main);
@@ -76,6 +84,14 @@
   color: #fbbf24;
 }
 
+.valNull {
+  color: #a78bfa;
+}
+
+.valDuplicate {
+  color: #fb923c;
+}
+
 .valError {
   color: #fb7185;
 }
@@ -85,6 +101,6 @@
 }
 
 .cardSub {
-  font-size: 0.775rem;
+  font-size: 0.75rem;
   color: var(--text-dim);
 }

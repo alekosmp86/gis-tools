@@ -16,6 +16,7 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
       const matchesSearch =
         searchQuery === "" ||
         item.suid.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.note && item.note.toLowerCase().includes(searchQuery.toLowerCase())) ||
         item.differences.some(
           (d) =>
             d.fieldName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -32,10 +33,14 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
         return <Badge variant={BadgeVariant.ACTIVE}>Coincidencia Exacta</Badge>;
       case DiscrepancyType.ATTRIBUTE_MISMATCH:
         return <Badge variant={BadgeVariant.DEV}>Discrepancia Atributos</Badge>;
+      case DiscrepancyType.NULL_SUID:
+        return <span className={styles.badgeNull}>SUID Nulo / Vacío</span>;
+      case DiscrepancyType.DUPLICATE_SUID:
+        return <span className={styles.badgeDuplicate}>SUID Duplicado</span>;
       case DiscrepancyType.ONLY_IN_DB:
         return <span className={styles.badgeDb}>Solo en DB</span>;
       case DiscrepancyType.ONLY_IN_SHP:
-        return <span className={styles.badgeShp}>Solo en SHP</span>;
+        return <span className={styles.badgeShp}>Solo en Archivo</span>;
       default:
         return null;
     }
@@ -57,7 +62,7 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
               <th>Estado de Coincidencia</th>
               <th>Campo / Atributo</th>
               <th>Valor Base de Datos (PostGIS)</th>
-              <th>Valor Shapefile (DBF)</th>
+              <th>Valor Archivo Fuente</th>
             </tr>
           </thead>
           <tbody>
@@ -72,7 +77,10 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
                 if (item.differences.length === 0) {
                   return [
                     <tr key={item.id}>
-                      <td className={styles.suidCell}>{item.suid}</td>
+                      <td className={styles.suidCell}>
+                        {item.suid}
+                        {item.note && <div className={styles.noteText}>{item.note}</div>}
+                      </td>
                       <td>{renderTypeBadge(item.type)}</td>
                       <td className={styles.dimText}>--</td>
                       <td className={styles.dimText}>--</td>
@@ -86,6 +94,7 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
                     {idx === 0 && (
                       <td rowSpan={item.differences.length} className={styles.suidCell}>
                         {item.suid}
+                        {item.note && <div className={styles.noteText}>{item.note}</div>}
                       </td>
                     )}
                     {idx === 0 && (
