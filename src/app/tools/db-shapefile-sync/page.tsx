@@ -9,6 +9,7 @@ import { StepIndicator } from "@/components/shared/StepIndicator";
 import { DbConnectionForm } from "@/components/tools/db-shapefile-sync/DbConnectionForm";
 import { ShapefileUploader } from "@/components/tools/db-shapefile-sync/ShapefileUploader";
 import { SuidMappingStep } from "@/components/tools/db-shapefile-sync/SuidMappingStep";
+import { Step4ResultsView } from "@/components/tools/db-shapefile-sync/Step4ResultsView";
 import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
 import type { ColumnMappingConfig } from "@/types/gis";
@@ -98,17 +99,14 @@ export default function DbShapefileSyncToolPage() {
           />
         )}
 
-        {/* Step 4 Placeholder: Results & Analysis */}
-        {currentStep === 4 && (
-          <div className={`glass-panel ${styles.placeholderCard}`}>
-            <h2 className={styles.placeholderTitle}>Paso 4: Resultados y Discrepancias</h2>
-            <p className={styles.placeholderText}>
-              Base de datos: <strong>{dbConfig?.db_name}</strong> (Tabla: <code>{dbConfig?.table_name}</code>) <br />
-              SUID Mapeado: <code>{mappingConfig?.suidColumn}</code> &rarr; <code>{mappingConfig?.matchedShpSuidColumn}</code> <br />
-              Atributos a comparar ({mappingConfig?.fieldsToCompare.length}): {mappingConfig?.fieldsToCompare.join(", ")} <br />
-              Comparación Geométrica Topológica: {mappingConfig?.compareGeometry ? "Activada" : "Desactivada"}
-            </p>
-          </div>
+        {/* Step 4: Full Comparison Results & SQL Patch Export */}
+        {currentStep === 4 && dbConfig && shapefileData && mappingConfig && (
+          <Step4ResultsView
+            dbConfig={dbConfig}
+            shapefileData={shapefileData}
+            mappingConfig={mappingConfig}
+            onBackToMapping={() => setCurrentStep(3)}
+          />
         )}
       </main>
 
