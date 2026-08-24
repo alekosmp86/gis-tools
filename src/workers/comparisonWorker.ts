@@ -208,14 +208,12 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
     processedSuids.add(suidKey);
     const fileRecList = fileSuidMap.get(suidKey) ?? [];
     const isDuplicate = dbRecList.length > 1 || fileRecList.length > 1;
-    if (isDuplicate) duplicateSuidCount += Math.max(dbRecList.length, fileRecList.length);
 
     dbRecList.forEach((dbRec, dbIdx) => {
       const fileRec = fileRecList[dbIdx] ?? fileRecList[0];
       const rawSuid = buildCompositeRawSuid(dbRec, dbSuidCols) || suidKey;
 
       if (!fileRec) {
-        onlyInDbCount++;
         const differences: AttributeDifference[] = [];
         fieldsToCompare.forEach((field) => {
           const dbVal = dbRec[field] !== undefined ? dbRec[field] : null;
@@ -228,10 +226,17 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
           }
         });
 
+        const resolvedType = isDuplicate ? DiscrepancyType.DUPLICATE_SUID : DiscrepancyType.ONLY_IN_DB;
+        if (resolvedType === DiscrepancyType.DUPLICATE_SUID) {
+          duplicateSuidCount++;
+        } else {
+          onlyInDbCount++;
+        }
+
         discrepancyItems.push({
           id: `db-${suidKey}-${dbIdx}`,
           suid: rawSuid,
-          type: isDuplicate ? DiscrepancyType.DUPLICATE_SUID : DiscrepancyType.ONLY_IN_DB,
+          type: resolvedType,
           differences,
           dbRecord: dbRec,
           note: isDuplicate ? `SUID Duplicado (Ocurrencia #${dbIdx + 1} en DB)` : undefined,
@@ -253,14 +258,16 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
             shpValue: fileVal as string | number | null,
           });
 
-          // Build multi-column WHERE clause for composite SUID
-          const whereClause = dbSuidCols
-            .map((col) => `"${col}" = ${toSqlValue(dbRec[col])}`)
-            .join(" AND ");
+          // Build multi-column WHERE clause for composite SUID (only for unique attribute mismatches)
+          if (!isDuplicate) {
+            const whereClause = dbSuidCols
+              .map((col) => `"${col}" = ${toSqlValue(dbRec[col])}`)
+              .join(" AND ");
 
-          updateStatements.push(
-            `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal)} WHERE ${whereClause};`
-          );
+            updateStatements.push(
+              `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal)} WHERE ${whereClause};`
+            );
+          }
         }
       });
 
@@ -270,8 +277,13 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
           ? DiscrepancyType.ATTRIBUTE_MISMATCH
           : DiscrepancyType.MATCH;
 
-      if (differences.length > 0) attributeMismatchCount++;
-      else exactMatchesCount++;
+      if (resolvedType === DiscrepancyType.DUPLICATE_SUID) {
+        duplicateSuidCount++;
+      } else if (resolvedType === DiscrepancyType.ATTRIBUTE_MISMATCH) {
+        attributeMismatchCount++;
+      } else {
+        exactMatchesCount++;
+      }
 
       discrepancyItems.push({
         id: `${differences.length > 0 ? "mismatch" : "match"}-${suidKey}-${dbIdx}`,

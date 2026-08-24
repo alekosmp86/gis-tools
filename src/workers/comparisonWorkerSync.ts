@@ -178,14 +178,12 @@ export async function runComparisonSync(
     processedSuids.add(suidKey);
     const fileRecList = fileSuidMap.get(suidKey) ?? [];
     const isDuplicate = dbRecList.length > 1 || fileRecList.length > 1;
-    if (isDuplicate) duplicateSuidCount += Math.max(dbRecList.length, fileRecList.length);
 
     dbRecList.forEach((dbRec, dbIdx) => {
       const fileRec = fileRecList[dbIdx] ?? fileRecList[0];
       const rawSuid = buildCompositeRawSuid(dbRec, dbSuidCols) || suidKey;
 
       if (!fileRec) {
-        onlyInDbCount++;
         const differences: AttributeDifference[] = [];
         fieldsToCompare.forEach((field) => {
           const dbVal = dbRec[field] !== undefined ? dbRec[field] : null;
@@ -193,7 +191,22 @@ export async function runComparisonSync(
             differences.push({ fieldName: field, dbValue: dbVal as string | number | null, shpValue: null });
           }
         });
-        discrepancyItems.push({ id: `db-${suidKey}-${dbIdx}`, suid: rawSuid, type: isDuplicate ? DiscrepancyType.DUPLICATE_SUID : DiscrepancyType.ONLY_IN_DB, differences, dbRecord: dbRec, note: isDuplicate ? `SUID Duplicado (Ocurrencia #${dbIdx + 1} en DB)` : undefined });
+
+        const resolvedType = isDuplicate ? DiscrepancyType.DUPLICATE_SUID : DiscrepancyType.ONLY_IN_DB;
+        if (resolvedType === DiscrepancyType.DUPLICATE_SUID) {
+          duplicateSuidCount++;
+        } else {
+          onlyInDbCount++;
+        }
+
+        discrepancyItems.push({
+          id: `db-${suidKey}-${dbIdx}`,
+          suid: rawSuid,
+          type: resolvedType,
+          differences,
+          dbRecord: dbRec,
+          note: isDuplicate ? `SUID Duplicado (Ocurrencia #${dbIdx + 1} en DB)` : undefined,
+        });
         return;
       }
 
@@ -204,14 +217,26 @@ export async function runComparisonSync(
         const fileVal = fileKey != null ? fileRec[fileKey] : null;
         if (cleanValue(dbVal) !== cleanValue(fileVal)) {
           differences.push({ fieldName: field, dbValue: dbVal as string | number | null, shpValue: fileVal as string | number | null });
-          const whereClause = dbSuidCols.map((col) => `"${col}" = ${toSqlValue(dbRec[col])}`).join(" AND ");
-          updateStatements.push(`UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal)} WHERE ${whereClause};`);
+          if (!isDuplicate) {
+            const whereClause = dbSuidCols.map((col) => `"${col}" = ${toSqlValue(dbRec[col])}`).join(" AND ");
+            updateStatements.push(`UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal)} WHERE ${whereClause};`);
+          }
         }
       });
 
-      const resolvedType = isDuplicate ? DiscrepancyType.DUPLICATE_SUID : differences.length > 0 ? DiscrepancyType.ATTRIBUTE_MISMATCH : DiscrepancyType.MATCH;
-      if (differences.length > 0) attributeMismatchCount++;
-      else exactMatchesCount++;
+      const resolvedType = isDuplicate
+        ? DiscrepancyType.DUPLICATE_SUID
+        : differences.length > 0
+          ? DiscrepancyType.ATTRIBUTE_MISMATCH
+          : DiscrepancyType.MATCH;
+
+      if (resolvedType === DiscrepancyType.DUPLICATE_SUID) {
+        duplicateSuidCount++;
+      } else if (resolvedType === DiscrepancyType.ATTRIBUTE_MISMATCH) {
+        attributeMismatchCount++;
+      } else {
+        exactMatchesCount++;
+      }
 
       discrepancyItems.push({
         id: `${differences.length > 0 ? "mismatch" : "match"}-${suidKey}-${dbIdx}`,
