@@ -79,7 +79,12 @@ export default function DbCsvSyncToolPage() {
         </div>
 
         {/* 4-Step Wizard Indicator */}
-        <StepIndicator currentStep={currentStep} onStepClick={handleStepClick} />
+        <StepIndicator
+          currentStep={currentStep}
+          fileStepTitle="Archivo CSV"
+          fileStepSubtitle="Cargar Archivo (.csv)"
+          onStepClick={handleStepClick}
+        />
 
         {/* Step 1: Database Connection & Introspection */}
         {currentStep === 1 && (

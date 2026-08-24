@@ -1,21 +1,28 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Check } from "lucide-react";
-import { WIZARD_STEPS } from "@/data/wizardStepsData";
+import { getWizardSteps } from "@/data/wizardStepsData";
 import type { StepIndicatorProps } from "@/types/gis";
 import styles from "./StepIndicator.module.css";
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({
   currentStep,
+  fileStepTitle,
+  fileStepSubtitle,
   onStepClick,
 }) => {
+  const steps = useMemo(
+    () => getWizardSteps(fileStepTitle, fileStepSubtitle),
+    [fileStepTitle, fileStepSubtitle]
+  );
+
   return (
     <div className={styles.stepperContainer}>
-      {WIZARD_STEPS.map((step, index) => {
+      {steps.map((step, index) => {
         const IconComponent = step.icon;
         const isCompleted = currentStep > step.id;
         const isActive = currentStep === step.id;
         const isClickable = Boolean(onStepClick && step.id < currentStep);
-        const isNotLast = index < WIZARD_STEPS.length - 1;
+        const isNotLast = index < steps.length - 1;
 
         const handleKeyDown = (e: React.KeyboardEvent) => {
           if (isClickable && onStepClick && (e.key === "Enter" || e.key === " ")) {

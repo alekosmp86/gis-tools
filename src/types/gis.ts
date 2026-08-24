@@ -20,6 +20,8 @@ export interface StepItemData {
 
 export interface StepIndicatorProps {
   currentStep: number;
+  fileStepTitle?: string;
+  fileStepSubtitle?: string;
   onStepClick?: (stepId: number) => void;
 }
 
