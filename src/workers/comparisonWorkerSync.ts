@@ -50,10 +50,10 @@ export async function runComparisonSync(
   onProgress?: ProgressCallback
 ): Promise<ComparisonSummary> {
   const { dbRecords, fileDataset, mappingConfig, dbSchemaName, dbTableName } = payload;
-  const { suidColumns, matchedShpSuidColumns, fieldsToCompare, insertDefaults } = mappingConfig;
+  const { suidColumns, matchedFileSuidColumns, fieldsToCompare, insertDefaults } = mappingConfig;
 
   const dbSuidCols = suidColumns || [];
-  const targetFileSuidCols = matchedShpSuidColumns || [];
+  const targetFileSuidCols = matchedFileSuidColumns || [];
 
   const emit = (phase: string, current: number, total: number) =>
     onProgress?.(phase, current, total);
@@ -136,16 +136,23 @@ export async function runComparisonSync(
   }
   emit("Indexando archivo fuente", totalFileRecords, totalFileRecords);
 
-  // Phase 3 — Pre-compute field key map
+  // Phase 3: Pre-compute field -> file column key map
   const firstFileRecord: Record<string, unknown> =
     (fileSuidMap.values().next().value as Array<Record<string, unknown>> | undefined)?.[0] ??
     fileNullRecords[0] ??
     {};
+
   const fieldToFileKey = new Map<string, string | null>();
   fieldsToCompare.forEach((field) => {
-    const fl = field.toLowerCase();
+    if (mappingConfig.attributeMap && mappingConfig.attributeMap[field]) {
+      fieldToFileKey.set(field, mappingConfig.attributeMap[field]);
+      return;
+    }
+
+    const fieldLower = field.toLowerCase();
+    const field10 = fieldLower.slice(0, 10);
     const match = Object.keys(firstFileRecord).find(
-      (k) => k.toLowerCase() === fl || k.toLowerCase() === fl.slice(0, 10)
+      (k) => k.toLowerCase() === fieldLower || k.toLowerCase() === field10
     );
     fieldToFileKey.set(field, match ?? null);
   });

@@ -3,11 +3,11 @@ import type { ColumnMappingConfig, InsertFieldDefault } from "@/types/gis";
 
 export function useSuidMappingForm(
   dbColumns: string[],
-  shpAttributes: string[],
+  fileAttributes: string[],
   onSuccess: (mappingConfig: ColumnMappingConfig) => void,
   initialConfig?: ColumnMappingConfig | null
 ) {
-  // Filter out geometry columns from SUID selection
+  // Allow all non-geometry columns OR geometry columns for SUID/Attribute selection
   const selectableColumns = useMemo(() => {
     return dbColumns.filter(
       (col) => !["geom", "geometry", "wkb_geometry"].includes(col.toLowerCase())
@@ -33,34 +33,77 @@ export function useSuidMappingForm(
     initialConfig?.insertDefaults || {}
   );
 
-  // Pre-index Shapefile attributes in a Map for fast O(1) lookups
-  const shpAttrMap = useMemo(() => {
+  // Pre-index source file attributes in a Map for fast O(1) lookups
+  const fileAttrMap = useMemo(() => {
     const map = new Map<string, string>();
-    shpAttributes.forEach((attr) => {
+    fileAttributes.forEach((attr) => {
       map.set(attr.toLowerCase(), attr);
     });
     return map;
-  }, [shpAttributes]);
+  }, [fileAttributes]);
 
-  // Match selected DB SUID columns to Shapefile attributes
-  const matchedShpSuids = useMemo(() => {
+  // Explicit 1-to-1 DB Column -> File Attribute mapping
+  const [customAttributeMap, setCustomAttributeMap] = useState<Record<string, string>>(
+    initialConfig?.attributeMap || {}
+  );
+
+  // Compute resolved attribute map (custom or auto-detected)
+  const attributeMap = useMemo(() => {
+    const map: Record<string, string> = { ...customAttributeMap };
+
+    dbColumns.forEach((dbCol) => {
+      if (map[dbCol] !== undefined) return; // Keep user custom override
+
+      const targetLower = dbCol.toLowerCase();
+      const target10Lower = targetLower.slice(0, 10);
+
+      const matchExact = fileAttrMap.get(targetLower);
+      if (matchExact) {
+        map[dbCol] = matchExact;
+        return;
+      }
+
+      const matchTruncated = fileAttrMap.get(target10Lower);
+      if (matchTruncated) {
+        map[dbCol] = matchTruncated;
+        return;
+      }
+
+      // Check common spatial name aliases (geom vs geom_wkb, geometry vs wkb_geometry)
+      if (targetLower.includes("geom")) {
+        const fileGeom = fileAttributes.find((attr) => attr.toLowerCase().includes("geom"));
+        if (fileGeom) {
+          map[dbCol] = fileGeom;
+          return;
+        }
+      }
+
+      map[dbCol] = ""; // Unmapped
+    });
+
+    return map;
+  }, [dbColumns, customAttributeMap, fileAttrMap, fileAttributes]);
+
+  // Match selected DB SUID columns to source file attributes
+  const matchedFileSuids = useMemo(() => {
     return selectedSuids.map((suidCol) => {
+      if (attributeMap[suidCol]) return attributeMap[suidCol];
       const targetLower = suidCol.toLowerCase();
       const target10Lower = targetLower.slice(0, 10);
 
-      const matchExact = shpAttrMap.get(targetLower);
+      const matchExact = fileAttrMap.get(targetLower);
       if (matchExact) return matchExact;
 
-      const matchTruncated = shpAttrMap.get(target10Lower);
+      const matchTruncated = fileAttrMap.get(target10Lower);
       return matchTruncated || "";
     });
-  }, [selectedSuids, shpAttrMap]);
+  }, [selectedSuids, attributeMap, fileAttrMap]);
 
-  // Filter out selected SUID columns from available comparison fields
+  // Filter out selected SUID columns from available comparison fields (allow all DB columns)
   const availableCompareFields = useMemo(() => {
     const suidSet = new Set(selectedSuids);
-    return selectableColumns.filter((col) => !suidSet.has(col));
-  }, [selectableColumns, selectedSuids]);
+    return dbColumns.filter((col) => !suidSet.has(col));
+  }, [dbColumns, selectedSuids]);
 
   // Unmapped DB columns (columns not chosen as SUID or comparison attributes)
   const unmappedDbColumns = useMemo(() => {
@@ -73,7 +116,6 @@ export function useSuidMappingForm(
   const toggleSuidColumn = (col: string) => {
     setSelectedSuids((prev) => {
       if (prev.includes(col)) {
-        // Don't allow deselecting the last remaining SUID column
         if (prev.length <= 1) return prev;
         return prev.filter((c) => c !== col);
       }
@@ -85,6 +127,13 @@ export function useSuidMappingForm(
     setSelectedFields((prev) =>
       prev.includes(field) ? prev.filter((f) => f !== field) : [...prev, field]
     );
+  };
+
+  const handleMapField = (dbCol: string, fileAttr: string) => {
+    setCustomAttributeMap((prev) => ({
+      ...prev,
+      [dbCol]: fileAttr,
+    }));
   };
 
   const selectAllFields = () => {
@@ -107,8 +156,9 @@ export function useSuidMappingForm(
 
     const config: ColumnMappingConfig = {
       suidColumns: selectedSuids,
-      matchedShpSuidColumns: matchedShpSuids,
+      matchedFileSuidColumns: matchedFileSuids,
       fieldsToCompare: selectedFields,
+      attributeMap,
       compareGeometry,
       insertDefaults,
     };
@@ -118,16 +168,18 @@ export function useSuidMappingForm(
   return {
     selectableColumns,
     selectedSuids,
-    matchedShpSuids,
+    matchedFileSuids,
     availableCompareFields,
     selectedFields,
+    attributeMap,
     compareGeometry,
     unmappedDbColumns,
     insertDefaults,
-    shpAttrMap,
+    fileAttrMap,
     toggleSuidColumn,
     setCompareGeometry,
     toggleField,
+    handleMapField,
     selectAllFields,
     clearAllFields,
     handleUpdateInsertDefault,

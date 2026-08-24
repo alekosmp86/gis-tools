@@ -66,10 +66,10 @@ self.onmessage = (event: MessageEvent<WorkerInputMessage>) => {
 
 function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummary {
   const { dbRecords, fileDataset, mappingConfig, dbSchemaName, dbTableName } = payload;
-  const { suidColumns, matchedShpSuidColumns, fieldsToCompare, insertDefaults } = mappingConfig;
+  const { suidColumns, matchedFileSuidColumns, fieldsToCompare, insertDefaults } = mappingConfig;
 
   const dbSuidCols = suidColumns || [];
-  const targetFileSuidCols = matchedShpSuidColumns || [];
+  const targetFileSuidCols = matchedFileSuidColumns || [];
 
   const totalDbRecords = dbRecords.length;
   const shpFeatures = (fileDataset.geojson as { features?: unknown[] } | undefined)?.features ?? [];
@@ -160,6 +160,11 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
 
   const fieldToFileKey = new Map<string, string | null>();
   fieldsToCompare.forEach((field) => {
+    if (mappingConfig.attributeMap && mappingConfig.attributeMap[field]) {
+      fieldToFileKey.set(field, mappingConfig.attributeMap[field]);
+      return;
+    }
+
     const fieldLower = field.toLowerCase();
     const field10 = fieldLower.slice(0, 10);
     const match = Object.keys(firstFileRecord).find(

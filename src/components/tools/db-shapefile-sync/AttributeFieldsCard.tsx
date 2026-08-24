@@ -1,13 +1,15 @@
 import React, { useMemo } from "react";
-import { ArrowRight, AlertTriangle } from "lucide-react";
+import { ArrowRight, AlertTriangle, Link2, Check } from "lucide-react";
 import type { AttributeFieldsCardProps } from "@/types/gis";
 import styles from "./AttributeFieldsCard.module.css";
 
 export const AttributeFieldsCard: React.FC<AttributeFieldsCardProps> = ({
   availableFields,
   selectedFields,
-  shpAttrMap,
+  attributeMap,
+  fileAttributes,
   onToggleField,
+  onMapField,
   onSelectAll,
   onClearAll,
 }) => {
@@ -19,7 +21,7 @@ export const AttributeFieldsCard: React.FC<AttributeFieldsCardProps> = ({
         <div className={styles.sectionTitleRow}>
           <span className={styles.sectionBadge}>2</span>
           <h3 className={styles.sectionTitle}>
-            Atributos Alfanuméricos a Comparar ({selectedFields.length} seleccionados)
+            Atributos a Comparar y Mapeo 1-a-1 ({selectedFields.length} seleccionados)
           </h3>
         </div>
 
@@ -35,43 +37,77 @@ export const AttributeFieldsCard: React.FC<AttributeFieldsCardProps> = ({
       </div>
 
       <p className={styles.sectionDesc}>
-        Marque los campos que desea comparar valor por valor entre la base de datos y el archivo Shapefile.
+        Marque las columnas de la base de datos que desea comparar y asigne la columna correspondiente del archivo fuente (CSV o Shapefile).
       </p>
 
-      <div className={styles.fieldsGrid}>
-        {availableFields.map((field) => {
-          const isChecked = selectedFieldsSet.has(field);
-          const targetLower = field.toLowerCase();
-          const target10Lower = targetLower.slice(0, 10);
-          const matchedShpCol = shpAttrMap.get(targetLower) || shpAttrMap.get(target10Lower);
+      <div className={styles.mappingList}>
+        {availableFields.map((dbField) => {
+          const isChecked = selectedFieldsSet.has(dbField);
+          const mappedFileAttr = attributeMap[dbField] || "";
+          const isMapped = Boolean(mappedFileAttr);
 
           return (
-            <label
-              key={field}
-              className={`${styles.fieldCard} ${isChecked ? styles.fieldCardActive : ""}`}
+            <div
+              key={dbField}
+              className={`${styles.mappingRow} ${isChecked ? styles.mappingRowActive : ""}`}
             >
-              <input
-                type="checkbox"
-                checked={isChecked}
-                onChange={() => onToggleField(field)}
-              />
-              <div className={styles.fieldInfo}>
-                <span className={styles.fieldName}>{field}</span>
-                <span className={styles.fieldMatch}>
-                  {matchedShpCol ? (
-                    <span className={styles.matchTag}>
-                      <ArrowRight size={12} />
-                      <span>SHP: {matchedShpCol}</span>
-                    </span>
-                  ) : (
-                    <span className={styles.noMatchTag}>
-                      <AlertTriangle size={12} />
-                      <span>Sin campo SHP directo</span>
-                    </span>
-                  )}
-                </span>
+              {/* Checkbox and DB Column Name */}
+              <div className={styles.dbColumnCol}>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => onToggleField(dbField)}
+                    className={styles.checkbox}
+                  />
+                  <span className={styles.dbFieldName}>{dbField}</span>
+                </label>
               </div>
-            </label>
+
+              {/* Arrow Indicator */}
+              <div className={styles.arrowCol}>
+                <ArrowRight size={16} className={isChecked ? styles.arrowActive : styles.arrowDim} />
+              </div>
+
+              {/* Source File Attribute Select Dropdown */}
+              <div className={styles.fileAttrCol}>
+                <div className={styles.selectWrapper}>
+                  <select
+                    value={mappedFileAttr}
+                    onChange={(e) => onMapField(dbField, e.target.value)}
+                    disabled={!isChecked}
+                    className={`${styles.attrSelect} ${!isMapped ? styles.attrSelectUnmapped : ""}`}
+                  >
+                    <option value="">-- Sin mapear --</option>
+                    {fileAttributes.map((attr) => (
+                      <option key={attr} value={attr}>
+                        {attr}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Mapping Status Badge */}
+              <div className={styles.statusCol}>
+                {isChecked && isMapped ? (
+                  <span className={styles.mappedBadge}>
+                    <Check size={13} />
+                    <span>Mapeado ({mappedFileAttr})</span>
+                  </span>
+                ) : isChecked ? (
+                  <span className={styles.unmappedBadge}>
+                    <AlertTriangle size={13} />
+                    <span>Seleccione campo fuente</span>
+                  </span>
+                ) : (
+                  <span className={styles.ignoredBadge}>
+                    <Link2 size={13} />
+                    <span>No comparado</span>
+                  </span>
+                )}
+              </div>
+            </div>
           );
         })}
       </div>

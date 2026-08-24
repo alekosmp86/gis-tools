@@ -73,67 +73,142 @@
   text-decoration: underline;
 }
 
-.fieldsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+.mappingList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.fieldCard {
+.mappingRow {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
+  align-items: center;
+  padding: 10px 14px;
   border-radius: 10px;
-  background: rgba(9, 13, 22, 0.5);
+  background: rgba(9, 13, 22, 0.4);
   border: 1px solid var(--border-color);
-  cursor: pointer;
+  gap: 16px;
   transition: all 0.2s ease;
 }
 
-.fieldCard:hover {
-  border-color: rgba(6, 182, 212, 0.4);
+.mappingRowActive {
+  background: rgba(6, 182, 212, 0.05);
+  border-color: rgba(6, 182, 212, 0.3);
 }
 
-.fieldCardActive {
-  background: rgba(6, 182, 212, 0.08);
-  border-color: var(--accent-cyan);
+.dbColumnCol {
+  flex: 1;
+  min-width: 180px;
 }
 
-.fieldCard input[type="checkbox"] {
-  accent-color: var(--accent-cyan);
-  margin-top: 3px;
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   cursor: pointer;
 }
 
-.fieldInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.checkbox {
+  accent-color: var(--accent-cyan);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 
-.fieldName {
+.dbFieldName {
   font-size: 0.875rem;
   font-weight: 600;
   font-family: var(--font-mono);
   color: var(--text-main);
 }
 
-.fieldMatch {
-  font-size: 0.75rem;
-  color: var(--text-dim);
-}
-
-.matchTag {
+.arrowCol {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+}
+
+.arrowActive {
   color: var(--accent-cyan);
 }
 
-.noMatchTag {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.arrowDim {
+  color: var(--text-dim);
+  opacity: 0.4;
+}
+
+.fileAttrCol {
+  flex: 1;
+  min-width: 200px;
+}
+
+.selectWrapper {
+  width: 100%;
+}
+
+.attrSelect {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: var(--text-main);
+  font-size: 0.825rem;
+  font-family: var(--font-mono);
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.attrSelect:focus {
+  border-color: var(--accent-cyan);
+}
+
+.attrSelect:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.attrSelectUnmapped {
+  border-color: rgba(251, 191, 36, 0.5);
   color: #fbbf24;
+}
+
+.statusCol {
+  min-width: 190px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mappedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.unmappedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.ignoredBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
 }

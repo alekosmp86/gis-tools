@@ -11,7 +11,7 @@ import styles from "./CsvSuidMappingStep.module.css";
 export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
   dbColumns,
   columnDetails,
-  shpAttributes,
+  fileAttributes,
   onSuccess,
   onBack,
   initialConfig = null,
@@ -19,19 +19,20 @@ export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
   const {
     selectableColumns,
     selectedSuids,
-    matchedShpSuids,
+    matchedFileSuids,
     availableCompareFields,
     selectedFields,
+    attributeMap,
     unmappedDbColumns,
     insertDefaults,
-    shpAttrMap,
     toggleSuidColumn,
     toggleField,
+    handleMapField,
     selectAllFields,
     clearAllFields,
     handleUpdateInsertDefault,
     handleProceed,
-  } = useSuidMappingForm(dbColumns, shpAttributes, onSuccess, initialConfig);
+  } = useSuidMappingForm(dbColumns, fileAttributes, onSuccess, initialConfig);
 
   return (
     <div className={`glass-panel ${styles.container}`}>
@@ -51,7 +52,7 @@ export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
       <SuidSelectorCard
         selectableColumns={selectableColumns}
         selectedSuids={selectedSuids}
-        matchedShpSuids={matchedShpSuids}
+        matchedFileSuids={matchedFileSuids}
         onToggleSuid={toggleSuidColumn}
       />
 
@@ -59,8 +60,10 @@ export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
       <AttributeFieldsCard
         availableFields={availableCompareFields}
         selectedFields={selectedFields}
-        shpAttrMap={shpAttrMap}
+        attributeMap={attributeMap}
+        fileAttributes={fileAttributes}
         onToggleField={toggleField}
+        onMapField={handleMapField}
         onSelectAll={selectAllFields}
         onClearAll={clearAllFields}
       />
