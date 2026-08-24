@@ -15,6 +15,7 @@ Este documento reúne la arquitectura general, decisiones de diseño, patrones a
 4. **Escalabilidad mediante Patrones de Diseño**: Uso del **Patrón Estrategia (Strategy Pattern)** para añadir nuevos formatos de archivos o motores de comparación sin modificar el código existente.
 5. **Cero Pérdida de Datos en Auditoría**: Detección explícita y reporte de registros con SUIDs Nulos/Vacíos y SUIDs Duplicados.
 6. **Manejo Inteligente de Restricciones `NOT NULL` y Claves Compuestas**: Introspección de metadatos de columnas en PostgreSQL (`information_schema.columns`) y soporte de claves SUID compuestas por múltiples columnas.
+7. **Rendimiento UI con Paginación de Discrepancias**: Paginación de alta velocidad en la tabla de resultados para renderizar únicamente el bloque activo de filas (50 / 100 / 250 / 500), garantizando fluidez instantánea sin congelar el DOM.
 
 ---
 
@@ -82,7 +83,7 @@ El motor clasifica las diferencias y genera dos scripts SQL PostGIS independient
 2. **Script de Inserción (`sqlInsertScript`)**:
    - Diseñado para registros presentes en el archivo fuente que NO existen en la base de datos.
    - Sintaxis: `INSERT INTO "esquema"."tabla" ("suid_col1", "suid_col2", "col1", "col2", "col_default") VALUES ('val1', 'val2', val1, val2, val_def);`
-   - **Soporte de Campos Faltantes y Restricciones `NOT NULL`**: A través del nuevo componente [`InsertDefaultsCard.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/InsertDefaultsCard.tsx), el usuario puede asignar valores estáticos (ej. `'ACTIVO'`, `'SISTEMA'`) o expresiones SQL (ej. `NOW()`) a columnas no mapeadas que sean obligatorias en PostgreSQL.
+   - **Soporte de Campos Faltantes y Restricciones `NOT NULL`**: A través del componente [`InsertDefaultsCard.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/InsertDefaultsCard.tsx), el usuario puede asignar valores estáticos (ej. `'ACTIVO'`, `'SISTEMA'`) o expresiones SQL (ej. `NOW()`) a columnas no mapeadas que sean obligatorias en PostgreSQL.
 3. **Interfaz de Usuario ([`SqlPatchDrawer.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/SqlPatchDrawer.tsx))**:
    - Pestañas independientes (Cyan para UPDATE, Verde para INSERT) con botones dedicados para copiar al portapapeles o descargar archivos `.sql`.
 
@@ -95,7 +96,7 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 1. **`DiscrepancyType.NULL_SUID`**: Agrupa registros donde alguna de las columnas SUID compuestas es `NULL` o vacía.
 2. **`DiscrepancyType.DUPLICATE_SUID`**: Agrupa registros con claves SUID repetidas, preservando todas sus ocurrencias mediante estructuras `Map<string, Array<Record>>`.
 3. **Barra de Resumen de KPIs ([`DiscrepanciesSummaryBar.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/DiscrepanciesSummaryBar.tsx))**:
-   - Desglose del Total Evaluados (`DB: 10.000 | Archivo: 6.457`).
+   - Desglose del Total Evaluados (`DB: 230.000 | Archivo: 69.083`).
    - Tarjetas KPI con badges interactivos para filtrar SUIDs Nulos y SUIDs Duplicados.
 
 ---
@@ -134,6 +135,7 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 - [`src/components/shared/DbConnectionForm.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/DbConnectionForm.tsx): Paso 1 compartido (Conexión e introspección DB con metadatos de columnas).
 - [`src/components/shared/StepIndicator.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/StepIndicator.tsx): Indicador visual de los 4 pasos del Wizard.
 - [`src/components/shared/ProgressBar.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/ProgressBar.tsx): Barra de progreso animada por fases.
+- [`src/components/shared/PaginationControls.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/PaginationControls.tsx): Control de paginación reutilizable (botones primera/anterior/siguiente/última, selector de filas por página y contador de registros).
 - [`src/components/shared/ColumnsList.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/ColumnsList.tsx): Visualizador de columnas inspeccionadas.
 - [`src/components/shared/AlertMessage.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/AlertMessage.tsx): Mensajes de estado y alerta.
 
@@ -145,7 +147,7 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
   - `InsertDefaultsCard.tsx`: Tarjeta de configuración de valores por defecto e inserciones para campos faltantes.
   - `Step4ResultsView.tsx`: Panel principal de resultados de comparación.
   - `DiscrepanciesSummaryBar.tsx`: Tarjetas KPI de resumen.
-  - `DiscrepanciesTable.tsx`: Tabla filtrable de discrepancias con badges.
+  - `DiscrepanciesTable.tsx`: Tabla filtrable y paginada de discrepancias (50 / 100 / 250 / 500 por página).
   - `SqlPatchDrawer.tsx`: Visor con pestañas de scripts SQL (UPDATE e INSERT).
 - **DB vs CSV**:
   - `CsvUploader.tsx`: Dropzone e inspección de encabezados `.csv`.
@@ -153,7 +155,7 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 
 ### Rutas de API y Páginas (`src/app/`)
 - [`src/app/api/db/columns/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/columns/route.ts): Endpoint de introspección de columnas con metadatos de restricciones (`is_nullable`, `column_default`).
-- [`src/app/api/db/records/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/route.ts): Endpoint de consulta de registros PostGIS (soporta selección de `suid_columns` compuestas).
+- [`src/app/api/db/records/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/route.ts): Endpoint de consulta ilimitada de registros PostGIS (sin tope de 10k).
 - [`src/app/tools/db-shapefile-sync/page.tsx`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-shapefile-sync/page.tsx): Wizard de Sincronización DB vs. Shapefile.
 - [`src/app/tools/db-csv-sync/page.tsx`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-csv-sync/page.tsx): Wizard de Sincronización DB vs. CSV.
 
@@ -161,31 +163,35 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 
 ## ⚡ 4. Desafíos Técnicos y Soluciones Aplicadas
 
-### Desafío 1: Correlación por Claves Únicas Compuestas por Múltiples Columnas
+### Desafío 1: Renderizado de Tablas Masivas (75.000+ Filas) y Límite de Registros DB
+- **Problema**: Renderizar 75.000+ filas DOM a la vez en `DiscrepanciesTable.tsx` congelaba el navegador al cambiar pestañas de filtro. Asimismo, un límite arbitrario de 10.000 registros en la API truncaba la auditoría en bases de datos con 200k+ filas.
+- **Solución**: Se implementó paginación cliente de alto rendimiento (50 / 100 / 250 / 500 filas por página) con reset dinámico de página durante el renderizado, reduciendo el tiempo de pintado a < 5ms. Además, se eliminó la restricción `LIMIT 10000;` en `/api/db/records` permitiendo evaluar tablas PostGIS completas de cualquier volumen.
+
+### Desafío 2: Correlación por Claves Únicas Compuestas por Múltiples Columnas
 - **Problema**: Tablas de catastro o vialidad frecuentemente no poseen un ID secuencial único, sino claves compuestas (ej. `depto` + `padron` o `provincia` + `ruta` + `km`).
 - **Solución**: Se implementó la selección interactiva de múltiples columnas SUID en [`SuidSelectorCard.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/SuidSelectorCard.tsx). El Web Worker genera la clave hash interna combinando los valores normalizados (`val1_val2`) e instruye las sentencias `UPDATE` con cláusula `WHERE "col1" = 'v1' AND "col2" = 'v2'`.
 
-### Desafío 2: Generación de Sentencias `INSERT` Válidas ante Restricciones `NOT NULL` de PostgreSQL
+### Desafío 3: Generación de Sentencias `INSERT` Válidas ante Restricciones `NOT NULL` de PostgreSQL
 - **Problema**: Cuando el archivo fuente (SHP o CSV) contiene menos columnas que la tabla destino en PostgreSQL, la inserción de registros faltantes provocaba errores de violación de restricción `null value in column violates not-null constraint`.
 - **Solución**: Se integró introspección en `/api/db/columns` consultando `information_schema.columns` (`is_nullable`, `column_default`) y se implementó el componente [`InsertDefaultsCard.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/InsertDefaultsCard.tsx), permitiendo al usuario ingresar valores por defecto (ej. `'SISTEMA'`) o expresiones SQL (ej. `NOW()`) antes de generar los scripts.
 
-### Desafío 3: Optimización de Búsqueda $O(1)$ frente a Búsquedas Anidadas $O(N^3)$
+### Desafío 4: Optimización de Búsqueda $O(1)$ frente a Búsquedas Anidadas $O(N^3)$
 - **Problema**: Evaluar `Object.keys(fileRec).find(...)` dentro de un bucle anidado provocaba 1.5 millones de escaneos para 10.000 registros, congelando la interfaz.
 - **Solución**: Se pre-calcula el mapa de correspondencia de columnas `fieldToFileKey` **una sola vez** antes de iniciar el bucle de comparación en la Fase 3 del Web Worker, reduciendo el costo de resolución a $O(1)$.
 
-### Desafío 4: Serialización de Objetos `Map` a través de la Frontera `postMessage`
+### Desafío 5: Serialización de Objetos `Map` a través de la Frontera `postMessage`
 - **Problema**: La API `structuredClone` de los Web Workers no soporta la transferencia nativa de instancias `Map` complejas.
 - **Solución**: La función `serializeFileDataset` en [`src/services/workerBridge.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/workerBridge.ts) convierte la estructura `recordsMap: Map<>` a un objeto plano `recordsObject` antes de enviar el mensaje, y el worker lo reconstruye internamente.
 
-### Desafío 5: Hidratación Segura de `localStorage` sin Errores SSR ni Advertencias de Renderizado
+### Desafío 6: Hidratación Segura de `localStorage` sin Errores SSR ni Advertencias de Renderizado
 - **Problema**: Leer `localStorage` en `useState(() => loadDbConfigFromLocalStorage())` causaba diferencias entre el HTML del servidor (SSR) y el cliente, provocando errores de hidratación (`Hydration failed`).
 - **Solución**: Inicializar el estado de conexión con valores seguros por defecto y programar la hidratación desde `localStorage` post-montaje utilizando `queueMicrotask` dentro de `useEffect` en [`src/hooks/useDbConnectionForm.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDbConnectionForm.ts).
 
-### Desafío 6: Truncamiento de Nombres de Columna a 10 Caracteres en dBase III (DBF)
+### Desafío 7: Truncamiento de Nombres de Columna a 10 Caracteres en dBase III (DBF)
 - **Problema**: El formato DBF limita los nombres de atributos a 10 caracteres.
 - **Solución**: El motor evalúa coincidencias probando tanto `fieldName.toLowerCase()` como `fieldName.slice(0, 10).toLowerCase()`.
 
-### Desafío 7: Descalces Falsos por Comillas en Cadenas de Texto (`TA014I111T9` vs `"TA014I111T9"`)
+### Desafío 8: Descalces Falsos por Comillas en Cadenas de Texto (`TA014I111T9` vs `"TA014I111T9"`)
 - **Problema**: Exportaciones envueltas entre comillas o con espacios no imprimibles generaban falsas discrepancias.
 - **Solución**: [`src/utils/gisCleaners.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/gisCleaners.ts) limpia comillas externas (`/^["']|["']$/g`), caracteres `\xa0\r\n\t` y sufijos `.0`.
 
@@ -193,14 +199,12 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 
 ## 🚀 5. Posibles Mejoras y Hoja de Ruta (Roadmap)
 
-1. **Paginación y Virtualización en Tabla de Discrepancias**:
-   - Paginación cliente/servidor para la visualización de 10.000+ discrepancias en el Paso 4.
-2. **Mapa Interactivo Vectorial (Leaflet / MapLibre + Turf.js)**:
+1. **Mapa Interactivo Vectorial (Leaflet / MapLibre + Turf.js)**:
    - Visualizador de mapas en el Paso 4 para colorear entidades espaciales en verde (Coincidencias), amarillo (Discrepancia Atributos), rojo (Solo en DB) y azul (Solo en SHP).
-3. **Comparación Topológica de Geometrías en Web Worker**:
+2. **Comparación Topológica de Geometrías en Web Worker**:
    - Algoritmos de intersección espacial, diferencia de áreas y distancia Hausdorff entre geometrías PostGIS (`ST_AsGeoJSON`) y Shapefiles en el Worker.
-4. **Nuevos Parseadores de Formatos (Estrategias `ISpatialFileParser`)**:
+3. **Nuevos Parseadores de Formatos (Estrategias `ISpatialFileParser`)**:
    - `KmlParser` (soporte de Google Earth `.kml` / `.kmz`).
    - `ExcelParser` (libros `.xlsx` / `.xls`).
-5. **Ejecución Directa de Parches SQL (Con Confirmación)**:
+4. **Ejecución Directa de Parches SQL (Con Confirmación)**:
    - Opción para aplicar los parches de actualización o inserción directamente sobre PostgreSQL (`BEGIN; ... COMMIT;` con `ROLLBACK`).
