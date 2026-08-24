@@ -1,0 +1,22 @@
+# GIS Tools — Task & Progress Log
+
+- [x] Initial project setup (Next.js 16 + React 19 + Turbopack + TypeScript + Leaflet)
+- [x] Portable Node.js environment configuration (`C:\Alekos\Tools\node24portable`)
+- [x] Strategy pattern implementation for Parsers (`ShapefileParser`, `CsvParser`)
+- [x] DB connection & table column inspection API endpoints (`/api/db/test`, `/api/db/columns`, `/api/db/records`)
+- [x] Interactive SUID key mapping & attribute selection step (Step 3)
+- [x] Off-main-thread Web Worker comparison engine (`comparisonWorker.ts` + `comparisonWorkerSync.ts`)
+- [x] Phased progress bar UI component (`ProgressBar.tsx`)
+- [x] PostGIS SQL patch script generator (`UPDATE` & `INSERT`)
+- [x] React Doctor optimization pass (**Score: 100 / 100 Great — `✔ No issues found!`**)
+- [x] Discrepancy counter & UPDATE SQL script sync bug fix
+- [x] EWKB Hex binary geometry parser & EPSG:32719 UTM Zone 19S to WGS84 converter (`ewkbParser.ts`)
+- [x] CSV spatial geometry column auto-detection (`CsvParser.ts`)
+- [x] Reusable dark/street Leaflet spatial map preview component (`SpatialMapPreview.tsx` & `.module.css`)
+- [x] Street basemap tile layer switcher (CartoDB Voyager, OSM, Esri Satellite, CartoDB Dark)
+- [x] Floating glassmorphism map legend overlay
+- [x] Overflow-protected feature attribute popups with close button
+- [x] Spatial discrepancy map tab in Step 4 with active card filtering
+- [x] Refactored Step 4 results view with modular sub-components (`ResultsControlsBar.tsx` & `useDiscrepancyGeojson.ts`)
+- [x] Extracted static map data to `src/constants/mapConstants.ts`
+- [x] Organized 4 topic commits on branch `feature/csv-ewkb-geometry-map`
