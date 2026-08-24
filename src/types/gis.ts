@@ -32,6 +32,7 @@ export interface ToolCardData {
   tags: string[];
   actionLabel: string;
   enabled: boolean;
+  route?: string;
 }
 
 export interface ToolCardProps {

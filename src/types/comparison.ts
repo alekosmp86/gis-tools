@@ -1,3 +1,7 @@
+import type { DbConfig } from "@/types/db";
+import type { ColumnMappingConfig } from "@/types/gis";
+import type { ParsedFileDataset } from "@/types/parsers";
+
 export const DiscrepancyType = {
   MATCH: "MATCH",
   ATTRIBUTE_MISMATCH: "ATTRIBUTE_MISMATCH",
@@ -51,6 +55,15 @@ export interface ComparisonSummary {
   onlyInShpCount: number;
   items: DiscrepancyItem[];
   sqlPatchScript: string;
+}
+
+export interface IComparisonEngine {
+  readonly engineName: string;
+  compare(
+    dbConfig: DbConfig,
+    dataset: ParsedFileDataset,
+    mappingConfig: ColumnMappingConfig
+  ): Promise<ComparisonSummary>;
 }
 
 export interface DiscrepanciesSummaryBarProps {

@@ -3,10 +3,11 @@ import { runDatasetComparison } from "@/services/comparisonEngine";
 import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
 import type { ColumnMappingConfig } from "@/types/gis";
+import type { ParsedFileDataset } from "@/types/parsers";
 
 export function useComparisonQuery(
   dbConfig: DbConfig,
-  shapefileData: ParsedShapefileData,
+  shapefileData: ParsedShapefileData | ParsedFileDataset,
   mappingConfig: ColumnMappingConfig
 ) {
   return useQuery({
