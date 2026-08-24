@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { PaginationControls } from "@/components/shared/PaginationControls";
 import { DiscrepancyType, DiscrepancyFilter, type DiscrepanciesTableProps } from "@/types/comparison";
@@ -23,23 +23,21 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
     setCurrentPage(1);
   }
 
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => {
-      const matchesFilter =
-        activeFilter === DiscrepancyFilter.ALL || item.type === activeFilter;
-      const matchesSearch =
-        searchQuery === "" ||
-        item.suid.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.note && item.note.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        item.differences.some(
-          (d) =>
-            d.fieldName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            String(d.dbValue).toLowerCase().includes(searchQuery.toLowerCase()) ||
-            String(d.shpValue).toLowerCase().includes(searchQuery.toLowerCase())
-        );
-      return matchesFilter && matchesSearch;
-    });
-  }, [items, activeFilter, searchQuery]);
+  const filteredItems = items.filter((item) => {
+    const matchesFilter =
+      activeFilter === DiscrepancyFilter.ALL || item.type === activeFilter;
+    const matchesSearch =
+      searchQuery === "" ||
+      item.suid.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.note && item.note.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      item.differences.some(
+        (d) =>
+          d.fieldName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          String(d.dbValue).toLowerCase().includes(searchQuery.toLowerCase()) ||
+          String(d.shpValue).toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    return matchesFilter && matchesSearch;
+  });
 
   const totalFilteredCount = filteredItems.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
@@ -48,9 +46,7 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
   const startIndex = (validCurrentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalFilteredCount);
 
-  const paginatedItems = useMemo(() => {
-    return filteredItems.slice(startIndex, endIndex);
-  }, [filteredItems, startIndex, endIndex]);
+  const paginatedItems = filteredItems.slice(startIndex, endIndex);
 
   const renderTypeBadge = (type: DiscrepancyType) => {
     switch (type) {

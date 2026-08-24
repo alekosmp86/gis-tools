@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { Check } from "lucide-react";
 import { getWizardSteps } from "@/data/wizardStepsData";
 import type { StepIndicatorProps } from "@/types/gis";
@@ -10,10 +10,7 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
   fileStepSubtitle,
   onStepClick,
 }) => {
-  const steps = useMemo(
-    () => getWizardSteps(fileStepTitle, fileStepSubtitle),
-    [fileStepTitle, fileStepSubtitle]
-  );
+  const steps = getWizardSteps(fileStepTitle, fileStepSubtitle);
 
   return (
     <div className={styles.stepperContainer}>

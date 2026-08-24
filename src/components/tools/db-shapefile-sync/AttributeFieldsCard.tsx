@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { ArrowRight, AlertTriangle, Link2, Check } from "lucide-react";
 import type { AttributeFieldsCardProps } from "@/types/gis";
 import styles from "./AttributeFieldsCard.module.css";
@@ -13,7 +13,7 @@ export const AttributeFieldsCard: React.FC<AttributeFieldsCardProps> = ({
   onSelectAll,
   onClearAll,
 }) => {
-  const selectedFieldsSet = useMemo(() => new Set(selectedFields), [selectedFields]);
+  const selectedFieldsSet = new Set(selectedFields);
 
   return (
     <div className={styles.sectionCard}>

@@ -33,10 +33,10 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
       const parsed = await parser.parse(file);
       setData(parsed);
       onSuccess(parsed);
+      setLoading(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al procesar el archivo CSV.";
       setErrorMessage(msg);
-    } finally {
       setLoading(false);
     }
   };

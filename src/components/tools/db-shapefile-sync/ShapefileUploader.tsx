@@ -30,10 +30,10 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
       const parsed = await parser.parse(file);
       setData(parsed);
       onSuccess(parsed as unknown as import("@/types/shp").ParsedShapefileData);
+      setLoading(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al procesar el archivo Shapefile.";
       setErrorMessage(msg);
-    } finally {
       setLoading(false);
     }
   };
