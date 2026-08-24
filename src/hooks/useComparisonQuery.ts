@@ -7,7 +7,7 @@ import type { ParsedFileDataset } from "@/types/parsers";
 
 export function useComparisonQuery(
   dbConfig: DbConfig,
-  shapefileData: ParsedShapefileData | ParsedFileDataset,
+  fileDataset: ParsedShapefileData | ParsedFileDataset,
   mappingConfig: ColumnMappingConfig
 ) {
   return useQuery({
@@ -15,11 +15,11 @@ export function useComparisonQuery(
       "datasetComparison",
       dbConfig.db_name,
       dbConfig.table_name,
-      shapefileData.fileName,
+      fileDataset.fileName,
       mappingConfig.suidColumn,
       mappingConfig.fieldsToCompare,
     ],
-    queryFn: () => runDatasetComparison(dbConfig, shapefileData, mappingConfig),
-    enabled: Boolean(dbConfig && shapefileData && mappingConfig),
+    queryFn: () => runDatasetComparison(dbConfig, fileDataset, mappingConfig),
+    enabled: Boolean(dbConfig && fileDataset && mappingConfig),
   });
 }

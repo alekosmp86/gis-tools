@@ -12,22 +12,22 @@ export { cleanSuid, cleanValue } from "@/utils/gisCleaners";
  */
 export async function runDatasetComparison(
   dbConfig: DbConfig,
-  shapefileData: ParsedShapefileData | ParsedFileDataset,
+  fileDataset: ParsedShapefileData | ParsedFileDataset,
   mappingConfig: ColumnMappingConfig
 ): Promise<ComparisonSummary> {
   const engine = new DbVsFileComparisonEngine();
 
   const dataset: ParsedFileDataset =
-    "recordsMap" in shapefileData
-      ? shapefileData
+    "recordsMap" in fileDataset
+      ? fileDataset
       : {
-          fileName: shapefileData.fileName,
-          fileSize: shapefileData.fileSize,
-          featureCount: shapefileData.featureCount,
-          geometryType: shapefileData.geometryType,
-          attributes: shapefileData.attributes,
+          fileName: fileDataset.fileName,
+          fileSize: fileDataset.fileSize,
+          featureCount: fileDataset.featureCount,
+          geometryType: fileDataset.geometryType,
+          attributes: fileDataset.attributes,
           recordsMap: new Map(),
-          geojson: shapefileData.geojson,
+          geojson: fileDataset.geojson,
         };
 
   return engine.compare(dbConfig, dataset, mappingConfig);

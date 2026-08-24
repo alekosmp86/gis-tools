@@ -16,20 +16,20 @@ import styles from "./Step4ResultsView.module.css";
 
 interface Step4ResultsViewProps {
   dbConfig: DbConfig;
-  shapefileData: ParsedShapefileData | ParsedFileDataset;
+  fileDataset: ParsedShapefileData | ParsedFileDataset;
   mappingConfig: ColumnMappingConfig;
   onBackToMapping: () => void;
 }
 
 export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   dbConfig,
-  shapefileData,
+  fileDataset,
   mappingConfig,
   onBackToMapping,
 }) => {
   const { data: summary, isLoading: loading, error } = useComparisonQuery(
     dbConfig,
-    shapefileData,
+    fileDataset,
     mappingConfig
   );
 
@@ -48,7 +48,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
         <div>
           <h2 className={styles.title}>4. Resultados de Análisis y Discrepancias</h2>
           <p className={styles.subtitle}>
-            Correlación realizada entre la tabla <code>{dbConfig.schema_name}.{dbConfig.table_name}</code> y el archivo <code>{shapefileData.fileName}</code> usando la clave SUID <code>{mappingConfig.suidColumn}</code>.
+            Correlación realizada entre la tabla <code>{dbConfig.schema_name}.{dbConfig.table_name}</code> y el archivo <code>{fileDataset.fileName}</code> usando la clave SUID <code>{mappingConfig.suidColumn}</code>.
           </p>
         </div>
       </div>
@@ -57,7 +57,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
       {loading && (
         <div className={styles.loadingArea}>
           <Loader2 size={36} className={styles.spin} />
-          <span>Consultando registros PostGIS y correlacionando atributos contra el Shapefile...</span>
+          <span>Consultando registros PostGIS y correlacionando atributos contra el archivo...</span>
         </div>
       )}
 

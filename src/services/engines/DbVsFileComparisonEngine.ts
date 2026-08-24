@@ -82,7 +82,7 @@ export class DbVsFileComparisonEngine implements IComparisonEngine {
       `-- ============================================================`,
       `-- PARCHE SQL GENERADO PARA POSTGIS: ${dbConfig.schema_name}.${dbConfig.table_name}`,
       `-- Fuente de comparación: ${dataset.fileName}`,
-      `-- Generado automáticamente por Antigravity GIS Tools`,
+      `-- Generado automáticamente por GIS Tools`,
       `-- ============================================================\n`,
     ];
 

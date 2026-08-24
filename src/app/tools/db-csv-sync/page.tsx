@@ -103,7 +103,7 @@ export default function DbCsvSyncToolPage() {
         {currentStep === 4 && dbConfig && csvDataset && mappingConfig && (
           <Step4ResultsView
             dbConfig={dbConfig}
-            shapefileData={csvDataset}
+            fileDataset={csvDataset}
             mappingConfig={mappingConfig}
             onBackToMapping={() => setCurrentStep(3)}
           />

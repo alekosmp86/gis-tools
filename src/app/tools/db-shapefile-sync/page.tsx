@@ -103,7 +103,7 @@ export default function DbShapefileSyncToolPage() {
         {currentStep === 4 && dbConfig && shapefileData && mappingConfig && (
           <Step4ResultsView
             dbConfig={dbConfig}
-            shapefileData={shapefileData}
+            fileDataset={shapefileData}
             mappingConfig={mappingConfig}
             onBackToMapping={() => setCurrentStep(3)}
           />
