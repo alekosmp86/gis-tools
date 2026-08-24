@@ -1,5 +1,7 @@
+import type { FeatureCollection, Feature, Geometry, GeoJsonProperties } from "geojson";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
 import { cleanSuid } from "@/utils/gisCleaners";
+import { parseEwkbHexToGeoJson } from "@/utils/ewkbParser";
 
 export class CsvParser implements ISpatialFileParser {
   readonly formatName = "CSV (Valores Separados por Comas)";
@@ -43,6 +45,13 @@ export class CsvParser implements ISpatialFileParser {
     const recordsMap = new Map<string, Record<string, unknown>>();
     const firstHeader = headers[0];
 
+    // Detect geometry column name (e.g. geom, geometry, wkt, wkb_geometry)
+    const geomColHeader = headers.find((h) =>
+      /^(geom|geometry|wkt|wkb_geometry)$/i.test(h.trim())
+    );
+
+    const geojsonFeatures: Array<Feature<Geometry, GeoJsonProperties>> = [];
+
     for (let i = 1; i < lines.length; i++) {
       const values = parseCsvLine(lines[i]);
       if (values.length === 0) continue;
@@ -57,15 +66,39 @@ export class CsvParser implements ISpatialFileParser {
       if (key) {
         recordsMap.set(key, record);
       }
+
+      if (geomColHeader && record[geomColHeader]) {
+        const geomVal = String(record[geomColHeader]);
+        const parsedGeom = parseEwkbHexToGeoJson(geomVal);
+        if (parsedGeom) {
+          geojsonFeatures.push({
+            type: "Feature",
+            geometry: parsedGeom,
+            properties: record,
+          });
+        }
+      }
+    }
+
+    let geometryType: string | undefined = undefined;
+    let featureCollection: FeatureCollection | undefined = undefined;
+
+    if (geojsonFeatures.length > 0) {
+      geometryType = geojsonFeatures[0].geometry.type;
+      featureCollection = {
+        type: "FeatureCollection",
+        features: geojsonFeatures,
+      };
     }
 
     return {
       fileName,
       fileSize,
       featureCount: lines.length - 1,
-      geometryType: undefined, // CSV has no spatial geometries
+      geometryType,
       attributes: headers,
       recordsMap,
+      geojson: featureCollection,
     };
   }
 }
