@@ -14,7 +14,7 @@ Este documento reúne la arquitectura general, decisiones de diseño, patrones a
 3. **Componentes Atómicos y Reglas Estrictas**: Separación estricta entre interfaces UI, hooks de estado, tipos TypeScript y servicios de dominio.
 4. **Escalabilidad mediante Patrones de Diseño**: Uso del **Patrón Estrategia (Strategy Pattern)** para añadir nuevos formatos de archivos o motores de comparación sin modificar el código existente.
 5. **Cero Pérdida de Datos en Auditoría**: Detección explícita y reporte de registros con SUIDs Nulos/Vacíos y SUIDs Duplicados.
-6. **Manejo Inteligente de Restricciones `NOT NULL`**: Introspección de metadatos de columnas en PostgreSQL (`information_schema.columns`) para permitir al usuario definir valores por defecto en columnas no mapeadas antes de generar parches de inserción.
+6. **Manejo Inteligente de Restricciones `NOT NULL` y Claves Compuestas**: Introspección de metadatos de columnas en PostgreSQL (`information_schema.columns`) y soporte de claves SUID compuestas por múltiples columnas.
 
 ---
 
@@ -44,8 +44,8 @@ Para independizar la carga de archivos, la correlación de datos y la interfaz d
             ├─ 2. serializeFileDataset()     ──▶ Convierte Map<> a Objeto plano (Serializable)
             │
             └─ 3. postMessage() ────────────▶ [Hilo Secundario: Web Worker]
-                                                  ├─ Fase 1: Indexado DB (SuidMap + Nulls)
-                                                  ├─ Fase 2: Indexado Archivo (SuidMap + Nulls)
+                                                  ├─ Fase 1: Indexado DB Compuesto (SuidMap + Nulls)
+                                                  ├─ Fase 2: Indexado Archivo Compuesto (SuidMap + Nulls)
                                                   ├─ Fase 3: Pre-cálculo O(1) de Mapa de Columnas
                                                   ├─ Fase 4: Comparación Atributos (UPDATE)
                                                   ├─ Fase 5: Generación Inserciones (INSERT) + Defaults
@@ -63,27 +63,36 @@ Para independizar la carga de archivos, la correlación de datos y la interfaz d
 
 ---
 
-### C. Generación Dual de Scripts SQL (UPDATE e INSERT) e Introspección `NOT NULL`
+### C. Claves Identificadoras SUID Compuestas (Multicolumna)
+
+- Permite seleccionar **una o múltiples columnas** de la base de datos (ej. `departamento` + `padron`) en [`SuidSelectorCard.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/SuidSelectorCard.tsx).
+- El Web Worker construye claves hash compuestas unificando las columnas limpiadas (`val1_val2`) para indexación $O(1)$.
+- Genera cláusulas `WHERE` multicolumna en SQL: `WHERE "depto" = '01' AND "padron" = '45012'`.
+- Al generar sentencias `INSERT`, se incluyen automáticamente todas las columnas componentes de la clave SUID compuesta.
+
+---
+
+### D. Generación Dual de Scripts SQL (UPDATE e INSERT) e Introspección `NOT NULL`
 
 El motor clasifica las diferencias y genera dos scripts SQL PostGIS independientes:
 
 1. **Script de Actualización (`sqlUpdateScript`)**:
    - Diseñado para registros existentes en ambos orígenes pero con valores dispares en atributos.
-   - Sintaxis: `UPDATE "esquema"."tabla" SET "columna" = valor WHERE "suid_col" = 'clave';`
+   - Sintaxis: `UPDATE "esquema"."tabla" SET "columna" = valor WHERE "suid_col1" = 'val1' AND "suid_col2" = 'val2';`
 2. **Script de Inserción (`sqlInsertScript`)**:
    - Diseñado para registros presentes en el archivo fuente que NO existen en la base de datos.
-   - Sintaxis: `INSERT INTO "esquema"."tabla" ("suid_col", "col1", "col2", "col_default") VALUES ('clave', val1, val2, val_def);`
+   - Sintaxis: `INSERT INTO "esquema"."tabla" ("suid_col1", "suid_col2", "col1", "col2", "col_default") VALUES ('val1', 'val2', val1, val2, val_def);`
    - **Soporte de Campos Faltantes y Restricciones `NOT NULL`**: A través del nuevo componente [`InsertDefaultsCard.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/InsertDefaultsCard.tsx), el usuario puede asignar valores estáticos (ej. `'ACTIVO'`, `'SISTEMA'`) o expresiones SQL (ej. `NOW()`) a columnas no mapeadas que sean obligatorias en PostgreSQL.
 3. **Interfaz de Usuario ([`SqlPatchDrawer.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/SqlPatchDrawer.tsx))**:
    - Pestañas independientes (Cyan para UPDATE, Verde para INSERT) con botones dedicados para copiar al portapapeles o descargar archivos `.sql`.
 
 ---
 
-### D. Auditoría Completa de SUIDs (Nulos y Duplicados)
+### E. Auditoría Completa de SUIDs (Nulos y Duplicados)
 
 Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 
-1. **`DiscrepancyType.NULL_SUID`**: Agrupa registros donde la columna SUID es `NULL` o vacía.
+1. **`DiscrepancyType.NULL_SUID`**: Agrupa registros donde alguna de las columnas SUID compuestas es `NULL` o vacía.
 2. **`DiscrepancyType.DUPLICATE_SUID`**: Agrupa registros con claves SUID repetidas, preservando todas sus ocurrencias mediante estructuras `Map<string, Array<Record>>`.
 3. **Barra de Resumen de KPIs ([`DiscrepanciesSummaryBar.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/DiscrepanciesSummaryBar.tsx))**:
    - Desglose del Total Evaluados (`DB: 10.000 | Archivo: 6.457`).
@@ -99,7 +108,7 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 - [`src/types/comparison.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/comparison.ts): Enums y modelos de discrepancias (`ComparisonSummary`, `DiscrepancyItem`, `DiscrepancyType`, `DiscrepancyFilter`).
 - [`src/types/workerMessages.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/workerMessages.ts): Protocolo de mensajes del Web Worker.
 - [`src/types/ui.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/ui.ts): Variantes de botones, badges y tipos de alerta.
-- [`src/types/gis.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/gis.ts): Modelos para el catálogo de herramientas y `InsertFieldDefault`.
+- [`src/types/gis.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/gis.ts): Modelos para el catálogo de herramientas, `ColumnMappingConfig` (soporte de `suidColumns` compuestas) y `InsertFieldDefault`.
 
 ### Motores y Parseadores (`src/services/`)
 - [`src/services/engines/DbVsFileComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsFileComparisonEngine.ts): Estrategia de comparación PostGIS vs Archivo.
@@ -109,7 +118,7 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 - [`src/services/localStorageDbConfig.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/localStorageDbConfig.ts): Persistencia local de credenciales (excluye contraseñas).
 
 ### Hilos Web Worker (`src/workers/`)
-- [`src/workers/comparisonWorker.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparisonWorker.ts): Hilo secundario de comparación asíncrona.
+- [`src/workers/comparisonWorker.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparisonWorker.ts): Hilo secundario de comparación asíncrona (soporta SUID compuesto).
 - [`src/workers/comparisonWorkerSync.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparisonWorkerSync.ts): Fallback sincrónico en caso de SSR.
 
 ### Utilidades y Helpers (`src/utils/`)
@@ -119,7 +128,7 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 - [`src/hooks/useDbConnectionForm.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDbConnectionForm.ts): Lógica del formulario de conexión DB con hidratación post-montaje.
 - [`src/hooks/useDbQueries.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDbQueries.ts): Consultas a la API con TanStack React Query.
 - [`src/hooks/useComparisonProgress.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useComparisonProgress.ts): Seguimiento de progreso del Web Worker.
-- [`src/hooks/useSuidMappingForm.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useSuidMappingForm.ts): Lógica del mapa de columnas SUID, atributos y campos por defecto.
+- [`src/hooks/useSuidMappingForm.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useSuidMappingForm.ts): Lógica del mapa de columnas SUID (compuestas), atributos y campos por defecto.
 
 ### Componentes UI Reutilizables (`src/components/shared/`)
 - [`src/components/shared/DbConnectionForm.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/DbConnectionForm.tsx): Paso 1 compartido (Conexión e introspección DB con metadatos de columnas).
@@ -132,6 +141,7 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 - **DB vs Shapefile**:
   - `ShapefileUploader.tsx`: Dropzone para archivos `.zip` / `.geojson`.
   - `SuidMappingStep.tsx`: Formulario de correspondencia SUID, Atributos e Inserciones `NOT NULL`.
+  - `SuidSelectorCard.tsx`: Selector interactivo de columnas SUID únicas o compuestas.
   - `InsertDefaultsCard.tsx`: Tarjeta de configuración de valores por defecto e inserciones para campos faltantes.
   - `Step4ResultsView.tsx`: Panel principal de resultados de comparación.
   - `DiscrepanciesSummaryBar.tsx`: Tarjetas KPI de resumen.
@@ -139,11 +149,11 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
   - `SqlPatchDrawer.tsx`: Visor con pestañas de scripts SQL (UPDATE e INSERT).
 - **DB vs CSV**:
   - `CsvUploader.tsx`: Dropzone e inspección de encabezados `.csv`.
-  - `CsvSuidMappingStep.tsx`: Mapeo de columnas CSV vs DB e Inserciones `NOT NULL`.
+  - `CsvSuidMappingStep.tsx`: Mapeo de columnas CSV vs DB (soporta SUID compuesto).
 
 ### Rutas de API y Páginas (`src/app/`)
 - [`src/app/api/db/columns/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/columns/route.ts): Endpoint de introspección de columnas con metadatos de restricciones (`is_nullable`, `column_default`).
-- [`src/app/api/db/records/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/route.ts): Endpoint de consulta de registros PostGIS para comparación.
+- [`src/app/api/db/records/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/route.ts): Endpoint de consulta de registros PostGIS (soporta selección de `suid_columns` compuestas).
 - [`src/app/tools/db-shapefile-sync/page.tsx`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-shapefile-sync/page.tsx): Wizard de Sincronización DB vs. Shapefile.
 - [`src/app/tools/db-csv-sync/page.tsx`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-csv-sync/page.tsx): Wizard de Sincronización DB vs. CSV.
 
@@ -151,27 +161,31 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 
 ## ⚡ 4. Desafíos Técnicos y Soluciones Aplicadas
 
-### Desafío 1: Generación de Sentencias `INSERT` Válidas ante Restricciones `NOT NULL` de PostgreSQL
+### Desafío 1: Correlación por Claves Únicas Compuestas por Múltiples Columnas
+- **Problema**: Tablas de catastro o vialidad frecuentemente no poseen un ID secuencial único, sino claves compuestas (ej. `depto` + `padron` o `provincia` + `ruta` + `km`).
+- **Solución**: Se implementó la selección interactiva de múltiples columnas SUID en [`SuidSelectorCard.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/SuidSelectorCard.tsx). El Web Worker genera la clave hash interna combinando los valores normalizados (`val1_val2`) e instruye las sentencias `UPDATE` con cláusula `WHERE "col1" = 'v1' AND "col2" = 'v2'`.
+
+### Desafío 2: Generación de Sentencias `INSERT` Válidas ante Restricciones `NOT NULL` de PostgreSQL
 - **Problema**: Cuando el archivo fuente (SHP o CSV) contiene menos columnas que la tabla destino en PostgreSQL, la inserción de registros faltantes provocaba errores de violación de restricción `null value in column violates not-null constraint`.
 - **Solución**: Se integró introspección en `/api/db/columns` consultando `information_schema.columns` (`is_nullable`, `column_default`) y se implementó el componente [`InsertDefaultsCard.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/InsertDefaultsCard.tsx), permitiendo al usuario ingresar valores por defecto (ej. `'SISTEMA'`) o expresiones SQL (ej. `NOW()`) antes de generar los scripts.
 
-### Desafío 2: Optimización de Búsqueda $O(1)$ frente a Búsquedas Anidadas $O(N^3)$
+### Desafío 3: Optimización de Búsqueda $O(1)$ frente a Búsquedas Anidadas $O(N^3)$
 - **Problema**: Evaluar `Object.keys(fileRec).find(...)` dentro de un bucle anidado provocaba 1.5 millones de escaneos para 10.000 registros, congelando la interfaz.
 - **Solución**: Se pre-calcula el mapa de correspondencia de columnas `fieldToFileKey` **una sola vez** antes de iniciar el bucle de comparación en la Fase 3 del Web Worker, reduciendo el costo de resolución a $O(1)$.
 
-### Desafío 3: Serialización de Objetos `Map` a través de la Frontera `postMessage`
+### Desafío 4: Serialización de Objetos `Map` a través de la Frontera `postMessage`
 - **Problema**: La API `structuredClone` de los Web Workers no soporta la transferencia nativa de instancias `Map` complejas.
 - **Solución**: La función `serializeFileDataset` en [`src/services/workerBridge.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/workerBridge.ts) convierte la estructura `recordsMap: Map<>` a un objeto plano `recordsObject` antes de enviar el mensaje, y el worker lo reconstruye internamente.
 
-### Desafío 4: Hidratación Segura de `localStorage` sin Errores SSR ni Advertencias de Renderizado
+### Desafío 5: Hidratación Segura de `localStorage` sin Errores SSR ni Advertencias de Renderizado
 - **Problema**: Leer `localStorage` en `useState(() => loadDbConfigFromLocalStorage())` causaba diferencias entre el HTML del servidor (SSR) y el cliente, provocando errores de hidratación (`Hydration failed`).
 - **Solución**: Inicializar el estado de conexión con valores seguros por defecto y programar la hidratación desde `localStorage` post-montaje utilizando `queueMicrotask` dentro de `useEffect` en [`src/hooks/useDbConnectionForm.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDbConnectionForm.ts).
 
-### Desafío 5: Truncamiento de Nombres de Columna a 10 Caracteres en dBase III (DBF)
+### Desafío 6: Truncamiento de Nombres de Columna a 10 Caracteres en dBase III (DBF)
 - **Problema**: El formato DBF limita los nombres de atributos a 10 caracteres.
 - **Solución**: El motor evalúa coincidencias probando tanto `fieldName.toLowerCase()` como `fieldName.slice(0, 10).toLowerCase()`.
 
-### Desafío 6: Descalces Falsos por Comillas en Cadenas de Texto (`TA014I111T9` vs `"TA014I111T9"`)
+### Desafío 7: Descalces Falsos por Comillas en Cadenas de Texto (`TA014I111T9` vs `"TA014I111T9"`)
 - **Problema**: Exportaciones envueltas entre comillas o con espacios no imprimibles generaban falsas discrepancias.
 - **Solución**: [`src/utils/gisCleaners.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/gisCleaners.ts) limpia comillas externas (`/^["']|["']$/g`), caracteres `\xa0\r\n\t` y sufijos `.0`.
 
@@ -179,12 +193,14 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 
 ## 🚀 5. Posibles Mejoras y Hoja de Ruta (Roadmap)
 
-1. **Mapa Interactivo Vectorial (Leaflet / MapLibre + Turf.js)**:
+1. **Paginación y Virtualización en Tabla de Discrepancias**:
+   - Paginación cliente/servidor para la visualización de 10.000+ discrepancias en el Paso 4.
+2. **Mapa Interactivo Vectorial (Leaflet / MapLibre + Turf.js)**:
    - Visualizador de mapas en el Paso 4 para colorear entidades espaciales en verde (Coincidencias), amarillo (Discrepancia Atributos), rojo (Solo en DB) y azul (Solo en SHP).
-2. **Comparación Topológica de Geometrías en Web Worker**:
+3. **Comparación Topológica de Geometrías en Web Worker**:
    - Algoritmos de intersección espacial, diferencia de áreas y distancia Hausdorff entre geometrías PostGIS (`ST_AsGeoJSON`) y Shapefiles en el Worker.
-3. **Nuevos Parseadores de Formatos (Estrategias `ISpatialFileParser`)**:
+4. **Nuevos Parseadores de Formatos (Estrategias `ISpatialFileParser`)**:
    - `KmlParser` (soporte de Google Earth `.kml` / `.kmz`).
    - `ExcelParser` (libros `.xlsx` / `.xls`).
-4. **Ejecución Directa de Parches SQL (Con Confirmación)**:
+5. **Ejecución Directa de Parches SQL (Con Confirmación)**:
    - Opción para aplicar los parches de actualización o inserción directamente sobre PostgreSQL (`BEGIN; ... COMMIT;` con `ROLLBACK`).
