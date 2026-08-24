@@ -1,0 +1,130 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "env": {
+      "PATH": "C:\\Alekos\\Tools\\node24portable;${env:PATH}"
+    }
+  },
+  "inputs": [
+    {
+      "id": "packageName",
+      "type": "promptString",
+      "description": "Enter package name to install (e.g. lucide-react, axios):",
+      "default": ""
+    },
+    {
+      "id": "devPackageName",
+      "type": "promptString",
+      "description": "Enter dev dependency package name to install (e.g. @types/node, tailwindcss):",
+      "default": ""
+    },
+    {
+      "id": "customNpmArgs",
+      "type": "promptString",
+      "description": "Enter custom npm arguments (e.g. audit, update, uninstall <pkg>):",
+      "default": ""
+    }
+  ],
+  "tasks": [
+    {
+      "label": "NPM: Install Dependencies (npm install)",
+      "type": "shell",
+      "command": "C:\\Alekos\\Tools\\node24portable\\npm.cmd",
+      "args": ["install"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "NPM: Run Dev Server (npm run dev)",
+      "type": "shell",
+      "command": "C:\\Alekos\\Tools\\node24portable\\npm.cmd",
+      "args": ["run", "dev"],
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "NPM: Install New Package...",
+      "type": "shell",
+      "command": "C:\\Alekos\\Tools\\node24portable\\npm.cmd",
+      "args": ["install", "${input:packageName}"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "NPM: Install Dev Package...",
+      "type": "shell",
+      "command": "C:\\Alekos\\Tools\\node24portable\\npm.cmd",
+      "args": ["install", "-D", "${input:devPackageName}"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "NPM: Build Project (npm run build)",
+      "type": "shell",
+      "command": "C:\\Alekos\\Tools\\node24portable\\npm.cmd",
+      "args": ["run", "build"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "NPM: Lint Code (npm run lint)",
+      "type": "shell",
+      "command": "C:\\Alekos\\Tools\\node24portable\\npm.cmd",
+      "args": ["run", "lint"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "NPM: Run Custom Command...",
+      "type": "shell",
+      "command": "C:\\Alekos\\Tools\\node24portable\\npm.cmd",
+      "args": ["${input:customNpmArgs}"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
