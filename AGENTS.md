@@ -7,10 +7,20 @@
 ## Git Commit Control
 - **NEVER execute `git commit` automatically.** Only run `git commit` when the user explicitly instructs to commit changes.
 
+## Verification & React Doctor Requirement
+- **Mandatory React Doctor Execution**: Always run `npm run doctor` (or `npx react-doctor`) along with `npm run lint` and `npm run build` after making any code changes.
+
 ## UI & Component Architecture
 - **Atomic & Reusable Components**: Never place entire pages or multi-section UIs inside a single monolithic file (like `page.tsx`).
 - Decompose UI into small, atomic, reusable components in `src/components/` (e.g. `Badge`, `Button`, `SearchInput`, `ToolCard`, `Header`, `Footer`, `HeroSection`, `FilterTabs`, etc.).
 - Maintain modular styling and clean separation of concerns.
+
+## Lucide Icons Only
+- **Always Use Lucide Icons**: Never use raw unicode arrow symbols (`➔`), emoji characters (`⚠️`, `✓`), or text bullets (`•`) in UI text. Always import and render official SVG icons from `lucide-react`.
+
+## No Inline Styles
+- **Zero Inline `style={{ ... }}`**: Never use inline `style` objects in `.tsx` component files.
+- Place all styling, typography, spacing, and layout rules inside modular CSS files (`.module.css`).
 
 ## Type & Interface Separation
 - **Separate Type Files**: Never define interfaces, models, or prop types inside `.tsx` component files. Leave `.tsx` files strictly for defining UI rendering logic.
