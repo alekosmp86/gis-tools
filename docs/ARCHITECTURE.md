@@ -1,17 +1,19 @@
 # Arquitectura, Desafíos Técnicos y Estado del Proyecto: GIS Tools
 
-Este documento reúne la arquitectura general, decisiones de diseño, patrones aplicados, desafíos técnicos resueltos y la hoja de ruta de desarrollo de la plataforma **GIS Tools**.
+Este documento reúne la arquitectura general, decisiones de diseño, patrones aplicados, procesamiento en segundo plano (Web Workers), desafíos técnicos resueltos y la hoja de ruta de desarrollo de la plataforma **GIS Tools**.
 
 ---
 
 ## 📋 1. Visión General del Proyecto
 
-**GIS Tools** es un portal web modular diseñado para la auditoría, correlación y sincronización de información alfanumérica y espacial entre **bases de datos PostgreSQL/PostGIS** y **fuentes de datos externas** (archivos Shapefile `.zip`, `.geojson` y archivos alfanuméricos `.csv`).
+**GIS Tools** es un portal web modular de alta velocidad diseñado para la auditoría, correlación, análisis de discrepancias y sincronización de información alfanumérica y espacial entre **bases de datos PostgreSQL/PostGIS** y **fuentes de datos externas** (archivos Shapefile `.zip`, `.geojson` y archivos alfanuméricos `.csv`).
 
 ### Principios de Diseño
-1. **Procesamiento 100% en Memoria del Navegador**: Ningún archivo cargado (.zip, .shp, .csv) se almacena en disco de servidores o tablas temporales de base de datos. Toda la inspección ocurre en memoria RAM local del usuario.
-2. **Componentes Atómicos y Reglas Estrictas**: Separación clara entre interfaces UI, hooks de lógica, tipos TypeScript y servicios de dominio.
-3. **Escalabilidad mediante Patrones de Diseño**: Uso del **Patrón Estrategia (Strategy Pattern)** para añadir nuevos formatos de archivos o motores de comparación sin alterar componentes existentes.
+1. **Procesamiento 100% en Memoria Local del Navegador**: Ningún archivo cargado (`.zip`, `.shp`, `.csv`) se almacena en disco de servidores o tablas temporales de base de datos. Toda la inspección ocurre en la memoria RAM del navegador.
+2. **Arquitectura Multihilo (Web Workers)**: Las operaciones pesadas de cómputo (indexado, búsqueda $O(1)$, comparación de miles de registros) se ejecutan en hilos Web Worker en segundo plano, evitando bloquear la interfaz de usuario.
+3. **Componentes Atómicos y Reglas Estrictas**: Separación estricta entre interfaces UI, hooks de estado, tipos TypeScript y servicios de dominio.
+4. **Escalabilidad mediante Patrones de Diseño**: Uso del **Patrón Estrategia (Strategy Pattern)** para añadir nuevos formatos de archivos o motores de comparación sin modificar el código existente.
+5. **Cero Pérdida de Datos en Auditoría**: Detección explícita y reporte de registros con SUIDs Nulos/Vacíos y SUIDs Duplicados.
 
 ---
 
@@ -27,61 +29,144 @@ Para independizar la carga de archivos, la correlación de datos y la interfaz d
 
 2. **Interfaz `IComparisonEngine` ([`src/types/comparison.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/comparison.ts))**:
    - Abstrae la lógica de comparación de datos.
-   - **`DbVsFileComparisonEngine`** ([`src/services/engines/DbVsFileComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsFileComparisonEngine.ts)): Motor universal que correlaciona registros PostGIS contra cualquier dataset `ParsedFileDataset`, clasifica discrepancias y genera parches SQL de actualización.
-
-### B. Organización Modular de Componentes
-- **`src/components/shared/`**: Componentes reutilizables por múltiples herramientas:
-  - `DbConnectionForm.tsx` (Paso 1: Conexión a PostgreSQL e Inspección de Esquema)
-  - `StepIndicator.tsx` (Indicador de pasos horizontal del Wizard)
-  - `ColumnsList.tsx` (Lista de etiquetas de columnas/atributos)
-  - `AlertMessage.tsx` (Notificaciones y alertas de estado)
-- **`src/components/tools/db-shapefile-sync/`**: Componentes del wizard específicos para Shapefiles.
-- **`src/components/tools/db-csv-sync/`**: Componentes del wizard específicos para archivos CSV.
-- **`src/components/ui/`**: Primitivas UI atómicas (`Button`, `Badge`, `FormField`, `SearchInput`).
-
-### C. Cero Comparaciones contra Literales de Texto (Enums & Const Objects)
-Todos los estados, categorías y filtros están tipados mediante objetos constantes/enums en `src/types/`:
-- `DiscrepancyType` (`MATCH`, `ATTRIBUTE_MISMATCH`, `ONLY_IN_DB`, `ONLY_IN_SHP`)
-- `DiscrepancyFilter` (`ALL`, `MATCH`, `ATTRIBUTE_MISMATCH`, `ONLY_IN_DB`, `ONLY_IN_SHP`)
-- `ResultsViewTab` (`TABLE`, `SQL`)
-- `BadgeVariant`, `ButtonVariant`, `ToolCategory`
-
-### D. Persistencia Segura (`localStorageDbConfig.ts`)
-- Utiliza la clave versionada `gis_tools_db_config_v1` para guardar en `localStorage` la configuración de conexión (servidor, puerto, usuario, base de datos, esquema y tabla).
-- **Seguridad**: Excluye automáticamente la contraseña de la persistencia local.
+   - **`DbVsFileComparisonEngine`** ([`src/services/engines/DbVsFileComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsFileComparisonEngine.ts)): Orquestador liviano que delega la comparación al Web Worker en segundo plano.
 
 ---
 
-## ⚡ 3. Desafíos Técnicos y Soluciones Aplicadas
+### B. Arquitectura Asíncrona con Web Workers
 
-### Desafío 1: Truncamiento de Nombres de Columna a 10 Caracteres en dBase III (DBF)
-- **Problema**: El formato DBF limita los nombres de atributos a 10 caracteres (ej. `padron_id` en DBF se exporta como `padron_id` o `padron_i`).
-- **Solución**: Tanto para la clave SUID como para los atributos a comparar, el sistema busca coincidencias evaluando tanto `fieldName.toLowerCase()` como `fieldName.slice(0, 10).toLowerCase()`.
+```
+  [Hilo Principal de UI (React)]
+            │
+            ├─ 1. fetch("/api/db/records")   ──▶ Servidor PostgreSQL (I/O Red)
+            │
+            ├─ 2. serializeFileDataset()     ──▶ Convierte Map<> a Objeto plano (Serializable)
+            │
+            └─ 3. postMessage() ────────────▶ [Hilo Secundario: Web Worker]
+                                                  ├─ Fase 1: Indexado DB (SuidMap + Nulls)
+                                                  ├─ Fase 2: Indexado Archivo (SuidMap + Nulls)
+                                                  ├─ Fase 3: Pre-cálculo O(1) de Mapa de Columnas
+                                                  ├─ Fase 4: Comparación Atributos (UPDATE)
+                                                  ├─ Fase 5: Detección Faltantes en DB (INSERT)
+                                                  └─ postMessage({ type: 'DONE', payload })
+                                                                │
+                                                                ▼
+                                                      [Resolución de Promise / Render UI]
+```
 
-### Desafío 2: Descalces Falsos por Comillas en Cadenas de Texto (`TA014I111T9` vs `"TA014I111T9"`)
-- **Problema**: Exportaciones de texto o DBF envolvían cadenas entre comillas dobles, provocando que `'TA014I111T9'` y `'"TA014I111T9"'` se clasificaran erróneamente como discrepancia de atributos.
-- **Solución**: Se implementó el módulo de limpieza [`src/utils/gisCleaners.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/gisCleaners.ts) con la función `cleanValue`:
-  - Elimina comillas externas (`/^["']|["']$/g`).
-  - Elimina espacios de no separación (`\xa0`), tabulaciones y saltos de línea (`\r\n\t`).
-  - Remueve el sufijo `.0` generado al convertir números flotantes a texto.
-
-### Desafío 3: Reglas de Rendimiento y Cumplimiento de React Doctor
-- **Problema**: Scans $O(N)$ dentro de loops `.map()` y llamadas asíncronas de `setState` dentro de `useEffect`.
-- **Solución**:
-  - Creación del hook de React Query [`useComparisonQuery.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useComparisonQuery.ts) para manejar la ejecución asíncrona del motor con caché cliente.
-  - Indexación previa de arreglos en `Map` y `Set` de búsqueda $O(1)$.
+- **`src/types/workerMessages.ts`**: Protocolo de mensajes fuertemente tipado (`WorkerInputMessage`, `WorkerProgressMessage`, `WorkerDoneMessage`, `WorkerErrorMessage`).
+- **`src/workers/comparisonWorker.ts`**: Web Worker dedicado que realiza el procesamiento $O(N)$ sin congelar la UI.
+- **`src/workers/comparisonWorkerSync.ts`**: Reemplazo sincrónico para entornos SSR donde Web Workers no estén disponibles.
+- **`src/services/workerBridge.ts`**: Adaptador basado en `Promise` con serialización `serializeFileDataset` y fallback automático.
+- **`src/hooks/useComparisonProgress.ts`** & **`src/components/shared/ProgressBar.tsx`**: Hook y componente UI con barra de progreso en tiempo real y contador de registros procesados.
 
 ---
 
-## 🛠️ 4. Herramientas Actuales en el Portal
+### C. Generación Dual de Scripts SQL (UPDATE e INSERT)
 
-1. **Sincronización DB vs. Shapefile** ([`/tools/db-shapefile-sync`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-shapefile-sync/page.tsx)):
-   - Soporta archivos `.zip` (SHP+DBF) y `.geojson`.
-   - Comparación de atributos alfanuméricos y conmutador de topología geométrica.
+El motor clasifica las diferencias y genera dos scripts SQL PostGIS independientes:
 
-2. **Sincronización DB vs. CSV** ([`/tools/db-csv-sync`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-csv-sync/page.tsx)):
-   - Soporta archivos `.csv` delimitados por coma.
-   - Comparación de atributos alfanuméricos y generación de scripts SQL PostGIS.
+1. **Script de Actualización (`sqlUpdateScript`)**:
+   - Diseñado para registros existentes en ambos orígenes pero con valores dispares en atributos.
+   - Sintaxis: `UPDATE "esquema"."tabla" SET "columna" = valor WHERE "suid_col" = 'clave';`
+2. **Script de Inserción (`sqlInsertScript`)**:
+   - Diseñado para registros presentes en el archivo fuente que NO existen en la base de datos.
+   - Sintaxis: `INSERT INTO "esquema"."tabla" ("suid_col", "col1", "col2") VALUES ('clave', val1, val2);`
+3. **Interfaz de Usuario ([`SqlPatchDrawer.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/SqlPatchDrawer.tsx))**:
+   - Pestañas independientes (Cyan para UPDATE, Verde para INSERT) con botones dedicados para copiar al portapapeles o descargar archivos `.sql`.
+
+---
+
+### D. Auditoría Completa de SUIDs (Nulos y Duplicados)
+
+Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
+
+1. **`DiscrepancyType.NULL_SUID`**: Agrupa registros donde la columna SUID es `NULL` o vacía.
+2. **`DiscrepancyType.DUPLICATE_SUID`**: Agrupa registros con claves SUID repetidas, preservando todas sus ocurrencias mediante estructuras `Map<string, Array<Record>>`.
+3. **Barra de Resumen de KPIs ([`DiscrepanciesSummaryBar.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/DiscrepanciesSummaryBar.tsx))**:
+   - Desglose del Total Evaluados (`DB: 10.000 | Archivo: 6.457`).
+   - Tarjetas KPI con badges interactivos para filtrar SUIDs Nulos y SUIDs Duplicados.
+
+---
+
+## 📂 3. Mapa de Archivos por Áreas y Módulos
+
+### Módulo de Dominio y Tipos (`src/types/`)
+- [`src/types/db.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/db.ts): Interfaces de configuración de conexión PostgreSQL (`DbConfig`, `ColumnMappingConfig`).
+- [`src/types/parsers.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/parsers.ts): Interfaces `ParsedFileDataset` e `ISpatialFileParser`.
+- [`src/types/comparison.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/comparison.ts): Enums y modelos de discrepancias (`ComparisonSummary`, `DiscrepancyItem`, `DiscrepancyType`, `DiscrepancyFilter`).
+- [`src/types/workerMessages.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/workerMessages.ts): Protocolo de mensajes del Web Worker.
+- [`src/types/ui.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/ui.ts): Variantes de botones, badges y tipos de alerta.
+- [`src/types/gis.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/gis.ts): Modelos para el catálogo de herramientas y tarjetas.
+
+### Motores y Parseadores (`src/services/`)
+- [`src/services/engines/DbVsFileComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsFileComparisonEngine.ts): Estrategia de comparación PostGIS vs Archivo.
+- [`src/services/workerBridge.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/workerBridge.ts): Puente de comunicación Promise / Worker con fallback SSR.
+- [`src/services/parsers/ShapefileParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/ShapefileParser.ts): Parser para `.zip` (SHP+DBF) y `.geojson`.
+- [`src/services/parsers/CsvParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/CsvParser.ts): Parser para `.csv` delimitado por comas.
+- [`src/services/localStorageDbConfig.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/localStorageDbConfig.ts): Persistencia local de credenciales (excluye contraseñas).
+
+### Hilos Web Worker (`src/workers/`)
+- [`src/workers/comparisonWorker.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparisonWorker.ts): Hilo secundario de comparación asíncrona.
+- [`src/workers/comparisonWorkerSync.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparisonWorkerSync.ts): Fallback sincrónico en caso de SSR.
+
+### Utilidades y Helpers (`src/utils/`)
+- [`src/utils/gisCleaners.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/gisCleaners.ts): Normalización de cadenas, limpieza de comillas (`cleanValue`) y claves SUID (`cleanSuid`).
+
+### Hooks Personalizados (`src/hooks/`)
+- [`src/hooks/useDbConnectionForm.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDbConnectionForm.ts): Lógica del formulario de conexión DB con hidratación post-mount.
+- [`src/hooks/useDbQueries.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDbQueries.ts): Consultas a la API con TanStack React Query.
+- [`src/hooks/useComparisonProgress.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useComparisonProgress.ts): Seguimiento de progreso del Web Worker.
+- [`src/hooks/useSuidMappingForm.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useSuidMappingForm.ts): Lógica del mapa de columnas SUID y atributos.
+
+### Componentes UI Reutilizables (`src/components/shared/`)
+- [`src/components/shared/DbConnectionForm.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/DbConnectionForm.tsx): Paso 1 compartido (Conexión e introspección DB).
+- [`src/components/shared/StepIndicator.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/StepIndicator.tsx): Indicador visual de los 4 pasos del Wizard.
+- [`src/components/shared/ProgressBar.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/ProgressBar.tsx): Barra de progreso animada por fases.
+- [`src/components/shared/ColumnsList.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/ColumnsList.tsx): Visualizador de columnas inspeccionadas.
+- [`src/components/shared/AlertMessage.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/AlertMessage.tsx): Mensajes de estado y alerta.
+
+### Componentes de Herramientas (`src/components/tools/`)
+- **DB vs Shapefile**:
+  - `ShapefileUploader.tsx`: Dropzone para archivos `.zip` / `.geojson`.
+  - `SuidMappingStep.tsx`: Formulario de correspondencia SUID/Atributos.
+  - `Step4ResultsView.tsx`: Panel principal de resultados de comparación.
+  - `DiscrepanciesSummaryBar.tsx`: Tarjetas KPI de resumen.
+  - `DiscrepanciesTable.tsx`: Tabla filtrable de discrepancias con badges.
+  - `SqlPatchDrawer.tsx`: Visor con pestañas de scripts SQL (UPDATE e INSERT).
+- **DB vs CSV**:
+  - `CsvUploader.tsx`: Dropzone e inspección de encabezados `.csv`.
+  - `CsvSuidMappingStep.tsx`: Mapeo de columnas CSV vs DB.
+
+### Rutas de API y Páginas (`src/app/`)
+- [`src/app/api/db/columns/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/columns/route.ts): Endpoint de introspección de columnas y conteo de filas.
+- [`src/app/api/db/records/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/route.ts): Endpoint de consulta de registros PostGIS para comparación.
+- [`src/app/tools/db-shapefile-sync/page.tsx`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-shapefile-sync/page.tsx): Wizard de Sincronización DB vs. Shapefile.
+- [`src/app/tools/db-csv-sync/page.tsx`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-csv-sync/page.tsx): Wizard de Sincronización DB vs. CSV.
+
+---
+
+## ⚡ 4. Desafíos Técnicos y Soluciones Aplicadas
+
+### Desafío 1: Optimización de Búsqueda $O(1)$ frente a Búsquedas Anidadas $O(N^3)$
+- **Problema**: Evaluar `Object.keys(fileRec).find(...)` dentro de un bucle anidado (Campos × Registros DB × Atributos Archivo) provocaba 1.5 millones de escaneos para 10.000 registros, congelando la interfaz.
+- **Solución**: Se pre-calcula el mapa de correspondencia de columnas `fieldToFileKey` **una sola vez** antes de iniciar el bucle de comparación en la Fase 3 del Web Worker, reduciendo el costo de resolución a $O(1)$.
+
+### Desafío 2: Serialización de Objetos `Map` a través de la Frontera `postMessage`
+- **Problema**: La API `structuredClone` de los Web Workers no soporta la transferencia nativa de instancias `Map` complejas.
+- **Solución**: La función `serializeFileDataset` en [`src/services/workerBridge.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/workerBridge.ts) convierte la estructura `recordsMap: Map<>` a un objeto plano `recordsObject` antes de enviar el mensaje, y el worker lo reconstruye internamente.
+
+### Desafío 3: Hidratación Segura de `localStorage` sin Errores SSR ni Advertencias de Renderizado
+- **Problema**: Leer `localStorage` en `useState(() => loadDbConfigFromLocalStorage())` causaba diferencias entre el HTML del servidor (SSR) y el cliente, provocando errores de hidratación (`Hydration failed`).
+- **Solución**: Inicializar el estado de conexión con valores seguros por defecto y programar la hidratación desde `localStorage` post-montaje utilizando `queueMicrotask` dentro de `useEffect` en [`src/hooks/useDbConnectionForm.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDbConnectionForm.ts).
+
+### Desafío 4: Truncamiento de Nombres de Columna a 10 Caracteres en dBase III (DBF)
+- **Problema**: El formato DBF limita los nombres de atributos a 10 caracteres.
+- **Solución**: El motor evalúa coincidencias probando tanto `fieldName.toLowerCase()` como `fieldName.slice(0, 10).toLowerCase()`.
+
+### Desafío 5: Descalces Falsos por Comillas en Cadenas de Texto (`TA014I111T9` vs `"TA014I111T9"`)
+- **Problema**: Exportaciones envueltas entre comillas o con espacios no imprimibles generaban falsas discrepancias.
+- **Solución**: [`src/utils/gisCleaners.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/gisCleaners.ts) limpia comillas externas (`/^["']|["']$/g`), caracteres `\xa0\r\n\t` y sufijos `.0`.
 
 ---
 
@@ -89,10 +174,10 @@ Todos los estados, categorías y filtros están tipados mediante objetos constan
 
 1. **Mapa Interactivo Vectorial (Leaflet / MapLibre + Turf.js)**:
    - Visualizador de mapas en el Paso 4 para colorear entidades espaciales en verde (Coincidencias), amarillo (Discrepancia Atributos), rojo (Solo en DB) y azul (Solo en SHP).
-2. **Comparación Topológica de Geometrías en JS/Wasm**:
-   - Algoritmos de intersección espacial, diferencia de áreas y distancia Hausdorff entre geometrías PostGIS (`ST_AsGeoJSON`) y Shapefiles.
-3. **Nuevos Parseadores de Formatos (Estrategias)**:
+2. **Comparación Topológica de Geometrías en Web Worker**:
+   - Algoritmos de intersección espacial, diferencia de áreas y distancia Hausdorff entre geometrías PostGIS (`ST_AsGeoJSON`) y Shapefiles en el Worker.
+3. **Nuevos Parseadores de Formatos (Estrategias `ISpatialFileParser`)**:
    - `KmlParser` (soporte de Google Earth `.kml` / `.kmz`).
    - `ExcelParser` (libros `.xlsx` / `.xls`).
 4. **Ejecución Directa de Parches SQL (Con Confirmación)**:
-   - Opción para aplicar el parche de actualización generado directamente sobre PostgreSQL (`BEGIN; ... COMMIT;` con `ROLLBACK`).
+   - Opción para aplicar los parches de actualización o inserción directamente sobre PostgreSQL (`BEGIN; ... COMMIT;` con `ROLLBACK`).
