@@ -1,11 +1,6 @@
 import React from "react";
+import type { ButtonProps } from "@/types/ui";
 import styles from "./Button.module.css";
-
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  children: React.ReactNode;
-  variant?: "primary" | "secondary" | "ghost";
-  isDisabled?: boolean;
-}
 
 export const Button: React.FC<ButtonProps> = ({
   children,

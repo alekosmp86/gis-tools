@@ -1,21 +1,16 @@
 import React from "react";
+import { BadgeVariant, type BadgeProps } from "@/types/ui";
 import styles from "./Badge.module.css";
-
-export interface BadgeProps {
-  children: React.ReactNode;
-  variant?: "active" | "dev" | "planned";
-  className?: string;
-}
 
 export const Badge: React.FC<BadgeProps> = ({
   children,
-  variant = "planned",
+  variant = BadgeVariant.PLANNED,
   className = "",
 }) => {
   const variantClass =
-    variant === "active"
+    variant === BadgeVariant.ACTIVE
       ? styles.active
-      : variant === "dev"
+      : variant === BadgeVariant.DEV
       ? styles.dev
       : styles.planned;
 

@@ -1,0 +1,43 @@
+.columnsContainer {
+  padding: 20px;
+  border-radius: 12px;
+  background: rgba(9, 13, 22, 0.6);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.columnsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.columnsTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.rowCount {
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+}
+
+.columnTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.colTag {
+  font-size: 0.775rem;
+  font-family: var(--font-mono);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(6, 182, 212, 0.1);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.2);
+}

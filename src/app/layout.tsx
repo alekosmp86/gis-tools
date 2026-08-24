@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { QueryProvider } from "@/providers/QueryProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "GIS Tools Suite | Spatial Dataset Processing & Correlation",
-  description: "High-performance browser-native spatial tools for comparing database tables with Shapefiles/GeoJSON and generating SQL updates.",
+  title: "Suite de Herramientas SIG | Procesamiento Espacial",
+  description: "Herramientas espaciales de alto rendimiento para comparar tablas de bases de datos con archivos Shapefile/GeoJSON y generar parches SQL para PostGIS.",
 };
 
 export default function RootLayout({
@@ -12,8 +13,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="es">
+      <body>
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }

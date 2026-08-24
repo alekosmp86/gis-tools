@@ -1,11 +1,6 @@
 import React from "react";
+import type { FilterTabsProps } from "@/types/ui";
 import styles from "./FilterTabs.module.css";
-
-export interface FilterTabsProps {
-  categories: string[];
-  activeCategory: string;
-  onSelectCategory: (category: string) => void;
-}
 
 export const FilterTabs: React.FC<FilterTabsProps> = ({
   categories,

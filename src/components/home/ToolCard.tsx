@@ -1,25 +1,9 @@
 import React from "react";
-import { ArrowRight, type LucideIcon } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
+import type { ToolCardProps } from "@/types/gis";
 import styles from "./ToolCard.module.css";
-
-export interface ToolCardData {
-  id: string;
-  title: string;
-  category: string;
-  badge: { label: string; type: "active" | "dev" | "planned" };
-  icon: LucideIcon;
-  description: string;
-  tags: string[];
-  actionLabel: string;
-  enabled: boolean;
-}
-
-export interface ToolCardProps {
-  tool: ToolCardData;
-  onLaunch?: (toolId: string) => void;
-}
 
 export const ToolCard: React.FC<ToolCardProps> = ({ tool, onLaunch }) => {
   const IconComponent = tool.icon;
