@@ -1,0 +1,48 @@
+.viewControlsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.viewTabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tabBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid var(--border-color);
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tabBtn:hover {
+  background: rgba(15, 23, 42, 0.7);
+  color: var(--text-bright);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.tabActive {
+  background: var(--accent-gradient-blue);
+  color: #ffffff;
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+}
+
+.tabActive:hover {
+  background: var(--accent-gradient-blue);
+  color: #ffffff;
+}

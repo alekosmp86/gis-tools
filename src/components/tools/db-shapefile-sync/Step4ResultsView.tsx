@@ -1,13 +1,15 @@
 import React, { useState } from "react";
-import { Loader2, ArrowLeft, Database, Table, FileCode } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Loader2, ArrowLeft, Database } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ProgressBar } from "@/components/shared/ProgressBar";
 import { DiscrepanciesSummaryBar } from "./DiscrepanciesSummaryBar";
 import { DiscrepanciesTable } from "./DiscrepanciesTable";
 import { SqlPatchDrawer } from "./SqlPatchDrawer";
+import { ResultsControlsBar } from "./ResultsControlsBar";
 import { useComparisonProgress } from "@/hooks/useComparisonProgress";
+import { useDiscrepancyGeojson } from "@/hooks/useDiscrepancyGeojson";
 import { DiscrepancyFilter, ResultsViewTab } from "@/types/comparison";
 import type { ParsedFileDataset } from "@/types/parsers";
 import type { DbConfig } from "@/types/db";
@@ -16,6 +18,11 @@ import type { ColumnMappingConfig } from "@/types/gis";
 import { useQuery } from "@tanstack/react-query";
 import { runDatasetComparison } from "@/services/comparisonEngine";
 import styles from "./Step4ResultsView.module.css";
+
+const SpatialMapPreview = dynamic(
+  () => import("@/components/shared/SpatialMapPreview").then((m) => m.SpatialMapPreview),
+  { ssr: false }
+);
 
 interface Step4ResultsViewProps {
   dbConfig: DbConfig;
@@ -58,6 +65,10 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
     error instanceof Error ? error.message : error ? "Error en el análisis." : null;
 
   const showProgress = loading && progress.phase !== "";
+  const hasGeojson = Boolean(fileDataset.geojson && fileDataset.geojson.features && fileDataset.geojson.features.length > 0);
+
+  // Hook encapsulating discrepancy GeoJSON feature collection creation
+  const discrepancyGeojson = useDiscrepancyGeojson(summary, fileDataset, activeFilter);
 
   return (
     <div className={`glass-panel ${styles.container}`}>
@@ -113,35 +124,14 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
           />
 
           {/* Controls Bar & View Mode Tabs */}
-          <div className={styles.viewControlsRow}>
-            <div className={styles.viewTabs}>
-              <button
-                type="button"
-                className={`${styles.tabBtn} ${activeViewTab === ResultsViewTab.TABLE ? styles.tabActive : ""}`}
-                onClick={() => setActiveViewTab(ResultsViewTab.TABLE)}
-              >
-                <Table size={16} />
-                <span>Tabla de Discrepancias ({summary.items.length})</span>
-              </button>
-
-              <button
-                type="button"
-                className={`${styles.tabBtn} ${activeViewTab === ResultsViewTab.SQL ? styles.tabActive : ""}`}
-                onClick={() => setActiveViewTab(ResultsViewTab.SQL)}
-              >
-                <FileCode size={16} />
-                <span>Script SQL PostGIS</span>
-              </button>
-            </div>
-
-            {activeViewTab === ResultsViewTab.TABLE && (
-              <SearchInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="Filtrar por SUID o valor de atributo..."
-              />
-            )}
-          </div>
+          <ResultsControlsBar
+            activeViewTab={activeViewTab}
+            onSelectTab={setActiveViewTab}
+            itemsCount={summary.items.length}
+            hasGeojson={hasGeojson}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
 
           {/* Table View */}
           {activeViewTab === ResultsViewTab.TABLE && (
@@ -149,6 +139,14 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
               items={summary.items}
               activeFilter={activeFilter}
               searchQuery={searchQuery}
+            />
+          )}
+
+          {/* Map View with Color-Coded Discrepancies */}
+          {activeViewTab === ResultsViewTab.MAP && hasGeojson && discrepancyGeojson && (
+            <SpatialMapPreview
+              geojson={discrepancyGeojson}
+              title="MAPA DE DISCREPANCIAS ESPACIALES"
             />
           )}
 

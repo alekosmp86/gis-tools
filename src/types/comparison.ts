@@ -29,6 +29,7 @@ export type DiscrepancyFilter = (typeof DiscrepancyFilter)[keyof typeof Discrepa
 
 export const ResultsViewTab = {
   TABLE: "table",
+  MAP: "map",
   SQL: "sql",
 } as const;
 
