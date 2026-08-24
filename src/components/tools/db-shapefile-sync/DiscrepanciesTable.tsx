@@ -1,5 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { PaginationControls } from "@/components/shared/PaginationControls";
 import { DiscrepancyType, DiscrepancyFilter, type DiscrepanciesTableProps } from "@/types/comparison";
 import { BadgeVariant } from "@/types/ui";
 import styles from "./DiscrepanciesTable.module.css";
@@ -9,6 +10,19 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
   activeFilter,
   searchQuery,
 }) => {
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [filterState, setFilterState] = useState({ activeFilter, searchQuery });
+
+  // Reset page to 1 during render when activeFilter or searchQuery changes
+  if (
+    filterState.activeFilter !== activeFilter ||
+    filterState.searchQuery !== searchQuery
+  ) {
+    setFilterState({ activeFilter, searchQuery });
+    setCurrentPage(1);
+  }
+
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchesFilter =
@@ -26,6 +40,17 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
       return matchesFilter && matchesSearch;
     });
   }, [items, activeFilter, searchQuery]);
+
+  const totalFilteredCount = filteredItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
+  const validCurrentPage = Math.min(currentPage, totalPages);
+
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalFilteredCount);
+
+  const paginatedItems = useMemo(() => {
+    return filteredItems.slice(startIndex, endIndex);
+  }, [filteredItems, startIndex, endIndex]);
 
   const renderTypeBadge = (type: DiscrepancyType) => {
     switch (type) {
@@ -46,13 +71,31 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
     }
   };
 
+  const paginationProps = {
+    currentPage: validCurrentPage,
+    totalPages,
+    pageSize,
+    totalFilteredCount,
+    startIndex,
+    endIndex,
+    onPageChange: setCurrentPage,
+    onPageSizeChange: (newSize: number) => {
+      setPageSize(newSize);
+      setCurrentPage(1);
+    },
+  };
+
   return (
     <div className={styles.tableContainer}>
       <div className={styles.tableHeaderRow}>
         <span className={styles.tableTitle}>
-          Resultados de Discrepancias ({filteredItems.length} registros de {items.length})
+          Resultados de Discrepancias ({totalFilteredCount.toLocaleString("es-UY")} de{" "}
+          {items.length.toLocaleString("es-UY")} registros)
         </span>
       </div>
+
+      {/* Top Pagination Bar */}
+      <PaginationControls {...paginationProps} />
 
       <div className={styles.tableWrapper}>
         <table className={styles.table}>
@@ -66,14 +109,14 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
             </tr>
           </thead>
           <tbody>
-            {filteredItems.length === 0 ? (
+            {paginatedItems.length === 0 ? (
               <tr>
                 <td colSpan={5} className={styles.emptyRow}>
                   No se encontraron registros que coincidan con los filtros aplicados.
                 </td>
               </tr>
             ) : (
-              filteredItems.flatMap((item) => {
+              paginatedItems.flatMap((item) => {
                 if (item.differences.length === 0) {
                   return [
                     <tr key={item.id}>
@@ -120,6 +163,9 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Bottom Pagination Bar */}
+      <PaginationControls {...paginationProps} />
     </div>
   );
 };

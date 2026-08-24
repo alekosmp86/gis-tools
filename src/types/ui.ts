@@ -75,6 +75,18 @@ export interface FilterTabsProps {
   onSelectCategory: (category: string) => void;
 }
 
+export interface PaginationControlsProps {
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+  totalFilteredCount: number;
+  startIndex: number;
+  endIndex: number;
+  pageSizeOptions?: number[];
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}
+
 export interface QueryProviderProps {
   children: React.ReactNode;
 }

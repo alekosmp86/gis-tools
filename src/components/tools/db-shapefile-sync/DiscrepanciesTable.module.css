@@ -23,7 +23,7 @@
 
 .tableWrapper {
   overflow-x: auto;
-  max-height: 500px;
+  max-height: 550px;
   overflow-y: auto;
 }
 
@@ -35,7 +35,7 @@
 }
 
 .table th {
-  background: rgba(15, 23, 42, 0.9);
+  background: rgba(15, 23, 42, 0.95);
   color: var(--text-muted);
   font-size: 0.775rem;
   font-weight: 700;
