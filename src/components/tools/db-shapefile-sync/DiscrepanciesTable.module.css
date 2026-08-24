@@ -78,12 +78,20 @@
   color: #fb7185;
   font-family: var(--font-mono);
   background: rgba(244, 63, 94, 0.04);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shpValueCell {
   color: #38bdf8;
   font-family: var(--font-mono);
   background: rgba(6, 182, 212, 0.04);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dimText {

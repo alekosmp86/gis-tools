@@ -120,7 +120,7 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
                 if (item.differences.length === 0) {
                   return [
                     <tr key={item.id}>
-                      <td className={styles.suidCell}>
+                      <td className={styles.suidCell} title={item.suid}>
                         {item.suid}
                         {item.note && <div className={styles.noteText}>{item.note}</div>}
                       </td>
@@ -132,32 +132,45 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
                   ];
                 }
 
-                return item.differences.map((diff, idx) => (
-                  <tr key={`${item.id}-${diff.fieldName}-${idx}`}>
-                    {idx === 0 && (
-                      <td rowSpan={item.differences.length} className={styles.suidCell}>
-                        {item.suid}
-                        {item.note && <div className={styles.noteText}>{item.note}</div>}
+                return item.differences.map((diff, idx) => {
+                  const dbValStr =
+                    diff.dbValue !== null && diff.dbValue !== undefined
+                      ? String(diff.dbValue)
+                      : "(Vacío / NULL)";
+                  const shpValStr =
+                    diff.shpValue !== null && diff.shpValue !== undefined
+                      ? String(diff.shpValue)
+                      : "(Vacío / NULL)";
+
+                  return (
+                    <tr key={`${item.id}-${diff.fieldName}-${idx}`}>
+                      {idx === 0 && (
+                        <td
+                          rowSpan={item.differences.length}
+                          className={styles.suidCell}
+                          title={item.suid}
+                        >
+                          {item.suid}
+                          {item.note && <div className={styles.noteText}>{item.note}</div>}
+                        </td>
+                      )}
+                      {idx === 0 && (
+                        <td rowSpan={item.differences.length}>
+                          {renderTypeBadge(item.type)}
+                        </td>
+                      )}
+                      <td className={styles.fieldNameCell} title={diff.fieldName}>
+                        {diff.fieldName}
                       </td>
-                    )}
-                    {idx === 0 && (
-                      <td rowSpan={item.differences.length}>
-                        {renderTypeBadge(item.type)}
+                      <td className={styles.dbValueCell} title={dbValStr}>
+                        {dbValStr}
                       </td>
-                    )}
-                    <td className={styles.fieldNameCell}>{diff.fieldName}</td>
-                    <td className={styles.dbValueCell}>
-                      {diff.dbValue !== null && diff.dbValue !== undefined
-                        ? String(diff.dbValue)
-                        : "(Vacío / NULL)"}
-                    </td>
-                    <td className={styles.shpValueCell}>
-                      {diff.shpValue !== null && diff.shpValue !== undefined
-                        ? String(diff.shpValue)
-                        : "(Vacío / NULL)"}
-                    </td>
-                  </tr>
-                ));
+                      <td className={styles.shpValueCell} title={shpValStr}>
+                        {shpValStr}
+                      </td>
+                    </tr>
+                  );
+                });
               })
             )}
           </tbody>
