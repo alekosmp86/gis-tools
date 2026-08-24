@@ -6,11 +6,11 @@ import styles from "./SuidSelectorCard.module.css";
 export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({
   selectableColumns,
   selectedSuids,
-  matchedShpSuids,
+  matchedFileSuids,
   onToggleSuid,
 }) => {
   const isComposite = selectedSuids.length > 1;
-  const allMatched = matchedShpSuids.length > 0 && matchedShpSuids.every((m) => m !== "");
+  const allMatched = matchedFileSuids.length > 0 && matchedFileSuids.every((m) => m !== "");
 
   return (
     <div className={styles.sectionCard}>
@@ -67,7 +67,7 @@ export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({
             <CheckCircle2 size={16} />
             <span>
               Coincidencia en archivo fuente:{" "}
-              <strong>{matchedShpSuids.join(" + ")}</strong>
+              <strong>{matchedFileSuids.join(" + ")}</strong>
             </span>
           </div>
         ) : (

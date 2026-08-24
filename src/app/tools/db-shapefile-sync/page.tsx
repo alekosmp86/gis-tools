@@ -100,7 +100,7 @@ export default function DbShapefileSyncToolPage() {
           <SuidMappingStep
             dbColumns={dbColumns}
             columnDetails={columnDetails}
-            shpAttributes={shapefileData.attributes}
+            fileAttributes={shapefileData.attributes}
             onSuccess={handleMappingSuccess}
             onBack={() => setCurrentStep(2)}
             initialConfig={mappingConfig}

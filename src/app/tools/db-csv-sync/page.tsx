@@ -105,7 +105,7 @@ export default function DbCsvSyncToolPage() {
           <CsvSuidMappingStep
             dbColumns={dbColumns}
             columnDetails={columnDetails}
-            shpAttributes={csvDataset.attributes}
+            fileAttributes={csvDataset.attributes}
             onSuccess={handleMappingSuccess}
             onBack={() => setCurrentStep(2)}
             initialConfig={mappingConfig}

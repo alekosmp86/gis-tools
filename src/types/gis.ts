@@ -51,8 +51,9 @@ export interface InsertFieldDefault {
 
 export interface ColumnMappingConfig {
   suidColumns: string[];
-  matchedShpSuidColumns: string[];
+  matchedFileSuidColumns: string[];
   fieldsToCompare: string[];
+  attributeMap?: Record<string, string>;
   compareGeometry: boolean;
   insertDefaults?: Record<string, InsertFieldDefault>;
 }
@@ -60,7 +61,7 @@ export interface ColumnMappingConfig {
 export interface SuidMappingStepProps {
   dbColumns: string[];
   columnDetails?: DbColumnMetadata[];
-  shpAttributes: string[];
+  fileAttributes: string[];
   onSuccess: (mappingConfig: ColumnMappingConfig) => void;
   onBack: () => void;
   initialConfig?: ColumnMappingConfig | null;
@@ -69,15 +70,17 @@ export interface SuidMappingStepProps {
 export interface SuidSelectorCardProps {
   selectableColumns: string[];
   selectedSuids: string[];
-  matchedShpSuids: string[];
+  matchedFileSuids: string[];
   onToggleSuid: (suid: string) => void;
 }
 
 export interface AttributeFieldsCardProps {
   availableFields: string[];
   selectedFields: string[];
-  shpAttrMap: Map<string, string>;
+  attributeMap: Record<string, string>;
+  fileAttributes: string[];
   onToggleField: (field: string) => void;
+  onMapField: (dbCol: string, fileAttr: string) => void;
   onSelectAll: () => void;
   onClearAll: () => void;
 }
