@@ -19,15 +19,15 @@ export const SuidMappingStep: React.FC<SuidMappingStepProps> = ({
 }) => {
   const {
     selectableColumns,
-    selectedSuid,
-    matchedShpSuid,
+    selectedSuids,
+    matchedShpSuids,
     availableCompareFields,
     selectedFields,
     compareGeometry,
     unmappedDbColumns,
     insertDefaults,
     shpAttrMap,
-    setSelectedSuid,
+    toggleSuidColumn,
     setCompareGeometry,
     toggleField,
     selectAllFields,
@@ -45,17 +45,17 @@ export const SuidMappingStep: React.FC<SuidMappingStepProps> = ({
         <div>
           <h2 className={styles.title}>3. Configuración de SUID y Campos a Comparar</h2>
           <p className={styles.subtitle}>
-            Seleccione el campo clave identificador (SUID), los atributos a comparar y configure valores por defecto para inserciones.
+            Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure valores por defecto.
           </p>
         </div>
       </div>
 
-      {/* 1. SUID Selection Card */}
+      {/* 1. SUID Selection Card (Supports single or multi-column composite keys) */}
       <SuidSelectorCard
         selectableColumns={selectableColumns}
-        selectedSuid={selectedSuid}
-        matchedShpSuid={matchedShpSuid}
-        onSelectSuid={setSelectedSuid}
+        selectedSuids={selectedSuids}
+        matchedShpSuids={matchedShpSuids}
+        onToggleSuid={toggleSuidColumn}
       />
 
       {/* 2. Attributes Selection Card */}
@@ -89,7 +89,7 @@ export const SuidMappingStep: React.FC<SuidMappingStepProps> = ({
           <span>Volver al Paso 2: Archivo Fuente</span>
         </Button>
 
-        <Button variant="primary" onClick={handleProceed} isDisabled={!selectedSuid}>
+        <Button variant="primary" onClick={handleProceed} isDisabled={selectedSuids.length === 0}>
           <span>Iniciar Análisis y Comparación</span>
           <ArrowRight size={16} />
         </Button>

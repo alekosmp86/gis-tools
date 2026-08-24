@@ -14,9 +14,12 @@ export function useSuidMappingForm(
     );
   }, [dbColumns]);
 
-  const [selectedSuid, setSelectedSuid] = useState<string>(
-    initialConfig?.suidColumn || selectableColumns[0] || ""
-  );
+  const [selectedSuids, setSelectedSuids] = useState<string[]>(() => {
+    if (initialConfig?.suidColumns && initialConfig.suidColumns.length > 0) {
+      return initialConfig.suidColumns;
+    }
+    return selectableColumns[0] ? [selectableColumns[0]] : [];
+  });
 
   const [selectedFields, setSelectedFields] = useState<string[]>(
     initialConfig?.fieldsToCompare || []
@@ -39,31 +42,44 @@ export function useSuidMappingForm(
     return map;
   }, [shpAttributes]);
 
-  // Match selected DB SUID to Shapefile attributes
-  const matchedShpSuid = useMemo(() => {
-    if (!selectedSuid) return "";
-    const targetLower = selectedSuid.toLowerCase();
-    const target10Lower = targetLower.slice(0, 10);
+  // Match selected DB SUID columns to Shapefile attributes
+  const matchedShpSuids = useMemo(() => {
+    return selectedSuids.map((suidCol) => {
+      const targetLower = suidCol.toLowerCase();
+      const target10Lower = targetLower.slice(0, 10);
 
-    const matchExact = shpAttrMap.get(targetLower);
-    if (matchExact) return matchExact;
+      const matchExact = shpAttrMap.get(targetLower);
+      if (matchExact) return matchExact;
 
-    const matchTruncated = shpAttrMap.get(target10Lower);
-    return matchTruncated || "";
-  }, [selectedSuid, shpAttrMap]);
+      const matchTruncated = shpAttrMap.get(target10Lower);
+      return matchTruncated || "";
+    });
+  }, [selectedSuids, shpAttrMap]);
 
-  // Filter out SUID from additional comparison fields
+  // Filter out selected SUID columns from available comparison fields
   const availableCompareFields = useMemo(() => {
-    return selectableColumns.filter((col) => col !== selectedSuid);
-  }, [selectableColumns, selectedSuid]);
+    const suidSet = new Set(selectedSuids);
+    return selectableColumns.filter((col) => !suidSet.has(col));
+  }, [selectableColumns, selectedSuids]);
 
   // Unmapped DB columns (columns not chosen as SUID or comparison attributes)
   const unmappedDbColumns = useMemo(() => {
-    const mappedSet = new Set([selectedSuid, ...selectedFields]);
+    const mappedSet = new Set([...selectedSuids, ...selectedFields]);
     return dbColumns.filter(
       (col) => !mappedSet.has(col) && !["geom", "geometry", "wkb_geometry"].includes(col.toLowerCase())
     );
-  }, [dbColumns, selectedSuid, selectedFields]);
+  }, [dbColumns, selectedSuids, selectedFields]);
+
+  const toggleSuidColumn = (col: string) => {
+    setSelectedSuids((prev) => {
+      if (prev.includes(col)) {
+        // Don't allow deselecting the last remaining SUID column
+        if (prev.length <= 1) return prev;
+        return prev.filter((c) => c !== col);
+      }
+      return [...prev, col];
+    });
+  };
 
   const toggleField = (field: string) => {
     setSelectedFields((prev) =>
@@ -87,10 +103,11 @@ export function useSuidMappingForm(
   };
 
   const handleProceed = () => {
-    if (!selectedSuid) return;
+    if (selectedSuids.length === 0) return;
+
     const config: ColumnMappingConfig = {
-      suidColumn: selectedSuid,
-      matchedShpSuidColumn: matchedShpSuid,
+      suidColumns: selectedSuids,
+      matchedShpSuidColumns: matchedShpSuids,
       fieldsToCompare: selectedFields,
       compareGeometry,
       insertDefaults,
@@ -100,15 +117,15 @@ export function useSuidMappingForm(
 
   return {
     selectableColumns,
-    selectedSuid,
-    matchedShpSuid,
+    selectedSuids,
+    matchedShpSuids,
     availableCompareFields,
     selectedFields,
     compareGeometry,
     unmappedDbColumns,
     insertDefaults,
     shpAttrMap,
-    setSelectedSuid,
+    toggleSuidColumn,
     setCompareGeometry,
     toggleField,
     selectAllFields,

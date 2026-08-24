@@ -27,13 +27,13 @@ export class DbVsFileComparisonEngine implements IComparisonEngine {
     dataset: ParsedFileDataset,
     mappingConfig: ColumnMappingConfig
   ): Promise<ComparisonSummary> {
-    // 1. Fetch DB Records from API route (stays on main thread — network I/O)
+    // 1. Fetch DB Records from API route
     const res = await fetch("/api/db/records", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...dbConfig,
-        suid_column: mappingConfig.suidColumn,
+        suid_columns: mappingConfig.suidColumns,
         fields_to_compare: mappingConfig.fieldsToCompare,
       }),
     });
@@ -47,7 +47,7 @@ export class DbVsFileComparisonEngine implements IComparisonEngine {
 
     const dbRecords: Array<Record<string, unknown>> = dbData.records || [];
 
-    // 2. Serialize dataset for postMessage (Map → plain object)
+    // 2. Serialize dataset for postMessage (Map -> plain object)
     const serializedDataset = serializeFileDataset(dataset);
 
     // 3. Offload CPU-intensive work to Web Worker

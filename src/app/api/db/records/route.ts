@@ -13,14 +13,22 @@ export async function POST(request: Request) {
       schema_name = "public",
       table_name,
       suid_column,
+      suid_columns,
       fields_to_compare = [],
     } = body;
 
-    if (!db_name || !user || !table_name || !suid_column) {
+    const suidColsList: string[] =
+      Array.isArray(suid_columns) && suid_columns.length > 0
+        ? suid_columns
+        : suid_column
+        ? [suid_column]
+        : [];
+
+    if (!db_name || !user || !table_name || suidColsList.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          error: "Los parámetros de conexión, tabla y columna SUID son obligatorios.",
+          error: "Los parámetros de conexión, tabla y columnas SUID son obligatorios.",
         },
         { status: 400 }
       );
@@ -39,10 +47,9 @@ export async function POST(request: Request) {
 
     const sanitizeIdentifier = (id: string) => id.replace(/"/g, '""');
 
-    const columnsToSelect = [
-      `"${sanitizeIdentifier(suid_column)}"`,
-      ...fields_to_compare.map((f: string) => `"${sanitizeIdentifier(f)}"`),
-    ];
+    // Combine suidColsList + fields_to_compare deduplicated
+    const allSelectedCols = Array.from(new Set([...suidColsList, ...fields_to_compare]));
+    const columnsToSelect = allSelectedCols.map((col) => `"${sanitizeIdentifier(col)}"`);
 
     const query = `
       SELECT ${columnsToSelect.join(", ")}

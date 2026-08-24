@@ -48,8 +48,8 @@ export interface InsertFieldDefault {
 }
 
 export interface ColumnMappingConfig {
-  suidColumn: string;
-  matchedShpSuidColumn: string;
+  suidColumns: string[];
+  matchedShpSuidColumns: string[];
   fieldsToCompare: string[];
   compareGeometry: boolean;
   insertDefaults?: Record<string, InsertFieldDefault>;
@@ -66,9 +66,9 @@ export interface SuidMappingStepProps {
 
 export interface SuidSelectorCardProps {
   selectableColumns: string[];
-  selectedSuid: string;
-  matchedShpSuid: string;
-  onSelectSuid: (suid: string) => void;
+  selectedSuids: string[];
+  matchedShpSuids: string[];
+  onToggleSuid: (suid: string) => void;
 }
 
 export interface AttributeFieldsCardProps {

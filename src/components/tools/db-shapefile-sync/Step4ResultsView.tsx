@@ -32,13 +32,15 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
 }) => {
   const { progress, onProgress, resetProgress } = useComparisonProgress();
 
+  const suidLabel = mappingConfig.suidColumns ? mappingConfig.suidColumns.join(" + ") : "";
+
   const { data: summary, isLoading: loading, error } = useQuery({
     queryKey: [
       "datasetComparison",
       dbConfig.db_name,
       dbConfig.table_name,
       fileDataset.fileName,
-      mappingConfig.suidColumn,
+      suidLabel,
       mappingConfig.fieldsToCompare,
     ],
     queryFn: () => {
@@ -71,7 +73,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
               {dbConfig.schema_name}.{dbConfig.table_name}
             </code>{" "}
             y el archivo <code>{fileDataset.fileName}</code> usando la clave SUID{" "}
-            <code>{mappingConfig.suidColumn}</code>.
+            <code>{suidLabel}</code>.
           </p>
         </div>
       </div>

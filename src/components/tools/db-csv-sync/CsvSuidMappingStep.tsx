@@ -18,14 +18,14 @@ export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
 }) => {
   const {
     selectableColumns,
-    selectedSuid,
-    matchedShpSuid,
+    selectedSuids,
+    matchedShpSuids,
     availableCompareFields,
     selectedFields,
     unmappedDbColumns,
     insertDefaults,
     shpAttrMap,
-    setSelectedSuid,
+    toggleSuidColumn,
     toggleField,
     selectAllFields,
     clearAllFields,
@@ -42,7 +42,7 @@ export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
         <div>
           <h2 className={styles.title}>3. Mapeo de SUID y Atributos CSV</h2>
           <p className={styles.subtitle}>
-            Seleccione la clave SUID, los atributos a comparar y configure valores por defecto para inserciones.
+            Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure valores por defecto.
           </p>
         </div>
       </div>
@@ -50,9 +50,9 @@ export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
       {/* 1. SUID Selection Card */}
       <SuidSelectorCard
         selectableColumns={selectableColumns}
-        selectedSuid={selectedSuid}
-        matchedShpSuid={matchedShpSuid}
-        onSelectSuid={setSelectedSuid}
+        selectedSuids={selectedSuids}
+        matchedShpSuids={matchedShpSuids}
+        onToggleSuid={toggleSuidColumn}
       />
 
       {/* 2. Attributes Selection Card */}
@@ -80,7 +80,7 @@ export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
           <span>Volver al Paso 2: CSV</span>
         </Button>
 
-        <Button variant="primary" onClick={handleProceed} isDisabled={!selectedSuid}>
+        <Button variant="primary" onClick={handleProceed} isDisabled={selectedSuids.length === 0}>
           <span>Iniciar Análisis de Discrepancias</span>
           <ArrowRight size={16} />
         </Button>

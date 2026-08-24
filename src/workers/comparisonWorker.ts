@@ -1,7 +1,7 @@
 /**
  * comparisonWorker.ts
  * Web Worker — runs all CPU-intensive comparison logic off the main thread.
- * No React, no Next.js, no framework imports. Plain TypeScript + DOM worker APIs.
+ * Supports multi-column Composite SUID keys and dual SQL patch generation.
  */
 import type { WorkerInputMessage, WorkerOutputMessage } from "@/types/workerMessages";
 import type { DiscrepancyItem, AttributeDifference, ComparisonSummary } from "@/types/comparison";
@@ -34,6 +34,21 @@ function toSqlValue(val: unknown): string {
   return `'${cleaned.replace(/'/g, "''")}'`;
 }
 
+function buildCompositeKey(rec: Record<string, unknown>, cols: string[]): string {
+  const cleanedVals = cols.map((col) => cleanSuid(rec[col]));
+  if (cleanedVals.some((val) => !val)) return "";
+  return cleanedVals.join("_");
+}
+
+function buildCompositeRawSuid(rec: Record<string, unknown>, cols: string[]): string {
+  const parts: string[] = [];
+  for (const col of cols) {
+    const val = cleanValue(rec[col]);
+    if (val) parts.push(val);
+  }
+  return parts.join(" | ");
+}
+
 self.onmessage = (event: MessageEvent<WorkerInputMessage>) => {
   if (event.data.type !== "RUN_COMPARISON") return;
   try {
@@ -51,7 +66,10 @@ self.onmessage = (event: MessageEvent<WorkerInputMessage>) => {
 
 function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummary {
   const { dbRecords, fileDataset, mappingConfig, dbSchemaName, dbTableName } = payload;
-  const { suidColumn, matchedShpSuidColumn, fieldsToCompare, insertDefaults } = mappingConfig;
+  const { suidColumns, matchedShpSuidColumns, fieldsToCompare, insertDefaults } = mappingConfig;
+
+  const dbSuidCols = suidColumns || [];
+  const targetFileSuidCols = matchedShpSuidColumns || [];
 
   const totalDbRecords = dbRecords.length;
   const shpFeatures = (fileDataset.geojson as { features?: unknown[] } | undefined)?.features ?? [];
@@ -65,6 +83,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
     `-- ============================================================`,
     `-- ${scriptType}: ${dbSchemaName}.${dbTableName}`,
     `-- Fuente de comparación: ${fileDataset.fileName}`,
+    `-- Clave SUID: ${dbSuidCols.join(", ")}`,
     `-- Generado automáticamente por GIS Tools`,
     `-- ============================================================\n`,
   ];
@@ -79,12 +98,12 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
   let nullSuidCount = 0;
   let duplicateSuidCount = 0;
 
-  // Phase 1: Index DB Records
+  // Phase 1: Index DB Records by Composite SUID Key
   const dbSuidMap = new Map<string, Array<Record<string, unknown>>>();
   const dbNullRecords: Array<Record<string, unknown>> = [];
 
   dbRecords.forEach((rec, i) => {
-    const key = cleanSuid(rec[suidColumn]);
+    const key = buildCompositeKey(rec, dbSuidCols);
     if (!key) {
       dbNullRecords.push(rec);
     } else {
@@ -96,7 +115,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
   });
   emitProgress("Indexando registros de base de datos", totalDbRecords, totalDbRecords);
 
-  // Phase 2: Index File Records
+  // Phase 2: Index Target File Records by Composite SUID Key
   const fileSuidMap = new Map<string, Array<Record<string, unknown>>>();
   const fileGeomMap = new Map<string, unknown>();
   const fileNullRecords: Array<Record<string, unknown>> = [];
@@ -104,8 +123,8 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
   if (shpFeatures.length > 0) {
     (shpFeatures as Array<{ properties: Record<string, unknown>; geometry: unknown }>).forEach(
       (feat, i) => {
-        if (feat.properties && matchedShpSuidColumn) {
-          const key = cleanSuid(feat.properties[matchedShpSuidColumn]);
+        if (feat.properties) {
+          const key = buildCompositeKey(feat.properties, targetFileSuidCols);
           if (!key) {
             fileNullRecords.push(feat.properties);
           } else {
@@ -120,7 +139,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
     );
   } else {
     Object.values(fileDataset.recordsObject).forEach((rec, i) => {
-      const key = cleanSuid(rec[matchedShpSuidColumn]);
+      const key = buildCompositeKey(rec, targetFileSuidCols);
       if (!key) {
         fileNullRecords.push(rec);
       } else {
@@ -158,7 +177,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
       type: DiscrepancyType.NULL_SUID,
       differences: [],
       dbRecord: rec,
-      note: "Registro en base de datos sin clave identificadora SUID.",
+      note: "Registro en base de datos sin clave identificadora SUID completa.",
     });
   });
   fileNullRecords.forEach((rec, idx) => {
@@ -169,7 +188,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
       type: DiscrepancyType.NULL_SUID,
       differences: [],
       shpFeatureProps: rec,
-      note: "Registro en archivo fuente sin clave identificadora SUID.",
+      note: "Registro en archivo fuente sin clave identificadora SUID completa.",
     });
   });
 
@@ -186,7 +205,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
 
     dbRecList.forEach((dbRec, dbIdx) => {
       const fileRec = fileRecList[dbIdx] ?? fileRecList[0];
-      const rawSuid = String(dbRec[suidColumn] ?? suidKey);
+      const rawSuid = buildCompositeRawSuid(dbRec, dbSuidCols) || suidKey;
 
       if (!fileRec) {
         onlyInDbCount++;
@@ -214,8 +233,14 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
             dbValue: dbVal as string | number | null,
             shpValue: fileVal as string | number | null,
           });
+
+          // Build multi-column WHERE clause for composite SUID
+          const whereClause = dbSuidCols
+            .map((col) => `"${col}" = ${toSqlValue(dbRec[col])}`)
+            .join(" AND ");
+
           updateStatements.push(
-            `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal)} WHERE "${suidColumn}" = '${rawSuid}';`
+            `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal)} WHERE ${whereClause};`
           );
         }
       });
@@ -248,7 +273,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
   });
   emitProgress("Comparando atributos", dbMapSize, dbMapSize);
 
-  // Phase 6: Only-in-file scan -> generates INSERT statements with user insertDefaults
+  // Phase 6: Only-in-file scan -> generates INSERT statements
   let fileLoopIdx = 0;
   const fileSuidMapSize = fileSuidMap.size;
 
@@ -257,7 +282,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
       onlyInShpCount += fileRecList.length;
 
       fileRecList.forEach((fileRec, fIdx) => {
-        const rawSuid = String(fileRec[matchedShpSuidColumn] ?? suidKey);
+        const rawSuid = buildCompositeRawSuid(fileRec, targetFileSuidCols) || suidKey;
 
         discrepancyItems.push({
           id: `file-${suidKey}-${fIdx}`,
@@ -268,9 +293,16 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
           shpGeometry: fileGeomMap.get(suidKey),
         });
 
-        // Build INSERT statement: SUID + mapped fields + unmapped user defaults
-        const insertCols: string[] = [`"${suidColumn}"`];
-        const insertVals: string[] = [toSqlValue(rawSuid)];
+        // Build INSERT statement: SUID columns + mapped fields + unmapped user defaults
+        const insertCols: string[] = [];
+        const insertVals: string[] = [];
+
+        dbSuidCols.forEach((col, cIdx) => {
+          const fCol = targetFileSuidCols[cIdx] || targetFileSuidCols[0];
+          const val = fileRec[fCol] ?? fileRec[col];
+          insertCols.push(`"${col}"`);
+          insertVals.push(toSqlValue(val));
+        });
 
         fieldsToCompare.forEach((field) => {
           const fileKey = fieldToFileKey.get(field);
