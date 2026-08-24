@@ -1,6 +1,6 @@
 import type { DbConfig } from "@/types/db";
 
-const STORAGE_KEY = "gis_tools_saved_db_config";
+const STORAGE_KEY = "gis_tools_saved_db_config_v1";
 
 export type SafeDbConfig = Omit<DbConfig, "password">;
 

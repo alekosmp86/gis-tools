@@ -37,6 +37,7 @@ export interface SearchInputProps {
 }
 
 export interface FormFieldProps {
+  id?: string;
   label: string;
   icon?: React.ElementType;
   type?: "text" | "password" | "number" | "email";
