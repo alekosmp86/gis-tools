@@ -53,8 +53,7 @@ export async function POST(request: Request) {
 
     const query = `
       SELECT ${columnsToSelect.join(", ")}
-      FROM "${sanitizeIdentifier(schema_name)}"."${sanitizeIdentifier(table_name)}"
-      LIMIT 10000;
+      FROM "${sanitizeIdentifier(schema_name)}"."${sanitizeIdentifier(table_name)}";
     `;
 
     const result = await client.query(query);
