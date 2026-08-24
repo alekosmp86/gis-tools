@@ -130,6 +130,10 @@
   gap: 8px;
 }
 
+.deleteBtnText {
+  color: var(--accent-rose);
+}
+
 .actionsRow {
   display: flex;
   align-items: center;

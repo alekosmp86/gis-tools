@@ -5,19 +5,22 @@ import Link from "next/link";
 import styles from "./page.module.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
-import { StepIndicator } from "@/components/gis/StepIndicator";
-import { DbConnectionForm } from "@/components/gis/DbConnectionForm";
-import { ShapefileUploader } from "@/components/gis/ShapefileUploader";
+import { StepIndicator } from "@/components/shared/StepIndicator";
+import { DbConnectionForm } from "@/components/tools/db-shapefile-sync/DbConnectionForm";
+import { ShapefileUploader } from "@/components/tools/db-shapefile-sync/ShapefileUploader";
+import { SuidMappingStep } from "@/components/tools/db-shapefile-sync/SuidMappingStep";
 import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
+import type { ColumnMappingConfig } from "@/types/gis";
 import { ArrowLeft } from "lucide-react";
 
 export default function DbShapefileSyncToolPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [dbConfig, setDbConfig] = useState<DbConfig | null>(null);
   const [dbColumns, setDbColumns] = useState<string[]>([]);
-  const [dbTotalRows, setDbTotalRows] = useState<number>(0);
+  const [, setDbTotalRows] = useState<number>(0);
   const [shapefileData, setShapefileData] = useState<ParsedShapefileData | null>(null);
+  const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
 
   const handleDbSuccess = (config: DbConfig, columns: string[], totalRows: number) => {
     setDbConfig(config);
@@ -33,6 +36,11 @@ export default function DbShapefileSyncToolPage() {
 
   const handleShapefileDiscard = () => {
     setShapefileData(null);
+  };
+
+  const handleMappingSuccess = (config: ColumnMappingConfig) => {
+    setMappingConfig(config);
+    setCurrentStep(4);
   };
 
   const handleStepClick = (stepId: number) => {
@@ -79,13 +87,26 @@ export default function DbShapefileSyncToolPage() {
           />
         )}
 
-        {/* Step 3 Placeholder */}
-        {currentStep === 3 && (
-          <div className="glass-panel" style={{ padding: "32px", textAlign: "center" }}>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 700 }}>Paso 3: Mapeo SUID y Atributos</h2>
-            <p style={{ color: "var(--text-muted)", marginTop: "8px" }}>
-              Base de datos: <strong>{dbConfig?.db_name}</strong> (Tabla: <code>{dbConfig?.table_name}</code> - {dbColumns.length} cols, {dbTotalRows} rows) <br />
-              Shapefile cargado: <strong>{shapefileData?.fileName}</strong> ({shapefileData?.featureCount} geometrías, {shapefileData?.attributes.length} atributos DBF)
+        {/* Step 3: SUID & Attributes Column Mapping */}
+        {currentStep === 3 && shapefileData && (
+          <SuidMappingStep
+            dbColumns={dbColumns}
+            shpAttributes={shapefileData.attributes}
+            onSuccess={handleMappingSuccess}
+            onBack={() => setCurrentStep(2)}
+            initialConfig={mappingConfig}
+          />
+        )}
+
+        {/* Step 4 Placeholder: Results & Analysis */}
+        {currentStep === 4 && (
+          <div className={`glass-panel ${styles.placeholderCard}`}>
+            <h2 className={styles.placeholderTitle}>Paso 4: Resultados y Discrepancias</h2>
+            <p className={styles.placeholderText}>
+              Base de datos: <strong>{dbConfig?.db_name}</strong> (Tabla: <code>{dbConfig?.table_name}</code>) <br />
+              SUID Mapeado: <code>{mappingConfig?.suidColumn}</code> &rarr; <code>{mappingConfig?.matchedShpSuidColumn}</code> <br />
+              Atributos a comparar ({mappingConfig?.fieldsToCompare.length}): {mappingConfig?.fieldsToCompare.join(", ")} <br />
+              Comparación Geométrica Topológica: {mappingConfig?.compareGeometry ? "Activada" : "Desactivada"}
             </p>
           </div>
         )}

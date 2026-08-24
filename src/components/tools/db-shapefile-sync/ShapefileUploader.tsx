@@ -1,8 +1,8 @@
 import React, { useState, useRef } from "react";
 import { UploadCloud, FileCheck, Trash2, ArrowRight, Layers, Loader2 } from "lucide-react";
-import { Button } from "../ui/Button";
-import { AlertMessage } from "../shared/AlertMessage";
-import { ColumnsList } from "../shared/ColumnsList";
+import { Button } from "@/components/ui/Button";
+import { AlertMessage } from "@/components/shared/AlertMessage";
+import { ColumnsList } from "@/components/shared/ColumnsList";
 import { parseUploadedSpatialFile } from "@/services/shapefileService";
 import type { ShapefileUploaderProps, ParsedShapefileData } from "@/types/shp";
 import styles from "./ShapefileUploader.module.css";
@@ -60,6 +60,13 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
     }
   };
 
+  const handleDropzoneKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      fileInputRef.current?.click();
+    }
+  };
+
   const handleDiscard = () => {
     setData(null);
     setErrorMessage(null);
@@ -94,17 +101,21 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
         ref={fileInputRef}
         onChange={handleFileChange}
         accept=".zip,.geojson,.json"
-        style={{ display: "none" }}
+        aria-label="Seleccionar archivo Shapefile o GeoJSON"
+        className={styles.hiddenInput}
       />
 
       {/* Upload Zone */}
       {!data && !loading && (
         <div
+          role="button"
+          tabIndex={0}
           className={`${styles.dropzone} ${isDragOver ? styles.dragOver : ""}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
+          onKeyDown={handleDropzoneKeyDown}
         >
           <div className={styles.dropIcon}>
             <UploadCloud size={36} />
@@ -147,7 +158,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
 
             <Button variant="ghost" onClick={handleDiscard}>
               <Trash2 size={16} color="var(--accent-rose)" />
-              <span style={{ color: "var(--accent-rose)" }}>Descartar archivo</span>
+              <span className={styles.discardText}>Descartar archivo</span>
             </Button>
           </div>
 

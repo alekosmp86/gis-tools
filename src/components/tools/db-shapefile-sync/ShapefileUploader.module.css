@@ -28,6 +28,14 @@
   font-weight: 700;
 }
 
+.hiddenInput {
+  display: none;
+}
+
+.discardText {
+  color: var(--accent-rose);
+}
+
 .subtitle {
   font-size: 0.875rem;
   color: var(--text-muted);

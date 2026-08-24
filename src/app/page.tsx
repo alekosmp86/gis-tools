@@ -70,10 +70,10 @@ export default function Home() {
               <Plus size={24} />
             </div>
             <div>
-              <h4 style={{ fontSize: "1.1rem", fontWeight: 600 }}>
+              <h4 className={styles.addTitle}>
                 Solicitar Nueva Herramienta SIG
               </h4>
-              <p style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginTop: "4px" }}>
+              <p className={styles.addText}>
                 Agregue conversores espaciales personalizados, validadores o calculadoras.
               </p>
             </div>

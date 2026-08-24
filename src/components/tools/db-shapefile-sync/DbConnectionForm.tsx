@@ -1,9 +1,9 @@
 import React from "react";
 import { Database, Server, User, Key, Table, Layers, Loader2, Save, Trash2, ShieldCheck, ArrowRight } from "lucide-react";
-import { Button } from "../ui/Button";
-import { FormField } from "../ui/FormField";
-import { AlertMessage } from "../shared/AlertMessage";
-import { ColumnsList } from "../shared/ColumnsList";
+import { Button } from "@/components/ui/Button";
+import { FormField } from "@/components/ui/FormField";
+import { AlertMessage } from "@/components/shared/AlertMessage";
+import { ColumnsList } from "@/components/shared/ColumnsList";
 import { useDbConnectionForm } from "@/hooks/useDbConnectionForm";
 import type { DbConnectionFormProps } from "@/types/db";
 import styles from "./DbConnectionForm.module.css";
@@ -130,7 +130,7 @@ export const DbConnectionForm: React.FC<DbConnectionFormProps> = ({ onSuccess })
           {hasSavedConfig && (
             <Button variant="ghost" onClick={handleClearSavedConfig} type="button">
               <Trash2 size={14} color="var(--accent-rose)" />
-              <span style={{ color: "var(--accent-rose)" }}>Borrar guardada</span>
+              <span className={styles.deleteBtnText}>Borrar guardada</span>
             </Button>
           )}
         </div>
