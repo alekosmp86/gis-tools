@@ -160,11 +160,13 @@ export async function runComparisonSync(
   // Phase 4 — Null SUIDs
   dbNullRecords.forEach((rec, idx) => {
     nullSuidCount++;
-    discrepancyItems.push({ id: `null-db-${idx}`, suid: "(SUID NULL / Vacío en DB)", type: DiscrepancyType.NULL_SUID, differences: [], dbRecord: rec, note: "Registro en base de datos sin clave identificadora SUID completa." });
+    const { differences, note } = extractNullRecordInfo(rec, true, fieldsToCompare, fieldToFileKey);
+    discrepancyItems.push({ id: `null-db-${idx}`, suid: "(SUID NULL / Vacío en DB)", type: DiscrepancyType.NULL_SUID, differences, dbRecord: rec, note });
   });
   fileNullRecords.forEach((rec, idx) => {
     nullSuidCount++;
-    discrepancyItems.push({ id: `null-file-${idx}`, suid: "(SUID NULL / Vacío en Archivo)", type: DiscrepancyType.NULL_SUID, differences: [], shpFeatureProps: rec, note: "Registro en archivo fuente sin clave identificadora SUID completa." });
+    const { differences, note } = extractNullRecordInfo(rec, false, fieldsToCompare, fieldToFileKey);
+    discrepancyItems.push({ id: `null-file-${idx}`, suid: "(SUID NULL / Vacío en Archivo)", type: DiscrepancyType.NULL_SUID, differences, shpFeatureProps: rec, note });
   });
 
   // Phase 5 — Comparison loop
@@ -184,7 +186,14 @@ export async function runComparisonSync(
 
       if (!fileRec) {
         onlyInDbCount++;
-        discrepancyItems.push({ id: `db-${suidKey}-${dbIdx}`, suid: rawSuid, type: isDuplicate ? DiscrepancyType.DUPLICATE_SUID : DiscrepancyType.ONLY_IN_DB, differences: [], dbRecord: dbRec, note: isDuplicate ? `SUID Duplicado (Ocurrencia #${dbIdx + 1} en DB)` : undefined });
+        const differences: AttributeDifference[] = [];
+        fieldsToCompare.forEach((field) => {
+          const dbVal = dbRec[field] !== undefined ? dbRec[field] : null;
+          if (cleanValue(dbVal) !== "") {
+            differences.push({ fieldName: field, dbValue: dbVal as string | number | null, shpValue: null });
+          }
+        });
+        discrepancyItems.push({ id: `db-${suidKey}-${dbIdx}`, suid: rawSuid, type: isDuplicate ? DiscrepancyType.DUPLICATE_SUID : DiscrepancyType.ONLY_IN_DB, differences, dbRecord: dbRec, note: isDuplicate ? `SUID Duplicado (Ocurrencia #${dbIdx + 1} en DB)` : undefined });
         return;
       }
 
@@ -225,7 +234,15 @@ export async function runComparisonSync(
       onlyInShpCount += fileRecList.length;
       fileRecList.forEach((fileRec, fIdx) => {
         const rawSuid = buildCompositeRawSuid(fileRec, targetFileSuidCols) || suidKey;
-        discrepancyItems.push({ id: `file-${suidKey}-${fIdx}`, suid: rawSuid, type: DiscrepancyType.ONLY_IN_SHP, differences: [], shpFeatureProps: fileRec, shpGeometry: fileGeomMap.get(suidKey) });
+        const differences: AttributeDifference[] = [];
+        fieldsToCompare.forEach((field) => {
+          const fileKey = fieldToFileKey.get(field);
+          const fileVal = fileKey != null ? fileRec[fileKey] : null;
+          if (cleanValue(fileVal) !== "") {
+            differences.push({ fieldName: field, dbValue: null, shpValue: fileVal as string | number | null });
+          }
+        });
+        discrepancyItems.push({ id: `file-${suidKey}-${fIdx}`, suid: rawSuid, type: DiscrepancyType.ONLY_IN_SHP, differences, shpFeatureProps: fileRec, shpGeometry: fileGeomMap.get(suidKey) });
 
         const insertCols: string[] = [];
         const insertVals: string[] = [];
@@ -273,4 +290,89 @@ export async function runComparisonSync(
     sqlUpdateScript: updateStatements.join("\n"),
     sqlInsertScript: insertStatements.join("\n"),
   };
+}
+
+function extractNullRecordInfo(
+  rec: Record<string, unknown>,
+  isDb: boolean,
+  fieldsToCompare: string[],
+  fieldToFileKey?: Map<string, string | null>
+): { differences: AttributeDifference[]; note: string } {
+  const differences: AttributeDifference[] = [];
+  const addedFields = new Set<string>();
+  const summaryParts: string[] = [];
+
+  fieldsToCompare.forEach((field) => {
+    let fileKey: string | null | undefined = field;
+    if (!isDb && fieldToFileKey) {
+      fileKey = fieldToFileKey.get(field);
+    }
+    const val = isDb ? rec[field] : (fileKey ? rec[fileKey] : rec[field]);
+    if (val !== undefined && val !== null && cleanValue(val) !== "") {
+      differences.push({
+        fieldName: field,
+        dbValue: isDb ? (val as string | number | null) : null,
+        shpValue: isDb ? null : (val as string | number | null),
+      });
+      addedFields.add(field.toLowerCase());
+      if (summaryParts.length < 3) {
+        summaryParts.push(`${field}: ${String(val)}`);
+      }
+    }
+  });
+
+  Object.entries(rec).forEach(([key, val]) => {
+    const keyLower = key.toLowerCase();
+    if (addedFields.has(keyLower)) return;
+    if (["geom", "geometry", "wkb_geometry", "shape_leng", "shape_area"].includes(keyLower)) return;
+
+    const isIdentifierKey =
+      keyLower.includes("id") ||
+      keyLower.includes("gid") ||
+      keyLower.includes("fid") ||
+      keyLower.includes("cod") ||
+      keyLower.includes("nom") ||
+      keyLower.includes("name") ||
+      keyLower.includes("ref") ||
+      keyLower.includes("num");
+
+    if (isIdentifierKey && val !== undefined && val !== null && cleanValue(val) !== "") {
+      differences.push({
+        fieldName: key,
+        dbValue: isDb ? (val as string | number | null) : null,
+        shpValue: isDb ? null : (val as string | number | null),
+      });
+      addedFields.add(keyLower);
+      if (summaryParts.length < 3) {
+        summaryParts.push(`${key}: ${String(val)}`);
+      }
+    }
+  });
+
+  if (differences.length === 0) {
+    Object.entries(rec).forEach(([key, val]) => {
+      if (addedFields.size >= 5) return;
+      const keyLower = key.toLowerCase();
+      if (["geom", "geometry", "wkb_geometry", "shape_leng", "shape_area"].includes(keyLower)) return;
+      if (val !== undefined && val !== null && cleanValue(val) !== "") {
+        differences.push({
+          fieldName: key,
+          dbValue: isDb ? (val as string | number | null) : null,
+          shpValue: isDb ? null : (val as string | number | null),
+        });
+        addedFields.add(keyLower);
+        if (summaryParts.length < 3) {
+          summaryParts.push(`${key}: ${String(val)}`);
+        }
+      }
+    });
+  }
+
+  const originText = isDb ? "base de datos" : "archivo fuente";
+  let note = `Registro en ${originText} sin clave identificadora SUID completa.`;
+  if (summaryParts.length > 0) {
+    note += ` [Atributos: ${summaryParts.join(" | ")}]`;
+  }
+
+  return { differences, note };
 }
