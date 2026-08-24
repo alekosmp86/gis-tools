@@ -34,7 +34,7 @@ export async function runComparisonSync(
   onProgress?: ProgressCallback
 ): Promise<ComparisonSummary> {
   const { dbRecords, fileDataset, mappingConfig, dbSchemaName, dbTableName } = payload;
-  const { suidColumn, matchedShpSuidColumn, fieldsToCompare } = mappingConfig;
+  const { suidColumn, matchedShpSuidColumn, fieldsToCompare, insertDefaults } = mappingConfig;
   const emit = (phase: string, current: number, total: number) =>
     onProgress?.(phase, current, total);
 
@@ -188,7 +188,7 @@ export async function runComparisonSync(
   });
   emit("Comparando atributos", dbMapSize, dbMapSize);
 
-  // Phase 6 — Only-in-file → INSERT
+  // Phase 6 — Only-in-file -> INSERT with insertDefaults
   let fileLoopIdx = 0;
   const fileSuidMapSize = fileSuidMap.size;
   fileSuidMap.forEach((fileRecList, suidKey) => {
@@ -207,6 +207,20 @@ export async function runComparisonSync(
             insertVals.push(toSqlValue(fileRec[fileKey]));
           }
         });
+
+        if (insertDefaults) {
+          Object.entries(insertDefaults).forEach(([fieldName, defConfig]) => {
+            if (defConfig.value && defConfig.value.trim() !== "") {
+              insertCols.push(`"${fieldName}"`);
+              if (defConfig.useRawExpression) {
+                insertVals.push(defConfig.value.trim());
+              } else {
+                insertVals.push(toSqlValue(defConfig.value));
+              }
+            }
+          });
+        }
+
         insertStatements.push(`INSERT INTO "${dbSchemaName}"."${dbTableName}" (${insertCols.join(", ")}) VALUES (${insertVals.join(", ")});`);
       });
     }

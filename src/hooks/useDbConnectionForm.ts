@@ -7,23 +7,22 @@ import {
   clearDbConfigFromLocalStorage,
 } from "@/services/localStorageDbConfig";
 import { AlertType } from "@/types/ui";
-import type { DbConfig } from "@/types/db";
+import type { DbConfig, DbColumnMetadata, DbConnectionFormProps } from "@/types/db";
 
-export function useDbConnectionForm(
-  onSuccess: (config: DbConfig, columns: string[], totalRows: number) => void
-) {
+export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"]) {
   const [config, setConfig] = useState<DbConfig>(INITIAL_DB_CONFIG);
   const [statusMessage, setStatusMessage] = useState<{
     type: AlertType;
     text: string;
   } | null>(null);
   const [columnsLoaded, setColumnsLoaded] = useState<string[]>([]);
+  const [columnDetailsLoaded, setColumnDetailsLoaded] = useState<DbColumnMetadata[]>([]);
   const [totalRowsLoaded, setTotalRowsLoaded] = useState<number | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [hasSavedConfig, setHasSavedConfig] = useState<boolean>(false);
   const [autoSave, setAutoSave] = useState(true);
 
-  // Client-side hydration from localStorage post-mount (scheduled asynchronously to avoid cascading render warnings)
+  // Client-side hydration from localStorage post-mount
   useEffect(() => {
     const saved = loadDbConfigFromLocalStorage();
     if (saved) {
@@ -41,6 +40,7 @@ export function useDbConnectionForm(
     setStatusMessage(null);
     setIsConnected(false);
     setColumnsLoaded([]);
+    setColumnDetailsLoaded([]);
     setTotalRowsLoaded(null);
   };
 
@@ -59,6 +59,7 @@ export function useDbConnectionForm(
     fetchColumnsMutation.mutate(config, {
       onSuccess: (data) => {
         setColumnsLoaded(data.columns);
+        setColumnDetailsLoaded(data.columnDetails || []);
         setTotalRowsLoaded(data.totalRows);
         setIsConnected(true);
 
@@ -99,7 +100,7 @@ export function useDbConnectionForm(
 
   const handleProceed = () => {
     if (isConnected && columnsLoaded.length > 0) {
-      onSuccess(config, columnsLoaded, totalRowsLoaded || 0);
+      onSuccess(config, columnsLoaded, totalRowsLoaded || 0, columnDetailsLoaded);
     }
   };
 
@@ -107,6 +108,7 @@ export function useDbConnectionForm(
     config,
     statusMessage,
     columnsLoaded,
+    columnDetailsLoaded,
     totalRowsLoaded,
     isConnected,
     hasSavedConfig,

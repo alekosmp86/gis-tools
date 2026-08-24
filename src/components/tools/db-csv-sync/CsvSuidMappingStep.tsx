@@ -3,12 +3,14 @@ import { GitMerge, ArrowRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SuidSelectorCard } from "@/components/tools/db-shapefile-sync/SuidSelectorCard";
 import { AttributeFieldsCard } from "@/components/tools/db-shapefile-sync/AttributeFieldsCard";
+import { InsertDefaultsCard } from "@/components/tools/db-shapefile-sync/InsertDefaultsCard";
 import { useSuidMappingForm } from "@/hooks/useSuidMappingForm";
 import type { SuidMappingStepProps } from "@/types/gis";
 import styles from "./CsvSuidMappingStep.module.css";
 
 export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
   dbColumns,
+  columnDetails,
   shpAttributes,
   onSuccess,
   onBack,
@@ -20,11 +22,14 @@ export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
     matchedShpSuid,
     availableCompareFields,
     selectedFields,
+    unmappedDbColumns,
+    insertDefaults,
     shpAttrMap,
     setSelectedSuid,
     toggleField,
     selectAllFields,
     clearAllFields,
+    handleUpdateInsertDefault,
     handleProceed,
   } = useSuidMappingForm(dbColumns, shpAttributes, onSuccess, initialConfig);
 
@@ -37,7 +42,7 @@ export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
         <div>
           <h2 className={styles.title}>3. Mapeo de SUID y Atributos CSV</h2>
           <p className={styles.subtitle}>
-            Seleccione el campo clave identificador (SUID) y los atributos alfanuméricos que desea comparar contra el archivo CSV.
+            Seleccione la clave SUID, los atributos a comparar y configure valores por defecto para inserciones.
           </p>
         </div>
       </div>
@@ -58,6 +63,14 @@ export const CsvSuidMappingStep: React.FC<SuidMappingStepProps> = ({
         onToggleField={toggleField}
         onSelectAll={selectAllFields}
         onClearAll={clearAllFields}
+      />
+
+      {/* 3. Insert Defaults Card for Unmapped DB Fields (NOT NULL Handling) */}
+      <InsertDefaultsCard
+        unmappedColumns={unmappedDbColumns}
+        columnDetails={columnDetails}
+        defaults={insertDefaults}
+        onChangeDefault={handleUpdateInsertDefault}
       />
 
       {/* Navigation Actions */}

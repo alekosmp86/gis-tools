@@ -8,8 +8,11 @@ export interface DbConfig {
   table_name: string;
 }
 
-export interface DbConnectionFormProps {
-  onSuccess: (config: DbConfig, columns: string[], totalRows: number) => void;
+export interface DbColumnMetadata {
+  column_name: string;
+  data_type: string;
+  is_nullable: boolean;
+  column_default: string | null;
 }
 
 export interface ColumnsResponse {
@@ -17,8 +20,18 @@ export interface ColumnsResponse {
   schema: string;
   tableName: string;
   columns: string[];
+  columnDetails?: DbColumnMetadata[];
   totalRows: number;
   error?: string;
+}
+
+export interface DbConnectionFormProps {
+  onSuccess: (
+    config: DbConfig,
+    columns: string[],
+    totalRows: number,
+    columnDetails?: DbColumnMetadata[]
+  ) => void;
 }
 
 export interface TestConnectionResponse {

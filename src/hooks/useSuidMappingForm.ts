@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import type { ColumnMappingConfig } from "@/types/gis";
+import type { ColumnMappingConfig, InsertFieldDefault } from "@/types/gis";
 
 export function useSuidMappingForm(
   dbColumns: string[],
@@ -26,6 +26,10 @@ export function useSuidMappingForm(
     initialConfig?.compareGeometry ?? false
   );
 
+  const [insertDefaults, setInsertDefaults] = useState<Record<string, InsertFieldDefault>>(
+    initialConfig?.insertDefaults || {}
+  );
+
   // Pre-index Shapefile attributes in a Map for fast O(1) lookups
   const shpAttrMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -35,7 +39,7 @@ export function useSuidMappingForm(
     return map;
   }, [shpAttributes]);
 
-  // Match selected DB SUID to Shapefile attributes (handles case-insensitivity & 10-char DBF truncation)
+  // Match selected DB SUID to Shapefile attributes
   const matchedShpSuid = useMemo(() => {
     if (!selectedSuid) return "";
     const targetLower = selectedSuid.toLowerCase();
@@ -53,6 +57,14 @@ export function useSuidMappingForm(
     return selectableColumns.filter((col) => col !== selectedSuid);
   }, [selectableColumns, selectedSuid]);
 
+  // Unmapped DB columns (columns not chosen as SUID or comparison attributes)
+  const unmappedDbColumns = useMemo(() => {
+    const mappedSet = new Set([selectedSuid, ...selectedFields]);
+    return dbColumns.filter(
+      (col) => !mappedSet.has(col) && !["geom", "geometry", "wkb_geometry"].includes(col.toLowerCase())
+    );
+  }, [dbColumns, selectedSuid, selectedFields]);
+
   const toggleField = (field: string) => {
     setSelectedFields((prev) =>
       prev.includes(field) ? prev.filter((f) => f !== field) : [...prev, field]
@@ -67,6 +79,13 @@ export function useSuidMappingForm(
     setSelectedFields([]);
   };
 
+  const handleUpdateInsertDefault = (fieldName: string, fieldDefault: InsertFieldDefault) => {
+    setInsertDefaults((prev) => ({
+      ...prev,
+      [fieldName]: fieldDefault,
+    }));
+  };
+
   const handleProceed = () => {
     if (!selectedSuid) return;
     const config: ColumnMappingConfig = {
@@ -74,6 +93,7 @@ export function useSuidMappingForm(
       matchedShpSuidColumn: matchedShpSuid,
       fieldsToCompare: selectedFields,
       compareGeometry,
+      insertDefaults,
     };
     onSuccess(config);
   };
@@ -85,12 +105,15 @@ export function useSuidMappingForm(
     availableCompareFields,
     selectedFields,
     compareGeometry,
+    unmappedDbColumns,
+    insertDefaults,
     shpAttrMap,
     setSelectedSuid,
     setCompareGeometry,
     toggleField,
     selectAllFields,
     clearAllFields,
+    handleUpdateInsertDefault,
     handleProceed,
   };
 }

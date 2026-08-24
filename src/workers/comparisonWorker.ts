@@ -7,8 +7,6 @@ import type { WorkerInputMessage, WorkerOutputMessage } from "@/types/workerMess
 import type { DiscrepancyItem, AttributeDifference, ComparisonSummary } from "@/types/comparison";
 import { DiscrepancyType } from "@/types/comparison";
 
-// ─── Inline utility functions ────────────────────────────────────────────────
-
 function cleanValue(val: unknown): string {
   if (val === null || val === undefined) return "";
   let str = String(val).trim();
@@ -27,8 +25,6 @@ function emitProgress(phase: string, current: number, total: number): void {
   self.postMessage(msg);
 }
 
-// ─── SQL value formatter ──────────────────────────────────────────────────────
-
 function toSqlValue(val: unknown): string {
   if (val === null || val === undefined || cleanValue(val) === "") return "NULL";
   const cleaned = cleanValue(val);
@@ -37,8 +33,6 @@ function toSqlValue(val: unknown): string {
   }
   return `'${cleaned.replace(/'/g, "''")}'`;
 }
-
-// ─── Main Worker Handler ──────────────────────────────────────────────────────
 
 self.onmessage = (event: MessageEvent<WorkerInputMessage>) => {
   if (event.data.type !== "RUN_COMPARISON") return;
@@ -55,11 +49,9 @@ self.onmessage = (event: MessageEvent<WorkerInputMessage>) => {
   }
 };
 
-// ─── Core Comparison Logic ────────────────────────────────────────────────────
-
 function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummary {
   const { dbRecords, fileDataset, mappingConfig, dbSchemaName, dbTableName } = payload;
-  const { suidColumn, matchedShpSuidColumn, fieldsToCompare } = mappingConfig;
+  const { suidColumn, matchedShpSuidColumn, fieldsToCompare, insertDefaults } = mappingConfig;
 
   const totalDbRecords = dbRecords.length;
   const shpFeatures = (fileDataset.geojson as { features?: unknown[] } | undefined)?.features ?? [];
@@ -87,7 +79,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
   let nullSuidCount = 0;
   let duplicateSuidCount = 0;
 
-  // ── Phase 1: Index DB Records ──────────────────────────────────────────────
+  // Phase 1: Index DB Records
   const dbSuidMap = new Map<string, Array<Record<string, unknown>>>();
   const dbNullRecords: Array<Record<string, unknown>> = [];
 
@@ -104,7 +96,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
   });
   emitProgress("Indexando registros de base de datos", totalDbRecords, totalDbRecords);
 
-  // ── Phase 2: Index File Records ────────────────────────────────────────────
+  // Phase 2: Index File Records
   const fileSuidMap = new Map<string, Array<Record<string, unknown>>>();
   const fileGeomMap = new Map<string, unknown>();
   const fileNullRecords: Array<Record<string, unknown>> = [];
@@ -141,7 +133,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
   }
   emitProgress("Indexando archivo fuente", totalFileRecords, totalFileRecords);
 
-  // ── Phase 3: Pre-compute field → file column key map (O(F × K), runs once) ─
+  // Phase 3: Pre-compute field -> file column key map
   const firstFileRecord: Record<string, unknown> =
     (fileSuidMap.values().next().value as Array<Record<string, unknown>> | undefined)?.[0] ??
     fileNullRecords[0] ??
@@ -157,7 +149,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
     fieldToFileKey.set(field, match ?? null);
   });
 
-  // ── Phase 4: Report NULL SUIDs ─────────────────────────────────────────────
+  // Phase 4: Report NULL SUIDs
   dbNullRecords.forEach((rec, idx) => {
     nullSuidCount++;
     discrepancyItems.push({
@@ -181,7 +173,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
     });
   });
 
-  // ── Phase 5: Main Comparison Loop (DB vs File) ─────────────────────────────
+  // Phase 5: Main Comparison Loop (DB vs File)
   const processedSuids = new Set<string>();
   let loopIdx = 0;
   const dbMapSize = dbSuidMap.size;
@@ -209,7 +201,6 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
         return;
       }
 
-      // Compare fields using pre-computed key map
       const differences: AttributeDifference[] = [];
 
       fieldsToCompare.forEach((field) => {
@@ -223,7 +214,6 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
             dbValue: dbVal as string | number | null,
             shpValue: fileVal as string | number | null,
           });
-          // UPDATE statement — one SET per mismatched field
           updateStatements.push(
             `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal)} WHERE "${suidColumn}" = '${rawSuid}';`
           );
@@ -258,7 +248,7 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
   });
   emitProgress("Comparando atributos", dbMapSize, dbMapSize);
 
-  // ── Phase 6: Only-in-file scan → generates INSERT statements ──────────────
+  // Phase 6: Only-in-file scan -> generates INSERT statements with user insertDefaults
   let fileLoopIdx = 0;
   const fileSuidMapSize = fileSuidMap.size;
 
@@ -278,19 +268,30 @@ function runComparison(payload: WorkerInputMessage["payload"]): ComparisonSummar
           shpGeometry: fileGeomMap.get(suidKey),
         });
 
-        // Build INSERT statement from available file columns
-        // Columns: suidColumn (mapped from file) + all fieldsToCompare that exist in fileRec
+        // Build INSERT statement: SUID + mapped fields + unmapped user defaults
         const insertCols: string[] = [`"${suidColumn}"`];
         const insertVals: string[] = [toSqlValue(rawSuid)];
 
         fieldsToCompare.forEach((field) => {
           const fileKey = fieldToFileKey.get(field);
           if (fileKey != null) {
-            const fileVal = fileRec[fileKey];
             insertCols.push(`"${field}"`);
-            insertVals.push(toSqlValue(fileVal));
+            insertVals.push(toSqlValue(fileRec[fileKey]));
           }
         });
+
+        if (insertDefaults) {
+          Object.entries(insertDefaults).forEach(([fieldName, defConfig]) => {
+            if (defConfig.value && defConfig.value.trim() !== "") {
+              insertCols.push(`"${fieldName}"`);
+              if (defConfig.useRawExpression) {
+                insertVals.push(defConfig.value.trim());
+              } else {
+                insertVals.push(toSqlValue(defConfig.value));
+              }
+            }
+          });
+        }
 
         insertStatements.push(
           `INSERT INTO "${dbSchemaName}"."${dbTableName}" (${insertCols.join(", ")}) VALUES (${insertVals.join(", ")});`

@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/Button";
 import { SuidSelectorCard } from "./SuidSelectorCard";
 import { AttributeFieldsCard } from "./AttributeFieldsCard";
 import { GeometryToggleCard } from "./GeometryToggleCard";
+import { InsertDefaultsCard } from "./InsertDefaultsCard";
 import { useSuidMappingForm } from "@/hooks/useSuidMappingForm";
 import type { SuidMappingStepProps } from "@/types/gis";
 import styles from "./SuidMappingStep.module.css";
 
 export const SuidMappingStep: React.FC<SuidMappingStepProps> = ({
   dbColumns,
+  columnDetails,
   shpAttributes,
   onSuccess,
   onBack,
@@ -22,12 +24,15 @@ export const SuidMappingStep: React.FC<SuidMappingStepProps> = ({
     availableCompareFields,
     selectedFields,
     compareGeometry,
+    unmappedDbColumns,
+    insertDefaults,
     shpAttrMap,
     setSelectedSuid,
     setCompareGeometry,
     toggleField,
     selectAllFields,
     clearAllFields,
+    handleUpdateInsertDefault,
     handleProceed,
   } = useSuidMappingForm(dbColumns, shpAttributes, onSuccess, initialConfig);
 
@@ -40,7 +45,7 @@ export const SuidMappingStep: React.FC<SuidMappingStepProps> = ({
         <div>
           <h2 className={styles.title}>3. Configuración de SUID y Campos a Comparar</h2>
           <p className={styles.subtitle}>
-            Seleccione el campo clave identificador (SUID) y los atributos alfanuméricos y geométricos que desea analizar.
+            Seleccione el campo clave identificador (SUID), los atributos a comparar y configure valores por defecto para inserciones.
           </p>
         </div>
       </div>
@@ -63,7 +68,15 @@ export const SuidMappingStep: React.FC<SuidMappingStepProps> = ({
         onClearAll={clearAllFields}
       />
 
-      {/* 3. Geometry Comparison Toggle Card */}
+      {/* 3. Insert Defaults for Unmapped DB Fields (NOT NULL Handling) */}
+      <InsertDefaultsCard
+        unmappedColumns={unmappedDbColumns}
+        columnDetails={columnDetails}
+        defaults={insertDefaults}
+        onChangeDefault={handleUpdateInsertDefault}
+      />
+
+      {/* 4. Geometry Comparison Toggle Card */}
       <GeometryToggleCard
         compareGeometry={compareGeometry}
         onToggleGeometry={setCompareGeometry}
@@ -73,7 +86,7 @@ export const SuidMappingStep: React.FC<SuidMappingStepProps> = ({
       <div className={styles.actionsRow}>
         <Button variant="secondary" onClick={onBack}>
           <ArrowLeft size={16} />
-          <span>Volver al Paso 2: Shapefile</span>
+          <span>Volver al Paso 2: Archivo Fuente</span>
         </Button>
 
         <Button variant="primary" onClick={handleProceed} isDisabled={!selectedSuid}>

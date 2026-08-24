@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { BadgeVariant } from "./ui";
+import type { DbColumnMetadata } from "./db";
 
 export const ToolCategory = {
   ALL: "Todos",
@@ -40,15 +41,23 @@ export interface ToolCardProps {
   onLaunch?: (toolId: string) => void;
 }
 
+export interface InsertFieldDefault {
+  fieldName: string;
+  value: string;
+  useRawExpression: boolean;
+}
+
 export interface ColumnMappingConfig {
   suidColumn: string;
   matchedShpSuidColumn: string;
   fieldsToCompare: string[];
   compareGeometry: boolean;
+  insertDefaults?: Record<string, InsertFieldDefault>;
 }
 
 export interface SuidMappingStepProps {
   dbColumns: string[];
+  columnDetails?: DbColumnMetadata[];
   shpAttributes: string[];
   onSuccess: (mappingConfig: ColumnMappingConfig) => void;
   onBack: () => void;

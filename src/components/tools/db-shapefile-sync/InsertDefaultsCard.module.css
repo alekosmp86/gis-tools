@@ -1,0 +1,205 @@
+.card {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: rgba(9, 13, 22, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.iconBox {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #34d399;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.subtitle {
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  flex-wrap: wrap;
+  transition: all 0.2s ease;
+}
+
+.requiredRow {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.04);
+}
+
+.colInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.nameGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.colName {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.dataType {
+  font-family: var(--font-mono);
+  font-size: 0.725rem;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badgeRequired {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.badgeDbDefault {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.25);
+}
+
+.badgeNullable {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim);
+  border: 1px solid var(--border-color);
+}
+
+.inputGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.inputWrapper {
+  flex: 1;
+  max-width: 240px;
+}
+
+.valueInput {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(4, 7, 13, 0.8);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 0.825rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.valueInput:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 10px var(--accent-cyan-glow);
+}
+
+.expressionToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.775rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.expressionToggle input {
+  accent-color: var(--accent-cyan);
+}
+
+.quickFillButtons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quickBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: var(--accent-cyan);
+  font-size: 0.725rem;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quickBtn:hover {
+  background: rgba(6, 182, 212, 0.25);
+}

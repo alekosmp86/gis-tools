@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Client } from "pg";
+import type { DbColumnMetadata } from "@/types/db";
 
 export async function POST(request: Request) {
   try {
@@ -26,9 +27,9 @@ export async function POST(request: Request) {
 
     await client.connect();
 
-    // Query information_schema for column names
+    // Query information_schema for column names, nullability, data types, and default values
     const columnsQuery = `
-      SELECT column_name, data_type 
+      SELECT column_name, data_type, is_nullable, column_default 
       FROM information_schema.columns 
       WHERE table_schema = $1 AND table_name = $2
       ORDER BY ordinal_position;
@@ -59,13 +60,21 @@ export async function POST(request: Request) {
 
     await client.end();
 
-    const columns = colRes.rows.map((row) => row.column_name);
+    const columnDetails: DbColumnMetadata[] = colRes.rows.map((row) => ({
+      column_name: row.column_name,
+      data_type: row.data_type,
+      is_nullable: row.is_nullable === "YES",
+      column_default: row.column_default ? String(row.column_default) : null,
+    }));
+
+    const columns = columnDetails.map((col) => col.column_name);
 
     return NextResponse.json({
       success: true,
       schema,
       tableName: table_name,
       columns,
+      columnDetails,
       totalRows: rowCount,
     });
   } catch (error: unknown) {

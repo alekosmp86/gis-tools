@@ -10,7 +10,7 @@ import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { CsvUploader } from "@/components/tools/db-csv-sync/CsvUploader";
 import { CsvSuidMappingStep } from "@/components/tools/db-csv-sync/CsvSuidMappingStep";
 import { Step4ResultsView } from "@/components/tools/db-shapefile-sync/Step4ResultsView";
-import type { DbConfig } from "@/types/db";
+import type { DbConfig, DbColumnMetadata } from "@/types/db";
 import type { ParsedFileDataset } from "@/types/parsers";
 import type { ColumnMappingConfig } from "@/types/gis";
 import { ArrowLeft } from "lucide-react";
@@ -19,13 +19,20 @@ export default function DbCsvSyncToolPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [dbConfig, setDbConfig] = useState<DbConfig | null>(null);
   const [dbColumns, setDbColumns] = useState<string[]>([]);
+  const [columnDetails, setColumnDetails] = useState<DbColumnMetadata[]>([]);
   const [, setDbTotalRows] = useState<number>(0);
   const [csvDataset, setCsvDataset] = useState<ParsedFileDataset | null>(null);
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
 
-  const handleDbSuccess = (config: DbConfig, columns: string[], totalRows: number) => {
+  const handleDbSuccess = (
+    config: DbConfig,
+    columns: string[],
+    totalRows: number,
+    details?: DbColumnMetadata[]
+  ) => {
     setDbConfig(config);
     setDbColumns(columns);
+    setColumnDetails(details || []);
     setDbTotalRows(totalRows);
     setCurrentStep(2);
   };
@@ -67,7 +74,7 @@ export default function DbCsvSyncToolPage() {
           <h1 className={styles.title}>Sincronización de Datos DB vs. CSV</h1>
           <p className={styles.description}>
             Correlacione registros de bases de datos PostgreSQL contra archivos alfanuméricos CSV (.csv),
-            analice discrepancias de atributos y genere parches SQL de actualización para PostGIS.
+            analice discrepancias de atributos y genere parches SQL de actualización e inserción para PostGIS.
           </p>
         </div>
 
@@ -92,6 +99,7 @@ export default function DbCsvSyncToolPage() {
         {currentStep === 3 && csvDataset && (
           <CsvSuidMappingStep
             dbColumns={dbColumns}
+            columnDetails={columnDetails}
             shpAttributes={csvDataset.attributes}
             onSuccess={handleMappingSuccess}
             onBack={() => setCurrentStep(2)}
