@@ -32,8 +32,9 @@ export default function Home() {
   });
 
   const handleLaunch = (toolId: string) => {
-    if (toolId === "gis-sync") {
-      router.push("/tools/db-shapefile-sync");
+    const targetTool = toolsList.find((t) => t.id === toolId);
+    if (targetTool?.route) {
+      router.push(targetTool.route);
     }
   };
 

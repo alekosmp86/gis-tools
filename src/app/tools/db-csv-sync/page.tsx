@@ -7,20 +7,20 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { StepIndicator } from "@/components/shared/StepIndicator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
-import { ShapefileUploader } from "@/components/tools/db-shapefile-sync/ShapefileUploader";
-import { SuidMappingStep } from "@/components/tools/db-shapefile-sync/SuidMappingStep";
+import { CsvUploader } from "@/components/tools/db-csv-sync/CsvUploader";
+import { CsvSuidMappingStep } from "@/components/tools/db-csv-sync/CsvSuidMappingStep";
 import { Step4ResultsView } from "@/components/tools/db-shapefile-sync/Step4ResultsView";
 import type { DbConfig } from "@/types/db";
-import type { ParsedShapefileData } from "@/types/shp";
+import type { ParsedFileDataset } from "@/types/parsers";
 import type { ColumnMappingConfig } from "@/types/gis";
 import { ArrowLeft } from "lucide-react";
 
-export default function DbShapefileSyncToolPage() {
+export default function DbCsvSyncToolPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [dbConfig, setDbConfig] = useState<DbConfig | null>(null);
   const [dbColumns, setDbColumns] = useState<string[]>([]);
   const [, setDbTotalRows] = useState<number>(0);
-  const [shapefileData, setShapefileData] = useState<ParsedShapefileData | null>(null);
+  const [csvDataset, setCsvDataset] = useState<ParsedFileDataset | null>(null);
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
 
   const handleDbSuccess = (config: DbConfig, columns: string[], totalRows: number) => {
@@ -30,13 +30,13 @@ export default function DbShapefileSyncToolPage() {
     setCurrentStep(2);
   };
 
-  const handleShapefileSuccess = (parsedData: ParsedShapefileData) => {
-    setShapefileData(parsedData);
+  const handleCsvSuccess = (parsedData: ParsedFileDataset) => {
+    setCsvDataset(parsedData);
     setCurrentStep(3);
   };
 
-  const handleShapefileDiscard = () => {
-    setShapefileData(null);
+  const handleCsvDiscard = () => {
+    setCsvDataset(null);
   };
 
   const handleMappingSuccess = (config: ColumnMappingConfig) => {
@@ -64,10 +64,10 @@ export default function DbShapefileSyncToolPage() {
         </div>
 
         <div className={styles.workspaceHeader}>
-          <h1 className={styles.title}>Sincronización de Datos DB vs. Shapefile</h1>
+          <h1 className={styles.title}>Sincronización de Datos DB vs. CSV</h1>
           <p className={styles.description}>
-            Correlacione registros de bases de datos PostgreSQL contra archivos Shapefile (.shp/.zip),
-            analice discrepancias de atributos y geometrías, y genere scripts SQL de actualización para PostGIS.
+            Correlacione registros de bases de datos PostgreSQL contra archivos alfanuméricos CSV (.csv),
+            analice discrepancias de atributos y genere parches SQL de actualización para PostGIS.
           </p>
         </div>
 
@@ -79,31 +79,31 @@ export default function DbShapefileSyncToolPage() {
           <DbConnectionForm onSuccess={handleDbSuccess} />
         )}
 
-        {/* Step 2: Shapefile / GeoJSON Upload */}
+        {/* Step 2: CSV File Upload & Parsing */}
         {currentStep === 2 && (
-          <ShapefileUploader
-            onSuccess={handleShapefileSuccess}
-            onDiscard={handleShapefileDiscard}
-            loadedData={shapefileData}
+          <CsvUploader
+            onSuccess={handleCsvSuccess}
+            onDiscard={handleCsvDiscard}
+            loadedData={csvDataset}
           />
         )}
 
         {/* Step 3: SUID & Attributes Column Mapping */}
-        {currentStep === 3 && shapefileData && (
-          <SuidMappingStep
+        {currentStep === 3 && csvDataset && (
+          <CsvSuidMappingStep
             dbColumns={dbColumns}
-            shpAttributes={shapefileData.attributes}
+            shpAttributes={csvDataset.attributes}
             onSuccess={handleMappingSuccess}
             onBack={() => setCurrentStep(2)}
             initialConfig={mappingConfig}
           />
         )}
 
-        {/* Step 4: Full Comparison Results & SQL Patch Export */}
-        {currentStep === 4 && dbConfig && shapefileData && mappingConfig && (
+        {/* Step 4: Reusable Comparison Results View */}
+        {currentStep === 4 && dbConfig && csvDataset && mappingConfig && (
           <Step4ResultsView
             dbConfig={dbConfig}
-            shapefileData={shapefileData}
+            shapefileData={csvDataset}
             mappingConfig={mappingConfig}
             onBackToMapping={() => setCurrentStep(3)}
           />

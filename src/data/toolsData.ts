@@ -1,4 +1,4 @@
-import { GitCompare, FileCode, Database, Cpu } from "lucide-react";
+import { GitCompare, FileSpreadsheet, FileCode, Database, Cpu } from "lucide-react";
 import { ToolCategory } from "@/types/gis";
 import { BadgeVariant } from "@/types/ui";
 import type { ToolCardData } from "@/types/gis";
@@ -18,10 +18,24 @@ export const toolsList: ToolCardData[] = [
     badge: { label: "Herramienta Principal", type: BadgeVariant.DEV },
     icon: GitCompare,
     description:
-      "Correlacione tablas de atributos de bases de datos contra capas Shapefile/GeoJSON. Destaque discrepancias en un mapa interactivo y genere scripts de actualización SQL para PostGIS.",
-    tags: ["Shapefile", "PostGIS", "Turf.js", "Leaflet"],
+      "Correlacione tablas de atributos de bases de datos contra capas Shapefile/GeoJSON. Destaque discrepancias y genere scripts de actualización SQL para PostGIS.",
+    tags: ["Shapefile", "PostGIS", "GeoJSON", "Topología"],
     actionLabel: "Iniciar Herramienta",
     enabled: true,
+    route: "/tools/db-shapefile-sync",
+  },
+  {
+    id: "db-csv-sync",
+    title: "Sincronización de Datos DB vs. CSV",
+    category: ToolCategory.SYNC,
+    badge: { label: "Nueva Herramienta", type: BadgeVariant.ACTIVE },
+    icon: FileSpreadsheet,
+    description:
+      "Correlacione registros PostGIS contra archivos alfanuméricos CSV. Identifique descalces de atributos y genere parches SQL de actualización.",
+    tags: ["CSV", "PostGIS", "Atributos", "SQL"],
+    actionLabel: "Iniciar Herramienta",
+    enabled: true,
+    route: "/tools/db-csv-sync",
   },
   {
     id: "spatial-converter",

@@ -8,6 +8,7 @@ import { DiscrepanciesTable } from "./DiscrepanciesTable";
 import { SqlPatchDrawer } from "./SqlPatchDrawer";
 import { useComparisonQuery } from "@/hooks/useComparisonQuery";
 import { DiscrepancyFilter, ResultsViewTab } from "@/types/comparison";
+import type { ParsedFileDataset } from "@/types/parsers";
 import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
 import type { ColumnMappingConfig } from "@/types/gis";
@@ -15,7 +16,7 @@ import styles from "./Step4ResultsView.module.css";
 
 interface Step4ResultsViewProps {
   dbConfig: DbConfig;
-  shapefileData: ParsedShapefileData;
+  shapefileData: ParsedShapefileData | ParsedFileDataset;
   mappingConfig: ColumnMappingConfig;
   onBackToMapping: () => void;
 }

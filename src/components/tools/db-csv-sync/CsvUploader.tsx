@@ -1,21 +1,24 @@
 import React, { useState, useRef } from "react";
-import { UploadCloud, FileCheck, Trash2, ArrowRight, Layers, Loader2 } from "lucide-react";
+import { UploadCloud, FileSpreadsheet, Trash2, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
-import { ShapefileParser } from "@/services/parsers/ShapefileParser";
-import type { ShapefileUploaderProps } from "@/types/shp";
+import { CsvParser } from "@/services/parsers/CsvParser";
 import type { ParsedFileDataset } from "@/types/parsers";
-import styles from "./ShapefileUploader.module.css";
+import styles from "./CsvUploader.module.css";
 
-export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
+interface CsvUploaderProps {
+  onSuccess: (data: ParsedFileDataset) => void;
+  onDiscard: () => void;
+  loadedData?: ParsedFileDataset | null;
+}
+
+export const CsvUploader: React.FC<CsvUploaderProps> = ({
   onSuccess,
   onDiscard,
   loadedData = null,
 }) => {
-  const [data, setData] = useState<ParsedFileDataset | null>(
-    loadedData ? (loadedData as unknown as ParsedFileDataset) : null
-  );
+  const [data, setData] = useState<ParsedFileDataset | null>(loadedData);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -26,12 +29,12 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
     setErrorMessage(null);
 
     try {
-      const parser = new ShapefileParser();
+      const parser = new CsvParser();
       const parsed = await parser.parse(file);
       setData(parsed);
-      onSuccess(parsed as unknown as import("@/types/shp").ParsedShapefileData);
+      onSuccess(parsed);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error al procesar el archivo Shapefile.";
+      const msg = err instanceof Error ? err.message : "Error al procesar el archivo CSV.";
       setErrorMessage(msg);
     } finally {
       setLoading(false);
@@ -90,12 +93,12 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
     <div className={`glass-panel ${styles.container}`}>
       <div className={styles.header}>
         <div className={styles.headerIcon}>
-          <Layers size={24} />
+          <FileSpreadsheet size={24} />
         </div>
         <div>
-          <h2 className={styles.title}>2. Cargar Capa Espacial Shapefile</h2>
+          <h2 className={styles.title}>2. Cargar Archivo de Datos CSV</h2>
           <p className={styles.subtitle}>
-            Suba un archivo <strong>.zip</strong> (que contenga los archivos .shp, .dbf, .shx) o un archivo <strong>.geojson</strong>. Los datos se procesan en la memoria local y se pueden descartar en cualquier momento.
+            Suba un archivo <strong>.csv</strong> delimitado por comas. Los datos se inspeccionan en la memoria local y se pueden descartar en cualquier momento.
           </p>
         </div>
       </div>
@@ -104,8 +107,8 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
-        accept=".zip,.geojson,.json"
-        aria-label="Seleccionar archivo Shapefile o GeoJSON"
+        accept=".csv,.txt"
+        aria-label="Seleccionar archivo CSV"
         className={styles.hiddenInput}
       />
 
@@ -125,12 +128,12 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
             <UploadCloud size={36} />
           </div>
           <div className={styles.dropText}>
-            <span className={styles.dropTitle}>Arrastre y suelte su archivo Shapefile (.zip) o GeoJSON aquí</span>
+            <span className={styles.dropTitle}>Arrastre y suelte su archivo CSV (.csv) aquí</span>
             <span className={styles.dropSub}>o haga clic para seleccionar un archivo desde su equipo</span>
           </div>
           <div className={styles.formatBadges}>
-            <span className={styles.formatBadge}>.ZIP (SHP + DBF)</span>
-            <span className={styles.formatBadge}>.GEOJSON</span>
+            <span className={styles.formatBadge}>.CSV</span>
+            <span className={styles.formatBadge}>DELIMITADO POR COMAS</span>
           </div>
         </div>
       )}
@@ -139,7 +142,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
       {loading && (
         <div className={styles.loadingArea}>
           <Loader2 size={32} className={styles.spin} />
-          <span>Leyendo e inspeccionando atributos del Shapefile en memoria...</span>
+          <span>Leyendo e inspeccionando columnas del archivo CSV en memoria...</span>
         </div>
       )}
 
@@ -151,11 +154,11 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
         <div className={styles.loadedCard}>
           <div className={styles.loadedHeader}>
             <div className={styles.fileMeta}>
-              <FileCheck size={28} className={styles.successIcon} />
+              <FileSpreadsheet size={28} className={styles.successIcon} />
               <div>
                 <div className={styles.fileName}>{data.fileName}</div>
                 <div className={styles.fileSub}>
-                  Tamaño: {formatSize(data.fileSize)} &bull; Tipo: {data.geometryType || "Desconocido"}
+                  Tamaño: {formatSize(data.fileSize)} &bull; {data.featureCount.toLocaleString()} filas
                 </div>
               </div>
             </div>
@@ -168,24 +171,24 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
 
           <div className={styles.metaRow}>
             <div className={styles.metaItem}>
-              <span className={styles.metaLabel}>Total de Geometrías Espaciales:</span>
-              <span className={styles.metaValue}>{data.featureCount.toLocaleString()} entidades</span>
+              <span className={styles.metaLabel}>Total de Filas / Registros:</span>
+              <span className={styles.metaValue}>{data.featureCount.toLocaleString()} filas</span>
             </div>
 
             <div className={styles.metaItem}>
-              <span className={styles.metaLabel}>Tipo de Geometría:</span>
-              <span className={styles.metaValue}>{data.geometryType || "Desconocido"}</span>
+              <span className={styles.metaLabel}>Columnas Encontradas:</span>
+              <span className={styles.metaValue}>{data.attributes.length} columnas</span>
             </div>
           </div>
 
-          {/* Reusable ColumnsList component for DBF Attribute tags */}
+          {/* Reusable ColumnsList component for CSV Header tags */}
           <ColumnsList
             columns={data.attributes}
-            title="Atributos Encontrados en DBF"
+            title="Encabezados / Columnas del Archivo CSV"
           />
 
           <div className={styles.proceedRow}>
-            <Button variant="primary" onClick={() => onSuccess(data as unknown as import("@/types/shp").ParsedShapefileData)}>
+            <Button variant="primary" onClick={() => onSuccess(data)}>
               <span>Continuar al Paso 3: Mapeo SUID y Atributos</span>
               <ArrowRight size={16} />
             </Button>
