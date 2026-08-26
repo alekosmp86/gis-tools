@@ -23,14 +23,15 @@ export function useLeafletMap(
   const mapInstanceRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const featureGroupRef = useRef<L.FeatureGroup | null>(null);
+  const lastProcessedGeojsonRef = useRef<FeatureCollection | null>(null);
 
   const [renderedCount, setRenderedCount] = useState<number>(0);
   const [isChunking, setIsChunking] = useState<boolean>(false);
 
+  // 1. Initialize Map Instance and Basemap Tile Layer
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    // Initialize Leaflet Map Instance
     if (!mapInstanceRef.current) {
       const map = L.map(mapContainerRef.current, {
         zoomControl: false,
@@ -43,7 +44,7 @@ export function useLeafletMap(
 
     const map = mapInstanceRef.current;
 
-    // Update Basemap tile layer
+    // Swap Basemap tile layer without affecting vector feature layers
     if (tileLayerRef.current) {
       map.removeLayer(tileLayerRef.current);
     }
@@ -54,6 +55,28 @@ export function useLeafletMap(
       subdomains: tileConfig.subdomains || "abc",
     }).addTo(map);
     tileLayerRef.current = tileLayer;
+  }, [mapContainerRef, basemapKey]);
+
+  // 2. Stream Vector GeoJSON Features via Web Worker (only re-runs when geojson features actually change)
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    // Prevent re-streaming if geojson reference, features array, or feature items haven't changed
+    const prevFeatures = lastProcessedGeojsonRef.current?.features;
+    const nextFeatures = geojson?.features;
+
+    if (
+      lastProcessedGeojsonRef.current === geojson ||
+      prevFeatures === nextFeatures ||
+      (prevFeatures &&
+        nextFeatures &&
+        prevFeatures.length === nextFeatures.length &&
+        (nextFeatures.length === 0 || prevFeatures[0] === nextFeatures[0]))
+    ) {
+      return;
+    }
+    lastProcessedGeojsonRef.current = geojson;
 
     // Reset Vector Layer Group
     if (featureGroupRef.current) {
@@ -157,7 +180,7 @@ export function useLeafletMap(
       if (pendingTimeout !== null) clearTimeout(pendingTimeout);
       worker.terminate();
     };
-  }, [mapContainerRef, geojson, basemapKey]);
+  }, [geojson]);
 
   const handleFitBounds = () => {
     if (mapInstanceRef.current && featureGroupRef.current) {
