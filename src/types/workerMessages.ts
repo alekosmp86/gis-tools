@@ -1,5 +1,40 @@
 import type { ColumnMappingConfig } from "@/types/gis";
 import type { ComparisonSummary } from "@/types/comparison";
+import type { Feature, Geometry, GeoJsonProperties } from "geojson";
+
+export const MapChunkMessageType = {
+  CHUNK_GEOJSON: "CHUNK_GEOJSON",
+  CHUNK_BATCH: "CHUNK_BATCH",
+  CHUNK_DONE: "CHUNK_DONE",
+} as const;
+
+export type MapChunkMessageType = (typeof MapChunkMessageType)[keyof typeof MapChunkMessageType];
+
+export interface MapChunkInputMessage {
+  type: typeof MapChunkMessageType.CHUNK_GEOJSON;
+  payload: {
+    features: Array<Feature<Geometry, GeoJsonProperties>>;
+    chunkSize: number;
+  };
+}
+
+export interface MapChunkOutputMessage {
+  type: typeof MapChunkMessageType.CHUNK_BATCH | typeof MapChunkMessageType.CHUNK_DONE;
+  payload: {
+    chunk?: Array<Feature<Geometry, GeoJsonProperties>>;
+    current: number;
+    total: number;
+  };
+}
+
+export const ComparisonWorkerMessageType = {
+  RUN_COMPARISON: "RUN_COMPARISON",
+  PROGRESS: "PROGRESS",
+  DONE: "DONE",
+  ERROR: "ERROR",
+} as const;
+
+export type ComparisonWorkerMessageType = (typeof ComparisonWorkerMessageType)[keyof typeof ComparisonWorkerMessageType];
 
 /**
  * Serializable version of ParsedFileDataset for postMessage transfer.
@@ -19,7 +54,7 @@ export interface SerializableFileDataset {
 
 /** Message sent FROM the main thread TO the worker */
 export interface WorkerInputMessage {
-  type: "RUN_COMPARISON";
+  type: typeof ComparisonWorkerMessageType.RUN_COMPARISON;
   payload: {
     dbRecords: Array<Record<string, unknown>>;
     fileDataset: SerializableFileDataset;
@@ -31,7 +66,7 @@ export interface WorkerInputMessage {
 
 /** Progress update message sent FROM the worker TO the main thread */
 export interface WorkerProgressMessage {
-  type: "PROGRESS";
+  type: typeof ComparisonWorkerMessageType.PROGRESS;
   phase: string;
   current: number;
   total: number;
@@ -39,13 +74,13 @@ export interface WorkerProgressMessage {
 
 /** Success message sent FROM the worker TO the main thread */
 export interface WorkerDoneMessage {
-  type: "DONE";
+  type: typeof ComparisonWorkerMessageType.DONE;
   payload: ComparisonSummary;
 }
 
 /** Error message sent FROM the worker TO the main thread */
 export interface WorkerErrorMessage {
-  type: "ERROR";
+  type: typeof ComparisonWorkerMessageType.ERROR;
   message: string;
 }
 
