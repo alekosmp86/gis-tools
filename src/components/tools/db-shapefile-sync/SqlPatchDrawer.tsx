@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Copy, Check, Download, FileCode, RefreshCw, PlusSquare, Play } from "lucide-react";
+import { Copy, Check, Download, FileCode, RefreshCw, PlusSquare, Play, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { SqlExecutionModal } from "./SqlExecutionModal";
@@ -19,6 +19,10 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
   const [copied, setCopied] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [executedTabs, setExecutedTabs] = useState<Record<SqlScriptType, boolean>>({
+    [SqlScriptType.UPDATE]: false,
+    [SqlScriptType.INSERT]: false,
+  });
   const [executionResult, setExecutionResult] = useState<{
     type: AlertType;
     text: string;
@@ -26,6 +30,7 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
 
   const activeScript = activeTab === SqlScriptType.UPDATE ? sqlUpdateScript : sqlInsertScript;
   const statementCount = (activeScript.match(/;/g) || []).length || (activeScript.trim() ? 1 : 0);
+  const isCurrentTabExecuted = executedTabs[activeTab];
 
   const handleCopy = () => {
     navigator.clipboard
@@ -58,6 +63,10 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
 
     return executeSqlScript(dbConfig, passwordInput, activeScript)
       .then((res) => {
+        setExecutedTabs((prev) => ({
+          ...prev,
+          [activeTab]: true,
+        }));
         setExecutionResult({
           type: AlertType.SUCCESS,
           text: res.message || `Ejecución exitosa. ${res.affectedRows || 0} registros modificados/insertados.`,
@@ -104,10 +113,19 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
             variant="primary"
             onClick={() => setIsModalOpen(true)}
             type="button"
-            disabled={!activeScript.trim() || executing}
+            disabled={!activeScript.trim() || executing || isCurrentTabExecuted}
           >
-            <Play size={16} />
-            <span>Ejecutar en BD</span>
+            {isCurrentTabExecuted ? (
+              <>
+                <CheckCircle2 size={16} color="var(--accent-emerald)" />
+                <span>Script Ejecutado</span>
+              </>
+            ) : (
+              <>
+                <Play size={16} />
+                <span>Ejecutar en BD</span>
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -131,7 +149,10 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
           }}
         >
           <RefreshCw size={15} />
-          <span>Script UPDATE</span>
+          <span>
+            Script UPDATE
+            {executedTabs[SqlScriptType.UPDATE] && " (Ejecutado)"}
+          </span>
           <span className={styles.scriptTabHint}>Corregir atributos existentes</span>
         </button>
 
@@ -145,7 +166,10 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
           }}
         >
           <PlusSquare size={15} />
-          <span>Script INSERT</span>
+          <span>
+            Script INSERT
+            {executedTabs[SqlScriptType.INSERT] && " (Ejecutado)"}
+          </span>
           <span className={styles.scriptTabHint}>Agregar registros faltantes</span>
         </button>
       </div>
