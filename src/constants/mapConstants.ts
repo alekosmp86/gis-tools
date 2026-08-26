@@ -33,10 +33,10 @@ export const BASEMAP_TILES: Record<string, TileLayerConfig> = {
 };
 
 export const DISCREPANCY_COLORS: Record<string, string> = {
-  [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#d97706",
+  [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#eab308",
   [DiscrepancyType.ONLY_IN_SHP]: "#9333ea",
   [DiscrepancyType.ONLY_IN_DB]: "#0284c7",
-  [DiscrepancyType.DUPLICATE_SUID]: "#ea580c",
+  [DiscrepancyType.DUPLICATE_SUID]: "#f97316",
   [DiscrepancyType.NULL_SUID]: "#dc2626",
   [DiscrepancyType.MATCH]: "#059669",
 };

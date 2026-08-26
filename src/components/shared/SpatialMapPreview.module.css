@@ -208,7 +208,7 @@
 }
 
 .legendDot[data-color-type="ATTRIBUTE_MISMATCH"] {
-  background-color: #d97706;
+  background-color: #eab308;
 }
 
 .legendDot[data-color-type="ONLY_IN_SHP"] {
