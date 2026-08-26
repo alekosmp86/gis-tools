@@ -24,6 +24,9 @@ export function useLeafletMap(
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const featureGroupRef = useRef<L.FeatureGroup | null>(null);
   const lastProcessedGeojsonRef = useRef<FeatureCollection | null>(null);
+  // Shared Canvas renderer — all vector layers draw onto a single <canvas> element
+  // instead of individual SVG DOM nodes, giving much faster pan/zoom repaints.
+  const canvasRendererRef = useRef<L.Canvas | null>(null);
 
   const [renderedCount, setRenderedCount] = useState<number>(0);
   const [isChunking, setIsChunking] = useState<boolean>(false);
@@ -40,6 +43,9 @@ export function useLeafletMap(
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
       mapInstanceRef.current = map;
+      // Initialize a single shared canvas renderer with padding so features
+      // just outside the viewport edge are still rendered (avoids clipping on fast pan).
+      canvasRendererRef.current = L.canvas({ padding: 0.5 });
     }
 
     const map = mapInstanceRef.current;
@@ -111,7 +117,9 @@ export function useLeafletMap(
           style: (feature) => {
             const discType = feature?.properties?._discrepancyType;
             const color = getDiscrepancyColor(discType);
+            // renderer is part of PathOptions, so it belongs here (not on GeoJSONOptions)
             return {
+              renderer: canvasRendererRef.current ?? undefined,
               color,
               weight: 4.5,
               opacity: 0.9,
@@ -121,6 +129,7 @@ export function useLeafletMap(
             const discType = feature?.properties?._discrepancyType;
             const color = getDiscrepancyColor(discType);
             return L.circleMarker(latlng, {
+              renderer: canvasRendererRef.current ?? undefined,
               radius: 7,
               fillColor: color,
               color: "#ffffff",
