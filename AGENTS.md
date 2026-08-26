@@ -4,6 +4,9 @@
 - Always use the portable Node.js binaries from `C:\Alekos\Tools\node24portable`.
 - When running commands via PowerShell, set `$env:PATH = "C:\Alekos\Tools\node24portable;" + $env:PATH` or run `C:\Alekos\Tools\node24portable\npm.cmd` / `node.exe`.
 
+## Mandatory Planning Requirement
+- **Always plan before implement**: Exercise judgement and create or update the `implementation_plan.md` artifact before making code modifications for any complex task or feature.
+
 ## Git Commit Control
 - **NEVER execute `git commit` automatically.** Only run `git commit` when the user explicitly instructs to commit changes.
 
