@@ -13,6 +13,7 @@ const SpatialMapPreview = dynamic(
 
 export const FileViewerContainer: React.FC = () => {
   const [parsedDataset, setParsedDataset] = useState<ParsedFileDataset | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const recordsList = parsedDataset?.recordsMap
     ? Array.from(parsedDataset.recordsMap.values())
@@ -28,7 +29,10 @@ export const FileViewerContainer: React.FC = () => {
     <div className={styles.container}>
       <FileViewerUploader
         parsedDataset={parsedDataset}
-        onFileParsed={setParsedDataset}
+        onFileParsed={(dataset) => {
+          setParsedDataset(dataset);
+          setSelectedIndex(null);
+        }}
       />
 
       {parsedDataset && (
@@ -39,6 +43,8 @@ export const FileViewerContainer: React.FC = () => {
                 <SpatialMapPreview
                   geojson={parsedDataset.geojson}
                   title={`VISTA ESPACIAL — ${parsedDataset.fileName}`}
+                  selectedFeatureIndex={selectedIndex}
+                  onSelectFeature={setSelectedIndex}
                 />
               </div>
 
@@ -59,6 +65,8 @@ export const FileViewerContainer: React.FC = () => {
         <AttributeTable
           records={recordsList}
           attributes={parsedDataset.attributes}
+          selectedIndex={selectedIndex}
+          onSelectRow={setSelectedIndex}
         />
       )}
     </div>

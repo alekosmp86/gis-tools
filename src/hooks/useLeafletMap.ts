@@ -14,7 +14,9 @@ import { buildPopupHtml } from "@/utils/mapPopupBuilder";
 export function useLeafletMap(
   mapContainerNode: HTMLDivElement | null,
   geojson: FeatureCollection,
-  basemapKey: string
+  basemapKey: string,
+  selectedFeatureIndex?: number | null,
+  onSelectFeature?: (index: number | null) => void
 ): {
   renderedCount: number;
   isChunking: boolean;
@@ -23,6 +25,7 @@ export function useLeafletMap(
   const mapInstanceRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const featureGroupRef = useRef<L.FeatureGroup | null>(null);
+  const highlightLayerRef = useRef<L.FeatureGroup | null>(null);
   const lastProcessedGeojsonRef = useRef<FeatureCollection | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
 
@@ -51,7 +54,7 @@ export function useLeafletMap(
     tileLayerRef.current = tileLayer;
   }, [basemapKey]);
 
-  // 2. Stream Vector GeoJSON Features via Web Worker (only re-runs when geojson features actually change)
+  // 2. Stream Vector GeoJSON Features via Web Worker
   useEffect(() => {
     if (!mapContainerNode) return;
 
@@ -86,6 +89,10 @@ export function useLeafletMap(
     // ── Step 3: Clear previous vector features ────────────────────────────
     if (featureGroupRef.current) {
       map.removeLayer(featureGroupRef.current);
+    }
+    if (highlightLayerRef.current) {
+      map.removeLayer(highlightLayerRef.current);
+      highlightLayerRef.current = null;
     }
 
     const featureGroup = L.featureGroup().addTo(map);
@@ -148,6 +155,12 @@ export function useLeafletMap(
                   maxWidth: 310,
                 }).openPopup();
               }
+              if (onSelectFeature) {
+                const featureIdx = geojson.features.indexOf(feature);
+                if (featureIdx !== -1) {
+                  onSelectFeature(featureIdx);
+                }
+              }
             });
           },
         });
@@ -190,7 +203,74 @@ export function useLeafletMap(
       if (pendingTimeout !== null) clearTimeout(pendingTimeout);
       worker.terminate();
     };
-  }, [mapContainerNode, geojson]);
+  }, [mapContainerNode, geojson, onSelectFeature]);
+
+  // 3. Highlight Selected Feature on Map & Pan/Zoom
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    // Clean up previous highlight layer
+    if (highlightLayerRef.current) {
+      map.removeLayer(highlightLayerRef.current);
+      highlightLayerRef.current = null;
+    }
+
+    if (selectedFeatureIndex === null || selectedFeatureIndex === undefined) {
+      return;
+    }
+
+    if (!geojson || !geojson.features || !geojson.features[selectedFeatureIndex]) {
+      return;
+    }
+
+    const targetFeature = geojson.features[selectedFeatureIndex];
+
+    const highlightGroup = L.featureGroup().addTo(map);
+    highlightLayerRef.current = highlightGroup;
+
+    const highlightSubLayer = L.geoJSON(targetFeature as import("geojson").GeoJsonObject, {
+      style: () => ({
+        color: "#38bdf8",
+        weight: 7,
+        opacity: 1,
+        fillColor: "#0284c7",
+        fillOpacity: 0.5,
+      }),
+      pointToLayer: (_feat, latlng) => {
+        return L.circleMarker(latlng, {
+          radius: 12,
+          fillColor: "#38bdf8",
+          color: "#ffffff",
+          weight: 3,
+          opacity: 1,
+          fillOpacity: 0.95,
+        });
+      },
+      onEachFeature: (feature, layer) => {
+        const popupHtml = buildPopupHtml(feature);
+        if (popupHtml) {
+          layer.bindPopup(popupHtml, {
+            closeButton: true,
+            autoPan: true,
+            maxWidth: 310,
+          }).openPopup();
+        }
+      },
+    });
+
+    highlightGroup.addLayer(highlightSubLayer);
+
+    map.invalidateSize();
+    const bounds = highlightGroup.getBounds();
+    if (bounds.isValid()) {
+      if (targetFeature.geometry && targetFeature.geometry.type === "Point") {
+        map.setView(bounds.getCenter(), Math.max(map.getZoom(), 16), { animate: true });
+      } else {
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 17, animate: true });
+      }
+    }
+  }, [selectedFeatureIndex, geojson]);
 
   const handleFitBounds = () => {
     if (mapInstanceRef.current && featureGroupRef.current) {

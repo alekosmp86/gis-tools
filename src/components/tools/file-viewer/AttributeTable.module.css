@@ -87,8 +87,20 @@
   text-overflow: ellipsis;
 }
 
+.table tr {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
 .table tr:hover td {
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.selectedRow td {
+  background: rgba(14, 165, 233, 0.22) !important;
+  color: #f89538 !important;
+  font-weight: 600;
+  border-bottom-color: rgba(56, 189, 248, 0.3) !important;
 }
 
 .nullVal {

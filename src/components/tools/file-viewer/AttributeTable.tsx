@@ -6,6 +6,8 @@ import styles from "./AttributeTable.module.css";
 interface AttributeTableProps {
   records: Array<Record<string, unknown>>;
   attributes: string[];
+  selectedIndex?: number | null;
+  onSelectRow?: (index: number | null) => void;
 }
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [15, 50, 100, 250];
@@ -13,19 +15,23 @@ const DEFAULT_PAGE_SIZE_OPTIONS = [15, 50, 100, 250];
 export const AttributeTable: React.FC<AttributeTableProps> = ({
   records,
   attributes,
+  selectedIndex,
+  onSelectRow,
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(15);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
+  const indexedRecords = records.map((rec, origIdx) => ({ rec, origIdx }));
+
   const filteredRecords = searchQuery.trim()
-    ? records.filter((rec) =>
+    ? indexedRecords.filter(({ rec }) =>
         attributes.some((attr) => {
           const val = rec[attr];
           return val !== undefined && val !== null && String(val).toLowerCase().includes(searchQuery.toLowerCase().trim());
         })
       )
-    : records;
+    : indexedRecords;
 
   const totalFilteredCount = filteredRecords.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
@@ -77,13 +83,18 @@ export const AttributeTable: React.FC<AttributeTableProps> = ({
               </tr>
             </thead>
             <tbody>
-              {paginatedRows.map((row, rowIdx) => {
+              {paginatedRows.map(({ rec, origIdx }, rowIdx) => {
                 const globalIndex = startIndex + rowIdx + 1;
+                const isSelected = selectedIndex === origIdx;
                 return (
-                  <tr key={rowIdx}>
-                    <td key={`#-${rowIdx}`}>{globalIndex}</td>
+                  <tr
+                    key={origIdx}
+                    className={isSelected ? styles.selectedRow : undefined}
+                    onClick={() => onSelectRow?.(isSelected ? null : origIdx)}
+                  >
+                    <td key={`#-${origIdx}`}>{globalIndex}</td>
                     {attributes.map((attr) => {
-                      const val = row[attr];
+                      const val = rec[attr];
                       const isNull = val === null || val === undefined || String(val).trim() === "";
                       return (
                         <td key={attr} title={!isNull ? String(val) : undefined}>

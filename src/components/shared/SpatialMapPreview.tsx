@@ -12,6 +12,8 @@ import styles from "./SpatialMapPreview.module.css";
 export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   geojson,
   title = "VISTA PREVIA ESPACIAL EN MAPA",
+  selectedFeatureIndex,
+  onSelectFeature,
 }) => {
   const [mapContainerNode, setMapContainerNode] = useState<HTMLDivElement | null>(null);
   const [basemapKey, setBasemapKey] = useState<string>("osm");
@@ -21,7 +23,9 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   const { renderedCount, isChunking, handleFitBounds } = useLeafletMap(
     mapContainerNode,
     geojson,
-    basemapKey
+    basemapKey,
+    selectedFeatureIndex,
+    onSelectFeature
   );
 
   const progressPct = totalFeatures > 0 ? Math.min(100, Math.round((renderedCount / totalFeatures) * 100)) : 0;

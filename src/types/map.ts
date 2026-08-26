@@ -3,6 +3,8 @@ import type { FeatureCollection } from "geojson";
 export interface SpatialMapPreviewProps {
   geojson: FeatureCollection;
   title?: string;
+  selectedFeatureIndex?: number | null;
+  onSelectFeature?: (index: number | null) => void;
 }
 
 export interface MapHeaderBarProps {
