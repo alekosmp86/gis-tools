@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import type { SpatialMapPreviewProps } from "@/types/map";
 import { useLeafletMap } from "@/hooks/useLeafletMap";
 import { MapProgressBar } from "./map/MapProgressBar";
@@ -13,13 +13,13 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   geojson,
   title = "VISTA PREVIA ESPACIAL EN MAPA",
 }) => {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [mapContainerNode, setMapContainerNode] = useState<HTMLDivElement | null>(null);
   const [basemapKey, setBasemapKey] = useState<string>("voyager");
 
   const totalFeatures = geojson?.features?.length || 0;
 
   const { renderedCount, isChunking, handleFitBounds } = useLeafletMap(
-    mapContainerRef,
+    mapContainerNode,
     geojson,
     basemapKey
   );
@@ -51,7 +51,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
 
       <MapLegend presentTypes={presentTypes} />
 
-      <div ref={mapContainerRef} className={styles.mapElement} />
+      <div ref={setMapContainerNode} className={styles.mapElement} />
     </div>
   );
 };

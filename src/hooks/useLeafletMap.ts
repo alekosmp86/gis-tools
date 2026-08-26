@@ -12,7 +12,7 @@ import type { MapChunkOutputMessage } from "@/types/workerMessages";
 import { buildPopupHtml } from "@/utils/mapPopupBuilder";
 
 export function useLeafletMap(
-  mapContainerRef: React.RefObject<HTMLDivElement | null>,
+  mapContainerNode: HTMLDivElement | null,
   geojson: FeatureCollection,
   basemapKey: string
 ): {
@@ -24,33 +24,21 @@ export function useLeafletMap(
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const featureGroupRef = useRef<L.FeatureGroup | null>(null);
   const lastProcessedGeojsonRef = useRef<FeatureCollection | null>(null);
-  // Shared Canvas renderer — all vector layers draw onto a single <canvas> element
-  // instead of individual SVG DOM nodes, giving much faster pan/zoom repaints.
   const canvasRendererRef = useRef<L.Canvas | null>(null);
+
+  const basemapKeyRef = useRef(basemapKey);
+  useEffect(() => {
+    basemapKeyRef.current = basemapKey;
+  }, [basemapKey]);
 
   const [renderedCount, setRenderedCount] = useState<number>(0);
   const [isChunking, setIsChunking] = useState<boolean>(false);
 
   // 1. Initialize Map Instance and Basemap Tile Layer
   useEffect(() => {
-    if (!mapContainerRef.current) return;
-
-    if (!mapInstanceRef.current) {
-      const map = L.map(mapContainerRef.current, {
-        zoomControl: false,
-        attributionControl: false,
-      }).setView([-32.5, -56.0], 7); // Center of Uruguay
-
-      L.control.zoom({ position: "bottomright" }).addTo(map);
-      mapInstanceRef.current = map;
-      // Initialize a single shared canvas renderer with padding so features
-      // just outside the viewport edge are still rendered (avoids clipping on fast pan).
-      canvasRendererRef.current = L.canvas({ padding: 0.5 });
-    }
-
+    if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
 
-    // Swap Basemap tile layer without affecting vector feature layers
     if (tileLayerRef.current) {
       map.removeLayer(tileLayerRef.current);
     }
@@ -61,30 +49,41 @@ export function useLeafletMap(
       subdomains: tileConfig.subdomains || "abc",
     }).addTo(map);
     tileLayerRef.current = tileLayer;
-  }, [mapContainerRef, basemapKey]);
+  }, [basemapKey]);
 
   // 2. Stream Vector GeoJSON Features via Web Worker (only re-runs when geojson features actually change)
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
+    if (!mapContainerNode) return;
+
+    // ── Step 1: Create map when container DOM node is mounted ────────────
+    if (!mapInstanceRef.current) {
+      const map = L.map(mapContainerNode, {
+        zoomControl: false,
+        attributionControl: false,
+      }).setView([-32.5, -56.0], 7);
+
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+      mapInstanceRef.current = map;
+      canvasRendererRef.current = L.canvas({ padding: 0.5 });
+
+      // Add initial tile layer
+      const tileConfig = BASEMAP_TILES[basemapKeyRef.current] || BASEMAP_TILES.voyager;
+      const tileLayer = L.tileLayer(tileConfig.url, {
+        maxZoom: tileConfig.maxZoom,
+        subdomains: tileConfig.subdomains || "abc",
+      }).addTo(map);
+      tileLayerRef.current = tileLayer;
+    }
+
     const map = mapInstanceRef.current;
 
-    // Prevent re-streaming if geojson reference, features array, or feature items haven't changed
-    const prevFeatures = lastProcessedGeojsonRef.current?.features;
-    const nextFeatures = geojson?.features;
-
-    if (
-      lastProcessedGeojsonRef.current === geojson ||
-      prevFeatures === nextFeatures ||
-      (prevFeatures &&
-        nextFeatures &&
-        prevFeatures.length === nextFeatures.length &&
-        (nextFeatures.length === 0 || prevFeatures[0] === nextFeatures[0]))
-    ) {
+    // ── Step 2: Skip if same GeoJSON reference ────────────────────────────
+    if (lastProcessedGeojsonRef.current === geojson) {
       return;
     }
     lastProcessedGeojsonRef.current = geojson;
 
-    // Reset Vector Layer Group
+    // ── Step 3: Clear previous vector features ────────────────────────────
     if (featureGroupRef.current) {
       map.removeLayer(featureGroupRef.current);
     }
@@ -92,15 +91,15 @@ export function useLeafletMap(
     const featureGroup = L.featureGroup().addTo(map);
     featureGroupRef.current = featureGroup;
 
-    if (!geojson || !geojson.features || geojson.features.length === 0) {
+    if (!geojson?.features || geojson.features.length === 0) {
       return;
     }
 
+    // ── Step 4: Stream features via Web Worker ────────────────────────────
     let isCancelled = false;
     let initialZoomDone = false;
     let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    // Instantiate Web Worker for off-main-thread GeoJSON chunking
     const worker = new Worker(new URL("../workers/mapChunkWorker.ts", import.meta.url));
 
     worker.onmessage = (event: MessageEvent<MapChunkOutputMessage>) => {
@@ -117,12 +116,13 @@ export function useLeafletMap(
           style: (feature) => {
             const discType = feature?.properties?._discrepancyType;
             const color = getDiscrepancyColor(discType);
-            // renderer is part of PathOptions, so it belongs here (not on GeoJSONOptions)
             return {
               renderer: canvasRendererRef.current ?? undefined,
               color,
               weight: 4.5,
               opacity: 0.9,
+              fillColor: color,
+              fillOpacity: 0.35,
             };
           },
           pointToLayer: (feature, latlng) => {
@@ -161,6 +161,7 @@ export function useLeafletMap(
 
             if (!initialZoomDone) {
               initialZoomDone = true;
+              map.invalidateSize();
               const bounds = featureGroup.getBounds();
               if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [30, 30] });
@@ -189,10 +190,11 @@ export function useLeafletMap(
       if (pendingTimeout !== null) clearTimeout(pendingTimeout);
       worker.terminate();
     };
-  }, [geojson]);
+  }, [mapContainerNode, geojson]);
 
   const handleFitBounds = () => {
     if (mapInstanceRef.current && featureGroupRef.current) {
+      mapInstanceRef.current.invalidateSize();
       const bounds = featureGroupRef.current.getBounds();
       if (bounds.isValid()) {
         mapInstanceRef.current.fitBounds(bounds, { padding: [30, 30] });
