@@ -1,0 +1,70 @@
+import React from "react";
+import { Info, Layers, AlertTriangle } from "lucide-react";
+import type { ParsedFileDataset } from "@/types/parsers";
+import styles from "./FileMetaPanel.module.css";
+
+interface FileMetaPanelProps {
+  dataset: ParsedFileDataset;
+}
+
+export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
+  const formattedSize = (dataset.fileSize / (1024 * 1024)).toFixed(2) + " MB";
+  const hasGeometry = Boolean(dataset.geojson && dataset.geojson.features && dataset.geojson.features.length > 0);
+
+  return (
+    <div className={styles.panelContainer}>
+      <h4 className={styles.headerTitle}>
+        <Info size={16} />
+        <span>Metadatos del Archivo</span>
+      </h4>
+
+      <div className={styles.statsGrid}>
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>Registros / Entidades</span>
+          <span className={styles.statValue}>{dataset.featureCount.toLocaleString("es-UY")}</span>
+        </div>
+
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>Tipo de Geometría</span>
+          <span className={styles.statValue}>
+            {hasGeometry ? dataset.geometryType || "Geometría" : "Alfanumérico"}
+          </span>
+        </div>
+
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>Tamaño del Archivo</span>
+          <span className={styles.statValue}>{formattedSize}</span>
+        </div>
+
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>Columnas / Campos</span>
+          <span className={styles.statValue}>{dataset.attributes.length}</span>
+        </div>
+      </div>
+
+      {!hasGeometry && (
+        <div className={styles.warningNote}>
+          <AlertTriangle size={16} color="#eab308" />
+          <span>
+            Este archivo no contiene geometría dibujable en el mapa. Visualizando solo la tabla de atributos.
+          </span>
+        </div>
+      )}
+
+      <div className={styles.attributesSection}>
+        <h5 className={styles.attributesTitle}>
+          <Layers size={14} />
+          <span>Campos de Atributos ({dataset.attributes.length})</span>
+        </h5>
+
+        <div className={styles.attributesBadgeList}>
+          {dataset.attributes.map((attr) => (
+            <span key={attr} className={styles.attributeBadge}>
+              {attr}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};

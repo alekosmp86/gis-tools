@@ -1,0 +1,35 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.mapLayout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .mapLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mapSection {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.sideSection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fullWidthSection {
+  width: 100%;
+}
