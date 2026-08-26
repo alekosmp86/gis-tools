@@ -63,3 +63,7 @@ export function getDiscrepancyLabel(type?: string): string {
   if (!type) return DEFAULT_DISCREPANCY_LABEL;
   return DISCREPANCY_LABELS[type] || DEFAULT_DISCREPANCY_LABEL;
 }
+
+/** Progressive Micro-Batch Map Rendering Constants */
+export const MAP_MICRO_CHUNK_SIZE = 400;
+export const MAP_CHUNK_DELAY_MS = 16;

@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import type { FeatureCollection, Feature, Geometry, GeoJsonProperties } from "geojson";
 import { DiscrepancyFilter } from "@/types/comparison";
 import type { ComparisonSummary, DiscrepancyFilter as DiscrepancyFilterType } from "@/types/comparison";
@@ -10,6 +11,15 @@ export function useDiscrepancyGeojson(
   fileDataset: ParsedShapefileData | ParsedFileDataset,
   activeFilter: DiscrepancyFilterType
 ): FeatureCollection | null {
+  const [deferredFilter, setDeferredFilter] = useState<DiscrepancyFilterType>(activeFilter);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDeferredFilter(activeFilter);
+    }, 150);
+    return () => clearTimeout(handler);
+  }, [activeFilter]);
+
   if (!summary || !summary.items) return fileDataset.geojson || null;
 
   const geoMap = new Map<string, Geometry>();
@@ -27,7 +37,7 @@ export function useDiscrepancyGeojson(
 
   const features: Array<Feature<Geometry, GeoJsonProperties>> = [];
   const itemsToRender = summary.items.filter((item) => {
-    return activeFilter === DiscrepancyFilter.ALL || item.type === activeFilter;
+    return deferredFilter === DiscrepancyFilter.ALL || item.type === deferredFilter;
   });
 
   itemsToRender.forEach((item) => {
