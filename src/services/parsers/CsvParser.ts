@@ -1,7 +1,8 @@
 import type { FeatureCollection, Feature, Geometry, GeoJsonProperties } from "geojson";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
 import { cleanSuid } from "@/utils/gisCleaners";
-import { parseEwkbHexToGeoJson } from "@/utils/ewkbParser";
+import { parseAnyGeometryString } from "@/utils/wktParser";
+import { normalizeCoordinate } from "@/utils/ewkbParser";
 
 export class CsvParser implements ISpatialFileParser {
   readonly formatName = "CSV (Valores Separados por Comas)";
@@ -45,9 +46,17 @@ export class CsvParser implements ISpatialFileParser {
     const recordsMap = new Map<string, Record<string, unknown>>();
     const firstHeader = headers[0];
 
-    // Detect geometry column name (e.g. geom, geometry, wkt, wkb_geometry)
+    // 1. Detect geometry column name (e.g. geom, geometry, wkt, wkb_geometry, the_geom, geom_wkt)
     const geomColHeader = headers.find((h) =>
-      /^(geom|geometry|wkt|wkb_geometry)$/i.test(h.trim())
+      /^(geom|geometry|wkt|wkb_geometry|the_geom|geom_wkt)$/i.test(h.trim())
+    );
+
+    // 2. Detect Lat/Lng coordinate column headers
+    const latColHeader = headers.find((h) =>
+      /^(lat|latitude|latitud|y_coord|y)$/i.test(h.trim())
+    );
+    const lngColHeader = headers.find((h) =>
+      /^(lng|lon|long|longitude|longitud|x_coord|x)$/i.test(h.trim())
     );
 
     const geojsonFeatures: Array<Feature<Geometry, GeoJsonProperties>> = [];
@@ -62,21 +71,36 @@ export class CsvParser implements ISpatialFileParser {
       });
 
       const rawSuid = record[firstHeader];
-      const key = cleanSuid(rawSuid);
-      if (key) {
-        recordsMap.set(key, record);
+      const key = cleanSuid(rawSuid) || `row-${i}`;
+      recordsMap.set(key, record);
+
+      let parsedGeom: Geometry | null = null;
+
+      // Check explicit geometry column first (EWKB Hex or WKT)
+      if (geomColHeader && record[geomColHeader]) {
+        parsedGeom = parseAnyGeometryString(record[geomColHeader]);
       }
 
-      if (geomColHeader && record[geomColHeader]) {
-        const geomVal = String(record[geomColHeader]);
-        const parsedGeom = parseEwkbHexToGeoJson(geomVal);
-        if (parsedGeom) {
-          geojsonFeatures.push({
-            type: "Feature",
-            geometry: parsedGeom,
-            properties: record,
-          });
+      // Fallback: Check Lat/Lng columns
+      if (!parsedGeom && latColHeader && lngColHeader && record[latColHeader] && record[lngColHeader]) {
+        const latVal = parseFloat(String(record[latColHeader]));
+        const lngVal = parseFloat(String(record[lngColHeader]));
+
+        if (!isNaN(latVal) && !isNaN(lngVal)) {
+          const [lon, lat] = normalizeCoordinate(lngVal, latVal);
+          parsedGeom = {
+            type: "Point",
+            coordinates: [lon, lat],
+          };
         }
+      }
+
+      if (parsedGeom) {
+        geojsonFeatures.push({
+          type: "Feature",
+          geometry: parsedGeom,
+          properties: record,
+        });
       }
     }
 
