@@ -6,9 +6,12 @@ export const Button: React.FC<ButtonProps> = ({
   children,
   variant = ButtonVariant.PRIMARY,
   isDisabled = false,
+  disabled,
   className = "",
   ...props
 }) => {
+  const isEffectiveDisabled = Boolean(isDisabled || disabled);
+
   const variantClass =
     variant === ButtonVariant.PRIMARY
       ? styles.primary
@@ -18,8 +21,8 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
-      className={`${styles.button} ${variantClass} ${isDisabled ? styles.disabled : ""} ${className}`}
-      disabled={isDisabled}
+      className={`${styles.button} ${variantClass} ${isEffectiveDisabled ? styles.disabled : ""} ${className}`}
+      disabled={isEffectiveDisabled}
       {...props}
     >
       {children}
