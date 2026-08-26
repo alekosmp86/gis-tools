@@ -22,20 +22,56 @@ function cleanSuid(val: unknown): string {
   return cleanValue(val).toLowerCase();
 }
 
-function toSqlValue(val: unknown): string {
+function isNumericColumnType(dataType?: string): boolean {
+  if (!dataType) return false;
+  const dt = dataType.toLowerCase();
+  return (
+    dt.includes("int") ||
+    dt.includes("num") ||
+    dt.includes("decimal") ||
+    dt.includes("float") ||
+    dt.includes("double") ||
+    dt.includes("real") ||
+    dt.includes("serial")
+  );
+}
+
+function toSqlValue(
+  val: unknown,
+  colName?: string,
+  dbColumnTypes?: Record<string, string>
+): string {
   if (val === null || val === undefined) return "NULL";
   const cleaned = cleanValue(val);
   if (cleaned === "") return "NULL";
 
-  const isNumeric = typeof val === "number" || /^-?\d+(\.\d+)?$/.test(cleaned);
-  if (isNumeric) {
+  const dataType = colName && dbColumnTypes ? dbColumnTypes[colName] : undefined;
+
+  if (dataType) {
+    if (isNumericColumnType(dataType)) {
+      const num = Number(cleaned);
+      if (!isNaN(num)) return cleaned;
+    }
+    // Character varying, text, varchar, char, date, uuid, etc. MUST be single-quoted
+    return `'${cleaned.replace(/'/g, "''")}'`;
+  }
+
+  // Fallback if database column data type is unknown:
+  // ONLY output unquoted SQL number if the original value was a JS primitive number
+  if (typeof val === "number" && !isNaN(val)) {
     return cleaned;
   }
+
+  // All string values (including numeric strings like "706112") MUST be single-quoted
   return `'${cleaned.replace(/'/g, "''")}'`;
 }
 
-function toSqlWhereCondition(col: string, val: unknown): string {
-  const sqlVal = toSqlValue(val);
+function toSqlWhereCondition(
+  col: string,
+  val: unknown,
+  dbColumnTypes?: Record<string, string>
+): string {
+  const sqlVal = toSqlValue(val, col, dbColumnTypes);
   if (sqlVal === "NULL") {
     return `"${col}" IS NULL`;
   }
@@ -64,7 +100,7 @@ export function runComparisonCore(
   payload: WorkerInputMessage["payload"],
   onProgress?: ProgressEmitter
 ): ComparisonSummary {
-  const { dbRecords, fileDataset, mappingConfig, dbSchemaName, dbTableName } = payload;
+  const { dbRecords, fileDataset, mappingConfig, dbSchemaName, dbTableName, dbColumnTypes } = payload;
   const { suidColumns, matchedFileSuidColumns, fieldsToCompare, insertDefaults } = mappingConfig;
 
   const dbSuidCols = suidColumns || [];
@@ -261,9 +297,9 @@ export function runComparisonCore(
 
       const differences: AttributeDifference[] = [];
 
-      // Compute SQL WHERE clause once per record instead of per mismatched field
+      // Compute SQL WHERE clause once per record using column types for precise SQL literal quoting
       const whereClause = !isDuplicate
-        ? dbSuidCols.map((col) => toSqlWhereCondition(col, dbRec[col])).join(" AND ")
+        ? dbSuidCols.map((col) => toSqlWhereCondition(col, dbRec[col], dbColumnTypes)).join(" AND ")
         : null;
 
       fieldsToCompare.forEach((field) => {
@@ -283,7 +319,7 @@ export function runComparisonCore(
 
           if (whereClause) {
             updateStatements.push(
-              `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal)} WHERE ${whereClause};`
+              `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal, field, dbColumnTypes)} WHERE ${whereClause};`
             );
           }
         }
@@ -374,7 +410,7 @@ export function runComparisonCore(
               : undefined;
           const val = fCol ? fileRec[fCol] ?? fileRec[col] : fileRec[col];
           insertCols.push(`"${col}"`);
-          insertVals.push(toSqlValue(val));
+          insertVals.push(toSqlValue(val, col, dbColumnTypes));
           addedCols.add(col);
         });
 
@@ -383,7 +419,7 @@ export function runComparisonCore(
           const fileKey = fieldToFileKey.get(field);
           if (fileKey != null) {
             insertCols.push(`"${field}"`);
-            insertVals.push(toSqlValue(fileRec[fileKey]));
+            insertVals.push(toSqlValue(fileRec[fileKey], field, dbColumnTypes));
             addedCols.add(field);
           }
         });
@@ -396,7 +432,7 @@ export function runComparisonCore(
               if (defConfig.useRawExpression) {
                 insertVals.push(defConfig.value.trim());
               } else {
-                insertVals.push(toSqlValue(defConfig.value));
+                insertVals.push(toSqlValue(defConfig.value, fieldName, dbColumnTypes));
               }
               addedCols.add(fieldName);
             }

@@ -35,6 +35,13 @@ export const ResultsViewTab = {
 
 export type ResultsViewTab = (typeof ResultsViewTab)[keyof typeof ResultsViewTab];
 
+export const SqlScriptType = {
+  UPDATE: "UPDATE",
+  INSERT: "INSERT",
+} as const;
+
+export type SqlScriptType = (typeof SqlScriptType)[keyof typeof SqlScriptType];
+
 export interface AttributeDifference {
   fieldName: string;
   dbValue: string | number | null;
@@ -95,4 +102,5 @@ export interface SqlPatchDrawerProps {
   sqlUpdateScript: string;
   sqlInsertScript: string;
   tableName: string;
+  dbConfig: DbConfig;
 }

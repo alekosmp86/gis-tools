@@ -51,6 +51,18 @@ export async function POST(request: Request) {
     const allSelectedCols = Array.from(new Set([...suidColsList, ...fields_to_compare]));
     const columnsToSelect = allSelectedCols.map((col) => `"${sanitizeIdentifier(col)}"`);
 
+    // Query PostgreSQL information_schema for exact column data types
+    const typesQuery = `
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_schema = $1 AND table_name = $2;
+    `;
+    const typesRes = await client.query(typesQuery, [schema_name, table_name]);
+    const columnTypes: Record<string, string> = {};
+    typesRes.rows.forEach((row: { column_name: string; data_type: string }) => {
+      columnTypes[row.column_name] = row.data_type;
+    });
+
     const query = `
       SELECT ${columnsToSelect.join(", ")}
       FROM "${sanitizeIdentifier(schema_name)}"."${sanitizeIdentifier(table_name)}";
@@ -63,6 +75,7 @@ export async function POST(request: Request) {
       success: true,
       records: result.rows,
       totalCount: result.rowCount,
+      columnTypes,
     });
   } catch (error: unknown) {
     const message =

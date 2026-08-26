@@ -46,6 +46,7 @@ export class DbVsFileComparisonEngine implements IComparisonEngine {
     }
 
     const dbRecords: Array<Record<string, unknown>> = dbData.records || [];
+    const dbColumnTypes: Record<string, string> = dbData.columnTypes || {};
 
     // 2. Serialize dataset for postMessage (Map -> plain object)
     const serializedDataset = serializeFileDataset(dataset);
@@ -58,6 +59,7 @@ export class DbVsFileComparisonEngine implements IComparisonEngine {
         mappingConfig,
         dbSchemaName: dbConfig.schema_name,
         dbTableName: dbConfig.table_name,
+        dbColumnTypes,
       },
       this.progressCallback
     );

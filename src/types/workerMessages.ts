@@ -61,6 +61,7 @@ export interface WorkerInputMessage {
     mappingConfig: ColumnMappingConfig;
     dbSchemaName: string;
     dbTableName: string;
+    dbColumnTypes?: Record<string, string>;
   };
 }
 

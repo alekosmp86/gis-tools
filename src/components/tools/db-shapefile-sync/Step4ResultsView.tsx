@@ -156,6 +156,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
               sqlUpdateScript={summary.sqlUpdateScript}
               sqlInsertScript={summary.sqlInsertScript}
               tableName={dbConfig.table_name}
+              dbConfig={dbConfig}
             />
           )}
 
