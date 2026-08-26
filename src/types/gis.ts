@@ -5,6 +5,7 @@ import type { DbColumnMetadata } from "./db";
 export const ToolCategory = {
   ALL: "Todos",
   SYNC: "Sincronización y Comparación",
+  VIEWERS: "Visualización",
   CONVERTERS: "Conversores",
   DATABASE: "Base de Datos",
 } as const;
