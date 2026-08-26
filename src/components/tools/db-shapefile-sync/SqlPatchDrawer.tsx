@@ -29,7 +29,14 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
   } | null>(null);
 
   const activeScript = activeTab === SqlScriptType.UPDATE ? sqlUpdateScript : sqlInsertScript;
-  const statementCount = (activeScript.match(/;/g) || []).length || (activeScript.trim() ? 1 : 0);
+
+  // Check if active script contains actual executable SQL statements (not just header comments)
+  const hasExecutableStatements =
+    activeTab === SqlScriptType.UPDATE
+      ? /UPDATE\s+/i.test(activeScript)
+      : /INSERT\s+INTO\s+/i.test(activeScript);
+
+  const statementCount = (activeScript.match(/;/g) || []).length;
   const isCurrentTabExecuted = executedTabs[activeTab];
 
   const handleCopy = () => {
@@ -113,7 +120,14 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
             variant="primary"
             onClick={() => setIsModalOpen(true)}
             type="button"
-            disabled={!activeScript.trim() || executing || isCurrentTabExecuted}
+            disabled={!hasExecutableStatements || executing || isCurrentTabExecuted}
+            title={
+              !hasExecutableStatements
+                ? "No hay sentencias SQL para ejecutar en este script"
+                : isCurrentTabExecuted
+                ? "El script ya ha sido ejecutado con éxito"
+                : "Ejecutar sentencias en la base de datos"
+            }
           >
             {isCurrentTabExecuted ? (
               <>
