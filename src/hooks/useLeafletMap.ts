@@ -43,7 +43,7 @@ export function useLeafletMap(
       map.removeLayer(tileLayerRef.current);
     }
 
-    const tileConfig = BASEMAP_TILES[basemapKey] || BASEMAP_TILES.voyager;
+    const tileConfig = BASEMAP_TILES[basemapKey] || BASEMAP_TILES.osm;
     const tileLayer = L.tileLayer(tileConfig.url, {
       maxZoom: tileConfig.maxZoom,
       subdomains: tileConfig.subdomains || "abc",
@@ -67,7 +67,7 @@ export function useLeafletMap(
       canvasRendererRef.current = L.canvas({ padding: 0.5 });
 
       // Add initial tile layer
-      const tileConfig = BASEMAP_TILES[basemapKeyRef.current] || BASEMAP_TILES.voyager;
+      const tileConfig = BASEMAP_TILES[basemapKeyRef.current] || BASEMAP_TILES.osm;
       const tileLayer = L.tileLayer(tileConfig.url, {
         maxZoom: tileConfig.maxZoom,
         subdomains: tileConfig.subdomains || "abc",

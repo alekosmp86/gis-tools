@@ -46,7 +46,6 @@ export const MapHeaderBar: React.FC<MapHeaderBarProps> = ({
             className={styles.selectBasemap}
             aria-label="Seleccionar mapa base"
           >
-            <option value="voyager">Mapa de Calles (Voyager)</option>
             <option value="osm">Estándar (OpenStreetMap)</option>
             <option value="satellite">Satélite (Esri World)</option>
             <option value="dark">Modo Oscuro (CartoDB)</option>

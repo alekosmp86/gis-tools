@@ -14,7 +14,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   title = "VISTA PREVIA ESPACIAL EN MAPA",
 }) => {
   const [mapContainerNode, setMapContainerNode] = useState<HTMLDivElement | null>(null);
-  const [basemapKey, setBasemapKey] = useState<string>("voyager");
+  const [basemapKey, setBasemapKey] = useState<string>("osm");
 
   const totalFeatures = geojson?.features?.length || 0;
 

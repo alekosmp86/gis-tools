@@ -8,12 +8,6 @@ export interface TileLayerConfig {
 }
 
 export const BASEMAP_TILES: Record<string, TileLayerConfig> = {
-  voyager: {
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-    subdomains: "abcd",
-    maxZoom: 19,
-    attribution: "CartoDB Voyager",
-  },
   osm: {
     url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     maxZoom: 19,
