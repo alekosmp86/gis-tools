@@ -3,7 +3,7 @@ import { GitMerge, ArrowRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SuidSelectorCard } from "./SuidSelectorCard";
 import { AttributeFieldsCard } from "./AttributeFieldsCard";
-import { GeometryToggleCard } from "./GeometryToggleCard";
+import { GeometryToggleCard } from "../db-shapefile-sync/GeometryToggleCard";
 import { InsertDefaultsCard } from "./InsertDefaultsCard";
 import { useSuidMappingForm } from "@/hooks/useSuidMappingForm";
 import type { SuidMappingStepProps } from "@/types/gis";

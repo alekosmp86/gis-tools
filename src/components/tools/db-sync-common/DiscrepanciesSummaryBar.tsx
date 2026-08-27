@@ -7,9 +7,10 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
   summary,
   activeFilter,
   onSelectFilter,
+  isReanalyzing = false,
 }) => {
   return (
-    <div className={styles.grid}>
+    <div className={`${styles.grid} ${isReanalyzing ? styles.reanalyzing : ""}`}>
       {/* Total Analyzed Card */}
       <div
         role="button"

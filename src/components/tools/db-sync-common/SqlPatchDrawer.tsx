@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Copy, Check, Download, FileCode, RefreshCw, PlusSquare, Play, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
@@ -15,6 +16,7 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
   tableName,
   dbConfig,
 }) => {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<SqlScriptType>(SqlScriptType.UPDATE);
   const [copied, setCopied] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -76,8 +78,12 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
         }));
         setExecutionResult({
           type: AlertType.SUCCESS,
-          text: res.message || `Ejecución exitosa. ${res.affectedRows || 0} registros modificados/insertados.`,
+          text: res.message
+            ? `${res.message} Sincronizando y re-analizando base de datos en segundo plano...`
+            : `Ejecución exitosa (${res.affectedRows || 0} registros procesados). Sincronizando y re-analizando en segundo plano...`,
         });
+        // Invalidate datasetComparison cache so Step 4 automatically re-analyzes and updates live
+        queryClient.invalidateQueries({ queryKey: ["datasetComparison"] });
       })
       .catch((err: unknown) => {
         const errMsg = err instanceof Error ? err.message : "Error al ejecutar en la base de datos.";

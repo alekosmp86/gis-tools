@@ -17,6 +17,7 @@ import type { ParsedShapefileData } from "@/types/shp";
 import type { ColumnMappingConfig } from "@/types/gis";
 import { useQuery } from "@tanstack/react-query";
 import { DbVsFileComparisonEngine } from "@/services/engines/DbVsFileComparisonEngine";
+import { ResyncBanner } from "./ResyncBanner";
 import styles from "./Step4ResultsView.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -41,7 +42,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
 
   const suidLabel = mappingConfig.suidColumns ? mappingConfig.suidColumns.join(" + ") : "";
 
-  const { data: summary, isLoading: loading, error } = useQuery({
+  const { data: summary, isLoading: loading, isFetching, error } = useQuery({
     queryKey: [
       "datasetComparison",
       dbConfig.db_name,
@@ -75,6 +76,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeViewTab, setActiveViewTab] = useState<ResultsViewTab>(ResultsViewTab.TABLE);
 
+  const isReanalyzing = Boolean(isFetching && !loading);
   const errorMessage =
     error instanceof Error ? error.message : error ? "Error en el análisis." : null;
 
@@ -130,11 +132,15 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
       {/* Results View */}
       {summary && !loading && (
         <div className={styles.resultsContent}>
+          {/* Background Re-sync Banner */}
+          <ResyncBanner isReanalyzing={isReanalyzing} progress={progress} />
+
           {/* KPI Summary Cards */}
           <DiscrepanciesSummaryBar
             summary={summary}
             activeFilter={activeFilter}
             onSelectFilter={setActiveFilter}
+            isReanalyzing={isReanalyzing}
           />
 
           {/* Controls Bar & View Mode Tabs */}
