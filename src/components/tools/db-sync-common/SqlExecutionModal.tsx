@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Database, Lock, Eye, EyeOff, X, ShieldAlert, Loader2 } from "lucide-react";
+import { Database, Lock, Eye, EyeOff, X, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import type { DbConfig } from "@/types/db";
 import type { SqlScriptType } from "@/types/comparison";
@@ -24,25 +24,16 @@ export const SqlExecutionModal: React.FC<SqlExecutionModalProps> = ({
 }) => {
   const [passwordInput, setPasswordInput] = useState<string>(dbConfig.password || "");
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!passwordInput.trim() || isSubmitting) return;
+    if (!passwordInput.trim()) return;
 
-    setIsSubmitting(true);
-    onConfirmExecute(passwordInput)
-      .then(() => {
-        onClose();
-      })
-      .catch(() => {
-        // Handled in parent
-      })
-      .finally(() => {
-        setIsSubmitting(false);
-      });
+    const password = passwordInput;
+    onClose();
+    onConfirmExecute(password);
   };
 
   return (
@@ -66,7 +57,6 @@ export const SqlExecutionModal: React.FC<SqlExecutionModalProps> = ({
             className={styles.closeBtn}
             onClick={onClose}
             aria-label="Cerrar modal"
-            disabled={isSubmitting}
           >
             <X size={18} />
           </button>
@@ -120,7 +110,6 @@ export const SqlExecutionModal: React.FC<SqlExecutionModalProps> = ({
                   className={styles.passwordInput}
                   required
                   autoFocus
-                  disabled={isSubmitting}
                 />
                 <button
                   type="button"
@@ -148,7 +137,6 @@ export const SqlExecutionModal: React.FC<SqlExecutionModalProps> = ({
               type="button"
               variant="secondary"
               onClick={onClose}
-              disabled={isSubmitting}
             >
               Cancelar
             </Button>
@@ -156,19 +144,10 @@ export const SqlExecutionModal: React.FC<SqlExecutionModalProps> = ({
             <Button
               type="submit"
               variant="primary"
-              disabled={!passwordInput.trim() || isSubmitting}
+              disabled={!passwordInput.trim()}
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 size={16} className="spin" />
-                  <span>Ejecutando en BD...</span>
-                </>
-              ) : (
-                <>
-                  <Database size={16} />
-                  <span>Confirmar y Ejecutar en BD</span>
-                </>
-              )}
+              <Database size={16} />
+              <span>Confirmar y Ejecutar en BD</span>
             </Button>
           </div>
         </form>
