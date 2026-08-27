@@ -1,11 +1,5 @@
 import { useState } from "react";
-
-export interface ComparisonProgress {
-  phase: string;
-  current: number;
-  total: number;
-  pct: number;
-}
+import type { ComparisonProgress } from "@/types/comparison";
 
 const INITIAL_PROGRESS: ComparisonProgress = {
   phase: "",

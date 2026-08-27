@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import dynamic from "next/dynamic";
+import { useQueryClient } from "@tanstack/react-query";
 import { UploadCloud, FileCheck, Trash2, ArrowRight, Layers, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
@@ -19,6 +20,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
   onDiscard,
   loadedData = null,
 }) => {
+  const queryClient = useQueryClient();
   const [data, setData] = useState<ParsedFileDataset | null>(
     loadedData ? (loadedData as unknown as ParsedFileDataset) : null
   );
@@ -30,6 +32,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
   const processFile = async (file: File) => {
     setLoading(true);
     setErrorMessage(null);
+    queryClient.removeQueries({ queryKey: ["datasetComparison"] });
 
     try {
       const parser: ISpatialFileParser = new ShapefileParser();
@@ -78,6 +81,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
   };
 
   const handleDiscard = () => {
+    queryClient.removeQueries({ queryKey: ["datasetComparison"] });
     setData(null);
     setErrorMessage(null);
     if (fileInputRef.current) {

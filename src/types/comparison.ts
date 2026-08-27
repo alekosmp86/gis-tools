@@ -83,10 +83,23 @@ export interface IComparisonEngine {
   ): Promise<ComparisonSummary>;
 }
 
+export interface ComparisonProgress {
+  phase: string;
+  current: number;
+  total: number;
+  pct: number;
+}
+
+export interface ResyncBannerProps {
+  isReanalyzing: boolean;
+  progress: ComparisonProgress;
+}
+
 export interface DiscrepanciesSummaryBarProps {
   summary: ComparisonSummary;
   activeFilter: DiscrepancyFilter;
   onSelectFilter: (filter: DiscrepancyFilter) => void;
+  isReanalyzing?: boolean;
 }
 
 export interface DiscrepanciesTableProps {

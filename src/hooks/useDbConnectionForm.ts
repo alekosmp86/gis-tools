@@ -1,4 +1,5 @@
 import { useState, useEffect, startTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { INITIAL_DB_CONFIG } from "@/data/dbConfigData";
 import { useFetchDbColumns } from "@/hooks/useDbQueries";
 import {
@@ -11,6 +12,7 @@ import { AlertType } from "@/types/ui";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormProps, SavedDbProfile } from "@/types/db";
 
 export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"]) {
+  const queryClient = useQueryClient();
   const [config, setConfig] = useState<DbConfig>(INITIAL_DB_CONFIG);
   const [statusMessage, setStatusMessage] = useState<{
     type: AlertType;
@@ -58,6 +60,7 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
     }
     const found = savedProfiles.find((p) => p.id === profileId);
     if (found) {
+      queryClient.removeQueries({ queryKey: ["datasetComparison"] });
       setConfig((prev) => ({ ...prev, ...found.config, password: "" }));
       setActiveProfileId(found.id);
       setProfileNameInput(found.name);
@@ -70,6 +73,7 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
   };
 
   const handleResetForm = () => {
+    queryClient.removeQueries({ queryKey: ["datasetComparison"] });
     setConfig(INITIAL_DB_CONFIG);
     setActiveProfileId("");
     setProfileNameInput("");
@@ -81,6 +85,7 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
   };
 
   const handleConnectAndFetchColumns = () => {
+    queryClient.removeQueries({ queryKey: ["datasetComparison"] });
     if (!config.db_name || !config.user || !config.table_name) {
       setStatusMessage({
         type: AlertType.ERROR,
