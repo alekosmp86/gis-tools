@@ -72,6 +72,21 @@ A continuación se detalla cada módulo implementado en la rama `feature/csv-ewk
 - **`src/components/tools/db-csv-sync/CsvUploader.tsx`** y **`src/components/tools/db-shapefile-sync/ShapefileUploader.tsx`**:
   - **Función**: Incorporación de `<SpatialMapPreview />` dinámico en el Paso 2 para mostrar una vista previa del mapa apenas se carga un archivo CSV con columna de geometría o un archivo Shapefile/GeoJSON.
 
+### I. Reorganización de Componentes Compartidos en `db-sync-common`
+- **`src/components/tools/db-sync-common/`**:
+  - **Función**: Módulo centralizado que agrupa todas las vistas de pasos y componentes comunes entre herramientas de comparación.
+  - **Componentes relocalizados**: `SuidMappingStep` (Paso 3 unificado), `SuidSelectorCard`, `AttributeFieldsCard`, `InsertDefaultsCard`, `Step4ResultsView` (Paso 4), `DiscrepanciesSummaryBar`, `DiscrepanciesTable`, `ResultsControlsBar`, `SqlPatchDrawer`, `SqlExecutionModal` y `ResyncBanner`.
+  - **Aislamiento**: `db-shapefile-sync` y `db-csv-sync` mantienen únicamente sus parsers y cargadores específicos (`ShapefileUploader`, `CsvUploader`, `GeometryToggleCard`).
+
+### J. Estrategia Combinada de Caché y Barras Skeleton de Recálculo
+- **Invalidación en Vivo tras Ejecución SQL**: `SqlPatchDrawer.tsx` invoca `queryClient.invalidateQueries({ queryKey: ["datasetComparison"] })` al ejecutar exitosamente parches en PostgreSQL, re-evaluando las discrepancias en segundo plano.
+- **Purga de Caché en Inicio de Sesión**: `ShapefileUploader.tsx`, `CsvUploader.tsx` y `useDbConnectionForm.ts` purgan las consultas comparativas mediante `queryClient.removeQueries(...)` al reemplazar un archivo o cambiar credenciales de DB.
+- **Visualización de Recálculo con Skeletons**: `DiscrepanciesSummaryBar.tsx` muestra un cartel informativo (*"Recalculando discrepancias..."*) y conmuta los valores de las tarjetas KPI a barras animadas de Skeleton (`styles.skeletonValue`) durante el procesamiento asíncrono.
+
+### K. Componente `ProfileSelect` e Hidratación Segura
+- **`src/components/shared/ProfileSelect.tsx`**: Dropdown accesible personalizado que reemplaza el elemento nativo `<select>`, integrando iconos Lucide SVG (`Plus`, `Bookmark`, `ChevronDown`, `Check`, `Trash2`) para gestión de perfiles de base de datos guardados.
+- **`src/hooks/useDbConnectionForm.ts`**: Optimización de hidratación de perfiles `localStorage` mediante `startTransition` de React 18, eliminando advertencias y envoltorios redundantes.
+
 ---
 
 ## 3. Desafíos Técnicos Resueltos

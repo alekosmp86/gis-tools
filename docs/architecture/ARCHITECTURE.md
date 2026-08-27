@@ -133,6 +133,7 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 
 ### Componentes UI Reutilizables (`src/components/shared/`)
 - [`src/components/shared/DbConnectionForm.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/DbConnectionForm.tsx): Paso 1 compartido (Conexión e introspección DB con metadatos de columnas).
+- [`src/components/shared/ProfileSelect.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/ProfileSelect.tsx): Dropdown de perfiles de conexión guardados con soporte de iconos Lucide SVG (`Plus`, `Bookmark`, `ChevronDown`, `Check`, `Trash2`).
 - [`src/components/shared/StepIndicator.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/StepIndicator.tsx): Indicador visual de los 4 pasos del Wizard.
 - [`src/components/shared/ProgressBar.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/ProgressBar.tsx): Barra de progreso animada por fases.
 - [`src/components/shared/PaginationControls.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/PaginationControls.tsx): Control de paginación reutilizable (botones primera/anterior/siguiente/última, selector de filas por página y contador de registros).
@@ -140,24 +141,36 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 - [`src/components/shared/AlertMessage.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/AlertMessage.tsx): Mensajes de estado y alerta.
 
 ### Componentes de Herramientas (`src/components/tools/`)
-- **DB vs Shapefile**:
-  - `ShapefileUploader.tsx`: Dropzone para archivos `.zip` / `.geojson`.
-  - `SuidMappingStep.tsx`: Formulario de correspondencia SUID, Atributos e Inserciones `NOT NULL`.
+- **Módulo Compartido de Comparación (`src/components/tools/db-sync-common/`)**:
+  - `SuidMappingStep.tsx`: Formulario unificado de correspondencia SUID (simple o compuesta), Atributos, valores `NOT NULL` por defecto y toggle geométrico opcional.
   - `SuidSelectorCard.tsx`: Selector interactivo de columnas SUID únicas o compuestas.
-  - `InsertDefaultsCard.tsx`: Tarjeta de configuración de valores por defecto e inserciones para campos faltantes.
-  - `Step4ResultsView.tsx`: Panel principal de resultados de comparación.
-  - `DiscrepanciesSummaryBar.tsx`: Tarjetas KPI de resumen.
+  - `AttributeFieldsCard.tsx`: Mapeo de correspondencia 1-a-1 de campos y atributos.
+  - `InsertDefaultsCard.tsx`: Configuración de valores por defecto para columnas obligatorias no mapeadas.
+  - `Step4ResultsView.tsx`: Panel contenedor de los resultados de análisis y discrepancias.
+  - `DiscrepanciesSummaryBar.tsx`: Tarjetas KPI de resumen con indicación visual de recálculo (Notice banner y barras Skeleton animadas en tarjetas).
   - `DiscrepanciesTable.tsx`: Tabla filtrable y paginada de discrepancias (50 / 100 / 250 / 500 por página).
-  - `SqlPatchDrawer.tsx`: Visor con pestañas de scripts SQL (UPDATE e INSERT).
-- **DB vs CSV**:
-  - `CsvUploader.tsx`: Dropzone e inspección de encabezados `.csv`.
-  - `CsvSuidMappingStep.tsx`: Mapeo de columnas CSV vs DB (soporta SUID compuesto).
+  - `ResultsControlsBar.tsx`: Barra de controles y selector de pestañas (Tabla, Mapa, Script SQL).
+  - `SqlPatchDrawer.tsx`: Visor con pestañas de scripts SQL (`UPDATE` e `INSERT`) con invalidación de caché React Query.
+  - `SqlExecutionModal.tsx`: Modal de confirmación y autenticación para ejecución directa de SQL en PostgreSQL con transacciones `BEGIN; ... COMMIT;`.
+  - `ResyncBanner.tsx`: Componente atómico de barra de notificación de sincronización en segundo plano con spinner `RefreshCw` y barra de progreso.
+- **Herramienta DB vs Shapefile (`src/components/tools/db-shapefile-sync/`)**:
+  - `ShapefileUploader.tsx`: Dropzone para archivos `.zip` / `.geojson` con vista previa de mapa espacial y purga de caché al reemplazar archivo.
+  - `GeometryToggleCard.tsx`: Tarjeta de activación opcional para comparación de geometrías.
+- **Herramienta DB vs CSV (`src/components/tools/db-csv-sync/`)**:
+  - `CsvUploader.tsx`: Dropzone e inspección de encabezados `.csv` con auto-detección EWKB/WKT y purga de caché al reemplazar archivo.
+- **Visor de Archivos (`src/components/tools/file-viewer/`)**:
+  - `FileViewerContainer.tsx`: Contenedor principal del visor directo de archivos espaciales.
+  - `FileViewerUploader.tsx`: Drag & drop para cargador rápido de archivos.
+  - `FileMetaPanel.tsx`: Panel de metadatos del archivo.
+  - `AttributeTable.tsx`: Tabla paginada interactiva con selección bidireccional mapa-tabla.
 
 ### Rutas de API y Páginas (`src/app/`)
 - [`src/app/api/db/columns/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/columns/route.ts): Endpoint de introspección de columnas con metadatos de restricciones (`is_nullable`, `column_default`).
 - [`src/app/api/db/records/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/route.ts): Endpoint de consulta ilimitada de registros PostGIS (sin tope de 10k).
+- [`src/app/api/db/execute/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/execute/route.ts): Endpoint de ejecución de scripts SQL transaccionales en PostgreSQL (`BEGIN; ... COMMIT;` / `ROLLBACK`).
 - [`src/app/tools/db-shapefile-sync/page.tsx`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-shapefile-sync/page.tsx): Wizard de Sincronización DB vs. Shapefile.
 - [`src/app/tools/db-csv-sync/page.tsx`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-csv-sync/page.tsx): Wizard de Sincronización DB vs. CSV.
+- [`src/app/tools/file-viewer/page.tsx`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/file-viewer/page.tsx): Visor directo de archivos espaciales.
 
 ---
 

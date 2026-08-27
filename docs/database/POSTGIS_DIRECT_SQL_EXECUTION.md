@@ -18,8 +18,8 @@ Users needed the ability to execute these SQL patches directly into the PostgreS
 
 - **[`src/app/api/db/execute/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/execute/route.ts)** — Next.js API Route handling PostgreSQL execution.
 - **[`src/services/dbExecutionService.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/dbExecutionService.ts)** — Frontend service client for execution requests.
-- **[`src/components/tools/db-shapefile-sync/SqlExecutionModal.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/SqlExecutionModal.tsx)** — UI Confirmation & Password Modal.
-- **[`src/components/tools/db-shapefile-sync/SqlExecutionModal.module.css`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-shapefile-sync/SqlExecutionModal.module.css)** — Modal styles and connection card grid.
+- **[`src/components/tools/db-sync-common/SqlExecutionModal.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-sync-common/SqlExecutionModal.tsx)** — UI Confirmation & Password Modal.
+- **[`src/components/tools/db-sync-common/SqlExecutionModal.module.css`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-sync-common/SqlExecutionModal.module.css)** — Modal styles and connection card grid.
 
 ---
 

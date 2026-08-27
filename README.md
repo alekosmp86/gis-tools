@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🌍 GIS Tools — Plataforma de Auditoría y Sincronización SIG
 
-## Getting Started
+**GIS Tools** es una plataforma web modular de alta velocidad diseñada para la auditoría, correlación, análisis de discrepancias, visualización espacial y sincronización de datos alfanuméricos y geográficos entre **bases de datos PostgreSQL/PostGIS** y **fuentes de datos externas** (Shapefiles `.zip`, GeoJSON `.geojson` y archivos alfanuméricos `.csv`).
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🚀 Herramientas Disponibles
+
+1. **Sincronización DB vs. Shapefile** (`/tools/db-shapefile-sync`)
+   - Correlación de tablas PostgreSQL/PostGIS contra archivos Shapefile (`.zip`) y GeoJSON (`.geojson`).
+   - Mapeo de clave SUID (simple o compuesta por múltiples columnas).
+   - Generación de scripts SQL PostGIS de actualización (`UPDATE`) e inserción (`INSERT`).
+
+2. **Sincronización DB vs. CSV** (`/tools/db-csv-sync`)
+   - Correlación de tablas PostGIS contra archivos `.csv` alfanuméricos y espaciales.
+   - Decodificación automática de geometrías EWKB Hex y pares Latitud/Longitud.
+   - Generación de parches SQL para PostGIS.
+
+3. **Visor de Archivos Espaciales** (`/tools/file-viewer`)
+   - Inspección directa e instantánea de archivos Shapefile, GeoJSON y CSV.
+   - Mapa interactivo Leaflet con selección bidireccional mapa-tabla de atributos.
+
+---
+
+## 🛠️ Tecnologías Principales
+
+- **Framework**: Next.js 16 (App Router, Turbopack) & React 19
+- **Estilos**: Vanilla CSS Modules (Glassmorphism, Cero inline styles)
+- **Mapas**: Leaflet (Canvas Renderer `L.canvas` para 60fps)
+- **Procesamiento**: Web Workers (Multihilo en memoria local $O(1)$)
+- **Caché y Estado**: TanStack React Query v5
+- **Iconografía**: Lucide React Icons exclusivamente
+
+---
+
+## 📁 Estructura del Proyecto
+
+```
+src/
+├── app/                     # Rutas y Next.js API Routes (/api/db/...)
+├── components/
+│   ├── layout/              # Header, Footer, Hero
+│   ├── shared/              # DbConnectionForm, ProfileSelect, StepIndicator
+│   ├── ui/                  # Button, Badge, SearchInput
+│   └── tools/
+│       ├── db-sync-common/  # Módulo compartido de pasos (Step 3 & Step 4)
+│       ├── db-shapefile-sync/# Componentes exclusivos de Shapefile
+│       ├── db-csv-sync/     # Componentes exclusivos de CSV
+│       └── file-viewer/     # Visor de archivos espaciales
+├── constants/               # Configuración estática de mapas y colores
+├── data/                    # Catálogo de herramientas y perfiles
+├── hooks/                   # Custom Hooks (useDbConnectionForm, etc.)
+├── services/                # Parsers (ShapefileParser, CsvParser) y Motores
+├── types/                   # Modelos TypeScript aislados
+├── utils/                   # Parseadores EWKB/WKT y limpiadores
+└── workers/                 # Web Workers de procesamiento asíncrono
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📚 Documentación
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Toda la documentación detallada del proyecto se encuentra organizada en el directorio [`docs/`](file:///c:/Alekos/Projects/gis-tools/docs/README.md):
 
-## Learn More
+- 🏗️ [**Arquitectura General & Componentes**](file:///c:/Alekos/Projects/gis-tools/docs/architecture/ARCHITECTURE.md)
+- 📊 [**Informe de Avances & Desafíos Resueltos**](file:///c:/Alekos/Projects/gis-tools/docs/architecture/ARCHITECTURE_AND_PROGRESS.md)
+- 💾 [**Ejecución Directa de SQL en PostGIS**](file:///c:/Alekos/Projects/gis-tools/docs/database/POSTGIS_DIRECT_SQL_EXECUTION.md)
+- 🗺️ [**Visor de Archivos Espaciales**](file:///c:/Alekos/Projects/gis-tools/docs/tools/FILE_VIEWER_TOOL.md)
+- 🎨 [**Estándares de Código y Reglas UI**](file:///c:/Alekos/Projects/gis-tools/docs/architecture/CODEBASE_STANDARDS_AND_UI_GUARDS.md)
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## ⚙️ Desarrollo Local
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+# Iniciar servidor de desarrollo
+npm run dev
 
-## Deploy on Vercel
+# Ejecutar auditoría React Doctor
+npm run doctor
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Validar ESLint
+npm run lint
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Construcción de producción
+npm run build
+```
