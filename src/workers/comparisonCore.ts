@@ -457,7 +457,7 @@ export function runComparisonCore(
     totalAnalyzed: discrepancyItems.length,
     exactMatchesCount,
     attributeMismatchCount,
-    geometryMismatchCount: 0,
+    geometryMismatchCount: 0, // @planned — see DiscrepancyType.GEOMETRY_MISMATCH
     onlyInDbCount,
     onlyInShpCount,
     nullSuidCount,

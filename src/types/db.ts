@@ -49,8 +49,10 @@ export interface TestConnectionResponse {
   error?: string;
 }
 
-export interface ColumnsPreviewProps {
-  columns: string[];
-  totalRows: number | null;
-  onProceed: () => void;
+export interface ExecuteSqlResponse {
+  success: boolean;
+  affectedRows?: number;
+  message?: string;
+  error?: string;
 }
+

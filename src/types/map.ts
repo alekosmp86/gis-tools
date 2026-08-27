@@ -1,5 +1,13 @@
 import type { FeatureCollection } from "geojson";
 
+export interface TileLayerConfig {
+  url: string;
+  subdomains?: string;
+  maxZoom: number;
+  attribution: string;
+}
+
+
 export interface SpatialMapPreviewProps {
   geojson: FeatureCollection;
   title?: string;

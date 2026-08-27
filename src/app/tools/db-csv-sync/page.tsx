@@ -8,7 +8,7 @@ import { Footer } from "@/components/layout/Footer";
 import { StepIndicator } from "@/components/shared/StepIndicator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { CsvUploader } from "@/components/tools/db-csv-sync/CsvUploader";
-import { CsvSuidMappingStep } from "@/components/tools/db-csv-sync/CsvSuidMappingStep";
+import { SuidMappingStep } from "@/components/tools/db-shapefile-sync/SuidMappingStep";
 import { Step4ResultsView } from "@/components/tools/db-shapefile-sync/Step4ResultsView";
 import type { DbConfig, DbColumnMetadata } from "@/types/db";
 import type { ParsedFileDataset } from "@/types/parsers";
@@ -20,20 +20,18 @@ export default function DbCsvSyncToolPage() {
   const [dbConfig, setDbConfig] = useState<DbConfig | null>(null);
   const [dbColumns, setDbColumns] = useState<string[]>([]);
   const [columnDetails, setColumnDetails] = useState<DbColumnMetadata[]>([]);
-  const [, setDbTotalRows] = useState<number>(0);
   const [csvDataset, setCsvDataset] = useState<ParsedFileDataset | null>(null);
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
 
   const handleDbSuccess = (
     config: DbConfig,
     columns: string[],
-    totalRows: number,
+    _totalRows: number,
     details?: DbColumnMetadata[]
   ) => {
     setDbConfig(config);
     setDbColumns(columns);
     setColumnDetails(details || []);
-    setDbTotalRows(totalRows);
     setCurrentStep(2);
   };
 
@@ -102,13 +100,14 @@ export default function DbCsvSyncToolPage() {
 
         {/* Step 3: SUID & Attributes Column Mapping */}
         {currentStep === 3 && csvDataset && (
-          <CsvSuidMappingStep
+          <SuidMappingStep
             dbColumns={dbColumns}
             columnDetails={columnDetails}
             fileAttributes={csvDataset.attributes}
             onSuccess={handleMappingSuccess}
             onBack={() => setCurrentStep(2)}
             initialConfig={mappingConfig}
+            showGeometryToggle={false}
           />
         )}
 

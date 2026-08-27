@@ -1,4 +1,6 @@
 import React from "react";
+import type { LucideIcon } from "lucide-react";
+import type { SavedDbProfile } from "./db";
 
 export const AlertType = {
   SUCCESS: "success",
@@ -87,6 +89,17 @@ export interface PaginationControlsProps {
   onPageSizeChange: (pageSize: number) => void;
 }
 
-export interface QueryProviderProps {
-  children: React.ReactNode;
+
+export interface FeatureHighlightData {
+  icon: LucideIcon;
+  title: string;
+  description: string;
 }
+
+export interface ProfileSelectProps {
+  profiles: SavedDbProfile[];
+  activeProfileId: string;
+  onSelectProfile: (profileId: string) => void;
+}
+
+

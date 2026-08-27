@@ -12,14 +12,10 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
-  const [filterState, setFilterState] = useState({ activeFilter, searchQuery });
+  const [prevProps, setPrevProps] = useState({ activeFilter, searchQuery });
 
-  // Reset page to 1 during render when activeFilter or searchQuery changes
-  if (
-    filterState.activeFilter !== activeFilter ||
-    filterState.searchQuery !== searchQuery
-  ) {
-    setFilterState({ activeFilter, searchQuery });
+  if (prevProps.activeFilter !== activeFilter || prevProps.searchQuery !== searchQuery) {
+    setPrevProps({ activeFilter, searchQuery });
     setCurrentPage(1);
   }
 
@@ -45,7 +41,6 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
 
   const startIndex = (validCurrentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalFilteredCount);
-
   const paginatedItems = filteredItems.slice(startIndex, endIndex);
 
   const renderTypeBadge = (type: DiscrepancyType) => {

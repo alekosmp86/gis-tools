@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
 import { CsvParser } from "@/services/parsers/CsvParser";
-import type { ParsedFileDataset } from "@/types/parsers";
+import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
 import styles from "./CsvUploader.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -35,7 +35,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
     setErrorMessage(null);
 
     try {
-      const parser = new CsvParser();
+      const parser: ISpatialFileParser = new CsvParser();
       const parsed = await parser.parse(file);
       setData(parsed);
       onSuccess(parsed);

@@ -1,11 +1,5 @@
-import type { DbConfig } from "@/types/db";
+import type { DbConfig, ExecuteSqlResponse } from "@/types/db";
 
-export interface ExecuteSqlResponse {
-  success: boolean;
-  affectedRows?: number;
-  message?: string;
-  error?: string;
-}
 
 export async function executeSqlScript(
   dbConfig: DbConfig,

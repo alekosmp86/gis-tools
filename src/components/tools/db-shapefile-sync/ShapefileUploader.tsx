@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
 import { ShapefileParser } from "@/services/parsers/ShapefileParser";
-import type { ShapefileUploaderProps } from "@/types/shp";
-import type { ParsedFileDataset } from "@/types/parsers";
+import type { ShapefileUploaderProps, ParsedShapefileData } from "@/types/shp";
+import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
 import styles from "./ShapefileUploader.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -32,10 +32,10 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
     setErrorMessage(null);
 
     try {
-      const parser = new ShapefileParser();
+      const parser: ISpatialFileParser = new ShapefileParser();
       const parsed = await parser.parse(file);
       setData(parsed);
-      onSuccess(parsed as unknown as import("@/types/shp").ParsedShapefileData);
+      onSuccess(parsed as unknown as ParsedShapefileData);
       setLoading(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al procesar el archivo Shapefile.";

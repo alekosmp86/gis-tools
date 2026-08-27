@@ -2,9 +2,8 @@
 
 import React, { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { QueryProviderProps } from "@/types/ui";
 
-export const QueryProvider: React.FC<QueryProviderProps> = ({ children }) => {
+export const QueryProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [queryClient] = useState(
     () =>
       new QueryClient({

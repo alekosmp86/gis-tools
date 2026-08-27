@@ -1,11 +1,12 @@
 import type { DbConfig } from "@/types/db";
 import type { ColumnMappingConfig } from "@/types/gis";
 import type { ParsedFileDataset } from "@/types/parsers";
+import type { ProgressCallback } from "@/services/workerBridge";
 
 export const DiscrepancyType = {
   MATCH: "MATCH",
   ATTRIBUTE_MISMATCH: "ATTRIBUTE_MISMATCH",
-  GEOMETRY_MISMATCH: "GEOMETRY_MISMATCH",
+  GEOMETRY_MISMATCH: "GEOMETRY_MISMATCH", // @planned — compareGeometry flag in ColumnMappingConfig
   ONLY_IN_DB: "ONLY_IN_DB",
   ONLY_IN_SHP: "ONLY_IN_SHP",
   NULL_SUID: "NULL_SUID",
@@ -16,16 +17,11 @@ export type DiscrepancyType = (typeof DiscrepancyType)[keyof typeof DiscrepancyT
 
 export const DiscrepancyFilter = {
   ALL: "ALL",
-  MATCH: "MATCH",
-  ATTRIBUTE_MISMATCH: "ATTRIBUTE_MISMATCH",
-  GEOMETRY_MISMATCH: "GEOMETRY_MISMATCH",
-  ONLY_IN_DB: "ONLY_IN_DB",
-  ONLY_IN_SHP: "ONLY_IN_SHP",
-  NULL_SUID: "NULL_SUID",
-  DUPLICATE_SUID: "DUPLICATE_SUID",
+  ...DiscrepancyType,
 } as const;
 
 export type DiscrepancyFilter = (typeof DiscrepancyFilter)[keyof typeof DiscrepancyFilter];
+
 
 export const ResultsViewTab = {
   TABLE: "table",
@@ -65,7 +61,7 @@ export interface ComparisonSummary {
   totalAnalyzed: number;
   exactMatchesCount: number;
   attributeMismatchCount: number;
-  geometryMismatchCount: number;
+  geometryMismatchCount: number; // @planned — always 0 until geometry comparison is implemented
   onlyInDbCount: number;
   onlyInShpCount: number;
   nullSuidCount: number;
@@ -82,7 +78,8 @@ export interface IComparisonEngine {
   compare(
     dbConfig: DbConfig,
     dataset: ParsedFileDataset,
-    mappingConfig: ColumnMappingConfig
+    mappingConfig: ColumnMappingConfig,
+    onProgress?: ProgressCallback
   ): Promise<ComparisonSummary>;
 }
 

@@ -16,7 +16,7 @@ import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
 import type { ColumnMappingConfig } from "@/types/gis";
 import { useQuery } from "@tanstack/react-query";
-import { runDatasetComparison } from "@/services/comparisonEngine";
+import { DbVsFileComparisonEngine } from "@/services/engines/DbVsFileComparisonEngine";
 import styles from "./Step4ResultsView.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -52,7 +52,21 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
     ],
     queryFn: () => {
       resetProgress();
-      return runDatasetComparison(dbConfig, fileDataset, mappingConfig, onProgress);
+      const dataset: ParsedFileDataset =
+        "recordsMap" in fileDataset
+          ? fileDataset
+          : {
+              kind: fileDataset.kind,
+              fileName: fileDataset.fileName,
+              fileSize: fileDataset.fileSize,
+              featureCount: fileDataset.featureCount,
+              geometryType: fileDataset.geometryType,
+              attributes: fileDataset.attributes,
+              recordsMap: new Map(),
+              geojson: fileDataset.geojson,
+            };
+      const engine = new DbVsFileComparisonEngine();
+      return engine.compare(dbConfig, dataset, mappingConfig, onProgress);
     },
     enabled: Boolean(dbConfig && fileDataset && mappingConfig),
   });

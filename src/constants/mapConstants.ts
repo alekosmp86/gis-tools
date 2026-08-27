@@ -1,11 +1,6 @@
 import { DiscrepancyType } from "@/types/comparison";
+import type { TileLayerConfig } from "@/types/map";
 
-export interface TileLayerConfig {
-  url: string;
-  subdomains?: string;
-  maxZoom: number;
-  attribution: string;
-}
 
 export const BASEMAP_TILES: Record<string, TileLayerConfig> = {
   osm: {

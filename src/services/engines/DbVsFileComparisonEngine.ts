@@ -11,21 +11,11 @@ import type { ProgressCallback } from "@/services/workerBridge";
 export class DbVsFileComparisonEngine implements IComparisonEngine {
   readonly engineName = "PostgreSQL vs Tabular File Comparison Engine";
 
-  private progressCallback?: ProgressCallback;
-
-  /**
-   * Sets an optional progress callback to receive phase updates from the worker.
-   * Must be called before compare() to receive progress events.
-   */
-  setProgressCallback(cb: ProgressCallback): this {
-    this.progressCallback = cb;
-    return this;
-  }
-
   async compare(
     dbConfig: DbConfig,
     dataset: ParsedFileDataset,
-    mappingConfig: ColumnMappingConfig
+    mappingConfig: ColumnMappingConfig,
+    onProgress?: ProgressCallback
   ): Promise<ComparisonSummary> {
     // 1. Fetch DB Records from API route
     const res = await fetch("/api/db/records", {
@@ -61,7 +51,7 @@ export class DbVsFileComparisonEngine implements IComparisonEngine {
         dbTableName: dbConfig.table_name,
         dbColumnTypes,
       },
-      this.progressCallback
+      onProgress
     );
   }
 }

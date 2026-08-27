@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, startTransition } from "react";
 import { INITIAL_DB_CONFIG } from "@/data/dbConfigData";
 import { useFetchDbColumns } from "@/hooks/useDbQueries";
 import {
@@ -28,7 +28,7 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
   useEffect(() => {
     const profiles = loadDbProfilesFromLocalStorage();
     if (profiles.length > 0) {
-      queueMicrotask(() => {
+      startTransition(() => {
         setSavedProfiles(profiles);
         const first = profiles[0];
         if (first) {
@@ -49,8 +49,6 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
     setColumnsLoaded([]);
     setColumnDetailsLoaded([]);
     setTotalRowsLoaded(null);
-    // Unbind active profile when user edits form parameters
-    setActiveProfileId("");
   };
 
   const handleSelectProfile = (profileId: string) => {

@@ -1,6 +1,14 @@
 import type { FeatureCollection } from "geojson";
 
+export const FileSourceKind = {
+  SHAPEFILE: "shapefile",
+  CSV: "csv",
+} as const;
+
+export type FileSourceKind = (typeof FileSourceKind)[keyof typeof FileSourceKind];
+
 export interface ParsedFileDataset {
+  kind: FileSourceKind;
   fileName: string;
   fileSize: number;
   featureCount: number;
@@ -15,3 +23,4 @@ export interface ISpatialFileParser {
   readonly supportedExtensions: string[];
   parse(file: File): Promise<ParsedFileDataset>;
 }
+

@@ -6,8 +6,8 @@ export const ToolCategory = {
   ALL: "Todos",
   SYNC: "Sincronización y Comparación",
   VIEWERS: "Visualización",
-  CONVERTERS: "Conversores",
-  DATABASE: "Base de Datos",
+  CONVERTERS: "Conversores", // @planned — future tool category
+  DATABASE: "Base de Datos", // @planned — future tool category
 } as const;
 
 export type ToolCategory = (typeof ToolCategory)[keyof typeof ToolCategory];
@@ -66,6 +66,7 @@ export interface SuidMappingStepProps {
   onSuccess: (mappingConfig: ColumnMappingConfig) => void;
   onBack: () => void;
   initialConfig?: ColumnMappingConfig | null;
+  showGeometryToggle?: boolean;
 }
 
 export interface SuidSelectorCardProps {

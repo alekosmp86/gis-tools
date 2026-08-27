@@ -1,10 +1,6 @@
-import { Zap, ShieldCheck, Globe, type LucideIcon } from "lucide-react";
+import { Zap, ShieldCheck, Globe } from "lucide-react";
+import type { FeatureHighlightData } from "@/types/ui";
 
-export interface FeatureHighlightData {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-}
 
 export const featureHighlightsData: FeatureHighlightData[] = [
   {

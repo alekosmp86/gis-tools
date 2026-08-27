@@ -1,5 +1,5 @@
 import type { FeatureCollection, Feature, Geometry, GeoJsonProperties } from "geojson";
-import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
+import { FileSourceKind, type ISpatialFileParser, type ParsedFileDataset } from "@/types/parsers";
 import { cleanSuid } from "@/utils/gisCleaners";
 import { parseAnyGeometryString } from "@/utils/wktParser";
 import { normalizeCoordinate } from "@/utils/ewkbParser";
@@ -116,6 +116,7 @@ export class CsvParser implements ISpatialFileParser {
     }
 
     return {
+      kind: FileSourceKind.CSV,
       fileName,
       fileSize,
       featureCount: lines.length - 1,

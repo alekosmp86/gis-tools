@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
+import { ProfileSelect } from "@/components/shared/ProfileSelect";
 import { useDbConnectionForm } from "@/hooks/useDbConnectionForm";
 import type { DbConnectionFormProps } from "@/types/db";
 import styles from "./DbConnectionForm.module.css";
@@ -76,19 +77,11 @@ export const DbConnectionForm: React.FC<DbConnectionFormProps> = ({ onSuccess })
           </div>
 
           <div className={styles.profilesControls}>
-            <select
-              value={activeProfileId}
-              onChange={(e) => handleSelectProfile(e.target.value)}
-              className={styles.profileSelect}
-              aria-label="Cargar perfil guardado"
-            >
-              <option value="">➕ Nueva conexión (ingresar datos vacíos)...</option>
-              {savedProfiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  📌 {profile.name}
-                </option>
-              ))}
-            </select>
+            <ProfileSelect
+              profiles={savedProfiles}
+              activeProfileId={activeProfileId}
+              onSelectProfile={handleSelectProfile}
+            />
 
             {activeProfileId ? (
               <Button
@@ -96,9 +89,9 @@ export const DbConnectionForm: React.FC<DbConnectionFormProps> = ({ onSuccess })
                 onClick={() => handleDeleteProfile(activeProfileId)}
                 type="button"
                 title="Eliminar este perfil de almacenamiento local"
+                aria-label="Eliminar perfil"
               >
-                <Trash2 size={15} color="var(--accent-rose)" />
-                <span className={styles.deleteBtnText}>Eliminar perfil</span>
+                <Trash2 size={16} color="var(--accent-rose)" />
               </Button>
             ) : (
               <Button

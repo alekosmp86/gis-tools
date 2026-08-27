@@ -20,20 +20,18 @@ export default function DbShapefileSyncToolPage() {
   const [dbConfig, setDbConfig] = useState<DbConfig | null>(null);
   const [dbColumns, setDbColumns] = useState<string[]>([]);
   const [columnDetails, setColumnDetails] = useState<DbColumnMetadata[]>([]);
-  const [, setDbTotalRows] = useState<number>(0);
   const [shapefileData, setShapefileData] = useState<ParsedShapefileData | null>(null);
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
 
   const handleDbSuccess = (
     config: DbConfig,
     columns: string[],
-    totalRows: number,
+    _totalRows: number,
     details?: DbColumnMetadata[]
   ) => {
     setDbConfig(config);
     setDbColumns(columns);
     setColumnDetails(details || []);
-    setDbTotalRows(totalRows);
     setCurrentStep(2);
   };
 

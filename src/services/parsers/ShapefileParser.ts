@@ -1,6 +1,6 @@
 import shp from "shpjs";
 import type { FeatureCollection, Geometry, GeoJsonProperties } from "geojson";
-import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
+import { FileSourceKind, type ISpatialFileParser, type ParsedFileDataset } from "@/types/parsers";
 import { cleanSuid } from "@/utils/gisCleaners";
 
 export class ShapefileParser implements ISpatialFileParser {
@@ -62,6 +62,7 @@ export class ShapefileParser implements ISpatialFileParser {
     });
 
     return {
+      kind: FileSourceKind.SHAPEFILE,
       fileName,
       fileSize,
       featureCount,

@@ -2,7 +2,8 @@ import React from "react";
 import { Table, MapPin, FileCode } from "lucide-react";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ResultsViewTab } from "@/types/comparison";
-import type { ResultsViewTab as ResultsViewTabType } from "@/types/comparison";
+type ResultsViewTabType = (typeof ResultsViewTab)[keyof typeof ResultsViewTab];
+
 import styles from "./ResultsControlsBar.module.css";
 
 interface ResultsControlsBarProps {

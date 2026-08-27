@@ -159,7 +159,6 @@ export function useSuidMappingForm(
     compareGeometry,
     unmappedDbColumns,
     insertDefaults,
-    fileAttrMap,
     toggleSuidColumn,
     setCompareGeometry,
     toggleField,

@@ -16,6 +16,7 @@ export const SuidMappingStep: React.FC<SuidMappingStepProps> = ({
   onSuccess,
   onBack,
   initialConfig = null,
+  showGeometryToggle = true,
 }) => {
   const {
     selectableColumns,
@@ -79,11 +80,13 @@ export const SuidMappingStep: React.FC<SuidMappingStepProps> = ({
         onChangeDefault={handleUpdateInsertDefault}
       />
 
-      {/* 4. Geometry Comparison Toggle Card */}
-      <GeometryToggleCard
-        compareGeometry={compareGeometry}
-        onToggleGeometry={setCompareGeometry}
-      />
+      {/* 4. Geometry Comparison Toggle Card (optional for spatial shapefiles) */}
+      {showGeometryToggle && (
+        <GeometryToggleCard
+          compareGeometry={compareGeometry}
+          onToggleGeometry={setCompareGeometry}
+        />
+      )}
 
       {/* Navigation Actions */}
       <div className={styles.actionsRow}>
