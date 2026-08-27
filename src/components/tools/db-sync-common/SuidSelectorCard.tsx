@@ -1,6 +1,6 @@
 import React from "react";
 import { CheckCircle2, AlertTriangle, Layers, Layers3 } from "lucide-react";
-import type { SuidSelectorCardProps } from "@/types/gis";
+import type { SuidSelectorCardProps } from "@/types/comparison";
 import styles from "./SuidSelectorCard.module.css";
 
 export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({

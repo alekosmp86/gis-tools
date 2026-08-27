@@ -1,7 +1,59 @@
-import type { DbConfig } from "@/types/db";
-import type { ColumnMappingConfig } from "@/types/gis";
+import type { DbConfig, DbColumnMetadata } from "@/types/db";
 import type { ParsedFileDataset } from "@/types/parsers";
 import type { ProgressCallback } from "@/services/workerBridge";
+
+export interface InsertFieldDefault {
+  fieldName: string;
+  value: string;
+  useRawExpression: boolean;
+}
+
+export interface ColumnMappingConfig {
+  suidColumns: string[];
+  matchedFileSuidColumns: string[];
+  fieldsToCompare: string[];
+  attributeMap?: Record<string, string>;
+  compareGeometry: boolean;
+  insertDefaults?: Record<string, InsertFieldDefault>;
+}
+
+export interface SuidMappingStepRef {
+  proceed: () => void;
+}
+
+export interface SuidMappingStepProps {
+  dbColumns: string[];
+  columnDetails?: DbColumnMetadata[];
+  fileAttributes: string[];
+  onSuccess: (mappingConfig: ColumnMappingConfig) => void;
+  onBack: () => void;
+  initialConfig?: ColumnMappingConfig | null;
+  showGeometryToggle?: boolean;
+  onReadyChange?: (ready: boolean) => void;
+}
+
+export interface SuidSelectorCardProps {
+  selectableColumns: string[];
+  selectedSuids: string[];
+  matchedFileSuids: string[];
+  onToggleSuid: (suid: string) => void;
+}
+
+export interface AttributeFieldsCardProps {
+  availableFields: string[];
+  selectedFields: string[];
+  attributeMap: Record<string, string>;
+  fileAttributes: string[];
+  onToggleField: (field: string) => void;
+  onMapField: (dbCol: string, fileAttr: string) => void;
+  onSelectAll: () => void;
+  onClearAll: () => void;
+}
+
+export interface GeometryToggleCardProps {
+  compareGeometry: boolean;
+  onToggleGeometry: (enabled: boolean) => void;
+}
 
 export const DiscrepancyType = {
   MATCH: "MATCH",

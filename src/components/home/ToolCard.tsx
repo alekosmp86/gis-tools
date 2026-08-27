@@ -2,7 +2,7 @@ import React from "react";
 import { ArrowRight } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
-import type { ToolCardProps } from "@/types/gis";
+import type { ToolCardProps } from "@/types/ui";
 import styles from "./ToolCard.module.css";
 
 export const ToolCard: React.FC<ToolCardProps> = ({ tool, onLaunch }) => {

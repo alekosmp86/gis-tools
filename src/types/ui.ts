@@ -19,6 +19,50 @@ export const BadgeVariant = {
 
 export type BadgeVariant = (typeof BadgeVariant)[keyof typeof BadgeVariant];
 
+export const ToolCategory = {
+  ALL: "Todos",
+  SYNC: "Sincronización y Comparación",
+  VIEWERS: "Visualización",
+  CONVERTERS: "Conversores", // @planned — future tool category
+  DATABASE: "Base de Datos", // @planned — future tool category
+} as const;
+
+export type ToolCategory = (typeof ToolCategory)[keyof typeof ToolCategory];
+
+export interface StepItemData {
+  id: number;
+  title: string;
+  subtitle: string;
+  icon: LucideIcon;
+}
+
+export interface StepIndicatorProps {
+  currentStep: number;
+  step1Title?: string;
+  step1Subtitle?: string;
+  fileStepTitle?: string;
+  fileStepSubtitle?: string;
+  onStepClick?: (stepId: number) => void;
+}
+
+export interface ToolCardData {
+  id: string;
+  title: string;
+  category: ToolCategory;
+  badge: { label: string; type: BadgeVariant };
+  icon: LucideIcon;
+  description: string;
+  tags: string[];
+  actionLabel: string;
+  enabled: boolean;
+  route?: string;
+}
+
+export interface ToolCardProps {
+  tool: ToolCardData;
+  onLaunch?: (toolId: string) => void;
+}
+
 export const ButtonVariant = {
   PRIMARY: "primary",
   SECONDARY: "secondary",
@@ -100,6 +144,30 @@ export interface ProfileSelectProps {
   profiles: SavedDbProfile[];
   activeProfileId: string;
   onSelectProfile: (profileId: string) => void;
+}
+
+export interface WizardStepDef {
+  id: number;
+  title: string;
+  subtitle: string;
+  icon: LucideIcon;
+  content: React.ReactNode;
+  canProceed?: boolean;
+  onNext?: () => void;
+  nextLabel?: string;
+  onBack?: () => void;
+  backLabel?: string;
+  hideFooter?: boolean;
+}
+
+export interface WizardOrchestratorProps {
+  steps: WizardStepDef[];
+  currentStep: number;
+  onStepClick?: (stepId: number) => void;
+  step1Title?: string;
+  step1Subtitle?: string;
+  fileStepTitle?: string;
+  fileStepSubtitle?: string;
 }
 
 

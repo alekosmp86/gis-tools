@@ -1,95 +1,32 @@
-import type { LucideIcon } from "lucide-react";
-import type { BadgeVariant } from "./ui";
-import type { DbColumnMetadata } from "./db";
+/**
+ * GIS & Spatial Data Type Definitions
+ */
 
-export const ToolCategory = {
-  ALL: "Todos",
-  SYNC: "Sincronización y Comparación",
-  VIEWERS: "Visualización",
-  CONVERTERS: "Conversores", // @planned — future tool category
-  DATABASE: "Base de Datos", // @planned — future tool category
+// Re-export comparison & table mapping interfaces for seamless compatibility
+export type {
+  InsertFieldDefault,
+  ColumnMappingConfig,
+  SuidMappingStepRef,
+  SuidMappingStepProps,
+  SuidSelectorCardProps,
+  AttributeFieldsCardProps,
+  GeometryToggleCardProps,
+} from "./comparison";
+
+// Re-export UI catalog & stepper types from UI module
+export {
+  ToolCategory,
+  type ToolCardData,
+  type ToolCardProps,
+  type StepItemData,
+  type StepIndicatorProps,
+} from "./ui";
+
+/** Common Spatial Reference Systems (SRID) */
+export const CommonSrid = {
+  EPSG_4326: 4326, // WGS 84 (Lat/Long)
+  EPSG_3857: 3857, // Pseudo-Mercator / Web Mercator
+  EPSG_5343: 5343, // POSGAR 2007 Argentina 3
 } as const;
 
-export type ToolCategory = (typeof ToolCategory)[keyof typeof ToolCategory];
-
-export interface StepItemData {
-  id: number;
-  title: string;
-  subtitle: string;
-  icon: LucideIcon;
-}
-
-export interface StepIndicatorProps {
-  currentStep: number;
-  step1Title?: string;
-  step1Subtitle?: string;
-  fileStepTitle?: string;
-  fileStepSubtitle?: string;
-  onStepClick?: (stepId: number) => void;
-}
-
-export interface ToolCardData {
-  id: string;
-  title: string;
-  category: ToolCategory;
-  badge: { label: string; type: BadgeVariant };
-  icon: LucideIcon;
-  description: string;
-  tags: string[];
-  actionLabel: string;
-  enabled: boolean;
-  route?: string;
-}
-
-export interface ToolCardProps {
-  tool: ToolCardData;
-  onLaunch?: (toolId: string) => void;
-}
-
-export interface InsertFieldDefault {
-  fieldName: string;
-  value: string;
-  useRawExpression: boolean;
-}
-
-export interface ColumnMappingConfig {
-  suidColumns: string[];
-  matchedFileSuidColumns: string[];
-  fieldsToCompare: string[];
-  attributeMap?: Record<string, string>;
-  compareGeometry: boolean;
-  insertDefaults?: Record<string, InsertFieldDefault>;
-}
-
-export interface SuidMappingStepProps {
-  dbColumns: string[];
-  columnDetails?: DbColumnMetadata[];
-  fileAttributes: string[];
-  onSuccess: (mappingConfig: ColumnMappingConfig) => void;
-  onBack: () => void;
-  initialConfig?: ColumnMappingConfig | null;
-  showGeometryToggle?: boolean;
-}
-
-export interface SuidSelectorCardProps {
-  selectableColumns: string[];
-  selectedSuids: string[];
-  matchedFileSuids: string[];
-  onToggleSuid: (suid: string) => void;
-}
-
-export interface AttributeFieldsCardProps {
-  availableFields: string[];
-  selectedFields: string[];
-  attributeMap: Record<string, string>;
-  fileAttributes: string[];
-  onToggleField: (field: string) => void;
-  onMapField: (dbCol: string, fileAttr: string) => void;
-  onSelectAll: () => void;
-  onClearAll: () => void;
-}
-
-export interface GeometryToggleCardProps {
-  compareGeometry: boolean;
-  onToggleGeometry: (enabled: boolean) => void;
-}
+export type CommonSrid = (typeof CommonSrid)[keyof typeof CommonSrid];

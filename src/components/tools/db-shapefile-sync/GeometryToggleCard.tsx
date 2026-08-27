@@ -1,5 +1,5 @@
 import React from "react";
-import type { GeometryToggleCardProps } from "@/types/gis";
+import type { GeometryToggleCardProps } from "@/types/comparison";
 import styles from "./GeometryToggleCard.module.css";
 
 export const GeometryToggleCard: React.FC<GeometryToggleCardProps> = ({

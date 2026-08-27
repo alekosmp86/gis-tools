@@ -1,6 +1,6 @@
 import React from "react";
 import { ArrowRight, AlertTriangle, Link2, Check } from "lucide-react";
-import type { AttributeFieldsCardProps } from "@/types/gis";
+import type { AttributeFieldsCardProps } from "@/types/comparison";
 import styles from "./AttributeFieldsCard.module.css";
 
 export const AttributeFieldsCard: React.FC<AttributeFieldsCardProps> = ({

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ColumnMappingConfig, InsertFieldDefault } from "@/types/gis";
+import type { ColumnMappingConfig, InsertFieldDefault } from "@/types/comparison";
 
 export function useSuidMappingForm(
   dbColumns: string[],

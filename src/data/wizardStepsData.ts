@@ -1,5 +1,5 @@
 import { Database, FileUp, GitMerge, BarChart3 } from "lucide-react";
-import type { StepItemData } from "@/types/gis";
+import type { StepItemData } from "@/types/ui";
 
 export function getWizardSteps(
   fileStepTitle = "Capa Espacial",

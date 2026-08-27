@@ -1,7 +1,7 @@
 import React from "react";
 import { Check } from "lucide-react";
 import { getWizardSteps } from "@/data/wizardStepsData";
-import type { StepIndicatorProps } from "@/types/gis";
+import type { StepIndicatorProps } from "@/types/ui";
 import styles from "./StepIndicator.module.css";
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({
