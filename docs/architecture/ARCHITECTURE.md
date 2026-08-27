@@ -211,14 +211,12 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 - **Problema**: Exportaciones envueltas entre comillas o con espacios no imprimibles generaban falsas discrepancias.
 - **Solución**: [`src/utils/gisCleaners.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/gisCleaners.ts) limpia comillas externas (`/^["']|["']$/g`), caracteres `\xa0\r\n\t` y sufijos `.0`.
 
----
-
 ## 🚀 5. Posibles Mejoras y Hoja de Ruta (Roadmap)
 
-1. **Mapa Interactivo Vectorial (Leaflet / MapLibre + Turf.js)**:
-   - Visualizador de mapas en el Paso 4 para colorear entidades espaciales en verde (Coincidencias), amarillo (Discrepancia Atributos), rojo (Solo en DB) y azul (Solo en SHP).
+1. **Visualización de Geometrías de la Base de Datos (PostGIS `ST_AsGeoJSON`)**:
+   - Consultar la geometría PostGIS desde la BD para superponer simultáneamente en el mapa la entidad de la base de datos (ej. en color azul) frente a la entidad del archivo (ej. en color amarillo/púrpura) para comparar descalces geométricos.
 2. **Comparación Topológica de Geometrías en Web Worker**:
-   - Algoritmos de intersección espacial, diferencia de áreas y distancia Hausdorff entre geometrías PostGIS (`ST_AsGeoJSON`) y Shapefiles en el Worker.
+   - Algoritmos de intersección espacial, diferencia de áreas y distancia Hausdorff entre geometrías PostGIS y Shapefiles en el Worker.
 3. **Nuevos Parseadores de Formatos (Estrategias `ISpatialFileParser`)**:
    - `KmlParser` (soporte de Google Earth `.kml` / `.kmz`).
    - `ExcelParser` (libros `.xlsx` / `.xls`).
