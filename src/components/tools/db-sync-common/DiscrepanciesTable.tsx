@@ -19,20 +19,26 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
     setCurrentPage(1);
   }
 
+  const query = searchQuery.trim().toLowerCase();
   const filteredItems = items.filter((item) => {
     const matchesFilter =
       activeFilter === DiscrepancyFilter.ALL || item.type === activeFilter;
-    const matchesSearch =
-      searchQuery === "" ||
-      item.suid.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.note && item.note.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      item.differences.some(
-        (d) =>
-          d.fieldName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          String(d.dbValue).toLowerCase().includes(searchQuery.toLowerCase()) ||
-          String(d.shpValue).toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    return matchesFilter && matchesSearch;
+    if (!matchesFilter) return false;
+
+    if (query === "") return true;
+
+    const matchesSuid = item.suid.toLowerCase().includes(query);
+    if (matchesSuid) return true;
+
+    const matchesNote = item.note ? item.note.toLowerCase().includes(query) : false;
+    if (matchesNote) return true;
+
+    return item.differences.some(
+      (d) =>
+        d.fieldName.toLowerCase().includes(query) ||
+        (d.dbValue !== null && String(d.dbValue).toLowerCase().includes(query)) ||
+        (d.shpValue !== null && String(d.shpValue).toLowerCase().includes(query))
+    );
   });
 
   const totalFilteredCount = filteredItems.length;

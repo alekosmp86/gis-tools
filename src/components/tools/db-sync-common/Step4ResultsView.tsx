@@ -8,15 +8,13 @@ import { DiscrepanciesSummaryBar } from "./DiscrepanciesSummaryBar";
 import { DiscrepanciesTable } from "./DiscrepanciesTable";
 import { SqlPatchDrawer } from "./SqlPatchDrawer";
 import { ResultsControlsBar } from "./ResultsControlsBar";
-import { useComparisonProgress } from "@/hooks/useComparisonProgress";
 import { useDiscrepancyGeojson } from "@/hooks/useDiscrepancyGeojson";
+import { useDatasetComparison } from "@/hooks/useDatasetComparison";
 import { DiscrepancyFilter, ResultsViewTab } from "@/types/comparison";
 import type { ParsedFileDataset } from "@/types/parsers";
 import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
 import type { ColumnMappingConfig } from "@/types/gis";
-import { useQuery } from "@tanstack/react-query";
-import { DbVsFileComparisonEngine } from "@/services/engines/DbVsFileComparisonEngine";
 import { ResyncBanner } from "./ResyncBanner";
 import styles from "./Step4ResultsView.module.css";
 
@@ -30,6 +28,7 @@ interface Step4ResultsViewProps {
   fileDataset: ParsedShapefileData | ParsedFileDataset;
   mappingConfig: ColumnMappingConfig;
   onBackToMapping: () => void;
+  sourceDbConfig?: DbConfig;
 }
 
 export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
@@ -37,48 +36,21 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   fileDataset,
   mappingConfig,
   onBackToMapping,
+  sourceDbConfig,
 }) => {
-  const { progress, onProgress, resetProgress } = useComparisonProgress();
-
-  const suidLabel = mappingConfig.suidColumns ? mappingConfig.suidColumns.join(" + ") : "";
-
-  const { data: summary, isLoading: loading, isFetching, error } = useQuery({
-    queryKey: [
-      "datasetComparison",
-      dbConfig.db_name,
-      dbConfig.table_name,
-      fileDataset.fileName,
-      suidLabel,
-      mappingConfig.fieldsToCompare,
-    ],
-    queryFn: () => {
-      resetProgress();
-      const dataset: ParsedFileDataset =
-        "recordsMap" in fileDataset
-          ? fileDataset
-          : {
-              kind: fileDataset.kind,
-              fileName: fileDataset.fileName,
-              fileSize: fileDataset.fileSize,
-              featureCount: fileDataset.featureCount,
-              geometryType: fileDataset.geometryType,
-              attributes: fileDataset.attributes,
-              recordsMap: new Map(),
-              geojson: fileDataset.geojson,
-            };
-      const engine = new DbVsFileComparisonEngine();
-      return engine.compare(dbConfig, dataset, mappingConfig, onProgress);
-    },
-    enabled: Boolean(dbConfig && fileDataset && mappingConfig),
+  const { summary, loading, isReanalyzing, error, progress } = useDatasetComparison({
+    dbConfig,
+    fileDataset,
+    mappingConfig,
+    sourceDbConfig,
   });
 
   const [activeFilter, setActiveFilter] = useState<DiscrepancyFilter>(DiscrepancyFilter.ALL);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeViewTab, setActiveViewTab] = useState<ResultsViewTab>(ResultsViewTab.TABLE);
 
-  const isReanalyzing = Boolean(isFetching && !loading);
-  const errorMessage =
-    error instanceof Error ? error.message : error ? "Error en el análisis." : null;
+  const suidLabel = mappingConfig.suidColumns ? mappingConfig.suidColumns.join(" + ") : "";
+  const errorMessage = error ? error.message : null;
 
   const showProgress = loading && progress.phase !== "";
   const hasGeojson = Boolean(fileDataset.geojson && fileDataset.geojson.features && fileDataset.geojson.features.length > 0);

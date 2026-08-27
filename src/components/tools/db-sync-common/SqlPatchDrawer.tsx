@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, Check, Download, FileCode, RefreshCw, PlusSquare, Play, CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
+import { SqlPatchHeader } from "./SqlPatchHeader";
+import { SqlPatchTabs } from "./SqlPatchTabs";
+import { SqlPatchPreviewBox } from "./SqlPatchPreviewBox";
 import { SqlExecutionModal } from "./SqlExecutionModal";
 import { executeSqlScript } from "@/services/dbExecutionService";
 import { SqlScriptType } from "@/types/comparison";
@@ -32,14 +33,38 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
 
   const activeScript = activeTab === SqlScriptType.UPDATE ? sqlUpdateScript : sqlInsertScript;
 
-  // Check if active script contains actual executable SQL statements (not just header comments)
-  const hasExecutableStatements =
-    activeTab === SqlScriptType.UPDATE
-      ? /UPDATE\s+/i.test(activeScript)
-      : /INSERT\s+INTO\s+/i.test(activeScript);
+  // Compute preview script truncation safely
+  const MAX_PREVIEW_LINES = 500;
+  const count = activeScript ? (activeScript.match(/;/g) || []).length : 0;
+  const lines = activeScript ? activeScript.split("\n") : [];
+  const isTruncated = lines.length > MAX_PREVIEW_LINES;
 
-  const statementCount = (activeScript.match(/;/g) || []).length;
+  const previewScript = !activeScript
+    ? ""
+    : !isTruncated
+    ? activeScript
+    : lines.slice(0, MAX_PREVIEW_LINES).join("\n") +
+      `\n\n-- ==========================================================================================\n` +
+      `-- ⚡ VISTA PREVIA TRUNCADA EN NAVEGADOR POR RENDIMIENTO\n` +
+      `-- Se están mostrando las primeras ${MAX_PREVIEW_LINES} sentencias de ${count.toLocaleString("es-ES")} sentencias totales.\n` +
+      `-- El script completo está disponible intacto para Copiar, Descargar (.sql) o Ejecutar en BD.\n` +
+      `-- ==========================================================================================`;
+
+  const hasExecutableStatements = Boolean(
+    activeScript &&
+      (activeTab === SqlScriptType.UPDATE
+        ? /UPDATE\s+/i.test(activeScript.slice(0, 10000))
+        : /INSERT\s+INTO\s+/i.test(activeScript.slice(0, 10000)))
+  );
+
+  const statementCount = count;
   const isCurrentTabExecuted = executedTabs[activeTab];
+
+  const handleTabChange = (newTab: SqlScriptType) => {
+    setActiveTab(newTab);
+    setCopied(false);
+    setExecutionResult(null);
+  };
 
   const handleCopy = () => {
     navigator.clipboard
@@ -82,7 +107,6 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
             ? `${res.message} Sincronizando y re-analizando base de datos en segundo plano...`
             : `Ejecución exitosa (${res.affectedRows || 0} registros procesados). Sincronizando y re-analizando en segundo plano...`,
         });
-        // Invalidate datasetComparison cache so Step 4 automatically re-analyzes and updates live
         queryClient.invalidateQueries({ queryKey: ["datasetComparison"] });
       })
       .catch((err: unknown) => {
@@ -100,55 +124,16 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.titleGroup}>
-          <FileCode size={20} className={styles.icon} />
-          <div>
-            <h3 className={styles.title}>Scripts SQL PostGIS</h3>
-            <p className={styles.subtitle}>
-              Seleccione el tipo de script a visualizar, copiar, descargar o ejecutar directamente.
-            </p>
-          </div>
-        </div>
-
-        <div className={styles.actionButtons}>
-          <Button variant="secondary" onClick={handleCopy} type="button" disabled={executing}>
-            {copied ? <Check size={16} color="var(--accent-emerald)" /> : <Copy size={16} />}
-            <span>{copied ? "¡Copiado!" : "Copiar SQL"}</span>
-          </Button>
-
-          <Button variant="secondary" onClick={handleDownload} type="button" disabled={executing}>
-            <Download size={16} />
-            <span>Descargar .sql</span>
-          </Button>
-
-          <Button
-            variant="primary"
-            onClick={() => setIsModalOpen(true)}
-            type="button"
-            disabled={!hasExecutableStatements || executing || isCurrentTabExecuted}
-            title={
-              !hasExecutableStatements
-                ? "No hay sentencias SQL para ejecutar en este script"
-                : isCurrentTabExecuted
-                ? "El script ya ha sido ejecutado con éxito"
-                : "Ejecutar sentencias en la base de datos"
-            }
-          >
-            {isCurrentTabExecuted ? (
-              <>
-                <CheckCircle2 size={16} color="var(--accent-emerald)" />
-                <span>Script Ejecutado</span>
-              </>
-            ) : (
-              <>
-                <Play size={16} />
-                <span>Ejecutar en BD</span>
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
+      {/* Drawer Header & Actions */}
+      <SqlPatchHeader
+        copied={copied}
+        executing={executing}
+        hasExecutableStatements={hasExecutableStatements}
+        isCurrentTabExecuted={isCurrentTabExecuted}
+        onCopy={handleCopy}
+        onDownload={handleDownload}
+        onOpenExecuteModal={() => setIsModalOpen(true)}
+      />
 
       {/* Execution Feedback Alert */}
       {executionResult && (
@@ -158,45 +143,18 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
       )}
 
       {/* Script Type Tabs */}
-      <div className={styles.scriptTabs}>
-        <button
-          type="button"
-          className={`${styles.scriptTabBtn} ${activeTab === SqlScriptType.UPDATE ? styles.scriptTabActive : ""}`}
-          onClick={() => {
-            setActiveTab(SqlScriptType.UPDATE);
-            setCopied(false);
-            setExecutionResult(null);
-          }}
-        >
-          <RefreshCw size={15} />
-          <span>
-            Script UPDATE
-            {executedTabs[SqlScriptType.UPDATE] && " (Ejecutado)"}
-          </span>
-          <span className={styles.scriptTabHint}>Corregir atributos existentes</span>
-        </button>
+      <SqlPatchTabs
+        activeTab={activeTab}
+        executedTabs={executedTabs}
+        onTabChange={handleTabChange}
+      />
 
-        <button
-          type="button"
-          className={`${styles.scriptTabBtn} ${activeTab === SqlScriptType.INSERT ? styles.scriptTabInsert : ""} ${activeTab === SqlScriptType.INSERT ? styles.scriptTabActive : ""}`}
-          onClick={() => {
-            setActiveTab(SqlScriptType.INSERT);
-            setCopied(false);
-            setExecutionResult(null);
-          }}
-        >
-          <PlusSquare size={15} />
-          <span>
-            Script INSERT
-            {executedTabs[SqlScriptType.INSERT] && " (Ejecutado)"}
-          </span>
-          <span className={styles.scriptTabHint}>Agregar registros faltantes</span>
-        </button>
-      </div>
-
-      <div className={styles.codeBox}>
-        <pre className={styles.codeContent}>{activeScript}</pre>
-      </div>
+      {/* Truncated Code Preview Box */}
+      <SqlPatchPreviewBox
+        previewScript={previewScript}
+        isTruncated={isTruncated}
+        statementCount={statementCount}
+      />
 
       {/* Password & Execution Confirmation Modal */}
       <SqlExecutionModal
