@@ -1,27 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
+import { ArrowLeft, Database, Layers, GitMerge } from "lucide-react";
 import styles from "./page.module.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
-import { StepIndicator } from "@/components/shared/StepIndicator";
+import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { ShapefileUploader } from "@/components/tools/db-shapefile-sync/ShapefileUploader";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
 import { Step4ResultsView } from "@/components/tools/db-sync-common/Step4ResultsView";
-import type { DbConfig, DbColumnMetadata } from "@/types/db";
-import type { ParsedShapefileData } from "@/types/shp";
-import type { ColumnMappingConfig } from "@/types/gis";
-import { ArrowLeft } from "lucide-react";
+import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
+import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/gis";
+import type { WizardStepDef } from "@/types/ui";
+import { ParsedShapefileData } from "@/types/shp";
 
 export default function DbShapefileSyncToolPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [dbConfig, setDbConfig] = useState<DbConfig | null>(null);
   const [dbColumns, setDbColumns] = useState<string[]>([]);
   const [columnDetails, setColumnDetails] = useState<DbColumnMetadata[]>([]);
+  const [isDbConnected, setIsDbConnected] = useState(false);
+
   const [shapefileData, setShapefileData] = useState<ParsedShapefileData | null>(null);
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
+  const [isMappingReady, setIsMappingReady] = useState(false);
+
+  const dbFormRef = useRef<DbConnectionFormRef | null>(null);
+  const suidMappingRef = useRef<SuidMappingStepRef | null>(null);
 
   const handleDbSuccess = (
     config: DbConfig,
@@ -37,7 +44,6 @@ export default function DbShapefileSyncToolPage() {
 
   const handleShapefileSuccess = (parsedData: ParsedShapefileData) => {
     setShapefileData(parsedData);
-    setCurrentStep(3);
   };
 
   const handleShapefileDiscard = () => {
@@ -54,6 +60,79 @@ export default function DbShapefileSyncToolPage() {
       setCurrentStep(stepId);
     }
   };
+
+  const steps: WizardStepDef[] = [
+    {
+      id: 1,
+      title: "Conectar a Base de Datos PostgreSQL",
+      subtitle: "Ingrese las credenciales para conectar a la base de datos e inspeccionar la tabla seleccionada.",
+      icon: Database,
+      content: (
+        <DbConnectionForm
+          ref={dbFormRef}
+          onSuccess={handleDbSuccess}
+          onStatusChange={(status) => setIsDbConnected(status.isConnected && status.columns.length > 0)}
+        />
+      ),
+      canProceed: isDbConnected,
+      onNext: () => dbFormRef.current?.proceed(),
+    },
+    {
+      id: 2,
+      title: "Cargar Capa Espacial Shapefile",
+      subtitle: "Suba un archivo .zip (que contenga .shp, .dbf, .shx) o .geojson.",
+      icon: Layers,
+      content: (
+        <ShapefileUploader
+          onSuccess={handleShapefileSuccess}
+          onDiscard={handleShapefileDiscard}
+          loadedData={shapefileData}
+        />
+      ),
+      canProceed: Boolean(shapefileData),
+      onNext: () => setCurrentStep(3),
+      onBack: () => setCurrentStep(1),
+    },
+    {
+      id: 3,
+      title: "Configuración de SUID y Campos a Comparar",
+      subtitle: "Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure valores por defecto.",
+      icon: GitMerge,
+      content: shapefileData ? (
+        <SuidMappingStep
+          ref={suidMappingRef}
+          dbColumns={dbColumns}
+          columnDetails={columnDetails}
+          fileAttributes={shapefileData.attributes}
+          onSuccess={handleMappingSuccess}
+          onBack={() => setCurrentStep(2)}
+          initialConfig={mappingConfig}
+          onReadyChange={setIsMappingReady}
+        />
+      ) : null,
+      canProceed: isMappingReady,
+      nextLabel: "Iniciar Análisis y Comparación",
+      onNext: () => suidMappingRef.current?.proceed(),
+      onBack: () => setCurrentStep(2),
+    },
+    {
+      id: 4,
+      title: "Resultados de Análisis y Discrepancias",
+      subtitle: dbConfig && shapefileData
+        ? `Correlación realizada entre ${dbConfig.schema_name}.${dbConfig.table_name} y ${shapefileData.fileName}.`
+        : "Visualice las diferencias detectadas y genere scripts SQL de sincronización.",
+      icon: Database,
+      content: dbConfig && shapefileData && mappingConfig ? (
+        <Step4ResultsView
+          dbConfig={dbConfig}
+          fileDataset={shapefileData}
+          mappingConfig={mappingConfig}
+        />
+      ) : null,
+      onBack: () => setCurrentStep(3),
+      backLabel: "Volver al Paso 3: Mapeo SUID",
+    },
+  ];
 
   return (
     <div className={styles.container}>
@@ -76,47 +155,12 @@ export default function DbShapefileSyncToolPage() {
           </p>
         </div>
 
-        {/* 4-Step Wizard Indicator */}
-        <StepIndicator currentStep={currentStep} onStepClick={handleStepClick} />
-
-        {/* Step 1: Database Connection & Introspection */}
-        {currentStep === 1 && (
-          <DbConnectionForm onSuccess={handleDbSuccess} />
-        )}
-
-        {/* Step 2: Shapefile / GeoJSON Upload */}
-        {currentStep === 2 && (
-          <ShapefileUploader
-            onSuccess={handleShapefileSuccess}
-            onDiscard={handleShapefileDiscard}
-            loadedData={shapefileData}
-          />
-        )}
-
-        {/* Step 3: SUID & Attributes Column Mapping */}
-        {currentStep === 3 && shapefileData && (
-          <SuidMappingStep
-            dbColumns={dbColumns}
-            columnDetails={columnDetails}
-            fileAttributes={shapefileData.attributes}
-            onSuccess={handleMappingSuccess}
-            onBack={() => setCurrentStep(2)}
-            initialConfig={mappingConfig}
-          />
-        )}
-
-        {/* Step 4: Full Comparison Results & SQL Patch Export */}
-        {currentStep === 4 && dbConfig && shapefileData && mappingConfig && (
-          <Step4ResultsView
-            dbConfig={dbConfig}
-            fileDataset={shapefileData}
-            mappingConfig={mappingConfig}
-            onBackToMapping={() => setCurrentStep(3)}
-          />
-        )}
+        {/* Wizard Orchestrator */}
+        <WizardOrchestrator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
       </main>
 
       <Footer />
     </div>
   );
 }
+

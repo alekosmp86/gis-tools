@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useQueryClient } from "@tanstack/react-query";
-import { UploadCloud, FileSpreadsheet, Trash2, ArrowRight, Loader2 } from "lucide-react";
+import { UploadCloud, FileSpreadsheet, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
@@ -100,19 +100,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
   };
 
   return (
-    <div className={`glass-panel ${styles.container}`}>
-      <div className={styles.header}>
-        <div className={styles.headerIcon}>
-          <FileSpreadsheet size={24} />
-        </div>
-        <div>
-          <h2 className={styles.title}>2. Cargar Archivo de Datos CSV</h2>
-          <p className={styles.subtitle}>
-            Suba un archivo <strong>.csv</strong> delimitado por comas. Los datos se inspeccionan en la memoria local y se pueden descartar en cualquier momento.
-          </p>
-        </div>
-      </div>
-
+    <div className={styles.container}>
       <input
         type="file"
         ref={fileInputRef}
@@ -207,14 +195,9 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
             </div>
           )}
 
-          <div className={styles.proceedRow}>
-            <Button variant="primary" onClick={() => onSuccess(data)}>
-              <span>Continuar al Paso 3: Mapeo SUID y Atributos</span>
-              <ArrowRight size={16} />
-            </Button>
-          </div>
         </div>
       )}
     </div>
   );
 };
+

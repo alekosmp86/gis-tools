@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useQueryClient } from "@tanstack/react-query";
-import { UploadCloud, FileCheck, Trash2, ArrowRight, Layers, Loader2 } from "lucide-react";
+import { UploadCloud, FileCheck, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
@@ -97,19 +97,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
   };
 
   return (
-    <div className={`glass-panel ${styles.container}`}>
-      <div className={styles.header}>
-        <div className={styles.headerIcon}>
-          <Layers size={24} />
-        </div>
-        <div>
-          <h2 className={styles.title}>2. Cargar Capa Espacial Shapefile</h2>
-          <p className={styles.subtitle}>
-            Suba un archivo <strong>.zip</strong> (que contenga los archivos .shp, .dbf, .shx) o un archivo <strong>.geojson</strong>. Los datos se procesan en la memoria local y se pueden descartar en cualquier momento.
-          </p>
-        </div>
-      </div>
-
+    <div className={styles.container}>
       <input
         type="file"
         ref={fileInputRef}
@@ -204,14 +192,9 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
             </div>
           )}
 
-          <div className={styles.proceedRow}>
-            <Button variant="primary" onClick={() => onSuccess(data as unknown as import("@/types/shp").ParsedShapefileData)}>
-              <span>Continuar al Paso 3: Mapeo SUID y Atributos</span>
-              <ArrowRight size={16} />
-            </Button>
-          </div>
         </div>
       )}
     </div>
   );
 };
+

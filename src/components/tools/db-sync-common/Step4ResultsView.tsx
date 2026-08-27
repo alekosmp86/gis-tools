@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
-import { Loader2, ArrowLeft, Database } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Loader2 } from "lucide-react";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ProgressBar } from "@/components/shared/ProgressBar";
 import { DiscrepanciesSummaryBar } from "./DiscrepanciesSummaryBar";
@@ -27,7 +26,7 @@ interface Step4ResultsViewProps {
   dbConfig: DbConfig;
   fileDataset: ParsedShapefileData | ParsedFileDataset;
   mappingConfig: ColumnMappingConfig;
-  onBackToMapping: () => void;
+  onBackToMapping?: () => void;
   sourceDbConfig?: DbConfig;
 }
 
@@ -35,7 +34,6 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   dbConfig,
   fileDataset,
   mappingConfig,
-  onBackToMapping,
   sourceDbConfig,
 }) => {
   const { summary, loading, isBusy, customNotice, error, progress } = useDatasetComparison({
@@ -49,7 +47,6 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeViewTab, setActiveViewTab] = useState<ResultsViewTab>(ResultsViewTab.TABLE);
 
-  const suidLabel = mappingConfig.suidColumns ? mappingConfig.suidColumns.join(" + ") : "";
   const errorMessage = error ? error.message : null;
 
   const showProgress = loading && progress.phase !== "";
@@ -59,24 +56,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   const discrepancyGeojson = useDiscrepancyGeojson(summary, fileDataset, activeFilter);
 
   return (
-    <div className={`glass-panel ${styles.container}`}>
-      <div className={styles.header}>
-        <div className={styles.headerIcon}>
-          <Database size={24} />
-        </div>
-        <div>
-          <h2 className={styles.title}>4. Resultados de Análisis y Discrepancias</h2>
-          <p className={styles.subtitle}>
-            Correlación realizada entre la tabla{" "}
-            <code>
-              {dbConfig.schema_name}.{dbConfig.table_name}
-            </code>{" "}
-            y el archivo <code>{fileDataset.fileName}</code> usando la clave SUID{" "}
-            <code>{suidLabel}</code>.
-          </p>
-        </div>
-      </div>
-
+    <div className={styles.container}>
       {/* Loading State */}
       {loading && (
         <div className={styles.loadingArea}>
@@ -151,16 +131,9 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
               dbConfig={dbConfig}
             />
           )}
-
-          {/* Back Navigation */}
-          <div className={styles.actionsRow}>
-            <Button variant="secondary" onClick={onBackToMapping}>
-              <ArrowLeft size={16} />
-              <span>Volver al Paso 3: Mapeo SUID</span>
-            </Button>
-          </div>
         </div>
       )}
     </div>
   );
 };
+

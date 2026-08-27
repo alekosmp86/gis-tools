@@ -1,27 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
+import { ArrowLeft, Database, FileSpreadsheet, GitMerge } from "lucide-react";
 import styles from "./page.module.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
-import { StepIndicator } from "@/components/shared/StepIndicator";
+import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { CsvUploader } from "@/components/tools/db-csv-sync/CsvUploader";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
 import { Step4ResultsView } from "@/components/tools/db-sync-common/Step4ResultsView";
-import type { DbConfig, DbColumnMetadata } from "@/types/db";
-import type { ParsedFileDataset } from "@/types/parsers";
-import type { ColumnMappingConfig } from "@/types/gis";
-import { ArrowLeft } from "lucide-react";
+import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
+import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/gis";
+import type { WizardStepDef } from "@/types/ui";
+import { ParsedFileDataset } from "@/types/parsers";
 
 export default function DbCsvSyncToolPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [dbConfig, setDbConfig] = useState<DbConfig | null>(null);
   const [dbColumns, setDbColumns] = useState<string[]>([]);
   const [columnDetails, setColumnDetails] = useState<DbColumnMetadata[]>([]);
+  const [isDbConnected, setIsDbConnected] = useState(false);
+
   const [csvDataset, setCsvDataset] = useState<ParsedFileDataset | null>(null);
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
+  const [isMappingReady, setIsMappingReady] = useState(false);
+
+  const dbFormRef = useRef<DbConnectionFormRef | null>(null);
+  const suidMappingRef = useRef<SuidMappingStepRef | null>(null);
 
   const handleDbSuccess = (
     config: DbConfig,
@@ -37,7 +44,6 @@ export default function DbCsvSyncToolPage() {
 
   const handleCsvSuccess = (parsedData: ParsedFileDataset) => {
     setCsvDataset(parsedData);
-    setCurrentStep(3);
   };
 
   const handleCsvDiscard = () => {
@@ -54,6 +60,80 @@ export default function DbCsvSyncToolPage() {
       setCurrentStep(stepId);
     }
   };
+
+  const steps: WizardStepDef[] = [
+    {
+      id: 1,
+      title: "Conectar a Base de Datos PostgreSQL",
+      subtitle: "Ingrese las credenciales para conectar a la base de datos e inspeccionar la tabla seleccionada.",
+      icon: Database,
+      content: (
+        <DbConnectionForm
+          ref={dbFormRef}
+          onSuccess={handleDbSuccess}
+          onStatusChange={(status) => setIsDbConnected(status.isConnected && status.columns.length > 0)}
+        />
+      ),
+      canProceed: isDbConnected,
+      onNext: () => dbFormRef.current?.proceed(),
+    },
+    {
+      id: 2,
+      title: "Cargar Archivo de Datos CSV",
+      subtitle: "Suba un archivo .csv delimitado por comas. Los datos se inspeccionan en la memoria local.",
+      icon: FileSpreadsheet,
+      content: (
+        <CsvUploader
+          onSuccess={handleCsvSuccess}
+          onDiscard={handleCsvDiscard}
+          loadedData={csvDataset}
+        />
+      ),
+      canProceed: Boolean(csvDataset),
+      onNext: () => setCurrentStep(3),
+      onBack: () => setCurrentStep(1),
+    },
+    {
+      id: 3,
+      title: "Configuración de SUID y Campos a Comparar",
+      subtitle: "Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure valores por defecto.",
+      icon: GitMerge,
+      content: csvDataset ? (
+        <SuidMappingStep
+          ref={suidMappingRef}
+          dbColumns={dbColumns}
+          columnDetails={columnDetails}
+          fileAttributes={csvDataset.attributes}
+          onSuccess={handleMappingSuccess}
+          onBack={() => setCurrentStep(2)}
+          initialConfig={mappingConfig}
+          showGeometryToggle={false}
+          onReadyChange={setIsMappingReady}
+        />
+      ) : null,
+      canProceed: isMappingReady,
+      nextLabel: "Iniciar Análisis y Comparación",
+      onNext: () => suidMappingRef.current?.proceed(),
+      onBack: () => setCurrentStep(2),
+    },
+    {
+      id: 4,
+      title: "Resultados de Análisis y Discrepancias",
+      subtitle: dbConfig && csvDataset
+        ? `Correlación realizada entre ${dbConfig.schema_name}.${dbConfig.table_name} y ${csvDataset.fileName}.`
+        : "Visualice las diferencias detectadas y genere scripts SQL de sincronización.",
+      icon: Database,
+      content: dbConfig && csvDataset && mappingConfig ? (
+        <Step4ResultsView
+          dbConfig={dbConfig}
+          fileDataset={csvDataset}
+          mappingConfig={mappingConfig}
+        />
+      ) : null,
+      onBack: () => setCurrentStep(3),
+      backLabel: "Volver al Paso 3: Mapeo SUID",
+    },
+  ];
 
   return (
     <div className={styles.container}>
@@ -76,53 +156,18 @@ export default function DbCsvSyncToolPage() {
           </p>
         </div>
 
-        {/* 4-Step Wizard Indicator */}
-        <StepIndicator
+        {/* Wizard Orchestrator */}
+        <WizardOrchestrator
+          steps={steps}
           currentStep={currentStep}
+          onStepClick={handleStepClick}
           fileStepTitle="Archivo CSV"
           fileStepSubtitle="Cargar Archivo (.csv)"
-          onStepClick={handleStepClick}
         />
-
-        {/* Step 1: Database Connection & Introspection */}
-        {currentStep === 1 && (
-          <DbConnectionForm onSuccess={handleDbSuccess} />
-        )}
-
-        {/* Step 2: CSV File Upload & Parsing */}
-        {currentStep === 2 && (
-          <CsvUploader
-            onSuccess={handleCsvSuccess}
-            onDiscard={handleCsvDiscard}
-            loadedData={csvDataset}
-          />
-        )}
-
-        {/* Step 3: SUID & Attributes Column Mapping */}
-        {currentStep === 3 && csvDataset && (
-          <SuidMappingStep
-            dbColumns={dbColumns}
-            columnDetails={columnDetails}
-            fileAttributes={csvDataset.attributes}
-            onSuccess={handleMappingSuccess}
-            onBack={() => setCurrentStep(2)}
-            initialConfig={mappingConfig}
-            showGeometryToggle={false}
-          />
-        )}
-
-        {/* Step 4: Reusable Comparison Results View */}
-        {currentStep === 4 && dbConfig && csvDataset && mappingConfig && (
-          <Step4ResultsView
-            dbConfig={dbConfig}
-            fileDataset={csvDataset}
-            mappingConfig={mappingConfig}
-            onBackToMapping={() => setCurrentStep(3)}
-          />
-        )}
       </main>
 
       <Footer />
     </div>
   );
 }
+

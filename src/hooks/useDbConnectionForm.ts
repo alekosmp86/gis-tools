@@ -11,7 +11,10 @@ import {
 import { AlertType } from "@/types/ui";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormProps, SavedDbProfile } from "@/types/db";
 
-export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"]) {
+export function useDbConnectionForm(
+  onSuccess: DbConnectionFormProps["onSuccess"],
+  onStatusChange?: DbConnectionFormProps["onStatusChange"]
+) {
   const queryClient = useQueryClient();
   const [config, setConfig] = useState<DbConfig>(INITIAL_DB_CONFIG);
   const [statusMessage, setStatusMessage] = useState<{
@@ -44,13 +47,26 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
 
   const fetchColumnsMutation = useFetchDbColumns();
 
-  const handleChange = (field: keyof DbConfig, value: string) => {
-    setConfig((prev) => ({ ...prev, [field]: value }));
-    setStatusMessage(null);
+  const resetStatus = () => {
     setIsConnected(false);
     setColumnsLoaded([]);
     setColumnDetailsLoaded([]);
     setTotalRowsLoaded(null);
+    if (onStatusChange) {
+      onStatusChange({
+        isConnected: false,
+        columns: [],
+        totalRows: 0,
+        columnDetails: [],
+        config,
+      });
+    }
+  };
+
+  const handleChange = (field: keyof DbConfig, value: string) => {
+    setConfig((prev) => ({ ...prev, [field]: value }));
+    setStatusMessage(null);
+    resetStatus();
   };
 
   const handleSelectProfile = (profileId: string) => {
@@ -65,10 +81,7 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
       setActiveProfileId(found.id);
       setProfileNameInput(found.name);
       setStatusMessage(null);
-      setIsConnected(false);
-      setColumnsLoaded([]);
-      setColumnDetailsLoaded([]);
-      setTotalRowsLoaded(null);
+      resetStatus();
     }
   };
 
@@ -78,10 +91,7 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
     setActiveProfileId("");
     setProfileNameInput("");
     setStatusMessage(null);
-    setIsConnected(false);
-    setColumnsLoaded([]);
-    setColumnDetailsLoaded([]);
-    setTotalRowsLoaded(null);
+    resetStatus();
   };
 
   const handleConnectAndFetchColumns = () => {
@@ -95,7 +105,7 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
     }
 
     setStatusMessage(null);
-    setIsConnected(false);
+    resetStatus();
 
     fetchColumnsMutation.mutate(config, {
       onSuccess: (data) => {
@@ -104,13 +114,23 @@ export function useDbConnectionForm(onSuccess: DbConnectionFormProps["onSuccess"
         setTotalRowsLoaded(data.totalRows);
         setIsConnected(true);
 
+        if (onStatusChange) {
+          onStatusChange({
+            isConnected: true,
+            columns: data.columns,
+            totalRows: data.totalRows,
+            columnDetails: data.columnDetails || [],
+            config,
+          });
+        }
+
         setStatusMessage({
           type: AlertType.SUCCESS,
           text: `Conexión establecida con éxito. Se encontraron ${data.columns.length} columnas y ${data.totalRows} registros en '${data.schema}.${data.tableName}'.`,
         });
       },
       onError: (err) => {
-        setIsConnected(false);
+        resetStatus();
         setStatusMessage({ type: AlertType.ERROR, text: err.message });
       },
     });

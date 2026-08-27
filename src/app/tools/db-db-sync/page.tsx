@@ -1,28 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
+import { ArrowLeft, Database, GitMerge } from "lucide-react";
 import styles from "./page.module.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
-import { StepIndicator } from "@/components/shared/StepIndicator";
+import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
 import { Step4ResultsView } from "@/components/tools/db-sync-common/Step4ResultsView";
-import type { DbConfig, DbColumnMetadata } from "@/types/db";
-import type { ParsedFileDataset } from "@/types/parsers";
-import { FileSourceKind } from "@/types/parsers";
-import type { ColumnMappingConfig } from "@/types/gis";
-import { ArrowLeft, Database } from "lucide-react";
+import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
+import { FileSourceKind, type ParsedFileDataset } from "@/types/parsers";
+import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/gis";
+import type { WizardStepDef } from "@/types/ui";
 
 export default function DbDbSyncToolPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [dbConfig1, setDbConfig1] = useState<DbConfig | null>(null);
   const [dbColumns1, setDbColumns1] = useState<string[]>([]);
+  const [isDb1Connected, setIsDb1Connected] = useState(false);
+
   const [dbConfig2, setDbConfig2] = useState<DbConfig | null>(null);
   const [dbColumns2, setDbColumns2] = useState<string[]>([]);
   const [columnDetails2, setColumnDetails2] = useState<DbColumnMetadata[]>([]);
+  const [isDb2Connected, setIsDb2Connected] = useState(false);
+
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
+  const [isMappingReady, setIsMappingReady] = useState(false);
+
+  const db1FormRef = useRef<DbConnectionFormRef | null>(null);
+  const db2FormRef = useRef<DbConnectionFormRef | null>(null);
+  const suidMappingRef = useRef<SuidMappingStepRef | null>(null);
 
   const handleDb1Success = (
     config: DbConfig,
@@ -68,6 +77,83 @@ export default function DbDbSyncToolPage() {
       }
     : null;
 
+  const steps: WizardStepDef[] = [
+    {
+      id: 1,
+      title: "Configurar Base de Datos Origen (DB 1)",
+      subtitle: "Ingrese las credenciales para conectar a la tabla de base de datos fuente.",
+      icon: Database,
+      content: (
+        <DbConnectionForm
+          key="db1-form"
+          ref={db1FormRef}
+          onSuccess={handleDb1Success}
+          onStatusChange={(status) => setIsDb1Connected(status.isConnected && status.columns.length > 0)}
+        />
+      ),
+      canProceed: isDb1Connected,
+      onNext: () => db1FormRef.current?.proceed(),
+    },
+    {
+      id: 2,
+      title: "Configurar Base de Datos Destino (DB 2)",
+      subtitle: "Ingrese las credenciales para conectar a la tabla de base de datos destino / réplica.",
+      icon: Database,
+      content: (
+        <DbConnectionForm
+          key="db2-form"
+          ref={db2FormRef}
+          onSuccess={handleDb2Success}
+          onStatusChange={(status) => setIsDb2Connected(status.isConnected && status.columns.length > 0)}
+        />
+      ),
+      canProceed: isDb2Connected,
+      onNext: () => db2FormRef.current?.proceed(),
+      onBack: () => setCurrentStep(1),
+    },
+    {
+      id: 3,
+      title: "Configuración de SUID y Campos a Comparar",
+      subtitle: "Seleccione una o más columnas como clave SUID única o compuesta y configure atributos a comparar entre ambas tablas.",
+      icon: GitMerge,
+      content: dbColumns1.length > 0 ? (
+        <SuidMappingStep
+          ref={suidMappingRef}
+          dbColumns={dbColumns2}
+          columnDetails={columnDetails2}
+          fileAttributes={dbColumns1}
+          onSuccess={handleMappingSuccess}
+          onBack={() => setCurrentStep(2)}
+          initialConfig={mappingConfig}
+          showGeometryToggle={false}
+          onReadyChange={setIsMappingReady}
+        />
+      ) : null,
+      canProceed: isMappingReady,
+      nextLabel: "Iniciar Análisis y Comparación",
+      onNext: () => suidMappingRef.current?.proceed(),
+      onBack: () => setCurrentStep(2),
+    },
+    {
+      id: 4,
+      title: "Resultados de Análisis y Discrepancias",
+      subtitle: dbConfig1 && dbConfig2
+        ? `Correlación realizada entre DB 1 (${dbConfig1.db_name}.${dbConfig1.table_name}) y DB 2 (${dbConfig2.db_name}.${dbConfig2.table_name}).`
+        : "Visualice las diferencias detectadas y genere scripts SQL de sincronización.",
+      icon: Database,
+      content: dbConfig2 && sourceDataset && mappingConfig ? (
+        <Step4ResultsView
+          dbConfig={dbConfig2}
+          fileDataset={sourceDataset}
+          mappingConfig={mappingConfig}
+          sourceDbConfig={dbConfig1 || undefined}
+        />
+      ) : null,
+      onBack: () => setCurrentStep(3),
+      backLabel: "Volver al Paso 3: Mapeo SUID",
+    },
+  ];
+
   return (
     <div className={styles.container}>
       <Header />
@@ -89,64 +175,20 @@ export default function DbDbSyncToolPage() {
           </p>
         </div>
 
-        {/* 4-Step Wizard Indicator */}
-        <StepIndicator
+        {/* Wizard Orchestrator */}
+        <WizardOrchestrator
+          steps={steps}
           currentStep={currentStep}
+          onStepClick={handleStepClick}
           step1Title="DB Origen"
           step1Subtitle="Tabla Fuente (DB 1)"
           fileStepTitle="DB Destino"
           fileStepSubtitle="Tabla Réplica (DB 2)"
-          onStepClick={handleStepClick}
         />
-
-        {/* Step 1: Source Database 1 Connection & Introspection */}
-        {currentStep === 1 && (
-          <div>
-            <div style={{ marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", color: "var(--accent-cyan)", fontWeight: 600 }}>
-              <Database size={18} />
-              <span>1. Configurar Conexión a Base de Datos Origen (Tabla Fuente DB 1)</span>
-            </div>
-            <DbConnectionForm onSuccess={handleDb1Success} />
-          </div>
-        )}
-
-        {/* Step 2: Target Database 2 Connection & Introspection */}
-        {currentStep === 2 && (
-          <div>
-            <div style={{ marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", color: "var(--accent-cyan)", fontWeight: 600 }}>
-              <Database size={18} />
-              <span>2. Configurar Conexión a Base de Datos Destino (Tabla Objetivo DB 2 / Réplica)</span>
-            </div>
-            <DbConnectionForm onSuccess={handleDb2Success} />
-          </div>
-        )}
-
-        {/* Step 3: SUID & Attributes Column Mapping */}
-        {currentStep === 3 && dbColumns1.length > 0 && (
-          <SuidMappingStep
-            dbColumns={dbColumns2}
-            columnDetails={columnDetails2}
-            fileAttributes={dbColumns1}
-            onSuccess={handleMappingSuccess}
-            onBack={() => setCurrentStep(2)}
-            initialConfig={mappingConfig}
-            showGeometryToggle={false}
-          />
-        )}
-
-        {/* Step 4: Full Comparison Results & SQL Patch Export / Direct Execution */}
-        {currentStep === 4 && dbConfig2 && sourceDataset && mappingConfig && (
-          <Step4ResultsView
-            dbConfig={dbConfig2}
-            fileDataset={sourceDataset}
-            mappingConfig={mappingConfig}
-            onBackToMapping={() => setCurrentStep(3)}
-            sourceDbConfig={dbConfig1 || undefined}
-          />
-        )}
       </main>
 
       <Footer />
     </div>
   );
 }
+
