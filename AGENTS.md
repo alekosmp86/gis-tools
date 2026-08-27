@@ -1,8 +1,9 @@
 # Workspace Rules
 
-## Portable Node.js Requirement
-- Always use the portable Node.js binaries from `C:\Alekos\Tools\node24portable`.
-- When running commands via PowerShell, set `$env:PATH = "C:\Alekos\Tools\node24portable;" + $env:PATH` or run `C:\Alekos\Tools\node24portable\npm.cmd` / `node.exe`.
+## Node.js Detection & Portable Fallback Requirement
+- **Node.js Environment Detection**: Detect whether system Node.js is installed and available in the `PATH`.
+- **System Node**: If system Node.js is installed and functioning, run standard `node` and `npm` commands directly.
+- **Portable Fallback**: If system Node.js is not available, fall back to using the portable Node.js binaries from `C:\Alekos\Tools\node24portable` (e.g. by setting `$env:PATH = "C:\Alekos\Tools\node24portable;" + $env:PATH` or using `C:\Alekos\Tools\node24portable\npm.cmd`).
 
 ## Mandatory Planning Requirement
 - **Always plan before implement**: Exercise judgement and create or update the `implementation_plan.md` artifact before making code modifications for any complex task or feature.
