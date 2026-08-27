@@ -1,4 +1,4 @@
-import { GitCompare, FileSpreadsheet, Eye } from "lucide-react";
+import { GitCompare, FileSpreadsheet, Eye, Database } from "lucide-react";
 import { ToolCategory } from "@/types/gis";
 import { BadgeVariant } from "@/types/ui";
 import type { ToolCardData } from "@/types/gis";
@@ -37,10 +37,23 @@ export const toolsList: ToolCardData[] = [
     route: "/tools/db-csv-sync",
   },
   {
+    id: "db-db-sync",
+    title: "Sincronización de Datos DB vs. DB (Réplicas)",
+    category: ToolCategory.SYNC,
+    badge: { label: "Nueva Herramienta", type: BadgeVariant.ACTIVE },
+    icon: Database,
+    description:
+      "Correlacione registros entre dos tablas de bases de datos PostgreSQL/PostGIS (incluso en distintas bases de datos o esquemas), analice discrepancias y genere parches SQL.",
+    tags: ["PostgreSQL", "PostGIS", "Réplicas", "SQL"],
+    actionLabel: "Iniciar Herramienta",
+    enabled: true,
+    route: "/tools/db-db-sync",
+  },
+  {
     id: "file-viewer",
     title: "Visor de Archivos Espaciales",
     category: ToolCategory.VIEWERS,
-    badge: { label: "Nueva Herramienta", type: BadgeVariant.ACTIVE },
+    badge: { label: "Herramienta Activa", type: BadgeVariant.ACTIVE },
     icon: Eye,
     description:
       "Visualice interactivamente entidades geográficas y tablas de atributos a partir de archivos Shapefile (.zip), GeoJSON o CSV.",

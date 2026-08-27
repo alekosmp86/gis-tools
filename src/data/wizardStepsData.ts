@@ -3,13 +3,15 @@ import type { StepItemData } from "@/types/gis";
 
 export function getWizardSteps(
   fileStepTitle = "Capa Espacial",
-  fileStepSubtitle = "Cargar Shapefile (.zip)"
+  fileStepSubtitle = "Cargar Shapefile (.zip)",
+  step1Title = "Base de Datos",
+  step1Subtitle = "Conexión y Tabla"
 ): StepItemData[] {
   return [
     {
       id: 1,
-      title: "Base de Datos",
-      subtitle: "Conexión y Tabla",
+      title: step1Title,
+      subtitle: step1Subtitle,
       icon: Database,
     },
     {

@@ -6,11 +6,13 @@ import styles from "./StepIndicator.module.css";
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({
   currentStep,
+  step1Title,
+  step1Subtitle,
   fileStepTitle,
   fileStepSubtitle,
   onStepClick,
 }) => {
-  const steps = getWizardSteps(fileStepTitle, fileStepSubtitle);
+  const steps = getWizardSteps(fileStepTitle, fileStepSubtitle, step1Title, step1Subtitle);
 
   return (
     <div className={styles.stepperContainer}>

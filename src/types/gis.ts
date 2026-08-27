@@ -21,6 +21,8 @@ export interface StepItemData {
 
 export interface StepIndicatorProps {
   currentStep: number;
+  step1Title?: string;
+  step1Subtitle?: string;
   fileStepTitle?: string;
   fileStepSubtitle?: string;
   onStepClick?: (stepId: number) => void;
