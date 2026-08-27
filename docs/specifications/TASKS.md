@@ -20,3 +20,9 @@
 - [x] Refactored Step 4 results view with modular sub-components (`ResultsControlsBar.tsx` & `useDiscrepancyGeojson.ts`)
 - [x] Extracted static map data to `src/constants/mapConstants.ts`
 - [x] Organized 4 topic commits on branch `feature/csv-ewkb-geometry-map`
+- [x] Decoupled inner step components from step transition logic (`DbConnectionForm`, `CsvUploader`, `ShapefileUploader`, `SuidMappingStep`, `Step4ResultsView`)
+- [x] Created master glassmorphism `WizardOrchestrator` container & navigation component (`WizardOrchestrator.tsx` & `.module.css`)
+- [x] Implemented automatic smooth scrolling (`scrollIntoView`) on wizard step transitions
+- [x] Resolved DB vs. DB step 1 -> step 2 state bleed with React `key` props (`key="db1-form"`, `key="db2-form"`)
+- [x] Refactored type system: relocated wizard & catalog UI types to `ui.ts` and mapping/comparison types to `comparison.ts`
+- [x] Pushed topic commits to remote `origin/main`

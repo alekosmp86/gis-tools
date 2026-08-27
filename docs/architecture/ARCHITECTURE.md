@@ -104,15 +104,16 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 ## 📂 3. Mapa de Archivos por Áreas y Módulos
 
 ### Módulo de Dominio y Tipos (`src/types/`)
-- [`src/types/db.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/db.ts): Interfaces de configuración PostgreSQL (`DbConfig`, `DbColumnMetadata`).
+- [`src/types/db.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/db.ts): Interfaces de configuración PostgreSQL (`DbConfig`, `DbColumnMetadata`, `SavedDbProfile`, `DbConnectionFormProps`, `DbConnectionFormRef`).
 - [`src/types/parsers.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/parsers.ts): Interfaces `ParsedFileDataset` e `ISpatialFileParser`.
-- [`src/types/comparison.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/comparison.ts): Enums y modelos de discrepancias (`ComparisonSummary`, `DiscrepancyItem`, `DiscrepancyType`, `DiscrepancyFilter`).
+- [`src/types/comparison.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/comparison.ts): Enums y modelos de discrepancias (`ComparisonSummary`, `DiscrepancyItem`, `DiscrepancyType`, `DiscrepancyFilter`), así como configuraciones de mapeo (`ColumnMappingConfig`, `InsertFieldDefault`, `SuidMappingStepProps`, `SuidMappingStepRef`).
 - [`src/types/workerMessages.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/workerMessages.ts): Protocolo de mensajes del Web Worker.
-- [`src/types/ui.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/ui.ts): Variantes de botones, badges y tipos de alerta.
-- [`src/types/gis.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/gis.ts): Modelos para el catálogo de herramientas, `ColumnMappingConfig` (soporte de `suidColumns` compuestas) y `InsertFieldDefault`.
+- [`src/types/ui.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/ui.ts): Componentes de UI, botones, badges, tipos de alerta, catálogo de herramientas (`ToolCategory`, `ToolCardData`, `ToolCardProps`) y orquestación de wizard (`WizardStepDef`, `WizardOrchestratorProps`).
+- [`src/types/gis.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/gis.ts): Definiciones del dominio espacial / SRID (`CommonSrid`), re-exportando tipos de UI y comparación para compatibilidad.
 
 ### Motores y Parseadores (`src/services/`)
 - [`src/services/engines/DbVsFileComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsFileComparisonEngine.ts): Estrategia de comparación PostGIS vs Archivo.
+- [`src/services/engines/DbVsDbComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsDbComparisonEngine.ts): Estrategia de comparación PostGIS vs PostGIS (réplicas DB vs DB).
 - [`src/services/workerBridge.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/workerBridge.ts): Puente de comunicación Promise / Worker con fallback SSR.
 - [`src/services/parsers/ShapefileParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/ShapefileParser.ts): Parser para `.zip` (SHP+DBF) y `.geojson`.
 - [`src/services/parsers/CsvParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/CsvParser.ts): Parser para `.csv` delimitado por comas.
@@ -124,6 +125,7 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 
 ### Utilidades y Helpers (`src/utils/`)
 - [`src/utils/gisCleaners.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/gisCleaners.ts): Normalización de cadenas, limpieza de comillas (`cleanValue`) y claves SUID (`cleanSuid`).
+- [`src/utils/ewkbParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/ewkbParser.ts): Parseador EWKB Hex PostGIS a GeoJSON con conversión de coordenadas UTM Zona 19S.
 
 ### Hooks Personalizados (`src/hooks/`)
 - [`src/hooks/useDbConnectionForm.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDbConnectionForm.ts): Lógica del formulario de conexión DB con hidratación post-montaje.
@@ -132,7 +134,8 @@ Para evitar pérdidas silenciosas de datos en tablas PostGIS o archivos fuente:
 - [`src/hooks/useSuidMappingForm.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useSuidMappingForm.ts): Lógica del mapa de columnas SUID (compuestas), atributos y campos por defecto.
 
 ### Componentes UI Reutilizables (`src/components/shared/`)
-- [`src/components/shared/DbConnectionForm.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/DbConnectionForm.tsx): Paso 1 compartido (Conexión e introspección DB con metadatos de columnas).
+- [`src/components/shared/WizardOrchestrator.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/WizardOrchestrator.tsx) & `.module.css`: Orquestador desacoplado del wizard con tarjeta master glassmorphism, cabecera de acento, barra inferior de navegación y desplazamiento automático suave (`smoothScroll`).
+- [`src/components/shared/DbConnectionForm.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/DbConnectionForm.tsx): Componente agnóstico de conexión DB (soporta referencias `forwardRef` para navegación imperativa).
 - [`src/components/shared/ProfileSelect.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/ProfileSelect.tsx): Dropdown de perfiles de conexión guardados con soporte de iconos Lucide SVG (`Plus`, `Bookmark`, `ChevronDown`, `Check`, `Trash2`).
 - [`src/components/shared/StepIndicator.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/StepIndicator.tsx): Indicador visual de los 4 pasos del Wizard.
 - [`src/components/shared/ProgressBar.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/ProgressBar.tsx): Barra de progreso animada por fases.

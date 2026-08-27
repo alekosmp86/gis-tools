@@ -83,9 +83,16 @@ A continuación se detalla cada módulo implementado en la rama `feature/csv-ewk
 - **Purga de Caché en Inicio de Sesión**: `ShapefileUploader.tsx`, `CsvUploader.tsx` y `useDbConnectionForm.ts` purgan las consultas comparativas mediante `queryClient.removeQueries(...)` al reemplazar un archivo o cambiar credenciales de DB.
 - **Visualización de Recálculo con Skeletons**: `DiscrepanciesSummaryBar.tsx` muestra un cartel informativo (*"Recalculando discrepancias..."*) y conmuta los valores de las tarjetas KPI a barras animadas de Skeleton (`styles.skeletonValue`) durante el procesamiento asíncrono.
 
-### K. Componente `ProfileSelect` e Hidratación Segura
-- **`src/components/shared/ProfileSelect.tsx`**: Dropdown accesible personalizado que reemplaza el elemento nativo `<select>`, integrando iconos Lucide SVG (`Plus`, `Bookmark`, `ChevronDown`, `Check`, `Trash2`) para gestión de perfiles de base de datos guardados.
-- **`src/hooks/useDbConnectionForm.ts`**: Optimización de hidratación de perfiles `localStorage` mediante `startTransition` de React 18, eliminando advertencias y envoltorios redundantes.
+### L. Refactorización del Orquestador de Wizard y Límites de Tipos
+- **`src/components/shared/WizardOrchestrator.tsx` & `.module.css`**:
+  - Componente orquestador desacoplado que asume la responsabilidad exclusiva de renderizar la tarjeta master glassmorphism, el indicador de pasos, el Pill de estado (`Paso N de M`), los títulos y la barra inferior de navegación (`Volver` / `Continuar`).
+  - **Componentes de Pasos Agnósticos**: Se eliminaron los botones de navegación y encabezados rígidos de los formularios interiores (`DbConnectionForm`, `CsvUploader`, `ShapefileUploader`, `SuidMappingStep`, `Step4ResultsView`). Los pasos exponen métodos imperativos `proceed()` vía `React.forwardRef`.
+  - **Aislamiento de Estado por Paso (`key`)**: Asignación de llaves `key="db1-form"` y `key="db2-form"` en la herramienta de sincronización DB vs. DB, más la llave dinámica `<div key={`step-content-${activeStep.id}`}>` en el orquestador, garantizando el desmontaje y limpieza total de estado al avanzar entre pasos.
+  - **Desplazamiento Suave Automático (`smoothScroll`)**: `useEffect` con `scrollIntoView({ behavior: "smooth", block: "start" })` que posiciona automáticamente la vista en la parte superior del wizard en cada transición de paso.
+- **Reorganización Estricta de Tipos**:
+  - **`src/types/ui.ts`**: Centraliza todos los tipos de interfaz de usuario (`WizardStepDef`, `WizardOrchestratorProps`, `ToolCategory`, `ToolCardData`, `ToolCardProps`, `StepIndicatorProps`, etc.).
+  - **`src/types/comparison.ts`**: Centraliza modelos de discrepancias y tipos de correspondencia/mapeo (`ColumnMappingConfig`, `InsertFieldDefault`, `SuidMappingStepProps`, `SuidMappingStepRef`).
+  - **`src/types/gis.ts`**: Enfocado en tipos de dominio espacial (`CommonSrid`), re-exportando los módulos anteriores para compatibilidad.
 
 ---
 
