@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useIsMutating } from "@tanstack/react-query";
 import { useComparisonProgress } from "./useComparisonProgress";
 import { DbVsFileComparisonEngine } from "@/services/engines/DbVsFileComparisonEngine";
 import { DbVsDbComparisonEngine } from "@/services/engines/DbVsDbComparisonEngine";
@@ -20,12 +20,16 @@ export interface UseDatasetComparisonResult {
   loading: boolean;
   isFetching: boolean;
   isReanalyzing: boolean;
+  isExecuting: boolean;
+  isBusy: boolean;
+  customNotice?: string;
   error: Error | null;
   progress: ComparisonProgress;
 }
 
 /**
  * Custom Hook encapsulating dataset comparison state, engine factory selection,
+ * background execution status tracking via React Query mutation keys,
  * progress tracking, and React Query execution off the UI component layer.
  */
 export function useDatasetComparison({
@@ -74,13 +78,22 @@ export function useDatasetComparison({
     enabled: Boolean(dbConfig && fileDataset && mappingConfig),
   });
 
+  const isExecuting = useIsMutating({ mutationKey: ["executeSql"] }) > 0;
   const isReanalyzing = Boolean(isFetching && !loading);
+  const isBusy = isExecuting || isReanalyzing;
+
+  const customNotice = isExecuting
+    ? "Ejecutando sentencias SQL en la base de datos PostgreSQL en segundo plano..."
+    : undefined;
 
   return {
     summary,
     loading,
     isFetching,
     isReanalyzing,
+    isExecuting,
+    isBusy,
+    customNotice,
     error: error instanceof Error ? error : null,
     progress,
   };

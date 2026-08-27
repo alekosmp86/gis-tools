@@ -17,6 +17,8 @@ export class DbVsFileComparisonEngine implements IComparisonEngine {
     mappingConfig: ColumnMappingConfig,
     onProgress?: ProgressCallback
   ): Promise<ComparisonSummary> {
+    onProgress?.("Consultando registros PostGIS...", 0, 0);
+
     // 1. Fetch DB Records from API route
     const res = await fetch("/api/db/records", {
       method: "POST",

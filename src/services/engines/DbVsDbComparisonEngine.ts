@@ -26,7 +26,7 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
     mappingConfig: ColumnMappingConfig,
     onProgress?: ProgressCallback
   ): Promise<ComparisonSummary> {
-    onProgress?.("Consultando registros de la Base de Datos Origen (DB 1)...", 5, 100);
+    onProgress?.("Consultando registros de la Base de Datos Origen (DB 1)...", 0, 0);
 
     // 1. Fetch Source DB 1 Records
     const sourceSuidCols =
@@ -59,7 +59,7 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
     };
 
     // 2. Fetch Target DB 2 Records
-    onProgress?.("Consultando registros de la Base de Datos Destino (DB 2)...", 20, 100);
+    onProgress?.("Consultando registros de la Base de Datos Destino (DB 2)...", 0, 0);
 
     const { records: targetRecords, columnTypes: targetColumnTypes } = await this.fetchDbRecords(
       targetDbConfig,
@@ -93,7 +93,7 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
     mappingConfig: ColumnMappingConfig,
     onProgress?: ProgressCallback
   ): Promise<ComparisonSummary> {
-    onProgress?.("Consultando registros PostGIS...", 5, 100);
+    onProgress?.("Consultando registros PostGIS...", 0, 0);
 
     const { records: targetRecords, columnTypes: targetColumnTypes } = await this.fetchDbRecords(
       targetDbConfig,

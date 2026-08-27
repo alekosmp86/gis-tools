@@ -7,6 +7,7 @@ import styles from "./ResyncBanner.module.css";
 export const ResyncBanner: React.FC<ResyncBannerProps> = ({
   isReanalyzing,
   progress,
+  customMessage,
 }) => {
   if (!isReanalyzing) return null;
 
@@ -14,9 +15,9 @@ export const ResyncBanner: React.FC<ResyncBannerProps> = ({
     <div className={styles.resyncBanner}>
       <div className={styles.resyncTextGroup}>
         <RefreshCw size={18} className={styles.spin} />
-        <span>Sincronizando y re-analizando base de datos en segundo plano...</span>
+        <span>{customMessage || "Sincronizando y re-analizando base de datos en segundo plano..."}</span>
       </div>
-      {progress.phase !== "" && (
+      {!customMessage && progress.phase !== "" && (
         <div className={styles.resyncProgress}>
           <ProgressBar
             phase={progress.phase}

@@ -38,7 +38,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   onBackToMapping,
   sourceDbConfig,
 }) => {
-  const { summary, loading, isReanalyzing, error, progress } = useDatasetComparison({
+  const { summary, loading, isBusy, customNotice, error, progress } = useDatasetComparison({
     dbConfig,
     fileDataset,
     mappingConfig,
@@ -105,14 +105,14 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
       {summary && !loading && (
         <div className={styles.resultsContent}>
           {/* Background Re-sync Banner */}
-          <ResyncBanner isReanalyzing={isReanalyzing} progress={progress} />
+          <ResyncBanner isReanalyzing={isBusy} progress={progress} customMessage={customNotice} />
 
           {/* KPI Summary Cards */}
           <DiscrepanciesSummaryBar
             summary={summary}
             activeFilter={activeFilter}
             onSelectFilter={setActiveFilter}
-            isReanalyzing={isReanalyzing}
+            isReanalyzing={isBusy}
           />
 
           {/* Controls Bar & View Mode Tabs */}

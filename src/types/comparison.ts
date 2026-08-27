@@ -93,6 +93,7 @@ export interface ComparisonProgress {
 export interface ResyncBannerProps {
   isReanalyzing: boolean;
   progress: ComparisonProgress;
+  customMessage?: string;
 }
 
 export interface DiscrepanciesSummaryBarProps {
@@ -113,4 +114,5 @@ export interface SqlPatchDrawerProps {
   sqlInsertScript: string;
   tableName: string;
   dbConfig: DbConfig;
+  onExecutingChange?: (executing: boolean) => void;
 }
