@@ -1,5 +1,6 @@
 import React from "react";
 import { Layers, Maximize2, Loader2, MapPin } from "lucide-react";
+import { formatNumber } from "@/utils/formatters";
 import type { MapHeaderBarProps } from "@/types/map";
 import styles from "../SpatialMapPreview.module.css";
 
@@ -20,7 +21,7 @@ export const MapHeaderBar: React.FC<MapHeaderBarProps> = ({
         <div className={styles.mapBadge}>
           <Layers size={14} className={styles.badgeIcon} />
           <span>
-            {title} &bull; {totalFeatures.toLocaleString("es-UY")} entidades
+            {title} &bull; {formatNumber(totalFeatures)} entidades
           </span>
         </div>
 
@@ -31,7 +32,7 @@ export const MapHeaderBar: React.FC<MapHeaderBarProps> = ({
           >
             <Loader2 size={13} className={styles.spinIcon} />
             <span>
-              Cargando: {progressPct}% ({renderedCount.toLocaleString("es-UY")} / {totalFeatures.toLocaleString("es-UY")})
+              Cargando: {progressPct}% ({formatNumber(renderedCount)} / {formatNumber(totalFeatures)})
             </span>
           </div>
         )}

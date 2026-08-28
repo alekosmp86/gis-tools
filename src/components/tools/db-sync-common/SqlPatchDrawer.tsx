@@ -1,14 +1,15 @@
 import React, { useState } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { SqlPatchHeader } from "./SqlPatchHeader";
 import { SqlPatchTabs } from "./SqlPatchTabs";
 import { SqlPatchPreviewBox } from "./SqlPatchPreviewBox";
 import { SqlExecutionModal } from "./SqlExecutionModal";
-import { executeSqlScript } from "@/services/dbExecutionService";
 import { SqlScriptType } from "@/types/comparison";
 import type { SqlPatchDrawerProps } from "@/types/comparison";
+import type { ExecuteBatchResult } from "@/types/db";
 import { AlertType } from "@/types/ui";
+import { formatNumber } from "@/utils/formatters";
 import styles from "./SqlPatchDrawer.module.css";
 
 export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
@@ -45,7 +46,7 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
     : lines.slice(0, MAX_PREVIEW_LINES).join("\n") +
       `\n\n-- ==========================================================================================\n` +
       `-- ⚡ VISTA PREVIA TRUNCADA EN NAVEGADOR POR RENDIMIENTO\n` +
-      `-- Se están mostrando las primeras ${MAX_PREVIEW_LINES} sentencias de ${count.toLocaleString("es-ES")} sentencias totales.\n` +
+      `-- Se están mostrando las primeras ${formatNumber(MAX_PREVIEW_LINES)} sentencias de ${formatNumber(count)} sentencias totales.\n` +
       `-- El script completo está disponible intacto para Copiar, Descargar (.sql) o Ejecutar en BD.\n` +
       `-- ==========================================================================================`;
 
@@ -58,37 +59,6 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
 
   const statementCount = count;
   const isCurrentTabExecuted = executedTabs[activeTab];
-
-  // TanStack React Query Mutation for PostgreSQL Execution
-  const executeMutation = useMutation({
-    mutationKey: ["executeSql"],
-    mutationFn: (passwordInput: string) => executeSqlScript(dbConfig, passwordInput, activeScript),
-    onSuccess: (res) => {
-      setExecutedTabs((prev) => ({
-        ...prev,
-        [activeTab]: true,
-      }));
-      setExecutionResult({
-        type: AlertType.SUCCESS,
-        text: res.message
-          ? `${res.message} Sincronizando y re-analizando base de datos en segundo plano...`
-          : `Ejecución exitosa (${res.affectedRows || 0} registros procesados). Sincronizando y re-analizando en segundo plano...`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["datasetComparison"] });
-      if (typeof window !== "undefined") {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
-    },
-    onError: (err: unknown) => {
-      const errMsg = err instanceof Error ? err.message : "Error al ejecutar en la base de datos.";
-      setExecutionResult({
-        type: AlertType.ERROR,
-        text: errMsg,
-      });
-    },
-  });
-
-  const executing = executeMutation.isPending;
 
   const handleTabChange = (newTab: SqlScriptType) => {
     setActiveTab(newTab);
@@ -121,9 +91,21 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleConfirmExecute = (passwordInput: string): Promise<void> => {
-    setExecutionResult(null);
-    return executeMutation.mutateAsync(passwordInput).then(() => {});
+  const handleExecutionCompleted = (res: ExecuteBatchResult) => {
+    setExecutedTabs((prev) => ({
+      ...prev,
+      [activeTab]: true,
+    }));
+
+    setExecutionResult({
+      type: res.success ? AlertType.SUCCESS : AlertType.WARNING,
+      text: `${res.message} Sincronizando y re-analizando base de datos en segundo plano...`,
+    });
+
+    queryClient.invalidateQueries({ queryKey: ["datasetComparison"] });
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   return (
@@ -131,7 +113,7 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
       {/* Drawer Header & Actions */}
       <SqlPatchHeader
         copied={copied}
-        executing={executing}
+        executing={false}
         hasExecutableStatements={hasExecutableStatements}
         isCurrentTabExecuted={isCurrentTabExecuted}
         onCopy={handleCopy}
@@ -141,7 +123,7 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
 
       {/* Execution Feedback Alert */}
       {executionResult && (
-        <div style={{ marginTop: "16px" }}>
+        <div className={styles.alertWrapper}>
           <AlertMessage type={executionResult.type} text={executionResult.text} />
         </div>
       )}
@@ -160,14 +142,15 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
         statementCount={statementCount}
       />
 
-      {/* Password & Execution Confirmation Modal */}
+      {/* Password & Chunked Execution Confirmation Modal */}
       <SqlExecutionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onConfirmExecute={handleConfirmExecute}
         dbConfig={dbConfig}
         scriptType={activeTab}
         statementCount={statementCount}
+        activeScript={activeScript}
+        onExecutionCompleted={handleExecutionCompleted}
       />
     </div>
   );

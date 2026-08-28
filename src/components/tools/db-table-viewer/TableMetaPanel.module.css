@@ -80,6 +80,12 @@
   color: #38bdf8;
 }
 
+.valueIcon {
+  display: inline;
+  margin-right: 4px;
+  vertical-align: -1px;
+}
+
 @media (max-width: 768px) {
   .grid {
     grid-template-columns: 1fr;

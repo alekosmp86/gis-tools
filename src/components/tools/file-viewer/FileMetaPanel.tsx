@@ -1,5 +1,6 @@
 import React from "react";
 import { Info, Layers, AlertTriangle } from "lucide-react";
+import { formatNumber, formatFileSize } from "@/utils/formatters";
 import type { ParsedFileDataset } from "@/types/parsers";
 import styles from "./FileMetaPanel.module.css";
 
@@ -8,7 +9,7 @@ interface FileMetaPanelProps {
 }
 
 export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
-  const formattedSize = (dataset.fileSize / (1024 * 1024)).toFixed(2) + " MB";
+  const formattedSize = formatFileSize(dataset.fileSize);
   const hasGeometry = Boolean(dataset.geojson && dataset.geojson.features && dataset.geojson.features.length > 0);
 
   return (
@@ -21,7 +22,7 @@ export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
           <span className={styles.statLabel}>Registros / Entidades</span>
-          <span className={styles.statValue}>{dataset.featureCount.toLocaleString("es-UY")}</span>
+          <span className={styles.statValue}>{formatNumber(dataset.featureCount)}</span>
         </div>
 
         <div className={styles.statCard}>
@@ -38,7 +39,7 @@ export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
 
         <div className={styles.statCard}>
           <span className={styles.statLabel}>Columnas / Campos</span>
-          <span className={styles.statValue}>{dataset.attributes.length}</span>
+          <span className={styles.statValue}>{formatNumber(dataset.attributes.length)}</span>
         </div>
       </div>
 
@@ -54,7 +55,7 @@ export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
       <div className={styles.attributesSection}>
         <h5 className={styles.attributesTitle}>
           <Layers size={14} />
-          <span>Campos de Atributos ({dataset.attributes.length})</span>
+          <span>Campos de Atributos ({formatNumber(dataset.attributes.length)})</span>
         </h5>
 
         <div className={styles.attributesBadgeList}>

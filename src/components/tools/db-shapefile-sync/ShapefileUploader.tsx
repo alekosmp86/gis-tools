@@ -8,6 +8,7 @@ import { ColumnsList } from "@/components/shared/ColumnsList";
 import { ShapefileParser } from "@/services/parsers/ShapefileParser";
 import type { ShapefileUploaderProps, ParsedShapefileData } from "@/types/shp";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
+import { formatNumber, formatFileSize } from "@/utils/formatters";
 import styles from "./ShapefileUploader.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -90,12 +91,6 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
     onDiscard();
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   return (
     <div className={styles.container}>
       <input
@@ -153,7 +148,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
               <div>
                 <div className={styles.fileName}>{data.fileName}</div>
                 <div className={styles.fileSub}>
-                  Tamaño: {formatSize(data.fileSize)} &bull; Tipo: {data.geometryType || "Desconocido"}
+                  Tamaño: {formatFileSize(data.fileSize)} &bull; Tipo: {data.geometryType || "Desconocido"}
                 </div>
               </div>
             </div>
@@ -167,7 +162,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
           <div className={styles.metaRow}>
             <div className={styles.metaItem}>
               <span className={styles.metaLabel}>Total de Geometrías Espaciales:</span>
-              <span className={styles.metaValue}>{data.featureCount.toLocaleString()} entidades</span>
+              <span className={styles.metaValue}>{formatNumber(data.featureCount)} entidades</span>
             </div>
 
             <div className={styles.metaItem}>

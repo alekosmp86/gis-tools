@@ -6,6 +6,7 @@ import { AlertType } from "@/types/ui";
 import type { ParsedFileDataset } from "@/types/parsers";
 import { ShapefileParser } from "@/services/parsers/ShapefileParser";
 import { CsvParser } from "@/services/parsers/CsvParser";
+import { formatNumber, formatFileSize } from "@/utils/formatters";
 import styles from "./FileViewerUploader.module.css";
 
 interface FileViewerUploaderProps {
@@ -101,7 +102,7 @@ export const FileViewerUploader: React.FC<FileViewerUploaderProps> = ({
             <div>
               <div className={styles.fileName}>{parsedDataset.fileName}</div>
               <div className={styles.fileMeta}>
-                {(parsedDataset.fileSize / (1024 * 1024)).toFixed(2)} MB &bull; {parsedDataset.featureCount.toLocaleString("es-UY")} registros
+                {formatFileSize(parsedDataset.fileSize)} &bull; {formatNumber(parsedDataset.featureCount)} registros
               </div>
             </div>
           </div>

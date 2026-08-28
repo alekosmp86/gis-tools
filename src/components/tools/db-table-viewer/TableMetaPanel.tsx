@@ -1,5 +1,6 @@
 import React from "react";
 import { Database, Table, Layers, HardDrive, Hash, Globe } from "lucide-react";
+import { formatNumber } from "@/utils/formatters";
 import type { DbConfig } from "@/types/db";
 import styles from "./TableMetaPanel.module.css";
 
@@ -34,7 +35,7 @@ export const TableMetaPanel: React.FC<TableMetaPanelProps> = ({
         <div className={styles.card}>
           <span className={styles.cardLabel}>Base de Datos</span>
           <span className={styles.cardValue}>
-            <Database size={13} style={{ display: "inline", marginRight: 4 }} />
+            <Database size={13} className={styles.valueIcon} />
             {config.db_name}
           </span>
         </div>
@@ -42,7 +43,7 @@ export const TableMetaPanel: React.FC<TableMetaPanelProps> = ({
         <div className={styles.card}>
           <span className={styles.cardLabel}>Esquema & Tabla</span>
           <span className={styles.cardValue}>
-            <Table size={13} style={{ display: "inline", marginRight: 4 }} />
+            <Table size={13} className={styles.valueIcon} />
             {config.schema_name}.{config.table_name}
           </span>
         </div>
@@ -50,7 +51,7 @@ export const TableMetaPanel: React.FC<TableMetaPanelProps> = ({
         <div className={styles.card}>
           <span className={styles.cardLabel}>Host / Servidor</span>
           <span className={styles.cardValue}>
-            <HardDrive size={13} style={{ display: "inline", marginRight: 4 }} />
+            <HardDrive size={13} className={styles.valueIcon} />
             {config.host}:{config.port}
           </span>
         </div>
@@ -58,23 +59,23 @@ export const TableMetaPanel: React.FC<TableMetaPanelProps> = ({
         <div className={styles.card}>
           <span className={styles.cardLabel}>Total de Registros</span>
           <span className={`${styles.cardValue} ${styles.cardValueHighlight}`}>
-            <Hash size={13} style={{ display: "inline", marginRight: 4 }} />
-            {totalRows.toLocaleString()} filas
+            <Hash size={13} className={styles.valueIcon} />
+            {formatNumber(totalRows)} filas
           </span>
         </div>
 
         <div className={styles.card}>
           <span className={styles.cardLabel}>Total de Columnas</span>
           <span className={styles.cardValue}>
-            <Layers size={13} style={{ display: "inline", marginRight: 4 }} />
-            {columnsCount} columnas
+            <Layers size={13} className={styles.valueIcon} />
+            {formatNumber(columnsCount)} columnas
           </span>
         </div>
 
         <div className={styles.card}>
           <span className={styles.cardLabel}>Geometría Detectada</span>
           <span className={`${styles.cardValue} ${styles.cardValueHighlight}`}>
-            <Globe size={13} style={{ display: "inline", marginRight: 4 }} />
+            <Globe size={13} className={styles.valueIcon} />
             {geometryType || "Alfanumérico / Sin Geometría"}
           </span>
         </div>

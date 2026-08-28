@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/Badge";
 import { PaginationControls } from "@/components/shared/PaginationControls";
 import { DiscrepancyType, DiscrepancyFilter, type DiscrepanciesTableProps } from "@/types/comparison";
 import { BadgeVariant } from "@/types/ui";
+import { formatNumber } from "@/utils/formatters";
 import styles from "./DiscrepanciesTable.module.css";
 
 export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
@@ -86,8 +87,8 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
     <div className={styles.tableContainer}>
       <div className={styles.tableHeaderRow}>
         <span className={styles.tableTitle}>
-          Resultados de Discrepancias ({totalFilteredCount.toLocaleString("es-UY")} de{" "}
-          {items.length.toLocaleString("es-UY")} registros)
+          Resultados de Discrepancias ({formatNumber(totalFilteredCount)} de{" "}
+          {formatNumber(items.length)} registros)
         </span>
       </div>
 

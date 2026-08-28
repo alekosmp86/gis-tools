@@ -1,5 +1,6 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { formatNumber } from "@/utils/formatters";
 import type { PaginationControlsProps } from "@/types/ui";
 import styles from "./PaginationControls.module.css";
 
@@ -21,9 +22,9 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
   return (
     <div className={styles.paginationBar}>
       <div className={styles.paginationSummary}>
-        Mostrando <strong>{(startIndex + 1).toLocaleString("es-UY")}</strong> -{" "}
-        <strong>{endIndex.toLocaleString("es-UY")}</strong> de{" "}
-        <strong>{totalFilteredCount.toLocaleString("es-UY")}</strong> registros
+        Mostrando <strong>{formatNumber(startIndex + 1)}</strong> -{" "}
+        <strong>{formatNumber(endIndex)}</strong> de{" "}
+        <strong>{formatNumber(totalFilteredCount)}</strong> registros
       </div>
 
       <div className={styles.paginationControls}>

@@ -7,6 +7,7 @@ import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
 import { CsvParser } from "@/services/parsers/CsvParser";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
+import { formatNumber, formatFileSize } from "@/utils/formatters";
 import styles from "./CsvUploader.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -93,12 +94,6 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
     onDiscard();
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   return (
     <div className={styles.container}>
       <input
@@ -156,7 +151,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
               <div>
                 <div className={styles.fileName}>{data.fileName}</div>
                 <div className={styles.fileSub}>
-                  Tamaño: {formatSize(data.fileSize)} &bull; {data.featureCount.toLocaleString()} filas
+                  Tamaño: {formatFileSize(data.fileSize)} &bull; {formatNumber(data.featureCount)} filas
                 </div>
               </div>
             </div>
@@ -170,12 +165,12 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
           <div className={styles.metaRow}>
             <div className={styles.metaItem}>
               <span className={styles.metaLabel}>Total de Filas / Registros:</span>
-              <span className={styles.metaValue}>{data.featureCount.toLocaleString()} filas</span>
+              <span className={styles.metaValue}>{formatNumber(data.featureCount)} filas</span>
             </div>
 
             <div className={styles.metaItem}>
               <span className={styles.metaLabel}>Columnas Encontradas:</span>
-              <span className={styles.metaValue}>{data.attributes.length} columnas</span>
+              <span className={styles.metaValue}>{formatNumber(data.attributes.length)} columnas</span>
             </div>
           </div>
 

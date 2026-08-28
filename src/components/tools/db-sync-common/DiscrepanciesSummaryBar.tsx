@@ -1,5 +1,6 @@
 import React from "react";
 import { CheckCircle2, AlertTriangle, Database, Layers, BarChart2, HelpCircle, Copy } from "lucide-react";
+import { formatNumber } from "@/utils/formatters";
 import { DiscrepancyFilter, type DiscrepanciesSummaryBarProps } from "@/types/comparison";
 import styles from "./DiscrepanciesSummaryBar.module.css";
 
@@ -25,9 +26,9 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
             <BarChart2 size={18} />
           </div>
         </div>
-        <div className={styles.cardValue}>{summary.totalAnalyzed.toLocaleString()}</div>
+        <div className={styles.cardValue}>{formatNumber(summary.totalAnalyzed)}</div>
         <div className={styles.cardSub}>
-          DB: {summary.totalDbRecords} | Archivo: {summary.totalFileRecords}
+          DB: {formatNumber(summary.totalDbRecords)} | Archivo: {formatNumber(summary.totalFileRecords)}
         </div>
       </div>
 
@@ -48,7 +49,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
           </div>
         </div>
         <div className={`${styles.cardValue} ${styles.valWarning}`}>
-          {summary.attributeMismatchCount.toLocaleString()}
+          {formatNumber(summary.attributeMismatchCount)}
         </div>
         <div className={styles.cardSub}>Valores dispares entre DB y SHP</div>
       </div>
@@ -68,7 +69,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
           </div>
         </div>
         <div className={`${styles.cardValue} ${styles.valSuccess}`}>
-          {summary.exactMatchesCount.toLocaleString()}
+          {formatNumber(summary.exactMatchesCount)}
         </div>
         <div className={styles.cardSub}>Registros idénticos</div>
       </div>
@@ -88,7 +89,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
           </div>
         </div>
         <div className={`${styles.cardValue} ${styles.valNull}`}>
-          {summary.nullSuidCount.toLocaleString()}
+          {formatNumber(summary.nullSuidCount)}
         </div>
         <div className={styles.cardSub}>Sin clave identificadora</div>
       </div>
@@ -108,7 +109,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
           </div>
         </div>
         <div className={`${styles.cardValue} ${styles.valDuplicate}`}>
-          {summary.duplicateSuidCount.toLocaleString()}
+          {formatNumber(summary.duplicateSuidCount)}
         </div>
         <div className={styles.cardSub}>Claves repetidas encontradas</div>
       </div>
@@ -130,7 +131,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
           </div>
         </div>
         <div className={`${styles.cardValue} ${styles.valError}`}>
-          {summary.onlyInDbCount.toLocaleString()}
+          {formatNumber(summary.onlyInDbCount)}
         </div>
         <div className={styles.cardSub}>Faltantes en archivo fuente</div>
       </div>
@@ -152,7 +153,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
           </div>
         </div>
         <div className={`${styles.cardValue} ${styles.valInfo}`}>
-          {summary.onlyInShpCount.toLocaleString()}
+          {formatNumber(summary.onlyInShpCount)}
         </div>
         <div className={styles.cardSub}>Faltantes en Base de Datos</div>
       </div>

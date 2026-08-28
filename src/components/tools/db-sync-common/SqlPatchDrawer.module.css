@@ -126,3 +126,20 @@
   word-break: break-all;
   margin: 0;
 }
+
+.alertWrapper {
+  margin-top: 16px;
+}
+
+.truncatedNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--accent-amber);
+  background: rgba(245, 158, 11, 0.1);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}

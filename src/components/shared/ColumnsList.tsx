@@ -1,4 +1,5 @@
 import React from "react";
+import { formatNumber } from "@/utils/formatters";
 import type { ColumnsListProps } from "@/types/ui";
 import styles from "./ColumnsList.module.css";
 
@@ -12,11 +13,11 @@ export const ColumnsList: React.FC<ColumnsListProps> = ({
     <div className={`${styles.columnsContainer} ${className}`}>
       <div className={styles.columnsHeader}>
         <span className={styles.columnsTitle}>
-          {title} ({columns.length}):
+          {title} ({formatNumber(columns.length)}):
         </span>
         {totalRows !== null && (
           <span className={styles.rowCount}>
-            Total registros: {totalRows.toLocaleString()}
+            Total registros: {formatNumber(totalRows)}
           </span>
         )}
       </div>

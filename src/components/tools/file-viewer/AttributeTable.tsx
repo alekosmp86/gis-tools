@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Table, Search } from "lucide-react";
 import { PaginationControls } from "@/components/shared/PaginationControls";
+import { formatNumber } from "@/utils/formatters";
 import styles from "./AttributeTable.module.css";
 
 interface AttributeTableProps {
@@ -56,7 +57,7 @@ export const AttributeTable: React.FC<AttributeTableProps> = ({
       <div className={styles.tableHeaderBar}>
         <h4 className={styles.tableTitle}>
           <Table size={16} />
-          <span>Tabla de Atributos ({totalFilteredCount.toLocaleString("es-UY")})</span>
+          <span>Tabla de Atributos ({formatNumber(totalFilteredCount)})</span>
         </h4>
 
         <div className={styles.searchBox}>

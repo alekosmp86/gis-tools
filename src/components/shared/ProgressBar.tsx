@@ -1,4 +1,5 @@
 import React from "react";
+import { formatNumber } from "@/utils/formatters";
 import styles from "./ProgressBar.module.css";
 
 interface ProgressBarProps {
@@ -21,7 +22,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ phase, current, total,
       {total > 0 && (
         <div className={styles.countRow}>
           <span className={styles.countLabel}>
-            {current.toLocaleString("es-UY")} / {total.toLocaleString("es-UY")} registros
+            {formatNumber(current)} / {formatNumber(total)} registros
           </span>
         </div>
       )}
