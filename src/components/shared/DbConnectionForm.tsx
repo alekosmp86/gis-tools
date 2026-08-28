@@ -18,8 +18,23 @@ import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
 import { ProfileSelect } from "@/components/shared/ProfileSelect";
 import { useDbConnectionForm } from "@/hooks/useDbConnectionForm";
-import type { DbConnectionFormProps, DbConnectionFormRef } from "@/types/db";
+import type {
+  DbConfig,
+  DbColumnMetadata,
+  DbConnectionFormRef,
+  DbConnectionStatusPayload,
+} from "@/types/db";
 import styles from "./DbConnectionForm.module.css";
+
+export interface DbConnectionFormProps {
+  onSuccess: (
+    config: DbConfig,
+    columns: string[],
+    totalRows: number,
+    columnDetails?: DbColumnMetadata[]
+  ) => void;
+  onStatusChange?: (status: DbConnectionStatusPayload) => void;
+}
 
 export const DbConnectionForm = React.forwardRef<DbConnectionFormRef, DbConnectionFormProps>(
   ({ onSuccess, onStatusChange }, ref) => {
@@ -96,7 +111,7 @@ export const DbConnectionForm = React.forwardRef<DbConnectionFormRef, DbConnecti
             label="Host / Servidor"
             icon={Server}
             value={config.host}
-            onChange={(val) => handleChange("host", val)}
+            onChange={(value) => handleChange("host", value)}
             placeholder="localhost"
           />
 
@@ -104,7 +119,7 @@ export const DbConnectionForm = React.forwardRef<DbConnectionFormRef, DbConnecti
             label="Puerto"
             icon={Server}
             value={config.port}
-            onChange={(val) => handleChange("port", val)}
+            onChange={(value) => handleChange("port", value)}
             placeholder="5432"
           />
 
@@ -112,7 +127,7 @@ export const DbConnectionForm = React.forwardRef<DbConnectionFormRef, DbConnecti
             label="Nombre de Base de Datos"
             icon={Database}
             value={config.db_name}
-            onChange={(val) => handleChange("db_name", val)}
+            onChange={(value) => handleChange("db_name", value)}
             placeholder="ej. sig_db"
           />
 
@@ -120,7 +135,7 @@ export const DbConnectionForm = React.forwardRef<DbConnectionFormRef, DbConnecti
             label="Usuario"
             icon={User}
             value={config.user}
-            onChange={(val) => handleChange("user", val)}
+            onChange={(value) => handleChange("user", value)}
             placeholder="postgres"
           />
 
@@ -129,7 +144,7 @@ export const DbConnectionForm = React.forwardRef<DbConnectionFormRef, DbConnecti
             icon={Key}
             type="password"
             value={config.password || ""}
-            onChange={(val) => handleChange("password", val)}
+            onChange={(value) => handleChange("password", value)}
             placeholder="••••••••"
           />
 
@@ -137,7 +152,7 @@ export const DbConnectionForm = React.forwardRef<DbConnectionFormRef, DbConnecti
             label="Esquema (Schema)"
             icon={Layers}
             value={config.schema_name}
-            onChange={(val) => handleChange("schema_name", val)}
+            onChange={(value) => handleChange("schema_name", value)}
             placeholder="public"
           />
 
@@ -145,7 +160,7 @@ export const DbConnectionForm = React.forwardRef<DbConnectionFormRef, DbConnecti
             label="Nombre de la Tabla"
             icon={Table}
             value={config.table_name}
-            onChange={(val) => handleChange("table_name", val)}
+            onChange={(value) => handleChange("table_name", value)}
             placeholder="ej. parcelas_catastro, rutas_nacionales"
             isFullWidth
           />
@@ -160,7 +175,7 @@ export const DbConnectionForm = React.forwardRef<DbConnectionFormRef, DbConnecti
               type="text"
               placeholder="Nombre del perfil (ej. Catastro Local)"
               value={profileNameInput}
-              onChange={(e) => setProfileNameInput(e.target.value)}
+              onChange={(event) => setProfileNameInput(event.target.value)}
               className={styles.profileNameInput}
               aria-label="Nombre del perfil de conexión"
             />

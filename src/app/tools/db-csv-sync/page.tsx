@@ -12,7 +12,7 @@ import { CsvUploader } from "@/components/tools/db-csv-sync/CsvUploader";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
 import { Step4ResultsView } from "@/components/tools/db-sync-common/Step4ResultsView";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
-import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/gis";
+import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
 import type { WizardStepDef } from "@/types/ui";
 import { ParsedFileDataset } from "@/types/parsers";
 

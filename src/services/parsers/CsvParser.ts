@@ -13,18 +13,18 @@ export class CsvParser implements ISpatialFileParser {
     const fileSize = file.size;
     const text = await file.text();
 
-    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
     if (lines.length === 0) {
       throw new Error("El archivo CSV está vacío.");
     }
 
-    const parseCsvLine = (line: string): string[] => {
+    const parseCsvLine = (lineText: string): string[] => {
       const result: string[] = [];
       let current = "";
       let inQuotes = false;
 
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
+      for (let charIndex = 0; charIndex < lineText.length; charIndex++) {
+        const char = lineText[charIndex];
         if (char === '"') {
           inQuotes = !inQuotes;
         } else if (char === "," && !inQuotes) {
@@ -47,31 +47,31 @@ export class CsvParser implements ISpatialFileParser {
     const firstHeader = headers[0];
 
     // 1. Detect geometry column name (e.g. geom, geometry, wkt, wkb_geometry, the_geom, geom_wkt)
-    const geomColHeader = headers.find((h) =>
-      /^(geom|geometry|wkt|wkb_geometry|the_geom|geom_wkt)$/i.test(h.trim())
+    const geomColHeader = headers.find((header) =>
+      /^(geom|geometry|wkt|wkb_geometry|the_geom|geom_wkt)$/i.test(header.trim())
     );
 
     // 2. Detect Lat/Lng coordinate column headers
-    const latColHeader = headers.find((h) =>
-      /^(lat|latitude|latitud|y_coord|y)$/i.test(h.trim())
+    const latColHeader = headers.find((header) =>
+      /^(lat|latitude|latitud|y_coord|y)$/i.test(header.trim())
     );
-    const lngColHeader = headers.find((h) =>
-      /^(lng|lon|long|longitude|longitud|x_coord|x)$/i.test(h.trim())
+    const lngColHeader = headers.find((header) =>
+      /^(lng|lon|long|longitude|longitud|x_coord|x)$/i.test(header.trim())
     );
 
     const geojsonFeatures: Array<Feature<Geometry, GeoJsonProperties>> = [];
 
-    for (let i = 1; i < lines.length; i++) {
-      const values = parseCsvLine(lines[i]);
+    for (let lineIndex = 1; lineIndex < lines.length; lineIndex++) {
+      const values = parseCsvLine(lines[lineIndex]);
       if (values.length === 0) continue;
 
       const record: Record<string, unknown> = {};
-      headers.forEach((h, idx) => {
-        record[h] = values[idx] !== undefined ? values[idx] : "";
+      headers.forEach((header, headerIndex) => {
+        record[header] = values[headerIndex] !== undefined ? values[headerIndex] : "";
       });
 
       const rawSuid = record[firstHeader];
-      const key = cleanSuid(rawSuid) || `row-${i}`;
+      const key = cleanSuid(rawSuid) || `row-${lineIndex}`;
       recordsMap.set(key, record);
 
       let parsedGeom: Geometry | null = null;

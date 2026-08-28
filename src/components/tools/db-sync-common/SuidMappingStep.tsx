@@ -4,8 +4,20 @@ import { AttributeFieldsCard } from "./AttributeFieldsCard";
 import { GeometryToggleCard } from "../db-shapefile-sync/GeometryToggleCard";
 import { InsertDefaultsCard } from "./InsertDefaultsCard";
 import { useSuidMappingForm } from "@/hooks/useSuidMappingForm";
-import type { SuidMappingStepProps, SuidMappingStepRef } from "@/types/comparison";
+import type { DbColumnMetadata } from "@/types/db";
+import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
 import styles from "./SuidMappingStep.module.css";
+
+export interface SuidMappingStepProps {
+  dbColumns: string[];
+  columnDetails?: DbColumnMetadata[];
+  fileAttributes: string[];
+  onSuccess: (mappingConfig: ColumnMappingConfig) => void;
+  onBack: () => void;
+  initialConfig?: ColumnMappingConfig | null;
+  showGeometryToggle?: boolean;
+  onReadyChange?: (ready: boolean) => void;
+}
 
 export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingStepProps>(
   (
@@ -91,4 +103,3 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
 );
 
 SuidMappingStep.displayName = "SuidMappingStep";
-

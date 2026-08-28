@@ -45,9 +45,9 @@ export function saveDbProfileToLocalStorage(
 
   // If updating an existing profile explicitly by ID
   if (existingProfileId) {
-    const idx = profiles.findIndex((p) => p.id === existingProfileId);
-    if (idx !== -1) {
-      profiles[idx] = {
+    const targetIndex = profiles.findIndex((profile) => profile.id === existingProfileId);
+    if (targetIndex !== -1) {
+      profiles[targetIndex] = {
         id: existingProfileId,
         name,
         config: safeConfig,
@@ -83,7 +83,7 @@ export function saveDbProfileToLocalStorage(
 export function deleteDbProfileFromLocalStorage(profileId: string): SavedDbProfile[] {
   if (typeof window === "undefined") return [];
 
-  const profiles = loadDbProfilesFromLocalStorage().filter((p) => p.id !== profileId);
+  const profiles = loadDbProfilesFromLocalStorage().filter((profile) => profile.id !== profileId);
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));

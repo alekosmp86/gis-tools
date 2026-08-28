@@ -1,8 +1,14 @@
 import React from "react";
 import { RefreshCw } from "lucide-react";
 import { ProgressBar } from "@/components/shared/ProgressBar";
-import type { ResyncBannerProps } from "@/types/comparison";
+import type { ComparisonProgress } from "@/types/comparison";
 import styles from "./ResyncBanner.module.css";
+
+export interface ResyncBannerProps {
+  isReanalyzing: boolean;
+  progress: ComparisonProgress;
+  customMessage?: string;
+}
 
 export const ResyncBanner: React.FC<ResyncBannerProps> = ({
   isReanalyzing,

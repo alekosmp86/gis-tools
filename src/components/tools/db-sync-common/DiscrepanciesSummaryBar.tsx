@@ -1,8 +1,15 @@
 import React from "react";
 import { CheckCircle2, AlertTriangle, Database, Layers, BarChart2, HelpCircle, Copy } from "lucide-react";
 import { formatNumber } from "@/utils/formatters";
-import { DiscrepancyFilter, type DiscrepanciesSummaryBarProps } from "@/types/comparison";
+import { DiscrepancyFilter, type ComparisonSummary } from "@/types/comparison";
 import styles from "./DiscrepanciesSummaryBar.module.css";
+
+export interface DiscrepanciesSummaryBarProps {
+  summary: ComparisonSummary;
+  activeFilter: DiscrepancyFilter;
+  onSelectFilter: (filter: DiscrepancyFilter) => void;
+  isReanalyzing?: boolean;
+}
 
 export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = ({
   summary,
@@ -17,7 +24,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         role="button"
         tabIndex={0}
         onClick={() => onSelectFilter(DiscrepancyFilter.ALL)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelectFilter(DiscrepancyFilter.ALL)}
+        onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onSelectFilter(DiscrepancyFilter.ALL)}
         className={`${styles.kpiCard} ${activeFilter === DiscrepancyFilter.ALL ? styles.active : ""}`}
       >
         <div className={styles.cardHeader}>
@@ -37,7 +44,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         role="button"
         tabIndex={0}
         onClick={() => onSelectFilter(DiscrepancyFilter.ATTRIBUTE_MISMATCH)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelectFilter(DiscrepancyFilter.ATTRIBUTE_MISMATCH)}
+        onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onSelectFilter(DiscrepancyFilter.ATTRIBUTE_MISMATCH)}
         className={`${styles.kpiCard} ${
           activeFilter === DiscrepancyFilter.ATTRIBUTE_MISMATCH ? styles.active : ""
         }`}
@@ -59,7 +66,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         role="button"
         tabIndex={0}
         onClick={() => onSelectFilter(DiscrepancyFilter.MATCH)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelectFilter(DiscrepancyFilter.MATCH)}
+        onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onSelectFilter(DiscrepancyFilter.MATCH)}
         className={`${styles.kpiCard} ${activeFilter === DiscrepancyFilter.MATCH ? styles.active : ""}`}
       >
         <div className={styles.cardHeader}>
@@ -79,7 +86,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         role="button"
         tabIndex={0}
         onClick={() => onSelectFilter(DiscrepancyFilter.NULL_SUID)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelectFilter(DiscrepancyFilter.NULL_SUID)}
+        onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onSelectFilter(DiscrepancyFilter.NULL_SUID)}
         className={`${styles.kpiCard} ${activeFilter === DiscrepancyFilter.NULL_SUID ? styles.active : ""}`}
       >
         <div className={styles.cardHeader}>
@@ -99,7 +106,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         role="button"
         tabIndex={0}
         onClick={() => onSelectFilter(DiscrepancyFilter.DUPLICATE_SUID)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelectFilter(DiscrepancyFilter.DUPLICATE_SUID)}
+        onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onSelectFilter(DiscrepancyFilter.DUPLICATE_SUID)}
         className={`${styles.kpiCard} ${activeFilter === DiscrepancyFilter.DUPLICATE_SUID ? styles.active : ""}`}
       >
         <div className={styles.cardHeader}>
@@ -119,7 +126,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         role="button"
         tabIndex={0}
         onClick={() => onSelectFilter(DiscrepancyFilter.ONLY_IN_DB)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelectFilter(DiscrepancyFilter.ONLY_IN_DB)}
+        onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onSelectFilter(DiscrepancyFilter.ONLY_IN_DB)}
         className={`${styles.kpiCard} ${
           activeFilter === DiscrepancyFilter.ONLY_IN_DB ? styles.active : ""
         }`}
@@ -141,7 +148,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         role="button"
         tabIndex={0}
         onClick={() => onSelectFilter(DiscrepancyFilter.ONLY_IN_SHP)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelectFilter(DiscrepancyFilter.ONLY_IN_SHP)}
+        onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onSelectFilter(DiscrepancyFilter.ONLY_IN_SHP)}
         className={`${styles.kpiCard} ${
           activeFilter === DiscrepancyFilter.ONLY_IN_SHP ? styles.active : ""
         }`}

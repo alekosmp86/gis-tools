@@ -1,8 +1,19 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { formatNumber } from "@/utils/formatters";
-import type { PaginationControlsProps } from "@/types/ui";
 import styles from "./PaginationControls.module.css";
+
+export interface PaginationControlsProps {
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+  totalFilteredCount: number;
+  startIndex: number;
+  endIndex: number;
+  pageSizeOptions?: number[];
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [50, 100, 250, 500];
 
@@ -33,7 +44,7 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
           <select
             id="page-size-select"
             value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            onChange={(event) => onPageSizeChange(Number(event.target.value))}
             className={styles.pageSizeSelect}
           >
             {pageSizeOptions.map((size) => (

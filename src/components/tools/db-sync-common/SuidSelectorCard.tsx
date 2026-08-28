@@ -1,7 +1,13 @@
 import React from "react";
-import { CheckCircle2, AlertTriangle, Layers, Layers3 } from "lucide-react";
-import type { SuidSelectorCardProps } from "@/types/comparison";
+import { CheckCircle2, AlertTriangle, Layers, Layers3, Check } from "lucide-react";
 import styles from "./SuidSelectorCard.module.css";
+
+export interface SuidSelectorCardProps {
+  selectableColumns: string[];
+  selectedSuids: string[];
+  matchedFileSuids: string[];
+  onToggleSuid: (suid: string) => void;
+}
 
 export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({
   selectableColumns,
@@ -10,7 +16,7 @@ export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({
   onToggleSuid,
 }) => {
   const isComposite = selectedSuids.length > 1;
-  const allMatched = matchedFileSuids.length > 0 && matchedFileSuids.every((m) => m !== "");
+  const allMatched = matchedFileSuids.length > 0 && matchedFileSuids.every((match) => match !== "");
 
   return (
     <div className={styles.sectionCard}>
@@ -41,20 +47,20 @@ export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({
 
       {/* Multi-select Pills */}
       <div className={styles.pillsGrid}>
-        {selectableColumns.map((col) => {
-          const isSelected = selectedSuids.includes(col);
+        {selectableColumns.map((column) => {
+          const isSelected = selectedSuids.includes(column);
           return (
             <button
-              key={col}
+              key={column}
               type="button"
               className={`${styles.pill} ${isSelected ? styles.pillSelected : ""}`}
-              onClick={() => onToggleSuid(col)}
+              onClick={() => onToggleSuid(column)}
               aria-pressed={isSelected}
             >
               <span className={`${styles.customCheck} ${isSelected ? styles.customCheckActive : ""}`}>
-                {isSelected && "✓"}
+                {isSelected && <Check size={12} />}
               </span>
-              <span className={styles.pillText}>{col}</span>
+              <span className={styles.pillText}>{column}</span>
             </button>
           );
         })}

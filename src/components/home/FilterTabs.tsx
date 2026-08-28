@@ -1,6 +1,11 @@
 import React from "react";
-import type { FilterTabsProps } from "@/types/ui";
 import styles from "./FilterTabs.module.css";
+
+export interface FilterTabsProps {
+  categories: string[];
+  activeCategory: string;
+  onSelectCategory: (category: string) => void;
+}
 
 export const FilterTabs: React.FC<FilterTabsProps> = ({
   categories,
@@ -9,15 +14,15 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
 }) => {
   return (
     <div className={styles.filterGroup}>
-      {categories.map((cat) => (
+      {categories.map((category) => (
         <button
-          key={cat}
+          key={category}
           className={`${styles.filterBtn} ${
-            activeCategory === cat ? styles.filterActive : ""
+            activeCategory === category ? styles.filterActive : ""
           }`}
-          onClick={() => onSelectCategory(cat)}
+          onClick={() => onSelectCategory(category)}
         >
-          {cat}
+          {category}
         </button>
       ))}
     </div>

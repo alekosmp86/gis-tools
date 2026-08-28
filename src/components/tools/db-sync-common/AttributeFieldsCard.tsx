@@ -1,7 +1,17 @@
 import React from "react";
 import { ArrowRight, AlertTriangle, Link2, Check } from "lucide-react";
-import type { AttributeFieldsCardProps } from "@/types/comparison";
 import styles from "./AttributeFieldsCard.module.css";
+
+export interface AttributeFieldsCardProps {
+  availableFields: string[];
+  selectedFields: string[];
+  attributeMap: Record<string, string>;
+  fileAttributes: string[];
+  onToggleField: (field: string) => void;
+  onMapField: (dbCol: string, fileAttr: string) => void;
+  onSelectAll: () => void;
+  onClearAll: () => void;
+}
 
 export const AttributeFieldsCard: React.FC<AttributeFieldsCardProps> = ({
   availableFields,
@@ -74,7 +84,7 @@ export const AttributeFieldsCard: React.FC<AttributeFieldsCardProps> = ({
                 <div className={styles.selectWrapper}>
                   <select
                     value={mappedFileAttr}
-                    onChange={(e) => onMapField(dbField, e.target.value)}
+                    onChange={(event) => onMapField(dbField, event.target.value)}
                     disabled={!isChecked}
                     className={`${styles.attrSelect} ${!isMapped ? styles.attrSelectUnmapped : ""}`}
                   >

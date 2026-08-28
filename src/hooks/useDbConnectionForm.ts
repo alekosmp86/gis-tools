@@ -10,11 +10,21 @@ import {
 } from "@/services/localStorageDbConfig";
 import { AlertType } from "@/types/ui";
 import { formatNumber } from "@/utils/formatters";
-import type { DbConfig, DbColumnMetadata, DbConnectionFormProps, SavedDbProfile } from "@/types/db";
+import type { DbConfig, DbColumnMetadata, DbConnectionStatusPayload, SavedDbProfile } from "@/types/db";
+
+interface UseDbConnectionFormCallbacks {
+  onSuccess: (
+    config: DbConfig,
+    columns: string[],
+    totalRows: number,
+    columnDetails?: DbColumnMetadata[]
+  ) => void;
+  onStatusChange?: (status: DbConnectionStatusPayload) => void;
+}
 
 export function useDbConnectionForm(
-  onSuccess: DbConnectionFormProps["onSuccess"],
-  onStatusChange?: DbConnectionFormProps["onStatusChange"]
+  onSuccess: UseDbConnectionFormCallbacks["onSuccess"],
+  onStatusChange?: UseDbConnectionFormCallbacks["onStatusChange"]
 ) {
   const queryClient = useQueryClient();
   const [config, setConfig] = useState<DbConfig>(INITIAL_DB_CONFIG);
@@ -75,7 +85,7 @@ export function useDbConnectionForm(
       handleResetForm();
       return;
     }
-    const found = savedProfiles.find((p) => p.id === profileId);
+    const found = savedProfiles.find((profile) => profile.id === profileId);
     if (found) {
       queryClient.removeQueries({ queryKey: ["datasetComparison"] });
       setConfig((prev) => ({ ...prev, ...found.config, password: "" }));
@@ -170,7 +180,7 @@ export function useDbConnectionForm(
   };
 
   const handleDeleteProfile = (profileId: string) => {
-    const target = savedProfiles.find((p) => p.id === profileId);
+    const target = savedProfiles.find((profile) => profile.id === profileId);
     const updated = deleteDbProfileFromLocalStorage(profileId);
     setSavedProfiles(updated);
 

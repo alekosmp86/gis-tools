@@ -1,6 +1,12 @@
 import React from "react";
-import { BadgeVariant, type BadgeProps } from "@/types/ui";
+import { BadgeVariant } from "@/types/ui";
 import styles from "./Badge.module.css";
+
+export interface BadgeProps {
+  children: React.ReactNode;
+  variant?: BadgeVariant;
+  className?: string;
+}
 
 export const Badge: React.FC<BadgeProps> = ({
   children,

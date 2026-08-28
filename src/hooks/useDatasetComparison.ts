@@ -5,8 +5,7 @@ import { DbVsDbComparisonEngine } from "@/services/engines/DbVsDbComparisonEngin
 import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
 import type { ParsedFileDataset } from "@/types/parsers";
-import type { ColumnMappingConfig } from "@/types/gis";
-import type { ComparisonSummary, ComparisonProgress } from "@/types/comparison";
+import type { ColumnMappingConfig, ComparisonSummary, ComparisonProgress } from "@/types/comparison";
 
 export interface UseDatasetComparisonParams {
   dbConfig: DbConfig;

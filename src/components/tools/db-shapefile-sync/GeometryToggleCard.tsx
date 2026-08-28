@@ -1,6 +1,10 @@
 import React from "react";
-import type { GeometryToggleCardProps } from "@/types/comparison";
 import styles from "./GeometryToggleCard.module.css";
+
+export interface GeometryToggleCardProps {
+  compareGeometry: boolean;
+  onToggleGeometry: (enabled: boolean) => void;
+}
 
 export const GeometryToggleCard: React.FC<GeometryToggleCardProps> = ({
   compareGeometry,
@@ -17,7 +21,7 @@ export const GeometryToggleCard: React.FC<GeometryToggleCardProps> = ({
         <input
           type="checkbox"
           checked={compareGeometry}
-          onChange={(e) => onToggleGeometry(e.target.checked)}
+          onChange={(event) => onToggleGeometry(event.target.checked)}
         />
         <div className={styles.toggleText}>
           <span className={styles.toggleTitle}>

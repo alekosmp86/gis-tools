@@ -2,8 +2,14 @@ import React, { useRef, useEffect } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { StepIndicator } from "@/components/shared/StepIndicator";
-import type { WizardOrchestratorProps } from "@/types/ui";
+import type { WizardStepDef } from "@/types/ui";
 import styles from "./WizardOrchestrator.module.css";
+
+export interface WizardOrchestratorProps {
+  steps: WizardStepDef[];
+  currentStep: number;
+  onStepClick?: (stepId: number) => void;
+}
 
 export const WizardOrchestrator: React.FC<WizardOrchestratorProps> = ({
   steps,
@@ -11,7 +17,7 @@ export const WizardOrchestrator: React.FC<WizardOrchestratorProps> = ({
   onStepClick,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const activeStep = steps.find((s) => s.id === currentStep) || steps[0];
+  const activeStep = steps.find((step) => step.id === currentStep) || steps[0];
   const IconComponent = activeStep.icon;
 
   const defaultBackLabel = currentStep > 1 ? `Volver al Paso ${currentStep - 1}` : undefined;

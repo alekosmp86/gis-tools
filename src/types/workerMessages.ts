@@ -1,5 +1,4 @@
-import type { ColumnMappingConfig } from "@/types/gis";
-import type { ComparisonSummary } from "@/types/comparison";
+import type { ColumnMappingConfig, ComparisonSummary } from "@/types/comparison";
 import type { Feature, Geometry, GeoJsonProperties } from "geojson";
 
 export const MapChunkMessageType = {

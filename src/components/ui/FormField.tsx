@@ -1,6 +1,17 @@
 import React, { useId } from "react";
-import type { FormFieldProps } from "@/types/ui";
 import styles from "./FormField.module.css";
+
+export interface FormFieldProps {
+  id?: string;
+  label: string;
+  icon?: React.ElementType;
+  type?: "text" | "password" | "number" | "email";
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  isFullWidth?: boolean;
+  className?: string;
+}
 
 export const FormField: React.FC<FormFieldProps> = ({
   id,
@@ -26,7 +37,7 @@ export const FormField: React.FC<FormFieldProps> = ({
         id={inputId}
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
       />
     </div>

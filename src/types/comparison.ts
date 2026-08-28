@@ -1,4 +1,4 @@
-import type { DbConfig, DbColumnMetadata } from "@/types/db";
+import type { DbConfig } from "@/types/db";
 import type { ParsedFileDataset } from "@/types/parsers";
 import type { ProgressCallback } from "@/services/workerBridge";
 
@@ -21,40 +21,6 @@ export interface SuidMappingStepRef {
   proceed: () => void;
 }
 
-export interface SuidMappingStepProps {
-  dbColumns: string[];
-  columnDetails?: DbColumnMetadata[];
-  fileAttributes: string[];
-  onSuccess: (mappingConfig: ColumnMappingConfig) => void;
-  onBack: () => void;
-  initialConfig?: ColumnMappingConfig | null;
-  showGeometryToggle?: boolean;
-  onReadyChange?: (ready: boolean) => void;
-}
-
-export interface SuidSelectorCardProps {
-  selectableColumns: string[];
-  selectedSuids: string[];
-  matchedFileSuids: string[];
-  onToggleSuid: (suid: string) => void;
-}
-
-export interface AttributeFieldsCardProps {
-  availableFields: string[];
-  selectedFields: string[];
-  attributeMap: Record<string, string>;
-  fileAttributes: string[];
-  onToggleField: (field: string) => void;
-  onMapField: (dbCol: string, fileAttr: string) => void;
-  onSelectAll: () => void;
-  onClearAll: () => void;
-}
-
-export interface GeometryToggleCardProps {
-  compareGeometry: boolean;
-  onToggleGeometry: (enabled: boolean) => void;
-}
-
 export const DiscrepancyType = {
   MATCH: "MATCH",
   ATTRIBUTE_MISMATCH: "ATTRIBUTE_MISMATCH",
@@ -73,7 +39,6 @@ export const DiscrepancyFilter = {
 } as const;
 
 export type DiscrepancyFilter = (typeof DiscrepancyFilter)[keyof typeof DiscrepancyFilter];
-
 
 export const ResultsViewTab = {
   TABLE: "table",
@@ -119,9 +84,7 @@ export interface ComparisonSummary {
   nullSuidCount: number;
   duplicateSuidCount: number;
   items: DiscrepancyItem[];
-  /** UPDATE statements for attribute mismatches (records exist in both but differ) */
   sqlUpdateScript: string;
-  /** INSERT statements for records present only in the file source (missing from DB) */
   sqlInsertScript: string;
 }
 
@@ -140,31 +103,4 @@ export interface ComparisonProgress {
   current: number;
   total: number;
   pct: number;
-}
-
-export interface ResyncBannerProps {
-  isReanalyzing: boolean;
-  progress: ComparisonProgress;
-  customMessage?: string;
-}
-
-export interface DiscrepanciesSummaryBarProps {
-  summary: ComparisonSummary;
-  activeFilter: DiscrepancyFilter;
-  onSelectFilter: (filter: DiscrepancyFilter) => void;
-  isReanalyzing?: boolean;
-}
-
-export interface DiscrepanciesTableProps {
-  items: DiscrepancyItem[];
-  activeFilter: DiscrepancyFilter;
-  searchQuery: string;
-}
-
-export interface SqlPatchDrawerProps {
-  sqlUpdateScript: string;
-  sqlInsertScript: string;
-  tableName: string;
-  dbConfig: DbConfig;
-  onExecutingChange?: (executing: boolean) => void;
 }

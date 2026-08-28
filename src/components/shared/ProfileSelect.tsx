@@ -1,8 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Plus, Bookmark, ChevronDown, Check } from "lucide-react";
-import type { ProfileSelectProps } from "@/types/ui";
-
+import type { SavedDbProfile } from "@/types/db";
 import styles from "./ProfileSelect.module.css";
+
+export interface ProfileSelectProps {
+  profiles: SavedDbProfile[];
+  activeProfileId: string;
+  onSelectProfile: (profileId: string) => void;
+}
 
 export const ProfileSelect: React.FC<ProfileSelectProps> = ({
   profiles,
@@ -12,7 +17,7 @@ export const ProfileSelect: React.FC<ProfileSelectProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const activeProfile = profiles.find((p) => p.id === activeProfileId);
+  const activeProfile = profiles.find((profile) => profile.id === activeProfileId);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -24,8 +29,8 @@ export const ProfileSelect: React.FC<ProfileSelectProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "Escape") {
       setIsOpen(false);
     }
   };

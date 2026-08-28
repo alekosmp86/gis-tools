@@ -9,7 +9,7 @@ export function useSuidMappingForm(
 ) {
   // Allow all non-geometry columns OR geometry columns for SUID/Attribute selection
   const selectableColumns = dbColumns.filter(
-    (col) => !["geom", "geometry", "wkb_geometry"].includes(col.toLowerCase())
+    (column) => !["geom", "geometry", "wkb_geometry"].includes(column.toLowerCase())
   );
 
   const [selectedSuids, setSelectedSuids] = useState<string[]>(() => {
@@ -89,27 +89,27 @@ export function useSuidMappingForm(
 
   // Filter out selected SUID columns from available comparison fields (allow all DB columns)
   const suidSet = new Set(selectedSuids);
-  const availableCompareFields = dbColumns.filter((col) => !suidSet.has(col));
+  const availableCompareFields = dbColumns.filter((column) => !suidSet.has(column));
 
   // Unmapped DB columns (columns not chosen as SUID or comparison attributes)
   const mappedSet = new Set([...selectedSuids, ...selectedFields]);
   const unmappedDbColumns = dbColumns.filter(
-    (col) => !mappedSet.has(col) && !["geom", "geometry", "wkb_geometry"].includes(col.toLowerCase())
+    (column) => !mappedSet.has(column) && !["geom", "geometry", "wkb_geometry"].includes(column.toLowerCase())
   );
 
-  const toggleSuidColumn = (col: string) => {
+  const toggleSuidColumn = (column: string) => {
     setSelectedSuids((prev) => {
-      if (prev.includes(col)) {
+      if (prev.includes(column)) {
         if (prev.length <= 1) return prev;
-        return prev.filter((c) => c !== col);
+        return prev.filter((item) => item !== column);
       }
-      return [...prev, col];
+      return [...prev, column];
     });
   };
 
   const toggleField = (field: string) => {
     setSelectedFields((prev) =>
-      prev.includes(field) ? prev.filter((f) => f !== field) : [...prev, field]
+      prev.includes(field) ? prev.filter((item) => item !== field) : [...prev, field]
     );
   };
 

@@ -1,10 +1,16 @@
 import React, { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { PaginationControls } from "@/components/shared/PaginationControls";
-import { DiscrepancyType, DiscrepancyFilter, type DiscrepanciesTableProps } from "@/types/comparison";
+import { DiscrepancyType, DiscrepancyFilter, type DiscrepancyItem } from "@/types/comparison";
 import { BadgeVariant } from "@/types/ui";
 import { formatNumber } from "@/utils/formatters";
 import styles from "./DiscrepanciesTable.module.css";
+
+export interface DiscrepanciesTableProps {
+  items: DiscrepancyItem[];
+  activeFilter: DiscrepancyFilter;
+  searchQuery: string;
+}
 
 export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
   items,
@@ -35,10 +41,10 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
     if (matchesNote) return true;
 
     return item.differences.some(
-      (d) =>
-        d.fieldName.toLowerCase().includes(query) ||
-        (d.dbValue !== null && String(d.dbValue).toLowerCase().includes(query)) ||
-        (d.shpValue !== null && String(d.shpValue).toLowerCase().includes(query))
+      (diffItem) =>
+        diffItem.fieldName.toLowerCase().includes(query) ||
+        (diffItem.dbValue !== null && String(diffItem.dbValue).toLowerCase().includes(query)) ||
+        (diffItem.shpValue !== null && String(diffItem.shpValue).toLowerCase().includes(query))
     );
   });
 
@@ -130,7 +136,7 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
                   ];
                 }
 
-                return item.differences.map((diff, idx) => {
+                return item.differences.map((diff, diffIndex) => {
                   const dbValStr =
                     diff.dbValue !== null && diff.dbValue !== undefined
                       ? String(diff.dbValue)
@@ -141,8 +147,8 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
                       : "(Vacío / NULL)";
 
                   return (
-                    <tr key={`${item.id}-${diff.fieldName}-${idx}`}>
-                      {idx === 0 && (
+                    <tr key={`${item.id}-${diff.fieldName}-${diffIndex}`}>
+                      {diffIndex === 0 && (
                         <td
                           rowSpan={item.differences.length}
                           className={styles.suidCell}
@@ -152,7 +158,7 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
                           {item.note && <div className={styles.noteText}>{item.note}</div>}
                         </td>
                       )}
-                      {idx === 0 && (
+                      {diffIndex === 0 && (
                         <td rowSpan={item.differences.length}>
                           {renderTypeBadge(item.type)}
                         </td>

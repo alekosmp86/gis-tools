@@ -11,9 +11,3 @@ export interface ParsedShapefileData {
   crs?: string;
   geojson: FeatureCollection<Geometry, GeoJsonProperties>;
 }
-
-export interface ShapefileUploaderProps {
-  onSuccess: (data: ParsedShapefileData) => void;
-  onDiscard: () => void;
-  loadedData?: ParsedShapefileData | null;
-}

@@ -1,7 +1,7 @@
 import type { DbConfig } from "@/types/db";
-import type { ColumnMappingConfig } from "@/types/gis";
 import type { ParsedFileDataset } from "@/types/parsers";
 import {
+  type ColumnMappingConfig,
   type IComparisonEngine,
   type ComparisonSummary,
 } from "@/types/comparison";

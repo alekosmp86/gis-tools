@@ -12,10 +12,10 @@ export function utm19sToWgs84(easting: number, northing: number): [number, numbe
   const e2 = (a * a - b * b) / (a * a);
   const ePrime2 = (a * a - b * b) / (b * b);
 
-  const x = easting - 500000.0;
-  const y = northing - 10000000.0; // Southern Hemisphere
+  const xCoordinate = easting - 500000.0;
+  const yCoordinate = northing - 10000000.0; // Southern Hemisphere
 
-  const M = y / k0;
+  const M = yCoordinate / k0;
   const mu = M / (a * (1 - e2 / 4 - (3 * e2 * e2) / 64 - (5 * Math.pow(e2, 3)) / 256));
 
   const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
@@ -35,7 +35,7 @@ export function utm19sToWgs84(easting: number, northing: number): [number, numbe
   const T1 = tanPhi1 * tanPhi1;
   const C1 = ePrime2 * cosPhi1 * cosPhi1;
   const R1 = (a * (1 - e2)) / Math.pow(1 - e2 * sinPhi1 * sinPhi1, 1.5);
-  const D = x / (N1 * k0);
+  const D = xCoordinate / (N1 * k0);
 
   const latRad =
     phi1Rad -
@@ -61,18 +61,18 @@ export function utm19sToWgs84(easting: number, northing: number): [number, numbe
 /**
  * Checks whether a coordinate point is in UTM meters range (e.g. Easting 100000..900000, Northing 5000000..9000000)
  */
-function isUtmCoordinates(x: number, y: number): boolean {
-  return Math.abs(x) > 180 || Math.abs(y) > 90;
+function isUtmCoordinates(xCoordinate: number, yCoordinate: number): boolean {
+  return Math.abs(xCoordinate) > 180 || Math.abs(yCoordinate) > 90;
 }
 
 /**
- * Normalizes a coordinate pair [x, y] to [lon, lat] degrees.
+ * Normalizes a coordinate pair [xCoordinate, yCoordinate] to [lon, lat] degrees.
  */
-export function normalizeCoordinate(x: number, y: number): [number, number] {
-  if (isUtmCoordinates(x, y)) {
-    return utm19sToWgs84(x, y);
+export function normalizeCoordinate(xCoordinate: number, yCoordinate: number): [number, number] {
+  if (isUtmCoordinates(xCoordinate, yCoordinate)) {
+    return utm19sToWgs84(xCoordinate, yCoordinate);
   }
-  return [x, y];
+  return [xCoordinate, yCoordinate];
 }
 
 /**
@@ -86,8 +86,8 @@ export function parseEwkbHexToGeoJson(hexStr: string): Geometry | null {
 
   try {
     const bytes = new Uint8Array(cleanHex.length / 2);
-    for (let i = 0; i < cleanHex.length; i += 2) {
-      bytes[i / 2] = parseInt(cleanHex.substring(i, i + 2), 16);
+    for (let charIndex = 0; charIndex < cleanHex.length; charIndex += 2) {
+      bytes[charIndex / 2] = parseInt(cleanHex.substring(charIndex, charIndex + 2), 16);
     }
 
     const view = new DataView(bytes.buffer);
@@ -108,18 +108,18 @@ export function parseEwkbHexToGeoJson(hexStr: string): Geometry | null {
     }
 
     const parsePoint = (): [number, number] => {
-      const x = view.getFloat64(offset, littleEndian);
+      const xCoordinate = view.getFloat64(offset, littleEndian);
       offset += 8;
-      const y = view.getFloat64(offset, littleEndian);
+      const yCoordinate = view.getFloat64(offset, littleEndian);
       offset += 8;
-      return normalizeCoordinate(x, y);
+      return normalizeCoordinate(xCoordinate, yCoordinate);
     };
 
     const parseLineStringCoords = (): Array<[number, number]> => {
       const numPoints = view.getUint32(offset, littleEndian);
       offset += 4;
       const pts: Array<[number, number]> = [];
-      for (let i = 0; i < numPoints; i++) {
+      for (let pointIndex = 0; pointIndex < numPoints; pointIndex++) {
         pts.push(parsePoint());
       }
       return pts;
@@ -146,7 +146,7 @@ export function parseEwkbHexToGeoJson(hexStr: string): Geometry | null {
       const numRings = view.getUint32(offset, littleEndian);
       offset += 4;
       const rings: Array<Array<[number, number]>> = [];
-      for (let r = 0; r < numRings; r++) {
+      for (let ringIndex = 0; ringIndex < numRings; ringIndex++) {
         rings.push(parseLineStringCoords());
       }
       return {
@@ -160,7 +160,7 @@ export function parseEwkbHexToGeoJson(hexStr: string): Geometry | null {
       const numGeoms = view.getUint32(offset, littleEndian);
       offset += 4;
       const pts: Array<[number, number]> = [];
-      for (let i = 0; i < numGeoms; i++) {
+      for (let geomIndex = 0; geomIndex < numGeoms; geomIndex++) {
         offset += 5; // Sub-header (1 byte endian + 4 byte type)
         pts.push(parsePoint());
       }
@@ -175,7 +175,7 @@ export function parseEwkbHexToGeoJson(hexStr: string): Geometry | null {
       const numGeoms = view.getUint32(offset, littleEndian);
       offset += 4;
       const lines: Array<Array<[number, number]>> = [];
-      for (let i = 0; i < numGeoms; i++) {
+      for (let geomIndex = 0; geomIndex < numGeoms; geomIndex++) {
         offset += 5; // Sub-header (1 byte endian + 4 byte type)
         lines.push(parseLineStringCoords());
       }
@@ -190,12 +190,12 @@ export function parseEwkbHexToGeoJson(hexStr: string): Geometry | null {
       const numGeoms = view.getUint32(offset, littleEndian);
       offset += 4;
       const polys: Array<Array<Array<[number, number]>>> = [];
-      for (let i = 0; i < numGeoms; i++) {
+      for (let geomIndex = 0; geomIndex < numGeoms; geomIndex++) {
         offset += 5; // Sub-header (1 byte endian + 4 byte type)
         const numRings = view.getUint32(offset, littleEndian);
         offset += 4;
         const rings: Array<Array<[number, number]>> = [];
-        for (let r = 0; r < numRings; r++) {
+        for (let ringIndex = 0; ringIndex < numRings; ringIndex++) {
           rings.push(parseLineStringCoords());
         }
         polys.push(rings);

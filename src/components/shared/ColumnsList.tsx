@@ -1,7 +1,13 @@
 import React from "react";
 import { formatNumber } from "@/utils/formatters";
-import type { ColumnsListProps } from "@/types/ui";
 import styles from "./ColumnsList.module.css";
+
+export interface ColumnsListProps {
+  columns: string[];
+  totalRows?: number | null;
+  title?: string;
+  className?: string;
+}
 
 export const ColumnsList: React.FC<ColumnsListProps> = ({
   columns,
@@ -23,9 +29,9 @@ export const ColumnsList: React.FC<ColumnsListProps> = ({
       </div>
 
       <div className={styles.columnTags}>
-        {columns.map((col) => (
-          <span key={col} className={styles.colTag}>
-            {col}
+        {columns.map((column) => (
+          <span key={column} className={styles.colTag}>
+            {column}
           </span>
         ))}
       </div>

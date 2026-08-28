@@ -12,7 +12,7 @@ import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingSt
 import { Step4ResultsView } from "@/components/tools/db-sync-common/Step4ResultsView";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
 import { FileSourceKind, type ParsedFileDataset } from "@/types/parsers";
-import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/gis";
+import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
 import type { WizardStepDef } from "@/types/ui";
 
 export default function DbDbSyncToolPage() {

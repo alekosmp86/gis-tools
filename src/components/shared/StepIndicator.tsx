@@ -1,7 +1,13 @@
 import React from "react";
 import { Check } from "lucide-react";
-import type { StepIndicatorProps } from "@/types/ui";
+import type { WizardStepDef } from "@/types/ui";
 import styles from "./StepIndicator.module.css";
+
+export interface StepIndicatorProps {
+  currentStep: number;
+  steps?: WizardStepDef[];
+  onStepClick?: (stepId: number) => void;
+}
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({
   currentStep,
@@ -17,9 +23,9 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
         const isClickable = Boolean(onStepClick && step.id < currentStep);
         const isNotLast = index < steps.length - 1;
 
-        const handleKeyDown = (e: React.KeyboardEvent) => {
-          if (isClickable && onStepClick && (e.key === "Enter" || e.key === " ")) {
-            e.preventDefault();
+        const handleKeyDown = (event: React.KeyboardEvent) => {
+          if (isClickable && onStepClick && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
             onStepClick(step.id);
           }
         };

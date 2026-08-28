@@ -46,16 +46,6 @@ export interface DbConnectionStatusPayload {
   config: DbConfig;
 }
 
-export interface DbConnectionFormProps {
-  onSuccess: (
-    config: DbConfig,
-    columns: string[],
-    totalRows: number,
-    columnDetails?: DbColumnMetadata[]
-  ) => void;
-  onStatusChange?: (status: DbConnectionStatusPayload) => void;
-}
-
 export interface TestConnectionResponse {
   success: boolean;
   message?: string;

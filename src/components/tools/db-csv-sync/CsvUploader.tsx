@@ -11,7 +11,7 @@ import { formatNumber, formatFileSize } from "@/utils/formatters";
 import styles from "./CsvUploader.module.css";
 
 const SpatialMapPreview = dynamic(
-  () => import("@/components/shared/SpatialMapPreview").then((m) => m.SpatialMapPreview),
+  () => import("@/components/shared/SpatialMapPreview").then((module) => module.SpatialMapPreview),
   { ssr: false }
 );
 
@@ -51,35 +51,35 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
     if (files && files.length > 0) {
       processFile(files[0]);
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
     setIsDragOver(true);
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDragLeave = (event: React.DragEvent) => {
+    event.preventDefault();
     setIsDragOver(false);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
     setIsDragOver(false);
-    const files = e.dataTransfer.files;
+    const files = event.dataTransfer.files;
     if (files && files.length > 0) {
       processFile(files[0]);
     }
   };
 
-  const handleDropzoneKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
+  const handleDropzoneKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
       fileInputRef.current?.click();
     }
   };
@@ -195,4 +195,3 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
     </div>
   );
 };
-

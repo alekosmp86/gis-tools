@@ -23,8 +23,8 @@ export function useSqlBatchExecution({
   const [result, setResult] = useState<ExecuteBatchResult | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
 
-  const handleStartExecution = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleStartExecution = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!passwordInput.trim() || isExecuting) return;
 
     setIsExecuting(true);
@@ -33,14 +33,14 @@ export function useSqlBatchExecution({
     setResult(null);
 
     try {
-      const res = await executeSqlInChunks(
+      const batchResult = await executeSqlInChunks(
         dbConfig,
         passwordInput,
         activeScript,
-        (p) => setProgress(p),
+        (chunkProgress) => setProgress(chunkProgress),
         500
       );
-      setResult(res);
+      setResult(batchResult);
       setIsCompleted(true);
       setIsExecuting(false);
     } catch (err: unknown) {

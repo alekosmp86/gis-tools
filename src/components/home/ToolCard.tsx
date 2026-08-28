@@ -1,7 +1,12 @@
 import React from "react";
 import { Badge } from "../ui/Badge";
-import type { ToolCardProps } from "@/types/ui";
+import type { ToolCardData } from "@/types/ui";
 import styles from "./ToolCard.module.css";
+
+export interface ToolCardProps {
+  tool: ToolCardData;
+  onLaunch?: (toolId: string) => void;
+}
 
 export const ToolCard: React.FC<ToolCardProps> = ({ tool, onLaunch }) => {
   const IconComponent = tool.icon;
@@ -12,9 +17,9 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onLaunch }) => {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (tool.enabled && onLaunch && (e.key === "Enter" || e.key === " ")) {
-      e.preventDefault();
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (tool.enabled && onLaunch && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
       onLaunch(tool.id);
     }
   };

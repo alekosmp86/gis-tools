@@ -14,11 +14,11 @@ export function parseWktToGeoJson(wktStr: string): Geometry | null {
     // 1. POINT(x y) or POINT (x y)
     const pointMatch = str.match(/^POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)$/i);
     if (pointMatch) {
-      const x = parseFloat(pointMatch[1]);
-      const y = parseFloat(pointMatch[2]);
+      const xCoordinate = parseFloat(pointMatch[1]);
+      const yCoordinate = parseFloat(pointMatch[2]);
       return {
         type: "Point",
-        coordinates: normalizeCoordinate(x, y),
+        coordinates: normalizeCoordinate(xCoordinate, yCoordinate),
       };
     }
 
@@ -26,8 +26,8 @@ export function parseWktToGeoJson(wktStr: string): Geometry | null {
     const lineMatch = str.match(/^LINESTRING\s*\((.+)\)$/i);
     if (lineMatch) {
       const coordsStr = lineMatch[1];
-      const pts = coordsStr.split(",").map((p) => {
-        const [xStr, yStr] = p.trim().split(/\s+/);
+      const pts = coordsStr.split(",").map((pointPair) => {
+        const [xStr, yStr] = pointPair.trim().split(/\s+/);
         return normalizeCoordinate(parseFloat(xStr), parseFloat(yStr));
       });
       return {
@@ -43,8 +43,8 @@ export function parseWktToGeoJson(wktStr: string): Geometry | null {
       const ringStrings = ringsRaw.split(/\)\s*,\s*\(/);
       const rings = ringStrings.map((ringStr) => {
         const cleanRing = ringStr.replace(/^\(/, "").replace(/\)$/, "").trim();
-        return cleanRing.split(",").map((p) => {
-          const [xStr, yStr] = p.trim().split(/\s+/);
+        return cleanRing.split(",").map((pointPair) => {
+          const [xStr, yStr] = pointPair.trim().split(/\s+/);
           return normalizeCoordinate(parseFloat(xStr), parseFloat(yStr));
         });
       });
@@ -63,8 +63,8 @@ export function parseWktToGeoJson(wktStr: string): Geometry | null {
         const ringStrings = polyStr.split(/\)\s*,\s*\(/);
         return ringStrings.map((ringStr) => {
           const cleanRing = ringStr.replace(/^\(/, "").replace(/\)$/, "").trim();
-          return cleanRing.split(",").map((p) => {
-            const [xStr, yStr] = p.trim().split(/\s+/);
+          return cleanRing.split(",").map((pointPair) => {
+            const [xStr, yStr] = pointPair.trim().split(/\s+/);
             return normalizeCoordinate(parseFloat(xStr), parseFloat(yStr));
           });
         });

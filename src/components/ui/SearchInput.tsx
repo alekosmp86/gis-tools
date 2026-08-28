@@ -1,7 +1,13 @@
 import React from "react";
 import { Search } from "lucide-react";
-import type { SearchInputProps } from "@/types/ui";
 import styles from "./SearchInput.module.css";
+
+export interface SearchInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+}
 
 export const SearchInput: React.FC<SearchInputProps> = ({
   value,
@@ -16,7 +22,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         type="text"
         placeholder={placeholder}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(event) => onChange(event.target.value)}
       />
     </div>
   );

@@ -10,7 +10,11 @@ export const MapProgressBar: React.FC<MapProgressBarProps> = ({ progressPct }) =
     <div className={styles.progressBarTrack}>
       <div
         className={styles.progressBarFill}
-        style={{ width: `${progressPct}%` } as React.CSSProperties}
+        ref={(element) => {
+          if (element) {
+            element.style.width = `${progressPct}%`;
+          }
+        }}
       />
     </div>
   );

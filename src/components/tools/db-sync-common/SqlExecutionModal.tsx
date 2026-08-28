@@ -50,7 +50,7 @@ export const SqlExecutionModal: React.FC<SqlExecutionModalProps> = ({
 
   return (
     <div className={styles.overlay} onClick={handleClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div className={styles.modal} onClick={(event) => event.stopPropagation()}>
         <SqlExecutionHeader
           isExecuting={isExecuting}
           isCompleted={isCompleted}

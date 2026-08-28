@@ -2,7 +2,7 @@ import React from "react";
 import { formatNumber } from "@/utils/formatters";
 import styles from "./ProgressBar.module.css";
 
-interface ProgressBarProps {
+export interface ProgressBarProps {
   phase: string;
   current: number;
   total: number;
@@ -17,7 +17,14 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ phase, current, total,
         <span className={styles.pctLabel}>{pct}%</span>
       </div>
       <div className={styles.track}>
-        <div className={styles.fill} style={{ width: `${pct}%` }} />
+        <div
+          className={styles.fill}
+          ref={(element) => {
+            if (element) {
+              element.style.width = `${pct}%`;
+            }
+          }}
+        />
       </div>
       {total > 0 && (
         <div className={styles.countRow}>

@@ -6,11 +6,18 @@ import { SqlPatchTabs } from "./SqlPatchTabs";
 import { SqlPatchPreviewBox } from "./SqlPatchPreviewBox";
 import { SqlExecutionModal } from "./SqlExecutionModal";
 import { SqlScriptType } from "@/types/comparison";
-import type { SqlPatchDrawerProps } from "@/types/comparison";
-import type { ExecuteBatchResult } from "@/types/db";
+import type { DbConfig, ExecuteBatchResult } from "@/types/db";
 import { AlertType } from "@/types/ui";
 import { formatNumber } from "@/utils/formatters";
 import styles from "./SqlPatchDrawer.module.css";
+
+export interface SqlPatchDrawerProps {
+  sqlUpdateScript: string;
+  sqlInsertScript: string;
+  tableName: string;
+  dbConfig: DbConfig;
+  onExecutingChange?: (executing: boolean) => void;
+}
 
 export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
   sqlUpdateScript,
