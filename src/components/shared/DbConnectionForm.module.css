@@ -191,16 +191,56 @@
 }
 
 @media (max-width: 768px) {
+  .formContainer {
+    padding: 18px 16px;
+    gap: 18px;
+  }
+
   .inputGrid {
     grid-template-columns: 1fr;
+  }
+
+  .profilesBar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
 
   .profilesControls {
     max-width: 100%;
     width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .profileSelect {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .prefRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .saveProfileGroup {
+    flex-wrap: wrap;
   }
 
   .profileNameInput {
-    min-width: 140px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .actionsRow,
+  .proceedArea {
+    width: 100%;
+  }
+
+  .actionsRow button,
+  .proceedArea button {
+    width: 100%;
+    justify-content: center;
   }
 }

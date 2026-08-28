@@ -57,3 +57,14 @@
   max-width: 100%;
   line-height: 1.6;
 }
+
+@media (max-width: 768px) {
+  .main {
+    padding: 18px 16px 40px 16px;
+    gap: 20px;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+}

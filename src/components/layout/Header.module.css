@@ -74,3 +74,36 @@
   background-color: var(--accent-emerald);
   box-shadow: 0 0 10px var(--accent-emerald);
 }
+
+@media (max-width: 768px) {
+  .headerContent {
+    padding: 0 16px;
+  }
+
+  .headerActions {
+    display: none;
+  }
+
+  .brandName {
+    font-size: 1.05rem;
+  }
+
+  .brandSub {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .logoArea {
+    gap: 8px;
+  }
+
+  .logoIcon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .brandName {
+    font-size: 0.95rem;
+  }
+}

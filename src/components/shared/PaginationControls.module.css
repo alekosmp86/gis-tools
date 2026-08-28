@@ -81,3 +81,28 @@
   opacity: 0.3;
   cursor: not-allowed;
 }
+
+@media (max-width: 640px) {
+  .paginationBar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .paginationControls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .pageSizeGroup {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .pageButtons {
+    justify-content: center;
+    width: 100%;
+  }
+}

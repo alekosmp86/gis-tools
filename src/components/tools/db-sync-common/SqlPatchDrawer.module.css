@@ -143,3 +143,42 @@
   margin-bottom: 8px;
   border: 1px solid rgba(245, 158, 11, 0.2);
 }
+
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .titleGroup {
+    min-width: 0;
+  }
+
+  .actionButtons {
+    width: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+
+  .actionButtons button {
+    flex: 1;
+    min-width: 120px;
+    justify-content: center;
+  }
+
+  .scriptTabs {
+    width: 100%;
+  }
+
+  .scriptTabBtn {
+    flex: 1;
+    min-width: 130px;
+    justify-content: center;
+    padding: 8px 12px;
+  }
+}

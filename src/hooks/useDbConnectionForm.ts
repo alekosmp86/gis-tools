@@ -9,6 +9,7 @@ import {
   generateDefaultProfileName,
 } from "@/services/localStorageDbConfig";
 import { AlertType } from "@/types/ui";
+import { formatNumber } from "@/utils/formatters";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormProps, SavedDbProfile } from "@/types/db";
 
 export function useDbConnectionForm(
@@ -126,7 +127,7 @@ export function useDbConnectionForm(
 
         setStatusMessage({
           type: AlertType.SUCCESS,
-          text: `Conexión establecida con éxito. Se encontraron ${data.columns.length} columnas y ${data.totalRows} registros en '${data.schema}.${data.tableName}'.`,
+          text: `Conexión establecida con éxito. Se encontraron ${formatNumber(data.columns.length)} columnas y ${formatNumber(data.totalRows)} registros en '${data.schema}.${data.tableName}'.`,
         });
       },
       onError: (err) => {

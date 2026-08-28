@@ -6,7 +6,8 @@
   background: rgba(9, 13, 22, 0.6);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  min-width: 280px;
+  min-width: 260px;
+  box-sizing: border-box;
 }
 
 .searchBox input {
@@ -25,4 +26,11 @@
 .icon {
   color: var(--text-dim);
   flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .searchBox {
+    min-width: 0;
+    width: 100%;
+  }
 }

@@ -272,3 +272,34 @@
 :global(.leaflet-popup-close-button:hover) {
   color: #0f172a !important;
 }
+
+@media (max-width: 640px) {
+  .mapContainer {
+    height: 340px;
+  }
+
+  .mapHeaderBar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+  }
+
+  .mapHeaderLeft {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .mapControls {
+    justify-content: flex-end;
+  }
+
+  .legendPanel {
+    bottom: 10px;
+    left: 8px;
+    padding: 6px 10px;
+    font-size: 0.7rem;
+  }
+}

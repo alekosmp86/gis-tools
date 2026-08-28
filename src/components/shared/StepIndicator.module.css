@@ -142,3 +142,52 @@
 .connectorCompleted {
   background: linear-gradient(90deg, var(--accent-emerald) 0%, rgba(6, 182, 212, 0.6) 100%);
 }
+
+@media (max-width: 992px) {
+  .stepSubtitle {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .stepperContainer {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+
+  .iconCircle {
+    width: 32px;
+    height: 32px;
+  }
+
+  .stepTitle {
+    font-size: 0.775rem;
+  }
+
+  .stepConnector {
+    margin: 0 6px;
+    min-width: 8px;
+  }
+}
+
+@media (max-width: 580px) {
+  .stepperContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+
+  .stepWrapper {
+    flex: 0 0 auto;
+  }
+
+  .stepItem {
+    white-space: nowrap;
+  }
+
+  .stepConnector {
+    flex: 0 0 16px;
+    min-width: 16px;
+  }
+}

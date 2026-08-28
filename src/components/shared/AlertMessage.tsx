@@ -30,8 +30,8 @@ export const AlertMessage: React.FC<AlertMessageProps> = ({
 
   return (
     <div className={`${styles.alert} ${alertClass} ${className}`}>
-      <Icon size={18} />
-      <span>{text}</span>
+      <Icon size={18} className={styles.alertIcon} />
+      <span className={styles.alertText}>{text}</span>
     </div>
   );
 };

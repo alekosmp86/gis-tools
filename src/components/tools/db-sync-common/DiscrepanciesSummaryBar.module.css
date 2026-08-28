@@ -110,3 +110,27 @@
   font-size: 0.75rem;
   color: var(--text-dim);
 }
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+    gap: 10px;
+  }
+
+  .kpiCard {
+    padding: 12px 14px;
+    gap: 6px;
+  }
+
+  .cardValue {
+    font-size: 1.35rem;
+  }
+
+  .cardTitle {
+    font-size: 0.7rem;
+  }
+
+  .cardSub {
+    font-size: 0.7rem;
+  }
+}

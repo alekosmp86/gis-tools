@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { Upload, FileCheck, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
-import { AlertType } from "@/types/ui";
+import { AlertType, ButtonVariant } from "@/types/ui";
 import type { ParsedFileDataset } from "@/types/parsers";
 import { ShapefileParser } from "@/services/parsers/ShapefileParser";
 import { CsvParser } from "@/services/parsers/CsvParser";
@@ -98,17 +98,26 @@ export const FileViewerUploader: React.FC<FileViewerUploaderProps> = ({
       {parsedDataset ? (
         <div className={styles.activeFileInfo}>
           <div className={styles.fileDetails}>
-            <FileCheck size={20} className={styles.fileIcon} />
-            <div>
-              <div className={styles.fileName}>{parsedDataset.fileName}</div>
+            <div className={styles.fileIconWrapper}>
+              <FileCheck size={20} className={styles.fileIcon} />
+            </div>
+            <div className={styles.fileTexts}>
+              <div className={styles.fileName} title={parsedDataset.fileName}>
+                {parsedDataset.fileName}
+              </div>
               <div className={styles.fileMeta}>
                 {formatFileSize(parsedDataset.fileSize)} &bull; {formatNumber(parsedDataset.featureCount)} registros
               </div>
             </div>
           </div>
 
-          <Button variant="secondary" onClick={handleClear} type="button">
-            <RefreshCw size={15} />
+          <Button
+            variant={ButtonVariant.SECONDARY}
+            onClick={handleClear}
+            type="button"
+            className={styles.reloadBtn}
+          >
+            <RefreshCw size={14} className={styles.reloadIcon} />
             <span>Cargar otro archivo</span>
           </Button>
         </div>

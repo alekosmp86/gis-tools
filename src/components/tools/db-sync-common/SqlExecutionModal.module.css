@@ -338,3 +338,58 @@
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(15, 23, 42, 0.8);
 }
+
+@media (max-width: 640px) {
+  .modal {
+    max-width: 100%;
+    border-radius: 12px;
+  }
+
+  .modalHeader {
+    padding: 16px;
+  }
+
+  .title {
+    font-size: 0.95rem;
+  }
+
+  .subtitle {
+    font-size: 0.75rem;
+  }
+
+  .modalBody {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .infoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .metricGrid {
+    gap: 6px;
+  }
+
+  .metricCard {
+    padding: 8px 4px;
+  }
+
+  .metricValue {
+    font-size: 0.95rem;
+  }
+
+  .metricLabel {
+    font-size: 0.625rem;
+  }
+
+  .modalFooter {
+    padding: 12px 16px;
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .modalFooter button {
+    width: 100%;
+    justify-content: center;
+  }
+}
