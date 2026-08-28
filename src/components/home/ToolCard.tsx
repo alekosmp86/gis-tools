@@ -1,15 +1,34 @@
 import React from "react";
-import { ArrowRight } from "lucide-react";
 import { Badge } from "../ui/Badge";
-import { Button } from "../ui/Button";
 import type { ToolCardProps } from "@/types/ui";
 import styles from "./ToolCard.module.css";
 
 export const ToolCard: React.FC<ToolCardProps> = ({ tool, onLaunch }) => {
   const IconComponent = tool.icon;
 
+  const handleClick = () => {
+    if (tool.enabled && onLaunch) {
+      onLaunch(tool.id);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (tool.enabled && onLaunch && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      onLaunch(tool.id);
+    }
+  };
+
   return (
-    <div className={`glass-panel ${styles.card}`}>
+    <div
+      role={tool.enabled ? "button" : undefined}
+      tabIndex={tool.enabled ? 0 : undefined}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className={`glass-panel ${styles.card} ${
+        tool.enabled ? styles.clickable : styles.disabled
+      }`}
+    >
       <div className={styles.cardHeader}>
         <div className={styles.cardIcon}>
           <IconComponent size={24} />
@@ -17,7 +36,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onLaunch }) => {
         <Badge variant={tool.badge.type}>{tool.badge.label}</Badge>
       </div>
 
-      <div>
+      <div className={styles.cardBody}>
         <h3 className={styles.cardTitle}>{tool.title}</h3>
         <p className={styles.cardDesc}>{tool.description}</p>
 
@@ -28,17 +47,6 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onLaunch }) => {
             </span>
           ))}
         </div>
-      </div>
-
-      <div className={styles.cardFooter}>
-        <Button
-          variant="primary"
-          isDisabled={!tool.enabled}
-          onClick={() => tool.enabled && onLaunch && onLaunch(tool.id)}
-        >
-          <span>{tool.actionLabel}</span>
-          {tool.enabled && <ArrowRight size={16} />}
-        </Button>
       </div>
     </div>
   );

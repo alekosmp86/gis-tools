@@ -1,13 +1,46 @@
 .card {
-  padding: 20px;
-  border-radius: 14px;
+  padding: 24px;
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 16px;
   position: relative;
   overflow: hidden;
-  min-height: 220px;
+  min-height: 200px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover {
+  transform: translateY(-4px);
+  border-color: rgba(6, 182, 212, 0.45);
+  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.6), 0 0 24px 0 var(--accent-cyan-glow);
+}
+
+.clickable:hover .cardIcon {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: var(--accent-cyan);
+  color: #38bdf8;
+  transform: scale(1.05);
+}
+
+.clickable:hover .cardTitle {
+  color: #38bdf8;
+}
+
+.clickable:focus-visible {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px var(--accent-cyan-glow);
+}
+
+.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .cardHeader {
@@ -18,9 +51,9 @@
 }
 
 .cardIcon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   background: rgba(6, 182, 212, 0.1);
   border: 1px solid rgba(6, 182, 212, 0.2);
   display: flex;
@@ -28,21 +61,29 @@
   justify-content: center;
   color: var(--accent-cyan);
   flex-shrink: 0;
+  transition: all 0.25s ease;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 .cardTitle {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 700;
   margin-top: 8px;
   letter-spacing: -0.01em;
   color: var(--text-main);
+  transition: color 0.2s ease;
 }
 
 .cardDesc {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
-  line-height: 1.5;
-  margin-top: 6px;
+  line-height: 1.55;
+  margin-top: 8px;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -53,23 +94,21 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 14px;
 }
 
 .tag {
   font-size: 0.725rem;
   font-family: var(--font-mono);
-  padding: 2px 7px;
+  padding: 3px 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-dim);
   border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: color 0.2s ease, border-color 0.2s ease;
 }
 
-.cardFooter {
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+.clickable:hover .tag {
+  border-color: rgba(6, 182, 212, 0.2);
+  color: var(--text-muted);
 }

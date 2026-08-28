@@ -12,7 +12,6 @@ import { ToolCard } from "@/components/home/ToolCard";
 import { FeatureHighlights } from "@/components/home/FeatureHighlights";
 import { toolsList, toolCategories } from "@/data/toolsData";
 import { ToolCategory } from "@/types/gis";
-import { Plus } from "lucide-react";
 
 export default function Home() {
   const router = useRouter();
@@ -64,21 +63,6 @@ export default function Home() {
           {filteredTools.map((tool) => (
             <ToolCard key={tool.id} tool={tool} onLaunch={handleLaunch} />
           ))}
-
-          {/* Add New Tool Request Card */}
-          <div className={`glass-panel ${styles.addCard}`}>
-            <div className={styles.addIcon}>
-              <Plus size={24} />
-            </div>
-            <div>
-              <h4 className={styles.addTitle}>
-                Solicitar Nueva Herramienta SIG
-              </h4>
-              <p className={styles.addText}>
-                Agregue conversores espaciales personalizados, validadores o calculadoras.
-              </p>
-            </div>
-          </div>
         </section>
 
         <FeatureHighlights />
