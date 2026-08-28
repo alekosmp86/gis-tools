@@ -29,23 +29,38 @@ export const ToolCategory = {
 export type ToolCategory = (typeof ToolCategory)[keyof typeof ToolCategory];
 
 export interface StepItemData {
-  id: number;
-  title: string;
-  subtitle: string;
-  icon: LucideIcon;
+  readonly id: number;
+  readonly title: string;
+  readonly subtitle: string;
+  readonly icon: LucideIcon;
 }
 
-export interface ToolCardData {
-  id: string;
-  title: string;
-  category: ToolCategory[];
-  badge: { label: string; type: BadgeVariant };
-  icon: LucideIcon;
-  description: string;
-  tags: string[];
-  enabled: boolean;
-  route?: string;
+export interface ToolBadgeData {
+  readonly label: string;
+  readonly type: BadgeVariant;
 }
+
+export interface BaseToolCardData {
+  readonly id: string;
+  readonly title: string;
+  readonly category: readonly ToolCategory[];
+  readonly badge: ToolBadgeData;
+  readonly icon: LucideIcon;
+  readonly description: string;
+  readonly tags: readonly string[];
+}
+
+export interface EnabledToolCardData extends BaseToolCardData {
+  readonly enabled: true;
+  readonly route: string;
+}
+
+export interface DisabledToolCardData extends BaseToolCardData {
+  readonly enabled: false;
+  readonly route?: string;
+}
+
+export type ToolCardData = EnabledToolCardData | DisabledToolCardData;
 
 export const ButtonVariant = {
   PRIMARY: "primary",
@@ -56,23 +71,23 @@ export const ButtonVariant = {
 export type ButtonVariant = (typeof ButtonVariant)[keyof typeof ButtonVariant];
 
 export interface FeatureHighlightData {
-  icon: LucideIcon;
-  title: string;
-  description: string;
+  readonly icon: LucideIcon;
+  readonly title: string;
+  readonly description: string;
 }
 
 export interface WizardStepDef {
-  id: number;
-  title: string;
-  subtitle: string;
-  cardTitle?: string;
-  cardSubtitle?: string;
-  icon: LucideIcon;
-  content: React.ReactNode;
-  canProceed?: boolean;
-  onNext?: () => void;
-  nextLabel?: string;
-  onBack?: () => void;
-  backLabel?: string;
-  hideFooter?: boolean;
+  readonly id: number;
+  readonly title: string;
+  readonly subtitle: string;
+  readonly cardTitle?: string;
+  readonly cardSubtitle?: string;
+  readonly icon: LucideIcon;
+  readonly content: React.ReactNode;
+  readonly canProceed?: boolean;
+  readonly onNext?: () => void;
+  readonly nextLabel?: string;
+  readonly onBack?: () => void;
+  readonly backLabel?: string;
+  readonly hideFooter?: boolean;
 }
