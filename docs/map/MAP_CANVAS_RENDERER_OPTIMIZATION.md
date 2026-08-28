@@ -1,92 +1,45 @@
-# Map Performance Optimization — Shared Leaflet Canvas Renderer
+# Map Performance Optimization, Sub-Hooks & Dynamic Symbology
 
-> **Topic**: Vector feature rendering performance optimization for large spatial datasets.  
-> **Date**: 2026-08-26  
-> **Status**: Implemented & Merged to `master`
-
----
-
-## 1. Diagnostic & Bottleneck Analysis
-
-### The Problem
-When displaying thousands of spatial features (lines, polygons, points) on the map preview component (`SpatialMapPreview` → `useLeafletMap`), **zooming and panning interactions became sluggish and unresponsive**.
-
-### Micro-Batch Chunking vs DOM Repaint
-Features were already streamed progressively using a Web Worker (`mapChunkWorker.ts`) in micro-batches of 400. While chunking prevented UI lockup during initial load, **interaction performance after rendering remained poor**.
-
-### Root Cause: SVG DOM Node Accumulation
-Leaflet defaults to **SVG rendering**. Each vector feature generates an individual `<path>` or `<circle>` SVG DOM element.
-- 10,000 features = 10,000 SVG DOM elements.
-- Every zoom or pan event triggers a **full DOM recalculation and repaint** of all visible nodes.
-- DOM node count growth creates a severe performance bottleneck.
+> **Topic**: Vector feature rendering performance, sub-hook map architecture, and dynamic layer symbology.  
+> **Status**: Implemented & Production Active
 
 ---
 
-## 2. Technical Solution — Shared Canvas Renderer
+## 1. Sub-Hook Map Architecture
 
-### Implementation (`src/hooks/useLeafletMap.ts`)
-Instantiated a single shared HTML5 Canvas renderer when the Leaflet map initializes:
+The Leaflet map engine inside [`useLeafletMap.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useLeafletMap.ts) functions as a clean facade orchestrating 5 single-responsibility sub-hooks located in `src/hooks/map/`:
 
-```typescript
-// Shared Canvas renderer ref — all vector layers draw onto a single <canvas> element
-// instead of individual SVG DOM nodes, giving much faster pan/zoom repaints.
-const canvasRendererRef = useRef<L.Canvas | null>(null);
-
-useEffect(() => {
-  if (!mapInstanceRef.current) return;
-  // Initialize canvas with padding so features outside viewport edge don't clip during fast pan
-  canvasRendererRef.current = L.canvas({ padding: 0.5 });
-}, []);
-```
-
-Configured `renderer` across layer creation:
-
-#### 1. Polygon & Line Layers (`PathOptions`)
-```typescript
-const geojsonSubLayer = L.geoJSON(chunkCollection, {
-  style: (feature) => ({
-    renderer: canvasRendererRef.current ?? undefined,
-    color,
-    weight: 4.5,
-    opacity: 0.9,
-  }),
-});
-```
-
-#### 2. Point Layers (`CircleMarkerOptions`)
-```typescript
-pointToLayer: (feature, latlng) => {
-  return L.circleMarker(latlng, {
-    renderer: canvasRendererRef.current ?? undefined,
-    radius: 7,
-    fillColor: color,
-    color: "#ffffff",
-    weight: 2,
-    opacity: 1,
-    fillOpacity: 0.9,
-  });
-}
-```
-
-> **TypeScript Note**: `renderer` is a property of `PathOptions` (returned by `style()`) and `CircleMarkerOptions`. It is **not** a valid property on `GeoJSONOptions`.
+- **[`useMapInstance.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useMapInstance.ts)**: Handles DOM container mounting, Leaflet instance creation, HTML5 Canvas renderer (`L.canvas({ padding: 0.5 })`), and publishes the `isMapReady` state signal.
+- **[`useBasemapTileLayer.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useBasemapTileLayer.ts)**: Manages smooth basemap tile switching (OpenStreetMap, Esri World Imagery Satellite, and CartoDB Dark Matter).
+- **[`useVectorChunkStream.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useVectorChunkStream.ts)**: Receives GeoJSON feature collections, offloads indexing to `mapChunkWorker.ts`, and streams 400-feature micro-batches without locking up the UI thread.
+- **[`useFeatureHighlight.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useFeatureHighlight.ts)**: Listens for attribute table record selections, renders a glowing target highlight overlay, and smoothly pans/zooms the map camera (`flyTo` / `panTo`).
+- **[`useLayerSymbology.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useLayerSymbology.ts)**: Listens to symbology state updates and applies 60fps dynamic styling to all canvas vector layers without rebuilding the feature index.
 
 ---
 
-## 3. SVG vs Canvas Comparison
+## 2. Dynamic Layer Symbology Popover Panel
+
+Users can customize vector feature rendering dynamically using [`MapStylePopover.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/map/MapStylePopover.tsx):
+
+### Customization Options
+- **Color Swatches & Custom Picker**: Preset color palette (Cyan, Emerald, Amber, Rose, Purple, Blue, Slate) plus native color picker.
+- **Line Weight**: 1px to 10px range slider (`weight`).
+- **Stroke & Fill Opacity**: Independent opacity sliders from 0.0 to 1.0 (`opacity` / `fillOpacity`).
+- **Point Radius**: 4px to 18px range slider for `L.circleMarker` point layers.
+- **Line Patterns**: Buttons for `SOLID`, `DASHED` (`dashArray: "8, 8"`), and `DOTTED` (`dashArray: "3, 6"`).
+
+---
+
+## 3. Shared Canvas Renderer (`L.canvas`) Optimization
+
+### SVG vs Canvas Comparison
+Leaflet defaults to SVG rendering, where each vector feature generates an individual `<path>` or `<circle>` DOM node. Rendering 10,000 features creates 10,000 DOM elements, causing severe DOM repaint lag during zoom and pan events.
+
+### HTML5 Canvas Solution
+By passing `L.canvas({ padding: 0.5 })` to `PathOptions` and `CircleMarkerOptions`, all features draw onto a single `<canvas>` element:
 
 | Metric | SVG (Previous) | Canvas (Current) |
 |---|---|---|
 | DOM Node Count | 1 node per feature (thousands) | **1 `<canvas>` element total** |
 | Pan / Zoom Repaint Cost | N × DOM recalculations | Single GPU/Canvas redraw |
-| Memory Overhead | Scales linearly with feature count | Low & constant |
 | Frame Rate (Pan/Zoom) | ~15–20 fps (laggy) | **Smooth 60 fps** |
-
----
-
-## 4. Scalability Decision Matrix
-
-| Strategy | Feature Count Limit | Implementation Effort | Status |
-|---|---|---|---|
-| **Canvas Renderer (`L.canvas`)** | Up to ~50,000 features | Minimal (~10 lines) | ✅ Implemented |
-| **`Leaflet.VectorGrid`** | 20,000 – 500,000 features | Medium (1–2 days) | 📋 Planned Phase 2 |
-| **`MapLibre GL JS` (WebGL)** | Millions of features | High (3–5 days) | 📋 Planned Phase 3 |

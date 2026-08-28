@@ -1,34 +1,36 @@
-# Arquitectura del Orquestador de Wizard y Desacoplamiento de Pasos
+# Wizard Orchestrator Architecture & Step Decoupling
 
-> **Módulo**: `src/components/shared/WizardOrchestrator.tsx` & `.module.css`  
-> **Fecha**: 2026-08-27  
-> **Estado**: Implementado & Puesto en Producción  
-
----
-
-## 1. Visión General y Motivación
-
-Anteriormente, cada formulario y vista interior (`DbConnectionForm`, `CsvUploader`, `ShapefileUploader`, `SuidMappingStep`, `Step4ResultsView`) administraba sus propios encabezados fijos (ej. `1. Configurar Conexión...`) y sus propios botones de navegación interna para avanzar o retroceder de paso.
-
-Esta responsabilidad cruzada acoplaba de forma rígida los componentes interiores a un número de paso específico, impidiendo su reutilización en otros flujos de trabajo (como en la herramienta de sincronización DB vs. DB, donde se requieren dos instancias de conexión a BD).
-
-### Solución Implementada: Patrón Orquestador Declarativo (`WizardOrchestrator`)
-Se creó el componente contenedor **`WizardOrchestrator`** que asume la responsabilidad exclusiva de:
-1. Renderizar la **barra stepper de progreso** (`StepIndicator`).
-2. Envolver el contenido del paso activo en una **tarjeta master glassmorphism** con bordes y luces de acento.
-3. Mostrar la **cabecera unificada** del paso activo (Pill `Paso N de M`, título, subtítulo e icono).
-4. Proveer la **barra de navegación inferior** con botones de `Volver` y `Continuar`.
-5. Ejecutar **desplazamiento automático suave (Smooth Scroll)** hacia el tope del wizard en cada transición de paso.
+> **Module**: `src/components/shared/WizardOrchestrator.tsx` & `.module.css`  
+> **Status**: Implemented & Production Active
 
 ---
 
-## 2. Definiciones de Tipos (`src/types/ui.ts`)
+## 1. Overview & Rationale
+
+Previously, each child form and tool view (`DbConnectionForm`, `CsvUploader`, `ShapefileUploader`, `SuidMappingStep`, `Step4ResultsView`) managed its own hardcoded step titles (e.g., `1. Configure Connection...`) and internal back/next buttons.
+
+This cross-cutting concern tightly coupled inner components to specific step positions, preventing them from being reused in other workflows (such as the DB vs. DB sync tool, which requires two separate DB connection form instances).
+
+### Solution: Declarative `WizardOrchestrator` Pattern
+The container component **`WizardOrchestrator`** assumes exclusive responsibility for:
+1. Rendering the progress stepper bar ([`StepIndicator`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/StepIndicator.tsx)).
+2. Wrapping the active step content inside a master glassmorphism card container.
+3. Displaying unified step headers (`Step N of M` badge, title, subtitle, and Lucide icon).
+4. Providing the bottom orchestration navigation footer with `Back` and `Continue` buttons.
+5. Executing automatic smooth scrolling (`scrollIntoView({ behavior: "smooth" })`) to the top of the wizard on every step transition.
+
+---
+
+## 2. Type Definitions
 
 ```typescript
+// In src/types/ui.ts
 export interface WizardStepDef {
   id: number;
   title: string;
   subtitle: string;
+  cardTitle?: string;
+  cardSubtitle?: string;
   icon: LucideIcon;
   content: React.ReactNode;
   canProceed?: boolean;
@@ -39,24 +41,21 @@ export interface WizardStepDef {
   hideFooter?: boolean;
 }
 
+// Co-located inside src/components/shared/WizardOrchestrator.tsx
 export interface WizardOrchestratorProps {
   steps: WizardStepDef[];
   currentStep: number;
   onStepClick?: (stepId: number) => void;
-  step1Title?: string;
-  step1Subtitle?: string;
-  fileStepTitle?: string;
-  fileStepSubtitle?: string;
 }
 ```
 
 ---
 
-## 3. Patrón de Referencias Imperativas (`React.forwardRef`)
+## 3. Imperative Ref Pattern (`React.forwardRef`)
 
-Para mantener los formularios y cargadores interiores 100% agnósticos al paso en el que se encuentran, los componentes exponen un método imperativo `proceed()` mediante `React.forwardRef` y `useImperativeHandle`:
+To keep inner forms and file uploaders 100% agnostic of their step position, components expose an imperative `proceed()` method via `React.forwardRef` and `useImperativeHandle`:
 
-### Ejemplo: `DbConnectionForm.tsx`
+### Example: `DbConnectionForm.tsx`
 ```typescript
 export interface DbConnectionFormRef {
   proceed: () => void;
@@ -75,15 +74,16 @@ export const DbConnectionForm = React.forwardRef<DbConnectionFormRef, DbConnecti
 );
 ```
 
-Cuando el usuario hace clic en el botón **"Continuar"** en la barra inferior del `WizardOrchestrator`, el orquestador invoca la función `onNext` definida en el arreglo de pasos de la página:
+When the user clicks **"Continue"** in the `WizardOrchestrator` bottom bar, the orchestrator triggers the `onNext` callback defined in the page step definition:
 
 ```typescript
-// En app/tools/db-db-sync/page.tsx
+// In app/tools/db-db-sync/page.tsx
 const steps: WizardStepDef[] = [
   {
     id: 1,
-    title: "Configurar Base de Datos Origen (DB 1)",
-    subtitle: "Ingrese las credenciales para conectar a la tabla de base de datos fuente.",
+    title: "Source Database (DB 1)",
+    subtitle: "Credentials and Table",
+    cardTitle: "Connect to Source PostgreSQL Database (DB 1)",
     icon: Database,
     content: (
       <DbConnectionForm
@@ -102,21 +102,21 @@ const steps: WizardStepDef[] = [
 
 ---
 
-## 4. Aislamiento de Estado e Identidad de Componentes (`key`)
+## 4. State Isolation & React `key` Identity
 
-En herramientas que reutilizan el mismo componente en múltiples pasos (como DB vs. DB, donde el Paso 1 y el Paso 2 renderizan `<DbConnectionForm />`), React por defecto preservaría el estado interno de la instancia al cambiar `currentStep`.
+In tools that reuse the same component across multiple steps (such as DB vs. DB sync, where Step 1 and Step 2 both render `<DbConnectionForm />`), React would default to preserving internal instance state across step changes.
 
-Para garantizar un aislamiento total del estado:
-1. **Llaves Únicas en la Página**: Se asignan propiedades `key` explícitas (`key="db1-form"` y `key="db2-form"`).
-2. **Llave Dinámica en el Orquestador**: El `WizardOrchestrator` envuelve el contenido activo en `<div key={`step-content-${activeStep.id}`} className={styles.content}>`.
+To ensure total state isolation:
+1. **Explicit Keys on Page**: Distinct keys are assigned (`key="db1-form"` and `key="db2-form"`).
+2. **Dynamic Key in Orchestrator**: `WizardOrchestrator` wraps active step content in `<div key={`step-content-${activeStep.id}`} className={styles.content}>`.
 
-Esto fuerza a React a desmontar limpiamente la instancia del paso anterior y montar una completamente nueva y limpia para el nuevo paso.
+This forces React to unmount the previous step's instance cleanly and mount a fresh, unpolluted component instance for the new step.
 
 ---
 
-## 5. Navegación Suave al Cambiar de Paso (`smoothScroll`)
+## 5. Smooth Transition Scrolling (`smoothScroll`)
 
-El `WizardOrchestrator` implementa un `useEffect` que reacciona a los cambios en `currentStep`:
+`WizardOrchestrator` uses a `useEffect` hook listening to `currentStep` changes:
 
 ```typescript
 const containerRef = useRef<HTMLDivElement>(null);
@@ -126,4 +126,4 @@ useEffect(() => {
 }, [currentStep]);
 ```
 
-Esto garantiza que si el usuario se desplazó hacia abajo inspeccionando tablas o columnas, al avanzar o retroceder de paso el visor vuelve suavemente a posicionar el encabezado del wizard en la parte superior de la pantalla.
+If the user scrolled down while inspecting tables or column lists, navigating forward or backward smoothly repositions the top of the wizard container at the top of the viewport.
