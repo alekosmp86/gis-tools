@@ -1,7 +1,10 @@
 import React from "react";
 import { getDiscrepancyLabel } from "@/constants/mapConstants";
-import type { MapLegendProps } from "@/types/map";
 import styles from "../SpatialMapPreview.module.css";
+
+export interface MapLegendProps {
+  presentTypes: string[];
+}
 
 export const MapLegend: React.FC<MapLegendProps> = ({ presentTypes }) => {
   return (

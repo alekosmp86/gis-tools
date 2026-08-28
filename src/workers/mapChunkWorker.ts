@@ -21,9 +21,16 @@ self.onmessage = (event: MessageEvent<MapChunkInputMessage>) => {
     return;
   }
 
-  for (let i = 0; i < total; i += chunkSize) {
-    const chunk = features.slice(i, i + chunkSize);
-    const current = Math.min(i + chunkSize, total);
+  for (let featureOffset = 0; featureOffset < total; featureOffset += chunkSize) {
+    const rawChunk = features.slice(featureOffset, featureOffset + chunkSize);
+    const chunk = rawChunk.map((featureItem, itemIndex) => ({
+      ...featureItem,
+      properties: {
+        ...featureItem.properties,
+        _featureIndex: featureOffset + itemIndex,
+      },
+    }));
+    const current = Math.min(featureOffset + chunkSize, total);
     const batchMsg: MapChunkOutputMessage = {
       type: MapChunkMessageType.CHUNK_BATCH,
       payload: { chunk, current, total },

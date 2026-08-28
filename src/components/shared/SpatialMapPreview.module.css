@@ -144,6 +144,11 @@
   color: var(--text-bright);
 }
 
+.stylePopoverWrapper {
+  position: relative;
+  display: inline-flex;
+}
+
 .controlBtn {
   display: inline-flex;
   align-items: center;
@@ -163,6 +168,13 @@
   background: var(--accent-cyan);
   color: #000;
   border-color: var(--accent-cyan);
+}
+
+.controlBtn.controlBtnActive {
+  background: var(--accent-cyan);
+  color: #000;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 10px var(--accent-cyan-glow);
 }
 
 .legendPanel {

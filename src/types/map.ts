@@ -1,5 +1,3 @@
-import type { FeatureCollection } from "geojson";
-
 export interface TileLayerConfig {
   url: string;
   subdomains?: string;
@@ -7,28 +5,21 @@ export interface TileLayerConfig {
   attribution: string;
 }
 
+export const MapStrokePattern = {
+  SOLID: "solid",
+  DASHED: "dashed",
+  DOTTED: "dotted",
+} as const;
 
-export interface SpatialMapPreviewProps {
-  geojson: FeatureCollection;
-  title?: string;
-  selectedFeatureIndex?: number | null;
-  onSelectFeature?: (index: number | null) => void;
-}
+export type MapStrokePattern = (typeof MapStrokePattern)[keyof typeof MapStrokePattern];
 
-export interface MapHeaderBarProps {
-  title: string;
-  totalFeatures: number;
-  renderedCount: number;
-  isChunking: boolean;
-  basemapKey: string;
-  onSelectBasemap: (basemapKey: string) => void;
-  onFitBounds: () => void;
-}
-
-export interface MapLegendProps {
-  presentTypes: string[];
-}
-
-export interface MapProgressBarProps {
-  progressPct: number;
+export interface MapFeatureStyle {
+  color: string;
+  fillColor: string;
+  weight: number;
+  opacity: number;
+  fillOpacity: number;
+  pointRadius: number;
+  strokePattern: MapStrokePattern;
+  overrideDiscrepancyColors: boolean;
 }

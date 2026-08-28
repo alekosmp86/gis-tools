@@ -1,5 +1,38 @@
 import { DiscrepancyType } from "@/types/comparison";
-import type { TileLayerConfig } from "@/types/map";
+import { MapStrokePattern, type MapFeatureStyle, type TileLayerConfig } from "@/types/map";
+
+export const DEFAULT_MAP_FEATURE_STYLE: MapFeatureStyle = {
+  color: "#06b6d4",
+  fillColor: "#06b6d4",
+  weight: 3.5,
+  opacity: 0.9,
+  fillOpacity: 0.35,
+  pointRadius: 7,
+  strokePattern: MapStrokePattern.SOLID,
+  overrideDiscrepancyColors: false,
+};
+
+export const MAP_STYLE_PRESET_COLORS = [
+  { label: "Cian Eléctrico", hex: "#06b6d4" },
+  { label: "Azul Océano", hex: "#3b82f6" },
+  { label: "Esmeralda", hex: "#10b981" },
+  { label: "Ámbar", hex: "#f59e0b" },
+  { label: "Coral / Rosa", hex: "#f43f5e" },
+  { label: "Violeta", hex: "#8b5cf6" },
+  { label: "Blanco Brillante", hex: "#f8fafc" },
+] as const;
+
+export function getDashArrayFromPattern(pattern: MapStrokePattern): string | undefined {
+  switch (pattern) {
+    case MapStrokePattern.DASHED:
+      return "6, 6";
+    case MapStrokePattern.DOTTED:
+      return "2, 5";
+    case MapStrokePattern.SOLID:
+    default:
+      return undefined;
+  }
+}
 
 
 export const BASEMAP_TILES: Record<string, TileLayerConfig> = {
