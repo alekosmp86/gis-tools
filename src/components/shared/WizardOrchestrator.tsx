@@ -9,10 +9,6 @@ export const WizardOrchestrator: React.FC<WizardOrchestratorProps> = ({
   steps,
   currentStep,
   onStepClick,
-  step1Title,
-  step1Subtitle,
-  fileStepTitle,
-  fileStepSubtitle,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeStep = steps.find((s) => s.id === currentStep) || steps[0];
@@ -27,14 +23,11 @@ export const WizardOrchestrator: React.FC<WizardOrchestratorProps> = ({
 
   return (
     <div className={styles.orchestratorContainer} ref={containerRef}>
-      {/* 4-Step Wizard Stepper Bar */}
+      {/* Wizard Stepper Bar */}
       <StepIndicator
+        steps={steps}
         currentStep={currentStep}
         onStepClick={onStepClick}
-        step1Title={step1Title}
-        step1Subtitle={step1Subtitle}
-        fileStepTitle={fileStepTitle}
-        fileStepSubtitle={fileStepSubtitle}
       />
 
       {/* Primary Enclosed Glass Card Container for Current Active Step */}
@@ -49,9 +42,9 @@ export const WizardOrchestrator: React.FC<WizardOrchestratorProps> = ({
               <span>Paso {activeStep.id} de {steps.length}</span>
             </div>
             <h2 className={styles.title}>
-              {activeStep.id}. {activeStep.title}
+              {activeStep.id}. {activeStep.cardTitle || activeStep.title}
             </h2>
-            <p className={styles.subtitle}>{activeStep.subtitle}</p>
+            <p className={styles.subtitle}>{activeStep.cardSubtitle || activeStep.subtitle}</p>
           </div>
         </div>
 

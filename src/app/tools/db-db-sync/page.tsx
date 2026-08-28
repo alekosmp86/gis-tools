@@ -80,8 +80,10 @@ export default function DbDbSyncToolPage() {
   const steps: WizardStepDef[] = [
     {
       id: 1,
-      title: "Configurar Base de Datos Origen (DB 1)",
-      subtitle: "Ingrese las credenciales para conectar a la tabla de base de datos fuente.",
+      title: "DB Origen",
+      subtitle: "Tabla Fuente (DB 1)",
+      cardTitle: "Configurar Base de Datos Origen (DB 1)",
+      cardSubtitle: "Ingrese las credenciales para conectar a la tabla de base de datos fuente.",
       icon: Database,
       content: (
         <DbConnectionForm
@@ -96,8 +98,10 @@ export default function DbDbSyncToolPage() {
     },
     {
       id: 2,
-      title: "Configurar Base de Datos Destino (DB 2)",
-      subtitle: "Ingrese las credenciales para conectar a la tabla de base de datos destino / réplica.",
+      title: "DB Destino",
+      subtitle: "Tabla Réplica (DB 2)",
+      cardTitle: "Configurar Base de Datos Destino (DB 2)",
+      cardSubtitle: "Ingrese las credenciales para conectar a la tabla de base de datos destino / réplica.",
       icon: Database,
       content: (
         <DbConnectionForm
@@ -113,8 +117,10 @@ export default function DbDbSyncToolPage() {
     },
     {
       id: 3,
-      title: "Configuración de SUID y Campos a Comparar",
-      subtitle: "Seleccione una o más columnas como clave SUID única o compuesta y configure atributos a comparar entre ambas tablas.",
+      title: "Mapeo SUID",
+      subtitle: "Identificador y Atributos",
+      cardTitle: "Configuración de SUID y Campos a Comparar",
+      cardSubtitle: "Seleccione una o más columnas como clave SUID única o compuesta y configure atributos a comparar entre ambas tablas.",
       icon: GitMerge,
       content: dbColumns1.length > 0 ? (
         <SuidMappingStep
@@ -136,8 +142,10 @@ export default function DbDbSyncToolPage() {
     },
     {
       id: 4,
-      title: "Resultados de Análisis y Discrepancias",
-      subtitle: dbConfig1 && dbConfig2
+      title: "Resultados",
+      subtitle: "Discrepancias y Script",
+      cardTitle: "Resultados de Análisis y Discrepancias",
+      cardSubtitle: dbConfig1 && dbConfig2
         ? `Correlación realizada entre DB 1 (${dbConfig1.db_name}.${dbConfig1.table_name}) y DB 2 (${dbConfig2.db_name}.${dbConfig2.table_name}).`
         : "Visualice las diferencias detectadas y genere scripts SQL de sincronización.",
       icon: Database,
@@ -180,10 +188,6 @@ export default function DbDbSyncToolPage() {
           steps={steps}
           currentStep={currentStep}
           onStepClick={handleStepClick}
-          step1Title="DB Origen"
-          step1Subtitle="Tabla Fuente (DB 1)"
-          fileStepTitle="DB Destino"
-          fileStepSubtitle="Tabla Réplica (DB 2)"
         />
       </main>
 

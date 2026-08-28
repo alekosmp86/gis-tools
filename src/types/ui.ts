@@ -38,10 +38,7 @@ export interface StepItemData {
 
 export interface StepIndicatorProps {
   currentStep: number;
-  step1Title?: string;
-  step1Subtitle?: string;
-  fileStepTitle?: string;
-  fileStepSubtitle?: string;
+  steps?: WizardStepDef[];
   onStepClick?: (stepId: number) => void;
 }
 
@@ -133,7 +130,6 @@ export interface PaginationControlsProps {
   onPageSizeChange: (pageSize: number) => void;
 }
 
-
 export interface FeatureHighlightData {
   icon: LucideIcon;
   title: string;
@@ -150,6 +146,8 @@ export interface WizardStepDef {
   id: number;
   title: string;
   subtitle: string;
+  cardTitle?: string;
+  cardSubtitle?: string;
   icon: LucideIcon;
   content: React.ReactNode;
   canProceed?: boolean;
@@ -164,10 +162,4 @@ export interface WizardOrchestratorProps {
   steps: WizardStepDef[];
   currentStep: number;
   onStepClick?: (stepId: number) => void;
-  step1Title?: string;
-  step1Subtitle?: string;
-  fileStepTitle?: string;
-  fileStepSubtitle?: string;
 }
-
-

@@ -64,8 +64,10 @@ export default function DbShapefileSyncToolPage() {
   const steps: WizardStepDef[] = [
     {
       id: 1,
-      title: "Conectar a Base de Datos PostgreSQL",
-      subtitle: "Ingrese las credenciales para conectar a la base de datos e inspeccionar la tabla seleccionada.",
+      title: "Base de Datos",
+      subtitle: "Conexión y Tabla",
+      cardTitle: "Conectar a Base de Datos PostgreSQL",
+      cardSubtitle: "Ingrese las credenciales para conectar a la base de datos e inspeccionar la tabla seleccionada.",
       icon: Database,
       content: (
         <DbConnectionForm
@@ -79,8 +81,10 @@ export default function DbShapefileSyncToolPage() {
     },
     {
       id: 2,
-      title: "Cargar Capa Espacial Shapefile",
-      subtitle: "Suba un archivo .zip (que contenga .shp, .dbf, .shx) o .geojson.",
+      title: "Capa Espacial",
+      subtitle: "Cargar Shapefile (.zip)",
+      cardTitle: "Cargar Capa Espacial Shapefile",
+      cardSubtitle: "Suba un archivo .zip (que contenga .shp, .dbf, .shx) o .geojson.",
       icon: Layers,
       content: (
         <ShapefileUploader
@@ -95,8 +99,10 @@ export default function DbShapefileSyncToolPage() {
     },
     {
       id: 3,
-      title: "Configuración de SUID y Campos a Comparar",
-      subtitle: "Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure valores por defecto.",
+      title: "Mapeo SUID",
+      subtitle: "Identificador y Atributos",
+      cardTitle: "Configuración de SUID y Campos a Comparar",
+      cardSubtitle: "Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure valores por defecto.",
       icon: GitMerge,
       content: shapefileData ? (
         <SuidMappingStep
@@ -117,8 +123,10 @@ export default function DbShapefileSyncToolPage() {
     },
     {
       id: 4,
-      title: "Resultados de Análisis y Discrepancias",
-      subtitle: dbConfig && shapefileData
+      title: "Resultados",
+      subtitle: "Discrepancias y Script",
+      cardTitle: "Resultados de Análisis y Discrepancias",
+      cardSubtitle: dbConfig && shapefileData
         ? `Correlación realizada entre ${dbConfig.schema_name}.${dbConfig.table_name} y ${shapefileData.fileName}.`
         : "Visualice las diferencias detectadas y genere scripts SQL de sincronización.",
       icon: Database,

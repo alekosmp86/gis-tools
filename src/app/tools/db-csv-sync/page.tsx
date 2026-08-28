@@ -64,8 +64,10 @@ export default function DbCsvSyncToolPage() {
   const steps: WizardStepDef[] = [
     {
       id: 1,
-      title: "Conectar a Base de Datos PostgreSQL",
-      subtitle: "Ingrese las credenciales para conectar a la base de datos e inspeccionar la tabla seleccionada.",
+      title: "Base de Datos",
+      subtitle: "Conexión y Tabla",
+      cardTitle: "Conectar a Base de Datos PostgreSQL",
+      cardSubtitle: "Ingrese las credenciales para conectar a la base de datos e inspeccionar la tabla seleccionada.",
       icon: Database,
       content: (
         <DbConnectionForm
@@ -79,8 +81,10 @@ export default function DbCsvSyncToolPage() {
     },
     {
       id: 2,
-      title: "Cargar Archivo de Datos CSV",
-      subtitle: "Suba un archivo .csv delimitado por comas. Los datos se inspeccionan en la memoria local.",
+      title: "Archivo CSV",
+      subtitle: "Cargar Archivo (.csv)",
+      cardTitle: "Cargar Archivo de Datos CSV",
+      cardSubtitle: "Suba un archivo .csv delimitado por comas. Los datos se inspeccionan en la memoria local.",
       icon: FileSpreadsheet,
       content: (
         <CsvUploader
@@ -95,8 +99,10 @@ export default function DbCsvSyncToolPage() {
     },
     {
       id: 3,
-      title: "Configuración de SUID y Campos a Comparar",
-      subtitle: "Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure valores por defecto.",
+      title: "Mapeo SUID",
+      subtitle: "Identificador y Atributos",
+      cardTitle: "Configuración de SUID y Campos a Comparar",
+      cardSubtitle: "Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure valores por defecto.",
       icon: GitMerge,
       content: csvDataset ? (
         <SuidMappingStep
@@ -118,8 +124,10 @@ export default function DbCsvSyncToolPage() {
     },
     {
       id: 4,
-      title: "Resultados de Análisis y Discrepancias",
-      subtitle: dbConfig && csvDataset
+      title: "Resultados",
+      subtitle: "Discrepancias y Script",
+      cardTitle: "Resultados de Análisis y Discrepancias",
+      cardSubtitle: dbConfig && csvDataset
         ? `Correlación realizada entre ${dbConfig.schema_name}.${dbConfig.table_name} y ${csvDataset.fileName}.`
         : "Visualice las diferencias detectadas y genere scripts SQL de sincronización.",
       icon: Database,
@@ -161,8 +169,6 @@ export default function DbCsvSyncToolPage() {
           steps={steps}
           currentStep={currentStep}
           onStepClick={handleStepClick}
-          fileStepTitle="Archivo CSV"
-          fileStepSubtitle="Cargar Archivo (.csv)"
         />
       </main>
 
