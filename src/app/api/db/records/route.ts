@@ -17,18 +17,11 @@ export async function POST(request: Request) {
       fields_to_compare = [],
     } = body;
 
-    const suidColsList: string[] =
-      Array.isArray(suid_columns) && suid_columns.length > 0
-        ? suid_columns
-        : suid_column
-        ? [suid_column]
-        : [];
-
-    if (!db_name || !user || !table_name || suidColsList.length === 0) {
+    if (!db_name || !user || !table_name) {
       return NextResponse.json(
         {
           success: false,
-          error: "Los parámetros de conexión, tabla y columnas SUID son obligatorios.",
+          error: "Los parámetros de conexión (base de datos, usuario y tabla) son obligatorios.",
         },
         { status: 400 }
       );
@@ -47,9 +40,19 @@ export async function POST(request: Request) {
 
     const sanitizeIdentifier = (id: string) => id.replace(/"/g, '""');
 
+    const suidColsList: string[] =
+      Array.isArray(suid_columns) && suid_columns.length > 0
+        ? suid_columns
+        : suid_column
+        ? [suid_column]
+        : [];
+
     // Combine suidColsList + fields_to_compare deduplicated
     const allSelectedCols = Array.from(new Set([...suidColsList, ...fields_to_compare]));
-    const columnsToSelect = allSelectedCols.map((col) => `"${sanitizeIdentifier(col)}"`);
+    const selectClause =
+      allSelectedCols.length > 0
+        ? allSelectedCols.map((col) => `"${sanitizeIdentifier(col)}"`).join(", ")
+        : "*";
 
     // Query PostgreSQL information_schema for exact column data types
     const typesQuery = `
@@ -64,7 +67,7 @@ export async function POST(request: Request) {
     });
 
     const query = `
-      SELECT ${columnsToSelect.join(", ")}
+      SELECT ${selectClause}
       FROM "${sanitizeIdentifier(schema_name)}"."${sanitizeIdentifier(table_name)}";
     `;
 

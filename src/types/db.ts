@@ -38,6 +38,14 @@ export interface DbConnectionFormRef {
   proceed: () => void;
 }
 
+export interface DbConnectionStatusPayload {
+  isConnected: boolean;
+  columns: string[];
+  totalRows: number;
+  columnDetails?: DbColumnMetadata[];
+  config: DbConfig;
+}
+
 export interface DbConnectionFormProps {
   onSuccess: (
     config: DbConfig,
@@ -45,13 +53,7 @@ export interface DbConnectionFormProps {
     totalRows: number,
     columnDetails?: DbColumnMetadata[]
   ) => void;
-  onStatusChange?: (status: {
-    isConnected: boolean;
-    columns: string[];
-    totalRows: number;
-    columnDetails?: DbColumnMetadata[];
-    config: DbConfig;
-  }) => void;
+  onStatusChange?: (status: DbConnectionStatusPayload) => void;
 }
 
 export interface TestConnectionResponse {
@@ -66,4 +68,3 @@ export interface ExecuteSqlResponse {
   message?: string;
   error?: string;
 }
-

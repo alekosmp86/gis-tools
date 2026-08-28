@@ -61,4 +61,17 @@ export const toolsList: ToolCardData[] = [
     enabled: true,
     route: "/tools/file-viewer",
   },
+  {
+    id: "db-table-viewer",
+    title: "Visor de Tabla PostGIS / PostgreSQL",
+    category: ToolCategory.VIEWERS,
+    badge: { label: "Nueva Herramienta", type: BadgeVariant.ACTIVE },
+    icon: Database,
+    description:
+      "Conéctese a cualquier tabla de PostgreSQL/PostGIS para visualizar sus geometrías espaciales en el mapa interactivo de Leaflet, inspeccionar metadatos y consultar sus atributos en una tabla paginada.",
+    tags: ["PostgreSQL", "PostGIS", "Visor Mapa", "Atributos"],
+    actionLabel: "Iniciar Herramienta",
+    enabled: true,
+    route: "/tools/db-table-viewer",
+  },
 ];
