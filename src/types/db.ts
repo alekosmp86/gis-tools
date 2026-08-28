@@ -68,3 +68,22 @@ export interface ExecuteSqlResponse {
   message?: string;
   error?: string;
 }
+
+export interface ExecuteChunkProgress {
+  currentBatch: number;
+  totalBatches: number;
+  processedStatements: number;
+  totalStatements: number;
+  successCount: number;
+  errorCount: number;
+  pct: number;
+}
+
+export interface ExecuteBatchResult {
+  success: boolean;
+  totalProcessed: number;
+  affectedRows: number;
+  errorCount: number;
+  errors: string[];
+  message: string;
+}

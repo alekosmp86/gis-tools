@@ -27,8 +27,8 @@
 - Place all styling, typography, spacing, and layout rules inside modular CSS files (`.module.css`).
 
 ## Type & Interface Separation
-- **Separate Type Files**: Never define interfaces, models, or prop types inside `.tsx` component files. Leave `.tsx` files strictly for defining UI rendering logic.
-- Place types and interfaces in `src/types/` (e.g. `src/types/db.ts`, `src/types/ui.ts`, `src/types/gis.ts`).
+- **Separate Type Files for Domain Models & API Contracts**: Place domain types, models, API contracts, state payloads, and shared data schemas in `src/types/` (e.g. `src/types/db.ts`, `src/types/ui.ts`, `src/types/gis.ts`).
+- **Component Props Exception**: Component props interfaces/types (e.g. `*Props`) SHOULD be declared directly inside the `.tsx` file where the component is declared and defined.
 
 ## Enums & Const Objects
 - **No Raw String Literal Comparisons**: Never compare against hardcoded string literals (e.g. `type === "success"` or `category === "Todos"`).
