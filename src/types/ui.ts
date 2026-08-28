@@ -43,7 +43,6 @@ export interface ToolCardData {
   icon: LucideIcon;
   description: string;
   tags: string[];
-  actionLabel: string;
   enabled: boolean;
   route?: string;
 }
