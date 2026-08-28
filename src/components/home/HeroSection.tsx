@@ -13,8 +13,7 @@ export const HeroSection: React.FC = () => {
       </div>
 
       <h1 className={styles.title}>
-        Sistemas de Información <br />
-        <span className="text-gradient-cyan">Geográfica (SIG)</span>
+        Sistemas de Información Geográfica <span className="text-gradient-cyan">(SIG)</span>
       </h1>
 
       <p className={styles.description}>

@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 800px;
+  width: 100%;
 }
 
 .heroTag {
@@ -20,4 +20,5 @@
   font-size: 1.125rem;
   color: var(--text-muted);
   line-height: 1.6;
+  max-width: 100%;
 }
