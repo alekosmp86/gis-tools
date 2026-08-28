@@ -9,7 +9,6 @@ import { HeroSection } from "@/components/home/HeroSection";
 import { FilterTabs } from "@/components/home/FilterTabs";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ToolCard } from "@/components/home/ToolCard";
-import { FeatureHighlights } from "@/components/home/FeatureHighlights";
 import { toolsList, toolCategories } from "@/data/toolsData";
 import { ToolCategory } from "@/types/gis";
 
@@ -64,8 +63,6 @@ export default function Home() {
             <ToolCard key={tool.id} tool={tool} onLaunch={handleLaunch} />
           ))}
         </section>
-
-        <FeatureHighlights />
       </main>
 
       <Footer />
