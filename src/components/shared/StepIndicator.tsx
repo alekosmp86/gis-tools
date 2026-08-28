@@ -1,19 +1,13 @@
 import React from "react";
 import { Check } from "lucide-react";
-import { getWizardSteps } from "@/data/wizardStepsData";
 import type { StepIndicatorProps } from "@/types/ui";
 import styles from "./StepIndicator.module.css";
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({
   currentStep,
-  step1Title,
-  step1Subtitle,
-  fileStepTitle,
-  fileStepSubtitle,
+  steps = [],
   onStepClick,
 }) => {
-  const steps = getWizardSteps(fileStepTitle, fileStepSubtitle, step1Title, step1Subtitle);
-
   return (
     <div className={styles.stepperContainer}>
       {steps.map((step, index) => {
@@ -51,7 +45,9 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
                 <div className={styles.stepInfo}>
                   <span className={styles.stepNumber}>PASO {step.id}</span>
                   <span className={styles.stepTitle}>{step.title}</span>
-                  <span className={styles.stepSubtitle}>{step.subtitle}</span>
+                  {step.subtitle && (
+                    <span className={styles.stepSubtitle}>{step.subtitle}</span>
+                  )}
                 </div>
               </div>
 

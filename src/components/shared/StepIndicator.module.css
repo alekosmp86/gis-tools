@@ -2,7 +2,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 28px;
+  padding: 16px 20px;
   gap: 12px;
   border-radius: 14px;
   background: rgba(9, 13, 22, 0.6);
@@ -10,24 +10,27 @@
   backdrop-filter: blur(12px);
   margin-bottom: 8px;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .stepWrapper {
   display: flex;
   align-items: center;
-  flex: 1;
+  flex: 1 1 0%;
+  min-width: 0;
 }
 
 .stepWrapper:last-child {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
 }
 
 .stepItem {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   transition: all 0.2s ease;
   user-select: none;
+  min-width: 0;
 }
 
 .clickable {
@@ -40,8 +43,8 @@
 }
 
 .iconCircle {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: rgba(15, 23, 42, 0.8);
   border: 1px solid var(--border-color);
@@ -56,29 +59,36 @@
 .stepInfo {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  min-width: 0;
 }
 
 .stepNumber {
-  font-size: 0.675rem;
+  font-size: 0.65rem;
   font-weight: 700;
   font-family: var(--font-mono);
   color: var(--text-dim);
   letter-spacing: 0.05em;
   text-transform: uppercase;
+  line-height: 1.1;
 }
 
 .stepTitle {
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-muted);
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.25;
 }
 
 .stepSubtitle {
-  font-size: 0.725rem;
+  font-size: 0.72rem;
+  font-weight: 400;
   color: var(--text-dim);
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.2;
 }
 
 .active .iconCircle {
@@ -97,6 +107,10 @@
   font-weight: 700;
 }
 
+.active .stepSubtitle {
+  color: var(--text-muted);
+}
+
 .completed .iconCircle {
   background: rgba(16, 185, 129, 0.15);
   border-color: var(--accent-emerald);
@@ -111,11 +125,16 @@
   color: var(--text-main);
 }
 
+.completed .stepSubtitle {
+  color: var(--text-dim);
+}
+
 .stepConnector {
-  flex: 1;
+  flex: 1 1 12px;
+  min-width: 12px;
   height: 2px;
   background: rgba(255, 255, 255, 0.08);
-  margin: 0 16px;
+  margin: 0 10px;
   border-radius: 2px;
   transition: background 0.3s ease;
 }
