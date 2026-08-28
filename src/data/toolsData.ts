@@ -6,13 +6,14 @@ export const toolCategories: string[] = [
   ToolCategory.ALL,
   ToolCategory.SYNC,
   ToolCategory.VIEWERS,
+  ToolCategory.DATABASE
 ];
 
 export const toolsList: ToolCardData[] = [
   {
     id: "gis-sync",
     title: "Sincronización de Datos DB vs. Shapefile",
-    category: ToolCategory.SYNC,
+    category: [ToolCategory.SYNC],
     badge: { label: "Herramienta Principal", type: BadgeVariant.DEV },
     icon: GitCompare,
     description:
@@ -25,7 +26,7 @@ export const toolsList: ToolCardData[] = [
   {
     id: "db-csv-sync",
     title: "Sincronización de Datos DB vs. CSV",
-    category: ToolCategory.SYNC,
+    category: [ToolCategory.SYNC],
     badge: { label: "Herramienta Activa", type: BadgeVariant.ACTIVE },
     icon: FileSpreadsheet,
     description:
@@ -38,7 +39,7 @@ export const toolsList: ToolCardData[] = [
   {
     id: "db-db-sync",
     title: "Sincronización de Datos DB vs. DB (Réplicas)",
-    category: ToolCategory.SYNC,
+    category: [ToolCategory.DATABASE, ToolCategory.SYNC],
     badge: { label: "Nueva Herramienta", type: BadgeVariant.ACTIVE },
     icon: Database,
     description:
@@ -51,7 +52,7 @@ export const toolsList: ToolCardData[] = [
   {
     id: "file-viewer",
     title: "Visor de Archivos Espaciales",
-    category: ToolCategory.VIEWERS,
+    category: [ToolCategory.VIEWERS],
     badge: { label: "Herramienta Activa", type: BadgeVariant.ACTIVE },
     icon: Eye,
     description:
@@ -64,7 +65,7 @@ export const toolsList: ToolCardData[] = [
   {
     id: "db-table-viewer",
     title: "Visor de Tabla PostGIS / PostgreSQL",
-    category: ToolCategory.VIEWERS,
+    category: [ToolCategory.VIEWERS, ToolCategory.DATABASE],
     badge: { label: "Nueva Herramienta", type: BadgeVariant.ACTIVE },
     icon: Eye,
     description:

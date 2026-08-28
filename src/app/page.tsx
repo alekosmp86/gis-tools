@@ -10,7 +10,7 @@ import { FilterTabs } from "@/components/home/FilterTabs";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ToolCard } from "@/components/home/ToolCard";
 import { toolsList, toolCategories } from "@/data/toolsData";
-import { ToolCategory } from "@/types/gis";
+import { ToolCategory } from "@/types/ui";
 
 export default function Home() {
   const router = useRouter();
@@ -19,7 +19,7 @@ export default function Home() {
 
   const filteredTools = toolsList.filter((tool) => {
     const matchesCategory =
-      activeCategory === ToolCategory.ALL || tool.category === activeCategory;
+      activeCategory === ToolCategory.ALL || tool.category.includes(activeCategory as ToolCategory);
     const matchesSearch =
       tool.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tool.description.toLowerCase().includes(searchQuery.toLowerCase()) ||

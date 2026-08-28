@@ -1,6 +1,5 @@
 import React from "react";
 import type { LucideIcon } from "lucide-react";
-import type { SavedDbProfile } from "./db";
 
 export const AlertType = {
   SUCCESS: "success",
@@ -24,7 +23,7 @@ export const ToolCategory = {
   SYNC: "Sincronización y Comparación",
   VIEWERS: "Visualización",
   CONVERTERS: "Conversores", // @planned — future tool category
-  DATABASE: "Base de Datos", // @planned — future tool category
+  DATABASE: "Base de Datos",
 } as const;
 
 export type ToolCategory = (typeof ToolCategory)[keyof typeof ToolCategory];
@@ -36,16 +35,10 @@ export interface StepItemData {
   icon: LucideIcon;
 }
 
-export interface StepIndicatorProps {
-  currentStep: number;
-  steps?: WizardStepDef[];
-  onStepClick?: (stepId: number) => void;
-}
-
 export interface ToolCardData {
   id: string;
   title: string;
-  category: ToolCategory;
+  category: ToolCategory[];
   badge: { label: string; type: BadgeVariant };
   icon: LucideIcon;
   description: string;
@@ -53,11 +46,6 @@ export interface ToolCardData {
   actionLabel: string;
   enabled: boolean;
   route?: string;
-}
-
-export interface ToolCardProps {
-  tool: ToolCardData;
-  onLaunch?: (toolId: string) => void;
 }
 
 export const ButtonVariant = {
@@ -68,78 +56,10 @@ export const ButtonVariant = {
 
 export type ButtonVariant = (typeof ButtonVariant)[keyof typeof ButtonVariant];
 
-export interface BadgeProps {
-  children: React.ReactNode;
-  variant?: BadgeVariant;
-  className?: string;
-}
-
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  children: React.ReactNode;
-  variant?: ButtonVariant;
-  isDisabled?: boolean;
-}
-
-export interface SearchInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  className?: string;
-}
-
-export interface FormFieldProps {
-  id?: string;
-  label: string;
-  icon?: React.ElementType;
-  type?: "text" | "password" | "number" | "email";
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  isFullWidth?: boolean;
-  className?: string;
-}
-
-export interface AlertMessageProps {
-  type: AlertType;
-  text: string;
-  className?: string;
-}
-
-export interface ColumnsListProps {
-  columns: string[];
-  totalRows?: number | null;
-  title?: string;
-  className?: string;
-}
-
-export interface FilterTabsProps {
-  categories: string[];
-  activeCategory: string;
-  onSelectCategory: (category: string) => void;
-}
-
-export interface PaginationControlsProps {
-  currentPage: number;
-  totalPages: number;
-  pageSize: number;
-  totalFilteredCount: number;
-  startIndex: number;
-  endIndex: number;
-  pageSizeOptions?: number[];
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
-}
-
 export interface FeatureHighlightData {
   icon: LucideIcon;
   title: string;
   description: string;
-}
-
-export interface ProfileSelectProps {
-  profiles: SavedDbProfile[];
-  activeProfileId: string;
-  onSelectProfile: (profileId: string) => void;
 }
 
 export interface WizardStepDef {
@@ -156,10 +76,4 @@ export interface WizardStepDef {
   onBack?: () => void;
   backLabel?: string;
   hideFooter?: boolean;
-}
-
-export interface WizardOrchestratorProps {
-  steps: WizardStepDef[];
-  currentStep: number;
-  onStepClick?: (stepId: number) => void;
 }
