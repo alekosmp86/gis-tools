@@ -41,3 +41,10 @@
 ## Language & Localization
 - **UI Language**: All user-facing UI text, titles, buttons, badges, descriptions, placeholders, and tool messages MUST be in **Spanish**.
 - Developer conversation with the user remains in **English**.
+
+## Variable Naming & Self-Descriptive Identifiers
+- **No Single-Letter Variable Names**: Never use single-letter names for variables, parameters, lambda arguments, or loop counters (e.g. avoid `e`, `i`, `f`, `p`, `x`, `y`, `v`, `val`).
+- **Descriptive Intent**: Variable and parameter names MUST clearly indicate their purpose and content (e.g. use `event`, `index`, `feature`, `preset`, `value`, `coordinate`, `fieldIndex`).
+
+## Pre-Commit Cleanliness Check
+- **Dead Code & Unused Exports Removal**: Before finalizing code changes or asking to commit, perform a quick audit to eliminate dead code, unused imports, unused exports, and deprecated functions or patterns.
