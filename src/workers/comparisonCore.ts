@@ -1,105 +1,50 @@
 /**
  * comparisonCore.ts
- * Core comparison engine — pure logic shared between Web Worker and Sync execution.
- * Supports multi-column Composite SUID keys and dual SQL patch generation.
+ * Motor principal de comparación espacial y matricial.
+ * Optimizado para datasets masivos (1.000.000+ registros) en memoria RAM:
+ * 1. Lectura binaria nativa de buffers SHP/DBF con indexación directa de punteros.
+ * 2. Conteo atómico de coincidencias exactas (sin clonar 1M objetos en memoria).
+ * 3. Generación automática de scripts SQL PostGIS (UPDATE e INSERT con geometrías ST_SetSRID/ST_Transform).
  */
+
 import type { WorkerInputMessage } from "@/types/workerMessages";
-import type { DiscrepancyItem, AttributeDifference, GeometryDifference, ComparisonSummary } from "@/types/comparison";
+import type {
+  DiscrepancyItem,
+  AttributeDifference,
+  GeometryDifference,
+  ComparisonSummary,
+} from "@/types/comparison";
 import { DiscrepancyType } from "@/types/comparison";
 import { compareGeometries } from "@/utils/geometryComparator";
+import { BinaryDbfReader, type DbfFieldDescriptor } from "@/utils/binaryDbfReader";
+import { BinaryShpReader } from "@/utils/binaryShpReader";
+import type { Geometry } from "geojson";
+
+import {
+  cleanValue,
+  buildCompositeKeyFromRecord,
+  buildCompositeRawSuidFromRecord,
+} from "./comparison/suidKeyUtils";
+import {
+  toSqlValue,
+  toSqlWhereCondition,
+  findDbGeometryColumn,
+  buildPostgisGeomExpr,
+  generateSqlScriptHeader,
+} from "./comparison/sqlBuilder";
+import { createNullDiscrepancyItem } from "./comparison/nullRecordHandler";
+import {
+  indexBinaryDbfDataset,
+  indexObjectDataset,
+} from "./comparison/fileDatasetIndexer";
 
 export type ProgressEmitter = (phase: string, current: number, total: number) => void;
 
-function cleanValue(val: unknown): string {
-  if (val === null || val === undefined) return "";
-  let str = String(val).trim();
-  str = str.replace(/^["']|["']$/g, "").trim();
-  str = str.replace(/[\r\n\t\xa0]/g, "");
-  if (str.endsWith(".0")) str = str.slice(0, -2);
-  return str;
-}
-
-function cleanSuid(val: unknown): string {
-  return cleanValue(val).toLowerCase();
-}
-
-function isNumericColumnType(dataType?: string): boolean {
-  if (!dataType) return false;
-  const dt = dataType.toLowerCase();
-  return (
-    dt.includes("int") ||
-    dt.includes("num") ||
-    dt.includes("decimal") ||
-    dt.includes("float") ||
-    dt.includes("double") ||
-    dt.includes("real") ||
-    dt.includes("serial")
-  );
-}
-
-function toSqlValue(
-  val: unknown,
-  colName?: string,
-  dbColumnTypes?: Record<string, string>
-): string {
-  if (val === null || val === undefined) return "NULL";
-  const cleaned = cleanValue(val);
-  if (cleaned === "") return "NULL";
-
-  const dataType = colName && dbColumnTypes ? dbColumnTypes[colName] : undefined;
-
-  if (dataType) {
-    if (isNumericColumnType(dataType)) {
-      const num = Number(cleaned);
-      if (!isNaN(num)) return cleaned;
-    }
-    // Character varying, text, varchar, char, date, uuid, etc. MUST be single-quoted
-    return `'${cleaned.replace(/'/g, "''")}'`;
-  }
-
-  // Fallback if database column data type is unknown:
-  // ONLY output unquoted SQL number if the original value was a JS primitive number
-  if (typeof val === "number" && !isNaN(val)) {
-    return cleaned;
-  }
-
-  // All string values (including numeric strings like "706112") MUST be single-quoted
-  return `'${cleaned.replace(/'/g, "''")}'`;
-}
-
-function toSqlWhereCondition(
-  col: string,
-  val: unknown,
-  dbColumnTypes?: Record<string, string>
-): string {
-  const sqlVal = toSqlValue(val, col, dbColumnTypes);
-  if (sqlVal === "NULL") {
-    return `"${col}" IS NULL`;
-  }
-  return `"${col}" = ${sqlVal}`;
-}
-
-function buildCompositeKey(record: Record<string, unknown>, columns: string[]): string {
-  const cleanedVals = columns.map((col) => cleanSuid(record[col]));
-  if (columns.length === 1) {
-    if (!cleanedVals[0]) return "";
-  } else {
-    if (cleanedVals.every((val) => !val)) return "";
-  }
-  return cleanedVals.join("_");
-}
-
-function buildCompositeRawSuid(record: Record<string, unknown>, columns: string[]): string {
-  const parts: string[] = columns.map((col) => {
-    const val = cleanValue(record[col]);
-    return val !== "" ? val : "NULL";
-  });
-  return parts.join(" | ");
-}
-
 function extractDbGeometry(dbRecord: Record<string, unknown>): unknown {
   const geomKey = Object.keys(dbRecord).find((key) =>
-    ["geom", "geometry", "wkb_geometry", "shape", "st_asgeojson", "geojson"].includes(key.toLowerCase())
+    ["geom", "geometry", "wkb_geometry", "shape", "st_asgeojson", "geojson"].includes(
+      key.toLowerCase()
+    )
   );
   return geomKey ? dbRecord[geomKey] : null;
 }
@@ -108,7 +53,14 @@ export function runComparisonCore(
   payload: WorkerInputMessage["payload"],
   onProgress?: ProgressEmitter
 ): ComparisonSummary {
-  const { dbRecords, fileDataset, mappingConfig, dbSchemaName, dbTableName, dbColumnTypes } = payload;
+  const {
+    dbRecords,
+    fileDataset,
+    mappingConfig,
+    dbSchemaName,
+    dbTableName,
+    dbColumnTypes,
+  } = payload;
   const { suidColumns, matchedFileSuidColumns, fieldsToCompare, insertDefaults } = mappingConfig;
 
   const dbSuidCols = suidColumns || [];
@@ -119,25 +71,22 @@ export function runComparisonCore(
   };
 
   const totalDbRecords = dbRecords.length;
-  const shpFeatures =
-    (fileDataset.geojson as { features?: unknown[] } | undefined)?.features ?? [];
-  const totalFileRecords =
-    shpFeatures.length > 0 ? shpFeatures.length : Object.keys(fileDataset.recordsObject).length;
-
   const discrepancyItems: DiscrepancyItem[] = [];
 
-  const SQL_HEADER = (scriptType: string) => [
-    `-- ============================================================`,
-    `-- ${scriptType}: ${dbSchemaName}.${dbTableName}`,
-    `-- Fuente de comparación: ${fileDataset.fileName}`,
-    `-- Clave SUID: ${dbSuidCols.join(", ")}`,
-    `-- Generado automáticamente por GIS Tools`,
-    `-- ============================================================`,
-    "",
-  ];
-
-  const updateStatements: string[] = SQL_HEADER("SCRIPT DE ACTUALIZACIÓN (UPDATE) PARA POSTGIS");
-  const insertStatements: string[] = SQL_HEADER("SCRIPT DE INSERCIÓN (INSERT) PARA POSTGIS");
+  const updateStatements: string[] = generateSqlScriptHeader(
+    "SCRIPT DE ACTUALIZACIÓN (UPDATE) PARA POSTGIS",
+    dbSchemaName,
+    dbTableName,
+    fileDataset.fileName,
+    dbSuidCols
+  );
+  const insertStatements: string[] = generateSqlScriptHeader(
+    "SCRIPT DE INSERCIÓN (INSERT) PARA POSTGIS",
+    dbSchemaName,
+    dbTableName,
+    fileDataset.fileName,
+    dbSuidCols
+  );
 
   let exactMatchesCount = 0;
   let attributeMismatchCount = 0;
@@ -147,132 +96,164 @@ export function runComparisonCore(
   let nullSuidCount = 0;
   let duplicateSuidCount = 0;
 
-  // Phase 1: Index DB Records by Composite SUID Key
+  // ==========================================
+  // FASE 1: Indexación de Registros de Base de Datos
+  // ==========================================
   const dbSuidMap = new Map<string, Array<Record<string, unknown>>>();
   const dbNullRecords: Array<Record<string, unknown>> = [];
 
   dbRecords.forEach((record, recordIndex) => {
-    const key = buildCompositeKey(record, dbSuidCols);
+    const key = buildCompositeKeyFromRecord(record, dbSuidCols);
     if (!key) {
       dbNullRecords.push(record);
     } else {
-      const arr = dbSuidMap.get(key) ?? [];
-      arr.push(record);
-      dbSuidMap.set(key, arr);
+      const recordList = dbSuidMap.get(key) ?? [];
+      recordList.push(record);
+      dbSuidMap.set(key, recordList);
     }
-    if (recordIndex % 500 === 0) emit("Indexando registros de base de datos", recordIndex, totalDbRecords);
+    if (recordIndex % 10_000 === 0) {
+      emit("Indexando registros de base de datos", recordIndex, totalDbRecords);
+    }
   });
   emit("Indexando registros de base de datos", totalDbRecords, totalDbRecords);
 
-  // Phase 2: Index Target File Records & Geometries by Composite SUID Key
-  const fileSuidMap = new Map<string, Array<Record<string, unknown>>>();
-  const fileGeomMap = new Map<string, unknown[]>();
-  const fileNullRecords: Array<Record<string, unknown>> = [];
+  // ==========================================
+  // FASE 2: Inicialización de Lectores e Indexación de Archivo
+  // ==========================================
+  let dbfReader: BinaryDbfReader | null = null;
+  let shpReader: BinaryShpReader | null = null;
 
-  if (shpFeatures.length > 0) {
-    (shpFeatures as Array<{ properties: Record<string, unknown>; geometry: unknown }>).forEach(
-      (feature, featureIndex) => {
-        if (feature.properties) {
-          const key = buildCompositeKey(feature.properties, targetFileSuidCols);
-          if (!key) {
-            fileNullRecords.push(feature.properties);
-          } else {
-            const arr = fileSuidMap.get(key) ?? [];
-            arr.push(feature.properties);
-            fileSuidMap.set(key, arr);
-
-            const geoms = fileGeomMap.get(key) ?? [];
-            geoms.push(feature.geometry);
-            fileGeomMap.set(key, geoms);
-          }
-        }
-        if (featureIndex % 500 === 0) emit("Indexando archivo fuente", featureIndex, totalFileRecords);
-      }
+  if (fileDataset.dbfBuffer && fileDataset.dbfBuffer.byteLength > 0) {
+    dbfReader = new BinaryDbfReader(
+      fileDataset.dbfBuffer,
+      fileDataset.cpgText || "windows-1252"
     );
-  } else {
-    Object.values(fileDataset.recordsObject).forEach((record, recordIndex) => {
-      const key = buildCompositeKey(record, targetFileSuidCols);
-      if (!key) {
-        fileNullRecords.push(record);
-      } else {
-        const arr = fileSuidMap.get(key) ?? [];
-        arr.push(record);
-        fileSuidMap.set(key, arr);
+    if (fileDataset.shpBuffer && fileDataset.shpBuffer.byteLength > 0) {
+      try {
+        shpReader = new BinaryShpReader(fileDataset.shpBuffer);
+      } catch {
+        shpReader = null;
       }
-      if (recordIndex % 500 === 0) emit("Indexando archivo fuente", recordIndex, totalFileRecords);
+    }
+  }
+
+  let totalFileRecords = 0;
+  let binaryFileSuidMap = new Map<string, number[]>();
+  let binaryFileNullIndices: number[] = [];
+  let objectFileSuidMap = new Map<string, Array<Record<string, unknown>>>();
+  let objectFileGeomMap = new Map<string, unknown[]>();
+  let objectFileNullRecords: Array<Record<string, unknown>> = [];
+  const dbfCompareFields: Map<string, DbfFieldDescriptor | null> = new Map();
+  const fieldToFileKey = new Map<string, string | null>();
+
+  if (dbfReader) {
+    const binaryIndex = indexBinaryDbfDataset(dbfReader, targetFileSuidCols, emit);
+    binaryFileSuidMap = binaryIndex.binaryFileSuidMap;
+    binaryFileNullIndices = binaryIndex.binaryFileNullIndices;
+    totalFileRecords = binaryIndex.totalFileRecords;
+
+    const availableDbfFields = dbfReader.header.fields;
+    fieldsToCompare.forEach((field) => {
+      let targetName = field;
+      if (mappingConfig.attributeMap && mappingConfig.attributeMap[field]) {
+        targetName = mappingConfig.attributeMap[field];
+      }
+      const match = availableDbfFields.find(
+        (dbfField) =>
+          dbfField.name.toLowerCase() === targetName.toLowerCase() ||
+          dbfField.name.toLowerCase() === targetName.toLowerCase().slice(0, 10)
+      );
+      dbfCompareFields.set(field, match ?? null);
+    });
+  } else {
+    const objectIndex = indexObjectDataset(fileDataset, targetFileSuidCols, emit);
+    objectFileSuidMap = objectIndex.objectFileSuidMap;
+    objectFileGeomMap = objectIndex.objectFileGeomMap;
+    objectFileNullRecords = objectIndex.objectFileNullRecords;
+    totalFileRecords = objectIndex.totalFileRecords;
+
+    const availableKeys = fileDataset.attributes || [];
+    fieldsToCompare.forEach((field) => {
+      if (mappingConfig.attributeMap && mappingConfig.attributeMap[field]) {
+        fieldToFileKey.set(field, mappingConfig.attributeMap[field]);
+        return;
+      }
+      const fieldLower = field.toLowerCase();
+      const field10 = fieldLower.slice(0, 10);
+      const match = availableKeys.find(
+        (attrKey) => attrKey.toLowerCase() === fieldLower || attrKey.toLowerCase() === field10
+      );
+      fieldToFileKey.set(field, match ?? null);
     });
   }
-  emit("Indexando archivo fuente", totalFileRecords, totalFileRecords);
 
-  // Phase 3: Pre-compute field -> file column key map
-  const firstFileRecord: Record<string, unknown> =
-    (fileSuidMap.values().next().value as Array<Record<string, unknown>> | undefined)?.[0] ??
-    fileNullRecords[0] ??
-    {};
-
-  const availableFileKeys: string[] =
-    fileDataset.attributes && fileDataset.attributes.length > 0
-      ? fileDataset.attributes
-      : Object.keys(firstFileRecord);
-
-  const fieldToFileKey = new Map<string, string | null>();
-  fieldsToCompare.forEach((field) => {
-    if (mappingConfig.attributeMap && mappingConfig.attributeMap[field]) {
-      fieldToFileKey.set(field, mappingConfig.attributeMap[field]);
-      return;
-    }
-
-    const fieldLower = field.toLowerCase();
-    const field10 = fieldLower.slice(0, 10);
-    const match = availableFileKeys.find(
-      (attrKey) => attrKey.toLowerCase() === fieldLower || attrKey.toLowerCase() === field10
-    );
-    fieldToFileKey.set(field, match ?? null);
-  });
-
-  // Phase 4: Report NULL SUIDs
+  // ==========================================
+  // FASE 3: Registro de SUIDs Nulos / Vacíos
+  // ==========================================
   dbNullRecords.forEach((record, recordIndex) => {
     nullSuidCount++;
-    const { differences, note } = extractNullRecordInfo(record, true, fieldsToCompare, fieldToFileKey);
-    discrepancyItems.push({
-      id: `null-db-${recordIndex}`,
-      suid: "(SUID NULL / Vacío en DB)",
-      type: DiscrepancyType.NULL_SUID,
-      differences,
-      dbRecord: record,
-      note,
-    });
-  });
-  fileNullRecords.forEach((record, recordIndex) => {
-    nullSuidCount++;
-    const { differences, note } = extractNullRecordInfo(record, false, fieldsToCompare, fieldToFileKey);
-    discrepancyItems.push({
-      id: `null-file-${recordIndex}`,
-      suid: "(SUID NULL / Vacío en Archivo)",
-      type: DiscrepancyType.NULL_SUID,
-      differences,
-      shpFeatureProps: record,
-      note,
-    });
+    discrepancyItems.push(
+      createNullDiscrepancyItem(
+        `null-db-${recordIndex}`,
+        record,
+        true,
+        fieldsToCompare,
+        fieldToFileKey
+      )
+    );
   });
 
-  // Phase 5: Main Comparison Loop (DB vs File)
+  if (dbfReader) {
+    binaryFileNullIndices.forEach((recordIndex, indexOrder) => {
+      nullSuidCount++;
+      const record = dbfReader!.readRecord(recordIndex) || {};
+      discrepancyItems.push(
+        createNullDiscrepancyItem(
+          `null-file-${indexOrder}`,
+          record,
+          false,
+          fieldsToCompare,
+          fieldToFileKey
+        )
+      );
+    });
+  } else {
+    objectFileNullRecords.forEach((record, recordIndex) => {
+      nullSuidCount++;
+      discrepancyItems.push(
+        createNullDiscrepancyItem(
+          `null-file-${recordIndex}`,
+          record,
+          false,
+          fieldsToCompare,
+          fieldToFileKey
+        )
+      );
+    });
+  }
+
+  // ==========================================
+  // FASE 4: Bucle Principal de Comparación (DB vs Archivo)
+  // ==========================================
   const processedSuids = new Set<string>();
   let processedDbRecordCount = 0;
 
   dbSuidMap.forEach((dbRecList, suidKey) => {
     processedSuids.add(suidKey);
-    const fileRecList = fileSuidMap.get(suidKey) ?? [];
-    const fileGeomList = fileGeomMap.get(suidKey) ?? [];
-    const isDuplicate = dbRecList.length > 1 || fileRecList.length > 1;
 
-    dbRecList.forEach((dbRec, dbIdx) => {
+    const binaryFileIndices = dbfReader ? binaryFileSuidMap.get(suidKey) ?? [] : [];
+    const objectFileRecList = !dbfReader ? objectFileSuidMap.get(suidKey) ?? [] : [];
+    const objectFileGeoms = !dbfReader ? objectFileGeomMap.get(suidKey) ?? [] : [];
+
+    const fileMatchesCount = dbfReader ? binaryFileIndices.length : objectFileRecList.length;
+    const isDuplicate = dbRecList.length > 1 || fileMatchesCount > 1;
+
+    dbRecList.forEach((dbRec, dbIndex) => {
       processedDbRecordCount++;
-      const fileRec = fileRecList[dbIdx] ?? fileRecList[0];
-      const shpGeom = fileGeomList[dbIdx] ?? fileGeomList[0];
-      const rawSuid = buildCompositeRawSuid(dbRec, dbSuidCols) || suidKey;
+      const rawSuid = buildCompositeRawSuidFromRecord(dbRec, dbSuidCols) || suidKey;
 
-      if (!fileRec) {
+      if (fileMatchesCount === 0) {
+        // Registro presente únicamente en Base de Datos
         const differences: AttributeDifference[] = [];
         fieldsToCompare.forEach((field) => {
           const dbVal = dbRec[field] !== undefined ? dbRec[field] : null;
@@ -285,7 +266,10 @@ export function runComparisonCore(
           }
         });
 
-        const resolvedType = isDuplicate ? DiscrepancyType.DUPLICATE_SUID : DiscrepancyType.ONLY_IN_DB;
+        const resolvedType = isDuplicate
+          ? DiscrepancyType.DUPLICATE_SUID
+          : DiscrepancyType.ONLY_IN_DB;
+
         if (resolvedType === DiscrepancyType.DUPLICATE_SUID) {
           duplicateSuidCount++;
         } else {
@@ -293,55 +277,96 @@ export function runComparisonCore(
         }
 
         discrepancyItems.push({
-          id: `db-${suidKey}-${dbIdx}`,
+          id: `db-${suidKey}-${dbIndex}`,
           suid: rawSuid,
           type: resolvedType,
           differences,
           dbRecord: dbRec,
-          note: isDuplicate ? `SUID Duplicado (Ocurrencia #${dbIdx + 1} en DB)` : undefined,
+          note: isDuplicate
+            ? `SUID Duplicado (${dbRecList.length} en DB / 0 en Archivo)`
+            : undefined,
         });
-        if (processedDbRecordCount % 500 === 0) emit("Comparando atributos", processedDbRecordCount, totalDbRecords);
         return;
       }
 
+      // Registro presente en ambos orígenes: Comparar atributos y geometría
       const differences: AttributeDifference[] = [];
+      let fileFeatureRecord: Record<string, unknown> | null = null;
+      let fileGeometry: Geometry | unknown | null = null;
 
-      // Compute SQL WHERE clause once per record using column types for precise SQL literal quoting
-      const whereClause = !isDuplicate
-        ? dbSuidCols.map((col) => toSqlWhereCondition(col, dbRec[col], dbColumnTypes)).join(" AND ")
-        : null;
+      const whereConditions = dbSuidCols.map((colName) =>
+        toSqlWhereCondition(colName, dbRec[colName], dbColumnTypes)
+      );
+      const whereClause = whereConditions.join(" AND ");
 
-      fieldsToCompare.forEach((field) => {
-        const dbVal = dbRec[field] !== undefined ? dbRec[field] : null;
-        const fileKey = fieldToFileKey.get(field);
-        const fileVal = fileKey != null ? fileRec[fileKey] : null;
+      if (dbfReader) {
+        const fileRecordIndex = binaryFileIndices[dbIndex] ?? binaryFileIndices[0];
 
-        const dbCleaned = cleanValue(dbVal);
-        const fileCleaned = cleanValue(fileVal);
+        fieldsToCompare.forEach((field) => {
+          const dbVal = dbRec[field] !== undefined ? dbRec[field] : null;
+          const fieldDescriptor = dbfCompareFields.get(field);
 
-        if (dbCleaned !== fileCleaned) {
-          differences.push({
-            fieldName: field,
-            dbValue: dbVal as string | number | null,
-            shpValue: fileVal as string | number | null,
-          });
+          if (fieldDescriptor) {
+            const fileVal = dbfReader!.readFieldValue(fileRecordIndex, fieldDescriptor);
+            const dbCleaned = cleanValue(dbVal);
+            const fileCleaned = cleanValue(fileVal);
 
-          if (whereClause) {
-            updateStatements.push(
-              `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal, field, dbColumnTypes)} WHERE ${whereClause};`
-            );
+            if (dbCleaned !== fileCleaned) {
+              differences.push({
+                fieldName: field,
+                dbValue: dbVal as string | number | null,
+                shpValue: fileVal as string | number | null,
+              });
+
+              if (whereClause) {
+                updateStatements.push(
+                  `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal, field, dbColumnTypes)} WHERE ${whereClause};`
+                );
+              }
+            }
           }
-        }
-      });
+        });
 
-      // Spatial Geometry Comparison (when compareGeometry is enabled)
+        if (shpReader) {
+          fileGeometry = shpReader.readGeometry(fileRecordIndex);
+        }
+      } else {
+        const objectFileRec = objectFileRecList[dbIndex] ?? objectFileRecList[0];
+        fileFeatureRecord = objectFileRec;
+        fileGeometry = objectFileGeoms[dbIndex] ?? objectFileGeoms[0];
+
+        fieldsToCompare.forEach((field) => {
+          const dbVal = dbRec[field] !== undefined ? dbRec[field] : null;
+          const fileKey = fieldToFileKey.get(field);
+          const fileVal = fileKey != null ? objectFileRec[fileKey] : null;
+
+          const dbCleaned = cleanValue(dbVal);
+          const fileCleaned = cleanValue(fileVal);
+
+          if (dbCleaned !== fileCleaned) {
+            differences.push({
+              fieldName: field,
+              dbValue: dbVal as string | number | null,
+              shpValue: fileVal as string | number | null,
+            });
+
+            if (whereClause) {
+              updateStatements.push(
+                `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${field}" = ${toSqlValue(fileVal, field, dbColumnTypes)} WHERE ${whereClause};`
+              );
+            }
+          }
+        });
+      }
+
+      // Comparación geométrica espacial
       let isGeometryMismatch = false;
       let geometryDiffInfo: GeometryDifference | undefined = undefined;
 
-      if (mappingConfig.compareGeometry) {
+      if (mappingConfig.compareGeometry && fileGeometry) {
         const dbGeom = extractDbGeometry(dbRec);
-        if (dbGeom && shpGeom) {
-          const geomResult = compareGeometries(dbGeom, shpGeom);
+        if (dbGeom) {
+          const geomResult = compareGeometries(dbGeom, fileGeometry);
           if (!geomResult.isMatch) {
             isGeometryMismatch = true;
             geometryDiffInfo = {
@@ -349,26 +374,15 @@ export function runComparisonCore(
               fileType: geomResult.fileType,
               details: geomResult.details || "Diferencia geométrica detectada",
               dbGeomRaw: dbGeom,
-              fileGeomRaw: shpGeom,
+              fileGeomRaw: fileGeometry,
             };
 
-            // Generate spatial UPDATE SQL statement if shapefile/file geometry exists
             if (whereClause && geomResult.fileGeomNormalized) {
-              const geomCol =
-                Object.keys(dbRec).find((columnKey) =>
-                  ["geom", "geometry", "wkb_geometry"].includes(columnKey.toLowerCase())
-                ) || "geom";
-              const jsonGeomStr = JSON.stringify(geomResult.fileGeomNormalized);
-              const targetSrid =
-                mappingConfig.targetSrid && mappingConfig.targetSrid > 0
-                  ? mappingConfig.targetSrid
-                  : 4326;
-
-              const stGeomExpr =
-                targetSrid === 4326
-                  ? `ST_SetSRID(ST_GeomFromGeoJSON('${jsonGeomStr}'), 4326)`
-                  : `ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON('${jsonGeomStr}'), 4326), ${targetSrid})`;
-
+              const geomCol = findDbGeometryColumn(dbRec, dbColumnTypes) || "geom";
+              const stGeomExpr = buildPostgisGeomExpr(
+                geomResult.fileGeomNormalized,
+                mappingConfig.targetSrid
+              );
               updateStatements.push(
                 `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${geomCol}" = ${stGeomExpr} WHERE ${whereClause};`
               );
@@ -392,128 +406,278 @@ export function runComparisonCore(
       } else if (resolvedType === DiscrepancyType.ATTRIBUTE_MISMATCH) {
         attributeMismatchCount++;
       } else {
+        // Coincidencia exacta: Incremento atómico para optimizar memoria RAM
         exactMatchesCount++;
       }
 
-      discrepancyItems.push({
-        id: `${isGeometryMismatch ? "geom-mismatch" : differences.length > 0 ? "mismatch" : "match"}-${suidKey}-${dbIdx}`,
-        suid: rawSuid,
-        type: resolvedType,
-        differences,
-        geometryDifference: geometryDiffInfo,
-        dbRecord: dbRec,
-        shpFeatureProps: fileRec,
-        shpGeometry: shpGeom,
-        note: isDuplicate
-          ? `SUID Duplicado (${dbRecList.length} en DB / ${fileRecList.length} en Archivo)`
-          : geometryDiffInfo
-            ? geometryDiffInfo.details
-            : undefined,
-      });
+      // Almacenar ítem en el array únicamente si representa una discrepancia real
+      if (resolvedType !== DiscrepancyType.MATCH) {
+        if (dbfReader && !fileFeatureRecord) {
+          const fileRecordIndex = binaryFileIndices[dbIndex] ?? binaryFileIndices[0];
+          fileFeatureRecord = dbfReader.readRecord(fileRecordIndex);
+        }
 
-      if (processedDbRecordCount % 500 === 0) emit("Comparando atributos y geometrías", processedDbRecordCount, totalDbRecords);
+        discrepancyItems.push({
+          id: `${isGeometryMismatch ? "geom-mismatch" : differences.length > 0 ? "mismatch" : "dup"}-${suidKey}-${dbIndex}`,
+          suid: rawSuid,
+          type: resolvedType,
+          differences,
+          geometryDifference: geometryDiffInfo,
+          dbRecord: dbRec,
+          shpFeatureProps: fileFeatureRecord || undefined,
+          shpGeometry: fileGeometry || undefined,
+          note: isDuplicate
+            ? `SUID Duplicado (${dbRecList.length} en DB / ${fileMatchesCount} en Archivo)`
+            : geometryDiffInfo
+              ? geometryDiffInfo.details
+              : undefined,
+        });
+      }
+
+      if (processedDbRecordCount % 10_000 === 0) {
+        emit("Comparando atributos y geometrías", processedDbRecordCount, totalDbRecords);
+      }
     });
   });
   emit("Comparando atributos y geometrías", totalDbRecords, totalDbRecords);
 
-  // Phase 6: Only-in-file scan -> generates INSERT statements
+  // ==========================================
+  // FASE 5: Registros Exclusivos de Archivo y Generación de INSERT
+  // ==========================================
   let totalUnmatchedFileRecords = 0;
-  fileSuidMap.forEach((fileRecList, suidKey) => {
-    if (!processedSuids.has(suidKey)) {
-      totalUnmatchedFileRecords += fileRecList.length;
-    }
-  });
+  if (dbfReader) {
+    binaryFileSuidMap.forEach((indices, suidKey) => {
+      if (!processedSuids.has(suidKey)) {
+        totalUnmatchedFileRecords += indices.length;
+      }
+    });
+  } else {
+    objectFileSuidMap.forEach((recList, suidKey) => {
+      if (!processedSuids.has(suidKey)) {
+        totalUnmatchedFileRecords += recList.length;
+      }
+    });
+  }
 
-  let processedInsertRecordCount = 0;
+  let processedInsertCount = 0;
 
-  fileSuidMap.forEach((fileRecList, suidKey) => {
-    if (!processedSuids.has(suidKey)) {
-      const fileGeomList = fileGeomMap.get(suidKey) ?? [];
-      onlyInShpCount += fileRecList.length;
+  if (dbfReader) {
+    binaryFileSuidMap.forEach((indices, suidKey) => {
+      if (!processedSuids.has(suidKey)) {
+        onlyInShpCount += indices.length;
 
-      fileRecList.forEach((fileRec, featureIndex) => {
-        processedInsertRecordCount++;
-        const rawSuid = buildCompositeRawSuid(fileRec, targetFileSuidCols) || suidKey;
+        indices.forEach((recordIndex, occurrenceIndex) => {
+          processedInsertCount++;
+          const fileRec = dbfReader!.readRecord(recordIndex) || {};
+          const fileGeom = shpReader ? shpReader.readGeometry(recordIndex) : undefined;
+          const rawSuid =
+            buildCompositeRawSuidFromRecord(fileRec, targetFileSuidCols) || suidKey;
 
-        const differences: AttributeDifference[] = [];
-        fieldsToCompare.forEach((field) => {
-          const fileKey = fieldToFileKey.get(field);
-          const fileVal = fileKey != null ? fileRec[fileKey] : null;
-          if (cleanValue(fileVal) !== "") {
-            differences.push({
-              fieldName: field,
-              dbValue: null,
-              shpValue: fileVal as string | number | null,
-            });
-          }
-        });
-
-        discrepancyItems.push({
-          id: `file-${suidKey}-${featureIndex}`,
-          suid: rawSuid,
-          type: DiscrepancyType.ONLY_IN_SHP,
-          differences,
-          shpFeatureProps: fileRec,
-          shpGeometry: fileGeomList[featureIndex] ?? fileGeomList[0],
-        });
-
-        // Build INSERT statement: SUID columns + mapped fields + unmapped user defaults
-        const insertCols: string[] = [];
-        const insertVals: string[] = [];
-        const addedCols = new Set<string>();
-
-        dbSuidCols.forEach((col, columnIndex) => {
-          const targetCol =
-            targetFileSuidCols.length > 0
-              ? targetFileSuidCols[columnIndex] || targetFileSuidCols[0]
-              : undefined;
-          const val = targetCol ? fileRec[targetCol] ?? fileRec[col] : fileRec[col];
-          insertCols.push(`"${col}"`);
-          insertVals.push(toSqlValue(val, col, dbColumnTypes));
-          addedCols.add(col);
-        });
-
-        fieldsToCompare.forEach((field) => {
-          if (addedCols.has(field)) return;
-          const fileKey = fieldToFileKey.get(field);
-          if (fileKey != null) {
-            insertCols.push(`"${field}"`);
-            insertVals.push(toSqlValue(fileRec[fileKey], field, dbColumnTypes));
-            addedCols.add(field);
-          }
-        });
-
-        if (insertDefaults) {
-          Object.entries(insertDefaults).forEach(([fieldName, defaultConfig]) => {
-            if (addedCols.has(fieldName)) return;
-            if (defaultConfig.value && defaultConfig.value.trim() !== "") {
-              insertCols.push(`"${fieldName}"`);
-              if (defaultConfig.useRawExpression) {
-                insertVals.push(defaultConfig.value.trim());
-              } else {
-                insertVals.push(toSqlValue(defaultConfig.value, fieldName, dbColumnTypes));
-              }
-              addedCols.add(fieldName);
+          const differences: AttributeDifference[] = [];
+          fieldsToCompare.forEach((field) => {
+            const fieldDesc = dbfCompareFields.get(field);
+            const fileVal = fieldDesc
+              ? dbfReader!.readFieldValue(recordIndex, fieldDesc)
+              : fileRec[field];
+            if (cleanValue(fileVal) !== "") {
+              differences.push({
+                fieldName: field,
+                dbValue: null,
+                shpValue: fileVal as string | number | null,
+              });
             }
           });
-        }
 
-        insertStatements.push(
-          `INSERT INTO "${dbSchemaName}"."${dbTableName}" (${insertCols.join(", ")}) VALUES (${insertVals.join(", ")});`
-        );
+          discrepancyItems.push({
+            id: `file-${suidKey}-${occurrenceIndex}`,
+            suid: rawSuid,
+            type: DiscrepancyType.ONLY_IN_SHP,
+            differences,
+            shpFeatureProps: fileRec,
+            shpGeometry: fileGeom || undefined,
+          });
 
-        if (processedInsertRecordCount % 500 === 0) {
-          emit("Generando sentencias INSERT", processedInsertRecordCount, totalUnmatchedFileRecords);
-        }
-      });
-    }
-  });
+          // Construcción de la sentencia INSERT INTO
+          const insertCols: string[] = [];
+          const insertVals: string[] = [];
+          const addedCols = new Set<string>();
+
+          dbSuidCols.forEach((col, columnIndex) => {
+            const targetCol =
+              targetFileSuidCols.length > 0
+                ? targetFileSuidCols[columnIndex] || targetFileSuidCols[0]
+                : undefined;
+            const val = targetCol ? fileRec[targetCol] ?? fileRec[col] : fileRec[col];
+            insertCols.push(`"${col}"`);
+            insertVals.push(toSqlValue(val, col, dbColumnTypes));
+            addedCols.add(col);
+          });
+
+          fieldsToCompare.forEach((field) => {
+            if (addedCols.has(field)) return;
+            const fieldDesc = dbfCompareFields.get(field);
+            const fileVal = fieldDesc
+              ? dbfReader!.readFieldValue(recordIndex, fieldDesc)
+              : fileRec[field];
+            if (fileVal !== undefined) {
+              insertCols.push(`"${field}"`);
+              insertVals.push(toSqlValue(fileVal, field, dbColumnTypes));
+              addedCols.add(field);
+            }
+          });
+
+          // Inclusión de Geometría PostGIS en la sentencia INSERT
+          if (fileGeom) {
+            const geomCol =
+              findDbGeometryColumn(dbRecords[0], dbColumnTypes) ||
+              (mappingConfig.compareGeometry ? "geom" : undefined);
+
+            if (geomCol && !addedCols.has(geomCol)) {
+              const stGeomExpr = buildPostgisGeomExpr(fileGeom, mappingConfig.targetSrid);
+              insertCols.push(`"${geomCol}"`);
+              insertVals.push(stGeomExpr);
+              addedCols.add(geomCol);
+            }
+          }
+
+          if (insertDefaults) {
+            Object.entries(insertDefaults).forEach(([fieldName, defaultConfig]) => {
+              if (addedCols.has(fieldName)) return;
+              if (defaultConfig.value && defaultConfig.value.trim() !== "") {
+                insertCols.push(`"${fieldName}"`);
+                if (defaultConfig.useRawExpression) {
+                  insertVals.push(defaultConfig.value.trim());
+                } else {
+                  insertVals.push(toSqlValue(defaultConfig.value, fieldName, dbColumnTypes));
+                }
+                addedCols.add(fieldName);
+              }
+            });
+          }
+
+          insertStatements.push(
+            `INSERT INTO "${dbSchemaName}"."${dbTableName}" (${insertCols.join(", ")}) VALUES (${insertVals.join(", ")});`
+          );
+
+          if (processedInsertCount % 5_000 === 0) {
+            emit("Generando sentencias INSERT", processedInsertCount, totalUnmatchedFileRecords);
+          }
+        });
+      }
+    });
+  } else {
+    objectFileSuidMap.forEach((fileRecList, suidKey) => {
+      if (!processedSuids.has(suidKey)) {
+        const fileGeomList = objectFileGeomMap.get(suidKey) ?? [];
+        onlyInShpCount += fileRecList.length;
+
+        fileRecList.forEach((fileRec, featureIndex) => {
+          processedInsertCount++;
+          const rawSuid =
+            buildCompositeRawSuidFromRecord(fileRec, targetFileSuidCols) || suidKey;
+
+          const differences: AttributeDifference[] = [];
+          fieldsToCompare.forEach((field) => {
+            const fileKey = fieldToFileKey.get(field);
+            const fileVal = fileKey != null ? fileRec[fileKey] : null;
+            if (cleanValue(fileVal) !== "") {
+              differences.push({
+                fieldName: field,
+                dbValue: null,
+                shpValue: fileVal as string | number | null,
+              });
+            }
+          });
+
+          discrepancyItems.push({
+            id: `file-${suidKey}-${featureIndex}`,
+            suid: rawSuid,
+            type: DiscrepancyType.ONLY_IN_SHP,
+            differences,
+            shpFeatureProps: fileRec,
+            shpGeometry: fileGeomList[featureIndex] ?? fileGeomList[0],
+          });
+
+          const insertCols: string[] = [];
+          const insertVals: string[] = [];
+          const addedCols = new Set<string>();
+
+          dbSuidCols.forEach((col, columnIndex) => {
+            const targetCol =
+              targetFileSuidCols.length > 0
+                ? targetFileSuidCols[columnIndex] || targetFileSuidCols[0]
+                : undefined;
+            const val = targetCol ? fileRec[targetCol] ?? fileRec[col] : fileRec[col];
+            insertCols.push(`"${col}"`);
+            insertVals.push(toSqlValue(val, col, dbColumnTypes));
+            addedCols.add(col);
+          });
+
+          fieldsToCompare.forEach((field) => {
+            if (addedCols.has(field)) return;
+            const fileKey = fieldToFileKey.get(field);
+            if (fileKey != null) {
+              insertCols.push(`"${field}"`);
+              insertVals.push(toSqlValue(fileRec[fileKey], field, dbColumnTypes));
+              addedCols.add(field);
+            }
+          });
+
+          const fileGeom = fileGeomList[featureIndex] ?? fileGeomList[0];
+          if (fileGeom) {
+            const geomCol =
+              findDbGeometryColumn(dbRecords[0], dbColumnTypes) ||
+              (mappingConfig.compareGeometry ? "geom" : undefined);
+
+            if (geomCol && !addedCols.has(geomCol)) {
+              const stGeomExpr = buildPostgisGeomExpr(fileGeom, mappingConfig.targetSrid);
+              insertCols.push(`"${geomCol}"`);
+              insertVals.push(stGeomExpr);
+              addedCols.add(geomCol);
+            }
+          }
+
+          if (insertDefaults) {
+            Object.entries(insertDefaults).forEach(([fieldName, defaultConfig]) => {
+              if (addedCols.has(fieldName)) return;
+              if (defaultConfig.value && defaultConfig.value.trim() !== "") {
+                insertCols.push(`"${fieldName}"`);
+                if (defaultConfig.useRawExpression) {
+                  insertVals.push(defaultConfig.value.trim());
+                } else {
+                  insertVals.push(toSqlValue(defaultConfig.value, fieldName, dbColumnTypes));
+                }
+                addedCols.add(fieldName);
+              }
+            });
+          }
+
+          insertStatements.push(
+            `INSERT INTO "${dbSchemaName}"."${dbTableName}" (${insertCols.join(", ")}) VALUES (${insertVals.join(", ")});`
+          );
+
+          if (processedInsertCount % 5_000 === 0) {
+            emit("Generando sentencias INSERT", processedInsertCount, totalUnmatchedFileRecords);
+          }
+        });
+      }
+    });
+  }
   emit("Generando sentencias INSERT", totalUnmatchedFileRecords, totalUnmatchedFileRecords);
+
+  const totalAnalyzed =
+    exactMatchesCount +
+    attributeMismatchCount +
+    geometryMismatchCount +
+    onlyInDbCount +
+    onlyInShpCount +
+    nullSuidCount +
+    duplicateSuidCount;
 
   return {
     totalDbRecords,
     totalFileRecords,
-    totalAnalyzed: discrepancyItems.length,
+    totalAnalyzed,
     exactMatchesCount,
     attributeMismatchCount,
     geometryMismatchCount,
@@ -525,92 +689,4 @@ export function runComparisonCore(
     sqlUpdateScript: updateStatements.join("\n"),
     sqlInsertScript: insertStatements.join("\n"),
   };
-}
-
-function extractNullRecordInfo(
-  record: Record<string, unknown>,
-  isDb: boolean,
-  fieldsToCompare: string[],
-  fieldToFileKey?: Map<string, string | null>
-): { differences: AttributeDifference[]; note: string } {
-  const differences: AttributeDifference[] = [];
-  const addedFields = new Set<string>();
-  const summaryParts: string[] = [];
-
-  // 1. Include fieldsToCompare if present in record
-  fieldsToCompare.forEach((field) => {
-    let fileKey: string | null | undefined = field;
-    if (!isDb && fieldToFileKey) {
-      fileKey = fieldToFileKey.get(field);
-    }
-    const val = isDb ? record[field] : fileKey ? record[fileKey] : record[field];
-    if (val !== undefined && val !== null && cleanValue(val) !== "") {
-      differences.push({
-        fieldName: field,
-        dbValue: isDb ? (val as string | number | null) : null,
-        shpValue: isDb ? null : (val as string | number | null),
-      });
-      addedFields.add(field.toLowerCase());
-      if (summaryParts.length < 3) {
-        summaryParts.push(`${field}: ${String(val)}`);
-      }
-    }
-  });
-
-  // 2. Also check key/identifier/descriptor attributes in record with precise matching
-  Object.entries(record).forEach(([key, val]) => {
-    const keyLower = key.toLowerCase();
-    if (addedFields.has(keyLower)) return;
-    if (["geom", "geometry", "wkb_geometry", "shape_leng", "shape_area"].includes(keyLower)) return;
-
-    const isIdentifierKey =
-      /\bid\b/.test(keyLower) ||
-      keyLower.endsWith("_id") ||
-      keyLower.endsWith("_cod") ||
-      keyLower.startsWith("cod") ||
-      keyLower.startsWith("nom") ||
-      keyLower.includes("name") ||
-      keyLower.includes("ref") ||
-      keyLower.startsWith("num");
-
-    if (isIdentifierKey && val !== undefined && val !== null && cleanValue(val) !== "") {
-      differences.push({
-        fieldName: key,
-        dbValue: isDb ? (val as string | number | null) : null,
-        shpValue: isDb ? null : (val as string | number | null),
-      });
-      addedFields.add(keyLower);
-      if (summaryParts.length < 3) {
-        summaryParts.push(`${key}: ${String(val)}`);
-      }
-    }
-  });
-
-  // 3. Fallback: if no attributes added yet, add any non-null non-geometry attributes (up to 5)
-  if (differences.length === 0) {
-    Object.entries(record).forEach(([key, val]) => {
-      if (addedFields.size >= 5) return;
-      const keyLower = key.toLowerCase();
-      if (["geom", "geometry", "wkb_geometry", "shape_leng", "shape_area"].includes(keyLower)) return;
-      if (val !== undefined && val !== null && cleanValue(val) !== "") {
-        differences.push({
-          fieldName: key,
-          dbValue: isDb ? (val as string | number | null) : null,
-          shpValue: isDb ? null : (val as string | number | null),
-        });
-        addedFields.add(keyLower);
-        if (summaryParts.length < 3) {
-          summaryParts.push(`${key}: ${String(val)}`);
-        }
-      }
-    });
-  }
-
-  const originText = isDb ? "base de datos" : "archivo fuente";
-  let note = `Registro en ${originText} sin clave identificadora SUID completa.`;
-  if (summaryParts.length > 0) {
-    note += ` [Atributos: ${summaryParts.join(" | ")}]`;
-  }
-
-  return { differences, note };
 }
