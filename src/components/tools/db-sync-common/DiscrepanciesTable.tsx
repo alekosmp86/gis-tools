@@ -60,6 +60,8 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
     switch (type) {
       case DiscrepancyType.MATCH:
         return <Badge variant={BadgeVariant.ACTIVE}>Coincidencia Exacta</Badge>;
+      case DiscrepancyType.GEOMETRY_MISMATCH:
+        return <span className={styles.badgeGeom}>Discrepancia Geométrica</span>;
       case DiscrepancyType.ATTRIBUTE_MISMATCH:
         return <Badge variant={BadgeVariant.DEV}>Discrepancia Atributos</Badge>;
       case DiscrepancyType.NULL_SUID:
