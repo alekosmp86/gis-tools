@@ -14,6 +14,7 @@ export interface ColumnMappingConfig {
   fieldsToCompare: string[];
   attributeMap?: Record<string, string>;
   compareGeometry: boolean;
+  targetSrid?: number;
   insertDefaults?: Record<string, InsertFieldDefault>;
 }
 
@@ -61,11 +62,20 @@ export interface AttributeDifference {
   shpValue: string | number | null;
 }
 
+export interface GeometryDifference {
+  dbType?: string;
+  fileType?: string;
+  details: string;
+  dbGeomRaw?: unknown;
+  fileGeomRaw?: unknown;
+}
+
 export interface DiscrepancyItem {
   id: string;
   suid: string;
   type: DiscrepancyType;
   differences: AttributeDifference[];
+  geometryDifference?: GeometryDifference;
   dbRecord?: Record<string, unknown>;
   shpFeatureProps?: Record<string, unknown>;
   shpGeometry?: unknown;

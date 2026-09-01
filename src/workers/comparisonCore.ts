@@ -4,8 +4,9 @@
  * Supports multi-column Composite SUID keys and dual SQL patch generation.
  */
 import type { WorkerInputMessage } from "@/types/workerMessages";
-import type { DiscrepancyItem, AttributeDifference, ComparisonSummary } from "@/types/comparison";
+import type { DiscrepancyItem, AttributeDifference, GeometryDifference, ComparisonSummary } from "@/types/comparison";
 import { DiscrepancyType } from "@/types/comparison";
+import { compareGeometries } from "@/utils/geometryComparator";
 
 export type ProgressEmitter = (phase: string, current: number, total: number) => void;
 
@@ -78,9 +79,9 @@ function toSqlWhereCondition(
   return `"${col}" = ${sqlVal}`;
 }
 
-function buildCompositeKey(rec: Record<string, unknown>, cols: string[]): string {
-  const cleanedVals = cols.map((col) => cleanSuid(rec[col]));
-  if (cols.length === 1) {
+function buildCompositeKey(record: Record<string, unknown>, columns: string[]): string {
+  const cleanedVals = columns.map((col) => cleanSuid(record[col]));
+  if (columns.length === 1) {
     if (!cleanedVals[0]) return "";
   } else {
     if (cleanedVals.every((val) => !val)) return "";
@@ -88,12 +89,19 @@ function buildCompositeKey(rec: Record<string, unknown>, cols: string[]): string
   return cleanedVals.join("_");
 }
 
-function buildCompositeRawSuid(rec: Record<string, unknown>, cols: string[]): string {
-  const parts: string[] = cols.map((col) => {
-    const val = cleanValue(rec[col]);
+function buildCompositeRawSuid(record: Record<string, unknown>, columns: string[]): string {
+  const parts: string[] = columns.map((col) => {
+    const val = cleanValue(record[col]);
     return val !== "" ? val : "NULL";
   });
   return parts.join(" | ");
+}
+
+function extractDbGeometry(dbRecord: Record<string, unknown>): unknown {
+  const geomKey = Object.keys(dbRecord).find((key) =>
+    ["geom", "geometry", "wkb_geometry", "shape", "st_asgeojson", "geojson"].includes(key.toLowerCase())
+  );
+  return geomKey ? dbRecord[geomKey] : null;
 }
 
 export function runComparisonCore(
@@ -133,6 +141,7 @@ export function runComparisonCore(
 
   let exactMatchesCount = 0;
   let attributeMismatchCount = 0;
+  let geometryMismatchCount = 0;
   let onlyInDbCount = 0;
   let onlyInShpCount = 0;
   let nullSuidCount = 0;
@@ -142,16 +151,16 @@ export function runComparisonCore(
   const dbSuidMap = new Map<string, Array<Record<string, unknown>>>();
   const dbNullRecords: Array<Record<string, unknown>> = [];
 
-  dbRecords.forEach((rec, i) => {
-    const key = buildCompositeKey(rec, dbSuidCols);
+  dbRecords.forEach((record, recordIndex) => {
+    const key = buildCompositeKey(record, dbSuidCols);
     if (!key) {
-      dbNullRecords.push(rec);
+      dbNullRecords.push(record);
     } else {
       const arr = dbSuidMap.get(key) ?? [];
-      arr.push(rec);
+      arr.push(record);
       dbSuidMap.set(key, arr);
     }
-    if (i % 500 === 0) emit("Indexando registros de base de datos", i, totalDbRecords);
+    if (recordIndex % 500 === 0) emit("Indexando registros de base de datos", recordIndex, totalDbRecords);
   });
   emit("Indexando registros de base de datos", totalDbRecords, totalDbRecords);
 
@@ -162,35 +171,35 @@ export function runComparisonCore(
 
   if (shpFeatures.length > 0) {
     (shpFeatures as Array<{ properties: Record<string, unknown>; geometry: unknown }>).forEach(
-      (feat, i) => {
-        if (feat.properties) {
-          const key = buildCompositeKey(feat.properties, targetFileSuidCols);
+      (feature, featureIndex) => {
+        if (feature.properties) {
+          const key = buildCompositeKey(feature.properties, targetFileSuidCols);
           if (!key) {
-            fileNullRecords.push(feat.properties);
+            fileNullRecords.push(feature.properties);
           } else {
             const arr = fileSuidMap.get(key) ?? [];
-            arr.push(feat.properties);
+            arr.push(feature.properties);
             fileSuidMap.set(key, arr);
 
             const geoms = fileGeomMap.get(key) ?? [];
-            geoms.push(feat.geometry);
+            geoms.push(feature.geometry);
             fileGeomMap.set(key, geoms);
           }
         }
-        if (i % 500 === 0) emit("Indexando archivo fuente", i, totalFileRecords);
+        if (featureIndex % 500 === 0) emit("Indexando archivo fuente", featureIndex, totalFileRecords);
       }
     );
   } else {
-    Object.values(fileDataset.recordsObject).forEach((rec, i) => {
-      const key = buildCompositeKey(rec, targetFileSuidCols);
+    Object.values(fileDataset.recordsObject).forEach((record, recordIndex) => {
+      const key = buildCompositeKey(record, targetFileSuidCols);
       if (!key) {
-        fileNullRecords.push(rec);
+        fileNullRecords.push(record);
       } else {
         const arr = fileSuidMap.get(key) ?? [];
-        arr.push(rec);
+        arr.push(record);
         fileSuidMap.set(key, arr);
       }
-      if (i % 500 === 0) emit("Indexando archivo fuente", i, totalFileRecords);
+      if (recordIndex % 500 === 0) emit("Indexando archivo fuente", recordIndex, totalFileRecords);
     });
   }
   emit("Indexando archivo fuente", totalFileRecords, totalFileRecords);
@@ -216,33 +225,33 @@ export function runComparisonCore(
     const fieldLower = field.toLowerCase();
     const field10 = fieldLower.slice(0, 10);
     const match = availableFileKeys.find(
-      (k) => k.toLowerCase() === fieldLower || k.toLowerCase() === field10
+      (attrKey) => attrKey.toLowerCase() === fieldLower || attrKey.toLowerCase() === field10
     );
     fieldToFileKey.set(field, match ?? null);
   });
 
   // Phase 4: Report NULL SUIDs
-  dbNullRecords.forEach((rec, idx) => {
+  dbNullRecords.forEach((record, recordIndex) => {
     nullSuidCount++;
-    const { differences, note } = extractNullRecordInfo(rec, true, fieldsToCompare, fieldToFileKey);
+    const { differences, note } = extractNullRecordInfo(record, true, fieldsToCompare, fieldToFileKey);
     discrepancyItems.push({
-      id: `null-db-${idx}`,
+      id: `null-db-${recordIndex}`,
       suid: "(SUID NULL / Vacío en DB)",
       type: DiscrepancyType.NULL_SUID,
       differences,
-      dbRecord: rec,
+      dbRecord: record,
       note,
     });
   });
-  fileNullRecords.forEach((rec, idx) => {
+  fileNullRecords.forEach((record, recordIndex) => {
     nullSuidCount++;
-    const { differences, note } = extractNullRecordInfo(rec, false, fieldsToCompare, fieldToFileKey);
+    const { differences, note } = extractNullRecordInfo(record, false, fieldsToCompare, fieldToFileKey);
     discrepancyItems.push({
-      id: `null-file-${idx}`,
+      id: `null-file-${recordIndex}`,
       suid: "(SUID NULL / Vacío en Archivo)",
       type: DiscrepancyType.NULL_SUID,
       differences,
-      shpFeatureProps: rec,
+      shpFeatureProps: record,
       note,
     });
   });
@@ -325,14 +334,61 @@ export function runComparisonCore(
         }
       });
 
+      // Spatial Geometry Comparison (when compareGeometry is enabled)
+      let isGeometryMismatch = false;
+      let geometryDiffInfo: GeometryDifference | undefined = undefined;
+
+      if (mappingConfig.compareGeometry) {
+        const dbGeom = extractDbGeometry(dbRec);
+        if (dbGeom && shpGeom) {
+          const geomResult = compareGeometries(dbGeom, shpGeom);
+          if (!geomResult.isMatch) {
+            isGeometryMismatch = true;
+            geometryDiffInfo = {
+              dbType: geomResult.dbType,
+              fileType: geomResult.fileType,
+              details: geomResult.details || "Diferencia geométrica detectada",
+              dbGeomRaw: dbGeom,
+              fileGeomRaw: shpGeom,
+            };
+
+            // Generate spatial UPDATE SQL statement if shapefile/file geometry exists
+            if (whereClause && geomResult.fileGeomNormalized) {
+              const geomCol =
+                Object.keys(dbRec).find((columnKey) =>
+                  ["geom", "geometry", "wkb_geometry"].includes(columnKey.toLowerCase())
+                ) || "geom";
+              const jsonGeomStr = JSON.stringify(geomResult.fileGeomNormalized);
+              const targetSrid =
+                mappingConfig.targetSrid && mappingConfig.targetSrid > 0
+                  ? mappingConfig.targetSrid
+                  : 4326;
+
+              const stGeomExpr =
+                targetSrid === 4326
+                  ? `ST_SetSRID(ST_GeomFromGeoJSON('${jsonGeomStr}'), 4326)`
+                  : `ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON('${jsonGeomStr}'), 4326), ${targetSrid})`;
+
+              updateStatements.push(
+                `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${geomCol}" = ${stGeomExpr} WHERE ${whereClause};`
+              );
+            }
+          }
+        }
+      }
+
       const resolvedType = isDuplicate
         ? DiscrepancyType.DUPLICATE_SUID
-        : differences.length > 0
-          ? DiscrepancyType.ATTRIBUTE_MISMATCH
-          : DiscrepancyType.MATCH;
+        : isGeometryMismatch
+          ? DiscrepancyType.GEOMETRY_MISMATCH
+          : differences.length > 0
+            ? DiscrepancyType.ATTRIBUTE_MISMATCH
+            : DiscrepancyType.MATCH;
 
       if (resolvedType === DiscrepancyType.DUPLICATE_SUID) {
         duplicateSuidCount++;
+      } else if (resolvedType === DiscrepancyType.GEOMETRY_MISMATCH) {
+        geometryMismatchCount++;
       } else if (resolvedType === DiscrepancyType.ATTRIBUTE_MISMATCH) {
         attributeMismatchCount++;
       } else {
@@ -340,22 +396,25 @@ export function runComparisonCore(
       }
 
       discrepancyItems.push({
-        id: `${differences.length > 0 ? "mismatch" : "match"}-${suidKey}-${dbIdx}`,
+        id: `${isGeometryMismatch ? "geom-mismatch" : differences.length > 0 ? "mismatch" : "match"}-${suidKey}-${dbIdx}`,
         suid: rawSuid,
         type: resolvedType,
         differences,
+        geometryDifference: geometryDiffInfo,
         dbRecord: dbRec,
         shpFeatureProps: fileRec,
         shpGeometry: shpGeom,
         note: isDuplicate
           ? `SUID Duplicado (${dbRecList.length} en DB / ${fileRecList.length} en Archivo)`
-          : undefined,
+          : geometryDiffInfo
+            ? geometryDiffInfo.details
+            : undefined,
       });
 
-      if (processedDbRecordCount % 500 === 0) emit("Comparando atributos", processedDbRecordCount, totalDbRecords);
+      if (processedDbRecordCount % 500 === 0) emit("Comparando atributos y geometrías", processedDbRecordCount, totalDbRecords);
     });
   });
-  emit("Comparando atributos", totalDbRecords, totalDbRecords);
+  emit("Comparando atributos y geometrías", totalDbRecords, totalDbRecords);
 
   // Phase 6: Only-in-file scan -> generates INSERT statements
   let totalUnmatchedFileRecords = 0;
@@ -372,7 +431,7 @@ export function runComparisonCore(
       const fileGeomList = fileGeomMap.get(suidKey) ?? [];
       onlyInShpCount += fileRecList.length;
 
-      fileRecList.forEach((fileRec, fIdx) => {
+      fileRecList.forEach((fileRec, featureIndex) => {
         processedInsertRecordCount++;
         const rawSuid = buildCompositeRawSuid(fileRec, targetFileSuidCols) || suidKey;
 
@@ -390,12 +449,12 @@ export function runComparisonCore(
         });
 
         discrepancyItems.push({
-          id: `file-${suidKey}-${fIdx}`,
+          id: `file-${suidKey}-${featureIndex}`,
           suid: rawSuid,
           type: DiscrepancyType.ONLY_IN_SHP,
           differences,
           shpFeatureProps: fileRec,
-          shpGeometry: fileGeomList[fIdx] ?? fileGeomList[0],
+          shpGeometry: fileGeomList[featureIndex] ?? fileGeomList[0],
         });
 
         // Build INSERT statement: SUID columns + mapped fields + unmapped user defaults
@@ -403,12 +462,12 @@ export function runComparisonCore(
         const insertVals: string[] = [];
         const addedCols = new Set<string>();
 
-        dbSuidCols.forEach((col, cIdx) => {
-          const fCol =
+        dbSuidCols.forEach((col, columnIndex) => {
+          const targetCol =
             targetFileSuidCols.length > 0
-              ? targetFileSuidCols[cIdx] || targetFileSuidCols[0]
+              ? targetFileSuidCols[columnIndex] || targetFileSuidCols[0]
               : undefined;
-          const val = fCol ? fileRec[fCol] ?? fileRec[col] : fileRec[col];
+          const val = targetCol ? fileRec[targetCol] ?? fileRec[col] : fileRec[col];
           insertCols.push(`"${col}"`);
           insertVals.push(toSqlValue(val, col, dbColumnTypes));
           addedCols.add(col);
@@ -425,14 +484,14 @@ export function runComparisonCore(
         });
 
         if (insertDefaults) {
-          Object.entries(insertDefaults).forEach(([fieldName, defConfig]) => {
+          Object.entries(insertDefaults).forEach(([fieldName, defaultConfig]) => {
             if (addedCols.has(fieldName)) return;
-            if (defConfig.value && defConfig.value.trim() !== "") {
+            if (defaultConfig.value && defaultConfig.value.trim() !== "") {
               insertCols.push(`"${fieldName}"`);
-              if (defConfig.useRawExpression) {
-                insertVals.push(defConfig.value.trim());
+              if (defaultConfig.useRawExpression) {
+                insertVals.push(defaultConfig.value.trim());
               } else {
-                insertVals.push(toSqlValue(defConfig.value, fieldName, dbColumnTypes));
+                insertVals.push(toSqlValue(defaultConfig.value, fieldName, dbColumnTypes));
               }
               addedCols.add(fieldName);
             }
@@ -457,7 +516,7 @@ export function runComparisonCore(
     totalAnalyzed: discrepancyItems.length,
     exactMatchesCount,
     attributeMismatchCount,
-    geometryMismatchCount: 0, // @planned — see DiscrepancyType.GEOMETRY_MISMATCH
+    geometryMismatchCount,
     onlyInDbCount,
     onlyInShpCount,
     nullSuidCount,
@@ -469,7 +528,7 @@ export function runComparisonCore(
 }
 
 function extractNullRecordInfo(
-  rec: Record<string, unknown>,
+  record: Record<string, unknown>,
   isDb: boolean,
   fieldsToCompare: string[],
   fieldToFileKey?: Map<string, string | null>
@@ -478,13 +537,13 @@ function extractNullRecordInfo(
   const addedFields = new Set<string>();
   const summaryParts: string[] = [];
 
-  // 1. Include fieldsToCompare if present in rec
+  // 1. Include fieldsToCompare if present in record
   fieldsToCompare.forEach((field) => {
     let fileKey: string | null | undefined = field;
     if (!isDb && fieldToFileKey) {
       fileKey = fieldToFileKey.get(field);
     }
-    const val = isDb ? rec[field] : fileKey ? rec[fileKey] : rec[field];
+    const val = isDb ? record[field] : fileKey ? record[fileKey] : record[field];
     if (val !== undefined && val !== null && cleanValue(val) !== "") {
       differences.push({
         fieldName: field,
@@ -498,8 +557,8 @@ function extractNullRecordInfo(
     }
   });
 
-  // 2. Also check key/identifier/descriptor attributes in rec with precise matching
-  Object.entries(rec).forEach(([key, val]) => {
+  // 2. Also check key/identifier/descriptor attributes in record with precise matching
+  Object.entries(record).forEach(([key, val]) => {
     const keyLower = key.toLowerCase();
     if (addedFields.has(keyLower)) return;
     if (["geom", "geometry", "wkb_geometry", "shape_leng", "shape_area"].includes(keyLower)) return;
@@ -529,7 +588,7 @@ function extractNullRecordInfo(
 
   // 3. Fallback: if no attributes added yet, add any non-null non-geometry attributes (up to 5)
   if (differences.length === 0) {
-    Object.entries(rec).forEach(([key, val]) => {
+    Object.entries(record).forEach(([key, val]) => {
       if (addedFields.size >= 5) return;
       const keyLower = key.toLowerCase();
       if (["geom", "geometry", "wkb_geometry", "shape_leng", "shape_area"].includes(keyLower)) return;

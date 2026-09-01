@@ -47,24 +47,63 @@ export async function POST(request: Request) {
         ? [suid_column]
         : [];
 
-    // Combine suidColsList + fields_to_compare deduplicated
     const allSelectedCols = Array.from(new Set([...suidColsList, ...fields_to_compare]));
-    const selectClause =
-      allSelectedCols.length > 0
-        ? allSelectedCols.map((col) => `"${sanitizeIdentifier(col)}"`).join(", ")
-        : "*";
 
     // Query PostgreSQL information_schema for exact column data types
     const typesQuery = `
-      SELECT column_name, data_type 
+      SELECT column_name, data_type, udt_name 
       FROM information_schema.columns 
       WHERE table_schema = $1 AND table_name = $2;
     `;
     const typesRes = await client.query(typesQuery, [schema_name, table_name]);
     const columnTypes: Record<string, string> = {};
-    typesRes.rows.forEach((row: { column_name: string; data_type: string }) => {
+    let geomColumnName: string | null = null;
+
+    typesRes.rows.forEach((row: { column_name: string; data_type: string; udt_name?: string }) => {
       columnTypes[row.column_name] = row.data_type;
+      const nameLower = row.column_name.toLowerCase();
+      const udtLower = (row.udt_name || "").toLowerCase();
+      if (
+        nameLower === "geom" ||
+        nameLower === "geometry" ||
+        nameLower === "wkb_geometry" ||
+        udtLower.includes("geometry")
+      ) {
+        geomColumnName = row.column_name;
+      }
     });
+
+    const colSelects: string[] = allSelectedCols.map((col) => `"${sanitizeIdentifier(col)}"`);
+    let detectedSrid: number = 4326;
+
+    // If table has a geometry column, automatically fetch it as GeoJSON & detect native SRID
+    if (geomColumnName) {
+      const geomSanitized = sanitizeIdentifier(geomColumnName);
+      try {
+        const sridQuery = `
+          SELECT ST_SRID("${geomSanitized}") AS srid 
+          FROM "${sanitizeIdentifier(schema_name)}"."${sanitizeIdentifier(table_name)}" 
+          WHERE "${geomSanitized}" IS NOT NULL 
+          LIMIT 1;
+        `;
+        const sridRes = await client.query(sridQuery);
+        if (sridRes.rows.length > 0 && typeof sridRes.rows[0].srid === "number" && sridRes.rows[0].srid > 0) {
+          detectedSrid = sridRes.rows[0].srid;
+        }
+      } catch {
+        // Fallback to 4326 default
+      }
+
+      const existingIdx = colSelects.findIndex((s) => s === `"${geomSanitized}"`);
+      const stGeoJsonExpr = `ST_AsGeoJSON("${geomSanitized}") AS "${geomSanitized}"`;
+      if (existingIdx !== -1) {
+        colSelects[existingIdx] = stGeoJsonExpr;
+      } else {
+        colSelects.push(stGeoJsonExpr);
+      }
+    }
+
+    const selectClause = colSelects.length > 0 ? colSelects.join(", ") : "*";
 
     const query = `
       SELECT ${selectClause}
@@ -79,6 +118,7 @@ export async function POST(request: Request) {
       records: result.rows,
       totalCount: result.rowCount,
       columnTypes,
+      detectedSrid,
     });
   } catch (error: unknown) {
     const message =
