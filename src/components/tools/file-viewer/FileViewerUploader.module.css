@@ -155,3 +155,17 @@
 .reloadIcon {
   flex-shrink: 0;
 }
+
+@media (min-width: 640px) {
+  .activeFileInfo {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .reloadBtn {
+    width: auto;
+  }
+}
+

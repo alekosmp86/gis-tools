@@ -7,7 +7,7 @@ import { AttributeTable } from "./AttributeTable";
 import styles from "./FileViewerContainer.module.css";
 
 const SpatialMapPreview = dynamic(
-  () => import("@/components/shared/SpatialMapPreview").then((m) => m.SpatialMapPreview),
+  () => import("@/components/shared/SpatialMapPreview").then((module) => module.SpatialMapPreview),
   { ssr: false }
 );
 

@@ -1,7 +1,6 @@
 import shp from "shpjs";
 import type { FeatureCollection, Geometry, GeoJsonProperties } from "geojson";
 import { FileSourceKind, type ISpatialFileParser, type ParsedFileDataset } from "@/types/parsers";
-import { cleanSuid } from "@/utils/gisCleaners";
 
 export class ShapefileParser implements ISpatialFileParser {
   readonly formatName = "Shapefile / GeoJSON";
@@ -43,22 +42,16 @@ export class ShapefileParser implements ISpatialFileParser {
       geometryType = features[0].geometry.type;
     }
 
-    features.forEach((feat) => {
-      if (feat.properties) {
-        Object.keys(feat.properties).forEach((attrKey) => {
-          attributesSet.add(attrKey);
+    features.forEach((feature, featureIndex) => {
+      const record = feature.properties ? (feature.properties as Record<string, unknown>) : {};
+      if (feature.properties) {
+        Object.keys(feature.properties).forEach((attributeKey) => {
+          attributesSet.add(attributeKey);
         });
-
-        // Store feature in map by first attribute or raw properties
-        const firstAttr = Object.keys(feat.properties)[0];
-        if (firstAttr) {
-          const rawSuid = feat.properties[firstAttr];
-          const key = cleanSuid(rawSuid);
-          if (key) {
-            recordsMap.set(key, feat.properties as Record<string, unknown>);
-          }
-        }
       }
+
+      const featureKey = `feat-${featureIndex}`;
+      recordsMap.set(featureKey, record);
     });
 
     return {
@@ -73,3 +66,4 @@ export class ShapefileParser implements ISpatialFileParser {
     };
   }
 }
+

@@ -1,6 +1,5 @@
 import type { FeatureCollection, Feature, Geometry, GeoJsonProperties } from "geojson";
 import { FileSourceKind, type ISpatialFileParser, type ParsedFileDataset } from "@/types/parsers";
-import { cleanSuid } from "@/utils/gisCleaners";
 import { parseAnyGeometryString } from "@/utils/wktParser";
 import { normalizeCoordinate } from "@/utils/ewkbParser";
 
@@ -44,7 +43,6 @@ export class CsvParser implements ISpatialFileParser {
     }
 
     const recordsMap = new Map<string, Record<string, unknown>>();
-    const firstHeader = headers[0];
 
     // 1. Detect geometry column name (e.g. geom, geometry, wkt, wkb_geometry, the_geom, geom_wkt)
     const geomColHeader = headers.find((header) =>
@@ -70,9 +68,8 @@ export class CsvParser implements ISpatialFileParser {
         record[header] = values[headerIndex] !== undefined ? values[headerIndex] : "";
       });
 
-      const rawSuid = record[firstHeader];
-      const key = cleanSuid(rawSuid) || `row-${lineIndex}`;
-      recordsMap.set(key, record);
+      const rowKey = `row-${lineIndex - 1}`;
+      recordsMap.set(rowKey, record);
 
       let parsedGeom: Geometry | null = null;
 

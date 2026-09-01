@@ -23,13 +23,17 @@ export const AttributeTable: React.FC<AttributeTableProps> = ({
   const [pageSize, setPageSize] = useState<number>(15);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  const indexedRecords = records.map((rec, origIdx) => ({ rec, origIdx }));
+  const indexedRecords = records.map((record, originalIndex) => ({ record, originalIndex }));
 
   const filteredRecords = searchQuery.trim()
-    ? indexedRecords.filter(({ rec }) =>
-        attributes.some((attr) => {
-          const val = rec[attr];
-          return val !== undefined && val !== null && String(val).toLowerCase().includes(searchQuery.toLowerCase().trim());
+    ? indexedRecords.filter(({ record }) =>
+        attributes.some((attributeKey) => {
+          const attributeValue = record[attributeKey];
+          return (
+            attributeValue !== undefined &&
+            attributeValue !== null &&
+            String(attributeValue).toLowerCase().includes(searchQuery.toLowerCase().trim())
+          );
         })
       )
     : indexedRecords;
@@ -42,8 +46,8 @@ export const AttributeTable: React.FC<AttributeTableProps> = ({
   const endIndex = Math.min(startIndex + pageSize, totalFilteredCount);
   const paginatedRows = filteredRecords.slice(startIndex, endIndex);
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.target.value);
     setCurrentPage(1);
   };
 
@@ -78,28 +82,31 @@ export const AttributeTable: React.FC<AttributeTableProps> = ({
             <thead>
               <tr>
                 <th key="#row">#</th>
-                {attributes.map((attr) => (
-                  <th key={attr}>{attr}</th>
+                {attributes.map((attributeKey) => (
+                  <th key={attributeKey}>{attributeKey}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {paginatedRows.map(({ rec, origIdx }, rowIdx) => {
-                const globalIndex = startIndex + rowIdx + 1;
-                const isSelected = selectedIndex === origIdx;
+              {paginatedRows.map(({ record, originalIndex }, rowIndex) => {
+                const globalIndex = startIndex + rowIndex + 1;
+                const isSelected = selectedIndex === originalIndex;
                 return (
                   <tr
-                    key={origIdx}
+                    key={originalIndex}
                     className={isSelected ? styles.selectedRow : undefined}
-                    onClick={() => onSelectRow?.(isSelected ? null : origIdx)}
+                    onClick={() => onSelectRow?.(isSelected ? null : originalIndex)}
                   >
-                    <td key={`#-${origIdx}`}>{globalIndex}</td>
-                    {attributes.map((attr) => {
-                      const val = rec[attr];
-                      const isNull = val === null || val === undefined || String(val).trim() === "";
+                    <td key={`#-${originalIndex}`}>{globalIndex}</td>
+                    {attributes.map((attributeKey) => {
+                      const attributeValue = record[attributeKey];
+                      const isNull =
+                        attributeValue === null ||
+                        attributeValue === undefined ||
+                        String(attributeValue).trim() === "";
                       return (
-                        <td key={attr} title={!isNull ? String(val) : undefined}>
-                          {isNull ? <span className={styles.nullVal}>null</span> : String(val)}
+                        <td key={attributeKey} title={!isNull ? String(attributeValue) : undefined}>
+                          {isNull ? <span className={styles.nullVal}>null</span> : String(attributeValue)}
                         </td>
                       );
                     })}
