@@ -35,21 +35,25 @@ export const ComparisonWorkerMessageType = {
 
 export type ComparisonWorkerMessageType = (typeof ComparisonWorkerMessageType)[keyof typeof ComparisonWorkerMessageType];
 
-/**
- * Serializable version of ParsedFileDataset for postMessage transfer.
- * `recordsMap` (a Map) is converted to a plain object before crossing the worker boundary.
- * GeoJSON FeatureCollection is structuredClone-safe.
- */
 export interface SerializableFileDataset {
   fileName: string;
   fileSize: number;
   featureCount: number;
   geometryType?: string;
   attributes: string[];
-  /** Plain object representation of recordsMap for structured clone */
-  recordsObject: Record<string, Record<string, unknown>>;
+  /** Plain object representation of recordsMap (optional when dbfBuffer is provided) */
+  recordsObject?: Record<string, Record<string, unknown>>;
   geojson?: object;
+  /** Raw binary DBF buffer for zero-copy worker transfer */
+  dbfBuffer?: Uint8Array;
+  /** Raw binary SHP buffer for lazy geometry decoding */
+  shpBuffer?: Uint8Array;
+  /** Character encoding CPG text */
+  cpgText?: string;
+  /** Coordinate projection PRJ text */
+  prjText?: string;
 }
+
 
 /** Message sent FROM the main thread TO the worker */
 export interface WorkerInputMessage {

@@ -43,9 +43,9 @@ export async function runInWorker(
       }
     };
 
-    worker.onerror = (err) => {
+    worker.onerror = (errorEvent) => {
       worker.terminate();
-      reject(new Error(err.message ?? "Error desconocido en el Web Worker."));
+      reject(new Error(errorEvent.message ?? "Error desconocido en el Web Worker."));
     };
 
     worker.postMessage({ type: "RUN_COMPARISON", payload: input } satisfies WorkerInputMessage);
@@ -54,7 +54,8 @@ export async function runInWorker(
 
 /**
  * Serializes a ParsedFileDataset for postMessage transfer.
- * Converts Map<> → plain Record<> since Maps are not transferable via structuredClone.
+ * If binary buffers are present (dbfBuffer/shpBuffer), avoids converting millions of Map
+ * records into plain JS objects, saving gigabytes of heap RAM.
  */
 export function serializeFileDataset(dataset: {
   fileName: string;
@@ -64,11 +65,22 @@ export function serializeFileDataset(dataset: {
   attributes: string[];
   recordsMap: Map<string, Record<string, unknown>>;
   geojson?: object;
+  dbfBuffer?: Uint8Array;
+  shpBuffer?: Uint8Array;
+  cpgText?: string;
+  prjText?: string;
+  isLargeDataset?: boolean;
 }): SerializableFileDataset {
-  const recordsObject: Record<string, Record<string, unknown>> = {};
-  dataset.recordsMap.forEach((rec, key) => {
-    recordsObject[key] = rec;
-  });
+  let recordsObject: Record<string, Record<string, unknown>> | undefined = undefined;
+
+  // If no DBF binary buffer exists (e.g. CSV or raw GeoJSON), populate recordsObject
+  if (!dataset.dbfBuffer) {
+    recordsObject = {};
+    dataset.recordsMap.forEach((record, key) => {
+      recordsObject![key] = record;
+    });
+  }
+
   return {
     fileName: dataset.fileName,
     fileSize: dataset.fileSize,
@@ -77,5 +89,9 @@ export function serializeFileDataset(dataset: {
     attributes: dataset.attributes,
     recordsObject,
     geojson: dataset.geojson,
+    dbfBuffer: dataset.dbfBuffer,
+    shpBuffer: dataset.shpBuffer,
+    cpgText: dataset.cpgText,
+    prjText: dataset.prjText,
   };
 }

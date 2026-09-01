@@ -16,6 +16,16 @@ export interface ParsedFileDataset {
   attributes: string[];
   recordsMap: Map<string, Record<string, unknown>>;
   geojson?: FeatureCollection;
+  /** Raw binary DBF buffer for zero-copy worker transfer */
+  dbfBuffer?: Uint8Array;
+  /** Raw binary SHP buffer for lazy geometry decoding */
+  shpBuffer?: Uint8Array;
+  /** Coordinate projection PRJ text */
+  prjText?: string;
+  /** Character encoding CPG text */
+  cpgText?: string;
+  /** Flag indicating dataset has >50k records and uses memory-optimized columnar storage */
+  isLargeDataset?: boolean;
 }
 
 export interface ISpatialFileParser {
@@ -23,4 +33,5 @@ export interface ISpatialFileParser {
   readonly supportedExtensions: string[];
   parse(file: File): Promise<ParsedFileDataset>;
 }
+
 
