@@ -219,6 +219,18 @@
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
 }
 
+.legendDot[data-color-type="DB_FEATURE"] {
+  background-color: #0284c7;
+}
+
+.legendDot[data-color-type="FILE_FEATURE"] {
+  background-color: #ec4899;
+}
+
+.legendDot[data-color-type="GEOMETRY_MISMATCH"] {
+  background-color: #ec4899;
+}
+
 .legendDot[data-color-type="ATTRIBUTE_MISMATCH"] {
   background-color: #eab308;
 }

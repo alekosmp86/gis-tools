@@ -55,12 +55,15 @@ export const BASEMAP_TILES: Record<string, TileLayerConfig> = {
 };
 
 export const DISCREPANCY_COLORS: Record<string, string> = {
-  [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#eab308",
-  [DiscrepancyType.ONLY_IN_SHP]: "#9333ea",
-  [DiscrepancyType.ONLY_IN_DB]: "#0284c7",
+  DB_FEATURE: "#00e5ff",
+  FILE_FEATURE: "#ff0055",
+  [DiscrepancyType.GEOMETRY_MISMATCH]: "#ff0055",
+  [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#f59e0b",
+  [DiscrepancyType.ONLY_IN_SHP]: "#a855f7",
+  [DiscrepancyType.ONLY_IN_DB]: "#00e5ff",
   [DiscrepancyType.DUPLICATE_SUID]: "#f97316",
-  [DiscrepancyType.NULL_SUID]: "#dc2626",
-  [DiscrepancyType.MATCH]: "#059669",
+  [DiscrepancyType.NULL_SUID]: "#ef4444",
+  [DiscrepancyType.MATCH]: "#10b981",
 };
 
 export const DEFAULT_DISCREPANCY_COLOR = "#2563eb";
@@ -71,6 +74,9 @@ export function getDiscrepancyColor(type?: string): string {
 }
 
 export const DISCREPANCY_LABELS: Record<string, string> = {
+  DB_FEATURE: "Geometría Base de Datos (PostgreSQL)",
+  FILE_FEATURE: "Geometría Archivo (Shapefile / CSV)",
+  [DiscrepancyType.GEOMETRY_MISMATCH]: "Discrepancia Geométrica",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "Discrepancia de Atributos",
   [DiscrepancyType.ONLY_IN_SHP]: "Solo en Archivo Fuente",
   [DiscrepancyType.ONLY_IN_DB]: "Solo en Base de Datos",

@@ -1,16 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import type { FeatureCollection } from "geojson";
-import {
-  getDiscrepancyColor,
-  getDashArrayFromPattern,
-  MAP_MICRO_CHUNK_SIZE,
-  MAP_CHUNK_DELAY_MS,
-} from "@/constants/mapConstants";
+import { MAP_MICRO_CHUNK_SIZE, MAP_CHUNK_DELAY_MS } from "@/constants/mapConstants";
 import type { MapFeatureStyle } from "@/types/map";
 import { MapChunkMessageType } from "@/types/workerMessages";
 import type { MapChunkOutputMessage } from "@/types/workerMessages";
-import { buildPopupHtml } from "@/utils/mapPopupBuilder";
+import { computeFeatureStyle, createPointToLayer } from "@/utils/mapFeatureStyler";
+import { bindFeatureEvents } from "@/utils/mapFeatureEvents";
 
 export function useVectorChunkStream(
   mapInstanceRef: React.RefObject<L.Map | null>,
@@ -72,66 +68,14 @@ export function useVectorChunkStream(
         };
 
         const currentStyle = featureStyleRef.current;
-        const dashArray = getDashArrayFromPattern(currentStyle.strokePattern);
         const canvasRenderer = canvasRendererRef.current;
 
         const geojsonSubLayer = L.geoJSON(chunkCollection as import("geojson").GeoJsonObject, {
-          style: (feature) => {
-            const discrepancyType = feature?.properties?._discrepancyType;
-            const useDiscrepancyColor = Boolean(discrepancyType && !currentStyle.overrideDiscrepancyColors);
-            const strokeColor = useDiscrepancyColor ? getDiscrepancyColor(discrepancyType) : currentStyle.color;
-            const fillColor = useDiscrepancyColor
-              ? getDiscrepancyColor(discrepancyType)
-              : currentStyle.fillColor || currentStyle.color;
-
-            return {
-              renderer: canvasRenderer ?? undefined,
-              color: strokeColor,
-              weight: currentStyle.weight,
-              opacity: currentStyle.opacity,
-              fillColor,
-              fillOpacity: currentStyle.fillOpacity,
-              dashArray,
-            };
-          },
-          pointToLayer: (feature, latlng) => {
-            const discrepancyType = feature?.properties?._discrepancyType;
-            const useDiscrepancyColor = Boolean(discrepancyType && !currentStyle.overrideDiscrepancyColors);
-            const strokeColor = useDiscrepancyColor ? getDiscrepancyColor(discrepancyType) : currentStyle.color;
-            const fillColor = useDiscrepancyColor
-              ? getDiscrepancyColor(discrepancyType)
-              : currentStyle.fillColor || currentStyle.color;
-
-            return L.circleMarker(latlng, {
-              renderer: canvasRenderer ?? undefined,
-              radius: currentStyle.pointRadius,
-              fillColor,
-              color: useDiscrepancyColor ? "#ffffff" : strokeColor,
-              weight: Math.min(currentStyle.weight, 3),
-              opacity: currentStyle.opacity,
-              fillOpacity: Math.max(currentStyle.fillOpacity, 0.7),
-            });
-          },
-          onEachFeature: (feature, layer) => {
-            layer.on("click", () => {
-              const popupHtml = buildPopupHtml(feature);
-              if (popupHtml) {
-                layer.bindPopup(popupHtml, {
-                  closeButton: true,
-                  autoPan: true,
-                  maxWidth: 310,
-                }).openPopup();
-              }
-              if (onSelectFeature) {
-                const targetIndex = typeof feature?.properties?._featureIndex === "number"
-                  ? feature.properties._featureIndex
-                  : geojson.features.indexOf(feature);
-                if (targetIndex !== -1 && targetIndex !== undefined) {
-                  onSelectFeature(targetIndex);
-                }
-              }
-            });
-          },
+          style: (feature) => computeFeatureStyle(feature, currentStyle, canvasRenderer),
+          pointToLayer: (feature, latlng) =>
+            createPointToLayer(feature, latlng, currentStyle, canvasRenderer),
+          onEachFeature: (feature, layer) =>
+            bindFeatureEvents(feature, layer, geojson.features, onSelectFeature),
         });
 
         featureGroup.addLayer(geojsonSubLayer);
