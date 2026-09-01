@@ -26,3 +26,9 @@
 - [x] Resolved DB vs. DB step 1 -> step 2 state bleed with React `key` props (`key="db1-form"`, `key="db2-form"`)
 - [x] Refactored type system: relocated wizard & catalog UI types to `ui.ts` and mapping/comparison types to `comparison.ts`
 - [x] Pushed topic commits to remote `origin/main`
+- [x] Implemented Shapefile 1M records memory optimization (`BinaryDbfReader`, `BinaryShpReader`, `StringInternPool`, `zipArchiveExtractor`, zero-copy Web Worker streaming, and atomic exact-match indexing)
+- [x] 50,000-feature representative sample preview for large Shapefiles with high-contrast amber alert banner
+- [x] Automatic PostGIS geometry column detection & `ST_SetSRID` / `ST_Transform` SQL expression injection in `INSERT` statements
+- [x] Decomposed `ShapefileUploader` into atomic sub-components (`ShapefileDropzone`, `LoadedShapefileCard`)
+- [x] Extracted reusable universal `FileDropzone` component in `src/components/shared/` and reused across Shapefile & CSV sync tools
+- [x] Decomposed monolithic `comparisonCore.ts` into single-responsibility submodules under `src/workers/comparison/` (`suidKeyUtils.ts`, `sqlBuilder.ts`, `nullRecordHandler.ts`, `fileDatasetIndexer.ts`)

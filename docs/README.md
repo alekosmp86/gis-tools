@@ -8,6 +8,7 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 
 ### 🏗️ 1. Architecture & Code Standards (`docs/architecture/`)
 - [`ARCHITECTURE.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/ARCHITECTURE.md) — Comprehensive technical architecture guide, multi-threading with Web Workers, Strategy pattern, composite SUID keys, and database introspection.
+- [`BINARY_SHAPEFILE_1M_OPTIMIZATION.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/BINARY_SHAPEFILE_1M_OPTIMIZATION.md) — Deep-dive guide on 1M+ Shapefile memory optimization, low-level binary readers (`BinaryDbfReader`, `BinaryShpReader`), string interning pool, atomic exact-match indexing, and 50k map preview sampling.
 - [`ARCHITECTURE_AND_PROGRESS.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/ARCHITECTURE_AND_PROGRESS.md) — Development progress log, architectural decisions, and solved engineering challenges.
 - [`CODEBASE_STANDARDS_AND_UI_GUARDS.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/CODEBASE_STANDARDS_AND_UI_GUARDS.md) — Workspace coding standards, prop interface co-location rules, zero inline styles policy, Lucide icons usage, and single-letter variable removal.
 - [`WIZARD_ORCHESTRATOR_ARCHITECTURE.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/WIZARD_ORCHESTRATOR_ARCHITECTURE.md) — Decoupled 4-step wizard orchestrator, glassmorphism master card, and automatic smooth scroll implementation.
