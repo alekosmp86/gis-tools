@@ -47,11 +47,19 @@ export function useVectorChunkStream(
     const featureGroup = L.featureGroup().addTo(mapInstance);
     featureGroupRef.current = featureGroup;
 
-    if (!geojson?.features || geojson.features.length === 0) {
+    let isCancelled = false;
+    const totalFeatures = geojson?.features?.length || 0;
+
+    if (totalFeatures === 0) {
+      requestAnimationFrame(() => {
+        if (!isCancelled) {
+          setRenderedCount(0);
+          setIsChunking(false);
+        }
+      });
       return;
     }
 
-    let isCancelled = false;
     let initialZoomDone = false;
     let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 

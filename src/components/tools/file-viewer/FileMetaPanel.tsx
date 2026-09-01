@@ -1,5 +1,5 @@
 import React from "react";
-import { Info, Layers, AlertTriangle } from "lucide-react";
+import { Info, Layers, AlertTriangle, Zap } from "lucide-react";
 import { formatNumber, formatFileSize } from "@/utils/formatters";
 import type { ParsedFileDataset } from "@/types/parsers";
 import styles from "./FileMetaPanel.module.css";
@@ -10,7 +10,11 @@ interface FileMetaPanelProps {
 
 export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
   const formattedSize = formatFileSize(dataset.fileSize);
-  const hasGeometry = Boolean(dataset.geojson && dataset.geojson.features && dataset.geojson.features.length > 0);
+  const hasGeometry = Boolean(
+    dataset.geojson &&
+      dataset.geojson.features &&
+      dataset.geojson.features.length > 0
+  );
 
   return (
     <div className={styles.panelContainer}>
@@ -28,7 +32,9 @@ export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
         <div className={styles.statCard}>
           <span className={styles.statLabel}>Tipo de Geometría</span>
           <span className={styles.statValue}>
-            {hasGeometry ? dataset.geometryType || "Geometría" : "Alfanumérico"}
+            {hasGeometry || dataset.shpBuffer
+              ? dataset.geometryType || "Geometría"
+              : "Alfanumérico"}
           </span>
         </div>
 
@@ -43,7 +49,16 @@ export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
         </div>
       </div>
 
-      {!hasGeometry && (
+      {dataset.isLargeDataset && (
+        <div className={styles.largeDatasetNotice}>
+          <Zap size={16} color="#38bdf8" />
+          <span>
+            Motor de Alta Capacidad (1M Registros) activo con lectura binaria de bajo consumo en memoria RAM.
+          </span>
+        </div>
+      )}
+
+      {!hasGeometry && !dataset.shpBuffer && (
         <div className={styles.warningNote}>
           <AlertTriangle size={16} color="#eab308" />
           <span>

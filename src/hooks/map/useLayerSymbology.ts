@@ -17,8 +17,12 @@ export function useLayerSymbology(
         (subLayer as L.FeatureGroup).eachLayer((layer: L.Layer) => {
           const feature = (layer as L.Layer & { feature?: GeoJSON.Feature }).feature;
           const discrepancyType = feature?.properties?._discrepancyType;
-          const useDiscrepancyColor = Boolean(discrepancyType && !featureStyle.overrideDiscrepancyColors);
-          const strokeColor = useDiscrepancyColor ? getDiscrepancyColor(discrepancyType) : featureStyle.color;
+          const useDiscrepancyColor = Boolean(
+            discrepancyType && !featureStyle.overrideDiscrepancyColors
+          );
+          const strokeColor = useDiscrepancyColor
+            ? getDiscrepancyColor(discrepancyType)
+            : featureStyle.color;
           const fillColor = useDiscrepancyColor
             ? getDiscrepancyColor(discrepancyType)
             : featureStyle.fillColor || featureStyle.color;

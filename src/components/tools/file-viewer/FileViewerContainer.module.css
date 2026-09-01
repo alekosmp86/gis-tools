@@ -22,7 +22,15 @@
   width: 100%;
   border-radius: 12px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
+
+.previewNotice {
+  margin-bottom: 2px;
+}
+
 
 .sideSection {
   display: flex;

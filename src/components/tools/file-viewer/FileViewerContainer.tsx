@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import type { ParsedFileDataset } from "@/types/parsers";
+import { AlertMessage } from "@/components/shared/AlertMessage";
+import { AlertType } from "@/types/ui";
+import { formatNumber } from "@/utils/formatters";
 import { FileViewerUploader } from "./FileViewerUploader";
 import { FileMetaPanel } from "./FileMetaPanel";
 import { AttributeTable } from "./AttributeTable";
@@ -40,6 +43,13 @@ export const FileViewerContainer: React.FC = () => {
           {hasGeometry && parsedDataset.geojson ? (
             <div className={styles.mapLayout}>
               <div className={styles.mapSection}>
+                {parsedDataset.isLargeDataset && (
+                  <AlertMessage
+                    type={AlertType.WARNING}
+                    className={styles.previewNotice}
+                    text={`Vista previa de muestra: Mostrando ${formatNumber(parsedDataset.geojson.features.length)} de ${formatNumber(parsedDataset.featureCount)} entidades en el mapa inicial para asegurar fluidez de navegación.`}
+                  />
+                )}
                 <SpatialMapPreview
                   geojson={parsedDataset.geojson}
                   title={`VISTA ESPACIAL — ${parsedDataset.fileName}`}
