@@ -30,6 +30,7 @@ export const Button: React.FC<ButtonProps> = ({
       className={`${styles.button} ${variantClass} ${isEffectiveDisabled ? styles.disabled : ""} ${className}`}
       disabled={isEffectiveDisabled}
       {...props}
+      suppressHydrationWarning
     >
       {children}
     </button>

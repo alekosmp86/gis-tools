@@ -61,6 +61,28 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         <div className={styles.cardSub}>Valores dispares entre DB y SHP</div>
       </div>
 
+      {/* Geometry Discrepancies Card */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelectFilter(DiscrepancyFilter.GEOMETRY_MISMATCH)}
+        onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onSelectFilter(DiscrepancyFilter.GEOMETRY_MISMATCH)}
+        className={`${styles.kpiCard} ${
+          activeFilter === DiscrepancyFilter.GEOMETRY_MISMATCH ? styles.active : ""
+        }`}
+      >
+        <div className={styles.cardHeader}>
+          <span className={styles.cardTitle}>Discrepancias Geométricas</span>
+          <div className={styles.iconShp}>
+            <Layers size={18} />
+          </div>
+        </div>
+        <div className={`${styles.cardValue} ${styles.valWarning}`}>
+          {formatNumber(summary.geometryMismatchCount)}
+        </div>
+        <div className={styles.cardSub}>Geometría o topología dispar</div>
+      </div>
+
       {/* Exact Matches Card */}
       <div
         role="button"

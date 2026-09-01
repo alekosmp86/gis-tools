@@ -55,6 +55,7 @@ export const BASEMAP_TILES: Record<string, TileLayerConfig> = {
 };
 
 export const DISCREPANCY_COLORS: Record<string, string> = {
+  [DiscrepancyType.GEOMETRY_MISMATCH]: "#ec4899",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#eab308",
   [DiscrepancyType.ONLY_IN_SHP]: "#9333ea",
   [DiscrepancyType.ONLY_IN_DB]: "#0284c7",
@@ -71,6 +72,7 @@ export function getDiscrepancyColor(type?: string): string {
 }
 
 export const DISCREPANCY_LABELS: Record<string, string> = {
+  [DiscrepancyType.GEOMETRY_MISMATCH]: "Discrepancia Geométrica",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "Discrepancia de Atributos",
   [DiscrepancyType.ONLY_IN_SHP]: "Solo en Archivo Fuente",
   [DiscrepancyType.ONLY_IN_DB]: "Solo en Base de Datos",

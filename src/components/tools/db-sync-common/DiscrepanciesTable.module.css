@@ -151,3 +151,15 @@
   color: #fb923c;
   border: 1px solid rgba(251, 146, 60, 0.25);
 }
+
+.badgeGeom {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.725rem;
+  font-family: var(--font-mono);
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(236, 72, 153, 0.12);
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.25);
+}

@@ -4,8 +4,9 @@
  * Supports multi-column Composite SUID keys and dual SQL patch generation.
  */
 import type { WorkerInputMessage } from "@/types/workerMessages";
-import type { DiscrepancyItem, AttributeDifference, ComparisonSummary } from "@/types/comparison";
+import type { DiscrepancyItem, AttributeDifference, GeometryDifference, ComparisonSummary } from "@/types/comparison";
 import { DiscrepancyType } from "@/types/comparison";
+import { compareGeometries } from "@/utils/geometryComparator";
 
 export type ProgressEmitter = (phase: string, current: number, total: number) => void;
 
@@ -96,6 +97,13 @@ function buildCompositeRawSuid(rec: Record<string, unknown>, cols: string[]): st
   return parts.join(" | ");
 }
 
+function extractDbGeometry(dbRec: Record<string, unknown>): unknown {
+  const geomKey = Object.keys(dbRec).find((k) =>
+    ["geom", "geometry", "wkb_geometry", "shape", "st_asgeojson", "geojson"].includes(k.toLowerCase())
+  );
+  return geomKey ? dbRec[geomKey] : null;
+}
+
 export function runComparisonCore(
   payload: WorkerInputMessage["payload"],
   onProgress?: ProgressEmitter
@@ -133,6 +141,7 @@ export function runComparisonCore(
 
   let exactMatchesCount = 0;
   let attributeMismatchCount = 0;
+  let geometryMismatchCount = 0;
   let onlyInDbCount = 0;
   let onlyInShpCount = 0;
   let nullSuidCount = 0;
@@ -325,14 +334,50 @@ export function runComparisonCore(
         }
       });
 
+      // Spatial Geometry Comparison (when compareGeometry is enabled)
+      let isGeometryMismatch = false;
+      let geometryDiffInfo: GeometryDifference | undefined = undefined;
+
+      if (mappingConfig.compareGeometry) {
+        const dbGeom = extractDbGeometry(dbRec);
+        if (dbGeom || shpGeom) {
+          const geomResult = compareGeometries(dbGeom, shpGeom);
+          if (!geomResult.isMatch) {
+            isGeometryMismatch = true;
+            geometryDiffInfo = {
+              dbType: geomResult.dbType,
+              fileType: geomResult.fileType,
+              details: geomResult.details || "Diferencia geométrica detectada",
+              dbGeomRaw: dbGeom,
+              fileGeomRaw: shpGeom,
+            };
+
+            // Generate spatial UPDATE SQL statement if shapefile/file geometry exists
+            if (whereClause && geomResult.fileGeomNormalized) {
+              const geomCol = Object.keys(dbRec).find((k) =>
+                ["geom", "geometry", "wkb_geometry"].includes(k.toLowerCase())
+              ) || "geom";
+              const jsonGeomStr = JSON.stringify(geomResult.fileGeomNormalized);
+              updateStatements.push(
+                `UPDATE "${dbSchemaName}"."${dbTableName}" SET "${geomCol}" = ST_SetSRID(ST_GeomFromGeoJSON('${jsonGeomStr}'), 4326) WHERE ${whereClause};`
+              );
+            }
+          }
+        }
+      }
+
       const resolvedType = isDuplicate
         ? DiscrepancyType.DUPLICATE_SUID
-        : differences.length > 0
-          ? DiscrepancyType.ATTRIBUTE_MISMATCH
-          : DiscrepancyType.MATCH;
+        : isGeometryMismatch
+          ? DiscrepancyType.GEOMETRY_MISMATCH
+          : differences.length > 0
+            ? DiscrepancyType.ATTRIBUTE_MISMATCH
+            : DiscrepancyType.MATCH;
 
       if (resolvedType === DiscrepancyType.DUPLICATE_SUID) {
         duplicateSuidCount++;
+      } else if (resolvedType === DiscrepancyType.GEOMETRY_MISMATCH) {
+        geometryMismatchCount++;
       } else if (resolvedType === DiscrepancyType.ATTRIBUTE_MISMATCH) {
         attributeMismatchCount++;
       } else {
@@ -340,22 +385,25 @@ export function runComparisonCore(
       }
 
       discrepancyItems.push({
-        id: `${differences.length > 0 ? "mismatch" : "match"}-${suidKey}-${dbIdx}`,
+        id: `${isGeometryMismatch ? "geom-mismatch" : differences.length > 0 ? "mismatch" : "match"}-${suidKey}-${dbIdx}`,
         suid: rawSuid,
         type: resolvedType,
         differences,
+        geometryDifference: geometryDiffInfo,
         dbRecord: dbRec,
         shpFeatureProps: fileRec,
         shpGeometry: shpGeom,
         note: isDuplicate
           ? `SUID Duplicado (${dbRecList.length} en DB / ${fileRecList.length} en Archivo)`
-          : undefined,
+          : geometryDiffInfo
+            ? geometryDiffInfo.details
+            : undefined,
       });
 
-      if (processedDbRecordCount % 500 === 0) emit("Comparando atributos", processedDbRecordCount, totalDbRecords);
+      if (processedDbRecordCount % 500 === 0) emit("Comparando atributos y geometrías", processedDbRecordCount, totalDbRecords);
     });
   });
-  emit("Comparando atributos", totalDbRecords, totalDbRecords);
+  emit("Comparando atributos y geometrías", totalDbRecords, totalDbRecords);
 
   // Phase 6: Only-in-file scan -> generates INSERT statements
   let totalUnmatchedFileRecords = 0;
@@ -457,7 +505,7 @@ export function runComparisonCore(
     totalAnalyzed: discrepancyItems.length,
     exactMatchesCount,
     attributeMismatchCount,
-    geometryMismatchCount: 0, // @planned — see DiscrepancyType.GEOMETRY_MISMATCH
+    geometryMismatchCount,
     onlyInDbCount,
     onlyInShpCount,
     nullSuidCount,
