@@ -1,20 +1,15 @@
 import React, { useState, useRef } from "react";
-import dynamic from "next/dynamic";
 import { useQueryClient } from "@tanstack/react-query";
-import { UploadCloud, FileCheck, Trash2, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Loader2 } from "lucide-react";
 import { AlertMessage } from "@/components/shared/AlertMessage";
-import { ColumnsList } from "@/components/shared/ColumnsList";
+import { AlertType } from "@/types/ui";
 import { ShapefileParser } from "@/services/parsers/ShapefileParser";
 import type { ParsedShapefileData } from "@/types/shp";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
-import { formatNumber, formatFileSize } from "@/utils/formatters";
+import { FileDropzone } from "@/components/shared/FileDropzone";
+import { LoadedShapefileCard } from "./LoadedShapefileCard";
 import styles from "./ShapefileUploader.module.css";
 
-const SpatialMapPreview = dynamic(
-  () => import("@/components/shared/SpatialMapPreview").then((module) => module.SpatialMapPreview),
-  { ssr: false }
-);
 
 export interface ShapefileUploaderProps {
   onSuccess: (data: ParsedShapefileData) => void;
@@ -47,9 +42,10 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
       setData(parsed);
       onSuccess(parsed as unknown as ParsedShapefileData);
       setLoading(false);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error al procesar el archivo Shapefile.";
-      setErrorMessage(msg);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Error al procesar el archivo Shapefile.";
+      setErrorMessage(message);
       setLoading(false);
     }
   };
@@ -61,17 +57,17 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
     }
   };
 
-  const handleDragOver = (event: React.DragEvent) => {
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragOver(true);
   };
 
-  const handleDragLeave = (event: React.DragEvent) => {
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragOver(false);
   };
 
-  const handleDrop = (event: React.DragEvent) => {
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragOver(false);
     const files = event.dataTransfer.files;
@@ -80,7 +76,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
     }
   };
 
-  const handleDropzoneKeyDown = (event: React.KeyboardEvent) => {
+  const handleDropzoneKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       fileInputRef.current?.click();
@@ -108,30 +104,19 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
         className={styles.hiddenInput}
       />
 
-      {/* Upload Zone */}
+      {/* Upload Dropzone */}
       {!data && !loading && (
-        <div
-          role="button"
-          tabIndex={0}
-          className={`${styles.dropzone} ${isDragOver ? styles.dragOver : ""}`}
+        <FileDropzone
+          isDragOver={isDragOver}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
           onKeyDown={handleDropzoneKeyDown}
-        >
-          <div className={styles.dropIcon}>
-            <UploadCloud size={36} />
-          </div>
-          <div className={styles.dropText}>
-            <span className={styles.dropTitle}>Arrastre y suelte su archivo Shapefile (.zip) o GeoJSON aquí</span>
-            <span className={styles.dropSub}>o haga clic para seleccionar un archivo desde su equipo</span>
-          </div>
-          <div className={styles.formatBadges}>
-            <span className={styles.formatBadge}>.ZIP (SHP + DBF)</span>
-            <span className={styles.formatBadge}>.GEOJSON</span>
-          </div>
-        </div>
+          title="Arrastre y suelte su archivo Shapefile (.zip) o GeoJSON aquí"
+          subtitle="o haga clic para seleccionar un archivo desde su equipo"
+          formatBadges={[".ZIP (SHP + DBF)", ".GEOJSON"]}
+        />
       )}
 
       {/* Loading State */}
@@ -143,58 +128,10 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
       )}
 
       {/* Error Alert */}
-      {errorMessage && <AlertMessage type="error" text={errorMessage} />}
+      {errorMessage && <AlertMessage type={AlertType.ERROR} text={errorMessage} />}
 
-      {/* Loaded File Info Card */}
-      {data && (
-        <div className={styles.loadedCard}>
-          <div className={styles.loadedHeader}>
-            <div className={styles.fileMeta}>
-              <FileCheck size={28} className={styles.successIcon} />
-              <div>
-                <div className={styles.fileName}>{data.fileName}</div>
-                <div className={styles.fileSub}>
-                  Tamaño: {formatFileSize(data.fileSize)} &bull; Tipo: {data.geometryType || "Desconocido"}
-                </div>
-              </div>
-            </div>
-
-            <Button variant="ghost" onClick={handleDiscard}>
-              <Trash2 size={16} color="var(--accent-rose)" />
-              <span className={styles.discardText}>Descartar archivo</span>
-            </Button>
-          </div>
-
-          <div className={styles.metaRow}>
-            <div className={styles.metaItem}>
-              <span className={styles.metaLabel}>Total de Geometrías Espaciales:</span>
-              <span className={styles.metaValue}>{formatNumber(data.featureCount)} entidades</span>
-            </div>
-
-            <div className={styles.metaItem}>
-              <span className={styles.metaLabel}>Tipo de Geometría:</span>
-              <span className={styles.metaValue}>{data.geometryType || "Desconocido"}</span>
-            </div>
-          </div>
-
-          {/* Reusable ColumnsList component for DBF Attribute tags */}
-          <ColumnsList
-            columns={data.attributes}
-            title="Atributos Encontrados en DBF"
-          />
-
-          {/* Interactive Spatial Map Preview if Shapefile/GeoJSON contains geometry */}
-          {data.geojson && data.geojson.features && data.geojson.features.length > 0 && (
-            <div className={styles.mapSection}>
-              <SpatialMapPreview
-                geojson={data.geojson}
-                title="VISTA PREVIA ESPACIAL DE CAPA VECTORIAL"
-              />
-            </div>
-          )}
-
-        </div>
-      )}
+      {/* Loaded File Metadata & Spatial Map Card */}
+      {data && <LoadedShapefileCard data={data} onDiscard={handleDiscard} />}
     </div>
   );
 };

@@ -1,10 +1,11 @@
 import React, { useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useQueryClient } from "@tanstack/react-query";
-import { UploadCloud, FileSpreadsheet, Trash2, Loader2 } from "lucide-react";
+import { FileSpreadsheet, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
+import { FileDropzone } from "@/components/shared/FileDropzone";
 import { CsvParser } from "@/services/parsers/CsvParser";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
 import { formatNumber, formatFileSize } from "@/utils/formatters";
@@ -107,28 +108,17 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
 
       {/* Upload Zone */}
       {!data && !loading && (
-        <div
-          role="button"
-          tabIndex={0}
-          className={`${styles.dropzone} ${isDragOver ? styles.dragOver : ""}`}
+        <FileDropzone
+          isDragOver={isDragOver}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
           onKeyDown={handleDropzoneKeyDown}
-        >
-          <div className={styles.dropIcon}>
-            <UploadCloud size={36} />
-          </div>
-          <div className={styles.dropText}>
-            <span className={styles.dropTitle}>Arrastre y suelte su archivo CSV (.csv) aquí</span>
-            <span className={styles.dropSub}>o haga clic para seleccionar un archivo desde su equipo</span>
-          </div>
-          <div className={styles.formatBadges}>
-            <span className={styles.formatBadge}>.CSV</span>
-            <span className={styles.formatBadge}>DELIMITADO POR COMAS</span>
-          </div>
-        </div>
+          title="Arrastre y suelte su archivo CSV (.csv) aquí"
+          subtitle="o haga clic para seleccionar un archivo desde su equipo"
+          formatBadges={[".CSV", "DELIMITADO POR COMAS"]}
+        />
       )}
 
       {/* Loading State */}
