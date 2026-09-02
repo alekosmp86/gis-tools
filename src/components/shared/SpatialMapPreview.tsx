@@ -17,6 +17,7 @@ export interface SpatialMapPreviewProps {
   selectedFeatureIndex?: number | null;
   onSelectFeature?: (index: number | null) => void;
   initialStyle?: Partial<MapFeatureStyle>;
+  isVisible?: boolean;
 }
 
 export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
@@ -25,6 +26,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   selectedFeatureIndex,
   onSelectFeature,
   initialStyle,
+  isVisible = true,
 }) => {
   const [mapContainerNode, setMapContainerNode] = useState<HTMLDivElement | null>(null);
   const [basemapKey, setBasemapKey] = useState<string>("osm");
@@ -41,7 +43,8 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
     basemapKey,
     featureStyle,
     selectedFeatureIndex,
-    onSelectFeature
+    onSelectFeature,
+    isVisible
   );
 
   const progressPct = totalFeatures > 0 ? Math.min(100, Math.round((renderedCount / totalFeatures) * 100)) : 0;

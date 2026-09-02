@@ -35,5 +35,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_001_SHAPEFILE_PROJECTED_COORDINATES_MAP_BLANK.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_001_SHAPEFILE_PROJECTED_COORDINATES_MAP_BLANK.md) — Projected coordinates (UTM/EPSG) resulting in blank/world map preview due to missing WGS84 reprojection.
 - [`ISSUE_002_SQL_DRAWER_LARGE_DATASET_OOM_FREEZE.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_002_SQL_DRAWER_LARGE_DATASET_OOM_FREEZE.md) — Main UI thread freeze and memory spikes on SQL Scripts tab when processing large spatial datasets.
 - [`ISSUE_003_COMPOSITE_SUID_PARTIAL_NULL_MISCLASSIFICATION.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_003_COMPOSITE_SUID_PARTIAL_NULL_MISCLASSIFICATION.md) — Composite SUID records with partial null sub-fields misclassified as null/vacant records.
+- [`ISSUE_004_HIDDEN_MAP_TAB_CANVAS_RENDERING_DESYNC.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_004_HIDDEN_MAP_TAB_CANVAS_RENDERING_DESYNC.md) — Leaflet Canvas rendering and viewport desynchronization when filtering KPI cards while the map tab is hidden in the DOM.
 
 

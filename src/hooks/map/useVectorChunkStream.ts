@@ -14,7 +14,8 @@ export function useVectorChunkStream(
   geojson: FeatureCollection,
   featureStyle: MapFeatureStyle,
   onSelectFeature?: (index: number | null) => void,
-  isMapReady: boolean = false
+  isMapReady: boolean = false,
+  isVisible: boolean = true
 ): {
   renderedCount: number;
   isChunking: boolean;
@@ -35,9 +36,23 @@ export function useVectorChunkStream(
     const mapInstance = mapInstanceRef.current;
     if (!mapInstance || !isMapReady) return;
 
-    if (lastProcessedGeojsonRef.current === geojson) {
+    // If the map is currently hidden, defer rendering until it becomes visible
+    if (!isVisible) {
       return;
     }
+
+    // If already rendered this exact geojson collection and visible, ensure viewport is fitted
+    if (lastProcessedGeojsonRef.current === geojson) {
+      mapInstance.invalidateSize();
+      if (featureGroupRef.current) {
+        const bounds = featureGroupRef.current.getBounds();
+        if (bounds.isValid()) {
+          mapInstance.fitBounds(bounds, { padding: [30, 30] });
+        }
+      }
+      return;
+    }
+
     lastProcessedGeojsonRef.current = geojson;
 
     if (featureGroupRef.current) {
@@ -62,6 +77,8 @@ export function useVectorChunkStream(
 
     let initialZoomDone = false;
     let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    mapInstance.invalidateSize();
 
     const worker = new Worker(new URL("../../workers/mapChunkWorker.ts", import.meta.url));
 
@@ -107,6 +124,13 @@ export function useVectorChunkStream(
         if (!isCancelled) {
           setRenderedCount(payload.total);
           setIsChunking(false);
+
+          // Final bounds fit after all chunks are painted
+          mapInstance.invalidateSize();
+          const finalBounds = featureGroup.getBounds();
+          if (finalBounds.isValid()) {
+            mapInstance.fitBounds(finalBounds, { padding: [30, 30] });
+          }
         }
       }
     };
@@ -132,7 +156,7 @@ export function useVectorChunkStream(
         // Safe disposal
       }
     };
-  }, [mapInstanceRef, canvasRendererRef, geojson, onSelectFeature, isMapReady]);
+  }, [mapInstanceRef, canvasRendererRef, geojson, onSelectFeature, isMapReady, isVisible]);
 
   return {
     renderedCount,

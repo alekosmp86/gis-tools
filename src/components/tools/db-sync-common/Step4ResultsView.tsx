@@ -52,8 +52,10 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   const showProgress = loading && progress.phase !== "";
   const hasGeojson = Boolean(fileDataset.geojson && fileDataset.geojson.features && fileDataset.geojson.features.length > 0);
 
-  // Hook encapsulating discrepancy GeoJSON feature collection creation
-  const discrepancyGeojson = useDiscrepancyGeojson(summary, fileDataset, activeFilter);
+  const isMapActive = activeViewTab === ResultsViewTab.MAP;
+
+  // Hook encapsulating discrepancy GeoJSON feature collection creation (Lazy-evaluated only when Map tab is active)
+  const discrepancyGeojson = useDiscrepancyGeojson(summary, fileDataset, activeFilter, isMapActive);
 
   return (
     <div className={styles.container}>
@@ -119,6 +121,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
               <SpatialMapPreview
                 geojson={discrepancyGeojson}
                 title="MAPA DE DISCREPANCIAS ESPACIALES"
+                isVisible={activeViewTab === ResultsViewTab.MAP}
               />
             </div>
           )}

@@ -1,4 +1,3 @@
-import { useDeferredValue } from "react";
 import type { FeatureCollection, Feature, Geometry, GeoJsonProperties } from "geojson";
 import { DiscrepancyFilter } from "@/types/comparison";
 import type { ComparisonSummary, DiscrepancyFilter as DiscrepancyFilterType } from "@/types/comparison";
@@ -10,9 +9,13 @@ import { normalizeGeometry } from "@/utils/spatial/SpatialGeometryComparator";
 export function useDiscrepancyGeojson(
   summary: ComparisonSummary | undefined,
   fileDataset: ParsedShapefileData | ParsedFileDataset,
-  activeFilter: DiscrepancyFilterType
+  activeFilter: DiscrepancyFilterType,
+  isMapActive: boolean = true
 ): FeatureCollection | null {
-  const deferredFilter = useDeferredValue(activeFilter);
+  // If the map is currently inactive (e.g. Table or SQL tab is active), bypass heavy GeoJSON generation
+  if (!isMapActive) {
+    return null;
+  }
 
   if (!summary || !summary.items) {
     return fileDataset.geojson || null;
@@ -35,7 +38,7 @@ export function useDiscrepancyGeojson(
 
   const features: Array<Feature<Geometry, GeoJsonProperties>> = [];
   const itemsToRender = summary.items.filter((item) => {
-    return deferredFilter === DiscrepancyFilter.ALL || item.type === deferredFilter;
+    return activeFilter === DiscrepancyFilter.ALL || item.type === activeFilter;
   });
 
   const totalItems = itemsToRender.length;

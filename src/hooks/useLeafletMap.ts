@@ -12,7 +12,8 @@ export function useLeafletMap(
   basemapKey: string,
   featureStyle: MapFeatureStyle,
   selectedFeatureIndex?: number | null,
-  onSelectFeature?: (index: number | null) => void
+  onSelectFeature?: (index: number | null) => void,
+  isVisible: boolean = true
 ): {
   renderedCount: number;
   isChunking: boolean;
@@ -24,14 +25,15 @@ export function useLeafletMap(
   // 2. Manage Active Basemap Tile Layer
   useBasemapTileLayer(mapInstanceRef, basemapKey, isMapReady);
 
-  // 3. Stream Vector GeoJSON Features via Web Worker
+  // 3. Stream Vector GeoJSON Features via Web Worker (Visibility-Aware)
   const { renderedCount, isChunking, featureGroupRef } = useVectorChunkStream(
     mapInstanceRef,
     canvasRendererRef,
     geojson,
     featureStyle,
     onSelectFeature,
-    isMapReady
+    isMapReady,
+    isVisible
   );
 
   // 4. Highlight Selected Feature & Pan Camera
