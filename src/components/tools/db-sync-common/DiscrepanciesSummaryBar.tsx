@@ -49,7 +49,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         value={summary.geometryMismatchCount}
         subtitle="Geometría o topología dispar"
         icon={Shapes}
-        iconContainerClass={styles.iconShp}
+        iconContainerClass={styles.valWarning}
         valueClass={styles.valWarning}
         isActive={activeFilter === DiscrepancyFilter.GEOMETRY_MISMATCH}
         onClick={() => onSelectFilter(DiscrepancyFilter.GEOMETRY_MISMATCH)}
@@ -109,7 +109,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         value={summary.onlyInShpCount}
         subtitle="Faltantes en Base de Datos"
         icon={Layers}
-        iconContainerClass={styles.iconShp}
+        iconContainerClass={styles.valInfo}
         valueClass={styles.valInfo}
         isActive={activeFilter === DiscrepancyFilter.ONLY_IN_SHP}
         onClick={() => onSelectFilter(DiscrepancyFilter.ONLY_IN_SHP)}
