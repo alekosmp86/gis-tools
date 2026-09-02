@@ -33,26 +33,30 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
   return (
     <div className={styles.paginationBar}>
       <div className={styles.paginationSummary}>
-        Mostrando <strong>{formatNumber(startIndex + 1)}</strong> -{" "}
-        <strong>{formatNumber(endIndex)}</strong> de{" "}
-        <strong>{formatNumber(totalFilteredCount)}</strong> registros
+        Mostrando <span className={styles.highlightNumber}>{formatNumber(startIndex + 1)}</span> –{" "}
+        <span className={styles.highlightNumber}>{formatNumber(endIndex)}</span> de{" "}
+        <span className={styles.highlightTotal}>{formatNumber(totalFilteredCount)}</span> registros
       </div>
 
       <div className={styles.paginationControls}>
         <div className={styles.pageSizeGroup}>
-          <label htmlFor="page-size-select">Filas por página:</label>
-          <select
-            id="page-size-select"
-            value={pageSize}
-            onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            className={styles.pageSizeSelect}
-          >
-            {pageSizeOptions.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
+          <label htmlFor="page-size-select" className={styles.pageSizeLabel}>
+            Filas por página:
+          </label>
+          <div className={styles.selectWrapper}>
+            <select
+              id="page-size-select"
+              value={pageSize}
+              onChange={(event) => onPageSizeChange(Number(event.target.value))}
+              className={styles.pageSizeSelect}
+            >
+              {pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className={styles.pageButtons}>
@@ -62,6 +66,7 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
             onClick={() => onPageChange(1)}
             disabled={currentPage === 1}
             title="Primera página"
+            aria-label="Primera página"
           >
             <ChevronsLeft size={16} />
           </button>
@@ -72,13 +77,17 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
             onClick={() => onPageChange(Math.max(1, currentPage - 1))}
             disabled={currentPage === 1}
             title="Página anterior"
+            aria-label="Página anterior"
           >
             <ChevronLeft size={16} />
           </button>
 
-          <span className={styles.pageIndicator}>
-            Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
-          </span>
+          <div className={styles.pageIndicator}>
+            <span>Página</span>
+            <span className={styles.currentPageBadge}>{currentPage}</span>
+            <span>de</span>
+            <span className={styles.totalPagesText}>{formatNumber(totalPages)}</span>
+          </div>
 
           <button
             type="button"
@@ -86,6 +95,7 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
             onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
             disabled={currentPage === totalPages}
             title="Página siguiente"
+            aria-label="Página siguiente"
           >
             <ChevronRight size={16} />
           </button>
@@ -96,6 +106,7 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
             onClick={() => onPageChange(totalPages)}
             disabled={currentPage === totalPages}
             title="Última página"
+            aria-label="Última página"
           >
             <ChevronsRight size={16} />
           </button>

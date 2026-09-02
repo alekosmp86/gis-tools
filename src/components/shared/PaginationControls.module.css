@@ -3,10 +3,10 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.7);
   border-bottom: 1px solid var(--border-color);
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 14px;
 }
 
 :global(.tableContainer) > .paginationBar:last-child,
@@ -16,33 +16,73 @@
 }
 
 .paginationSummary {
-  font-size: 0.825rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.highlightNumber {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.highlightTotal {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--accent-cyan);
 }
 
 .paginationControls {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .pageSizeGroup {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.8rem;
+  font-size: 0.825rem;
   color: var(--text-muted);
 }
 
+.pageSizeLabel {
+  color: var(--text-muted);
+}
+
+.selectWrapper {
+  position: relative;
+  display: inline-flex;
+}
+
 .pageSizeSelect {
-  background: rgba(9, 13, 22, 0.9);
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(9, 13, 22, 0.85) url("data:image/svg2+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 4px 8px;
+  border-radius: 8px;
+  padding: 6px 28px 6px 12px;
   color: var(--text-main);
+  font-family: var(--font-mono);
   font-size: 0.825rem;
+  font-weight: 600;
   outline: none;
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pageSizeSelect:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  background-color: rgba(15, 23, 42, 0.95);
+}
+
+.pageSizeSelect:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
 }
 
 .pageButtons {
@@ -52,9 +92,27 @@
 }
 
 .pageIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.825rem;
   color: var(--text-muted);
-  padding: 0 6px;
+  padding: 4px 10px;
+  background: rgba(9, 13, 22, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.currentPageBadge {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+
+.totalPagesText {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-main);
 }
 
 .pageBtn {
@@ -64,45 +122,43 @@
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(15, 23, 42, 0.85);
   border: 1px solid var(--border-color);
   color: var(--text-main);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .pageBtn:hover:not(:disabled) {
   background: rgba(6, 182, 212, 0.15);
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
+  transform: translateY(-1px);
+}
+
+.pageBtn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .pageBtn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .paginationBar {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
-    padding: 10px 14px;
+    gap: 12px;
   }
 
   .paginationControls {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-
-  .pageSizeGroup {
     justify-content: space-between;
     width: 100%;
   }
 
-  .pageButtons {
-    justify-content: center;
-    width: 100%;
+  .pageSizeGroup {
+    justify-content: space-between;
   }
 }
