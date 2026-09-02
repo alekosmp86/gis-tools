@@ -68,7 +68,7 @@ export default function DbDbSyncToolPage() {
     ? {
         kind: FileSourceKind.CSV,
         fileName: `${dbConfig1.db_name}.${dbConfig1.schema_name}.${dbConfig1.table_name}`,
-        fileSize: dbColumns1.length * 100,
+        fileSize: 0, // In-memory database recordset
         featureCount: 0,
         attributes: dbColumns1,
         recordsMap: new Map(),
@@ -127,7 +127,6 @@ export default function DbDbSyncToolPage() {
           columnDetails={columnDetails2}
           fileAttributes={dbColumns1}
           onSuccess={handleMappingSuccess}
-          onBack={() => setCurrentStep(2)}
           initialConfig={mappingConfig}
           showGeometryToggle={false}
           onReadyChange={setIsMappingReady}

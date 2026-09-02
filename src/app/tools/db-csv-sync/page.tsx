@@ -109,7 +109,6 @@ export default function DbCsvSyncToolPage() {
           columnDetails={columnDetails}
           fileAttributes={csvDataset.attributes}
           onSuccess={handleMappingSuccess}
-          onBack={() => setCurrentStep(2)}
           initialConfig={mappingConfig}
           showGeometryToggle={false}
           onReadyChange={setIsMappingReady}

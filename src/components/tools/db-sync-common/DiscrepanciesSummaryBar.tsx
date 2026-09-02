@@ -10,6 +10,7 @@ import {
   Copy,
   Shapes,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { formatNumber } from "@/utils/common/ValueFormatter";
 import {
   DiscrepancyFilter,
@@ -28,18 +29,12 @@ export interface DiscrepanciesSummaryBarProps {
   isReanalyzing?: boolean;
 }
 
-function getLucideIcon(kind: ComparisonIconKind) {
-  switch (kind) {
-    case "database":
-      return Database;
-    case "file":
-    case "table":
-      return FileSpreadsheet;
-    case "layers":
-    default:
-      return Layers;
-  }
-}
+const ICON_FOR_KIND: Record<ComparisonIconKind, LucideIcon> = {
+  database: Database,
+  file: FileSpreadsheet,
+  table: FileSpreadsheet,
+  layers: Layers,
+};
 
 export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = ({
   summary,
@@ -48,7 +43,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
   descriptor,
   isReanalyzing = false,
 }) => {
-  const sourceIcon = getLucideIcon(descriptor.sourceIconKind);
+  const sourceIcon = ICON_FOR_KIND[descriptor.sourceIconKind] || Layers;
 
   return (
     <div className={`${styles.grid} ${isReanalyzing ? styles.reanalyzing : ""}`}>

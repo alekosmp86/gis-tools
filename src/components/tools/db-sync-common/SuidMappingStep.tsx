@@ -13,7 +13,6 @@ export interface SuidMappingStepProps {
   columnDetails?: DbColumnMetadata[];
   fileAttributes: string[];
   onSuccess: (mappingConfig: ColumnMappingConfig) => void;
-  onBack: () => void;
   initialConfig?: ColumnMappingConfig | null;
   showGeometryToggle?: boolean;
   onReadyChange?: (ready: boolean) => void;

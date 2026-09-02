@@ -27,7 +27,6 @@ interface Step4ResultsViewProps {
   dbConfig: DbConfig;
   fileDataset: ParsedShapefileData | ParsedFileDataset;
   mappingConfig: ColumnMappingConfig;
-  onBackToMapping?: () => void;
   sourceDbConfig?: DbConfig;
   descriptor?: ComparisonSourceDescriptor;
 }

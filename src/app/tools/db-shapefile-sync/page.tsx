@@ -12,7 +12,7 @@ import { DB_VS_SHAPEFILE_DESCRIPTOR } from "@/constants/comparisonDescriptors";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
 import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
 import type { WizardStepDef } from "@/types/ui";
-import { ParsedShapefileData } from "@/types/shp";
+import type { ParsedShapefileData } from "@/types/shp";
 
 export default function DbShapefileSyncToolPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -109,7 +109,6 @@ export default function DbShapefileSyncToolPage() {
           columnDetails={columnDetails}
           fileAttributes={shapefileData.attributes}
           onSuccess={handleMappingSuccess}
-          onBack={() => setCurrentStep(2)}
           initialConfig={mappingConfig}
           onReadyChange={setIsMappingReady}
         />
