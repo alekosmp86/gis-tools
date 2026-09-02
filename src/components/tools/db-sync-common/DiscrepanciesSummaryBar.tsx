@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, AlertTriangle, Database, Layers, BarChart2, HelpCircle, Copy } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Database, Layers, BarChart2, HelpCircle, Copy, Shapes } from "lucide-react";
 import { formatNumber } from "@/utils/common/ValueFormatter";
 import { DiscrepancyFilter, type ComparisonSummary } from "@/types/comparison";
 import { SummaryKpiCard } from "./SummaryKpiCard";
@@ -48,7 +48,7 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         title="Discrepancias Geométricas"
         value={summary.geometryMismatchCount}
         subtitle="Geometría o topología dispar"
-        icon={Layers}
+        icon={Shapes}
         iconContainerClass={styles.iconShp}
         valueClass={styles.valWarning}
         isActive={activeFilter === DiscrepancyFilter.GEOMETRY_MISMATCH}

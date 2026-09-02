@@ -61,12 +61,12 @@ The platform uses strategy abstractions to decouple file loading, comparison alg
 ```
 
 - **`src/types/workerMessages.ts`**: Strongly typed message protocol carrying transferable binary buffers (`dbfBuffer`, `shpBuffer`).
-- **`src/workers/comparison/` Sub-modules**:
-  - [`suidKeyUtils.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/suidKeyUtils.ts): String interning, cleaning, and composite SUID hashing.
-  - [`sqlBuilder.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/sqlBuilder.ts): PostGIS geometry expression generator, type-safe WHERE conditions, and SQL patch builder.
-  - [`nullRecordHandler.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/nullRecordHandler.ts): Diagnostic attribute summaries for invalid or missing SUID records.
-  - [`fileDatasetIndexer.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/fileDatasetIndexer.ts): Zero-copy binary DBF and GeoJSON dataset indexers.
-- **[`comparisonCore.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparisonCore.ts)**: High-level orchestrator coordinating the 5 comparison phases.
+- **`src/workers/comparison/` Domain Services**:
+  - [`SpatialComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SpatialComparisonEngine.ts): Main comparison domain orchestrator implementing atomic exact-match counting and discrepancy-only memory retention.
+  - [`SuidKeyResolver.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SuidKeyResolver.ts): String interning, cleaning, and composite SUID key resolution with partial non-null support.
+  - [`SqlScriptBuilder.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SqlScriptBuilder.ts): PostGIS geometry expression generator, compact 6-decimal GeoJSON serializer, and SQL patch builder.
+  - [`NullRecordHandler.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/NullRecordHandler.ts): Diagnostic summaries for null and duplicate SUID records.
+  - [`FileDatasetIndexer.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/FileDatasetIndexer.ts): Zero-copy binary DBF and object dataset indexers.
 - **[`workerBridge.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/workerBridge.ts)**: Promise-based adapter providing automatic fallback and dataset serialization.
 
 ---
