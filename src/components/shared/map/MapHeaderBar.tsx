@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Layers, Maximize2, Loader2, MapPin, Palette } from "lucide-react";
-import { formatNumber } from "@/utils/formatters";
+import { formatNumber } from "@/utils/common/ValueFormatter";
 import type { MapFeatureStyle } from "@/types/map";
 import { MapStylePopover } from "./MapStylePopover";
 import styles from "../SpatialMapPreview.module.css";

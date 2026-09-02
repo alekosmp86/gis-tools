@@ -1,6 +1,6 @@
 import React from "react";
 import { CheckCircle2, AlertTriangle, Database, Layers, BarChart2, HelpCircle, Copy } from "lucide-react";
-import { formatNumber } from "@/utils/formatters";
+import { formatNumber } from "@/utils/common/ValueFormatter";
 import { DiscrepancyFilter, type ComparisonSummary } from "@/types/comparison";
 import { SummaryKpiCard } from "./SummaryKpiCard";
 import styles from "./DiscrepanciesSummaryBar.module.css";

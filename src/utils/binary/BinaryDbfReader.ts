@@ -1,13 +1,10 @@
 /**
- * binaryDbfReader.ts
+ * BinaryDbfReader.ts
  * High-performance, zero-allocation binary parser for dBase III / IV (.dbf) files.
- * Designed to process 1,000,000+ records in RAM with minimal GC overhead by:
- * 1. Avoiding ArrayBuffer slices (using Uint8Array.subarray views).
- * 2. Utilizing string interning for categorical & repetitive values.
- * 3. Supporting lazy record decoding on demand.
+ * Designed to process 1,000,000+ records in RAM with minimal GC overhead.
  */
 
-import { StringInternPool } from "./stringInternPool";
+import { StringInternPool } from "./StringInternPool";
 
 export interface DbfFieldDescriptor {
   readonly name: string;
@@ -57,9 +54,6 @@ export class BinaryDbfReader {
     this.header = this.parseHeader();
   }
 
-  /**
-   * Parses the 32-byte main header and field descriptor table.
-   */
   private parseHeader(): DbfHeader {
     if (this.uint8View.byteLength < 32) {
       throw new Error("El archivo DBF es demasiado pequeño para contener una cabecera válida.");
@@ -71,7 +65,7 @@ export class BinaryDbfReader {
 
     const fields: DbfFieldDescriptor[] = [];
     let currentFieldOffset = 32;
-    let accumulatedRecordOffset = 1; // 1 byte deletion flag at the beginning of each record
+    let accumulatedRecordOffset = 1;
 
     while (currentFieldOffset < headerLength - 1) {
       const terminatorCheck = this.uint8View[currentFieldOffset];
@@ -79,7 +73,6 @@ export class BinaryDbfReader {
         break;
       }
 
-      // Read field name (up to 11 bytes, null-terminated)
       let nameLength = 0;
       while (
         nameLength < 11 &&
@@ -117,16 +110,13 @@ export class BinaryDbfReader {
     };
   }
 
-  /**
-   * Reads a single field value from a given record index with type conversion and string interning.
-   */
   public readFieldValue(recordIndex: number, field: DbfFieldDescriptor): unknown {
     if (recordIndex < 0 || recordIndex >= this.header.recordCount) {
       return null;
     }
 
     const recordStart = this.header.headerLength + recordIndex * this.header.recordLength;
-    const isDeleted = this.uint8View[recordStart] === 0x2a; // '*' indicates deleted record
+    const isDeleted = this.uint8View[recordStart] === 0x2a;
     if (isDeleted) {
       return null;
     }
@@ -151,7 +141,6 @@ export class BinaryDbfReader {
         return lowerChar === "y" || lowerChar === "t" || lowerChar === "1";
       }
       case "D": {
-        // Date format: YYYYMMDD
         if (rawText.length === 8) {
           const year = rawText.substring(0, 4);
           const month = rawText.substring(4, 6);
@@ -166,9 +155,6 @@ export class BinaryDbfReader {
     }
   }
 
-  /**
-   * Reads an entire record at the specified index as a key-value object.
-   */
   public readRecord(recordIndex: number): Record<string, unknown> | null {
     const record: Record<string, unknown> = {};
     for (let index = 0; index < this.header.fields.length; index++) {

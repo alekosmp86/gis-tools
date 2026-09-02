@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/Badge";
 import { PaginationControls } from "@/components/shared/PaginationControls";
 import { DiscrepancyType, DiscrepancyFilter, type DiscrepancyItem } from "@/types/comparison";
 import { BadgeVariant } from "@/types/ui";
-import { formatNumber } from "@/utils/formatters";
+import { formatNumber } from "@/utils/common/ValueFormatter";
 import styles from "./DiscrepanciesTable.module.css";
 
 export interface DiscrepanciesTableProps {

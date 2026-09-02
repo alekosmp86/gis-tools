@@ -1,6 +1,6 @@
 import React from "react";
 import type { LucideIcon } from "lucide-react";
-import { formatNumber } from "@/utils/formatters";
+import { formatNumber } from "@/utils/common/ValueFormatter";
 import styles from "./DiscrepanciesSummaryBar.module.css";
 
 export interface SummaryKpiCardProps {

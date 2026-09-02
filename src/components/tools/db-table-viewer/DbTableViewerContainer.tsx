@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { TableMetaPanel } from "./TableMetaPanel";
 import { AttributeTable } from "../file-viewer/AttributeTable";
 import { useFetchDbRecords } from "@/hooks/useDbQueries";
-import { parseRecordsToGeoJson } from "@/utils/geojsonUtils";
+import { parseRecordsToGeoJson } from "@/utils/spatial/GeoJsonDatasetBuilder";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { AlertType } from "@/types/ui";
 import type { DbConfig } from "@/types/db";

@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import type { ParsedFileDataset } from "@/types/parsers";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { AlertType } from "@/types/ui";
-import { formatNumber } from "@/utils/formatters";
+import { formatNumber } from "@/utils/common/ValueFormatter";
 import { FileViewerUploader } from "./FileViewerUploader";
 import { FileMetaPanel } from "./FileMetaPanel";
 import { AttributeTable } from "./AttributeTable";

@@ -4,8 +4,8 @@ import { DiscrepancyFilter } from "@/types/comparison";
 import type { ComparisonSummary, DiscrepancyFilter as DiscrepancyFilterType } from "@/types/comparison";
 import type { ParsedFileDataset } from "@/types/parsers";
 import type { ParsedShapefileData } from "@/types/shp";
-import { cleanSuid } from "@/utils/gisCleaners";
-import { normalizeGeometry } from "@/utils/geometryComparator";
+import { cleanSuid } from "@/utils/common/GisStringSanitizer";
+import { normalizeGeometry } from "@/utils/spatial/SpatialGeometryComparator";
 
 export function useDiscrepancyGeojson(
   summary: ComparisonSummary | undefined,
@@ -14,16 +14,20 @@ export function useDiscrepancyGeojson(
 ): FeatureCollection | null {
   const deferredFilter = useDeferredValue(activeFilter);
 
-  if (!summary || !summary.items) return fileDataset.geojson || null;
+  if (!summary || !summary.items) {
+    return fileDataset.geojson || null;
+  }
 
   const geoMap = new Map<string, Geometry>();
   if (fileDataset.geojson && fileDataset.geojson.features) {
-    fileDataset.geojson.features.forEach((feat) => {
-      if (feat.geometry && feat.properties) {
-        const firstAttr = Object.keys(feat.properties)[0];
+    fileDataset.geojson.features.forEach((feature) => {
+      if (feature.geometry && feature.properties) {
+        const firstAttr = Object.keys(feature.properties)[0];
         if (firstAttr) {
-          const key = cleanSuid(feat.properties[firstAttr]);
-          if (key) geoMap.set(key, feat.geometry);
+          const featureKey = cleanSuid(feature.properties[firstAttr]);
+          if (featureKey) {
+            geoMap.set(featureKey, feature.geometry);
+          }
         }
       }
     });
@@ -35,11 +39,17 @@ export function useDiscrepancyGeojson(
   });
 
   itemsToRender.forEach((item) => {
-    const shpGeom = (item.shpGeometry as Geometry | undefined) || geoMap.get(cleanSuid(item.suid));
+    const rawShpGeom =
+      (item.shpGeometry as Geometry | undefined) ||
+      (item.suid ? geoMap.get(cleanSuid(item.suid)) : undefined);
+    const shpGeom = rawShpGeom ? (normalizeGeometry(rawShpGeom) as Geometry | null) : null;
 
     // Extract DB geometry if present in dbRecord
     const rawDbGeom = item.dbRecord
-      ? item.dbRecord.geom || item.dbRecord.geometry || item.dbRecord.wkb_geometry || item.dbRecord.shape
+      ? item.dbRecord.geom ||
+        item.dbRecord.geometry ||
+        item.dbRecord.wkb_geometry ||
+        item.dbRecord.shape
       : null;
     const dbGeom = rawDbGeom ? (normalizeGeometry(rawDbGeom) as Geometry | null) : null;
 

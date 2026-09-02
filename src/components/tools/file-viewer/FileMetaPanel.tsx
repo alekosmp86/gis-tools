@@ -1,6 +1,6 @@
 import React from "react";
 import { Info, Layers, AlertTriangle, Zap } from "lucide-react";
-import { formatNumber, formatFileSize } from "@/utils/formatters";
+import { formatNumber, formatFileSize } from "@/utils/common/ValueFormatter";
 import type { ParsedFileDataset } from "@/types/parsers";
 import styles from "./FileMetaPanel.module.css";
 

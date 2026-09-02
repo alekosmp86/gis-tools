@@ -1,11 +1,3 @@
-/**
- * binaryShpReader.ts
- * High-speed binary reader and lazy geometry decoder for ESRI Shapefiles (.shp).
- * Enables processing 1M records with minimal RAM by:
- * 1. Fast scanning record byte offsets and content lengths.
- * 2. Lazy-decoding geometries on demand when requested for comparison or map rendering.
- */
-
 import type { Geometry } from "geojson";
 
 export enum ShapeType {
@@ -64,10 +56,10 @@ export class BinaryShpReader {
       throw new Error("El archivo SHP es demasiado pequeño para contener una cabecera válida.");
     }
 
-    const fileCode = this.dataView.getInt32(0, false); // Big endian
-    const fileLengthWords = this.dataView.getInt32(24, false); // Big endian
-    const version = this.dataView.getInt32(28, true); // Little endian
-    const shapeType = this.dataView.getInt32(32, true); // Little endian
+    const fileCode = this.dataView.getInt32(0, false);
+    const fileLengthWords = this.dataView.getInt32(24, false);
+    const version = this.dataView.getInt32(28, true);
+    const shapeType = this.dataView.getInt32(32, true);
 
     const minX = this.dataView.getFloat64(36, true);
     const minY = this.dataView.getFloat64(44, true);
@@ -83,9 +75,6 @@ export class BinaryShpReader {
     };
   }
 
-  /**
-   * Fast scan to index record byte offsets without allocating GeoJSON objects.
-   */
   private buildRecordIndex(): {
     offsets: Uint32Array;
     lengths: Uint32Array;
@@ -97,7 +86,7 @@ export class BinaryShpReader {
     const totalBytes = this.uint8View.byteLength;
 
     while (currentByteOffset + 8 <= totalBytes) {
-      const contentLengthWords = this.dataView.getInt32(currentByteOffset + 4, false); // Big endian
+      const contentLengthWords = this.dataView.getInt32(currentByteOffset + 4, false);
       const contentLengthBytes = contentLengthWords * 2;
 
       offsetsList.push(currentByteOffset);
@@ -118,15 +107,15 @@ export class BinaryShpReader {
     return { offsets, lengths, count };
   }
 
-  /**
-   * Lazily decodes a single geometry at the given record index into a standard GeoJSON Geometry object.
-   */
-  public readGeometry(recordIndex: number): Geometry | null {
+  public readGeometry(
+    recordIndex: number,
+    transformCoordinate?: ((coordinate: [number, number]) => [number, number]) | null
+  ): Geometry | null {
     if (recordIndex < 0 || recordIndex >= this.recordCount) {
       return null;
     }
 
-    const recordOffset = this.recordOffsets[recordIndex] + 8; // Skip 8-byte record header
+    const recordOffset = this.recordOffsets[recordIndex] + 8;
     const recordShapeType = this.dataView.getInt32(recordOffset, true);
 
     switch (recordShapeType) {
@@ -136,11 +125,36 @@ export class BinaryShpReader {
       case ShapeType.POINT:
       case ShapeType.POINTZ:
       case ShapeType.POINTM: {
-        const pointX = this.dataView.getFloat64(recordOffset + 4, true);
-        const pointY = this.dataView.getFloat64(recordOffset + 12, true);
+        const rawPointX = this.dataView.getFloat64(recordOffset + 4, true);
+        const rawPointY = this.dataView.getFloat64(recordOffset + 12, true);
+        const [pointX, pointY] = transformCoordinate
+          ? transformCoordinate([rawPointX, rawPointY])
+          : [rawPointX, rawPointY];
         return {
           type: "Point",
           coordinates: [pointX, pointY],
+        };
+      }
+
+      case ShapeType.MULTIPOINT:
+      case ShapeType.MULTIPOINTZ:
+      case ShapeType.MULTIPOINTM: {
+        const numPoints = this.dataView.getInt32(recordOffset + 36, true);
+        const pointsOffset = recordOffset + 40;
+        const multiPointCoordinates: number[][] = [];
+
+        for (let pointIndex = 0; pointIndex < numPoints; pointIndex++) {
+          const rawPointX = this.dataView.getFloat64(pointsOffset + pointIndex * 16, true);
+          const rawPointY = this.dataView.getFloat64(pointsOffset + pointIndex * 16 + 8, true);
+          const [pointX, pointY] = transformCoordinate
+            ? transformCoordinate([rawPointX, rawPointY])
+            : [rawPointX, rawPointY];
+          multiPointCoordinates.push([pointX, pointY]);
+        }
+
+        return {
+          type: "MultiPoint",
+          coordinates: multiPointCoordinates,
         };
       }
 
@@ -164,8 +178,11 @@ export class BinaryShpReader {
           const lineCoordinates: number[][] = [];
 
           for (let pointIndex = startIndex; pointIndex < endIndex; pointIndex++) {
-            const coordinateX = this.dataView.getFloat64(pointsOffset + pointIndex * 16, true);
-            const coordinateY = this.dataView.getFloat64(pointsOffset + pointIndex * 16 + 8, true);
+            const rawCoordinateX = this.dataView.getFloat64(pointsOffset + pointIndex * 16, true);
+            const rawCoordinateY = this.dataView.getFloat64(pointsOffset + pointIndex * 16 + 8, true);
+            const [coordinateX, coordinateY] = transformCoordinate
+              ? transformCoordinate([rawCoordinateX, rawCoordinateY])
+              : [rawCoordinateX, rawCoordinateY];
             lineCoordinates.push([coordinateX, coordinateY]);
           }
           lines.push(lineCoordinates);
@@ -203,8 +220,11 @@ export class BinaryShpReader {
           const ringCoordinates: number[][] = [];
 
           for (let pointIndex = startIndex; pointIndex < endIndex; pointIndex++) {
-            const coordinateX = this.dataView.getFloat64(pointsOffset + pointIndex * 16, true);
-            const coordinateY = this.dataView.getFloat64(pointsOffset + pointIndex * 16 + 8, true);
+            const rawCoordinateX = this.dataView.getFloat64(pointsOffset + pointIndex * 16, true);
+            const rawCoordinateY = this.dataView.getFloat64(pointsOffset + pointIndex * 16 + 8, true);
+            const [coordinateX, coordinateY] = transformCoordinate
+              ? transformCoordinate([rawCoordinateX, rawCoordinateY])
+              : [rawCoordinateX, rawCoordinateY];
             ringCoordinates.push([coordinateX, coordinateY]);
           }
           rings.push(ringCoordinates);

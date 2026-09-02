@@ -1,5 +1,5 @@
 import React from "react";
-import { formatNumber } from "@/utils/formatters";
+import { formatNumber } from "@/utils/common/ValueFormatter";
 import styles from "./ProgressBar.module.css";
 
 export interface ProgressBarProps {

@@ -4,7 +4,7 @@
  */
 
 import type { SerializableFileDataset } from "@/types/workerMessages";
-import type { BinaryDbfReader, DbfFieldDescriptor } from "@/utils/binaryDbfReader";
+import type { BinaryDbfReader, DbfFieldDescriptor } from "@/utils/binary/BinaryDbfReader";
 import { cleanSuid, buildCompositeKeyFromRecord } from "./suidKeyUtils";
 
 export interface BinaryIndexResult {

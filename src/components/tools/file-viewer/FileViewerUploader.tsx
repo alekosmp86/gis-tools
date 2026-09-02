@@ -6,7 +6,7 @@ import { AlertType, ButtonVariant } from "@/types/ui";
 import type { ParsedFileDataset } from "@/types/parsers";
 import { ShapefileParser } from "@/services/parsers/ShapefileParser";
 import { CsvParser } from "@/services/parsers/CsvParser";
-import { formatNumber, formatFileSize } from "@/utils/formatters";
+import { formatNumber, formatFileSize } from "@/utils/common/ValueFormatter";
 import styles from "./FileViewerUploader.module.css";
 
 interface FileViewerUploaderProps {

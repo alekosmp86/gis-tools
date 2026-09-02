@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Table, Search } from "lucide-react";
 import { PaginationControls } from "@/components/shared/PaginationControls";
-import { formatNumber } from "@/utils/formatters";
+import { formatNumber } from "@/utils/common/ValueFormatter";
 import styles from "./AttributeTable.module.css";
 
 interface AttributeTableProps {

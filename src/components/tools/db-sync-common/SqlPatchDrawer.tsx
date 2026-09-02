@@ -8,7 +8,7 @@ import { SqlExecutionModal } from "./SqlExecutionModal";
 import { SqlScriptType } from "@/types/comparison";
 import type { DbConfig, ExecuteBatchResult } from "@/types/db";
 import { AlertType } from "@/types/ui";
-import { formatNumber } from "@/utils/formatters";
+import { formatNumber } from "@/utils/common/ValueFormatter";
 import styles from "./SqlPatchDrawer.module.css";
 
 export interface SqlPatchDrawerProps {

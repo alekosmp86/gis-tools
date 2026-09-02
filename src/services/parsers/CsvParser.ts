@@ -1,7 +1,7 @@
 import type { FeatureCollection, Feature, Geometry, GeoJsonProperties } from "geojson";
 import { FileSourceKind, type ISpatialFileParser, type ParsedFileDataset } from "@/types/parsers";
-import { parseAnyGeometryString } from "@/utils/wktParser";
-import { normalizeCoordinate } from "@/utils/ewkbParser";
+import { parseAnyGeometryString } from "@/utils/spatial/WktGeometryParser";
+import { normalizeCoordinate } from "@/utils/spatial/EwkbGeometryParser";
 
 export class CsvParser implements ISpatialFileParser {
   readonly formatName = "CSV (Valores Separados por Comas)";

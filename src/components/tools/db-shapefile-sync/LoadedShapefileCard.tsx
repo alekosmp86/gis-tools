@@ -6,7 +6,7 @@ import { AlertMessage } from "@/components/shared/AlertMessage";
 import { AlertType } from "@/types/ui";
 import { ColumnsList } from "@/components/shared/ColumnsList";
 import type { ParsedFileDataset } from "@/types/parsers";
-import { formatNumber, formatFileSize } from "@/utils/formatters";
+import { formatNumber, formatFileSize } from "@/utils/common/ValueFormatter";
 import styles from "./LoadedShapefileCard.module.css";
 
 const SpatialMapPreview = dynamic(

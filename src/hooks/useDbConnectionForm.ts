@@ -9,7 +9,7 @@ import {
   generateDefaultProfileName,
 } from "@/services/localStorageDbConfig";
 import { AlertType } from "@/types/ui";
-import { formatNumber } from "@/utils/formatters";
+import { formatNumber } from "@/utils/common/ValueFormatter";
 import type { DbConfig, DbColumnMetadata, DbConnectionStatusPayload, SavedDbProfile } from "@/types/db";
 
 interface UseDbConnectionFormCallbacks {

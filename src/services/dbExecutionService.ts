@@ -4,7 +4,7 @@ import type {
   ExecuteChunkProgress,
   ExecuteBatchResult,
 } from "@/types/db";
-import { formatNumber } from "@/utils/formatters";
+import { formatNumber } from "@/utils/common/ValueFormatter";
 
 export async function executeSqlScript(
   dbConfig: DbConfig,

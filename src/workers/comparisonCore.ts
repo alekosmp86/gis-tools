@@ -15,9 +15,10 @@ import type {
   ComparisonSummary,
 } from "@/types/comparison";
 import { DiscrepancyType } from "@/types/comparison";
-import { compareGeometries } from "@/utils/geometryComparator";
-import { BinaryDbfReader, type DbfFieldDescriptor } from "@/utils/binaryDbfReader";
-import { BinaryShpReader } from "@/utils/binaryShpReader";
+import { compareGeometries } from "@/utils/spatial/SpatialGeometryComparator";
+import { BinaryDbfReader, type DbfFieldDescriptor } from "@/utils/binary/BinaryDbfReader";
+import { BinaryShpReader } from "@/utils/binary/BinaryShpReader";
+import { createProjectionConverter } from "@/utils/spatial/ProjectionEngine";
 import type { Geometry } from "geojson";
 
 import {
@@ -122,6 +123,7 @@ export function runComparisonCore(
   // ==========================================
   let dbfReader: BinaryDbfReader | null = null;
   let shpReader: BinaryShpReader | null = null;
+  const transformCoordinate = createProjectionConverter(fileDataset.prjText);
 
   if (fileDataset.dbfBuffer && fileDataset.dbfBuffer.byteLength > 0) {
     dbfReader = new BinaryDbfReader(
@@ -328,7 +330,7 @@ export function runComparisonCore(
         });
 
         if (shpReader) {
-          fileGeometry = shpReader.readGeometry(fileRecordIndex);
+          fileGeometry = shpReader.readGeometry(fileRecordIndex, transformCoordinate);
         }
       } else {
         const objectFileRec = objectFileRecList[dbIndex] ?? objectFileRecList[0];
@@ -469,7 +471,9 @@ export function runComparisonCore(
         indices.forEach((recordIndex, occurrenceIndex) => {
           processedInsertCount++;
           const fileRec = dbfReader!.readRecord(recordIndex) || {};
-          const fileGeom = shpReader ? shpReader.readGeometry(recordIndex) : undefined;
+          const fileGeom = shpReader
+            ? shpReader.readGeometry(recordIndex, transformCoordinate)
+            : undefined;
           const rawSuid =
             buildCompositeRawSuidFromRecord(fileRec, targetFileSuidCols) || suidKey;
 

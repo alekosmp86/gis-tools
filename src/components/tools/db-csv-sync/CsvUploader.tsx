@@ -8,7 +8,7 @@ import { ColumnsList } from "@/components/shared/ColumnsList";
 import { FileDropzone } from "@/components/shared/FileDropzone";
 import { CsvParser } from "@/services/parsers/CsvParser";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
-import { formatNumber, formatFileSize } from "@/utils/formatters";
+import { formatNumber, formatFileSize } from "@/utils/common/ValueFormatter";
 import styles from "./CsvUploader.module.css";
 
 const SpatialMapPreview = dynamic(

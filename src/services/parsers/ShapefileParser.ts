@@ -1,9 +1,10 @@
 import shp from "shpjs";
 import type { FeatureCollection, Geometry, GeoJsonProperties, Feature } from "geojson";
 import { FileSourceKind, type ISpatialFileParser, type ParsedFileDataset } from "@/types/parsers";
-import { extractShapefileZip } from "@/utils/zipArchiveExtractor";
-import { BinaryDbfReader } from "@/utils/binaryDbfReader";
-import { BinaryShpReader, ShapeType } from "@/utils/binaryShpReader";
+import { extractShapefileZip } from "@/utils/binary/ZipShapefileExtractor";
+import { BinaryDbfReader } from "@/utils/binary/BinaryDbfReader";
+import { BinaryShpReader, ShapeType } from "@/utils/binary/BinaryShpReader";
+import { createProjectionConverter } from "@/utils/spatial/ProjectionEngine";
 
 /** Maximum number of features rendered in the initial step map preview to avoid Leaflet OOM */
 export const MAX_MAP_PREVIEW_FEATURES = 50_000;
@@ -64,13 +65,16 @@ export class ShapefileParser implements ISpatialFileParser {
 
         const isLargeDataset = featureCount > MAX_MAP_PREVIEW_FEATURES;
         const previewLimit = isLargeDataset ? MAX_MAP_PREVIEW_FEATURES : featureCount;
+        const transformCoordinate = createProjectionConverter(extractedPackage.prjText);
 
         const recordsMap = new Map<string, Record<string, unknown>>();
         const features: Array<Feature<Geometry, GeoJsonProperties>> = [];
 
         // Build representative subset for map preview (up to MAX_MAP_PREVIEW_FEATURES)
         for (let recordIndex = 0; recordIndex < previewLimit; recordIndex++) {
-          const geometry = shpReader ? shpReader.readGeometry(recordIndex) : null;
+          const geometry = shpReader
+            ? shpReader.readGeometry(recordIndex, transformCoordinate)
+            : null;
           const properties = dbfReader.readRecord(recordIndex) || {};
           recordsMap.set(`feat-${recordIndex}`, properties);
 

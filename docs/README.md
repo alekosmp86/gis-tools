@@ -8,6 +8,7 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 
 ### 🏗️ 1. Architecture & Code Standards (`docs/architecture/`)
 - [`ARCHITECTURE.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/ARCHITECTURE.md) — Comprehensive technical architecture guide, multi-threading with Web Workers, Strategy pattern, composite SUID keys, and database introspection.
+- [`MODULAR_UTILS_AND_OOP_ARCHITECTURE.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/MODULAR_UTILS_AND_OOP_ARCHITECTURE.md) — Modular organization of `src/utils/` (`binary/`, `spatial/`, `map/`, `common/`), coordinate reprojection pipeline, and OOP domain service architecture.
 - [`BINARY_SHAPEFILE_1M_OPTIMIZATION.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/BINARY_SHAPEFILE_1M_OPTIMIZATION.md) — Deep-dive guide on 1M+ Shapefile memory optimization, low-level binary readers (`BinaryDbfReader`, `BinaryShpReader`), string interning pool, atomic exact-match indexing, and 50k map preview sampling.
 - [`ARCHITECTURE_AND_PROGRESS.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/ARCHITECTURE_AND_PROGRESS.md) — Development progress log, architectural decisions, and solved engineering challenges.
 - [`CODEBASE_STANDARDS_AND_UI_GUARDS.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/CODEBASE_STANDARDS_AND_UI_GUARDS.md) — Workspace coding standards, prop interface co-location rules, zero inline styles policy, Lucide icons usage, and single-letter variable removal.
@@ -29,3 +30,7 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 ### 📋 5. Specifications (`docs/specifications/`)
 - [`REQUERIMIENTOS_Y_ESPECIFICACION.md`](file:///c:/Alekos/Projects/gis-tools/docs/specifications/REQUERIMIENTOS_Y_ESPECIFICACION.md) — System requirements and specifications.
 - [`TASKS.md`](file:///c:/Alekos/Projects/gis-tools/docs/specifications/TASKS.md) — Development task tracking and checklist.
+
+### 🐛 6. Issues & Troubleshooting Log (`docs/issues/`)
+- [`ISSUE_001_SHAPEFILE_PROJECTED_COORDINATES_MAP_BLANK.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_001_SHAPEFILE_PROJECTED_COORDINATES_MAP_BLANK.md) — Projected coordinates (UTM/EPSG) resulting in blank/world map preview due to missing WGS84 reprojection.
+

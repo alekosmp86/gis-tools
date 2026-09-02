@@ -5,8 +5,8 @@ import { MAP_MICRO_CHUNK_SIZE, MAP_CHUNK_DELAY_MS } from "@/constants/mapConstan
 import type { MapFeatureStyle } from "@/types/map";
 import { MapChunkMessageType } from "@/types/workerMessages";
 import type { MapChunkOutputMessage } from "@/types/workerMessages";
-import { computeFeatureStyle, createPointToLayer } from "@/utils/mapFeatureStyler";
-import { bindFeatureEvents } from "@/utils/mapFeatureEvents";
+import { computeFeatureStyle, createPointToLayer } from "@/utils/map/MapSymbologyStyler";
+import { bindFeatureEvents } from "@/utils/map/MapEventHandler";
 
 export function useVectorChunkStream(
   mapInstanceRef: React.RefObject<L.Map | null>,
