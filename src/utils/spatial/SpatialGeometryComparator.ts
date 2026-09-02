@@ -1,4 +1,5 @@
 import type { Geometry } from "geojson";
+import { GIS_PRECISION } from "@/constants/gisConstants";
 import { EwkbGeometryParser } from "./EwkbGeometryParser";
 import { WktGeometryParser } from "./WktGeometryParser";
 
@@ -12,7 +13,7 @@ export interface GeometryComparisonResult {
 }
 
 export interface SpatialComparatorOptions {
-  /** Decimal places to round coordinates to absorb minor projection noise (default: 4, ~10m) */
+  /** Decimal places to round coordinates to absorb minor projection noise (default: GIS_PRECISION.COMPARISON_DECIMALS = 4, ~10m) */
   decimalPrecision?: number;
 }
 
@@ -28,7 +29,7 @@ export class SpatialGeometryComparator {
   private readonly wktParser = new WktGeometryParser();
 
   constructor(options: SpatialComparatorOptions = {}) {
-    this.decimalPrecision = options.decimalPrecision ?? 4;
+    this.decimalPrecision = options.decimalPrecision ?? GIS_PRECISION.COMPARISON_DECIMALS;
     this.roundFactor = Math.pow(10, this.decimalPrecision);
   }
 
