@@ -272,14 +272,8 @@ export class SpatialGeometryComparator {
     const dbCoords = "coordinates" in dbGeom ? dbGeom.coordinates : null;
     const fileCoords = "coordinates" in fileGeom ? fileGeom.coordinates : null;
 
-    const roundDeep = (obj: unknown): unknown => {
-      if (typeof obj === "number") return Math.round(obj * this.roundFactor) / this.roundFactor;
-      if (Array.isArray(obj)) return obj.map(roundDeep);
-      return obj;
-    };
-
     const isCoordsMatch =
-      JSON.stringify(roundDeep(dbCoords)) === JSON.stringify(roundDeep(fileCoords));
+      JSON.stringify(this.roundDeep(dbCoords)) === JSON.stringify(this.roundDeep(fileCoords));
 
     if (!isCoordsMatch) {
       return {
@@ -300,6 +294,12 @@ export class SpatialGeometryComparator {
       fileGeomNormalized: fileGeom,
     };
   }
+
+  private roundDeep(obj: unknown): unknown {
+    if (typeof obj === "number") return Math.round(obj * this.roundFactor) / this.roundFactor;
+    if (Array.isArray(obj)) return obj.map((item) => this.roundDeep(item));
+    return obj;
+  }
 }
 
 /** Convenience singleton and functional exports */
@@ -308,5 +308,3 @@ export const compareGeometries = (dbGeom: unknown, fileGeom: unknown): GeometryC
   defaultComparator.compare(dbGeom, fileGeom);
 export const normalizeGeometry = (raw: unknown): Geometry | null =>
   defaultComparator.normalizeGeometry(raw);
-export const normalizeCoordinatesInGeometry = (geom: Geometry): Geometry =>
-  defaultComparator.normalizeCoordinatesInGeometry(geom);

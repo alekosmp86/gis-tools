@@ -53,18 +53,18 @@ export class ValueFormatter {
     value: number | string | null | undefined,
     fallback: string = "0"
   ): string {
-    const formatter = new ValueFormatter();
-    return formatter.formatNumber(value, fallback);
+    return DEFAULT_FORMATTER.formatNumber(value, fallback);
   }
 
   public static formatFileSize(
     bytes: number | null | undefined,
     fallback: string = "0 B"
   ): string {
-    const formatter = new ValueFormatter();
-    return formatter.formatFileSize(bytes, fallback);
+    return DEFAULT_FORMATTER.formatFileSize(bytes, fallback);
   }
 }
+
+const DEFAULT_FORMATTER = new ValueFormatter();
 
 /** Convenience exports */
 export const formatNumber = ValueFormatter.formatNumber;

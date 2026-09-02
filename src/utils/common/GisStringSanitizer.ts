@@ -10,6 +10,17 @@ export class GisStringSanitizer {
    * - Strips floating point '.0' suffixes (e.g. '1002.0' -> '1002').
    */
   public cleanValue(value: unknown): string {
+    return GisStringSanitizer.cleanValue(value);
+  }
+
+  /**
+   * Normalizes SUID key strings (lowercased for key lookups).
+   */
+  public cleanSuid(value: unknown): string {
+    return GisStringSanitizer.cleanSuid(value);
+  }
+
+  public static cleanValue(value: unknown): string {
     if (value === null || value === undefined) return "";
     let cleanString = String(value).trim();
     cleanString = cleanString.replace(/^["']|["']$/g, "").trim();
@@ -20,21 +31,8 @@ export class GisStringSanitizer {
     return cleanString;
   }
 
-  /**
-   * Normalizes SUID key strings (lowercased for key lookups).
-   */
-  public cleanSuid(value: unknown): string {
-    return this.cleanValue(value).toLowerCase();
-  }
-
-  public static cleanValue(value: unknown): string {
-    const sanitizer = new GisStringSanitizer();
-    return sanitizer.cleanValue(value);
-  }
-
   public static cleanSuid(value: unknown): string {
-    const sanitizer = new GisStringSanitizer();
-    return sanitizer.cleanSuid(value);
+    return GisStringSanitizer.cleanValue(value).toLowerCase();
   }
 }
 
