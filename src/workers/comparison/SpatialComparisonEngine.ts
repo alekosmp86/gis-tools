@@ -335,6 +335,12 @@ export class SpatialComparisonEngine {
             type: resolvedType,
             differences,
             dbRecord: dbRec,
+            duplicateDetails: isDuplicate
+              ? {
+                  targetCount: dbRecList.length,
+                  sourceCount: 0,
+                }
+              : undefined,
             note: isDuplicate
               ? `SUID Duplicado (${dbRecList.length} en DB / 0 en Archivo)`
               : undefined,
@@ -397,6 +403,12 @@ export class SpatialComparisonEngine {
                 ? dbfReader.readRecord(binaryFileIndices[dbIndex] ?? binaryFileIndices[0]) || undefined
                 : undefined),
             shpGeometry: fileGeometry || undefined,
+            duplicateDetails: isDuplicate
+              ? {
+                  targetCount: dbRecList.length,
+                  sourceCount: fileMatchesCount,
+                }
+              : undefined,
             note: isDuplicate
               ? `SUID Duplicado (${dbRecList.length} en DB / ${fileMatchesCount} en Archivo)`
               : undefined,

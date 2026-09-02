@@ -1,10 +1,15 @@
 import React, { useState } from "react";
-import { Layers, AlertTriangle, Database, FileSpreadsheet } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
+import { Layers, AlertTriangle } from "lucide-react";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { PaginationControls } from "@/components/shared/PaginationControls";
-import { DiscrepancyType, DiscrepancyFilter, type DiscrepancyItem } from "@/types/comparison";
-import { BadgeVariant } from "@/types/ui";
+import { ComparisonIcon } from "@/components/ui/ComparisonIcon";
+import { DiscrepancyTypeBadge } from "./DiscrepancyTypeBadge";
+import { DiscrepancySuidCell } from "./DiscrepancySuidCell";
+import {
+  DiscrepancyFilter,
+  type DiscrepancyItem,
+  type ComparisonSourceDescriptor,
+} from "@/types/comparison";
 import { formatNumber } from "@/utils/common/ValueFormatter";
 import styles from "./DiscrepanciesTable.module.css";
 
@@ -13,6 +18,7 @@ export interface DiscrepanciesTableProps {
   activeFilter: DiscrepancyFilter;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  descriptor: ComparisonSourceDescriptor;
 }
 
 export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
@@ -20,6 +26,7 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
   activeFilter,
   searchQuery,
   onSearchChange,
+  descriptor,
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
@@ -59,27 +66,6 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
   const startIndex = (validCurrentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalFilteredCount);
   const paginatedItems = filteredItems.slice(startIndex, endIndex);
-
-  const renderTypeBadge = (type: DiscrepancyType) => {
-    switch (type) {
-      case DiscrepancyType.MATCH:
-        return <Badge variant={BadgeVariant.ACTIVE}>Coincidencia Exacta</Badge>;
-      case DiscrepancyType.GEOMETRY_MISMATCH:
-        return <span className={styles.badgeGeom}>Diferencia Geométrica</span>;
-      case DiscrepancyType.ATTRIBUTE_MISMATCH:
-        return <span className={styles.badgeAttr}>Diferencia de Atributos</span>;
-      case DiscrepancyType.NULL_SUID:
-        return <span className={styles.badgeNull}>SUID Nulo / Vacío</span>;
-      case DiscrepancyType.DUPLICATE_SUID:
-        return <span className={styles.badgeDuplicate}>SUID Duplicado</span>;
-      case DiscrepancyType.ONLY_IN_DB:
-        return <span className={styles.badgeDb}>Solo en Base de Datos</span>;
-      case DiscrepancyType.ONLY_IN_SHP:
-        return <span className={styles.badgeShp}>Solo en Archivo Fuente</span>;
-      default:
-        return null;
-    }
-  };
 
   const paginationProps = {
     currentPage: validCurrentPage,
@@ -136,14 +122,14 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
               <th className={styles.thField}>Campo / Atributo</th>
               <th className={styles.thDb}>
                 <span className={styles.thWithIcon}>
-                  <Database size={13} />
-                  Valor Base de Datos
+                  <ComparisonIcon kind={descriptor.targetIconKind} size={13} />
+                  Valor {descriptor.targetLabel}
                 </span>
               </th>
               <th className={styles.thShp}>
                 <span className={styles.thWithIcon}>
-                  <FileSpreadsheet size={13} />
-                  Valor Archivo
+                  <ComparisonIcon kind={descriptor.sourceIconKind} size={13} />
+                  Valor {descriptor.sourceLabel}
                 </span>
               </th>
             </tr>
@@ -166,11 +152,10 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
                 if (item.differences.length === 0) {
                   return [
                     <tr key={item.id} className={styles.tableRow}>
-                      <td className={styles.suidCell} title={item.suid}>
-                        <span className={styles.suidText}>{item.suid}</span>
-                        {item.note && <div className={styles.noteText}>{item.note}</div>}
+                      <DiscrepancySuidCell item={item} descriptor={descriptor} />
+                      <td className={styles.statusCell}>
+                        <DiscrepancyTypeBadge type={item.type} descriptor={descriptor} />
                       </td>
-                      <td className={styles.statusCell}>{renderTypeBadge(item.type)}</td>
                       <td className={styles.dimText}>--</td>
                       <td className={styles.dimText}>--</td>
                       <td className={styles.dimText}>--</td>
@@ -191,18 +176,15 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
                   return (
                     <tr key={`${item.id}-${diff.fieldName}-${diffIndex}`} className={styles.tableRow}>
                       {diffIndex === 0 && (
-                        <td
+                        <DiscrepancySuidCell
+                          item={item}
+                          descriptor={descriptor}
                           rowSpan={item.differences.length}
-                          className={styles.suidCell}
-                          title={item.suid}
-                        >
-                          <span className={styles.suidText}>{item.suid}</span>
-                          {item.note && <div className={styles.noteText}>{item.note}</div>}
-                        </td>
+                        />
                       )}
                       {diffIndex === 0 && (
                         <td rowSpan={item.differences.length} className={styles.statusCell}>
-                          {renderTypeBadge(item.type)}
+                          <DiscrepancyTypeBadge type={item.type} descriptor={descriptor} />
                         </td>
                       )}
                       <td className={styles.fieldNameCell} title={diff.fieldName}>

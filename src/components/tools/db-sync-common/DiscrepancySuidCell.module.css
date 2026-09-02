@@ -1,0 +1,22 @@
+.suidCell {
+  vertical-align: top !important;
+  white-space: nowrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.suidText {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--accent-cyan);
+  font-size: 0.825rem;
+}
+
+.noteText {
+  font-size: 0.725rem;
+  font-weight: 400;
+  font-family: var(--font-sans, sans-serif);
+  color: var(--text-dim);
+  margin-top: 4px;
+  line-height: 1.35;
+}
