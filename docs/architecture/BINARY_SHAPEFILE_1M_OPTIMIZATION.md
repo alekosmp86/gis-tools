@@ -71,13 +71,13 @@ Categorical attributes in Shapefiles (such as department names, municipality cod
 
 ---
 
-## 🗺️ 4. Initial Map Preview Strategy (50k Representative Sample)
+## 🗺️ 4. Initial Map Preview Strategy (25k Representative Sample)
 
 To provide an immediate, rich spatial preview without crashing Leaflet:
-1. When parsing a dataset with $>50{,}000$ features, [`ShapefileParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/ShapefileParser.ts) generates a GeoJSON collection containing the **first 50,000 features** for the initial map step.
+1. When parsing a dataset with $>25{,}000$ features, [`ShapefileParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/ShapefileParser.ts) generates a GeoJSON collection containing the **first 25,000 features** for the initial map step.
 2. The full binary buffers (`dbfBuffer`, `shpBuffer`) and total feature count ($1{,}051{,}248$) are preserved in the dataset model.
 3. The UI renders a high-contrast warning banner informing the user:
-   > *"Vista previa de muestra: Mostrando 50.000 de 1.051.248 entidades en el mapa inicial para asegurar fluidez de navegación. La totalidad de los 1.051.248 registros se auditará en los pasos siguientes."*
+   > *"Vista previa de muestra: Mostrando 25.000 de 1.051.248 entidades en el mapa inicial para asegurar fluidez de navegación. La totalidad de los 1.051.248 registros se auditará en los pasos siguientes."*
 
 ---
 

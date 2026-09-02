@@ -7,8 +7,7 @@ import { BinaryShpReader, ShapeType } from "@/utils/binary/BinaryShpReader";
 import { createProjectionConverter } from "@/utils/spatial/ProjectionEngine";
 
 /** Maximum number of features rendered in the initial step map preview to avoid Leaflet OOM */
-export const MAX_MAP_PREVIEW_FEATURES = 50_000;
-
+export const MAX_MAP_PREVIEW_FEATURES = 25_000;
 
 function resolveShapeTypeName(shapeType: number): string {
   switch (shapeType) {
