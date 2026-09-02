@@ -1,5 +1,7 @@
 import React, { useState } from "react";
+import { Layers, AlertTriangle, Database, FileSpreadsheet } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+import { SearchInput } from "@/components/ui/SearchInput";
 import { PaginationControls } from "@/components/shared/PaginationControls";
 import { DiscrepancyType, DiscrepancyFilter, type DiscrepancyItem } from "@/types/comparison";
 import { BadgeVariant } from "@/types/ui";
@@ -10,12 +12,14 @@ export interface DiscrepanciesTableProps {
   items: DiscrepancyItem[];
   activeFilter: DiscrepancyFilter;
   searchQuery: string;
+  onSearchChange: (query: string) => void;
 }
 
 export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
   items,
   activeFilter,
   searchQuery,
+  onSearchChange,
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
@@ -61,17 +65,17 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
       case DiscrepancyType.MATCH:
         return <Badge variant={BadgeVariant.ACTIVE}>Coincidencia Exacta</Badge>;
       case DiscrepancyType.GEOMETRY_MISMATCH:
-        return <span className={styles.badgeGeom}>Discrepancia Geométrica</span>;
+        return <span className={styles.badgeGeom}>Diferencia Geométrica</span>;
       case DiscrepancyType.ATTRIBUTE_MISMATCH:
-        return <Badge variant={BadgeVariant.DEV}>Discrepancia Atributos</Badge>;
+        return <span className={styles.badgeAttr}>Diferencia de Atributos</span>;
       case DiscrepancyType.NULL_SUID:
         return <span className={styles.badgeNull}>SUID Nulo / Vacío</span>;
       case DiscrepancyType.DUPLICATE_SUID:
         return <span className={styles.badgeDuplicate}>SUID Duplicado</span>;
       case DiscrepancyType.ONLY_IN_DB:
-        return <span className={styles.badgeDb}>Solo en DB</span>;
+        return <span className={styles.badgeDb}>Solo en Base de Datos</span>;
       case DiscrepancyType.ONLY_IN_SHP:
-        return <span className={styles.badgeShp}>Solo en Archivo</span>;
+        return <span className={styles.badgeShp}>Solo en Archivo Fuente</span>;
       default:
         return null;
     }
@@ -93,44 +97,80 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
 
   return (
     <div className={styles.tableContainer}>
+      {/* Table Header Row with Title & Integrated Search */}
       <div className={styles.tableHeaderRow}>
-        <span className={styles.tableTitle}>
-          Resultados de Discrepancias ({formatNumber(totalFilteredCount)} de{" "}
-          {formatNumber(items.length)} registros)
-        </span>
+        <div className={styles.titleGroup}>
+          <div className={styles.headerIcon}>
+            <Layers size={18} />
+          </div>
+          <div>
+            <div className={styles.tableTitle}>Resultados de Evaluación de Discrepancias</div>
+            <div className={styles.tableSubtitle}>
+              Mostrando <span className={styles.countCyan}>{formatNumber(totalFilteredCount)}</span> de{" "}
+              <span className={styles.countMuted}>{formatNumber(items.length)}</span> registros totales
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.headerActions}>
+          <div className={styles.searchWrapper}>
+            <SearchInput
+              value={searchQuery}
+              onChange={onSearchChange}
+              placeholder="Filtrar por SUID o atributo..."
+            />
+          </div>
+        </div>
       </div>
 
       {/* Top Pagination Bar */}
       <PaginationControls {...paginationProps} />
 
+      {/* Data Table */}
       <div className={styles.tableWrapper}>
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>SUID (Identificador)</th>
-              <th>Estado de Coincidencia</th>
-              <th>Campo / Atributo</th>
-              <th>Valor Base de Datos (PostGIS)</th>
-              <th>Valor Archivo Fuente</th>
+              <th className={styles.thSuid}>SUID (Identificador)</th>
+              <th className={styles.thStatus}>Tipo de Discrepancia</th>
+              <th className={styles.thField}>Campo / Atributo</th>
+              <th className={styles.thDb}>
+                <span className={styles.thWithIcon}>
+                  <Database size={13} />
+                  Valor Base de Datos
+                </span>
+              </th>
+              <th className={styles.thShp}>
+                <span className={styles.thWithIcon}>
+                  <FileSpreadsheet size={13} />
+                  Valor Archivo
+                </span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {paginatedItems.length === 0 ? (
               <tr>
                 <td colSpan={5} className={styles.emptyRow}>
-                  No se encontraron registros que coincidan con los filtros aplicados.
+                  <div className={styles.emptyContent}>
+                    <AlertTriangle size={26} className={styles.emptyIcon} />
+                    <div className={styles.emptyTitle}>No se encontraron registros</div>
+                    <div className={styles.emptySubtitle}>
+                      No hay discrepancias que coincidan con los filtros aplicados o el término de búsqueda.
+                    </div>
+                  </div>
                 </td>
               </tr>
             ) : (
               paginatedItems.flatMap((item) => {
                 if (item.differences.length === 0) {
                   return [
-                    <tr key={item.id}>
+                    <tr key={item.id} className={styles.tableRow}>
                       <td className={styles.suidCell} title={item.suid}>
-                        {item.suid}
+                        <span className={styles.suidText}>{item.suid}</span>
                         {item.note && <div className={styles.noteText}>{item.note}</div>}
                       </td>
-                      <td>{renderTypeBadge(item.type)}</td>
+                      <td className={styles.statusCell}>{renderTypeBadge(item.type)}</td>
                       <td className={styles.dimText}>--</td>
                       <td className={styles.dimText}>--</td>
                       <td className={styles.dimText}>--</td>
@@ -149,30 +189,30 @@ export const DiscrepanciesTable: React.FC<DiscrepanciesTableProps> = ({
                       : "(Vacío / NULL)";
 
                   return (
-                    <tr key={`${item.id}-${diff.fieldName}-${diffIndex}`}>
+                    <tr key={`${item.id}-${diff.fieldName}-${diffIndex}`} className={styles.tableRow}>
                       {diffIndex === 0 && (
                         <td
                           rowSpan={item.differences.length}
                           className={styles.suidCell}
                           title={item.suid}
                         >
-                          {item.suid}
+                          <span className={styles.suidText}>{item.suid}</span>
                           {item.note && <div className={styles.noteText}>{item.note}</div>}
                         </td>
                       )}
                       {diffIndex === 0 && (
-                        <td rowSpan={item.differences.length}>
+                        <td rowSpan={item.differences.length} className={styles.statusCell}>
                           {renderTypeBadge(item.type)}
                         </td>
                       )}
                       <td className={styles.fieldNameCell} title={diff.fieldName}>
-                        {diff.fieldName}
+                        <span className={styles.fieldNameBadge}>{diff.fieldName}</span>
                       </td>
                       <td className={styles.dbValueCell} title={dbValStr}>
-                        {dbValStr}
+                        <span className={styles.dbValChip}>{dbValStr}</span>
                       </td>
                       <td className={styles.shpValueCell} title={shpValStr}>
-                        {shpValStr}
+                        <span className={styles.shpValChip}>{shpValStr}</span>
                       </td>
                     </tr>
                   );

@@ -95,14 +95,12 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
             isReanalyzing={isBusy}
           />
 
-          {/* Controls Bar & View Mode Tabs */}
+          {/* View Mode Navigation Tabs */}
           <ResultsControlsBar
             activeViewTab={activeViewTab}
             onSelectTab={setActiveViewTab}
             itemsCount={summary.items.length}
             hasGeojson={hasGeojson}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
           />
 
           {/* Table View */}
@@ -111,6 +109,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
               items={summary.items}
               activeFilter={activeFilter}
               searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
             />
           </div>
 
