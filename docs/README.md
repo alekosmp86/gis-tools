@@ -37,5 +37,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_003_COMPOSITE_SUID_PARTIAL_NULL_MISCLASSIFICATION.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_003_COMPOSITE_SUID_PARTIAL_NULL_MISCLASSIFICATION.md) — Composite SUID records with partial null sub-fields misclassified as null/vacant records.
 - [`ISSUE_004_HIDDEN_MAP_TAB_CANVAS_RENDERING_DESYNC.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_004_HIDDEN_MAP_TAB_CANVAS_RENDERING_DESYNC.md) — Leaflet Canvas rendering and viewport desynchronization when filtering KPI cards while the map tab is hidden in the DOM.
 - [`ISSUE_005_POSTGIS_LARGE_DATASET_QUERY_PROGRESS_FREEZE.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_005_POSTGIS_LARGE_DATASET_QUERY_PROGRESS_FREEZE.md) — PostGIS large dataset query freezing without progress feedback and monolithic memory overhead.
+- [`ISSUE_006_UNMAPPED_GEOMETRY_COLUMN_AUTO_INJECTION_IN_INSERT.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_006_UNMAPPED_GEOMETRY_COLUMN_AUTO_INJECTION_IN_INSERT.md) — Unmapped PostGIS geometry column auto-injection in INSERT statements for tabular datasets.
 
 
