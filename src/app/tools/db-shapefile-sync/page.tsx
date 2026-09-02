@@ -8,6 +8,7 @@ import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { ShapefileUploader } from "@/components/tools/db-shapefile-sync/ShapefileUploader";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
 import { Step4ResultsView } from "@/components/tools/db-sync-common/Step4ResultsView";
+import { DB_VS_SHAPEFILE_DESCRIPTOR } from "@/constants/comparisonDescriptors";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
 import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
 import type { WizardStepDef } from "@/types/ui";
@@ -132,6 +133,7 @@ export default function DbShapefileSyncToolPage() {
           dbConfig={dbConfig}
           fileDataset={shapefileData}
           mappingConfig={mappingConfig}
+          descriptor={DB_VS_SHAPEFILE_DESCRIPTOR}
         />
       ) : null,
       onBack: () => setCurrentStep(3),

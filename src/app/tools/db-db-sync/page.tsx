@@ -7,6 +7,7 @@ import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
 import { Step4ResultsView } from "@/components/tools/db-sync-common/Step4ResultsView";
+import { DB_VS_DB_DESCRIPTOR } from "@/constants/comparisonDescriptors";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
 import { FileSourceKind, type ParsedFileDataset } from "@/types/parsers";
 import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
@@ -152,6 +153,7 @@ export default function DbDbSyncToolPage() {
           fileDataset={sourceDataset}
           mappingConfig={mappingConfig}
           sourceDbConfig={dbConfig1 || undefined}
+          descriptor={DB_VS_DB_DESCRIPTOR}
         />
       ) : null,
       onBack: () => setCurrentStep(3),

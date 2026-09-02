@@ -80,6 +80,10 @@ export interface DiscrepancyItem {
   shpFeatureProps?: Record<string, unknown>;
   shpGeometry?: unknown;
   note?: string;
+  duplicateDetails?: {
+    targetCount: number;
+    sourceCount: number;
+  };
 }
 
 export interface ComparisonSummary {
@@ -117,4 +121,18 @@ export interface ComparisonProgress {
   current: number;
   total: number;
   pct: number;
+}
+
+export type ComparisonIconKind = "database" | "file" | "layers" | "table";
+
+export interface ComparisonSourceDescriptor {
+  /** Target dataset label (the dataset being synchronized/updated, e.g. "DB Destino", "Base de Datos") */
+  targetLabel: string;
+  targetShortLabel: string;
+  targetIconKind: ComparisonIconKind;
+
+  /** Source dataset label (the reference dataset, e.g. "DB Origen", "Archivo Shapefile", "Archivo CSV") */
+  sourceLabel: string;
+  sourceShortLabel: string;
+  sourceIconKind: ComparisonIconKind;
 }

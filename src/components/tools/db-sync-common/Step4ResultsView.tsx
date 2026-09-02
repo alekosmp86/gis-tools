@@ -13,7 +13,8 @@ import { DiscrepancyFilter, ResultsViewTab } from "@/types/comparison";
 import type { ParsedFileDataset } from "@/types/parsers";
 import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
-import type { ColumnMappingConfig } from "@/types/comparison";
+import type { ColumnMappingConfig, ComparisonSourceDescriptor } from "@/types/comparison";
+import { resolveComparisonDescriptor } from "@/constants/comparisonDescriptors";
 import { ResyncBanner } from "./ResyncBanner";
 import styles from "./Step4ResultsView.module.css";
 
@@ -28,6 +29,7 @@ interface Step4ResultsViewProps {
   mappingConfig: ColumnMappingConfig;
   onBackToMapping?: () => void;
   sourceDbConfig?: DbConfig;
+  descriptor?: ComparisonSourceDescriptor;
 }
 
 export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
@@ -35,6 +37,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   fileDataset,
   mappingConfig,
   sourceDbConfig,
+  descriptor: customDescriptor,
 }) => {
   const { summary, loading, isBusy, customNotice, error, progress } = useDatasetComparison({
     dbConfig,
@@ -56,6 +59,12 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
 
   // Hook encapsulating discrepancy GeoJSON feature collection creation (Lazy-evaluated only when Map tab is active)
   const discrepancyGeojson = useDiscrepancyGeojson(summary, fileDataset, activeFilter, isMapActive);
+
+  const descriptor = resolveComparisonDescriptor({
+    descriptor: customDescriptor,
+    isDbToDb: Boolean(sourceDbConfig),
+    fileSourceKind: fileDataset.kind,
+  });
 
   return (
     <div className={styles.container}>
@@ -94,6 +103,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
             summary={summary}
             activeFilter={activeFilter}
             onSelectFilter={setActiveFilter}
+            descriptor={descriptor}
             isReanalyzing={isBusy}
           />
 
@@ -112,6 +122,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
               activeFilter={activeFilter}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
+              descriptor={descriptor}
             />
           </div>
 
