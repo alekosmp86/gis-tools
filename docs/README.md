@@ -39,5 +39,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_005_POSTGIS_LARGE_DATASET_QUERY_PROGRESS_FREEZE.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_005_POSTGIS_LARGE_DATASET_QUERY_PROGRESS_FREEZE.md) — PostGIS large dataset query freezing without progress feedback and monolithic memory overhead.
 - [`ISSUE_006_UNMAPPED_GEOMETRY_COLUMN_AUTO_INJECTION_IN_INSERT.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_006_UNMAPPED_GEOMETRY_COLUMN_AUTO_INJECTION_IN_INSERT.md) — Unmapped PostGIS geometry column auto-injection in INSERT statements for tabular datasets.
 - [`ISSUE_007_POLYMORPHIC_COMPARISON_SOURCE_DESCRIPTOR.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_007_POLYMORPHIC_COMPARISON_SOURCE_DESCRIPTOR.md) — Polymorphic comparison source descriptor architecture for extensible multi-source dataset labeling.
+- [`ISSUE_008_CODEBASE_SOLID_DEAD_CODE_PERFORMANCE_AUDIT.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_008_CODEBASE_SOLID_DEAD_CODE_PERFORMANCE_AUDIT.md) — Codebase quality audit, dead code elimination, SOLID principle adherence, zero-allocation hot paths, and performance optimizations.
 
 

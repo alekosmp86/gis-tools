@@ -22,6 +22,7 @@ This document documents major milestone updates, architectural decisions, and pr
 | **Sub-Hook Map Architecture** | ✅ Active | Decoupled Leaflet integration into 5 single-responsibility hooks. |
 | **Direct PostGIS SQL Execution** | ✅ Active | Transactional SQL batch execution modal (`BEGIN; ... COMMIT;`). |
 | **Codebase Rules & Compliance** | ✅ Active | 100/100 React Doctor score, co-located props, zero inline styles, Lucide icons only. |
+| **Code Quality & SOLID Audit** | ✅ Active | Zero-allocation static hot paths, dead code elimination, DRY icon maps, and strict enum comparisons. |
 
 ---
 
@@ -50,3 +51,8 @@ This document documents major milestone updates, architectural decisions, and pr
 ### 5. Universal Shared `FileDropzone` Component
 - **Decision**: Extracted file drag-and-drop presentation and keyboard handling into [`FileDropzone.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/FileDropzone.tsx) in `src/components/shared/`, reusing it across `ShapefileUploader.tsx` and `CsvUploader.tsx`.
 - **Benefits**: Reduced duplicated CSS/JSX by over 150 lines and established consistent UX across all file upload workflows.
+
+### 6. Zero-Allocation Hot Paths and Dead Code Elimination
+- **Decision**: Refactored domain utility classes (`GisStringSanitizer`, `ValueFormatter`) to eliminate per-call object allocations in high-frequency loops (millions of calls per dataset comparison run). Removed orphaned exports, dead props (`onBackToMapping`, unused `onBack`), and duplicated icon lookup functions across the UI layer.
+- **Benefits**: Drastically minimized garbage collector pressure in worker execution pipelines, eliminated API surface noise, and enforced 100/100 React Doctor and TypeScript strict cleanliness.
+
