@@ -95,7 +95,7 @@ export async function POST(request: Request) {
       }
 
       const existingIdx = colSelects.findIndex((s) => s === `"${geomSanitized}"`);
-      const stGeoJsonExpr = `ST_AsGeoJSON("${geomSanitized}") AS "${geomSanitized}"`;
+      const stGeoJsonExpr = `CASE WHEN "${geomSanitized}" IS NULL THEN NULL WHEN ST_SRID("${geomSanitized}") = 4326 THEN ST_AsGeoJSON("${geomSanitized}") WHEN ST_SRID("${geomSanitized}") > 0 THEN ST_AsGeoJSON(ST_Transform("${geomSanitized}", 4326)) ELSE ST_AsGeoJSON("${geomSanitized}") END AS "${geomSanitized}"`;
       if (existingIdx !== -1) {
         colSelects[existingIdx] = stGeoJsonExpr;
       } else {

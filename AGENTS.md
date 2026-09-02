@@ -48,3 +48,14 @@
 
 ## Pre-Commit Cleanliness Check
 - **Dead Code & Unused Exports Removal**: Before finalizing code changes or asking to commit, perform a quick audit to eliminate dead code, unused imports, unused exports, and deprecated functions or patterns.
+
+## Issue Documentation Rule
+- **Document Every Addressed Issue**: For every new issue or bug addressed in the codebase, create a new dedicated markdown file inside `docs/issues/` (e.g. `docs/issues/ISSUE_001_DESCRIPTIVE_NAME.md`).
+- **Required Sections**:
+  1. **Problem Statement**: Clear description of the unexpected behavior or symptom observed by the user.
+  2. **Root Cause Analysis & Technical Details**: Why the issue occurred, affected components, and data/coordinate flow breakdown.
+  3. **Implemented Solution**: Architectural or code changes made to resolve the issue.
+  4. **Code Examples & Diff Snippets**: Before/after code snippets or practical examples demonstrating the fix.
+  5. **Verification & Testing**: Commands and results proving the issue is resolved and regressions prevented.
+- **Documentation Index Update**: Always add the newly created issue document to the index in `docs/README.md`.
+
