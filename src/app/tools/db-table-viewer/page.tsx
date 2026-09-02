@@ -1,16 +1,13 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import Link from "next/link";
-import { ArrowLeft, Database, MapPin } from "lucide-react";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { Database, MapPin } from "lucide-react";
+import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { DbTableViewerContainer } from "@/components/tools/db-table-viewer/DbTableViewerContainer";
 import type { DbConfig, DbConnectionFormRef } from "@/types/db";
 import type { WizardStepDef } from "@/types/ui";
-import styles from "./page.module.css";
 
 export default function DbTableViewerPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -79,35 +76,15 @@ export default function DbTableViewerPage() {
   ];
 
   return (
-    <div className={styles.container}>
-      <Header />
-
-      <main className={styles.main}>
-        {/* Back to Portal Link */}
-        <div className={styles.backArea}>
-          <Link href="/" className={styles.backBtn}>
-            <ArrowLeft size={16} />
-            <span>Volver al Portal de Herramientas SIG</span>
-          </Link>
-        </div>
-
-        <div className={styles.workspaceHeader}>
-          <h1 className={styles.title}>Visor de Tabla PostGIS / PostgreSQL</h1>
-          <p className={styles.description}>
-            Conéctese a cualquier tabla de PostgreSQL/PostGIS para inspeccionar sus registros en tiempo real, 
-            visualizar geometrías espaciales en el mapa interactivo de Leaflet y consultar sus atributos en una tabla paginada.
-          </p>
-        </div>
-
-        {/* Wizard Orchestrator */}
-        <WizardOrchestrator
-          steps={steps}
-          currentStep={currentStep}
-          onStepClick={handleStepClick}
-        />
-      </main>
-
-      <Footer />
-    </div>
+    <ToolWorkspaceLayout
+      title="Visor de Tabla PostGIS / PostgreSQL"
+      description="Conéctese a cualquier tabla de PostgreSQL/PostGIS para inspeccionar sus registros en tiempo real, visualizar geometrías espaciales en el mapa interactivo de Leaflet y consultar sus atributos en una tabla paginada."
+    >
+      <WizardOrchestrator
+        steps={steps}
+        currentStep={currentStep}
+        onStepClick={handleStepClick}
+      />
+    </ToolWorkspaceLayout>
   );
 }

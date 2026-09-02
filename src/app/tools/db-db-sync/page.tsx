@@ -1,11 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import Link from "next/link";
-import { ArrowLeft, Database, GitMerge } from "lucide-react";
-import styles from "./page.module.css";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { Database, GitMerge } from "lucide-react";
+import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
@@ -27,7 +24,7 @@ export default function DbDbSyncToolPage() {
   const [isDb2Connected, setIsDb2Connected] = useState(false);
 
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
-  const [isMappingReady, setIsMappingReady] = useState(false);
+  const [isMappingReady, setIsMappingReady] = useState(true);
 
   const db1FormRef = useRef<DbConnectionFormRef | null>(null);
   const db2FormRef = useRef<DbConnectionFormRef | null>(null);
@@ -163,36 +160,16 @@ export default function DbDbSyncToolPage() {
   ];
 
   return (
-    <div className={styles.container}>
-      <Header />
-
-      <main className={styles.main}>
-        {/* Back to Portal Link */}
-        <div className={styles.backArea}>
-          <Link href="/" className={styles.backBtn}>
-            <ArrowLeft size={16} />
-            <span>Volver al Portal de Herramientas SIG</span>
-          </Link>
-        </div>
-
-        <div className={styles.workspaceHeader}>
-          <h1 className={styles.title}>Sincronización de Datos DB vs. DB (Réplicas)</h1>
-          <p className={styles.description}>
-            Correlacione registros entre dos tablas de bases de datos PostgreSQL/PostGIS (incluso en distintas bases de datos o esquemas),
-            identifique discrepancias alfanuméricas y aplique parches SQL de actualización e inserción.
-          </p>
-        </div>
-
-        {/* Wizard Orchestrator */}
-        <WizardOrchestrator
-          steps={steps}
-          currentStep={currentStep}
-          onStepClick={handleStepClick}
-        />
-      </main>
-
-      <Footer />
-    </div>
+    <ToolWorkspaceLayout
+      title="Sincronización de Datos DB vs. DB (Réplicas)"
+      description="Correlacione registros entre dos tablas de bases de datos PostgreSQL/PostGIS (incluso en distintas bases de datos o esquemas), identifique discrepancias alfanuméricas y aplique parches SQL de actualización e inserción."
+    >
+      <WizardOrchestrator
+        steps={steps}
+        currentStep={currentStep}
+        onStepClick={handleStepClick}
+      />
+    </ToolWorkspaceLayout>
   );
 }
 

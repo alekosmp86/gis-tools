@@ -1,11 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import Link from "next/link";
-import { ArrowLeft, Database, FileSpreadsheet, GitMerge } from "lucide-react";
-import styles from "./page.module.css";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { Database, FileSpreadsheet, GitMerge } from "lucide-react";
+import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { CsvUploader } from "@/components/tools/db-csv-sync/CsvUploader";
@@ -25,7 +22,7 @@ export default function DbCsvSyncToolPage() {
 
   const [csvDataset, setCsvDataset] = useState<ParsedFileDataset | null>(null);
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
-  const [isMappingReady, setIsMappingReady] = useState(false);
+  const [isMappingReady, setIsMappingReady] = useState(true);
 
   const dbFormRef = useRef<DbConnectionFormRef | null>(null);
   const suidMappingRef = useRef<SuidMappingStepRef | null>(null);
@@ -144,36 +141,16 @@ export default function DbCsvSyncToolPage() {
   ];
 
   return (
-    <div className={styles.container}>
-      <Header />
-
-      <main className={styles.main}>
-        {/* Back to Portal Link */}
-        <div className={styles.backArea}>
-          <Link href="/" className={styles.backBtn}>
-            <ArrowLeft size={16} />
-            <span>Volver al Portal de Herramientas SIG</span>
-          </Link>
-        </div>
-
-        <div className={styles.workspaceHeader}>
-          <h1 className={styles.title}>Sincronización de Datos DB vs. CSV</h1>
-          <p className={styles.description}>
-            Correlacione registros de bases de datos PostgreSQL contra archivos alfanuméricos CSV (.csv),
-            analice discrepancias de atributos y genere parches SQL de actualización e inserción para PostGIS.
-          </p>
-        </div>
-
-        {/* Wizard Orchestrator */}
-        <WizardOrchestrator
-          steps={steps}
-          currentStep={currentStep}
-          onStepClick={handleStepClick}
-        />
-      </main>
-
-      <Footer />
-    </div>
+    <ToolWorkspaceLayout
+      title="Sincronización de Datos DB vs. CSV"
+      description="Correlacione registros de bases de datos PostgreSQL contra archivos alfanuméricos CSV (.csv), analice discrepancias de atributos y genere parches SQL de actualización e inserción para PostGIS."
+    >
+      <WizardOrchestrator
+        steps={steps}
+        currentStep={currentStep}
+        onStepClick={handleStepClick}
+      />
+    </ToolWorkspaceLayout>
   );
 }
 

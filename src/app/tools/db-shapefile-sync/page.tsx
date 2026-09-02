@@ -1,11 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import Link from "next/link";
-import { ArrowLeft, Database, Layers, GitMerge } from "lucide-react";
-import styles from "./page.module.css";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { Database, Layers, GitMerge } from "lucide-react";
+import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { ShapefileUploader } from "@/components/tools/db-shapefile-sync/ShapefileUploader";
@@ -25,7 +22,7 @@ export default function DbShapefileSyncToolPage() {
 
   const [shapefileData, setShapefileData] = useState<ParsedShapefileData | null>(null);
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
-  const [isMappingReady, setIsMappingReady] = useState(false);
+  const [isMappingReady, setIsMappingReady] = useState(true);
 
   const dbFormRef = useRef<DbConnectionFormRef | null>(null);
   const suidMappingRef = useRef<SuidMappingStepRef | null>(null);
@@ -143,32 +140,12 @@ export default function DbShapefileSyncToolPage() {
   ];
 
   return (
-    <div className={styles.container}>
-      <Header />
-
-      <main className={styles.main}>
-        {/* Back to Portal Link */}
-        <div className={styles.backArea}>
-          <Link href="/" className={styles.backBtn}>
-            <ArrowLeft size={16} />
-            <span>Volver al Portal de Herramientas SIG</span>
-          </Link>
-        </div>
-
-        <div className={styles.workspaceHeader}>
-          <h1 className={styles.title}>Sincronización de Datos DB vs. Shapefile</h1>
-          <p className={styles.description}>
-            Correlacione registros de bases de datos PostgreSQL contra archivos Shapefile (.shp/.zip),
-            analice discrepancias de atributos y geometrías, y genere scripts SQL de actualización para PostGIS.
-          </p>
-        </div>
-
-        {/* Wizard Orchestrator */}
-        <WizardOrchestrator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
-      </main>
-
-      <Footer />
-    </div>
+    <ToolWorkspaceLayout
+      title="Sincronización de Datos DB vs. Shapefile"
+      description="Correlacione registros de bases de datos PostgreSQL contra archivos Shapefile (.shp/.zip), analice discrepancias de atributos y geometrías, y genere scripts SQL de actualización para PostGIS."
+    >
+      <WizardOrchestrator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
+    </ToolWorkspaceLayout>
   );
 }
 
