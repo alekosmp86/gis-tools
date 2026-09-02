@@ -7,6 +7,7 @@ import {
 } from "@/types/comparison";
 import { runInWorker, serializeFileDataset } from "@/services/workerBridge";
 import type { ProgressCallback } from "@/services/workerBridge";
+import { DatabaseStreamReader } from "@/services/streaming/DatabaseStreamReader";
 
 export class DbVsFileComparisonEngine implements IComparisonEngine {
   readonly engineName = "PostgreSQL vs Tabular File Comparison Engine";
@@ -17,29 +18,12 @@ export class DbVsFileComparisonEngine implements IComparisonEngine {
     mappingConfig: ColumnMappingConfig,
     onProgress?: ProgressCallback
   ): Promise<ComparisonSummary> {
-    onProgress?.("Consultando registros PostGIS...", 0, 0);
-
-    // 1. Fetch DB Records from API route
-    const res = await fetch("/api/db/records", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...dbConfig,
-        suid_columns: mappingConfig.suidColumns,
-        fields_to_compare: mappingConfig.fieldsToCompare,
-      }),
-    });
-
-    const dbData = await res.json();
-    if (!res.ok || !dbData.success) {
-      throw new Error(
-        dbData.error || "No se pudieron consultar los registros de la base de datos."
-      );
-    }
-
-    const dbRecords: Array<Record<string, unknown>> = dbData.records || [];
-    const dbColumnTypes: Record<string, string> = dbData.columnTypes || {};
-    const detectedSrid: number | undefined = dbData.detectedSrid;
+    // 1. Fetch or Stream DB Records progressively with real-time progress updates
+    const {
+      records: dbRecords,
+      columnTypes: dbColumnTypes,
+      detectedSrid,
+    } = await DatabaseStreamReader.fetchOrStreamRecords(dbConfig, mappingConfig, onProgress);
 
     const finalMappingConfig: ColumnMappingConfig = {
       ...mappingConfig,
@@ -49,7 +33,7 @@ export class DbVsFileComparisonEngine implements IComparisonEngine {
     // 2. Serialize dataset for postMessage (Map -> plain object)
     const serializedDataset = serializeFileDataset(dataset);
 
-    // 3. Offload CPU-intensive work to Web Worker
+    // 3. Offload CPU-intensive comparison to Web Worker
     return runInWorker(
       {
         dbRecords,

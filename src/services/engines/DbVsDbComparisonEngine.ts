@@ -8,11 +8,7 @@ import {
 } from "@/types/comparison";
 import { runInWorker, serializeFileDataset } from "@/services/workerBridge";
 import type { ProgressCallback } from "@/services/workerBridge";
-
-interface DbRecordsResponse {
-  records: Array<Record<string, unknown>>;
-  columnTypes: Record<string, string>;
-}
+import { DatabaseStreamReader } from "@/services/streaming/DatabaseStreamReader";
 
 export class DbVsDbComparisonEngine implements IComparisonEngine {
   readonly engineName = "PostgreSQL DB 1 vs PostgreSQL DB 2 Comparison Engine";
@@ -26,8 +22,6 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
     mappingConfig: ColumnMappingConfig,
     onProgress?: ProgressCallback
   ): Promise<ComparisonSummary> {
-    onProgress?.("Consultando registros de la Base de Datos Origen (DB 1)...", 0, 0);
-
     // 1. Fetch Source DB 1 Records
     const sourceSuidCols =
       mappingConfig.matchedFileSuidColumns && mappingConfig.matchedFileSuidColumns.length > 0
@@ -36,11 +30,22 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
 
     const sourceFields = this.buildSourceFields(mappingConfig, sourceSuidCols);
 
-    const { records: sourceRecords } = await this.fetchDbRecords(
+    const sourceMappingConfig: ColumnMappingConfig = {
+      ...mappingConfig,
+      suidColumns: sourceSuidCols,
+      fieldsToCompare: sourceFields,
+    };
+
+    const { records: sourceRecords } = await DatabaseStreamReader.fetchOrStreamRecords(
       sourceDbConfig,
-      sourceSuidCols,
-      sourceFields,
-      "No se pudieron consultar los registros de la Base de Datos Origen (DB 1)."
+      sourceMappingConfig,
+      (phase, current, total) => {
+        onProgress?.(
+          `[BD Origen] ${phase}`,
+          current,
+          total
+        );
+      }
     );
 
     // Construct ParsedFileDataset structure from Source DB 1 records
@@ -59,14 +64,18 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
     };
 
     // 2. Fetch Target DB 2 Records
-    onProgress?.("Consultando registros de la Base de Datos Destino (DB 2)...", 0, 0);
-
-    const { records: targetRecords, columnTypes: targetColumnTypes } = await this.fetchDbRecords(
-      targetDbConfig,
-      mappingConfig.suidColumns,
-      mappingConfig.fieldsToCompare,
-      "No se pudieron consultar los registros de la Base de Datos Destino (DB 2)."
-    );
+    const { records: targetRecords, columnTypes: targetColumnTypes } =
+      await DatabaseStreamReader.fetchOrStreamRecords(
+        targetDbConfig,
+        mappingConfig,
+        (phase, current, total) => {
+          onProgress?.(
+            `[BD Destino] ${phase}`,
+            current,
+            total
+          );
+        }
+      );
 
     // 3. Serialize Source DB 1 dataset & run comparison in Web Worker
     const serializedDataset = serializeFileDataset(sourceDataset);
@@ -93,14 +102,12 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
     mappingConfig: ColumnMappingConfig,
     onProgress?: ProgressCallback
   ): Promise<ComparisonSummary> {
-    onProgress?.("Consultando registros PostGIS...", 0, 0);
-
-    const { records: targetRecords, columnTypes: targetColumnTypes } = await this.fetchDbRecords(
-      targetDbConfig,
-      mappingConfig.suidColumns,
-      mappingConfig.fieldsToCompare,
-      "No se pudieron consultar los registros de la base de datos."
-    );
+    const { records: targetRecords, columnTypes: targetColumnTypes } =
+      await DatabaseStreamReader.fetchOrStreamRecords(
+        targetDbConfig,
+        mappingConfig,
+        onProgress
+      );
 
     const serializedDataset = serializeFileDataset(sourceDataset);
 
@@ -115,36 +122,6 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
       },
       onProgress
     );
-  }
-
-  /**
-   * Helper method to execute POST /api/db/records requests.
-   */
-  private async fetchDbRecords(
-    dbConfig: DbConfig,
-    suidColumns: string[],
-    fieldsToCompare: string[],
-    errorMessage: string
-  ): Promise<DbRecordsResponse> {
-    const res = await fetch("/api/db/records", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...dbConfig,
-        suid_columns: suidColumns,
-        fields_to_compare: fieldsToCompare,
-      }),
-    });
-
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || errorMessage);
-    }
-
-    return {
-      records: data.records || [],
-      columnTypes: data.columnTypes || {},
-    };
   }
 
   /**
