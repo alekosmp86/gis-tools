@@ -323,6 +323,7 @@ export class SpatialComparisonEngine {
             ? DiscrepancyType.DUPLICATE_SUID
             : DiscrepancyType.ONLY_IN_DB;
 
+          // Note: duplicateSuidCount is tracked per affected record row to match total item counts
           if (resolvedType === DiscrepancyType.DUPLICATE_SUID) {
             duplicateSuidCount++;
           } else {

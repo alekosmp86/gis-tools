@@ -103,9 +103,7 @@ export class DatabaseStreamReader {
               totalCount
             );
           } else if (message.type === "CHUNK") {
-            for (let rowIndex = 0; rowIndex < message.rows.length; rowIndex++) {
-              records.push(message.rows[rowIndex]);
-            }
+            Array.prototype.push.apply(records, message.rows);
 
             const current = message.current;
             const total = message.total || totalCount;
@@ -134,9 +132,7 @@ export class DatabaseStreamReader {
       try {
         const tailMessage: StreamMessage = JSON.parse(lineBuffer.trim());
         if (tailMessage.type === "CHUNK") {
-          for (let rowIndex = 0; rowIndex < tailMessage.rows.length; rowIndex++) {
-            records.push(tailMessage.rows[rowIndex]);
-          }
+          Array.prototype.push.apply(records, tailMessage.rows);
         } else if (tailMessage.type === "ERROR") {
           throw new Error(tailMessage.error);
         }

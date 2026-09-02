@@ -24,7 +24,7 @@ export class SqlScriptBuilder {
     this.targetSrid = targetSrid > 0 ? targetSrid : 4326;
   }
 
-  public isNumericColumnType(dataType?: string): boolean {
+  private isNumericColumnType(dataType?: string): boolean {
     if (!dataType) return false;
     const lowerType = dataType.toLowerCase();
     return (
@@ -124,40 +124,5 @@ export class SqlScriptBuilder {
     values: string[]
   ): string {
     return `INSERT INTO "${this.dbSchemaName}"."${this.dbTableName}" (${columnNames.join(", ")}) VALUES (${values.join(", ")});`;
-  }
-
-  public static findDbGeometryColumn(
-    dbRecord?: Record<string, unknown>,
-    dbColumnTypes?: Record<string, string>
-  ): string | undefined {
-    if (dbColumnTypes) {
-      const directMatch = Object.keys(dbColumnTypes).find((key) =>
-        ["geom", "geometry", "wkb_geometry", "geom_3857", "the_geom", "shape"].includes(
-          key.toLowerCase()
-        )
-      );
-      if (directMatch) return directMatch;
-
-      const typeMatch = Object.keys(dbColumnTypes).find((key) => {
-        const typeStr = dbColumnTypes[key]?.toLowerCase() || "";
-        return (
-          typeStr.includes("geometry") ||
-          typeStr.includes("geography") ||
-          typeStr === "user-defined"
-        );
-      });
-      if (typeMatch) return typeMatch;
-    }
-
-    if (dbRecord) {
-      const directMatch = Object.keys(dbRecord).find((key) =>
-        ["geom", "geometry", "wkb_geometry", "geom_3857", "the_geom", "shape"].includes(
-          key.toLowerCase()
-        )
-      );
-      if (directMatch) return directMatch;
-    }
-
-    return undefined;
   }
 }
