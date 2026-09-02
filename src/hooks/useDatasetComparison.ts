@@ -26,6 +26,24 @@ export interface UseDatasetComparisonResult {
   progress: ComparisonProgress;
 }
 
+function normalizeToFileDataset(
+  fileDataset: ParsedShapefileData | ParsedFileDataset
+): ParsedFileDataset {
+  if ("recordsMap" in fileDataset) {
+    return fileDataset;
+  }
+  return {
+    kind: fileDataset.kind,
+    fileName: fileDataset.fileName,
+    fileSize: fileDataset.fileSize,
+    featureCount: fileDataset.featureCount,
+    geometryType: fileDataset.geometryType,
+    attributes: fileDataset.attributes,
+    recordsMap: new Map(),
+    geojson: fileDataset.geojson,
+  };
+}
+
 /**
  * Custom Hook encapsulating dataset comparison state, engine factory selection,
  * background execution status tracking via React Query mutation keys,
@@ -58,19 +76,7 @@ export function useDatasetComparison({
         const engine = new DbVsDbComparisonEngine();
         return engine.compareDbVsDb(sourceDbConfig, dbConfig, mappingConfig, onProgress);
       }
-      const dataset: ParsedFileDataset =
-        "recordsMap" in fileDataset
-          ? fileDataset
-          : {
-              kind: fileDataset.kind,
-              fileName: fileDataset.fileName,
-              fileSize: fileDataset.fileSize,
-              featureCount: fileDataset.featureCount,
-              geometryType: fileDataset.geometryType,
-              attributes: fileDataset.attributes,
-              recordsMap: new Map(),
-              geojson: fileDataset.geojson,
-            };
+      const dataset = normalizeToFileDataset(fileDataset);
       const engine = new DbVsFileComparisonEngine();
       return engine.compare(dbConfig, dataset, mappingConfig, onProgress);
     },

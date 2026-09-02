@@ -57,7 +57,7 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
     const sourceDataset: ParsedFileDataset = {
       kind: FileSourceKind.CSV,
       fileName: `${sourceDbConfig.db_name}.${sourceDbConfig.schema_name}.${sourceDbConfig.table_name}`,
-      fileSize: sourceRecords.length * 100,
+      fileSize: 0, // In-memory database recordset (no physical file size)
       featureCount: sourceRecords.length,
       attributes: sourceFields,
       recordsMap,

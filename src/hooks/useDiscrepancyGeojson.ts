@@ -1,5 +1,5 @@
 import type { FeatureCollection, Feature, Geometry, GeoJsonProperties } from "geojson";
-import { DiscrepancyFilter } from "@/types/comparison";
+import { DiscrepancyFilter, DiscrepancyType } from "@/types/comparison";
 import type {
   ComparisonSummary,
   DiscrepancyFilter as DiscrepancyFilterType,
@@ -73,7 +73,7 @@ function createDiscrepancyFeatures(
   const features: Array<Feature<Geometry, GeoJsonProperties>> = [];
   const dbGeometry = extractDbGeometry(item.dbRecord);
   const fileGeometry = extractFileGeometry(item, geoMap);
-  const isMatch = item.type === "MATCH";
+  const isMatch = item.type === DiscrepancyType.MATCH;
 
   if (dbGeometry) {
     features.push({
