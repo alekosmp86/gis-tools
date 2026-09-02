@@ -24,15 +24,22 @@ export class SuidKeyResolver {
       return "";
     }
     const parts: string[] = [];
+    let hasAtLeastOneValidPart = false;
+
     for (let index = 0; index < suidColumns.length; index++) {
       const columnName = suidColumns[index];
       const rawValue = record[columnName];
       const cleaned = this.cleanKeyString(rawValue);
-      if (cleaned === "") {
-        return "";
+      if (cleaned !== "") {
+        hasAtLeastOneValidPart = true;
       }
       parts.push(cleaned);
     }
+
+    if (!hasAtLeastOneValidPart) {
+      return "";
+    }
+
     return parts.join("|");
   }
 

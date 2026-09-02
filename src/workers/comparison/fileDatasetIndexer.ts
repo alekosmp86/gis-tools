@@ -41,27 +41,26 @@ export class FileDatasetIndexer {
     );
 
     for (let recordIndex = 0; recordIndex < totalRecords; recordIndex++) {
-      let isRecordValid = true;
+      let hasAtLeastOneValidPart = false;
       const keyParts: string[] = [];
 
       for (let fieldIndex = 0; fieldIndex < suidFieldDescriptors.length; fieldIndex++) {
         const descriptor = suidFieldDescriptors[fieldIndex];
         if (!descriptor) {
-          isRecordValid = false;
-          break;
+          keyParts.push("");
+          continue;
         }
 
         const rawFieldValue = dbfReader.readFieldValue(recordIndex, descriptor);
         const cleanedKey = this.suidResolver.cleanKeyString(rawFieldValue);
 
-        if (cleanedKey === "") {
-          isRecordValid = false;
-          break;
+        if (cleanedKey !== "") {
+          hasAtLeastOneValidPart = true;
         }
         keyParts.push(cleanedKey);
       }
 
-      if (!isRecordValid || keyParts.length === 0) {
+      if (!hasAtLeastOneValidPart || keyParts.length === 0) {
         nullRecordIndices.push(recordIndex);
         continue;
       }
