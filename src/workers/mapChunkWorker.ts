@@ -1,46 +1,18 @@
 /**
  * mapChunkWorker.ts
  * Web Worker for off-main-thread GeoJSON chunk streaming.
- * Slices large feature arrays into micro-batch chunks and posts them back to UI thread.
  */
 import { MapChunkMessageType } from "@/types/workerMessages";
-import type { MapChunkInputMessage, MapChunkOutputMessage } from "@/types/workerMessages";
+import type { MapChunkInputMessage } from "@/types/workerMessages";
+import { MapChunkStreamer } from "./map/MapChunkStreamer";
+
+const streamer = new MapChunkStreamer();
 
 self.onmessage = (event: MessageEvent<MapChunkInputMessage>) => {
   if (event.data.type !== MapChunkMessageType.CHUNK_GEOJSON) return;
 
   const { features, chunkSize } = event.data.payload;
-  const total = features.length;
-
-  if (!features || total === 0) {
-    const doneMsg: MapChunkOutputMessage = {
-      type: MapChunkMessageType.CHUNK_DONE,
-      payload: { current: 0, total: 0 },
-    };
-    self.postMessage(doneMsg);
-    return;
-  }
-
-  for (let featureOffset = 0; featureOffset < total; featureOffset += chunkSize) {
-    const rawChunk = features.slice(featureOffset, featureOffset + chunkSize);
-    const chunk = rawChunk.map((featureItem, itemIndex) => ({
-      ...featureItem,
-      properties: {
-        ...featureItem.properties,
-        _featureIndex: featureOffset + itemIndex,
-      },
-    }));
-    const current = Math.min(featureOffset + chunkSize, total);
-    const batchMsg: MapChunkOutputMessage = {
-      type: MapChunkMessageType.CHUNK_BATCH,
-      payload: { chunk, current, total },
-    };
-    self.postMessage(batchMsg);
-  }
-
-  const doneMsg: MapChunkOutputMessage = {
-    type: MapChunkMessageType.CHUNK_DONE,
-    payload: { current: total, total },
-  };
-  self.postMessage(doneMsg);
+  streamer.streamMicroChunks(features, chunkSize, (message) => {
+    self.postMessage(message);
+  });
 };

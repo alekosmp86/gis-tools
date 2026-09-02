@@ -88,7 +88,7 @@ export interface ComparisonSummary {
   totalAnalyzed: number;
   exactMatchesCount: number;
   attributeMismatchCount: number;
-  geometryMismatchCount: number; // @planned — always 0 until geometry comparison is implemented
+  geometryMismatchCount: number;
   onlyInDbCount: number;
   onlyInShpCount: number;
   nullSuidCount: number;
@@ -96,6 +96,10 @@ export interface ComparisonSummary {
   items: DiscrepancyItem[];
   sqlUpdateScript: string;
   sqlInsertScript: string;
+  sqlUpdateCount: number;
+  sqlInsertCount: number;
+  sqlUpdatePreview: string;
+  sqlInsertPreview: string;
 }
 
 export interface IComparisonEngine {
