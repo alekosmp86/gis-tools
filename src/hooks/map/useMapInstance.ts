@@ -28,7 +28,20 @@ export function useMapInstance(mapContainerNode: HTMLDivElement | null): {
       setIsMapReady(true);
     }
 
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        if (mapInstanceRef.current && mapContainerNode.offsetWidth > 0 && mapContainerNode.offsetHeight > 0) {
+          mapInstanceRef.current.invalidateSize();
+        }
+      });
+      resizeObserver.observe(mapContainerNode);
+    }
+
     return () => {
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;

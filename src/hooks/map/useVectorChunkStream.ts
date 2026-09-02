@@ -123,6 +123,14 @@ export function useVectorChunkStream(
       isCancelled = true;
       if (pendingTimeout !== null) clearTimeout(pendingTimeout);
       worker.terminate();
+      try {
+        featureGroup.clearLayers();
+        if (mapInstance.hasLayer(featureGroup)) {
+          mapInstance.removeLayer(featureGroup);
+        }
+      } catch {
+        // Safe disposal
+      }
     };
   }, [mapInstanceRef, canvasRendererRef, geojson, onSelectFeature, isMapReady]);
 

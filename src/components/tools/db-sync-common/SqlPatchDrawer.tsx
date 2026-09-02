@@ -14,14 +14,77 @@ import styles from "./SqlPatchDrawer.module.css";
 export interface SqlPatchDrawerProps {
   sqlUpdateScript: string;
   sqlInsertScript: string;
+  sqlUpdatePreview?: string;
+  sqlInsertPreview?: string;
+  sqlUpdateCount?: number;
+  sqlInsertCount?: number;
   tableName: string;
   dbConfig: DbConfig;
   onExecutingChange?: (executing: boolean) => void;
 }
 
+interface ScriptPreviewStats {
+  readonly previewScript: string;
+  readonly isTruncated: boolean;
+  readonly statementCount: number;
+}
+
+const MAX_PREVIEW_LINES = 500;
+
+function computeFallbackStats(script: string, maxLines: number = MAX_PREVIEW_LINES): ScriptPreviewStats {
+  if (!script) {
+    return { previewScript: "", isTruncated: false, statementCount: 0 };
+  }
+
+  let currentPos = 0;
+  let lineCount = 0;
+  let cutoffPos = -1;
+  let statementCount = 0;
+
+  while (currentPos < script.length) {
+    const nextNewline = script.indexOf("\n", currentPos);
+    if (nextNewline === -1) {
+      if (script.slice(currentPos).includes(";")) {
+        statementCount++;
+      }
+      lineCount++;
+      break;
+    }
+
+    if (script.slice(currentPos, nextNewline).includes(";")) {
+      statementCount++;
+    }
+
+    lineCount++;
+    if (lineCount === maxLines && cutoffPos === -1) {
+      cutoffPos = nextNewline;
+    }
+
+    currentPos = nextNewline + 1;
+  }
+
+  const isTruncated = cutoffPos !== -1 && cutoffPos < script.length;
+  const rawPreview = isTruncated ? script.slice(0, cutoffPos) : script;
+
+  const previewScript = !isTruncated
+    ? rawPreview
+    : rawPreview +
+      `\n\n-- ==========================================================================================\n` +
+      `-- ⚡ VISTA PREVIA TRUNCADA EN NAVEGADOR POR RENDIMIENTO\n` +
+      `-- Se están mostrando las primeras ${formatNumber(maxLines)} sentencias de ${formatNumber(statementCount)} sentencias totales.\n` +
+      `-- El script completo está disponible intacto para Copiar, Descargar (.sql) o Ejecutar en BD.\n` +
+      `-- ==========================================================================================`;
+
+  return { previewScript, isTruncated, statementCount };
+}
+
 export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
   sqlUpdateScript,
   sqlInsertScript,
+  sqlUpdatePreview,
+  sqlInsertPreview,
+  sqlUpdateCount,
+  sqlInsertCount,
   tableName,
   dbConfig,
 }) => {
@@ -38,33 +101,29 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
     text: string;
   } | null>(null);
 
-  const activeScript = activeTab === SqlScriptType.UPDATE ? sqlUpdateScript : sqlInsertScript;
+  const isUpdateTab = activeTab === SqlScriptType.UPDATE;
+  const activeScript = isUpdateTab ? sqlUpdateScript : sqlInsertScript;
 
-  // Compute preview script truncation safely
-  const MAX_PREVIEW_LINES = 500;
-  const count = activeScript ? (activeScript.match(/;/g) || []).length : 0;
-  const lines = activeScript ? activeScript.split("\n") : [];
-  const isTruncated = lines.length > MAX_PREVIEW_LINES;
+  // Resolve precomputed values from Web Worker or fallback to fast single-pass scanner
+  let previewScript: string;
+  let isTruncated: boolean;
+  let statementCount: number;
 
-  const previewScript = !activeScript
-    ? ""
-    : !isTruncated
-    ? activeScript
-    : lines.slice(0, MAX_PREVIEW_LINES).join("\n") +
-      `\n\n-- ==========================================================================================\n` +
-      `-- ⚡ VISTA PREVIA TRUNCADA EN NAVEGADOR POR RENDIMIENTO\n` +
-      `-- Se están mostrando las primeras ${formatNumber(MAX_PREVIEW_LINES)} sentencias de ${formatNumber(count)} sentencias totales.\n` +
-      `-- El script completo está disponible intacto para Copiar, Descargar (.sql) o Ejecutar en BD.\n` +
-      `-- ==========================================================================================`;
+  const precomputedPreview = isUpdateTab ? sqlUpdatePreview : sqlInsertPreview;
+  const precomputedCount = isUpdateTab ? sqlUpdateCount : sqlInsertCount;
 
-  const hasExecutableStatements = Boolean(
-    activeScript &&
-      (activeTab === SqlScriptType.UPDATE
-        ? /UPDATE\s+/i.test(activeScript.slice(0, 10000))
-        : /INSERT\s+INTO\s+/i.test(activeScript.slice(0, 10000)))
-  );
+  if (precomputedPreview !== undefined && precomputedCount !== undefined) {
+    previewScript = precomputedPreview;
+    statementCount = precomputedCount;
+    isTruncated = statementCount > MAX_PREVIEW_LINES;
+  } else {
+    const fallbackStats = computeFallbackStats(activeScript);
+    previewScript = fallbackStats.previewScript;
+    statementCount = fallbackStats.statementCount;
+    isTruncated = fallbackStats.isTruncated;
+  }
 
-  const statementCount = count;
+  const hasExecutableStatements = statementCount > 0 || Boolean(activeScript && activeScript.trim().length > 0);
   const isCurrentTabExecuted = executedTabs[activeTab];
 
   const handleTabChange = (newTab: SqlScriptType) => {
@@ -142,7 +201,7 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
         onTabChange={handleTabChange}
       />
 
-      {/* Truncated Code Preview Box */}
+      {/* Instant Zero-Lag Code Preview Box */}
       <SqlPatchPreviewBox
         previewScript={previewScript}
         isTruncated={isTruncated}

@@ -42,13 +42,17 @@ export async function executeSqlInChunks(
   onProgress?: (progress: ExecuteChunkProgress) => void,
   chunkSize: number = 500
 ): Promise<ExecuteBatchResult> {
-  const rawLines = sqlScript.split("\n");
   const statements: string[] = [];
-  for (const rawLine of rawLines) {
-    const line = rawLine.trim();
+  let currentPos = 0;
+
+  while (currentPos < sqlScript.length) {
+    const nextNewline = sqlScript.indexOf("\n", currentPos);
+    const line = (nextNewline === -1 ? sqlScript.slice(currentPos) : sqlScript.slice(currentPos, nextNewline)).trim();
     if (line.length > 0 && !line.startsWith("--")) {
       statements.push(line);
     }
+    if (nextNewline === -1) break;
+    currentPos = nextNewline + 1;
   }
 
   const totalStatements = statements.length;

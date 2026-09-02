@@ -38,7 +38,9 @@ export function useDiscrepancyGeojson(
     return deferredFilter === DiscrepancyFilter.ALL || item.type === deferredFilter;
   });
 
-  itemsToRender.forEach((item) => {
+  const totalItems = itemsToRender.length;
+  for (let index = 0; index < totalItems; index++) {
+    const item = itemsToRender[index];
     const rawShpGeom =
       (item.shpGeometry as Geometry | undefined) ||
       (item.suid ? geoMap.get(cleanSuid(item.suid)) : undefined);
@@ -86,7 +88,7 @@ export function useDiscrepancyGeojson(
         },
       });
     }
-  });
+  }
 
   if (features.length === 0 && fileDataset.geojson) {
     return fileDataset.geojson;

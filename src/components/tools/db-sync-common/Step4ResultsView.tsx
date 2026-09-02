@@ -106,31 +106,37 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
           />
 
           {/* Table View */}
-          {activeViewTab === ResultsViewTab.TABLE && (
+          <div className={activeViewTab === ResultsViewTab.TABLE ? undefined : styles.tabHidden}>
             <DiscrepanciesTable
               items={summary.items}
               activeFilter={activeFilter}
               searchQuery={searchQuery}
             />
-          )}
+          </div>
 
-          {/* Map View with Color-Coded Discrepancies */}
-          {activeViewTab === ResultsViewTab.MAP && hasGeojson && discrepancyGeojson && (
-            <SpatialMapPreview
-              geojson={discrepancyGeojson}
-              title="MAPA DE DISCREPANCIAS ESPACIALES"
-            />
+          {/* Map View with Color-Coded Discrepancies (Preserved in DOM to eliminate 500k layer teardown overhead) */}
+          {hasGeojson && discrepancyGeojson && (
+            <div className={activeViewTab === ResultsViewTab.MAP ? undefined : styles.tabHidden}>
+              <SpatialMapPreview
+                geojson={discrepancyGeojson}
+                title="MAPA DE DISCREPANCIAS ESPACIALES"
+              />
+            </div>
           )}
 
           {/* SQL Patch Script Drawer */}
-          {activeViewTab === ResultsViewTab.SQL && (
+          <div className={activeViewTab === ResultsViewTab.SQL ? undefined : styles.tabHidden}>
             <SqlPatchDrawer
               sqlUpdateScript={summary.sqlUpdateScript}
               sqlInsertScript={summary.sqlInsertScript}
+              sqlUpdatePreview={summary.sqlUpdatePreview}
+              sqlInsertPreview={summary.sqlInsertPreview}
+              sqlUpdateCount={summary.sqlUpdateCount}
+              sqlInsertCount={summary.sqlInsertCount}
               tableName={dbConfig.table_name}
               dbConfig={dbConfig}
             />
-          )}
+          </div>
         </div>
       )}
     </div>

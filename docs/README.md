@@ -33,4 +33,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 
 ### 🐛 6. Issues & Troubleshooting Log (`docs/issues/`)
 - [`ISSUE_001_SHAPEFILE_PROJECTED_COORDINATES_MAP_BLANK.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_001_SHAPEFILE_PROJECTED_COORDINATES_MAP_BLANK.md) — Projected coordinates (UTM/EPSG) resulting in blank/world map preview due to missing WGS84 reprojection.
+- [`ISSUE_002_SQL_DRAWER_LARGE_DATASET_OOM_FREEZE.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_002_SQL_DRAWER_LARGE_DATASET_OOM_FREEZE.md) — Main UI thread freeze and memory spikes on SQL Scripts tab when processing large spatial datasets.
+
 

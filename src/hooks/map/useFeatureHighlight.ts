@@ -74,5 +74,17 @@ export function useFeatureHighlight(
         mapInstance.fitBounds(bounds, { padding: [60, 60], maxZoom: 17, animate: true });
       }
     }
+
+    return () => {
+      if (highlightLayerRef.current && mapInstance) {
+        try {
+          highlightLayerRef.current.clearLayers();
+          mapInstance.removeLayer(highlightLayerRef.current);
+          highlightLayerRef.current = null;
+        } catch {
+          // Safe disposal
+        }
+      }
+    };
   }, [mapInstanceRef, selectedFeatureIndex, geojson, isMapReady]);
 }
