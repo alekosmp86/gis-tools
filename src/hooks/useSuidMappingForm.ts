@@ -5,7 +5,8 @@ export function useSuidMappingForm(
   dbColumns: string[],
   fileAttributes: string[],
   onSuccess: (mappingConfig: ColumnMappingConfig) => void,
-  initialConfig?: ColumnMappingConfig | null
+  initialConfig?: ColumnMappingConfig | null,
+  onReadyChange?: (ready: boolean) => void
 ) {
   // Allow all non-geometry columns OR geometry columns for SUID/Attribute selection
   const selectableColumns = dbColumns.filter(
@@ -99,11 +100,15 @@ export function useSuidMappingForm(
 
   const toggleSuidColumn = (column: string) => {
     setSelectedSuids((prev) => {
+      let next: string[];
       if (prev.includes(column)) {
         if (prev.length <= 1) return prev;
-        return prev.filter((item) => item !== column);
+        next = prev.filter((item) => item !== column);
+      } else {
+        next = [...prev, column];
       }
-      return [...prev, column];
+      onReadyChange?.(next.length > 0);
+      return next;
     });
   };
 

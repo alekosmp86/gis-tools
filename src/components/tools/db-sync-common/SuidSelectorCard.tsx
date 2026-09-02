@@ -17,6 +17,7 @@ export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({
 }) => {
   const isComposite = selectedSuids.length > 1;
   const allMatched = matchedFileSuids.length > 0 && matchedFileSuids.every((match) => match !== "");
+  const selectedSuidSet = new Set(selectedSuids);
 
   return (
     <div className={styles.sectionCard}>
@@ -48,7 +49,7 @@ export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({
       {/* Multi-select Pills */}
       <div className={styles.pillsGrid}>
         {selectableColumns.map((column) => {
-          const isSelected = selectedSuids.includes(column);
+          const isSelected = selectedSuidSet.has(column);
           return (
             <button
               key={column}

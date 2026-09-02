@@ -1,4 +1,4 @@
-import React, { useImperativeHandle, useEffect } from "react";
+import React, { useImperativeHandle } from "react";
 import { SuidSelectorCard } from "./SuidSelectorCard";
 import { AttributeFieldsCard } from "./AttributeFieldsCard";
 import { GeometryToggleCard } from "../db-shapefile-sync/GeometryToggleCard";
@@ -50,15 +50,17 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
       clearAllFields,
       handleUpdateInsertDefault,
       handleProceed,
-    } = useSuidMappingForm(dbColumns, fileAttributes, onSuccess, initialConfig);
+    } = useSuidMappingForm(
+      dbColumns,
+      fileAttributes,
+      onSuccess,
+      initialConfig,
+      onReadyChange
+    );
 
     useImperativeHandle(ref, () => ({
       proceed: handleProceed,
     }), [handleProceed]);
-
-    useEffect(() => {
-      onReadyChange?.(selectedSuids.length > 0);
-    }, [selectedSuids.length, onReadyChange]);
 
     return (
       <div className={styles.container}>
