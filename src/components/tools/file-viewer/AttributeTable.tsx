@@ -65,8 +65,12 @@ export const AttributeTable: React.FC<AttributeTableProps> = ({
         </h4>
 
         <div className={styles.searchBox}>
-          <Search size={15} color="#94a3b8" />
+          <label htmlFor="attribute-table-search-input" className={styles.searchLabel}>
+            <Search size={15} color="#94a3b8" />
+            <span>Buscar:</span>
+          </label>
           <input
+            id="attribute-table-search-input"
             type="text"
             value={searchQuery}
             onChange={handleSearchChange}

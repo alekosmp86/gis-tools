@@ -38,6 +38,17 @@
   min-width: 240px;
 }
 
+.searchLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .searchInput {
   background: transparent;
   border: none;
