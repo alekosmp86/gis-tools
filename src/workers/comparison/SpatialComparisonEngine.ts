@@ -7,6 +7,7 @@ import type {
 import { DiscrepancyType } from "@/types/comparison";
 import type { SerializableFileDataset } from "@/types/workerMessages";
 import { compareGeometries } from "@/utils/spatial/SpatialGeometryComparator";
+import { parseAnyGeometryString } from "@/utils/spatial/WktGeometryParser";
 import { BinaryDbfReader, type DbfFieldDescriptor } from "@/utils/binary/BinaryDbfReader";
 import { BinaryShpReader } from "@/utils/binary/BinaryShpReader";
 import { createProjectionConverter } from "@/utils/spatial/ProjectionEngine";
@@ -363,11 +364,13 @@ export class SpatialComparisonEngine {
           dbfCompareFields,
         });
 
-        const { isGeometryDifferent, geometryDiffDetails } = this.evaluateGeometryDifference(
-          dbRec,
-          fileGeometry,
-          mappingConfig.compareGeometry
-        );
+        const { isGeometryDifferent, geometryDiffDetails, resolvedDbGeom, resolvedFileGeom } =
+          this.evaluateGeometryDifference(
+            dbRec,
+            fileFeatureRecord || undefined,
+            fileGeometry,
+            mappingConfig
+          );
 
         let resolvedType: DiscrepancyType;
         if (isDuplicate) {
@@ -393,8 +396,8 @@ export class SpatialComparisonEngine {
             geometryDifference: isGeometryDifferent
               ? {
                   details: geometryDiffDetails || "Geometría espacial no coincide",
-                  dbGeomRaw: dbRec.geom || dbRec.geometry,
-                  fileGeomRaw: fileGeometry,
+                  dbGeomRaw: resolvedDbGeom || dbRec.geom_wkb || dbRec.geom || dbRec.geometry,
+                  fileGeomRaw: resolvedFileGeom || fileGeometry,
                 }
               : undefined,
             dbRecord: dbRec,
@@ -403,7 +406,7 @@ export class SpatialComparisonEngine {
               (dbfReader
                 ? dbfReader.readRecord(binaryFileIndices[dbIndex] ?? binaryFileIndices[0]) || undefined
                 : undefined),
-            shpGeometry: fileGeometry || undefined,
+            shpGeometry: resolvedFileGeom || fileGeometry || undefined,
             duplicateDetails: isDuplicate
               ? {
                   targetCount: dbRecList.length,
@@ -537,31 +540,58 @@ export class SpatialComparisonEngine {
 
   private evaluateGeometryDifference(
     dbRec: Record<string, unknown>,
+    fileRec: Record<string, unknown> | undefined,
     fileGeometry: unknown,
-    compareGeometryEnabled: boolean
+    mappingConfig: ColumnMappingConfig
   ) {
-    if (!compareGeometryEnabled) {
-      return { isGeometryDifferent: false, geometryDiffDetails: undefined };
+    if (!mappingConfig.compareGeometry) {
+      return { isGeometryDifferent: false, geometryDiffDetails: undefined, resolvedDbGeom: null, resolvedFileGeom: null };
     }
 
-    const dbGeom =
-      dbRec.geom ??
-      dbRec.geometry ??
-      dbRec.wkb_geometry ??
-      dbRec.wkt ??
-      dbRec.the_geom;
+    // Resolve mapped geometry columns (e.g. DB "geom_wkb" <-> CSV "geom")
+    let mappedDbCol: string | undefined = undefined;
+    let mappedFileCol: string | undefined = undefined;
 
-    if (dbGeom && fileGeometry) {
-      const geoCompResult = compareGeometries(dbGeom, fileGeometry);
+    if (mappingConfig.attributeMap) {
+      for (const [dbKey, fileKey] of Object.entries(mappingConfig.attributeMap)) {
+        if (/geom/i.test(dbKey) || /geom/i.test(fileKey)) {
+          mappedDbCol = dbKey;
+          mappedFileCol = fileKey;
+          break;
+        }
+      }
+    }
+
+    const rawDbGeom = (mappedDbCol ? dbRec[mappedDbCol] : undefined)
+      ?? dbRec.geom_wkb
+      ?? dbRec.geom
+      ?? dbRec.geometry
+      ?? dbRec.wkb_geometry
+      ?? dbRec.wkt
+      ?? dbRec.the_geom;
+
+    const dbGeom = typeof rawDbGeom === "string"
+      ? parseAnyGeometryString(rawDbGeom) || rawDbGeom
+      : rawDbGeom;
+
+    const rawFileGeom = fileGeometry ?? (mappedFileCol && fileRec ? fileRec[mappedFileCol] : undefined);
+    const fileGeom = typeof rawFileGeom === "string"
+      ? parseAnyGeometryString(rawFileGeom) || rawFileGeom
+      : rawFileGeom;
+
+    if (dbGeom && fileGeom) {
+      const geoCompResult = compareGeometries(dbGeom, fileGeom);
       if (!geoCompResult.isMatch) {
         return {
           isGeometryDifferent: true,
           geometryDiffDetails: geoCompResult.details,
+          resolvedDbGeom: dbGeom,
+          resolvedFileGeom: fileGeom,
         };
       }
     }
 
-    return { isGeometryDifferent: false, geometryDiffDetails: undefined };
+    return { isGeometryDifferent: false, geometryDiffDetails: undefined, resolvedDbGeom: dbGeom, resolvedFileGeom: fileGeom };
   }
 
   private collectUnmatchedFileFeatures(params: CollectUnmatchedParams): DiscrepancyItem[] {

@@ -69,6 +69,7 @@ export function useDatasetComparison({
       fileDataset.fileName,
       suidLabel,
       mappingConfig.fieldsToCompare,
+      mappingConfig.compareGeometry,
     ],
     queryFn: () => {
       resetProgress();
