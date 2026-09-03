@@ -1,6 +1,9 @@
 import React from "react";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { SqlPatchHeader } from "./SqlPatchHeader";
+import { SqlPatchCopyButton } from "./SqlPatchCopyButton";
+import { SqlPatchDownloadButton } from "./SqlPatchDownloadButton";
+import { SqlPatchExecuteButton, SqlPatchExecutedButton } from "./SqlPatchExecuteButton";
 import { SqlPatchTabs } from "./SqlPatchTabs";
 import { SqlPatchPreviewBox } from "./SqlPatchPreviewBox";
 import { SqlExecutionModal } from "../SqlExecutionModal";
@@ -66,16 +69,28 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
   return (
     <div className={styles.container}>
       {/* Drawer Header & Actions */}
-      <SqlPatchHeader
-        copied={copied}
-        executing={false}
-        isGenerating={isGenerating}
-        hasExecutableStatements={hasExecutableStatements}
-        isCurrentTabExecuted={isCurrentTabExecuted}
-        onCopy={handleCopy}
-        onDownload={handleDownload}
-        onOpenExecuteModal={handleOpenExecuteModal}
-      />
+      <SqlPatchHeader>
+        <SqlPatchCopyButton
+          copied={copied}
+          disabled={false}
+          isLoading={isGenerating}
+          onClick={handleCopy}
+        />
+        <SqlPatchDownloadButton
+          disabled={false}
+          isLoading={isGenerating}
+          onClick={handleDownload}
+        />
+        {isCurrentTabExecuted ? (
+          <SqlPatchExecutedButton />
+        ) : (
+          <SqlPatchExecuteButton
+            disabled={!hasExecutableStatements}
+            isLoading={isGenerating}
+            onClick={handleOpenExecuteModal}
+          />
+        )}
+      </SqlPatchHeader>
 
       {/* Execution Feedback Alert */}
       {executionResult && (
