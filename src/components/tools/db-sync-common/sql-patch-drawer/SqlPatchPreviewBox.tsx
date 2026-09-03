@@ -7,12 +7,14 @@ export interface SqlPatchPreviewBoxProps {
   previewScript: string;
   isTruncated: boolean;
   statementCount: number;
+  maxPreviewLines?: number;
 }
 
 export const SqlPatchPreviewBox: React.FC<SqlPatchPreviewBoxProps> = ({
   previewScript,
   isTruncated,
   statementCount,
+  maxPreviewLines = 25,
 }) => {
   return (
     <>
@@ -20,7 +22,7 @@ export const SqlPatchPreviewBox: React.FC<SqlPatchPreviewBoxProps> = ({
         <div className={styles.truncatedNotice}>
           <Zap size={15} />
           <span>
-            Mostrando vista previa de las primeras 500 sentencias (de {formatNumber(statementCount)} totales) para mantener la máxima velocidad. El script completo se mantendrá intacto al Copiar, Descargar (.sql) o Ejecutar en BD.
+            Mostrando vista previa de las primeras {maxPreviewLines} sentencias (de {formatNumber(statementCount)} totales) para mantener la máxima velocidad. El script completo se mantendrá intacto al Copiar, Descargar (.sql) o Ejecutar en BD.
           </span>
         </div>
       )}

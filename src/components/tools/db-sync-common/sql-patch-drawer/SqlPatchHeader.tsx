@@ -1,11 +1,12 @@
 import React from "react";
-import { FileCode, Copy, Check, Download, Play, CheckCircle2 } from "lucide-react";
+import { FileCode, Copy, Check, Download, Play, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import styles from "./SqlPatchDrawer.module.css";
 
 export interface SqlPatchHeaderProps {
   copied: boolean;
   executing: boolean;
+  isGenerating?: boolean;
   hasExecutableStatements: boolean;
   isCurrentTabExecuted: boolean;
   onCopy: () => void;
@@ -16,6 +17,7 @@ export interface SqlPatchHeaderProps {
 export const SqlPatchHeader: React.FC<SqlPatchHeaderProps> = ({
   copied,
   executing,
+  isGenerating = false,
   hasExecutableStatements,
   isCurrentTabExecuted,
   onCopy,
@@ -35,21 +37,27 @@ export const SqlPatchHeader: React.FC<SqlPatchHeaderProps> = ({
       </div>
 
       <div className={styles.actionButtons}>
-        <Button variant="secondary" onClick={onCopy} type="button" disabled={executing}>
-          {copied ? <Check size={16} color="var(--accent-emerald)" /> : <Copy size={16} />}
-          <span>{copied ? "¡Copiado!" : "Copiar SQL"}</span>
+        <Button variant="secondary" onClick={onCopy} type="button" disabled={executing || isGenerating}>
+          {isGenerating ? (
+            <Loader2 size={16} className={styles.spin} />
+          ) : copied ? (
+            <Check size={16} color="var(--accent-emerald)" />
+          ) : (
+            <Copy size={16} />
+          )}
+          <span>{isGenerating ? "Generando..." : copied ? "¡Copiado!" : "Copiar SQL"}</span>
         </Button>
 
-        <Button variant="secondary" onClick={onDownload} type="button" disabled={executing}>
-          <Download size={16} />
-          <span>Descargar .sql</span>
+        <Button variant="secondary" onClick={onDownload} type="button" disabled={executing || isGenerating}>
+          {isGenerating ? <Loader2 size={16} className={styles.spin} /> : <Download size={16} />}
+          <span>{isGenerating ? "Generando..." : "Descargar .sql"}</span>
         </Button>
 
         <Button
           variant="primary"
           onClick={onOpenExecuteModal}
           type="button"
-          disabled={!hasExecutableStatements || executing || isCurrentTabExecuted}
+          disabled={!hasExecutableStatements || executing || isGenerating || isCurrentTabExecuted}
           title={
             !hasExecutableStatements
               ? "No hay sentencias SQL para ejecutar en este script"
@@ -58,7 +66,12 @@ export const SqlPatchHeader: React.FC<SqlPatchHeaderProps> = ({
               : "Ejecutar sentencias en la base de datos"
           }
         >
-          {isCurrentTabExecuted ? (
+          {isGenerating ? (
+            <>
+              <Loader2 size={16} className={styles.spin} />
+              <span>Generando...</span>
+            </>
+          ) : isCurrentTabExecuted ? (
             <>
               <CheckCircle2 size={16} color="var(--accent-emerald)" />
               <span>Script Ejecutado</span>

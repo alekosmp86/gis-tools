@@ -4,8 +4,8 @@ import { Loader2 } from "lucide-react";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ProgressBar } from "@/components/shared/ProgressBar";
 import { DiscrepanciesSummaryBar } from "./DiscrepanciesSummaryBar";
-import { DiscrepanciesTable } from "./DiscrepanciesTable";
-import { SqlPatchDrawer } from "./SqlPatchDrawer";
+import { DiscrepanciesTable } from "./discrepancies-table/DiscrepanciesTable";
+import { SqlPatchDrawer } from "./sql-patch-drawer/SqlPatchDrawer";
 import { ResultsControlsBar } from "./ResultsControlsBar";
 import { useDiscrepancyGeojson } from "@/hooks/useDiscrepancyGeojson";
 import { useDatasetComparison } from "@/hooks/useDatasetComparison";
@@ -15,6 +15,7 @@ import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
 import type { ColumnMappingConfig, ComparisonSourceDescriptor } from "@/types/comparison";
 import { resolveComparisonDescriptor } from "@/constants/comparisonDescriptors";
+import { generateSqlPatchesInWorker, serializeFileDataset } from "@/services/workerBridge";
 import { ResyncBanner } from "./ResyncBanner";
 import styles from "./Step4ResultsView.module.css";
 
@@ -147,6 +148,23 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
               sqlInsertCount={summary.sqlInsertCount}
               tableName={dbConfig.table_name}
               dbConfig={dbConfig}
+              onGenerateFullScript={async () => {
+                const serializedDataset = serializeFileDataset(
+                  "recordsMap" in fileDataset
+                    ? fileDataset
+                    : {
+                        ...fileDataset,
+                        recordsMap: new Map(),
+                      }
+                );
+                return generateSqlPatchesInWorker({
+                  discrepancyItems: summary.items,
+                  fileDataset: serializedDataset,
+                  mappingConfig,
+                  dbSchemaName: dbConfig.schema_name,
+                  dbTableName: dbConfig.table_name,
+                });
+              }}
             />
           </div>
         </div>
