@@ -70,6 +70,20 @@ export class ProjectionEngine {
   }
 
   /**
+   * Extracts the native EPSG code from an ESRI PRJ WKT string.
+   */
+  public static extractEpsg(prjText?: string | null): number | null {
+    if (!prjText || !prjText.trim()) return null;
+    const clean = prjText.trim();
+    if (clean === "EPSG:4326" || clean === "4326") return 4326;
+    const matches = clean.match(/AUTHORITY\[\s*"EPSG"\s*,\s*"?(\d+)"?\s*\]/gi);
+    if (!matches || matches.length === 0) return null;
+    const lastMatch = matches[matches.length - 1];
+    const numMatch = lastMatch.match(/\d+/);
+    return numMatch ? Number(numMatch[0]) : null;
+  }
+
+  /**
    * Static helper for direct conversion without manual instantiation.
    */
   public static createConverter(prjText?: string | null): CoordinateTransformFn | null {

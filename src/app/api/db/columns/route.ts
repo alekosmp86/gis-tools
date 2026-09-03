@@ -27,12 +27,20 @@ export async function POST(request: Request) {
 
     await client.connect();
 
-    // Query information_schema for column names, nullability, data types, and default values
+    // Query information_schema joined with pg_attribute for exact PostGIS types (e.g. geometry(MultiPolygon, 32721))
     const columnsQuery = `
-      SELECT column_name, data_type, is_nullable, column_default 
-      FROM information_schema.columns 
-      WHERE table_schema = $1 AND table_name = $2
-      ORDER BY ordinal_position;
+      SELECT 
+        c.column_name, 
+        c.data_type, 
+        c.is_nullable, 
+        c.column_default,
+        format_type(a.atttypid, a.atttypmod) AS full_data_type
+      FROM information_schema.columns c
+      LEFT JOIN pg_attribute a 
+        ON a.attname = c.column_name 
+       AND a.attrelid = format('%I.%I', c.table_schema, c.table_name)::regclass
+      WHERE c.table_schema = $1 AND c.table_name = $2
+      ORDER BY c.ordinal_position;
     `;
     const colRes = await client.query(columnsQuery, [schema, table_name]);
 
@@ -62,7 +70,7 @@ export async function POST(request: Request) {
 
     const columnDetails: DbColumnMetadata[] = colRes.rows.map((row) => ({
       column_name: row.column_name,
-      data_type: row.data_type,
+      data_type: row.full_data_type || row.data_type,
       is_nullable: row.is_nullable === "YES",
       column_default: row.column_default ? String(row.column_default) : null,
     }));

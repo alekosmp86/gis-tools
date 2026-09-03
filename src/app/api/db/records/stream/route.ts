@@ -51,25 +51,34 @@ export async function POST(request: Request) {
 
     const allSelectedCols = Array.from(new Set([...suidColsList, ...fields_to_compare]));
 
-    // 1. Query PostgreSQL information_schema for exact column data types
+    // 1. Query PostgreSQL information_schema and pg_attribute for exact column data types
     const typesQuery = `
-      SELECT column_name, data_type, udt_name 
-      FROM information_schema.columns 
-      WHERE table_schema = $1 AND table_name = $2;
+      SELECT 
+        c.column_name, 
+        c.data_type, 
+        c.udt_name,
+        format_type(a.atttypid, a.atttypmod) AS full_data_type
+      FROM information_schema.columns c
+      LEFT JOIN pg_attribute a 
+        ON a.attname = c.column_name 
+       AND a.attrelid = format('%I.%I', c.table_schema, c.table_name)::regclass
+      WHERE c.table_schema = $1 AND c.table_name = $2;
     `;
     const typesRes = await client.query(typesQuery, [schema_name, table_name]);
     const columnTypes: Record<string, string> = {};
     let geomColumnName: string | null = null;
 
-    typesRes.rows.forEach((row: { column_name: string; data_type: string; udt_name?: string }) => {
-      columnTypes[row.column_name] = row.data_type;
+    typesRes.rows.forEach((row: { column_name: string; data_type: string; udt_name?: string; full_data_type?: string }) => {
+      columnTypes[row.column_name] = row.full_data_type || row.data_type;
       const nameLower = row.column_name.toLowerCase();
       const udtLower = (row.udt_name || "").toLowerCase();
+      const fullLower = (row.full_data_type || "").toLowerCase();
       if (
         nameLower === "geom" ||
         nameLower === "geometry" ||
         nameLower === "wkb_geometry" ||
-        udtLower.includes("geometry")
+        udtLower.includes("geometry") ||
+        fullLower.includes("geometry")
       ) {
         geomColumnName = row.column_name;
       }

@@ -3,7 +3,6 @@
  * Object-Oriented Builder for high-speed, compact SQL generation (INSERT, UPDATE) and PostGIS expressions.
  */
 
-import { roundGisCoordinate } from "@/constants/gisConstants";
 import { cleanValue } from "@/utils/common/GisStringSanitizer";
 
 export class SqlScriptBuilder {
@@ -69,45 +68,47 @@ export class SqlScriptBuilder {
   }
 
   /**
-   * Serializes a geometry to compact GeoJSON string with rounded coordinates (6 decimals),
-   * cutting string size by over 55% compared to raw floating-point JSON.stringify.
+   * Serializes a geometry to standard GeoJSON string preserving full float64 coordinate fidelity.
    */
   public serializeCompactGeoJson(geometry: unknown): string {
     if (!geometry || typeof geometry !== "object") {
       return "{}";
     }
-
-    const geomObj = geometry as { type?: string; coordinates?: unknown };
-    if (!geomObj.type || !geomObj.coordinates) {
-      return JSON.stringify(geometry);
-    }
-
-    const roundCoordinates = (coords: unknown): unknown => {
-      if (!Array.isArray(coords)) return coords;
-      if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
-        return [
-          roundGisCoordinate(coords[0]),
-          roundGisCoordinate(coords[1]),
-        ];
-      }
-      return coords.map((childCoords) => roundCoordinates(childCoords));
-    };
-
-    const compactGeom = {
-      type: geomObj.type,
-      coordinates: roundCoordinates(geomObj.coordinates),
-    };
-
-    return JSON.stringify(compactGeom);
+    return JSON.stringify(geometry);
   }
 
-  public buildPostgisGeomExpr(geometry: unknown): string {
+  public buildPostgisGeomExpr(
+    geometry: unknown,
+    targetColumnName?: string,
+    sourceSrid?: number
+  ): string {
     const compactJsonString = this.serializeCompactGeoJson(geometry);
+    const originSrid = sourceSrid || (this.targetSrid !== 4326 ? this.targetSrid : 4326);
 
-    if (this.targetSrid === 4326) {
-      return `ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), 4326)`;
+    let baseExpr: string;
+    if (originSrid === this.targetSrid) {
+      baseExpr = `ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), ${this.targetSrid})`;
+    } else {
+      baseExpr = `ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), ${originSrid}), ${this.targetSrid})`;
     }
-    return `ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), 4326), ${this.targetSrid})`;
+
+    const targetType =
+      targetColumnName && this.dbColumnTypes
+        ? this.dbColumnTypes[targetColumnName]?.toLowerCase()
+        : undefined;
+
+    const isMultiTarget = targetType ? targetType.includes("multi") : false;
+
+    const geomObj = geometry as { type?: string };
+    const isSingleType =
+      geomObj &&
+      (geomObj.type === "Polygon" || geomObj.type === "LineString" || geomObj.type === "Point");
+
+    if (isMultiTarget && isSingleType) {
+      return `ST_Multi(${baseExpr})`;
+    }
+
+    return baseExpr;
   }
 
   public buildUpdateStatement(
@@ -117,6 +118,14 @@ export class SqlScriptBuilder {
   ): string {
     const sqlValue = this.formatSqlValue(fileValue, fieldName);
     return `UPDATE "${this.dbSchemaName}"."${this.dbTableName}" SET "${fieldName}" = ${sqlValue} WHERE ${whereClause};`;
+  }
+
+  public buildUpdateStatementRaw(
+    fieldName: string,
+    rawSqlExpression: string,
+    whereClause: string
+  ): string {
+    return `UPDATE "${this.dbSchemaName}"."${this.dbTableName}" SET "${fieldName}" = ${rawSqlExpression} WHERE ${whereClause};`;
   }
 
   public buildInsertStatement(
