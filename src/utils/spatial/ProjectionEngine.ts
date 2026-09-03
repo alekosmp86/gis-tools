@@ -77,10 +77,19 @@ export class ProjectionEngine {
     const clean = prjText.trim();
     if (clean === "EPSG:4326" || clean === "4326") return 4326;
     const matches = clean.match(/AUTHORITY\[\s*"EPSG"\s*,\s*"?(\d+)"?\s*\]/gi);
-    if (!matches || matches.length === 0) return null;
-    const lastMatch = matches[matches.length - 1];
-    const numMatch = lastMatch.match(/\d+/);
-    return numMatch ? Number(numMatch[0]) : null;
+    if (matches && matches.length > 0) {
+      const lastMatch = matches[matches.length - 1];
+      const numMatch = lastMatch.match(/\d+/);
+      if (numMatch) return Number(numMatch[0]);
+    }
+
+    // Fallback checks for common projected coordinate systems
+    if (/5381/.test(clean) || /SIRGAS.*(?:2000)?.*21S/i.test(clean)) return 5381;
+    if (/32721/.test(clean) || /WGS.*(?:19)?84.*(?:UTM)?.*21S/i.test(clean)) return 32721;
+    if (/31981/.test(clean)) return 31981;
+    if (/5382/.test(clean)) return 5382;
+    if (/5383/.test(clean)) return 5383;
+    return null;
   }
 
   /**

@@ -92,17 +92,39 @@ export async function POST(request: Request) {
       const geomSanitized = sanitizeIdentifier(geomColumnName);
       try {
         const sridQuery = `
-          SELECT ST_SRID("${geomSanitized}") AS srid 
-          FROM "${sanitizeIdentifier(schema_name)}"."${sanitizeIdentifier(table_name)}" 
-          WHERE "${geomSanitized}" IS NOT NULL 
-          LIMIT 1;
+          SELECT COALESCE(
+            NULLIF((SELECT Find_SRID($1, $2, $3)), 0),
+            NULLIF((SELECT ST_SRID("${geomSanitized}") FROM "${sanitizeIdentifier(schema_name)}"."${sanitizeIdentifier(table_name)}" WHERE "${geomSanitized}" IS NOT NULL LIMIT 1), 0)
+          ) AS srid;
         `;
-        const sridRes = await client.query(sridQuery);
+        const sridRes = await client.query(sridQuery, [schema_name, table_name, geomColumnName]);
         if (sridRes.rows.length > 0 && typeof sridRes.rows[0].srid === "number" && sridRes.rows[0].srid > 0) {
           detectedSrid = sridRes.rows[0].srid;
         }
       } catch {
-        // Fallback to 4326 default
+        // Fallback to ST_SRID only if Find_SRID fails
+        try {
+          const fallbackQuery = `
+            SELECT ST_SRID("${geomSanitized}") AS srid 
+            FROM "${sanitizeIdentifier(schema_name)}"."${sanitizeIdentifier(table_name)}" 
+            WHERE "${geomSanitized}" IS NOT NULL 
+            LIMIT 1;
+          `;
+          const fallbackRes = await client.query(fallbackQuery);
+          if (fallbackRes.rows.length > 0 && typeof fallbackRes.rows[0].srid === "number" && fallbackRes.rows[0].srid > 0) {
+            detectedSrid = fallbackRes.rows[0].srid;
+          }
+        } catch {
+          // Keep default
+        }
+      }
+
+      // If still 4326, parse from column type modifier (e.g. geometry(MultiPolygon,5381))
+      if (detectedSrid === 4326 && columnTypes[geomColumnName]) {
+        const typeMatch = columnTypes[geomColumnName].match(/,\s*(\d+)\s*\)/);
+        if (typeMatch && Number(typeMatch[1]) > 0) {
+          detectedSrid = Number(typeMatch[1]);
+        }
       }
 
       const existingIdx = colSelects.findIndex((s) => s === `"${geomSanitized}"`);
