@@ -24,6 +24,8 @@ src/utils/
 │   ├── ProjectionEngine.ts
 │   ├── EwkbGeometryParser.ts
 │   ├── WktGeometryParser.ts
+│   ├── GeometryRawNormalizer.ts
+│   ├── PolygonRingNormalizer.ts
 │   ├── SpatialGeometryComparator.ts
 │   └── GeoJsonDatasetBuilder.ts
 │
