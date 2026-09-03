@@ -129,19 +129,19 @@ export function useSqlPatchDrawerState({
       return activeScript;
     }
 
+    setIsGenerating(true);
     try {
-      setIsGenerating(true);
       const generated = await onGenerateFullScript();
       setLazyScripts(generated);
+      setIsGenerating(false);
       return isUpdateTab ? generated.sqlUpdateScript : generated.sqlInsertScript;
     } catch {
+      setIsGenerating(false);
       setExecutionResult({
         type: AlertType.ERROR,
         text: "Error al generar el script SQL completo en segundo plano.",
       });
       return null;
-    } finally {
-      setIsGenerating(false);
     }
   };
 
