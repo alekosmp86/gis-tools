@@ -2,68 +2,37 @@ import type {
   ColumnMappingConfig,
   ComparisonSummary,
   DiscrepancyItem,
-  AttributeDifference,
 } from "@/types/comparison";
-import { DiscrepancyType } from "@/types/comparison";
 import type { SerializableFileDataset } from "@/types/workerMessages";
-import { compareGeometries } from "@/utils/spatial/SpatialGeometryComparator";
-import { parseAnyGeometryString } from "@/utils/spatial/WktGeometryParser";
 import { BinaryDbfReader, type DbfFieldDescriptor } from "@/utils/binary/BinaryDbfReader";
 import { BinaryShpReader } from "@/utils/binary/BinaryShpReader";
-import { createProjectionConverter } from "@/utils/spatial/ProjectionEngine";
-import type { Geometry } from "geojson";
-
+import { createProjectionConverter, ProjectionEngine } from "@/utils/spatial/ProjectionEngine";
 import { FileDatasetIndexer } from "./FileDatasetIndexer";
 import { SuidKeyResolver } from "./SuidKeyResolver";
 import { NullRecordHandler } from "./NullRecordHandler";
 import { SqlPatchGenerator } from "./SqlPatchGenerator";
+import { FeatureAttributeExtractor } from "./FeatureAttributeExtractor";
+import { GeometryDifferenceEvaluator } from "./GeometryDifferenceEvaluator";
+import { MatchedRecordsComparator } from "./MatchedRecordsComparator";
+import { UnmatchedFileFeaturesCollector } from "./UnmatchedFileFeaturesCollector";
 
-interface PassCounts {
-  exactMatchesCount: number;
-  attributeMismatchCount: number;
-  geometryMismatchCount: number;
-  onlyInDbCount: number;
-  duplicateSuidCount: number;
-}
-
-interface PassResult {
-  discrepancyItems: DiscrepancyItem[];
-  processedSuids: Set<string>;
-  counts: PassCounts;
-}
-
-interface CompareMatchedParams {
-  dbSuidMap: Map<string, Record<string, unknown>[]>;
-  dbSuidCols: string[];
-  fieldsToCompare: string[];
-  fieldToFileKey: Map<string, string>;
-  binaryFileSuidMap: Map<string, number[]>;
-  objectFileSuidMap: Map<string, Record<string, unknown>[]>;
-  dbfReader: BinaryDbfReader | null;
-  shpReader: BinaryShpReader | null;
-  transformCoordinate: ((coordinate: [number, number]) => [number, number]) | null;
-  dbfCompareFields: Map<string, DbfFieldDescriptor>;
-  mappingConfig: ColumnMappingConfig;
-  emit: (phase: string, current: number, total: number) => void;
-}
-
-interface CollectUnmatchedParams {
-  processedSuids: Set<string>;
-  binaryFileSuidMap: Map<string, number[]>;
-  objectFileSuidMap: Map<string, Record<string, unknown>[]>;
-  targetFileSuidCols: string[];
-  fieldsToCompare: string[];
-  fieldToFileKey: Map<string, string>;
-  dbfCompareFields: Map<string, DbfFieldDescriptor>;
-  dbfReader: BinaryDbfReader | null;
-  shpReader: BinaryShpReader | null;
-  transformCoordinate: ((coordinate: [number, number]) => [number, number]) | null;
-}
-
+/**
+ * SpatialComparisonEngine.ts
+ * High-level comparison orchestrator coordinating dataset indexing, Pass 1 matched comparison,
+ * Pass 2 unmatched features collection, and zero-allocation SQL patch preview generation.
+ */
 export class SpatialComparisonEngine {
   private readonly suidResolver = new SuidKeyResolver();
   private readonly indexer = new FileDatasetIndexer(this.suidResolver);
   private readonly nullHandler = new NullRecordHandler();
+  private readonly attributeExtractor = new FeatureAttributeExtractor(this.suidResolver);
+  private readonly geometryEvaluator = new GeometryDifferenceEvaluator();
+  private readonly matchedComparator = new MatchedRecordsComparator(
+    this.suidResolver,
+    this.attributeExtractor,
+    this.geometryEvaluator
+  );
+  private readonly unmatchedCollector = new UnmatchedFileFeaturesCollector(this.suidResolver);
 
   public executeComparison(
     dbRecords: Record<string, unknown>[],
@@ -81,7 +50,7 @@ export class SpatialComparisonEngine {
     const { dbSuidCols, targetFileSuidCols, fieldsToCompare, fieldToFileKey } =
       this.resolveMappingParameters(mappingConfig);
 
-    const { dbfReader, shpReader, transformCoordinate } =
+    const { dbfReader, shpReader, transformCoordinate, fileSrid } =
       this.initializeFileReaders(fileDataset);
 
     // 1. Index DB records
@@ -96,7 +65,7 @@ export class SpatialComparisonEngine {
 
     // 3. Pass 1: Compare Matched Records
     emit("Comparando registros...", 0, dbRecords.length);
-    const pass1Result = this.compareMatchedRecords({
+    const pass1Result = this.matchedComparator.compareMatchedRecords({
       dbSuidMap,
       dbSuidCols,
       fieldsToCompare,
@@ -113,7 +82,7 @@ export class SpatialComparisonEngine {
 
     // 4. Pass 2: Process features ONLY in file
     emit("Procesando registros solo en archivo...", dbRecords.length, dbRecords.length);
-    const unmatchedFileItems = this.collectUnmatchedFileFeatures({
+    const unmatchedFileItems = this.unmatchedCollector.collectUnmatchedFileFeatures({
       processedSuids: pass1Result.processedSuids,
       binaryFileSuidMap,
       objectFileSuidMap,
@@ -142,16 +111,18 @@ export class SpatialComparisonEngine {
       nullRecordItems.length +
       pass1Result.counts.duplicateSuidCount;
 
-    // 6. Generate SQL Patches
-    emit("Generando sentencias SQL...", 0, allDiscrepancyItems.length);
+    // 6. Generate SQL Patches (preview mode only: zero-memory allocation)
+    emit("Generando vista previa SQL...", 0, allDiscrepancyItems.length);
     const sqlPatchGenerator = new SqlPatchGenerator(
       dbSchemaName,
       dbTableName,
       mappingConfig,
       dbColumnTypes,
-      Boolean(dbfReader)
+      Boolean(dbfReader),
+      shpReader,
+      fileSrid
     );
-    const patchResult = sqlPatchGenerator.generatePatches(allDiscrepancyItems, emit);
+    const patchResult = sqlPatchGenerator.generatePatches(allDiscrepancyItems, emit, false);
 
     return {
       totalDbRecords: dbRecords.length,
@@ -192,6 +163,7 @@ export class SpatialComparisonEngine {
     let dbfReader: BinaryDbfReader | null = null;
     let shpReader: BinaryShpReader | null = null;
     let transformCoordinate: ((coordinate: [number, number]) => [number, number]) | null = null;
+    let fileSrid: number | undefined;
 
     if (fileDataset.dbfBuffer) {
       dbfReader = new BinaryDbfReader(fileDataset.dbfBuffer, fileDataset.cpgText || "windows-1252");
@@ -199,11 +171,12 @@ export class SpatialComparisonEngine {
     if (fileDataset.shpBuffer) {
       shpReader = new BinaryShpReader(fileDataset.shpBuffer);
       if (fileDataset.prjText) {
+        fileSrid = ProjectionEngine.extractEpsg(fileDataset.prjText) || undefined;
         transformCoordinate = createProjectionConverter(fileDataset.prjText);
       }
     }
 
-    return { dbfReader, shpReader, transformCoordinate };
+    return { dbfReader, shpReader, transformCoordinate, fileSrid };
   }
 
   private indexDatabaseRecords(
@@ -267,7 +240,7 @@ export class SpatialComparisonEngine {
       fieldsToCompare.forEach((field) => {
         const fileKey = fieldToFileKey.get(field) || field;
         const descriptor = dbfReader.header.fields.find(
-          (f) => f.name.toLowerCase() === fileKey.toLowerCase()
+          (descriptorItem) => descriptorItem.name.toLowerCase() === fileKey.toLowerCase()
         );
         if (descriptor) {
           dbfCompareFields.set(field, descriptor);
@@ -275,414 +248,6 @@ export class SpatialComparisonEngine {
       });
     }
     return dbfCompareFields;
-  }
-
-  private compareMatchedRecords(params: CompareMatchedParams): PassResult {
-    const {
-      dbSuidMap,
-      dbSuidCols,
-      fieldsToCompare,
-      fieldToFileKey,
-      binaryFileSuidMap,
-      objectFileSuidMap,
-      dbfReader,
-      shpReader,
-      transformCoordinate,
-      dbfCompareFields,
-      mappingConfig,
-      emit,
-    } = params;
-
-    const discrepancyItems: DiscrepancyItem[] = [];
-    const processedSuids = new Set<string>();
-    let exactMatchesCount = 0;
-    let attributeMismatchCount = 0;
-    let geometryMismatchCount = 0;
-    let onlyInDbCount = 0;
-    let duplicateSuidCount = 0;
-
-    let processedDbRecordCount = 0;
-    const totalDbSuidEntries = dbSuidMap.size;
-
-    dbSuidMap.forEach((dbRecList, suidKey) => {
-      processedSuids.add(suidKey);
-
-      const binaryFileIndices = binaryFileSuidMap.get(suidKey) || [];
-      const objectFileRecList = objectFileSuidMap.get(suidKey) || [];
-      const objectFileGeoms = objectFileRecList.map((rec) => rec._geometry);
-
-      const fileMatchesCount = dbfReader ? binaryFileIndices.length : objectFileRecList.length;
-      const isDuplicate = dbRecList.length > 1 || fileMatchesCount > 1;
-
-      dbRecList.forEach((dbRec, dbIndex) => {
-        processedDbRecordCount++;
-        const rawSuid = this.suidResolver.buildCompositeRawSuid(dbRec, dbSuidCols) || suidKey;
-
-        if (fileMatchesCount === 0) {
-          const differences = this.computeOnlyInDbDifferences(dbRec, fieldsToCompare);
-          const resolvedType = isDuplicate
-            ? DiscrepancyType.DUPLICATE_SUID
-            : DiscrepancyType.ONLY_IN_DB;
-
-          // Note: duplicateSuidCount is tracked per affected record row to match total item counts
-          if (resolvedType === DiscrepancyType.DUPLICATE_SUID) {
-            duplicateSuidCount++;
-          } else {
-            onlyInDbCount++;
-          }
-
-          discrepancyItems.push({
-            id: `db-${suidKey}-${dbIndex}`,
-            suid: rawSuid,
-            type: resolvedType,
-            differences,
-            dbRecord: dbRec,
-            duplicateDetails: isDuplicate
-              ? {
-                  targetCount: dbRecList.length,
-                  sourceCount: 0,
-                }
-              : undefined,
-            note: isDuplicate
-              ? `SUID Duplicado (${dbRecList.length} en DB / 0 en Archivo)`
-              : undefined,
-          });
-          return;
-        }
-
-        const { differences, fileFeatureRecord, fileGeometry } = this.extractFeatureAttributesAndGeometry({
-          dbRec,
-          dbIndex,
-          fieldsToCompare,
-          fieldToFileKey,
-          binaryFileIndices,
-          objectFileRecList,
-          objectFileGeoms,
-          dbfReader,
-          shpReader,
-          transformCoordinate,
-          dbfCompareFields,
-        });
-
-        const { isGeometryDifferent, geometryDiffDetails, resolvedDbGeom, resolvedFileGeom } =
-          this.evaluateGeometryDifference(
-            dbRec,
-            fileFeatureRecord || undefined,
-            fileGeometry,
-            mappingConfig
-          );
-
-        let resolvedType: DiscrepancyType;
-        if (isDuplicate) {
-          resolvedType = DiscrepancyType.DUPLICATE_SUID;
-          duplicateSuidCount++;
-        } else if (isGeometryDifferent) {
-          resolvedType = DiscrepancyType.GEOMETRY_MISMATCH;
-          geometryMismatchCount++;
-        } else if (differences.length > 0) {
-          resolvedType = DiscrepancyType.ATTRIBUTE_MISMATCH;
-          attributeMismatchCount++;
-        } else {
-          resolvedType = DiscrepancyType.MATCH;
-          exactMatchesCount++;
-        }
-
-        if (resolvedType !== DiscrepancyType.MATCH) {
-          discrepancyItems.push({
-            id: `match-${suidKey}-${dbIndex}`,
-            suid: rawSuid,
-            type: resolvedType,
-            differences,
-            geometryDifference: isGeometryDifferent
-              ? {
-                  details: geometryDiffDetails || "Geometría espacial no coincide",
-                  dbGeomRaw: resolvedDbGeom || dbRec.geom_wkb || dbRec.geom || dbRec.geometry,
-                  fileGeomRaw: resolvedFileGeom || fileGeometry,
-                }
-              : undefined,
-            dbRecord: dbRec,
-            shpFeatureProps:
-              fileFeatureRecord ||
-              (dbfReader
-                ? dbfReader.readRecord(binaryFileIndices[dbIndex] ?? binaryFileIndices[0]) || undefined
-                : undefined),
-            shpGeometry: resolvedFileGeom || fileGeometry || undefined,
-            duplicateDetails: isDuplicate
-              ? {
-                  targetCount: dbRecList.length,
-                  sourceCount: fileMatchesCount,
-                }
-              : undefined,
-            note: isDuplicate
-              ? `SUID Duplicado (${dbRecList.length} en DB / ${fileMatchesCount} en Archivo)`
-              : undefined,
-          });
-        }
-      });
-
-      if (processedDbRecordCount % 10_000 === 0) {
-        emit("Comparando registros...", processedDbRecordCount, totalDbSuidEntries);
-      }
-    });
-
-    return {
-      discrepancyItems,
-      processedSuids,
-      counts: {
-        exactMatchesCount,
-        attributeMismatchCount,
-        geometryMismatchCount,
-        onlyInDbCount,
-        duplicateSuidCount,
-      },
-    };
-  }
-
-  private computeOnlyInDbDifferences(
-    dbRec: Record<string, unknown>,
-    fieldsToCompare: string[]
-  ): AttributeDifference[] {
-    const differences: AttributeDifference[] = [];
-    fieldsToCompare.forEach((field) => {
-      const dbVal = dbRec[field] !== undefined ? dbRec[field] : null;
-      if (this.suidResolver.cleanRawValue(dbVal) !== "") {
-        differences.push({
-          fieldName: field,
-          dbValue: dbVal as string | number | null,
-          shpValue: null,
-        });
-      }
-    });
-    return differences;
-  }
-
-  private extractFeatureAttributesAndGeometry(params: {
-    dbRec: Record<string, unknown>;
-    dbIndex: number;
-    fieldsToCompare: string[];
-    fieldToFileKey: Map<string, string>;
-    binaryFileIndices: number[];
-    objectFileRecList: Record<string, unknown>[];
-    objectFileGeoms: unknown[];
-    dbfReader: BinaryDbfReader | null;
-    shpReader: BinaryShpReader | null;
-    transformCoordinate: ((coordinate: [number, number]) => [number, number]) | null;
-    dbfCompareFields: Map<string, DbfFieldDescriptor>;
-  }) {
-    const {
-      dbRec,
-      dbIndex,
-      fieldsToCompare,
-      fieldToFileKey,
-      binaryFileIndices,
-      objectFileRecList,
-      objectFileGeoms,
-      dbfReader,
-      shpReader,
-      transformCoordinate,
-      dbfCompareFields,
-    } = params;
-
-    const differences: AttributeDifference[] = [];
-    let fileFeatureRecord: Record<string, unknown> | null = null;
-    let fileGeometry: Geometry | unknown | null = null;
-
-    if (dbfReader) {
-      const fileRecordIndex = binaryFileIndices[dbIndex] ?? binaryFileIndices[0];
-
-      fieldsToCompare.forEach((field) => {
-        const dbVal = dbRec[field] !== undefined ? dbRec[field] : null;
-        const fieldDescriptor = dbfCompareFields.get(field);
-
-        if (fieldDescriptor) {
-          const fileVal = dbfReader.readFieldValue(fileRecordIndex, fieldDescriptor);
-          const dbCleaned = this.suidResolver.cleanRawValue(dbVal);
-          const fileCleaned = this.suidResolver.cleanRawValue(fileVal);
-
-          if (dbCleaned !== fileCleaned) {
-            differences.push({
-              fieldName: field,
-              dbValue: dbVal as string | number | null,
-              shpValue: fileVal as string | number | null,
-            });
-          }
-        }
-      });
-
-      if (shpReader) {
-        fileGeometry = shpReader.readGeometry(fileRecordIndex, transformCoordinate);
-      }
-    } else {
-      const objectFileRec = objectFileRecList[dbIndex] ?? objectFileRecList[0];
-      fileFeatureRecord = objectFileRec;
-      fileGeometry = objectFileGeoms[dbIndex] ?? objectFileGeoms[0];
-
-      fieldsToCompare.forEach((field) => {
-        const dbVal = dbRec[field] !== undefined ? dbRec[field] : null;
-        const fileKey = fieldToFileKey.get(field);
-        const fileVal = fileKey != null ? objectFileRec[fileKey] : null;
-
-        const dbCleaned = this.suidResolver.cleanRawValue(dbVal);
-        const fileCleaned = this.suidResolver.cleanRawValue(fileVal);
-
-        if (dbCleaned !== fileCleaned) {
-          differences.push({
-            fieldName: field,
-            dbValue: dbVal as string | number | null,
-            shpValue: fileVal as string | number | null,
-          });
-        }
-      });
-    }
-
-    return { differences, fileFeatureRecord, fileGeometry };
-  }
-
-  private evaluateGeometryDifference(
-    dbRec: Record<string, unknown>,
-    fileRec: Record<string, unknown> | undefined,
-    fileGeometry: unknown,
-    mappingConfig: ColumnMappingConfig
-  ) {
-    if (!mappingConfig.compareGeometry) {
-      return { isGeometryDifferent: false, geometryDiffDetails: undefined, resolvedDbGeom: null, resolvedFileGeom: null };
-    }
-
-    // Resolve mapped geometry columns (e.g. DB "geom_wkb" <-> CSV "geom")
-    let mappedDbCol: string | undefined = undefined;
-    let mappedFileCol: string | undefined = undefined;
-
-    if (mappingConfig.attributeMap) {
-      for (const [dbKey, fileKey] of Object.entries(mappingConfig.attributeMap)) {
-        if (/geom/i.test(dbKey) || /geom/i.test(fileKey)) {
-          mappedDbCol = dbKey;
-          mappedFileCol = fileKey;
-          break;
-        }
-      }
-    }
-
-    const rawDbGeom = (mappedDbCol ? dbRec[mappedDbCol] : undefined)
-      ?? dbRec.geom_wkb
-      ?? dbRec.geom
-      ?? dbRec.geometry
-      ?? dbRec.wkb_geometry
-      ?? dbRec.wkt
-      ?? dbRec.the_geom;
-
-    const dbGeom = typeof rawDbGeom === "string"
-      ? parseAnyGeometryString(rawDbGeom) || rawDbGeom
-      : rawDbGeom;
-
-    const rawFileGeom = fileGeometry ?? (mappedFileCol && fileRec ? fileRec[mappedFileCol] : undefined);
-    const fileGeom = typeof rawFileGeom === "string"
-      ? parseAnyGeometryString(rawFileGeom) || rawFileGeom
-      : rawFileGeom;
-
-    if (dbGeom && fileGeom) {
-      const geoCompResult = compareGeometries(dbGeom, fileGeom);
-      if (!geoCompResult.isMatch) {
-        return {
-          isGeometryDifferent: true,
-          geometryDiffDetails: geoCompResult.details,
-          resolvedDbGeom: dbGeom,
-          resolvedFileGeom: fileGeom,
-        };
-      }
-    }
-
-    return { isGeometryDifferent: false, geometryDiffDetails: undefined, resolvedDbGeom: dbGeom, resolvedFileGeom: fileGeom };
-  }
-
-  private collectUnmatchedFileFeatures(params: CollectUnmatchedParams): DiscrepancyItem[] {
-    const {
-      processedSuids,
-      binaryFileSuidMap,
-      objectFileSuidMap,
-      targetFileSuidCols,
-      fieldsToCompare,
-      fieldToFileKey,
-      dbfCompareFields,
-      dbfReader,
-      shpReader,
-      transformCoordinate,
-    } = params;
-
-    const unmatchedItems: DiscrepancyItem[] = [];
-
-    if (dbfReader) {
-      binaryFileSuidMap.forEach((indices, suidKey) => {
-        if (!processedSuids.has(suidKey)) {
-          indices.forEach((recordIndex, occurrenceIndex) => {
-            const fileRec = dbfReader.readRecord(recordIndex) || {};
-            const fileGeom = shpReader
-              ? shpReader.readGeometry(recordIndex, transformCoordinate)
-              : undefined;
-            const rawSuid =
-              this.suidResolver.buildCompositeRawSuid(fileRec, targetFileSuidCols) || suidKey;
-
-            const differences: AttributeDifference[] = [];
-            fieldsToCompare.forEach((field) => {
-              const fieldDesc = dbfCompareFields.get(field);
-              const fileVal = fieldDesc
-                ? dbfReader.readFieldValue(recordIndex, fieldDesc)
-                : fileRec[field];
-              if (this.suidResolver.cleanRawValue(fileVal) !== "") {
-                differences.push({
-                  fieldName: field,
-                  dbValue: null,
-                  shpValue: fileVal as string | number | null,
-                });
-              }
-            });
-
-            unmatchedItems.push({
-              id: `file-${suidKey}-${occurrenceIndex}`,
-              suid: rawSuid,
-              type: DiscrepancyType.ONLY_IN_SHP,
-              differences,
-              shpFeatureProps: fileRec,
-              shpGeometry: fileGeom || undefined,
-            });
-          });
-        }
-      });
-    } else {
-      objectFileSuidMap.forEach((recList, suidKey) => {
-        if (!processedSuids.has(suidKey)) {
-          const fileGeomList = recList.map((rec) => rec._geometry);
-
-          recList.forEach((fileRec, featureIndex) => {
-            const rawSuid =
-              this.suidResolver.buildCompositeRawSuid(fileRec, targetFileSuidCols) || suidKey;
-
-            const differences: AttributeDifference[] = [];
-            fieldsToCompare.forEach((field) => {
-              const fileKey = fieldToFileKey.get(field);
-              const fileVal = fileKey != null ? fileRec[fileKey] : null;
-              if (this.suidResolver.cleanRawValue(fileVal) !== "") {
-                differences.push({
-                  fieldName: field,
-                  dbValue: null,
-                  shpValue: fileVal as string | number | null,
-                });
-              }
-            });
-
-            unmatchedItems.push({
-              id: `file-${suidKey}-${featureIndex}`,
-              suid: rawSuid,
-              type: DiscrepancyType.ONLY_IN_SHP,
-              differences,
-              shpFeatureProps: fileRec,
-              shpGeometry: fileGeomList[featureIndex] ?? fileGeomList[0],
-            });
-          });
-        }
-      });
-    }
-
-    return unmatchedItems;
   }
 
   public static compareDatasets(
