@@ -2,7 +2,7 @@
  * comparisonWorkerSync.ts
  * Synchronous SSR / fallback comparison engine — delegates execution to SpatialComparisonEngine.
  */
-import type { WorkerInputMessage } from "@/types/workerMessages";
+import type { WorkerRunComparisonInputMessage } from "@/types/workerMessages";
 import type { ComparisonSummary } from "@/types/comparison";
 import type { ProgressCallback } from "@/services/workerBridge";
 import { SpatialComparisonEngine } from "./comparison/SpatialComparisonEngine";
@@ -10,7 +10,7 @@ import { SpatialComparisonEngine } from "./comparison/SpatialComparisonEngine";
 const comparisonEngine = new SpatialComparisonEngine();
 
 export async function runComparisonSync(
-  payload: WorkerInputMessage["payload"],
+  payload: WorkerRunComparisonInputMessage["payload"],
   onProgress?: ProgressCallback
 ): Promise<ComparisonSummary> {
   const {

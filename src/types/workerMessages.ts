@@ -1,4 +1,9 @@
-import type { ColumnMappingConfig, ComparisonSummary } from "@/types/comparison";
+import type {
+  ColumnMappingConfig,
+  ComparisonSummary,
+  DiscrepancyItem,
+  SqlPatchSummary,
+} from "@/types/comparison";
 import type { Feature, Geometry, GeoJsonProperties } from "geojson";
 
 export const MapChunkMessageType = {
@@ -28,12 +33,14 @@ export interface MapChunkOutputMessage {
 
 export const ComparisonWorkerMessageType = {
   RUN_COMPARISON: "RUN_COMPARISON",
+  GENERATE_SQL: "GENERATE_SQL",
   PROGRESS: "PROGRESS",
   DONE: "DONE",
   ERROR: "ERROR",
 } as const;
 
-export type ComparisonWorkerMessageType = (typeof ComparisonWorkerMessageType)[keyof typeof ComparisonWorkerMessageType];
+export type ComparisonWorkerMessageType =
+  (typeof ComparisonWorkerMessageType)[keyof typeof ComparisonWorkerMessageType];
 
 export interface SerializableFileDataset {
   fileName: string;
@@ -54,9 +61,8 @@ export interface SerializableFileDataset {
   prjText?: string;
 }
 
-
-/** Message sent FROM the main thread TO the worker */
-export interface WorkerInputMessage {
+/** Message sent FROM the main thread TO the worker to run full comparison */
+export interface WorkerRunComparisonInputMessage {
   type: typeof ComparisonWorkerMessageType.RUN_COMPARISON;
   payload: {
     dbRecords: Array<Record<string, unknown>>;
@@ -68,6 +74,23 @@ export interface WorkerInputMessage {
   };
 }
 
+/** Message sent FROM the main thread TO the worker to lazily generate full SQL patches */
+export interface WorkerGenerateSqlInputMessage {
+  type: typeof ComparisonWorkerMessageType.GENERATE_SQL;
+  payload: {
+    discrepancyItems: Array<DiscrepancyItem>;
+    fileDataset: SerializableFileDataset;
+    mappingConfig: ColumnMappingConfig;
+    dbSchemaName: string;
+    dbTableName: string;
+    dbColumnTypes?: Record<string, string>;
+  };
+}
+
+export type WorkerInputMessage =
+  | WorkerRunComparisonInputMessage
+  | WorkerGenerateSqlInputMessage;
+
 /** Progress update message sent FROM the worker TO the main thread */
 export interface WorkerProgressMessage {
   type: typeof ComparisonWorkerMessageType.PROGRESS;
@@ -76,11 +99,21 @@ export interface WorkerProgressMessage {
   total: number;
 }
 
-/** Success message sent FROM the worker TO the main thread */
-export interface WorkerDoneMessage {
+/** Success message sent FROM the worker TO the main thread for comparison */
+export interface WorkerDoneComparisonMessage {
   type: typeof ComparisonWorkerMessageType.DONE;
   payload: ComparisonSummary;
 }
+
+/** Success message sent FROM the worker TO the main thread for on-demand SQL generation */
+export interface WorkerDoneGenerateSqlMessage {
+  type: typeof ComparisonWorkerMessageType.DONE;
+  payload: SqlPatchSummary;
+}
+
+export type WorkerDoneMessage =
+  | WorkerDoneComparisonMessage
+  | WorkerDoneGenerateSqlMessage;
 
 /** Error message sent FROM the worker TO the main thread */
 export interface WorkerErrorMessage {

@@ -25,7 +25,7 @@ export interface SuidMappingStepRef {
 export const DiscrepancyType = {
   MATCH: "MATCH",
   ATTRIBUTE_MISMATCH: "ATTRIBUTE_MISMATCH",
-  GEOMETRY_MISMATCH: "GEOMETRY_MISMATCH", // @planned — compareGeometry flag in ColumnMappingConfig
+  GEOMETRY_MISMATCH: "GEOMETRY_MISMATCH",
   ONLY_IN_DB: "ONLY_IN_DB",
   ONLY_IN_SHP: "ONLY_IN_SHP",
   NULL_SUID: "NULL_SUID",
@@ -79,6 +79,7 @@ export interface DiscrepancyItem {
   dbRecord?: Record<string, unknown>;
   shpFeatureProps?: Record<string, unknown>;
   shpGeometry?: unknown;
+  fileRecordIndex?: number;
   note?: string;
   duplicateDetails?: {
     targetCount: number;
@@ -136,3 +137,13 @@ export interface ComparisonSourceDescriptor {
   sourceShortLabel: string;
   sourceIconKind: ComparisonIconKind;
 }
+
+export interface SqlPatchSummary {
+  sqlUpdateScript: string;
+  sqlInsertScript: string;
+  sqlUpdateCount: number;
+  sqlInsertCount: number;
+  sqlUpdatePreview: string;
+  sqlInsertPreview: string;
+}
+

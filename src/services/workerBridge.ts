@@ -1,6 +1,7 @@
-import type { ComparisonSummary } from "@/types/comparison";
+import type { ComparisonSummary, SqlPatchSummary } from "@/types/comparison";
 import type {
-  WorkerInputMessage,
+  WorkerRunComparisonInputMessage,
+  WorkerGenerateSqlInputMessage,
   WorkerOutputMessage,
   SerializableFileDataset,
 } from "@/types/workerMessages";
@@ -12,7 +13,7 @@ export type ProgressCallback = (phase: string, current: number, total: number) =
  * Falls back to an inline synchronous import if Worker is unavailable (SSR / old browsers).
  */
 export async function runInWorker(
-  input: WorkerInputMessage["payload"],
+  input: WorkerRunComparisonInputMessage["payload"],
   onProgress?: ProgressCallback
 ): Promise<ComparisonSummary> {
   if (typeof Worker === "undefined") {
@@ -34,7 +35,7 @@ export async function runInWorker(
           break;
         case "DONE":
           worker.terminate();
-          resolve(msg.payload);
+          resolve(msg.payload as ComparisonSummary);
           break;
         case "ERROR":
           worker.terminate();
@@ -48,7 +49,77 @@ export async function runInWorker(
       reject(new Error(errorEvent.message ?? "Error desconocido en el Web Worker."));
     };
 
-    worker.postMessage({ type: "RUN_COMPARISON", payload: input } satisfies WorkerInputMessage);
+    worker.postMessage({
+      type: "RUN_COMPARISON",
+      payload: input,
+    } satisfies WorkerRunComparisonInputMessage);
+  });
+}
+
+/**
+ * Lazily generates full SQL patches inside a Web Worker.
+ */
+export async function generateSqlPatchesInWorker(
+  input: WorkerGenerateSqlInputMessage["payload"],
+  onProgress?: ProgressCallback
+): Promise<SqlPatchSummary> {
+  if (typeof Worker === "undefined") {
+    const { SqlPatchGenerator } = await import("../workers/comparison/SqlPatchGenerator");
+    const { BinaryShpReader } = await import("../utils/binary/BinaryShpReader");
+    const { ProjectionEngine } = await import("../utils/spatial/ProjectionEngine");
+
+    const shpReader = input.fileDataset.shpBuffer
+      ? new BinaryShpReader(input.fileDataset.shpBuffer)
+      : null;
+
+    const fileSrid = input.fileDataset.prjText
+      ? ProjectionEngine.extractEpsg(input.fileDataset.prjText) ?? undefined
+      : undefined;
+
+    const generator = new SqlPatchGenerator(
+      input.dbSchemaName,
+      input.dbTableName,
+      input.mappingConfig,
+      input.dbColumnTypes,
+      Boolean(input.fileDataset.dbfBuffer),
+      shpReader,
+      fileSrid
+    );
+
+    return generator.generatePatches(input.discrepancyItems, onProgress, true);
+  }
+
+  return new Promise<SqlPatchSummary>((resolve, reject) => {
+    const worker = new Worker(
+      new URL("../workers/comparisonWorker.ts", import.meta.url)
+    );
+
+    worker.onmessage = (event: MessageEvent<WorkerOutputMessage>) => {
+      const msg = event.data;
+      switch (msg.type) {
+        case "PROGRESS":
+          onProgress?.(msg.phase, msg.current, msg.total);
+          break;
+        case "DONE":
+          worker.terminate();
+          resolve(msg.payload as SqlPatchSummary);
+          break;
+        case "ERROR":
+          worker.terminate();
+          reject(new Error(msg.message));
+          break;
+      }
+    };
+
+    worker.onerror = (errorEvent) => {
+      worker.terminate();
+      reject(new Error(errorEvent.message ?? "Error en el Web Worker al generar parches SQL."));
+    };
+
+    worker.postMessage({
+      type: "GENERATE_SQL",
+      payload: input,
+    } satisfies WorkerGenerateSqlInputMessage);
   });
 }
 
