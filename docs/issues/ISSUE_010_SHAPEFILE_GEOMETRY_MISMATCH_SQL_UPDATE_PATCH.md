@@ -131,21 +131,34 @@ try {
 }
 ```
 
-### C. Direct Native PostGIS Injection in `SqlScriptBuilder.ts`:
+### C. Direct Native PostGIS Injection with Dynamic Column SRID Introspection in `SqlScriptBuilder.ts`:
 ```typescript
 public buildPostgisGeomExpr(geometry: unknown, targetColumnName?: string, sourceSrid?: number): string {
   const compactJsonString = this.serializeCompactGeoJson(geometry);
-  const originSrid = sourceSrid || (this.targetSrid !== 4326 ? this.targetSrid : 4326);
+  const targetType = targetColumnName && this.dbColumnTypes ? this.dbColumnTypes[targetColumnName]?.toLowerCase() : undefined;
 
-  let baseExpr: string;
-  if (originSrid === this.targetSrid) {
-    baseExpr = `ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), ${this.targetSrid})`;
-  } else {
-    baseExpr = `ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), ${originSrid}), ${this.targetSrid})`;
+  let effectiveTargetSrid = this.targetSrid;
+  if (targetType) {
+    const typeSridMatch = targetType.match(/,\s*(\d+)\s*\)/);
+    if (typeSridMatch && Number(typeSridMatch[1]) > 0) {
+      effectiveTargetSrid = Number(typeSridMatch[1]);
+    }
   }
 
-  const targetType = targetColumnName && this.dbColumnTypes ? this.dbColumnTypes[targetColumnName]?.toLowerCase() : undefined;
-  if (targetType?.includes("multi") && (geometry as { type?: string })?.type === "Polygon") {
+  const originSrid = sourceSrid || (effectiveTargetSrid !== 4326 ? effectiveTargetSrid : 4326);
+
+  let baseExpr: string;
+  if (originSrid === effectiveTargetSrid) {
+    baseExpr = `ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), ${effectiveTargetSrid})`;
+  } else {
+    baseExpr = `ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), ${originSrid}), ${effectiveTargetSrid})`;
+  }
+
+  const isMultiTarget = targetType ? targetType.includes("multi") : false;
+  const geomObj = geometry as { type?: string };
+  const isSingleType = geomObj && (geomObj.type === "Polygon" || geomObj.type === "LineString" || geomObj.type === "Point");
+
+  if (isMultiTarget && isSingleType) {
     return `ST_Multi(${baseExpr})`;
   }
   return baseExpr;
