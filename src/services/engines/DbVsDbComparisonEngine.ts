@@ -64,18 +64,26 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
     };
 
     // 2. Fetch Target DB 2 Records
-    const { records: targetRecords, columnTypes: targetColumnTypes } =
-      await DatabaseStreamReader.fetchOrStreamRecords(
-        targetDbConfig,
-        mappingConfig,
-        (phase, current, total) => {
-          onProgress?.(
-            `[BD Destino] ${phase}`,
-            current,
-            total
-          );
-        }
-      );
+    const {
+      records: targetRecords,
+      columnTypes: targetColumnTypes,
+      detectedSrid,
+    } = await DatabaseStreamReader.fetchOrStreamRecords(
+      targetDbConfig,
+      mappingConfig,
+      (phase, current, total) => {
+        onProgress?.(
+          `[BD Destino] ${phase}`,
+          current,
+          total
+        );
+      }
+    );
+
+    const finalMappingConfig: ColumnMappingConfig = {
+      ...mappingConfig,
+      targetSrid: mappingConfig.targetSrid ?? detectedSrid,
+    };
 
     // 3. Serialize Source DB 1 dataset & run comparison in Web Worker
     const serializedDataset = serializeFileDataset(sourceDataset);
@@ -84,7 +92,7 @@ export class DbVsDbComparisonEngine implements IComparisonEngine {
       {
         dbRecords: targetRecords,
         fileDataset: serializedDataset,
-        mappingConfig,
+        mappingConfig: finalMappingConfig,
         dbSchemaName: targetDbConfig.schema_name,
         dbTableName: targetDbConfig.table_name,
         dbColumnTypes: targetColumnTypes,

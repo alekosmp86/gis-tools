@@ -160,9 +160,13 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
                 return generateSqlPatchesInWorker({
                   discrepancyItems: summary.items,
                   fileDataset: serializedDataset,
-                  mappingConfig,
+                  mappingConfig: {
+                    ...mappingConfig,
+                    targetSrid: summary.targetSrid ?? mappingConfig.targetSrid,
+                  },
                   dbSchemaName: dbConfig.schema_name,
                   dbTableName: dbConfig.table_name,
+                  dbColumnTypes: summary.dbColumnTypes,
                 });
               }}
             />

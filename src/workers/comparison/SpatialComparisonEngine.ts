@@ -136,6 +136,8 @@ export class SpatialComparisonEngine {
       nullSuidCount: nullRecordItems.length,
       duplicateSuidCount: pass1Result.counts.duplicateSuidCount,
       items: allDiscrepancyItems,
+      targetSrid: mappingConfig.targetSrid,
+      dbColumnTypes,
       ...patchResult,
     };
   }

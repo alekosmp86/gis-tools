@@ -83,19 +83,27 @@ export class SqlScriptBuilder {
     sourceSrid?: number
   ): string {
     const compactJsonString = this.serializeCompactGeoJson(geometry);
-    const originSrid = sourceSrid || (this.targetSrid !== 4326 ? this.targetSrid : 4326);
-
-    let baseExpr: string;
-    if (originSrid === this.targetSrid) {
-      baseExpr = `ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), ${this.targetSrid})`;
-    } else {
-      baseExpr = `ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), ${originSrid}), ${this.targetSrid})`;
-    }
-
     const targetType =
       targetColumnName && this.dbColumnTypes
         ? this.dbColumnTypes[targetColumnName]?.toLowerCase()
         : undefined;
+
+    let effectiveTargetSrid = this.targetSrid;
+    if (targetType) {
+      const typeSridMatch = targetType.match(/,\s*(\d+)\s*\)/);
+      if (typeSridMatch && Number(typeSridMatch[1]) > 0) {
+        effectiveTargetSrid = Number(typeSridMatch[1]);
+      }
+    }
+
+    const originSrid = sourceSrid || (effectiveTargetSrid !== 4326 ? effectiveTargetSrid : 4326);
+
+    let baseExpr: string;
+    if (originSrid === effectiveTargetSrid) {
+      baseExpr = `ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), ${effectiveTargetSrid})`;
+    } else {
+      baseExpr = `ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON('${compactJsonString}'), ${originSrid}), ${effectiveTargetSrid})`;
+    }
 
     const isMultiTarget = targetType ? targetType.includes("multi") : false;
 

@@ -105,6 +105,8 @@ export interface ComparisonSummary {
   sqlInsertCount: number;
   sqlUpdatePreview: string;
   sqlInsertPreview: string;
+  targetSrid?: number;
+  dbColumnTypes?: Record<string, string>;
 }
 
 export interface IComparisonEngine {
