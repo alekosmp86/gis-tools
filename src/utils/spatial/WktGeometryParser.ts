@@ -99,10 +99,12 @@ export class WktGeometryParser implements IGeometryParser {
     const str = String(geomVal).trim();
     if (!str) return null;
 
+    const cleanHexStr = str.replace(/^(\\x|0x)/i, "");
+
     // Try EWKB Hex first (starts with 01 or 00 and contains hex characters)
-    if (/^[0-9a-fA-F]{18,}$/.test(str)) {
+    if (/^[0-9a-fA-F]{18,}$/.test(cleanHexStr)) {
       const ewkbParser = new EwkbGeometryParser();
-      const parsed = ewkbParser.parse(str);
+      const parsed = ewkbParser.parse(cleanHexStr);
       if (parsed) return parsed;
     }
 

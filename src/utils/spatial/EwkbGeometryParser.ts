@@ -128,7 +128,8 @@ export class EwkbGeometryParser implements IGeometryParser {
       return null;
     }
 
-    const cleanHex = rawInput.trim();
+    const rawHex = rawInput.trim();
+    const cleanHex = rawHex.replace(/^(\\x|0x)/i, "");
     if (cleanHex.length < 18) {
       return null;
     }
