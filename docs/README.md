@@ -41,5 +41,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_007_POLYMORPHIC_COMPARISON_SOURCE_DESCRIPTOR.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_007_POLYMORPHIC_COMPARISON_SOURCE_DESCRIPTOR.md) — Polymorphic comparison source descriptor architecture for extensible multi-source dataset labeling.
 - [`ISSUE_008_CODEBASE_SOLID_DEAD_CODE_PERFORMANCE_AUDIT.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_008_CODEBASE_SOLID_DEAD_CODE_PERFORMANCE_AUDIT.md) — Codebase quality audit, dead code elimination, SOLID principle adherence, zero-allocation hot paths, and performance optimizations.
 - [`ISSUE_009_CSV_GEOMETRY_COMPARISON.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_009_CSV_GEOMETRY_COMPARISON.md) — Spatial geometry comparison (EWKB/WKT raw binaries) for DB vs. CSV synchronization.
+- [`ISSUE_010_SHAPEFILE_GEOMETRY_MISMATCH_SQL_UPDATE_PATCH.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_010_SHAPEFILE_GEOMETRY_MISMATCH_SQL_UPDATE_PATCH.md) — Shapefile geometry synchronization, high-fidelity vertex preservation, zero-copy native streaming, and PostGIS UPDATE generation.
 
 
