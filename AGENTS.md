@@ -59,3 +59,6 @@
   5. **Verification & Testing**: Commands and results proving the issue is resolved and regressions prevented.
 - **Documentation Index Update**: Always add the newly created issue document to the index in `docs/README.md`.
 
+## Function Decomposition & Non-Monolithic Code
+- **No Monolithic Functions**: Do not create monolithic functions. Functions with many lines or multiple responsibilities MUST be decomposed into smaller, focused, single-responsibility functions or helper methods, with the main function acting as a clean orchestrator.
+
