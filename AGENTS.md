@@ -60,5 +60,9 @@
 - **Documentation Index Update**: Always add the newly created issue document to the index in `docs/README.md`.
 
 ## Function Decomposition & Non-Monolithic Code
-- **No Monolithic Functions**: Do not create monolithic functions. Functions with many lines or multiple responsibilities MUST be decomposed into smaller, focused, single-responsibility functions or helper methods, with the main function acting as a clean orchestrator.
+- **No Monolithic Functions**: Do not create or bloat monolithic functions. When adding functionalities, keep functions clean: never bloat an existing function by piling inline logic into it.
+- **Dedicated Helper Methods & Orchestrators**: Always create dedicated, single-responsibility helper methods or functions for distinct tasks (queries, transforms, calculations), and let the main function act purely as a high-level orchestrator of how they are used.
+
+## User Addressing Requirement
+- **Start Every Message With User's Name**: Always start every message sent to the user by explicitly mentioning their name (**Alekos**). This serves as an immediate alignment verification check.
 
