@@ -14,10 +14,10 @@ Meanwhile, the user required that the final step (Step 4 `Step4ResultsView`) con
 
 ## Implemented Solution
 1. **Centralized Map Preview Threshold**:
-   - Defined and exported `MAX_MAP_PREVIEW_FEATURES = 25_000` in [`src/constants/mapConstants.ts`](file:///c:/Alekos/Projects/gis-tools/src/constants/mapConstants.ts).
-   - Reused `MAX_MAP_PREVIEW_FEATURES` in [`ShapefileParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/ShapefileParser.ts) and [`useDbQueries.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDbQueries.ts).
+   - Defined and exported `MAX_MAP_PREVIEW_FEATURES = 25_000` in [`src/constants/mapConstants.ts`](src/constants/mapConstants.ts).
+   - Reused `MAX_MAP_PREVIEW_FEATURES` in [`ShapefileParser.ts`](src/services/parsers/ShapefileParser.ts) and [`useDbQueries.ts`](src/hooks/useDbQueries.ts).
 2. **Dedicated Preview Slicing in `CsvUploader`**:
-   - Created `buildCappedPreviewGeoJson(geojson, maxFeatures)` helper function in [`CsvUploader.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-csv-sync/CsvUploader.tsx).
+   - Created `buildCappedPreviewGeoJson(geojson, maxFeatures)` helper function in [`CsvUploader.tsx`](src/components/tools/db-csv-sync/CsvUploader.tsx).
    - Generated a slice of features (`geojson.features.slice(0, MAX_MAP_PREVIEW_FEATURES)`) exclusively for the Step 2 preview map.
    - When capped, rendered an informational warning banner via `AlertMessage` (`AlertType.WARNING`):
      *"Vista previa de muestra: Mostrando los primeros {X} de {Total} registros con geometría en el mapa inicial para asegurar fluidez de navegación. La totalidad de los {Total} registros se auditará y visualizará en el paso final."*

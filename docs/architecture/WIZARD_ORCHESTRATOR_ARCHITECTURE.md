@@ -13,7 +13,7 @@ This cross-cutting concern tightly coupled inner components to specific step pos
 
 ### Solution: Declarative `WizardOrchestrator` Pattern
 The container component **`WizardOrchestrator`** assumes exclusive responsibility for:
-1. Rendering the progress stepper bar ([`StepIndicator`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/StepIndicator.tsx)).
+1. Rendering the progress stepper bar ([`StepIndicator`](src/components/shared/StepIndicator.tsx)).
 2. Wrapping the active step content inside a master glassmorphism card container.
 3. Displaying unified step headers (`Step N of M` badge, title, subtitle, and Lucide icon).
 4. Providing the bottom orchestration navigation footer with `Back` and `Continue` buttons.

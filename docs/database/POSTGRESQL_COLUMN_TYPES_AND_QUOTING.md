@@ -16,7 +16,7 @@ When generating `UPDATE` and `INSERT` SQL patch statements for PostgreSQL/PostGI
 
 ## 2. Introspection via `information_schema.columns`
 
-The API route [`/api/db/columns`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/columns/route.ts) inspects database schema metadata directly:
+The API route [`/api/db/columns`](src/app/api/db/columns/route.ts) inspects database schema metadata directly:
 
 ```sql
 SELECT 
@@ -44,7 +44,7 @@ export interface DbColumnMetadata {
 
 ## 3. SQL Quoting Rules in Comparison Engine
 
-Inside [`comparisonWorker.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparisonWorker.ts), values are formatted based on their introspected column type:
+Inside [`comparisonWorker.ts`](src/workers/comparisonWorker.ts), values are formatted based on their introspected column type:
 
 1. **Numeric Column Types**:
    If `data_type` matches `/int|integer|numeric|decimal|float|double|real/i`, values are output without quotes:

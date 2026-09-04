@@ -24,7 +24,7 @@ During this period:
 
 We introduced a **hybrid streaming architecture** with native PostgreSQL server-side cursors and Web ReadableStreams:
 
-1. **Streaming Endpoint with SQL Server-Side Cursor ([`src/app/api/db/records/stream/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/stream/route.ts))**:
+1. **Streaming Endpoint with SQL Server-Side Cursor ([`src/app/api/db/records/stream/route.ts`](src/app/api/db/records/stream/route.ts))**:
    - Runs a fast `SELECT COUNT(*)` to obtain the exact total record count.
    - For datasets $\le 25{,}000$ records (`STREAMING_RECORD_THRESHOLD`), executes the fast single-shot query in $<100\text{ ms}$.
    - For datasets $> 25{,}000$ records up to $1\text{M}+$ records, opens a PostgreSQL transaction cursor:
@@ -36,13 +36,13 @@ We introduced a **hybrid streaming architecture** with native PostgreSQL server-
      COMMIT;
      ```
    - Streams row batches as Newline-Delimited JSON (NDJSON) over standard Web `ReadableStream`.
-2. **Client-Side Progressive Stream Reader ([`src/services/streaming/DatabaseStreamReader.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/streaming/DatabaseStreamReader.ts))**:
+2. **Client-Side Progressive Stream Reader ([`src/services/streaming/DatabaseStreamReader.ts`](src/services/streaming/DatabaseStreamReader.ts))**:
    - Reads the NDJSON stream line-by-line via `response.body.getReader()`.
    - Emits real-time progress callbacks:
      `onProgress("Consultando registros PostGIS (" + formatNumber(current) + " de " + formatNumber(total) + ")...", current, total)`
    - Smoothly advances the Step 4 progress bar (50k, 100k, 150k... 1.04M) with live percentage updates.
 3. **Integrated Engines**:
-   - Updated [`DbVsFileComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsFileComparisonEngine.ts) and [`DbVsDbComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsDbComparisonEngine.ts) to utilize `DatabaseStreamReader`.
+   - Updated [`DbVsFileComparisonEngine.ts`](src/services/engines/DbVsFileComparisonEngine.ts) and [`DbVsDbComparisonEngine.ts`](src/services/engines/DbVsDbComparisonEngine.ts) to utilize `DatabaseStreamReader`.
 
 ---
 

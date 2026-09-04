@@ -51,21 +51,21 @@ The high-capacity architecture replaces eager object instantiation with native t
 
 ## 🧩 3. Core Engine Components
 
-### A. [`StringInternPool.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/binary/StringInternPool.ts)
+### A. [`StringInternPool.ts`](src/utils/binary/StringInternPool.ts)
 Categorical attributes in Shapefiles (such as department names, municipality codes, land-use tags) repeat across hundreds of thousands of rows.
 - The `StringInternPool` acts as a canonical string cache (`Map<string, string>`).
 - If `"CANELONES"` appears 200,000 times, only **one single string instance** is allocated in RAM, eliminating hundreds of megabytes of redundant V8 string allocations.
 
-### B. [`BinaryDbfReader.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/binary/BinaryDbfReader.ts)
+### B. [`BinaryDbfReader.ts`](src/utils/binary/BinaryDbfReader.ts)
 - **Zero Slices**: Reads dBase III/IV records directly from the underlying typed buffer using `Uint8Array.subarray` views instead of copying `ArrayBuffer.slice()`.
 - **Selective Column Extraction**: Fields are only decoded on-demand using `readFieldValue(recordIndex, fieldDescriptor)`.
 - **Character Encoding Support**: Native `TextDecoder` supporting `windows-1252`, `iso-8859-1`, and `utf-8` via `.cpg` metadata.
 
-### C. [`BinaryShpReader.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/binary/BinaryShpReader.ts)
+### C. [`BinaryShpReader.ts`](src/utils/binary/BinaryShpReader.ts)
 - **Fast Offset Indexing**: Rapidly scans the 100-byte main header and record headers to populate lightweight `Uint32Array` offset index tables.
 - **Lazy Geometry Decoder**: `readGeometry(recordIndex)` converts raw ESRI shape byte slices into standard GeoJSON `Geometry` objects only when a record requires spatial comparison or map rendering.
 
-### D. [`ZipShapefileExtractor.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/binary/ZipShapefileExtractor.ts)
+### D. [`ZipShapefileExtractor.ts`](src/utils/binary/ZipShapefileExtractor.ts)
 - Powered by `but-unzip` for ultra-fast, in-memory archive decompression.
 - Extracts `.shp`, `.dbf`, `.shx`, `.prj`, and `.cpg` concurrently using `Promise.all`.
 
@@ -74,7 +74,7 @@ Categorical attributes in Shapefiles (such as department names, municipality cod
 ## 🗺️ 4. Initial Map Preview Strategy (25k Representative Sample)
 
 To provide an immediate, rich spatial preview without crashing Leaflet:
-1. When parsing a dataset with $>25{,}000$ features, [`ShapefileParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/ShapefileParser.ts) generates a GeoJSON collection containing the **first 25,000 features** for the initial map step.
+1. When parsing a dataset with $>25{,}000$ features, [`ShapefileParser.ts`](src/services/parsers/ShapefileParser.ts) generates a GeoJSON collection containing the **first 25,000 features** for the initial map step.
 2. The full binary buffers (`dbfBuffer`, `shpBuffer`) and total feature count ($1{,}051{,}248$) are preserved in the dataset model.
 3. The UI renders a high-contrast warning banner informing the user:
    > *"Vista previa de muestra: Mostrando 25.000 de 1.051.248 entidades en el mapa inicial para asegurar fluidez de navegación. La totalidad de los 1.051.248 registros se auditará en los pasos siguientes."*
@@ -84,7 +84,7 @@ To provide an immediate, rich spatial preview without crashing Leaflet:
 ## ⚡ 5. Web Worker Comparison Optimizations
 
 ### A. Index by Row Pointer (`suidKey -> number[]`)
-Instead of copying 1M objects into a JavaScript `Map<string, Object[]>`, [`FileDatasetIndexer.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/FileDatasetIndexer.ts) maps composite SUIDs to record indices (`number[]`), reducing indexing memory from >1.2 GB to **< 35 MB**.
+Instead of copying 1M objects into a JavaScript `Map<string, Object[]>`, [`FileDatasetIndexer.ts`](src/workers/comparison/FileDatasetIndexer.ts) maps composite SUIDs to record indices (`number[]`), reducing indexing memory from >1.2 GB to **< 35 MB**.
 
 ### B. Atomic Exact-Match Counting & Discrepancy-Only Memory Retention
 In typical comparison jobs, $>70\%$ to $>90\%$ of records match perfectly between the database and the Shapefile:
@@ -101,7 +101,7 @@ In typical comparison jobs, $>70\%$ to $>90\%$ of records match perfectly betwee
 
 ### C. Automatic PostGIS Geometry INSERT Generation
 For features found only in the source Shapefile:
-- [`SqlScriptBuilder.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SqlScriptBuilder.ts) automatically discovers the database table's spatial column (`geom`, `geometry`, `wkb_geometry`, or PostGIS type `geometry`/`USER-DEFINED`).
+- [`SqlScriptBuilder.ts`](src/workers/comparison/SqlScriptBuilder.ts) automatically discovers the database table's spatial column (`geom`, `geometry`, `wkb_geometry`, or PostGIS type `geometry`/`USER-DEFINED`).
 - Formats the PostGIS spatial expression:
   ```sql
   ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon",...}'), 4326)

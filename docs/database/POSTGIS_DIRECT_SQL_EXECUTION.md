@@ -7,7 +7,7 @@
 
 ## 1. Overview & Goal
 
-The final step of the database synchronization wizard ([`SqlPatchDrawer.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-sync-common/SqlPatchDrawer.tsx)) allows users to view, copy, download, and execute generated `.sql` patch files (`UPDATE` and `INSERT`).
+The final step of the database synchronization wizard ([`SqlPatchDrawer.tsx`](src/components/tools/db-sync-common/SqlPatchDrawer.tsx)) allows users to view, copy, download, and execute generated `.sql` patch files (`UPDATE` and `INSERT`).
 
 Users can execute these SQL patches directly into the PostgreSQL/PostGIS database from within the application interface without opening external SQL clients (e.g., pgAdmin or DBeaver).
 
@@ -15,10 +15,10 @@ Users can execute these SQL patches directly into the PostgreSQL/PostGIS databas
 
 ## 2. Key Components & Architecture
 
-- **[`src/app/api/db/execute/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/execute/route.ts)** — API Route handling transactional PostgreSQL batch execution.
-- **[`src/services/dbExecutionService.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/dbExecutionService.ts)** — Chunked execution service batching statements (500 statements per batch) with progress reporting.
-- **[`src/components/tools/db-sync-common/SqlExecutionModal.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-sync-common/SqlExecutionModal.tsx)** — UI password confirmation, execution progress bar, and summary modal.
-- **[`src/hooks/useSqlBatchExecution.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useSqlBatchExecution.ts)** — Encapsulated batch execution state and progress tracker hook.
+- **[`src/app/api/db/execute/route.ts`](src/app/api/db/execute/route.ts)** — API Route handling transactional PostgreSQL batch execution.
+- **[`src/services/dbExecutionService.ts`](src/services/dbExecutionService.ts)** — Chunked execution service batching statements (500 statements per batch) with progress reporting.
+- **[`src/components/tools/db-sync-common/SqlExecutionModal.tsx`](src/components/tools/db-sync-common/SqlExecutionModal.tsx)** — UI password confirmation, execution progress bar, and summary modal.
+- **[`src/hooks/useSqlBatchExecution.ts`](src/hooks/useSqlBatchExecution.ts)** — Encapsulated batch execution state and progress tracker hook.
 
 ---
 

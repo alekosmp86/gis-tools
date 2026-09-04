@@ -32,3 +32,10 @@
 - [x] Decomposed `ShapefileUploader` into atomic sub-components (`ShapefileDropzone`, `LoadedShapefileCard`)
 - [x] Extracted reusable universal `FileDropzone` component in `src/components/shared/` and reused across Shapefile & CSV sync tools
 - [x] Decomposed monolithic `comparisonCore.ts` into single-responsibility submodules under `src/workers/comparison/` (`suidKeyUtils.ts`, `sqlBuilder.ts`, `nullRecordHandler.ts`, `fileDatasetIndexer.ts`)
+- [x] Implemented auto-detected primary key WHERE optimization in `SqlPatchGenerator.ts` for fast B-Tree UPDATE execution on 1M+ tables (Issue #014)
+- [x] Implemented lazy preview-only SQL generation on Step 4 and instant execution modal opening on "Ejecutar en BD" (Issue #015)
+- [x] Eliminated 30M+ heap allocations in worker comparison by omitting `computeOnlyInDbDifferences` on non-actionable `ONLY_IN_DB` and `ONLY_IN_SHP` records
+- [x] Refactored `SqlPatchGenerator.ts` to follow SOLID principles (Parameter Object pattern, helper decomposition, self-descriptive variables)
+- [x] Lifted binary DBF restriction in `SqlPatchGenerator.ts` to enable PostGIS geometry UPDATE patches for CSV and tabular datasets (Issue #016)
+- [x] Centralized unified `MAX_MAP_PREVIEW_FEATURES = 25_000` constant in `mapConstants.ts`
+- [x] Capped DB-CSV Step 2 preview map at 25,000 features with warning alert while preserving complete uncapped dataset for Step 4 discrepancy map (Issue #017)

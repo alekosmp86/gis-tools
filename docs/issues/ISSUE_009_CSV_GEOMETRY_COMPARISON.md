@@ -4,11 +4,11 @@
 > **Status**: Resolved  
 > **Date**: 2026-09-03  
 > **Affected Files**:
-> - [`src/app/tools/db-csv-sync/page.tsx`](file:///c:/Alekos/Projects/gis-tools/src/app/tools/db-csv-sync/page.tsx)
-> - [`src/hooks/useDatasetComparison.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDatasetComparison.ts)
-> - [`src/utils/spatial/EwkbGeometryParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/spatial/EwkbGeometryParser.ts)
-> - [`src/utils/spatial/WktGeometryParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/spatial/WktGeometryParser.ts)
-> - [`src/workers/comparison/SpatialComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SpatialComparisonEngine.ts)
+> - [`src/app/tools/db-csv-sync/page.tsx`](src/app/tools/db-csv-sync/page.tsx)
+> - [`src/hooks/useDatasetComparison.ts`](src/hooks/useDatasetComparison.ts)
+> - [`src/utils/spatial/EwkbGeometryParser.ts`](src/utils/spatial/EwkbGeometryParser.ts)
+> - [`src/utils/spatial/WktGeometryParser.ts`](src/utils/spatial/WktGeometryParser.ts)
+> - [`src/workers/comparison/SpatialComparisonEngine.ts`](src/workers/comparison/SpatialComparisonEngine.ts)
 
 ---
 

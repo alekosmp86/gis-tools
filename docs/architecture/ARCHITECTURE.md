@@ -26,12 +26,12 @@ This document provides a comprehensive overview of the system architecture, desi
 ### A. Strategy Pattern
 The platform uses strategy abstractions to decouple file loading, comparison algorithms, and UI presentation:
 
-1. **`ISpatialFileParser` Interface** ([`src/types/parsers.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/parsers.ts)):
+1. **`ISpatialFileParser` Interface** ([`src/types/parsers.ts`](src/types/parsers.ts)):
    - Unifies parsing across different formats into a standardized `ParsedFileDataset`.
    - **`ShapefileParser`**: High-capacity parser with binary dBase/Shapefile readers, zip package extraction (`but-unzip`), and 50k initial map preview sampling.
    - **`CsvParser`**: Parses delimited `.csv` tabular files with automatic EWKB Hex, WKT, and Lat/Lng coordinate parsing.
 
-2. **`IComparisonEngine` Interface** ([`src/types/comparison.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/comparison.ts)):
+2. **`IComparisonEngine` Interface** ([`src/types/comparison.ts`](src/types/comparison.ts)):
    - Defines dataset comparison contracts.
    - **`DbVsFileComparisonEngine`**: Orchestrates database vs file comparison via background Web Workers.
    - **`DbVsDbComparisonEngine`**: Compares two live PostgreSQL database instances (primary vs replica).
@@ -62,35 +62,35 @@ The platform uses strategy abstractions to decouple file loading, comparison alg
 
 - **`src/types/workerMessages.ts`**: Strongly typed message protocol carrying transferable binary buffers (`dbfBuffer`, `shpBuffer`).
 - **`src/workers/comparison/` Domain Services**:
-  - [`SpatialComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SpatialComparisonEngine.ts): Main comparison domain orchestrator implementing atomic exact-match counting and discrepancy-only memory retention.
-  - [`SuidKeyResolver.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SuidKeyResolver.ts): String interning, cleaning, and composite SUID key resolution with partial non-null support.
-  - [`SqlScriptBuilder.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SqlScriptBuilder.ts): PostGIS geometry expression generator, compact 6-decimal GeoJSON serializer, and SQL patch builder.
-  - [`NullRecordHandler.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/NullRecordHandler.ts): Diagnostic summaries for null and duplicate SUID records.
-  - [`FileDatasetIndexer.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/FileDatasetIndexer.ts): Zero-copy binary DBF and object dataset indexers.
-- **[`workerBridge.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/workerBridge.ts)**: Promise-based adapter providing automatic fallback and dataset serialization.
+  - [`SpatialComparisonEngine.ts`](src/workers/comparison/SpatialComparisonEngine.ts): Main comparison domain orchestrator implementing atomic exact-match counting and discrepancy-only memory retention.
+  - [`SuidKeyResolver.ts`](src/workers/comparison/SuidKeyResolver.ts): String interning, cleaning, and composite SUID key resolution with partial non-null support.
+  - [`SqlScriptBuilder.ts`](src/workers/comparison/SqlScriptBuilder.ts): PostGIS geometry expression generator, compact 6-decimal GeoJSON serializer, and SQL patch builder.
+  - [`NullRecordHandler.ts`](src/workers/comparison/NullRecordHandler.ts): Diagnostic summaries for null and duplicate SUID records.
+  - [`FileDatasetIndexer.ts`](src/workers/comparison/FileDatasetIndexer.ts): Zero-copy binary DBF and object dataset indexers.
+- **[`workerBridge.ts`](src/services/workerBridge.ts)**: Promise-based adapter providing automatic fallback and dataset serialization.
 
 ---
 
 ### C. Zero-Allocation Binary File Readers (1M+ Scale)
 
-See [`BINARY_SHAPEFILE_1M_OPTIMIZATION.md`](file:///c:/Alekos/Projects/gis-tools/docs/architecture/BINARY_SHAPEFILE_1M_OPTIMIZATION.md) for full deep-dive.
+See [`BINARY_SHAPEFILE_1M_OPTIMIZATION.md`](docs/architecture/BINARY_SHAPEFILE_1M_OPTIMIZATION.md) for full deep-dive.
 
-1. **[`StringInternPool.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/stringInternPool.ts)**: Canonical string pool deduplicating repetitive categorical strings across millions of records.
-2. **[`BinaryDbfReader.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/binaryDbfReader.ts)**: Low-level dBase III/IV parser operating directly on `Uint8Array.subarray` views without copying memory.
-3. **[`BinaryShpReader.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/binaryShpReader.ts)**: Scans record byte offsets and lazily decodes geometries only when required for comparison or viewport rendering.
-4. **[`zipArchiveExtractor.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/zipArchiveExtractor.ts)**: Concurrent in-memory zip archive extractor using `but-unzip`.
+1. **[`StringInternPool.ts`](src/utils/stringInternPool.ts)**: Canonical string pool deduplicating repetitive categorical strings across millions of records.
+2. **[`BinaryDbfReader.ts`](src/utils/binaryDbfReader.ts)**: Low-level dBase III/IV parser operating directly on `Uint8Array.subarray` views without copying memory.
+3. **[`BinaryShpReader.ts`](src/utils/binaryShpReader.ts)**: Scans record byte offsets and lazily decodes geometries only when required for comparison or viewport rendering.
+4. **[`zipArchiveExtractor.ts`](src/utils/zipArchiveExtractor.ts)**: Concurrent in-memory zip archive extractor using `but-unzip`.
 
 ---
 
 ### D. Decoupled Map Sub-Hook Architecture
 
-The Leaflet map engine inside [`useLeafletMap.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useLeafletMap.ts) is decomposed into 5 modular sub-hooks located in `src/hooks/map/`:
+The Leaflet map engine inside [`useLeafletMap.ts`](src/hooks/useLeafletMap.ts) is decomposed into 5 modular sub-hooks located in `src/hooks/map/`:
 
-1. [`useMapInstance.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useMapInstance.ts): Map mounting, `L.canvas` HTML5 renderer initialization, and `isMapReady` state signal.
-2. [`useBasemapTileLayer.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useBasemapTileLayer.ts): Tile layer switching between OpenStreetMap, Satellite, and Dark basemaps.
-3. [`useVectorChunkStream.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useVectorChunkStream.ts): Web Worker chunk streaming and micro-batch state management for progressive feature rendering.
-4. [`useFeatureHighlight.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useFeatureHighlight.ts): Dynamic glowing target feature highlight and smooth camera panning.
-5. [`useLayerSymbology.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useLayerSymbology.ts): 60fps dynamic symbology updates (stroke color, fill color, line weight, stroke opacity, fill opacity, point radius, and stroke pattern).
+1. [`useMapInstance.ts`](src/hooks/map/useMapInstance.ts): Map mounting, `L.canvas` HTML5 renderer initialization, and `isMapReady` state signal.
+2. [`useBasemapTileLayer.ts`](src/hooks/map/useBasemapTileLayer.ts): Tile layer switching between OpenStreetMap, Satellite, and Dark basemaps.
+3. [`useVectorChunkStream.ts`](src/hooks/map/useVectorChunkStream.ts): Web Worker chunk streaming and micro-batch state management for progressive feature rendering.
+4. [`useFeatureHighlight.ts`](src/hooks/map/useFeatureHighlight.ts): Dynamic glowing target feature highlight and smooth camera panning.
+5. [`useLayerSymbology.ts`](src/hooks/map/useLayerSymbology.ts): 60fps dynamic symbology updates (stroke color, fill color, line weight, stroke opacity, fill opacity, point radius, and stroke pattern).
 
 ---
 
@@ -100,7 +100,8 @@ The comparison engine generates two distinct PostGIS SQL patch scripts:
 
 1. **Update Script (`sqlUpdateScript`)**:
    - For records present in both sources but containing disparate attribute values or geometries.
-   - Syntax: `UPDATE "schema"."table" SET "col" = 'val', "geom" = ST_SetSRID(...) WHERE "suid_col1" = 'v1' AND "suid_col2" = 'v2';`
+   - Primary Key Optimized: `UPDATE "schema"."table" SET "col" = 'val', "geom" = ST_SetSRID(...) WHERE "id" = '123';`
+   - Composite SUID Fallback: `UPDATE "schema"."table" SET "col" = 'val', "geom" = ST_SetSRID(...) WHERE "suid_col1" = 'v1' AND "suid_col2" = 'v2';`
 2. **Insertion Script (`sqlInsertScript`)**:
    - For records present in the file source that are missing from the database.
    - Automatically injects decoded PostGIS geometry expressions (`ST_SetSRID` / `ST_Transform`) and user-defined defaults for required `NOT NULL` columns.
@@ -111,31 +112,34 @@ The comparison engine generates two distinct PostGIS SQL patch scripts:
 ## 📂 3. Directory & File Map
 
 ### Domain Models & Types (`src/types/`)
-- [`db.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/db.ts): Database connection models (`DbConfig`, `DbColumnMetadata`, `SavedDbProfile`, `ExecuteBatchResult`).
-- [`parsers.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/parsers.ts): `ParsedFileDataset` (carrying binary buffers `dbfBuffer`, `shpBuffer`) and `ISpatialFileParser`.
-- [`comparison.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/comparison.ts): Discrepancy models (`ComparisonSummary`, `DiscrepancyItem`, `DiscrepancyType`, `DiscrepancyFilter`) and mapping configurations (`ColumnMappingConfig`, `InsertFieldDefault`).
-- [`workerMessages.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/workerMessages.ts): Web Worker message definitions and `SerializableFileDataset`.
-- [`ui.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/ui.ts): UI badges, alerts, button variants, and tool catalog definitions (`ToolCategory`, `ToolCardData`, `WizardStepDef`).
+- [`db.ts`](src/types/db.ts): Database connection models (`DbConfig`, `DbColumnMetadata`, `SavedDbProfile`, `ExecuteBatchResult`).
+- [`parsers.ts`](src/types/parsers.ts): `ParsedFileDataset` (carrying binary buffers `dbfBuffer`, `shpBuffer`) and `ISpatialFileParser`.
+- [`comparison.ts`](src/types/comparison.ts): Discrepancy models (`ComparisonSummary`, `DiscrepancyItem`, `DiscrepancyType`, `DiscrepancyFilter`) and mapping configurations (`ColumnMappingConfig`, `InsertFieldDefault`).
+- [`workerMessages.ts`](src/types/workerMessages.ts): Web Worker message definitions and `SerializableFileDataset`.
+- [`ui.ts`](src/types/ui.ts): UI badges, alerts, button variants, and tool catalog definitions (`ToolCategory`, `ToolCardData`, `WizardStepDef`).
 
 ### Engines & Parsers (`src/services/`)
-- [`DbVsFileComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsFileComparisonEngine.ts): PostGIS vs File comparison engine.
-- [`DbVsDbComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsDbComparisonEngine.ts): PostGIS DB vs DB replica engine.
-- [`workerBridge.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/workerBridge.ts): Worker communication bridge with automatic fallback and binary buffer serialization.
-- [`ShapefileParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/ShapefileParser.ts): High-capacity parser with 50,000-feature preview sampling.
-- [`CsvParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/CsvParser.ts): Delimited CSV parser with EWKB/WKT/LatLng support.
+- [`DbVsFileComparisonEngine.ts`](src/services/engines/DbVsFileComparisonEngine.ts): PostGIS vs File comparison engine.
+- [`DbVsDbComparisonEngine.ts`](src/services/engines/DbVsDbComparisonEngine.ts): PostGIS DB vs DB replica engine.
+- [`workerBridge.ts`](src/services/workerBridge.ts): Worker communication bridge with automatic fallback and binary buffer serialization.
+- [`ShapefileParser.ts`](src/services/parsers/ShapefileParser.ts): High-capacity parser with unified 25,000-feature preview sampling.
+- [`CsvParser.ts`](src/services/parsers/CsvParser.ts): Delimited CSV parser with EWKB/WKT/LatLng support.
 
 ### Web Workers & Comparison Engine (`src/workers/`)
-- [`comparisonCore.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparisonCore.ts): Clean orchestrator for dataset correlation and discrepancy analysis.
-- [`comparison/suidKeyUtils.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/suidKeyUtils.ts): Key construction and string cleaning.
-- [`comparison/sqlBuilder.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/sqlBuilder.ts): PostGIS geometry SQL generator and statement builders.
-- [`comparison/nullRecordHandler.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/nullRecordHandler.ts): Diagnostic summaries for null SUIDs.
-- [`comparison/fileDatasetIndexer.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/fileDatasetIndexer.ts): Fast zero-copy binary indexing routines.
-- [`comparisonWorker.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparisonWorker.ts): Background comparison Web Worker.
-- [`mapChunkWorker.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/mapChunkWorker.ts): GeoJSON feature chunking worker for progressive map streaming.
+- [`comparison/SpatialComparisonEngine.ts`](src/workers/comparison/SpatialComparisonEngine.ts): Clean orchestrator for two-pass dataset correlation, lazy preview generation, and discrepancy analysis.
+- [`comparison/SuidKeyResolver.ts`](src/workers/comparison/SuidKeyResolver.ts): Composite key construction and string normalization.
+- [`comparison/SqlPatchGenerator.ts`](src/workers/comparison/SqlPatchGenerator.ts): PostGIS UPDATE/INSERT patch generator with primary key WHERE optimization and CSV/SHP geometry support.
+- [`comparison/SqlScriptBuilder.ts`](src/workers/comparison/SqlScriptBuilder.ts): PostGIS `ST_SetSRID`/`ST_Transform` SQL statement formatting.
+- [`comparison/NullRecordHandler.ts`](src/workers/comparison/NullRecordHandler.ts): Diagnostic summaries for null SUIDs.
+- [`comparison/FileDatasetIndexer.ts`](src/workers/comparison/FileDatasetIndexer.ts): Fast zero-copy binary indexing routines.
+- [`comparison/MatchedRecordsComparator.ts`](src/workers/comparison/MatchedRecordsComparator.ts): Attribute and geometry difference comparison with heap allocation elimination for non-actionable records.
+- [`comparison/UnmatchedFileFeaturesCollector.ts`](src/workers/comparison/UnmatchedFileFeaturesCollector.ts): Fast collection of file-only insert records.
+- [`comparisonWorker.ts`](src/workers/comparisonWorker.ts): Background comparison Web Worker.
+- [`mapChunkWorker.ts`](src/workers/mapChunkWorker.ts): GeoJSON feature chunking worker for progressive map streaming.
 
 ### Shared UI Components (`src/components/shared/`)
-- [`FileDropzone.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/FileDropzone.tsx): Universal drag-and-drop file upload zone with keyboard accessibility and format badges.
-- [`SpatialMapPreview.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/SpatialMapPreview.tsx): Full-featured interactive Leaflet Canvas map preview with layer symbology and feature highlights.
-- [`ColumnsList.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/ColumnsList.tsx): Modular attribute column tag list.
-- [`AlertMessage.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/AlertMessage.tsx): Unified alert banners (`SUCCESS`, `ERROR`, `WARNING`, `INFO`).
-- [`WizardOrchestrator.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/WizardOrchestrator.tsx): Master wizard container managing step transitions and automatic scrolling.
+- [`FileDropzone.tsx`](src/components/shared/FileDropzone.tsx): Universal drag-and-drop file upload zone with keyboard accessibility and format badges.
+- [`SpatialMapPreview.tsx`](src/components/shared/SpatialMapPreview.tsx): Full-featured interactive Leaflet Canvas map preview with layer symbology and feature highlights.
+- [`ColumnsList.tsx`](src/components/shared/ColumnsList.tsx): Modular attribute column tag list.
+- [`AlertMessage.tsx`](src/components/shared/AlertMessage.tsx): Unified alert banners (`SUCCESS`, `ERROR`, `WARNING`, `INFO`).
+- [`WizardOrchestrator.tsx`](src/components/shared/WizardOrchestrator.tsx): Master wizard container managing step transitions and automatic scrolling.

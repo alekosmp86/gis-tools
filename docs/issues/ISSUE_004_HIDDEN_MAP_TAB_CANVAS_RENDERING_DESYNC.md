@@ -27,8 +27,8 @@ However, if a user clicked a KPI filter card (e.g. from *Total Evaluados* to *Di
 We established a **visibility-aware map rendering lifecycle**:
 
 1. **`isVisible` Prop Propagation**:
-   - Added `isVisible: boolean = true` prop to [`SpatialMapPreview.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/SpatialMapPreview.tsx), [`useLeafletMap.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useLeafletMap.ts), and [`useVectorChunkStream.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/map/useVectorChunkStream.ts).
-   - In [`Step4ResultsView.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-sync-common/Step4ResultsView.tsx), passed `isVisible={activeViewTab === ResultsViewTab.MAP}`.
+   - Added `isVisible: boolean = true` prop to [`SpatialMapPreview.tsx`](src/components/shared/SpatialMapPreview.tsx), [`useLeafletMap.ts`](src/hooks/useLeafletMap.ts), and [`useVectorChunkStream.ts`](src/hooks/map/useVectorChunkStream.ts).
+   - In [`Step4ResultsView.tsx`](src/components/tools/db-sync-common/Step4ResultsView.tsx), passed `isVisible={activeViewTab === ResultsViewTab.MAP}`.
 2. **Deferred Rendering While Hidden**:
    - When `!isVisible`, `useVectorChunkStream` skips worker chunking into the 0x0 container.
 3. **Automatic Resynchronization On Tab Visibility**:

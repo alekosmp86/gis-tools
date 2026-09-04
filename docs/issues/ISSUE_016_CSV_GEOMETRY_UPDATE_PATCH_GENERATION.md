@@ -53,7 +53,7 @@ En `isGeometryInsertionRequested`, la verificación dependía de `if (this.isBin
 
 ## 4. Code Examples & Diff Snippets
 
-### [SqlPatchGenerator.ts](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SqlPatchGenerator.ts)
+### [SqlPatchGenerator.ts](src/workers/comparison/SqlPatchGenerator.ts)
 
 ```diff
   private extractGeometryUpdateClause(

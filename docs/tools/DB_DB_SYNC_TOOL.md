@@ -36,5 +36,5 @@ Unlike file-based tools, this tool directly queries both live database connectio
 
 ## 3. Key Components & Engines
 
-- **[`DbVsDbComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/engines/DbVsDbComparisonEngine.ts)**: Fetches records from both databases and offloads multithreaded comparison to the Web Worker.
-- **[`WizardOrchestrator.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/WizardOrchestrator.tsx)**: Manages step transitions and smooth scroll navigation.
+- **[`DbVsDbComparisonEngine.ts`](src/services/engines/DbVsDbComparisonEngine.ts)**: Fetches records from both databases and offloads multithreaded comparison to the Web Worker.
+- **[`WizardOrchestrator.tsx`](src/components/shared/WizardOrchestrator.tsx)**: Manages step transitions and smooth scroll navigation.

@@ -25,7 +25,7 @@ It allows database administrators and GIS analysts to inspect live PostGIS table
    - Supports real-time feature highlight and smooth camera panning (`flyTo`).
 
 3. **Dynamic Layer Symbology Popover**
-   - Interactive popover panel ([`MapStylePopover.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/shared/map/MapStylePopover.tsx)) allowing live updates to stroke/fill colors, stroke weight (1-10px), opacity, point radius, and line dash patterns (`SOLID`, `DASHED`, `DOTTED`).
+   - Interactive popover panel ([`MapStylePopover.tsx`](src/components/shared/map/MapStylePopover.tsx)) allowing live updates to stroke/fill colors, stroke weight (1-10px), opacity, point radius, and line dash patterns (`SOLID`, `DASHED`, `DOTTED`).
 
 4. **Paginated Attribute Table**
    - High-performance attribute table with global search text filtering and custom page size options (50, 100, 250, 500 rows per page).

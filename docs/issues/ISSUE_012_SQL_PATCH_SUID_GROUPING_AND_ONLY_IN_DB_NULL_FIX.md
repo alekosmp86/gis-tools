@@ -39,11 +39,11 @@ Al ejecutar la sincronización de una tabla espacial PostGIS (`ide_ejesviacircul
 ## 3. Implemented Solution
 
 1. **Sentencia UPDATE Compuesta por SUID**:
-   - En [`SqlScriptBuilder.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SqlScriptBuilder.ts), se implementó `buildCompositeUpdateStatement(setClauses, whereClause)`, construyendo `UPDATE "schema"."table" SET "col1" = val1, "col2" = val2 WHERE suid;`.
+   - En [`SqlScriptBuilder.ts`](src/workers/comparison/SqlScriptBuilder.ts), se implementó `buildCompositeUpdateStatement(setClauses, whereClause)`, construyendo `UPDATE "schema"."table" SET "col1" = val1, "col2" = val2 WHERE suid;`.
    - Se eliminaron los métodos obsoletos `buildUpdateStatement` y `buildUpdateStatementRaw` para evitar código muerto.
 
 2. **Filtro Estricto en `processItemUpdates`**:
-   - En [`SqlPatchGenerator.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SqlPatchGenerator.ts), se incorporó una guardia estricta:
+   - En [`SqlPatchGenerator.ts`](src/workers/comparison/SqlPatchGenerator.ts), se incorporó una guardia estricta:
      ```typescript
      if (
        item.type !== DiscrepancyType.ATTRIBUTE_MISMATCH &&
@@ -56,12 +56,12 @@ Al ejecutar la sincronización de una tabla espacial PostGIS (`ide_ejesviacircul
    - Todas las diferencias de atributos y la actualización geométrica se agrupan en un único array `setClauses`, emitiendo exactamente una consulta `UPDATE` por SUID.
 
 3. **Parser CSV Robusto con Detección de Delimitador y Remoción de BOM**:
-   - En [`CsvParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/CsvParser.ts), se remueve el BOM UTF-8 inicial (`rawText.replace(/^\uFEFF/, "")`).
+   - En [`CsvParser.ts`](src/services/parsers/CsvParser.ts), se remueve el BOM UTF-8 inicial (`rawText.replace(/^\uFEFF/, "")`).
    - Se añadió `detectDelimiter()` para soportar comas `,`, punto y coma `;` y tabulaciones `\t`.
    - Se incluyó `geom_wkb` en las expresiones regulares de detección geométrica.
 
 4. **Búsqueda Fallback Insensible a Mayúsculas/Minúsculas**:
-   - En [`SuidKeyResolver.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SuidKeyResolver.ts) y [`FeatureAttributeExtractor.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/FeatureAttributeExtractor.ts), si el atributo no se encuentra por nombre exacto, se realiza una búsqueda insensible a mayúsculas/minúsculas en el objeto de registro.
+   - En [`SuidKeyResolver.ts`](src/workers/comparison/SuidKeyResolver.ts) y [`FeatureAttributeExtractor.ts`](src/workers/comparison/FeatureAttributeExtractor.ts), si el atributo no se encuentra por nombre exacto, se realiza una búsqueda insensible a mayúsculas/minúsculas en el objeto de registro.
 
 ---
 

@@ -9,13 +9,13 @@ En la sincronización entre bases de datos PostgreSQL/PostGIS (DB vs. DB), las t
 
 ## 3. Implemented Solution
 1. **Contrato de Datos `ComparisonSourceDescriptor`**:
-   - Definido en [`src/types/comparison.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/comparison.ts) para modelar `targetLabel`, `targetShortLabel`, `targetIconKind`, `sourceLabel`, `sourceShortLabel` y `sourceIconKind`.
+   - Definido en [`src/types/comparison.ts`](src/types/comparison.ts) para modelar `targetLabel`, `targetShortLabel`, `targetIconKind`, `sourceLabel`, `sourceShortLabel` y `sourceIconKind`.
 2. **Catálogo de Descriptores y Resolver**:
-   - Creado [`src/constants/comparisonDescriptors.ts`](file:///c:/Alekos/Projects/gis-tools/src/constants/comparisonDescriptors.ts) con presets (`DB_VS_SHAPEFILE_DESCRIPTOR`, `DB_VS_CSV_DESCRIPTOR`, `DB_VS_DB_DESCRIPTOR`, `resolveComparisonDescriptor`).
+   - Creado [`src/constants/comparisonDescriptors.ts`](src/constants/comparisonDescriptors.ts) con presets (`DB_VS_SHAPEFILE_DESCRIPTOR`, `DB_VS_CSV_DESCRIPTOR`, `DB_VS_DB_DESCRIPTOR`, `resolveComparisonDescriptor`).
 3. **Componente Estático `ComparisonIcon`**:
-   - Creado [`src/components/ui/ComparisonIcon.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/ui/ComparisonIcon.tsx) para renderizar íconos según el tipo de fuente sin recrear componentes en tiempo de render.
+   - Creado [`src/components/ui/ComparisonIcon.tsx`](src/components/ui/ComparisonIcon.tsx) para renderizar íconos según el tipo de fuente sin recrear componentes en tiempo de render.
 4. **Componentes Agnósticos y Puros**:
-   - [`DiscrepanciesSummaryBar.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-sync-common/DiscrepanciesSummaryBar.tsx) y [`DiscrepanciesTable.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-sync-common/DiscrepanciesTable.tsx) ahora consumen directamente el descriptor sin ninguna comprobación condicional interna.
+   - [`DiscrepanciesSummaryBar.tsx`](src/components/tools/db-sync-common/DiscrepanciesSummaryBar.tsx) y [`DiscrepanciesTable.tsx`](src/components/tools/db-sync-common/DiscrepanciesTable.tsx) ahora consumen directamente el descriptor sin ninguna comprobación condicional interna.
 5. **Inyección en Páginas de Herramientas**:
    - Cada página de sincronización (`db-shapefile-sync`, `db-csv-sync`, `db-db-sync`) inyecta su descriptor explícito a `Step4ResultsView`.
 

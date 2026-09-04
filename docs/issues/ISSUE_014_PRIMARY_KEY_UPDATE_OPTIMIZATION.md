@@ -17,7 +17,7 @@ En tablas con más de 1M de filas, si no existe un índice compuesto explícito 
 ## 2. Root Cause Analysis & Technical Details
 
 ### A. Cláusula WHERE Atada Exclusivamente a Columnas SUID
-El generador de parches ([`SqlPatchGenerator.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SqlPatchGenerator.ts)) construía la cláusula `WHERE` mapeando directamente las columnas de negocio seleccionadas como SUID (`dbSuidCols`):
+El generador de parches ([`SqlPatchGenerator.ts`](src/workers/comparison/SqlPatchGenerator.ts)) construía la cláusula `WHERE` mapeando directamente las columnas de negocio seleccionadas como SUID (`dbSuidCols`):
 
 ```typescript
 private buildWhereClause(dbRecord: Record<string, unknown>): string {
@@ -29,7 +29,7 @@ private buildWhereClause(dbRecord: Record<string, unknown>): string {
 ```
 
 ### B. Falta de Introspección de la Clave Primaria en PostgreSQL
-Aunque la base de datos contara con una clave primaria sustituta (como `id bigint PRIMARY KEY`, `gid`, u `ogc_fid`) con su respectivo índice B-Tree compacto de acceso $O(1)$, dicha columna no se detectaba en [`/api/db/columns`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/columns/route.ts) ni se incluía en las consultas de streaming de registros ([`/api/db/records/stream`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/stream/route.ts)).
+Aunque la base de datos contara con una clave primaria sustituta (como `id bigint PRIMARY KEY`, `gid`, u `ogc_fid`) con su respectivo índice B-Tree compacto de acceso $O(1)$, dicha columna no se detectaba en [`/api/db/columns`](src/app/api/db/columns/route.ts) ni se incluía en las consultas de streaming de registros ([`/api/db/records/stream`](src/app/api/db/records/stream/route.ts)).
 
 ---
 
@@ -38,13 +38,13 @@ Aunque la base de datos contara con una clave primaria sustituta (como `id bigin
 Se implementó una arquitectura adaptativa de **Optimización de Búsqueda por Clave Primaria**:
 
 1. **Introspección Automática de PK en Catálogo PostgreSQL**:
-   En [`src/app/api/db/columns/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/columns/route.ts), se consulta `pg_index` unido a `pg_attribute` donde `indisprimary = true`. Si la tabla posee una clave primaria de columna única, se extrae y etiqueta en `columnDetails` como `is_primary_key: true` y se devuelve `primaryKeyColumn` en el payload JSON.
+   En [`src/app/api/db/columns/route.ts`](src/app/api/db/columns/route.ts), se consulta `pg_index` unido a `pg_attribute` donde `indisprimary = true`. Si la tabla posee una clave primaria de columna única, se extrae y etiqueta en `columnDetails` como `is_primary_key: true` y se devuelve `primaryKeyColumn` en el payload JSON.
 
 2. **Inclusión Selectiva en Streaming de Registros**:
-   Tanto en [`DatabaseStreamReader.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/streaming/DatabaseStreamReader.ts) como en los endpoints [`/api/db/records`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/route.ts) y [`/api/db/records/stream`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/stream/route.ts), se incluye la columna de clave primaria dentro de `allSelectedCols`, asegurando que cada registro en memoria contenga su identificador único de tabla.
+   Tanto en [`DatabaseStreamReader.ts`](src/services/streaming/DatabaseStreamReader.ts) como en los endpoints [`/api/db/records`](src/app/api/db/records/route.ts) y [`/api/db/records/stream`](src/app/api/db/records/stream/route.ts), se incluye la columna de clave primaria dentro de `allSelectedCols`, asegurando que cada registro en memoria contenga su identificador único de tabla.
 
 3. **Componente Atómico `PkOptimizationCard` en Paso 3**:
-   Se creó [`PkOptimizationCard.tsx`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-sync-common/PkOptimizationCard.tsx) con su hoja de estilos modular [`.module.css`](file:///c:/Alekos/Projects/gis-tools/src/components/tools/db-sync-common/PkOptimizationCard.module.css), permitiendo:
+   Se creó [`PkOptimizationCard.tsx`](src/components/tools/db-sync-common/PkOptimizationCard.tsx) con su hoja de estilos modular [`.module.css`](src/components/tools/db-sync-common/PkOptimizationCard.module.css), permitiendo:
    - Visualizar la clave primaria detectada (ej. `id`).
    - Conmutar la optimización mediante switch interactivo.
    - Seleccionar o anular manualmente la columna de clave primaria si el usuario lo prefiere.

@@ -29,10 +29,10 @@ This document outlines the mandatory engineering standards, component boundaries
 
 ### B. Domain Models & Schemas Location (`src/types/`)
 - Shared domain models, API schemas, state payloads, and database configuration types MUST be placed in dedicated files inside `src/types/`:
-  - [`db.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/db.ts) — Database connection and execution payload models.
-  - [`comparison.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/comparison.ts) — Discrepancy types, comparison summary models, and mapping configurations.
-  - [`ui.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/ui.ts) — Tool categories, badges, button variants, and wizard step definitions.
-  - [`parsers.ts`](file:///c:/Alekos/Projects/gis-tools/src/types/parsers.ts) — Parsed file dataset schemas.
+  - [`db.ts`](src/types/db.ts) — Database connection and execution payload models.
+  - [`comparison.ts`](src/types/comparison.ts) — Discrepancy types, comparison summary models, and mapping configurations.
+  - [`ui.ts`](src/types/ui.ts) — Tool categories, badges, button variants, and wizard step definitions.
+  - [`parsers.ts`](src/types/parsers.ts) — Parsed file dataset schemas.
 - Do NOT create barrel re-export files (such as `src/types/gis.ts`). Import models directly from their home module.
 
 ---

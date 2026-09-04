@@ -40,7 +40,7 @@ Esto hacía que filas que eran en realidad `Solo en Base de Datos` o `SUID Dupli
 Se adoptó el **Modelo de Clasificación Estricta 1-a-1 (Opción A)**:
 
 1. **Filtro Canónico Unificado en `useDiscrepanciesTableData.ts`**:
-   Se alineó el filtro con [`useDiscrepancyGeojson.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDiscrepancyGeojson.ts#L132):
+   Se alineó el filtro con [`useDiscrepancyGeojson.ts`](src/hooks/useDiscrepancyGeojson.ts#L132):
    ```typescript
    const matchesFilter =
      activeFilter === DiscrepancyFilter.ALL || item.type === activeFilter;

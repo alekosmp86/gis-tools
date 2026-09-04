@@ -4,13 +4,13 @@
 > **Status**: Resolved  
 > **Date**: 2026-09-02  
 > **Affected Files**:
-> - [`src/utils/binary/binaryShpReader.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/binary/binaryShpReader.ts)
-> - [`src/services/parsers/ShapefileParser.ts`](file:///c:/Alekos/Projects/gis-tools/src/services/parsers/ShapefileParser.ts)
-> - [`src/workers/comparisonCore.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparisonCore.ts)
-> - [`src/utils/spatial/projectionUtils.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/spatial/projectionUtils.ts)
-> - [`src/utils/spatial/geometryComparator.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/spatial/geometryComparator.ts)
-> - [`src/hooks/useDiscrepancyGeojson.ts`](file:///c:/Alekos/Projects/gis-tools/src/hooks/useDiscrepancyGeojson.ts)
-> - [`src/app/api/db/records/route.ts`](file:///c:/Alekos/Projects/gis-tools/src/app/api/db/records/route.ts)
+> - [`src/utils/binary/binaryShpReader.ts`](src/utils/binary/binaryShpReader.ts)
+> - [`src/services/parsers/ShapefileParser.ts`](src/services/parsers/ShapefileParser.ts)
+> - [`src/workers/comparisonCore.ts`](src/workers/comparisonCore.ts)
+> - [`src/utils/spatial/projectionUtils.ts`](src/utils/spatial/projectionUtils.ts)
+> - [`src/utils/spatial/geometryComparator.ts`](src/utils/spatial/geometryComparator.ts)
+> - [`src/hooks/useDiscrepancyGeojson.ts`](src/hooks/useDiscrepancyGeojson.ts)
+> - [`src/app/api/db/records/route.ts`](src/app/api/db/records/route.ts)
 
 ---
 
@@ -27,7 +27,7 @@ When uploading a Shapefile package in a `.zip` archive (e.g., `service_area_ultr
 ## 2. Root Cause Analysis & Technical Details
 
 1. **Direct Binary Byte Reading**:
-   The low-level zero-allocation binary reader ([`BinaryShpReader.ts`](file:///c:/Alekos/Projects/gis-tools/src/utils/binaryShpReader.ts)) parsed shape geometry records directly from the raw `.shp` binary byte buffer into GeoJSON `coordinates`.
+   The low-level zero-allocation binary reader ([`BinaryShpReader.ts`](src/utils/binaryShpReader.ts)) parsed shape geometry records directly from the raw `.shp` binary byte buffer into GeoJSON `coordinates`.
 
 2. **Projected Coordinate Reference Systems (CRS)**:
    Many GIS Shapefiles use projected coordinate systems (such as UTM Zone 19S/21S, EPSG:32719, Gauß-Krüger, Web Mercator EPSG:3857, etc.) where coordinate values are stored in metric distances (e.g., Easting $X \approx 576{,}000\text{ m}$, Northing $Y \approx 6{,}140{,}000\text{ m}$).

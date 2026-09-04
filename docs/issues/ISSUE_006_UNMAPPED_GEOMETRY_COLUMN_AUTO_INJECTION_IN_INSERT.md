@@ -17,7 +17,7 @@ The user had explicitly mapped `geom_wkb` and had **not** selected or mapped `ge
 ## Root Cause Analysis & Technical Details
 
 1. **Unconditional Column Discovery in INSERT Generation**:
-   - In [`SpatialComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SpatialComparisonEngine.ts), when constructing `INSERT` statements for records present only in the file source (`ONLY_IN_SHP`), the engine inspected `dbColumnTypes` via `SqlScriptBuilder.findDbGeometryColumn(dbRecords[0], dbColumnTypes)`.
+   - In [`SpatialComparisonEngine.ts`](src/workers/comparison/SpatialComparisonEngine.ts), when constructing `INSERT` statements for records present only in the file source (`ONLY_IN_SHP`), the engine inspected `dbColumnTypes` via `SqlScriptBuilder.findDbGeometryColumn(dbRecords[0], dbColumnTypes)`.
    - If the database table schema contained any column named `geom` or of type `geometry`/`USER-DEFINED`, it returned that column name.
    - The engine appended `"geom"` and `ST_SetSRID(ST_GeomFromGeoJSON(...), 4326)` into `insertCols` and `insertVals` **without checking if the user actually mapped or selected `geom`**.
 2. **Coupling Comparison Evaluation with SQL Generation**:
@@ -27,7 +27,7 @@ The user had explicitly mapped `geom_wkb` and had **not** selected or mapped `ge
 
 ## Implemented Solution
 
-We established the **strict mapped column rule** for SQL statement generation in [`SpatialComparisonEngine.ts`](file:///c:/Alekos/Projects/gis-tools/src/workers/comparison/SpatialComparisonEngine.ts):
+We established the **strict mapped column rule** for SQL statement generation in [`SpatialComparisonEngine.ts`](src/workers/comparison/SpatialComparisonEngine.ts):
 
 ```typescript
 const isGeometryInsertionRequested = (geomColumnName: string): boolean => {
