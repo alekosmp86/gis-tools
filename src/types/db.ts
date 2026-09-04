@@ -70,6 +70,7 @@ export interface ExecuteChunkProgress {
   successCount: number;
   errorCount: number;
   pct: number;
+  phase?: string;
 }
 
 export interface ExecuteBatchResult {

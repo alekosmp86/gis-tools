@@ -4,7 +4,8 @@ import type { DbConfig, ExecuteChunkProgress, ExecuteBatchResult } from "@/types
 
 interface UseSqlBatchExecutionParams {
   dbConfig: DbConfig;
-  activeScript: string;
+  activeScript?: string;
+  onEnsureScript?: () => Promise<string | null>;
   onExecutionCompleted?: (result: ExecuteBatchResult) => void;
   onClose: () => void;
 }
@@ -12,6 +13,7 @@ interface UseSqlBatchExecutionParams {
 export function useSqlBatchExecution({
   dbConfig,
   activeScript,
+  onEnsureScript,
   onExecutionCompleted,
   onClose,
 }: UseSqlBatchExecutionParams) {
@@ -23,20 +25,49 @@ export function useSqlBatchExecution({
   const [result, setResult] = useState<ExecuteBatchResult | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
 
+  const resolveScriptToExecute = async (): Promise<string | null> => {
+    if (activeScript && activeScript.trim() !== "") {
+      return activeScript;
+    }
+    if (!onEnsureScript) {
+      return null;
+    }
+
+    setProgress({
+      currentBatch: 0,
+      totalBatches: 0,
+      processedStatements: 0,
+      totalStatements: 0,
+      successCount: 0,
+      errorCount: 0,
+      pct: 0,
+      phase: "Construyendo sentencias SQL para ejecución...",
+    });
+
+    const generated = await onEnsureScript();
+    return generated && generated.trim() !== "" ? generated : null;
+  };
+
   const handleStartExecution = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!passwordInput.trim() || isExecuting) return;
 
     setIsExecuting(true);
     setGeneralError(null);
-    setProgress(null);
     setResult(null);
 
     try {
+      const scriptToExecute = await resolveScriptToExecute();
+      if (!scriptToExecute) {
+        setGeneralError("No se pudieron generar las sentencias SQL para ejecutar.");
+        setIsExecuting(false);
+        return;
+      }
+
       const batchResult = await executeSqlInChunks(
         dbConfig,
         passwordInput,
-        activeScript,
+        scriptToExecute,
         (chunkProgress) => setProgress(chunkProgress),
         500
       );

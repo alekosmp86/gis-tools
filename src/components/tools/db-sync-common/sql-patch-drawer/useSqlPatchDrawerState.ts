@@ -130,6 +130,7 @@ export function useSqlPatchDrawerState({
     }
 
     setIsGenerating(true);
+
     try {
       const generated = await onGenerateFullScript();
       setLazyScripts(generated);
@@ -174,9 +175,7 @@ export function useSqlPatchDrawerState({
     URL.revokeObjectURL(url);
   };
 
-  const handleOpenExecuteModal = async () => {
-    const script = await ensureScriptAvailable();
-    if (!script) return;
+  const handleOpenExecuteModal = () => {
     setIsModalOpen(true);
   };
 
@@ -221,5 +220,6 @@ export function useSqlPatchDrawerState({
     handleOpenExecuteModal,
     handleCloseExecuteModal,
     handleExecutionCompleted,
+    ensureScriptAvailable,
   };
 }

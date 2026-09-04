@@ -55,6 +55,7 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
     handleOpenExecuteModal,
     handleCloseExecuteModal,
     handleExecutionCompleted,
+    ensureScriptAvailable,
   } = useSqlPatchDrawerState({
     sqlUpdateScript,
     sqlInsertScript,
@@ -86,7 +87,7 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
         ) : (
           <SqlPatchExecuteButton
             disabled={!hasExecutableStatements}
-            isLoading={isGenerating}
+            isLoading={false}
             onClick={handleOpenExecuteModal}
           />
         )}
@@ -130,6 +131,7 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
         scriptType={activeTab}
         statementCount={currentStats.statementCount}
         activeScript={activeScript}
+        onEnsureScript={ensureScriptAvailable}
         onExecutionCompleted={handleExecutionCompleted}
       />
     </div>

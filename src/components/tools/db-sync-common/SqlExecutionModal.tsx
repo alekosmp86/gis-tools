@@ -13,7 +13,8 @@ export interface SqlExecutionModalProps {
   dbConfig: DbConfig;
   scriptType: string;
   statementCount: number;
-  activeScript: string;
+  activeScript?: string;
+  onEnsureScript?: () => Promise<string | null>;
   onExecutionCompleted?: (result: ExecuteBatchResult) => void;
 }
 
@@ -24,6 +25,7 @@ export const SqlExecutionModal: React.FC<SqlExecutionModalProps> = ({
   scriptType,
   statementCount,
   activeScript,
+  onEnsureScript,
   onExecutionCompleted,
 }) => {
   const {
@@ -42,6 +44,7 @@ export const SqlExecutionModal: React.FC<SqlExecutionModalProps> = ({
   } = useSqlBatchExecution({
     dbConfig,
     activeScript,
+    onEnsureScript,
     onExecutionCompleted,
     onClose,
   });

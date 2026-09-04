@@ -14,7 +14,11 @@ export const SqlExecutionProgress: React.FC<SqlExecutionProgressProps> = ({ prog
       <div className={styles.progressSection}>
         {progress && (
           <ProgressBar
-            phase={`Lote ${progress.currentBatch} de ${progress.totalBatches}`}
+            phase={
+              progress.phase
+                ? progress.phase
+                : `Lote ${progress.currentBatch} de ${progress.totalBatches}`
+            }
             current={progress.processedStatements}
             total={progress.totalStatements}
             pct={progress.pct}
