@@ -9,7 +9,7 @@ import { SqlPatchDrawer } from "./sql-patch-drawer/SqlPatchDrawer";
 import { ResultsControlsBar } from "./ResultsControlsBar";
 import { useDiscrepancyGeojson } from "@/hooks/useDiscrepancyGeojson";
 import { useDatasetComparison } from "@/hooks/useDatasetComparison";
-import { DiscrepancyFilter, ResultsViewTab } from "@/types/comparison";
+import { DiscrepancyFilter, DiscrepancyType, ResultsViewTab } from "@/types/comparison";
 import type { ParsedFileDataset } from "@/types/parsers";
 import type { DbConfig } from "@/types/db";
 import type { ParsedShapefileData } from "@/types/shp";
@@ -149,6 +149,12 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
               tableName={dbConfig.table_name}
               dbConfig={dbConfig}
               onGenerateFullScript={async () => {
+                const actionableItems = summary.items.filter(
+                  (item) =>
+                    item.type === DiscrepancyType.ATTRIBUTE_MISMATCH ||
+                    item.type === DiscrepancyType.GEOMETRY_MISMATCH ||
+                    item.type === DiscrepancyType.ONLY_IN_SHP
+                );
                 const serializedDataset = serializeFileDataset(
                   "recordsMap" in fileDataset
                     ? fileDataset
@@ -158,7 +164,7 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
                       }
                 );
                 return generateSqlPatchesInWorker({
-                  discrepancyItems: summary.items,
+                  discrepancyItems: actionableItems,
                   fileDataset: serializedDataset,
                   mappingConfig: {
                     ...mappingConfig,
