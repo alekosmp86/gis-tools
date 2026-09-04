@@ -46,5 +46,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_012_SQL_PATCH_SUID_GROUPING_AND_ONLY_IN_DB_NULL_FIX.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_012_SQL_PATCH_SUID_GROUPING_AND_ONLY_IN_DB_NULL_FIX.md) — SQL patch single UPDATE per SUID grouping, elimination of destructive NULL updates on ONLY_IN_DB items, and CSV delimiter/BOM parsing robustness.
 - [`ISSUE_013_KPI_CARD_DISCREPANCY_TABLE_FILTER_DESYNC.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_013_KPI_CARD_DISCREPANCY_TABLE_FILTER_DESYNC.md) — KPI cards and discrepancy table filter desynchronization fix, eliminating false attribute mismatches with null file values.
 - [`ISSUE_014_PRIMARY_KEY_UPDATE_OPTIMIZATION.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_014_PRIMARY_KEY_UPDATE_OPTIMIZATION.md) — PostGIS SQL UPDATE WHERE clause optimization via auto-detected primary keys, eliminating sequential scans in 1M+ row tables.
+- [`ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md) — Lazy preview-only SQL generation on step 4 transition, immediate modal opening on "Ejecutar en BD", and chunked generation/execution upon confirmation.
 
 
