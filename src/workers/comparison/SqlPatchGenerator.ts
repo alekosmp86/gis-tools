@@ -101,8 +101,12 @@ export class SqlPatchGenerator {
     const setClauses: Array<{ column: string; valueExpr: string }> = [];
 
     // 1. Consolidate attribute differences
+    const primaryKeyCol = this.mappingConfig.primaryKeyColumn;
     for (let differenceIndex = 0; differenceIndex < item.differences.length; differenceIndex++) {
       const difference = item.differences[differenceIndex];
+      if (primaryKeyCol && difference.fieldName === primaryKeyCol) {
+        continue;
+      }
       const sqlValue = this.sqlBuilder.formatSqlValue(
         difference.shpValue,
         difference.fieldName
@@ -212,6 +216,14 @@ export class SqlPatchGenerator {
   }
 
   private buildWhereClause(dbRecord: Record<string, unknown>): string {
+    const primaryKeyColumn = this.mappingConfig.primaryKeyColumn;
+    if (primaryKeyColumn && dbRecord[primaryKeyColumn] != null) {
+      return this.sqlBuilder.formatWhereCondition(
+        primaryKeyColumn,
+        dbRecord[primaryKeyColumn]
+      );
+    }
+
     const conditions = this.dbSuidCols.map((col) =>
       this.sqlBuilder.formatWhereCondition(col, dbRecord[col])
     );
