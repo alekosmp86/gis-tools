@@ -86,7 +86,8 @@ export class GeometryRawNormalizer {
         }
       }
       if (!baseGeom) {
-        if (trimmed.startsWith("010") || trimmed.startsWith("000")) {
+        const cleanHex = trimmed.replace(/^(\\x|0x)/i, "");
+        if (/^[0-9a-fA-F]+$/.test(cleanHex) && cleanHex.length >= 16) {
           baseGeom = this.ewkbParser.parse(trimmed);
         } else {
           baseGeom = this.wktParser.parse(trimmed);

@@ -1,6 +1,5 @@
 import type { FeatureCollection, Feature, Geometry } from "geojson";
-import { EwkbGeometryParser } from "./EwkbGeometryParser";
-import { WktGeometryParser } from "./WktGeometryParser";
+import { GeometryRawNormalizer } from "./GeometryRawNormalizer";
 
 export interface ParsedRecordGeoJsonResult {
   geojson: FeatureCollection | null;
@@ -12,11 +11,15 @@ export interface ParsedRecordGeoJsonResult {
  * Object-Oriented Builder for transforming raw database records or tabular datasets into GeoJSON FeatureCollections.
  */
 export class GeoJsonDatasetBuilder {
-  private readonly ewkbParser = new EwkbGeometryParser();
-  private readonly wktParser = new WktGeometryParser();
+  private readonly normalizer: GeometryRawNormalizer;
+
+  constructor(normalizer = new GeometryRawNormalizer()) {
+    this.normalizer = normalizer;
+  }
 
   /**
-   * Scans record columns for geometry fields (EWKB Hex or WKT) and constructs a FeatureCollection.
+   * Scans record columns for geometry fields (GeoJSON objects, JSON strings, EWKB Hex, WKT)
+   * and constructs a FeatureCollection.
    */
   public buildFromRecords(
     records: Array<Record<string, unknown>>,
@@ -44,19 +47,17 @@ export class GeoJsonDatasetBuilder {
     records.forEach((record, recordIndex) => {
       let geometry: Geometry | null = null;
 
-      if (geomColName && record[geomColName]) {
-        const val = String(record[geomColName]).trim();
-        if (/^[0-9a-fA-F]+$/.test(val) && val.length >= 16) {
-          geometry = this.ewkbParser.parse(val);
-        } else if (/^[A-Z]+\s*\(/.test(val)) {
-          geometry = this.wktParser.parse(val);
-        }
-      } else {
-        // Fallback search across all columns for EWKB Hex
+      if (geomColName && record[geomColName] != null) {
+        geometry = this.normalizer.normalizeGeometry(record[geomColName]);
+      }
+
+      // Fallback search across all columns if candidate column was null or not found
+      if (!geometry) {
         for (const col of columns) {
-          const val = String(record[col] || "").trim();
-          if (/^[0-9a-fA-F]+$/.test(val) && val.length >= 32) {
-            const parsed = this.ewkbParser.parse(val);
+          if (col === geomColName) continue;
+          const val = record[col];
+          if (val != null) {
+            const parsed = this.normalizer.normalizeGeometry(val);
             if (parsed) {
               geometry = parsed;
               break;

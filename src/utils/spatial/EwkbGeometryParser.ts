@@ -1,4 +1,5 @@
 import type { Geometry } from "geojson";
+import { ProjectionEngine } from "./ProjectionEngine";
 
 export interface IGeometryParser {
   parse(rawInput: unknown): Geometry | null;
@@ -153,15 +154,25 @@ export class EwkbGeometryParser implements IGeometryParser {
       const hasSrid = (rawType & 0x20000000) !== 0;
       const baseType = rawType & 0xff;
 
+      let embeddedSrid: number | null = null;
       if (hasSrid) {
-        offset += 4; // Skip SRID uint32
+        embeddedSrid = view.getUint32(offset, littleEndian);
+        offset += 4;
       }
+
+      const sridConverter =
+        embeddedSrid && embeddedSrid > 0 && embeddedSrid !== 4326
+          ? ProjectionEngine.createConverter(`EPSG:${embeddedSrid}`)
+          : null;
 
       const parsePoint = (): [number, number] => {
         const xCoordinate = view.getFloat64(offset, littleEndian);
         offset += 8;
         const yCoordinate = view.getFloat64(offset, littleEndian);
         offset += 8;
+        if (sridConverter && EwkbGeometryParser.isUtmCoordinates(xCoordinate, yCoordinate)) {
+          return sridConverter([xCoordinate, yCoordinate]);
+        }
         return EwkbGeometryParser.normalizeCoordinate(xCoordinate, yCoordinate);
       };
 
