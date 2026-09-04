@@ -86,55 +86,64 @@ export class SqlPatchGenerator {
   }
 
   private processItemUpdates(item: DiscrepancyItem, collector: PatchCollector): void {
+    // Only ATTRIBUTE_MISMATCH and GEOMETRY_MISMATCH should ever generate UPDATE statements
+    if (
+      item.type !== DiscrepancyType.ATTRIBUTE_MISMATCH &&
+      item.type !== DiscrepancyType.GEOMETRY_MISMATCH
+    ) {
+      return;
+    }
+
     if (!item.dbRecord) return;
     const whereClause = this.buildWhereClause(item.dbRecord);
     if (!whereClause) return;
 
-    this.buildAttributeUpdates(item, whereClause, collector);
-    this.buildGeometryUpdate(item, whereClause, collector);
-  }
+    const setClauses: Array<{ column: string; valueExpr: string }> = [];
 
-  private buildAttributeUpdates(
-    item: DiscrepancyItem,
-    whereClause: string,
-    collector: PatchCollector
-  ): void {
-    if (item.differences.length === 0) return;
-
+    // 1. Consolidate attribute differences
     for (let differenceIndex = 0; differenceIndex < item.differences.length; differenceIndex++) {
       const difference = item.differences[differenceIndex];
-      const updateSql = this.sqlBuilder.buildUpdateStatement(
-        difference.fieldName,
+      const sqlValue = this.sqlBuilder.formatSqlValue(
         difference.shpValue,
-        whereClause
+        difference.fieldName
       );
-      collector.addUpdate(updateSql);
+      setClauses.push({
+        column: difference.fieldName,
+        valueExpr: sqlValue,
+      });
     }
-  }
 
-  private buildGeometryUpdate(
-    item: DiscrepancyItem,
-    whereClause: string,
-    collector: PatchCollector
-  ): void {
+    // 2. Consolidate geometry update if geometry mismatch and binary DBF/SHP
     const hasGeometryMismatch =
       item.type === DiscrepancyType.GEOMETRY_MISMATCH || Boolean(item.geometryDifference);
 
-    if (!hasGeometryMismatch || !this.isBinaryDbf) return;
+    if (hasGeometryMismatch && this.isBinaryDbf) {
+      const geomCol = this.resolveGeometryColumn();
+      if (geomCol) {
+        const rawGeom =
+          item.fileRecordIndex != null && this.shpReader
+            ? this.shpReader.readGeometry(item.fileRecordIndex, null)
+            : item.shpGeometry;
 
-    const geomCol = this.resolveGeometryColumn();
-    if (!geomCol) return;
+        if (rawGeom) {
+          const geomExpr = this.sqlBuilder.buildPostgisGeomExpr(rawGeom, geomCol, this.fileSrid);
+          const existingIndex = setClauses.findIndex((clause) => clause.column === geomCol);
+          if (existingIndex >= 0) {
+            setClauses[existingIndex].valueExpr = geomExpr;
+          } else {
+            setClauses.push({
+              column: geomCol,
+              valueExpr: geomExpr,
+            });
+          }
+        }
+      }
+    }
 
-    const rawGeom =
-      item.fileRecordIndex != null && this.shpReader
-        ? this.shpReader.readGeometry(item.fileRecordIndex, null)
-        : item.shpGeometry;
-
-    if (!rawGeom) return;
-
-    const geomExpr = this.sqlBuilder.buildPostgisGeomExpr(rawGeom, geomCol, this.fileSrid);
-    const updateSql = this.sqlBuilder.buildUpdateStatementRaw(geomCol, geomExpr, whereClause);
-    collector.addUpdate(updateSql);
+    if (setClauses.length > 0) {
+      const updateSql = this.sqlBuilder.buildCompositeUpdateStatement(setClauses, whereClause);
+      collector.addUpdate(updateSql);
+    }
   }
 
   private processItemInsert(item: DiscrepancyItem, collector: PatchCollector): void {

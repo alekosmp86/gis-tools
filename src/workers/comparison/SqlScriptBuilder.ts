@@ -119,21 +119,14 @@ export class SqlScriptBuilder {
     return baseExpr;
   }
 
-  public buildUpdateStatement(
-    fieldName: string,
-    fileValue: unknown,
+  public buildCompositeUpdateStatement(
+    setClauses: Array<{ column: string; valueExpr: string }>,
     whereClause: string
   ): string {
-    const sqlValue = this.formatSqlValue(fileValue, fieldName);
-    return `UPDATE "${this.dbSchemaName}"."${this.dbTableName}" SET "${fieldName}" = ${sqlValue} WHERE ${whereClause};`;
-  }
-
-  public buildUpdateStatementRaw(
-    fieldName: string,
-    rawSqlExpression: string,
-    whereClause: string
-  ): string {
-    return `UPDATE "${this.dbSchemaName}"."${this.dbTableName}" SET "${fieldName}" = ${rawSqlExpression} WHERE ${whereClause};`;
+    const assignments = setClauses
+      .map((item) => `"${item.column}" = ${item.valueExpr}`)
+      .join(", ");
+    return `UPDATE "${this.dbSchemaName}"."${this.dbTableName}" SET ${assignments} WHERE ${whereClause};`;
   }
 
   public buildInsertStatement(
