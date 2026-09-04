@@ -1,5 +1,6 @@
 import React, { useImperativeHandle } from "react";
 import { SuidSelectorCard } from "./SuidSelectorCard";
+import { PkOptimizationCard } from "./PkOptimizationCard";
 import { AttributeFieldsCard } from "./AttributeFieldsCard";
 import { GeometryToggleCard } from "../db-shapefile-sync/GeometryToggleCard";
 import { InsertDefaultsCard } from "./InsertDefaultsCard";
@@ -31,6 +32,9 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
     },
     ref
   ) => {
+    const detectedPk =
+      columnDetails?.find((detail) => detail.is_primary_key)?.column_name ?? null;
+
     const {
       selectableColumns,
       selectedSuids,
@@ -41,6 +45,10 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
       compareGeometry,
       unmappedDbColumns,
       insertDefaults,
+      isPkOptimizationEnabled,
+      setIsPkOptimizationEnabled,
+      selectedPkColumn,
+      setSelectedPkColumn,
       toggleSuidColumn,
       setCompareGeometry,
       toggleField,
@@ -54,7 +62,8 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
       fileAttributes,
       onSuccess,
       initialConfig,
-      onReadyChange
+      onReadyChange,
+      detectedPk
     );
 
     useImperativeHandle(ref, () => ({
@@ -69,6 +78,16 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
           selectedSuids={selectedSuids}
           matchedFileSuids={matchedFileSuids}
           onToggleSuid={toggleSuidColumn}
+        />
+
+        {/* 1.1. Primary Key UPDATE Optimization Card */}
+        <PkOptimizationCard
+          availableColumns={dbColumns}
+          detectedPrimaryKey={detectedPk}
+          selectedPrimaryKey={selectedPkColumn}
+          isEnabled={isPkOptimizationEnabled}
+          onToggleEnabled={setIsPkOptimizationEnabled}
+          onSelectPrimaryKey={setSelectedPkColumn}
         />
 
         {/* 2. Attributes Selection & 1-to-1 Mapping Card */}

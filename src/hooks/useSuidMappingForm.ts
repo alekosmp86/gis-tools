@@ -6,7 +6,8 @@ export function useSuidMappingForm(
   fileAttributes: string[],
   onSuccess: (mappingConfig: ColumnMappingConfig) => void,
   initialConfig?: ColumnMappingConfig | null,
-  onReadyChange?: (ready: boolean) => void
+  onReadyChange?: (ready: boolean) => void,
+  detectedPrimaryKey?: string | null
 ) {
   // Allow all non-geometry columns OR geometry columns for SUID/Attribute selection
   const selectableColumns = dbColumns.filter(
@@ -31,6 +32,17 @@ export function useSuidMappingForm(
   const [insertDefaults, setInsertDefaults] = useState<Record<string, InsertFieldDefault>>(
     initialConfig?.insertDefaults || {}
   );
+
+  const [isPkOptimizationEnabled, setIsPkOptimizationEnabled] = useState<boolean>(() => {
+    if (initialConfig?.primaryKeyColumn !== undefined) {
+      return initialConfig.primaryKeyColumn !== null;
+    }
+    return Boolean(detectedPrimaryKey);
+  });
+
+  const [selectedPkColumn, setSelectedPkColumn] = useState<string>(() => {
+    return initialConfig?.primaryKeyColumn || detectedPrimaryKey || "";
+  });
 
   // Pre-index source file attributes in a Map for fast O(1) lookups
   const fileAttrMap = new Map<string, string>();
@@ -143,6 +155,9 @@ export function useSuidMappingForm(
   const handleProceed = () => {
     if (selectedSuids.length === 0) return;
 
+    const effectivePk =
+      isPkOptimizationEnabled && selectedPkColumn ? selectedPkColumn : null;
+
     const config: ColumnMappingConfig = {
       suidColumns: selectedSuids,
       matchedFileSuidColumns: matchedFileSuids,
@@ -150,6 +165,7 @@ export function useSuidMappingForm(
       attributeMap,
       compareGeometry,
       insertDefaults,
+      primaryKeyColumn: effectivePk,
     };
     onSuccess(config);
   };
@@ -164,6 +180,10 @@ export function useSuidMappingForm(
     compareGeometry,
     unmappedDbColumns,
     insertDefaults,
+    isPkOptimizationEnabled,
+    setIsPkOptimizationEnabled,
+    selectedPkColumn,
+    setSelectedPkColumn,
     toggleSuidColumn,
     setCompareGeometry,
     toggleField,
