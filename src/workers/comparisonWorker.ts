@@ -74,15 +74,15 @@ self.onmessage = (event: MessageEvent<WorkerInputMessage>) => {
         ? ProjectionEngine.extractEpsg(fileDataset.prjText) ?? undefined
         : undefined;
 
-      const sqlPatchGenerator = new SqlPatchGenerator(
+      const sqlPatchGenerator = new SqlPatchGenerator({
         dbSchemaName,
         dbTableName,
         mappingConfig,
         dbColumnTypes,
-        Boolean(fileDataset.dbfBuffer),
+        isBinaryDbf: Boolean(fileDataset.dbfBuffer),
         shpReader,
-        fileSrid
-      );
+        fileSrid,
+      });
 
       const patchResult = sqlPatchGenerator.generatePatches(
         discrepancyItems,

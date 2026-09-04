@@ -79,15 +79,15 @@ export async function generateSqlPatchesInWorker(
       ? ProjectionEngine.extractEpsg(input.fileDataset.prjText) ?? undefined
       : undefined;
 
-    const generator = new SqlPatchGenerator(
-      input.dbSchemaName,
-      input.dbTableName,
-      input.mappingConfig,
-      input.dbColumnTypes,
-      Boolean(input.fileDataset.dbfBuffer),
+    const generator = new SqlPatchGenerator({
+      dbSchemaName: input.dbSchemaName,
+      dbTableName: input.dbTableName,
+      mappingConfig: input.mappingConfig,
+      dbColumnTypes: input.dbColumnTypes,
+      isBinaryDbf: Boolean(input.fileDataset.dbfBuffer),
       shpReader,
-      fileSrid
-    );
+      fileSrid,
+    });
 
     return generator.generatePatches(input.discrepancyItems, onProgress, true);
   }

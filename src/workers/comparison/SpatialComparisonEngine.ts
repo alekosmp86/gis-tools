@@ -1,7 +1,8 @@
-import type {
-  ColumnMappingConfig,
-  ComparisonSummary,
-  DiscrepancyItem,
+import {
+  DiscrepancyType,
+  type ColumnMappingConfig,
+  type ComparisonSummary,
+  type DiscrepancyItem,
 } from "@/types/comparison";
 import type { SerializableFileDataset } from "@/types/workerMessages";
 import { BinaryDbfReader, type DbfFieldDescriptor } from "@/utils/binary/BinaryDbfReader";
@@ -87,20 +88,15 @@ export class SpatialComparisonEngine {
       binaryFileSuidMap,
       objectFileSuidMap,
       targetFileSuidCols,
-      fieldsToCompare,
-      fieldToFileKey,
-      dbfCompareFields,
       dbfReader,
       shpReader,
       transformCoordinate,
     });
 
-    // 5. Aggregate All Discrepancy Items
-    const allDiscrepancyItems: DiscrepancyItem[] = [
-      ...nullRecordItems,
-      ...pass1Result.discrepancyItems,
-      ...unmatchedFileItems,
-    ];
+    // 5. Aggregate All Discrepancy Items safely without array spread overhead
+    const allDiscrepancyItems: DiscrepancyItem[] = nullRecordItems
+      .concat(pass1Result.discrepancyItems)
+      .concat(unmatchedFileItems);
 
     const totalAnalyzed =
       pass1Result.counts.exactMatchesCount +
@@ -111,18 +107,42 @@ export class SpatialComparisonEngine {
       nullRecordItems.length +
       pass1Result.counts.duplicateSuidCount;
 
-    // 6. Generate SQL Patches (preview mode only: zero-memory allocation)
-    emit("Generando vista previa SQL...", 0, allDiscrepancyItems.length);
-    const sqlPatchGenerator = new SqlPatchGenerator(
+    // 6. Generate SQL Patches (Ultra-fast preview mode: extracts first 25 updates and 25 inserts, < 1ms execution)
+    const previewUpdateItems: DiscrepancyItem[] = [];
+    const discrepancyItemsCount = pass1Result.discrepancyItems.length;
+    for (let itemIndex = 0; itemIndex < discrepancyItemsCount; itemIndex++) {
+      const item = pass1Result.discrepancyItems[itemIndex];
+      if (
+        item.type === DiscrepancyType.ATTRIBUTE_MISMATCH ||
+        item.type === DiscrepancyType.GEOMETRY_MISMATCH
+      ) {
+        previewUpdateItems.push(item);
+        if (previewUpdateItems.length >= 25) {
+          break;
+        }
+      }
+    }
+
+    const previewInsertItems = unmatchedFileItems.slice(0, 25);
+    const totalUpdates =
+      pass1Result.counts.attributeMismatchCount + pass1Result.counts.geometryMismatchCount;
+    const totalInserts = unmatchedFileItems.length;
+
+    const sqlPatchGenerator = new SqlPatchGenerator({
       dbSchemaName,
       dbTableName,
       mappingConfig,
       dbColumnTypes,
-      Boolean(dbfReader),
+      isBinaryDbf: Boolean(dbfReader),
       shpReader,
-      fileSrid
+      fileSrid,
+    });
+    const patchResult = sqlPatchGenerator.generatePreviewPatches(
+      previewUpdateItems,
+      previewInsertItems,
+      totalUpdates,
+      totalInserts
     );
-    const patchResult = sqlPatchGenerator.generatePatches(allDiscrepancyItems, emit, false);
 
     return {
       totalDbRecords: dbRecords.length,
