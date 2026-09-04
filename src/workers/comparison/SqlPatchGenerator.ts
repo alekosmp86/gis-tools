@@ -238,7 +238,7 @@ export class SqlPatchGenerator {
     const hasGeometryMismatch =
       item.type === DiscrepancyType.GEOMETRY_MISMATCH || Boolean(item.geometryDifference);
 
-    if (!hasGeometryMismatch || !this.isBinaryDbf) {
+    if (!hasGeometryMismatch) {
       return null;
     }
 
@@ -430,7 +430,7 @@ export class SqlPatchGenerator {
   }
 
   private isGeometryInsertionRequested(geometryColumnName: string): boolean {
-    if (this.isBinaryDbf) return true;
+    if (this.mappingConfig.compareGeometry || this.isBinaryDbf) return true;
     return this.fieldsToCompare.includes(geometryColumnName);
   }
 

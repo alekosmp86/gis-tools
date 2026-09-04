@@ -47,5 +47,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_013_KPI_CARD_DISCREPANCY_TABLE_FILTER_DESYNC.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_013_KPI_CARD_DISCREPANCY_TABLE_FILTER_DESYNC.md) — KPI cards and discrepancy table filter desynchronization fix, eliminating false attribute mismatches with null file values.
 - [`ISSUE_014_PRIMARY_KEY_UPDATE_OPTIMIZATION.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_014_PRIMARY_KEY_UPDATE_OPTIMIZATION.md) — PostGIS SQL UPDATE WHERE clause optimization via auto-detected primary keys, eliminating sequential scans in 1M+ row tables.
 - [`ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md) — Lazy preview-only SQL generation on step 4 transition, immediate modal opening on "Ejecutar en BD", and chunked generation/execution upon confirmation.
+- [`ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md) — SQL UPDATE patch generation for geometry discrepancies in CSV and tabular datasets by lifting Shapefile-only binary DBF constraints.
 
 
