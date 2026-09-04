@@ -44,5 +44,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_010_SHAPEFILE_GEOMETRY_MISMATCH_SQL_UPDATE_PATCH.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_010_SHAPEFILE_GEOMETRY_MISMATCH_SQL_UPDATE_PATCH.md) — Shapefile geometry synchronization, high-fidelity vertex preservation, zero-copy native streaming, and PostGIS UPDATE generation.
 - [`ISSUE_011_TABLE_VIEWER_SPATIAL_DETECTION_AND_ATTRIBUTES.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_011_TABLE_VIEWER_SPATIAL_DETECTION_AND_ATTRIBUTES.md) — PostGIS Table Viewer spatial geometry recognition, all-null attribute values fix, and dynamic EWKB SRID reprojection.
 - [`ISSUE_012_SQL_PATCH_SUID_GROUPING_AND_ONLY_IN_DB_NULL_FIX.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_012_SQL_PATCH_SUID_GROUPING_AND_ONLY_IN_DB_NULL_FIX.md) — SQL patch single UPDATE per SUID grouping, elimination of destructive NULL updates on ONLY_IN_DB items, and CSV delimiter/BOM parsing robustness.
+- [`ISSUE_013_KPI_CARD_DISCREPANCY_TABLE_FILTER_DESYNC.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_013_KPI_CARD_DISCREPANCY_TABLE_FILTER_DESYNC.md) — KPI cards and discrepancy table filter desynchronization fix, eliminating false attribute mismatches with null file values.
 
 
