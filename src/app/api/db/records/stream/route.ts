@@ -17,6 +17,8 @@ export async function POST(request: Request) {
       suid_column,
       suid_columns,
       fields_to_compare = [],
+      limit,
+      offset,
     } = body;
 
     if (!db_name || !user || !table_name) {
@@ -84,7 +86,9 @@ export async function POST(request: Request) {
       }
     });
 
-    const colSelects: string[] = allSelectedCols.map((col) => `"${sanitizeIdentifier(col)}"`);
+    const targetCols =
+      allSelectedCols.length > 0 ? allSelectedCols : Object.keys(columnTypes);
+    const colSelects: string[] = targetCols.map((col) => `"${sanitizeIdentifier(col)}"`);
     let detectedSrid: number = 4326;
 
     // 2. If table has a geometry column, automatically fetch it as GeoJSON & detect native SRID
@@ -146,10 +150,17 @@ export async function POST(request: Request) {
     const countRes = await client.query(countQuery);
     const totalCount: number = countRes.rows[0]?.total || 0;
 
-    const dataQuery = `
+    let dataQuery = `
       SELECT ${selectClause}
-      FROM "${sanitizeIdentifier(schema_name)}"."${sanitizeIdentifier(table_name)}";
+      FROM "${sanitizeIdentifier(schema_name)}"."${sanitizeIdentifier(table_name)}"
     `;
+    if (typeof limit === "number" && limit > 0) {
+      dataQuery += ` LIMIT ${Number(limit)}`;
+    }
+    if (typeof offset === "number" && offset > 0) {
+      dataQuery += ` OFFSET ${Number(offset)}`;
+    }
+    dataQuery += ";";
 
     const encoder = new TextEncoder();
 

@@ -77,3 +77,15 @@ export interface ExecuteBatchResult {
   errors: string[];
   message: string;
 }
+export interface DatabaseFetchResult {
+  records: Array<Record<string, unknown>>;
+  columnTypes: Record<string, string>;
+  detectedSrid: number;
+  totalCount: number;
+}
+
+export interface DbStreamRecordsParams {
+  config: DbConfig;
+  totalRows?: number;
+  onProgress?: (phase: string, current?: number, total?: number) => void;
+}

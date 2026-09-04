@@ -1,14 +1,7 @@
-import type { DbConfig } from "@/types/db";
+import type { DbConfig, DatabaseFetchResult } from "@/types/db";
 import type { ColumnMappingConfig } from "@/types/comparison";
 import type { ProgressCallback } from "@/services/workerBridge";
 import { formatNumber } from "@/utils/common/ValueFormatter";
-
-export interface DatabaseFetchResult {
-  records: Array<Record<string, unknown>>;
-  columnTypes: Record<string, string>;
-  detectedSrid: number;
-  totalCount: number;
-}
 
 interface StreamMetaMessage {
   type: "META";
@@ -45,19 +38,29 @@ export class DatabaseStreamReader {
    */
   public static async fetchOrStreamRecords(
     dbConfig: DbConfig,
-    mappingConfig: ColumnMappingConfig,
-    onProgress?: ProgressCallback
+    mappingConfig?: Partial<ColumnMappingConfig>,
+    onProgress?: ProgressCallback,
+    options?: { limit?: number; offset?: number }
   ): Promise<DatabaseFetchResult> {
     onProgress?.("Conectando a base de datos PostgreSQL...", 0, 0);
+
+    const requestBody: Record<string, unknown> = {
+      ...dbConfig,
+      suid_columns: mappingConfig?.suidColumns,
+      fields_to_compare: mappingConfig?.fieldsToCompare,
+    };
+
+    if (typeof options?.limit === "number" && options.limit > 0) {
+      requestBody.limit = options.limit;
+    }
+    if (typeof options?.offset === "number" && options.offset > 0) {
+      requestBody.offset = options.offset;
+    }
 
     const response = await fetch("/api/db/records/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...dbConfig,
-        suid_columns: mappingConfig.suidColumns,
-        fields_to_compare: mappingConfig.fieldsToCompare,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok || !response.body) {
