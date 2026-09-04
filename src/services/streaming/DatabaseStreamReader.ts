@@ -48,6 +48,7 @@ export class DatabaseStreamReader {
       ...dbConfig,
       suid_columns: mappingConfig?.suidColumns,
       fields_to_compare: mappingConfig?.fieldsToCompare,
+      primary_key_column: mappingConfig?.primaryKeyColumn,
     };
 
     if (typeof options?.limit === "number" && options.limit > 0) {

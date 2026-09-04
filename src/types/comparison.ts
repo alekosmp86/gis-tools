@@ -16,6 +16,7 @@ export interface ColumnMappingConfig {
   compareGeometry: boolean;
   targetSrid?: number;
   insertDefaults?: Record<string, InsertFieldDefault>;
+  primaryKeyColumn?: string | null;
 }
 
 export interface SuidMappingStepRef {

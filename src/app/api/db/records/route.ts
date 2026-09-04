@@ -15,6 +15,7 @@ export async function POST(request: Request) {
       suid_column,
       suid_columns,
       fields_to_compare = [],
+      primary_key_column,
       limit,
       offset,
     } = body;
@@ -49,7 +50,10 @@ export async function POST(request: Request) {
         ? [suid_column]
         : [];
 
-    const allSelectedCols = Array.from(new Set([...suidColsList, ...fields_to_compare]));
+    const pkColsList: string[] = primary_key_column ? [primary_key_column] : [];
+    const allSelectedCols = Array.from(
+      new Set([...suidColsList, ...fields_to_compare, ...pkColsList])
+    );
 
     // Query PostgreSQL information_schema and pg_attribute for exact column data types
     const typesQuery = `

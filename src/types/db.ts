@@ -22,6 +22,7 @@ export interface DbColumnMetadata {
   data_type: string;
   is_nullable: boolean;
   column_default: string | null;
+  is_primary_key?: boolean;
 }
 
 export interface ColumnsResponse {
@@ -30,6 +31,7 @@ export interface ColumnsResponse {
   tableName: string;
   columns: string[];
   columnDetails?: DbColumnMetadata[];
+  primaryKeyColumn?: string | null;
   totalRows: number;
   error?: string;
 }
@@ -43,6 +45,7 @@ export interface DbConnectionStatusPayload {
   columns: string[];
   totalRows: number;
   columnDetails?: DbColumnMetadata[];
+  primaryKeyColumn?: string | null;
   config: DbConfig;
 }
 

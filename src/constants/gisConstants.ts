@@ -26,10 +26,3 @@ export const GIS_PRECISION = {
    */
   COMPARISON_FACTOR: 10_000,
 } as const;
-
-/**
- * Rounds a floating-point coordinate to the centralized GIS precision (6 decimals).
- */
-export function roundGisCoordinate(coordinate: number): number {
-  return Math.round(coordinate * GIS_PRECISION.COORDINATE_FACTOR) / GIS_PRECISION.COORDINATE_FACTOR;
-}
