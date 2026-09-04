@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import { TableMetaPanel } from "./TableMetaPanel";
 import { AttributeTable } from "../file-viewer/AttributeTable";
-import { useFetchDbRecords } from "@/hooks/useDbQueries";
+import { useStreamDbRecords } from "@/hooks/useDbQueries";
 import { parseRecordsToGeoJson } from "@/utils/spatial/GeoJsonDatasetBuilder";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { AlertType } from "@/types/ui";
@@ -27,18 +27,30 @@ export const DbTableViewerContainer: React.FC<DbTableViewerContainerProps> = ({
   totalRows,
 }) => {
   const [records, setRecords] = useState<Array<Record<string, unknown>>>([]);
+  const [detectedSrid, setDetectedSrid] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [progressText, setProgressText] = useState<string>("Conectando a base de datos PostgreSQL...");
 
-  const fetchRecordsMutation = useFetchDbRecords();
+  const streamRecordsMutation = useStreamDbRecords();
 
   useEffect(() => {
-    fetchRecordsMutation.mutate(config, {
-      onSuccess: (data) => {
-        setRecords(data.records);
+    streamRecordsMutation.mutate(
+      {
+        config,
+        totalRows,
+        onProgress: setProgressText,
       },
-    });
+      {
+        onSuccess: (data) => {
+          setRecords(data.records);
+          if (data.detectedSrid > 0) {
+            setDetectedSrid(data.detectedSrid);
+          }
+        },
+      }
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config]);
+  }, [config, totalRows]);
 
   // Extract spatial GeoJSON features from PostGIS table records using utility
   const { geojson, detectedGeometryType } = parseRecordsToGeoJson(records, columns);
@@ -46,21 +58,21 @@ export const DbTableViewerContainer: React.FC<DbTableViewerContainerProps> = ({
 
   return (
     <div className={styles.container}>
-      {/* Loading State */}
-      {fetchRecordsMutation.isPending && (
+      {/* Loading State with Live Streaming Progress */}
+      {streamRecordsMutation.isPending && (
         <div className={styles.loadingArea}>
           <Loader2 size={24} className={styles.spin} />
-          <span>Consultando y extrayendo registros espaciales de la base de datos PostGIS...</span>
+          <span>{progressText}</span>
         </div>
       )}
 
-      {/* Error Message if fetching records fails */}
-      {fetchRecordsMutation.isError && (
+      {/* Error Message if streaming records fails */}
+      {streamRecordsMutation.isError && (
         <AlertMessage
           type={AlertType.ERROR}
           text={
-            fetchRecordsMutation.error instanceof Error
-              ? fetchRecordsMutation.error.message
+            streamRecordsMutation.error instanceof Error
+              ? streamRecordsMutation.error.message
               : "No se pudieron obtener los registros de la base de datos."
           }
         />
@@ -86,6 +98,8 @@ export const DbTableViewerContainer: React.FC<DbTableViewerContainerProps> = ({
                   totalRows={totalRows || records.length}
                   columnsCount={columns.length}
                   geometryType={detectedGeometryType}
+                  detectedSrid={detectedSrid}
+                  loadedRows={records.length}
                 />
               </div>
             </div>
@@ -96,6 +110,8 @@ export const DbTableViewerContainer: React.FC<DbTableViewerContainerProps> = ({
                 totalRows={totalRows || records.length}
                 columnsCount={columns.length}
                 geometryType={detectedGeometryType}
+                detectedSrid={detectedSrid}
+                loadedRows={records.length}
               />
             </div>
           )}

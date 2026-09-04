@@ -9,6 +9,8 @@ interface TableMetaPanelProps {
   totalRows: number;
   columnsCount: number;
   geometryType?: string | null;
+  detectedSrid?: number | null;
+  loadedRows?: number;
 }
 
 export const TableMetaPanel: React.FC<TableMetaPanelProps> = ({
@@ -16,6 +18,8 @@ export const TableMetaPanel: React.FC<TableMetaPanelProps> = ({
   totalRows,
   columnsCount,
   geometryType,
+  detectedSrid,
+  loadedRows,
 }) => {
   return (
     <div className={styles.container}>
@@ -61,6 +65,11 @@ export const TableMetaPanel: React.FC<TableMetaPanelProps> = ({
           <span className={`${styles.cardValue} ${styles.cardValueHighlight}`}>
             <Hash size={13} className={styles.valueIcon} />
             {formatNumber(totalRows)} filas
+            {loadedRows && totalRows > loadedRows ? (
+              <span className={styles.sampleBadge}>
+                {" "}(muestra: {formatNumber(loadedRows)})
+              </span>
+            ) : null}
           </span>
         </div>
 
@@ -76,7 +85,9 @@ export const TableMetaPanel: React.FC<TableMetaPanelProps> = ({
           <span className={styles.cardLabel}>Geometría Detectada</span>
           <span className={`${styles.cardValue} ${styles.cardValueHighlight}`}>
             <Globe size={13} className={styles.valueIcon} />
-            {geometryType || "Alfanumérico / Sin Geometría"}
+            {geometryType
+              ? `${geometryType}${detectedSrid ? ` (EPSG:${detectedSrid})` : ""}`
+              : "Alfanumérico / Sin Geometría"}
           </span>
         </div>
       </div>
