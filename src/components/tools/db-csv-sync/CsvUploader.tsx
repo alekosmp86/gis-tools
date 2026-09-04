@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import dynamic from "next/dynamic";
+import type { FeatureCollection } from "geojson";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileSpreadsheet, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -7,6 +8,8 @@ import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
 import { FileDropzone } from "@/components/shared/FileDropzone";
 import { CsvParser } from "@/services/parsers/CsvParser";
+import { MAX_MAP_PREVIEW_FEATURES } from "@/constants/mapConstants";
+import { AlertType } from "@/types/ui";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
 import { formatNumber, formatFileSize } from "@/utils/common/ValueFormatter";
 import styles from "./CsvUploader.module.css";
@@ -15,6 +18,25 @@ const SpatialMapPreview = dynamic(
   () => import("@/components/shared/SpatialMapPreview").then((module) => module.SpatialMapPreview),
   { ssr: false }
 );
+
+/**
+ * Builds a capped FeatureCollection subset for map preview to preserve UI responsiveness.
+ */
+function buildCappedPreviewGeoJson(
+  geojson: FeatureCollection | undefined,
+  maxFeatures: number
+): FeatureCollection | null {
+  if (!geojson || !geojson.features || geojson.features.length === 0) {
+    return null;
+  }
+  if (geojson.features.length <= maxFeatures) {
+    return geojson;
+  }
+  return {
+    ...geojson,
+    features: geojson.features.slice(0, maxFeatures),
+  };
+}
 
 interface CsvUploaderProps {
   onSuccess: (data: ParsedFileDataset) => void;
@@ -34,6 +56,16 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const previewGeojson = buildCappedPreviewGeoJson(
+    data?.geojson,
+    MAX_MAP_PREVIEW_FEATURES
+  );
+
+  const isPreviewCapped = Boolean(
+    data?.geojson?.features &&
+      data.geojson.features.length > MAX_MAP_PREVIEW_FEATURES
+  );
+
   const processFile = async (file: File) => {
     setLoading(true);
     setErrorMessage(null);
@@ -45,9 +77,9 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
       setData(parsed);
       onSuccess(parsed);
       setLoading(false);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error al procesar el archivo CSV.";
-      setErrorMessage(msg);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Error al procesar el archivo CSV.";
+      setErrorMessage(message);
       setLoading(false);
     }
   };
@@ -130,7 +162,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
       )}
 
       {/* Error Alert */}
-      {errorMessage && <AlertMessage type="error" text={errorMessage} />}
+      {errorMessage && <AlertMessage type={AlertType.ERROR} text={errorMessage} />}
 
       {/* Loaded File Info Card */}
       {data && (
@@ -171,10 +203,17 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
           />
 
           {/* Interactive Spatial Map Preview if CSV contains Geometry (EWKB / WKT / GeoJSON) */}
-          {data.geojson && data.geojson.features && data.geojson.features.length > 0 && (
+          {previewGeojson && previewGeojson.features.length > 0 && (
             <div className={styles.mapSection}>
+              {isPreviewCapped && data.geojson && (
+                <AlertMessage
+                  type={AlertType.WARNING}
+                  className={styles.previewNotice}
+                  text={`Vista previa de muestra: Mostrando los primeros ${formatNumber(previewGeojson.features.length)} de ${formatNumber(data.geojson.features.length)} registros con geometría en el mapa inicial para asegurar fluidez de navegación. La totalidad de los ${formatNumber(data.featureCount)} registros se auditará y visualizará en el paso final.`}
+                />
+              )}
               <SpatialMapPreview
-                geojson={data.geojson}
+                geojson={previewGeojson}
                 title="VISTA PREVIA ESPACIAL DEL ARCHIVO CSV"
               />
             </div>
