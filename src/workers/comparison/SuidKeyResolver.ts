@@ -13,6 +13,19 @@ export class SuidKeyResolver {
     return cleanSuid(value);
   }
 
+  private resolveRecordValue(record: Record<string, unknown>, columnName: string): unknown {
+    if (record[columnName] !== undefined) {
+      return record[columnName];
+    }
+    const lowerCol = columnName.toLowerCase();
+    for (const [key, value] of Object.entries(record)) {
+      if (key.toLowerCase() === lowerCol) {
+        return value;
+      }
+    }
+    return undefined;
+  }
+
   /**
    * Builds a normalized composite SUID key from a row record and column list.
    */
@@ -28,7 +41,7 @@ export class SuidKeyResolver {
 
     for (let index = 0; index < suidColumns.length; index++) {
       const columnName = suidColumns[index];
-      const rawValue = record[columnName];
+      const rawValue = this.resolveRecordValue(record, columnName);
       const cleaned = this.cleanKeyString(rawValue);
       if (cleaned !== "") {
         hasAtLeastOneValidPart = true;
@@ -56,7 +69,7 @@ export class SuidKeyResolver {
     const parts: string[] = [];
     for (let index = 0; index < suidColumns.length; index++) {
       const columnName = suidColumns[index];
-      const rawValue = record[columnName];
+      const rawValue = this.resolveRecordValue(record, columnName);
       const cleaned = this.cleanRawValue(rawValue);
       if (cleaned !== "") {
         parts.push(cleaned);

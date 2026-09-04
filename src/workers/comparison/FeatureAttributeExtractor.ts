@@ -110,8 +110,22 @@ export class FeatureAttributeExtractor {
 
       fieldsToCompare.forEach((field) => {
         const dbVal = dbRecord[field] !== undefined ? dbRecord[field] : null;
-        const fileKey = fieldToFileKey.get(field);
-        const fileVal = fileKey != null ? objectFileRec[fileKey] : null;
+        const fileKey = fieldToFileKey.get(field) || field;
+        let fileVal: unknown = null;
+
+        if (fileKey != null) {
+          if (objectFileRec[fileKey] !== undefined) {
+            fileVal = objectFileRec[fileKey];
+          } else {
+            const lowerKey = fileKey.toLowerCase();
+            for (const [key, value] of Object.entries(objectFileRec)) {
+              if (key.toLowerCase() === lowerKey) {
+                fileVal = value;
+                break;
+              }
+            }
+          }
+        }
 
         const dbCleaned = this.suidResolver.cleanRawValue(dbVal);
         const fileCleaned = this.suidResolver.cleanRawValue(fileVal);
