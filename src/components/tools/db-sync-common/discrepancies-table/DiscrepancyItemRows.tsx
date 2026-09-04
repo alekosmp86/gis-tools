@@ -1,6 +1,6 @@
 import React from "react";
-import type { DiscrepancyItem, ComparisonSourceDescriptor } from "@/types/comparison";
-import { DiscrepancyFilter, DiscrepancyType } from "@/types/comparison";
+import type { DiscrepancyItem, ComparisonSourceDescriptor, DiscrepancyFilter } from "@/types/comparison";
+import { DiscrepancyType } from "@/types/comparison";
 import { DiscrepancySuidCell } from "../DiscrepancySuidCell";
 import { DiscrepancyTypeBadge } from "../DiscrepancyTypeBadge";
 import styles from "./DiscrepanciesTable.module.css";
@@ -8,7 +8,7 @@ import styles from "./DiscrepanciesTable.module.css";
 export interface DiscrepancyItemRowsProps {
   item: DiscrepancyItem;
   descriptor: ComparisonSourceDescriptor;
-  activeFilter: DiscrepancyFilter;
+  activeFilter?: DiscrepancyFilter;
 }
 
 interface TableDiffRow {
@@ -22,18 +22,14 @@ interface TableDiffRow {
 export const DiscrepancyItemRows: React.FC<DiscrepancyItemRowsProps> = ({
   item,
   descriptor,
-  activeFilter,
 }) => {
   const diffRows: TableDiffRow[] = [];
 
-  const isGeometryCard = activeFilter === DiscrepancyFilter.GEOMETRY_MISMATCH;
-  const isAttributeCard = activeFilter === DiscrepancyFilter.ATTRIBUTE_MISMATCH;
+  const shouldIncludeGeometry = Boolean(
+    item.geometryDifference || item.type === DiscrepancyType.GEOMETRY_MISMATCH
+  );
 
-  const shouldIncludeGeometry =
-    !isAttributeCard &&
-    Boolean(item.geometryDifference || item.type === DiscrepancyType.GEOMETRY_MISMATCH);
-
-  const shouldIncludeAttributes = !isGeometryCard && item.differences.length > 0;
+  const shouldIncludeAttributes = item.differences.length > 0;
 
   if (shouldIncludeGeometry) {
     const geomObj = item.shpGeometry as { type?: string } | undefined;
@@ -71,11 +67,7 @@ export const DiscrepancyItemRows: React.FC<DiscrepancyItemRowsProps> = ({
   }
 
   const totalRows = diffRows.length;
-  const displayBadgeType = isGeometryCard
-    ? DiscrepancyType.GEOMETRY_MISMATCH
-    : isAttributeCard
-    ? DiscrepancyType.ATTRIBUTE_MISMATCH
-    : item.type;
+  const displayBadgeType = item.type;
 
   return (
     <>

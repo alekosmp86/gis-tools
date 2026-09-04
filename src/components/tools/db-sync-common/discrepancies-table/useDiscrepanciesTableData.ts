@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { DiscrepancyItem } from "@/types/comparison";
-import { DiscrepancyFilter, DiscrepancyType } from "@/types/comparison";
+import { DiscrepancyFilter } from "@/types/comparison";
 
 interface UseDiscrepanciesTableDataParams {
   items: DiscrepancyItem[];
@@ -28,20 +28,8 @@ export const useDiscrepanciesTableData = ({
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
   const filteredItems = items.filter((item) => {
-    let matchesFilter = activeFilter === DiscrepancyFilter.ALL;
-    if (!matchesFilter) {
-      if (activeFilter === DiscrepancyFilter.ATTRIBUTE_MISMATCH) {
-        matchesFilter = item.differences.length > 0;
-      } else if (activeFilter === DiscrepancyFilter.GEOMETRY_MISMATCH) {
-        matchesFilter =
-          Boolean(item.geometryDifference) || item.type === DiscrepancyType.GEOMETRY_MISMATCH;
-      } else if (activeFilter === DiscrepancyFilter.DUPLICATE_SUID) {
-        matchesFilter =
-          item.type === DiscrepancyType.DUPLICATE_SUID || Boolean(item.duplicateDetails);
-      } else {
-        matchesFilter = item.type === activeFilter;
-      }
-    }
+    const matchesFilter =
+      activeFilter === DiscrepancyFilter.ALL || item.type === activeFilter;
     if (!matchesFilter) return false;
 
     if (normalizedQuery === "") return true;
