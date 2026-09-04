@@ -48,5 +48,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_014_PRIMARY_KEY_UPDATE_OPTIMIZATION.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_014_PRIMARY_KEY_UPDATE_OPTIMIZATION.md) — PostGIS SQL UPDATE WHERE clause optimization via auto-detected primary keys, eliminating sequential scans in 1M+ row tables.
 - [`ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md) — Lazy preview-only SQL generation on step 4 transition, immediate modal opening on "Ejecutar en BD", and chunked generation/execution upon confirmation.
 - [`ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md) — SQL UPDATE patch generation for geometry discrepancies in CSV and tabular datasets by lifting Shapefile-only binary DBF constraints.
+- [`ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md`](file:///c:/Alekos/Projects/gis-tools/docs/issues/ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md) — Capping features in DB-CSV Step 2 preview map via unified `MAX_MAP_PREVIEW_FEATURES` while preserving full uncapped features in Step 4.
 
 
