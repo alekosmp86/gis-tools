@@ -100,10 +100,6 @@ export class MatchedRecordsComparator {
         const rawSuid = this.suidResolver.buildCompositeRawSuid(dbRec, dbSuidCols) || suidKey;
 
         if (fileMatchesCount === 0) {
-          const differences = this.attributeExtractor.computeOnlyInDbDifferences(
-            dbRec,
-            fieldsToCompare
-          );
           const resolvedType = isDuplicate
             ? DiscrepancyType.DUPLICATE_SUID
             : DiscrepancyType.ONLY_IN_DB;
@@ -118,8 +114,7 @@ export class MatchedRecordsComparator {
             id: `db-${suidKey}-${dbIndex}`,
             suid: rawSuid,
             type: resolvedType,
-            differences,
-            dbRecord: dbRec,
+            differences: [],
             duplicateDetails: isDuplicate
               ? {
                   targetCount: dbRecList.length,

@@ -1,9 +1,6 @@
-import type {
-  DiscrepancyItem,
-  AttributeDifference,
-} from "@/types/comparison";
+import type { DiscrepancyItem } from "@/types/comparison";
 import { DiscrepancyType } from "@/types/comparison";
-import type { BinaryDbfReader, DbfFieldDescriptor } from "@/utils/binary/BinaryDbfReader";
+import type { BinaryDbfReader } from "@/utils/binary/BinaryDbfReader";
 import type { BinaryShpReader } from "@/utils/binary/BinaryShpReader";
 import type { SuidKeyResolver } from "./SuidKeyResolver";
 
@@ -12,9 +9,6 @@ export interface CollectUnmatchedParams {
   binaryFileSuidMap: Map<string, number[]>;
   objectFileSuidMap: Map<string, Record<string, unknown>[]>;
   targetFileSuidCols: string[];
-  fieldsToCompare: string[];
-  fieldToFileKey: Map<string, string>;
-  dbfCompareFields: Map<string, DbfFieldDescriptor>;
   dbfReader: BinaryDbfReader | null;
   shpReader: BinaryShpReader | null;
   transformCoordinate: ((coordinate: [number, number]) => [number, number]) | null;
@@ -38,9 +32,6 @@ export class UnmatchedFileFeaturesCollector {
       binaryFileSuidMap,
       objectFileSuidMap,
       targetFileSuidCols,
-      fieldsToCompare,
-      fieldToFileKey,
-      dbfCompareFields,
       dbfReader,
       shpReader,
       transformCoordinate,
@@ -59,26 +50,11 @@ export class UnmatchedFileFeaturesCollector {
             const rawSuid =
               this.suidResolver.buildCompositeRawSuid(fileRec, targetFileSuidCols) || suidKey;
 
-            const differences: AttributeDifference[] = [];
-            fieldsToCompare.forEach((field) => {
-              const fieldDesc = dbfCompareFields.get(field);
-              const fileVal = fieldDesc
-                ? dbfReader.readFieldValue(recordIndex, fieldDesc)
-                : fileRec[field];
-              if (this.suidResolver.cleanRawValue(fileVal) !== "") {
-                differences.push({
-                  fieldName: field,
-                  dbValue: null,
-                  shpValue: fileVal as string | number | null,
-                });
-              }
-            });
-
             unmatchedItems.push({
               id: `file-${suidKey}-${occurrenceIndex}`,
               suid: rawSuid,
               type: DiscrepancyType.ONLY_IN_SHP,
-              differences,
+              differences: [],
               shpFeatureProps: fileRec,
               shpGeometry: fileGeom || undefined,
               fileRecordIndex: recordIndex,
@@ -95,24 +71,11 @@ export class UnmatchedFileFeaturesCollector {
             const rawSuid =
               this.suidResolver.buildCompositeRawSuid(fileRec, targetFileSuidCols) || suidKey;
 
-            const differences: AttributeDifference[] = [];
-            fieldsToCompare.forEach((field) => {
-              const fileKey = fieldToFileKey.get(field);
-              const fileVal = fileKey != null ? fileRec[fileKey] : null;
-              if (this.suidResolver.cleanRawValue(fileVal) !== "") {
-                differences.push({
-                  fieldName: field,
-                  dbValue: null,
-                  shpValue: fileVal as string | number | null,
-                });
-              }
-            });
-
             unmatchedItems.push({
               id: `file-${suidKey}-${featureIndex}`,
               suid: rawSuid,
               type: DiscrepancyType.ONLY_IN_SHP,
-              differences,
+              differences: [],
               shpFeatureProps: fileRec,
               shpGeometry: fileGeomList[featureIndex] ?? fileGeomList[0],
             });

@@ -37,24 +37,6 @@ export class FeatureAttributeExtractor {
     this.suidResolver = suidResolver;
   }
 
-  public computeOnlyInDbDifferences(
-    dbRecord: Record<string, unknown>,
-    fieldsToCompare: string[]
-  ): AttributeDifference[] {
-    const differences: AttributeDifference[] = [];
-    fieldsToCompare.forEach((field) => {
-      const dbVal = dbRecord[field] !== undefined ? dbRecord[field] : null;
-      if (this.suidResolver.cleanRawValue(dbVal) !== "") {
-        differences.push({
-          fieldName: field,
-          dbValue: dbVal as string | number | null,
-          shpValue: null,
-        });
-      }
-    });
-    return differences;
-  }
-
   public extractFeatureAttributesAndGeometry(
     params: ExtractFeatureParams
   ): ExtractedFeatureResult {
