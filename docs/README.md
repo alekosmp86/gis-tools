@@ -53,5 +53,7 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md`](docs/issues/ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md) — SQL UPDATE patch generation for geometry discrepancies in CSV and tabular datasets by lifting Shapefile-only binary DBF constraints.
 - [`ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md`](docs/issues/ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md) — Capping features in DB-CSV Step 2 preview map via unified `MAX_MAP_PREVIEW_FEATURES` while preserving full uncapped features in Step 4.
 - [`ISSUE_018_CIRCULAR_DEPENDENCY_AND_LAYER_SEPARATION_AUDIT.md`](docs/issues/ISSUE_018_CIRCULAR_DEPENDENCY_AND_LAYER_SEPARATION_AUDIT.md) — Elimination of circular dependency between domain types and worker services, layer separation audit, and permanent dependency graph integration.
+- [`ISSUE_019_EXPORT_ENCODING_GLITCH_TOLERANCE.md`](docs/issues/ISSUE_019_EXPORT_ENCODING_GLITCH_TOLERANCE.md) — Character encoding glitch and mojibake tolerance for GIS/DBF exports (letter 'Ñ' corruptions), preserving strict case and punctuation sensitivity.
+
 
 
