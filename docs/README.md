@@ -54,6 +54,8 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md`](docs/issues/ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md) — Capping features in DB-CSV Step 2 preview map via unified `MAX_MAP_PREVIEW_FEATURES` while preserving full uncapped features in Step 4.
 - [`ISSUE_018_CIRCULAR_DEPENDENCY_AND_LAYER_SEPARATION_AUDIT.md`](docs/issues/ISSUE_018_CIRCULAR_DEPENDENCY_AND_LAYER_SEPARATION_AUDIT.md) — Elimination of circular dependency between domain types and worker services, layer separation audit, and permanent dependency graph integration.
 - [`ISSUE_019_EXPORT_ENCODING_GLITCH_TOLERANCE.md`](docs/issues/ISSUE_019_EXPORT_ENCODING_GLITCH_TOLERANCE.md) — Character encoding glitch and mojibake tolerance for GIS/DBF exports (letter 'Ñ' corruptions), preserving strict case and punctuation sensitivity.
+- [`ISSUE_020_WIZARD_STEP4_SYNC_PARAMETERS_DECOUPLING.md`](docs/issues/ISSUE_020_WIZARD_STEP4_SYNC_PARAMETERS_DECOUPLING.md) — Decoupling SUID mapping from SQL sync parameters into a dedicated 5-step wizard and renaming Step4ResultsView to ComparisonResultsView.
+
 
 
 
