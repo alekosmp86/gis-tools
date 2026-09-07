@@ -141,6 +141,7 @@ export class MatchedRecordsComparator {
             shpReader,
             transformCoordinate,
             dbfCompareFields,
+            ignoreEncodingArtifacts: mappingConfig.ignoreEncodingArtifacts,
           });
 
         const { isGeometryDifferent, geometryDiffDetails, resolvedDbGeom, resolvedFileGeom } =

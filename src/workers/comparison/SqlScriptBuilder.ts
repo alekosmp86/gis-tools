@@ -3,7 +3,7 @@
  * Object-Oriented Builder for high-speed, compact SQL generation (INSERT, UPDATE) and PostGIS expressions.
  */
 
-import { cleanValue } from "@/utils/common/GisStringSanitizer";
+import { cleanValue, repairEncoding } from "@/utils/common/GisStringSanitizer";
 
 export class SqlScriptBuilder {
   private readonly dbSchemaName: string;
@@ -39,7 +39,7 @@ export class SqlScriptBuilder {
 
   public formatSqlValue(value: unknown, columnName?: string): string {
     if (value === null || value === undefined) return "NULL";
-    const cleaned = cleanValue(value);
+    const cleaned = repairEncoding(cleanValue(value));
     if (cleaned === "") return "NULL";
 
     const dataType = columnName && this.dbColumnTypes ? this.dbColumnTypes[columnName] : undefined;

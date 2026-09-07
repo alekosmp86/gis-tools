@@ -18,6 +18,7 @@ export interface ColumnMappingConfig {
   targetSrid?: number;
   insertDefaults?: Record<string, InsertFieldDefault>;
   primaryKeyColumn?: string | null;
+  ignoreEncodingArtifacts?: boolean;
 }
 
 export interface SuidMappingStepRef {
