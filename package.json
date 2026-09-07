@@ -8,6 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "doctor": "react-doctor",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "graph": "node scripts/generate-dependency-graph.cjs",
     "graph:serve": "node scripts/serve-dependency-graph.cjs"
   },
@@ -23,6 +27,7 @@
     "shpjs": "^6.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/geojson": "^7946.0.16",
     "@types/leaflet": "^1.9.22",
     "@types/node": "^20",
@@ -35,6 +40,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
     "react-doctor": "^0.9.12",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
   }
 }
