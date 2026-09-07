@@ -13,6 +13,7 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ARCHITECTURE_AND_PROGRESS.md`](docs/architecture/ARCHITECTURE_AND_PROGRESS.md) — Development progress log, architectural decisions, and solved engineering challenges.
 - [`CODEBASE_STANDARDS_AND_UI_GUARDS.md`](docs/architecture/CODEBASE_STANDARDS_AND_UI_GUARDS.md) — Workspace coding standards, prop interface co-location rules, zero inline styles policy, Lucide icons usage, and single-letter variable removal.
 - [`WIZARD_ORCHESTRATOR_ARCHITECTURE.md`](docs/architecture/WIZARD_ORCHESTRATOR_ARCHITECTURE.md) — Decoupled 4-step wizard orchestrator, glassmorphism master card, and automatic smooth scroll implementation.
+- [`dependency-graph.html`](docs/architecture/dependency-graph.html) — Interactive Next.js dependency graph application with draggable physics nodes, neighborhood highlighting, and layer filters.
 
 ### 💾 2. Database (`docs/database/`)
 - [`POSTGIS_DIRECT_SQL_EXECUTION.md`](docs/database/POSTGIS_DIRECT_SQL_EXECUTION.md) — Direct PostGIS SQL patch execution modal, chunked statement batching (500 per batch), and transaction safety (`BEGIN; ... COMMIT;`).
@@ -51,5 +52,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md`](docs/issues/ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md) — Lazy preview-only SQL generation on step 4 transition, immediate modal opening on "Ejecutar en BD", and chunked generation/execution upon confirmation.
 - [`ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md`](docs/issues/ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md) — SQL UPDATE patch generation for geometry discrepancies in CSV and tabular datasets by lifting Shapefile-only binary DBF constraints.
 - [`ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md`](docs/issues/ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md) — Capping features in DB-CSV Step 2 preview map via unified `MAX_MAP_PREVIEW_FEATURES` while preserving full uncapped features in Step 4.
+- [`ISSUE_018_CIRCULAR_DEPENDENCY_AND_LAYER_SEPARATION_AUDIT.md`](docs/issues/ISSUE_018_CIRCULAR_DEPENDENCY_AND_LAYER_SEPARATION_AUDIT.md) — Elimination of circular dependency between domain types and worker services, layer separation audit, and permanent dependency graph integration.
 
 
