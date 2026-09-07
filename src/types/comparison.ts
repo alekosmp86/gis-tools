@@ -25,6 +25,10 @@ export interface SuidMappingStepRef {
   proceed: () => void;
 }
 
+export interface SyncParametersStepRef {
+  proceed: () => void;
+}
+
 export const DiscrepancyType = {
   MATCH: "MATCH",
   ATTRIBUTE_MISMATCH: "ATTRIBUTE_MISMATCH",
