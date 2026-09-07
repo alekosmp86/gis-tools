@@ -4,6 +4,7 @@ import { PkOptimizationCard } from "./PkOptimizationCard";
 import { AttributeFieldsCard } from "./AttributeFieldsCard";
 import { GeometryToggleCard } from "../db-shapefile-sync/GeometryToggleCard";
 import { InsertDefaultsCard } from "./InsertDefaultsCard";
+import { EncodingToleranceCard } from "./EncodingToleranceCard";
 import { useSuidMappingForm } from "@/hooks/useSuidMappingForm";
 import type { DbColumnMetadata } from "@/types/db";
 import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
@@ -43,6 +44,7 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
       selectedFields,
       attributeMap,
       compareGeometry,
+      ignoreEncodingArtifacts,
       unmappedDbColumns,
       insertDefaults,
       isPkOptimizationEnabled,
@@ -51,6 +53,7 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
       setSelectedPkColumn,
       toggleSuidColumn,
       setCompareGeometry,
+      setIgnoreEncodingArtifacts,
       toggleField,
       handleMapField,
       selectAllFields,
@@ -117,6 +120,12 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
             onToggleGeometry={setCompareGeometry}
           />
         )}
+
+        {/* 5. Encoding Glitch Tolerance Card */}
+        <EncodingToleranceCard
+          isEnabled={ignoreEncodingArtifacts}
+          onToggleEnabled={setIgnoreEncodingArtifacts}
+        />
       </div>
     );
   }

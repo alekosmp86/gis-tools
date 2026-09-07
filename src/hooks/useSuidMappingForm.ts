@@ -29,6 +29,10 @@ export function useSuidMappingForm(
     initialConfig?.compareGeometry ?? false
   );
 
+  const [ignoreEncodingArtifacts, setIgnoreEncodingArtifacts] = useState<boolean>(
+    initialConfig?.ignoreEncodingArtifacts ?? true
+  );
+
   const [insertDefaults, setInsertDefaults] = useState<Record<string, InsertFieldDefault>>(
     initialConfig?.insertDefaults || {}
   );
@@ -166,6 +170,7 @@ export function useSuidMappingForm(
       compareGeometry,
       insertDefaults,
       primaryKeyColumn: effectivePk,
+      ignoreEncodingArtifacts,
     };
     onSuccess(config);
   };
@@ -178,6 +183,7 @@ export function useSuidMappingForm(
     selectedFields,
     attributeMap,
     compareGeometry,
+    ignoreEncodingArtifacts,
     unmappedDbColumns,
     insertDefaults,
     isPkOptimizationEnabled,
@@ -186,6 +192,7 @@ export function useSuidMappingForm(
     setSelectedPkColumn,
     toggleSuidColumn,
     setCompareGeometry,
+    setIgnoreEncodingArtifacts,
     toggleField,
     handleMapField,
     selectAllFields,
