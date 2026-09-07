@@ -5,9 +5,9 @@ import {
   type ColumnMappingConfig,
   type IComparisonEngine,
   type ComparisonSummary,
+  type ProgressCallback,
 } from "@/types/comparison";
 import { runInWorker, serializeFileDataset } from "@/services/workerBridge";
-import type { ProgressCallback } from "@/services/workerBridge";
 import { DatabaseStreamReader } from "@/services/streaming/DatabaseStreamReader";
 
 export class DbVsDbComparisonEngine implements IComparisonEngine {

@@ -1,6 +1,7 @@
 import type { DbConfig } from "@/types/db";
 import type { ParsedFileDataset } from "@/types/parsers";
-import type { ProgressCallback } from "@/services/workerBridge";
+
+export type ProgressCallback = (phase: string, current: number, total: number) => void;
 
 export interface InsertFieldDefault {
   fieldName: string;

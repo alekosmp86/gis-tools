@@ -1,6 +1,5 @@
 import type { DbConfig, DatabaseFetchResult } from "@/types/db";
-import type { ColumnMappingConfig } from "@/types/comparison";
-import type { ProgressCallback } from "@/services/workerBridge";
+import type { ColumnMappingConfig, ProgressCallback } from "@/types/comparison";
 import { formatNumber } from "@/utils/common/ValueFormatter";
 
 interface StreamMetaMessage {
