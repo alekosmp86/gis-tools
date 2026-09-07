@@ -75,3 +75,22 @@
 - **Hermetic Isolation & Determinism**: Zero inter-test coupling; each test runs independently without shared mutable state or non-deterministic dependencies.
 - **Real Logic Verification**: For domain math, spatial operations, parsers, and string normalizers, test against real calculations without mocking internal domain logic.
 
+## Testing-First Branching & Deployment Workflow
+- **Step 1 — Sync `testing` with `main`**: When ordered to test any development or fix, first switch to `testing` and bring it up to date with the latest stable changes from `main` (`git checkout testing`, `git pull origin testing`, `git merge main`).
+- **Step 2 — Merge Candidate Branch into `testing`**: Merge the candidate fix/dev branch into `testing` (`git merge <feature-or-fix-branch>`).
+- **Step 3 — Run Quality Gauntlet**: Execute all quality gates:
+  1. `npm test` (100% green across all unit and integration test suites).
+  2. `npm run doctor` (100 / 100 Great maintainability score).
+  3. `npm run lint` (0 errors, 0 warnings).
+  4. `npm run build` (Clean Turbopack production build).
+- **Step 4A — Tactical Fork on Failure (RED)**:
+  - DO NOT use `git revert` (avoids inverted delta history pollution).
+  - Use `git reset --hard origin/testing` to return `testing` to its clean baseline.
+  - Switch back to the feature/fix branch to iterate, debug, and resolve the defect.
+- **Step 4B — Tactical Fork on Success (GREEN)**:
+  - Reset `testing` back to clean state (`git reset --hard origin/testing`).
+  - Switch to `main` (`git checkout main`).
+  - Merge the verified candidate branch (`git merge <feature-or-fix-branch>`).
+  - Push `main` to remote origin upon user command (`git push origin main`).
+  - Fast-forward `testing` to align with `main` and push (`git checkout testing`, `git merge main`, `git push origin testing`).
+
