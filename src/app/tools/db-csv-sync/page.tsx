@@ -1,16 +1,17 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Database, FileSpreadsheet, GitMerge } from "lucide-react";
+import { Database, FileSpreadsheet, GitMerge, Sliders } from "lucide-react";
 import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { CsvUploader } from "@/components/tools/db-csv-sync/CsvUploader";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
-import { Step4ResultsView } from "@/components/tools/db-sync-common/Step4ResultsView";
+import { SyncParametersStep } from "@/components/tools/db-sync-common/SyncParametersStep";
+import { ComparisonResultsView } from "@/components/tools/db-sync-common/ComparisonResultsView";
 import { DB_VS_CSV_DESCRIPTOR } from "@/constants/comparisonDescriptors";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
-import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
+import type { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/types/comparison";
 import type { WizardStepDef } from "@/types/ui";
 import { ParsedFileDataset } from "@/types/parsers";
 
@@ -27,6 +28,7 @@ export default function DbCsvSyncToolPage() {
 
   const dbFormRef = useRef<DbConnectionFormRef | null>(null);
   const suidMappingRef = useRef<SuidMappingStepRef | null>(null);
+  const syncParametersRef = useRef<SyncParametersStepRef | null>(null);
 
   const handleDbSuccess = (
     config: DbConfig,
@@ -49,8 +51,16 @@ export default function DbCsvSyncToolPage() {
   };
 
   const handleMappingSuccess = (config: ColumnMappingConfig) => {
-    setMappingConfig(config);
+    setMappingConfig((previous) => ({
+      ...previous,
+      ...config,
+    }));
     setCurrentStep(4);
+  };
+
+  const handleSyncParametersSuccess = (finalConfig: ColumnMappingConfig) => {
+    setMappingConfig(finalConfig);
+    setCurrentStep(5);
   };
 
   const handleStepClick = (stepId: number) => {
@@ -79,10 +89,10 @@ export default function DbCsvSyncToolPage() {
     },
     {
       id: 2,
-      title: "Archivo CSV",
-      subtitle: "Cargar Archivo (.csv)",
+      title: "Capa Tabular",
+      subtitle: "Cargar Archivo CSV",
       cardTitle: "Cargar Archivo de Datos CSV",
-      cardSubtitle: "Suba un archivo .csv delimitado por comas. Los datos se inspeccionan en la memoria local.",
+      cardSubtitle: "Suba un archivo CSV con coordenadas espaciales o información tabular para comparar.",
       icon: FileSpreadsheet,
       content: (
         <CsvUploader
@@ -100,7 +110,7 @@ export default function DbCsvSyncToolPage() {
       title: "Mapeo SUID",
       subtitle: "Identificador y Atributos",
       cardTitle: "Configuración de SUID y Campos a Comparar",
-      cardSubtitle: "Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure valores por defecto.",
+      cardSubtitle: "Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure la comparación de geometrías.",
       icon: GitMerge,
       content: csvDataset ? (
         <SuidMappingStep
@@ -115,12 +125,34 @@ export default function DbCsvSyncToolPage() {
         />
       ) : null,
       canProceed: isMappingReady,
-      nextLabel: "Iniciar Análisis y Comparación",
+      nextLabel: "Continuar a Parámetros de Sincronización",
       onNext: () => suidMappingRef.current?.proceed(),
       onBack: () => setCurrentStep(2),
     },
     {
       id: 4,
+      title: "Parámetros",
+      subtitle: "Tolerancia y Parches SQL",
+      cardTitle: "Parámetros Avanzados de Sincronización",
+      cardSubtitle: "Configure la tolerancia a fallas de codificación, optimización de sentencias UPDATE y valores por defecto para INSERT.",
+      icon: Sliders,
+      content: (
+        <SyncParametersStep
+          ref={syncParametersRef}
+          dbColumns={dbColumns}
+          columnDetails={columnDetails}
+          initialConfig={mappingConfig}
+          onSuccess={handleSyncParametersSuccess}
+        />
+      ),
+      canProceed: true,
+      nextLabel: "Iniciar Análisis y Comparación",
+      onNext: () => syncParametersRef.current?.proceed(),
+      onBack: () => setCurrentStep(3),
+      backLabel: "Volver al Paso 3: Mapeo SUID",
+    },
+    {
+      id: 5,
       title: "Resultados",
       subtitle: "Discrepancias y Script",
       cardTitle: "Resultados de Análisis y Discrepancias",
@@ -129,29 +161,24 @@ export default function DbCsvSyncToolPage() {
         : "Visualice las diferencias detectadas y genere scripts SQL de sincronización.",
       icon: Database,
       content: dbConfig && csvDataset && mappingConfig ? (
-        <Step4ResultsView
+        <ComparisonResultsView
           dbConfig={dbConfig}
           fileDataset={csvDataset}
           mappingConfig={mappingConfig}
           descriptor={DB_VS_CSV_DESCRIPTOR}
         />
       ) : null,
-      onBack: () => setCurrentStep(3),
-      backLabel: "Volver al Paso 3: Mapeo SUID",
+      onBack: () => setCurrentStep(4),
+      backLabel: "Volver al Paso 4: Parámetros de Sincronización",
     },
   ];
 
   return (
     <ToolWorkspaceLayout
-      title="Sincronización de Datos DB vs. CSV"
-      description="Correlacione registros de bases de datos PostgreSQL contra archivos alfanuméricos CSV (.csv), analice discrepancias de atributos y genere parches SQL de actualización e inserción para PostGIS."
+      title="Sincronización de Datos DB vs. Archivo CSV"
+      description="Compare registros de PostgreSQL contra archivos CSV con geometrías o coordenadas espaciales, detecte discrepancias y genere parches SQL de sincronización para PostGIS."
     >
-      <WizardOrchestrator
-        steps={steps}
-        currentStep={currentStep}
-        onStepClick={handleStepClick}
-      />
+      <WizardOrchestrator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
     </ToolWorkspaceLayout>
   );
 }
-

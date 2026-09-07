@@ -1,16 +1,17 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Database, GitMerge } from "lucide-react";
+import { Database, GitMerge, Sliders } from "lucide-react";
 import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
-import { Step4ResultsView } from "@/components/tools/db-sync-common/Step4ResultsView";
+import { SyncParametersStep } from "@/components/tools/db-sync-common/SyncParametersStep";
+import { ComparisonResultsView } from "@/components/tools/db-sync-common/ComparisonResultsView";
 import { DB_VS_DB_DESCRIPTOR } from "@/constants/comparisonDescriptors";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
 import { FileSourceKind, type ParsedFileDataset } from "@/types/parsers";
-import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
+import type { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/types/comparison";
 import type { WizardStepDef } from "@/types/ui";
 
 export default function DbDbSyncToolPage() {
@@ -30,6 +31,7 @@ export default function DbDbSyncToolPage() {
   const db1FormRef = useRef<DbConnectionFormRef | null>(null);
   const db2FormRef = useRef<DbConnectionFormRef | null>(null);
   const suidMappingRef = useRef<SuidMappingStepRef | null>(null);
+  const syncParametersRef = useRef<SyncParametersStepRef | null>(null);
 
   const handleDb1Success = (
     config: DbConfig,
@@ -53,8 +55,16 @@ export default function DbDbSyncToolPage() {
   };
 
   const handleMappingSuccess = (config: ColumnMappingConfig) => {
-    setMappingConfig(config);
+    setMappingConfig((previous) => ({
+      ...previous,
+      ...config,
+    }));
     setCurrentStep(4);
+  };
+
+  const handleSyncParametersSuccess = (finalConfig: ColumnMappingConfig) => {
+    setMappingConfig(finalConfig);
+    setCurrentStep(5);
   };
 
   const handleStepClick = (stepId: number) => {
@@ -63,7 +73,7 @@ export default function DbDbSyncToolPage() {
     }
   };
 
-  // Build a ParsedFileDataset wrapper for DB 1 to pass seamlessly into Step4ResultsView & worker
+  // Build a ParsedFileDataset wrapper for DB 1 to pass seamlessly into ComparisonResultsView & worker
   const sourceDataset: ParsedFileDataset | null = dbConfig1
     ? {
         kind: FileSourceKind.CSV,
@@ -79,9 +89,9 @@ export default function DbDbSyncToolPage() {
     {
       id: 1,
       title: "DB Origen",
-      subtitle: "Tabla Fuente (DB 1)",
+      subtitle: "Tabla Primaria (DB 1)",
       cardTitle: "Configurar Base de Datos Origen (DB 1)",
-      cardSubtitle: "Ingrese las credenciales para conectar a la tabla de base de datos fuente.",
+      cardSubtitle: "Ingrese las credenciales para conectar a la tabla de base de datos origen / referencia.",
       icon: Database,
       content: (
         <DbConnectionForm
@@ -133,12 +143,34 @@ export default function DbDbSyncToolPage() {
         />
       ) : null,
       canProceed: isMappingReady,
-      nextLabel: "Iniciar Análisis y Comparación",
+      nextLabel: "Continuar a Parámetros de Sincronización",
       onNext: () => suidMappingRef.current?.proceed(),
       onBack: () => setCurrentStep(2),
     },
     {
       id: 4,
+      title: "Parámetros",
+      subtitle: "Tolerancia y Parches SQL",
+      cardTitle: "Parámetros Avanzados de Sincronización",
+      cardSubtitle: "Configure la tolerancia a fallas de codificación, optimización de sentencias UPDATE y valores por defecto para INSERT.",
+      icon: Sliders,
+      content: (
+        <SyncParametersStep
+          ref={syncParametersRef}
+          dbColumns={dbColumns2}
+          columnDetails={columnDetails2}
+          initialConfig={mappingConfig}
+          onSuccess={handleSyncParametersSuccess}
+        />
+      ),
+      canProceed: true,
+      nextLabel: "Iniciar Análisis y Comparación",
+      onNext: () => syncParametersRef.current?.proceed(),
+      onBack: () => setCurrentStep(3),
+      backLabel: "Volver al Paso 3: Mapeo SUID",
+    },
+    {
+      id: 5,
       title: "Resultados",
       subtitle: "Discrepancias y Script",
       cardTitle: "Resultados de Análisis y Discrepancias",
@@ -147,7 +179,7 @@ export default function DbDbSyncToolPage() {
         : "Visualice las diferencias detectadas y genere scripts SQL de sincronización.",
       icon: Database,
       content: dbConfig2 && sourceDataset && mappingConfig ? (
-        <Step4ResultsView
+        <ComparisonResultsView
           dbConfig={dbConfig2}
           fileDataset={sourceDataset}
           mappingConfig={mappingConfig}
@@ -155,8 +187,8 @@ export default function DbDbSyncToolPage() {
           descriptor={DB_VS_DB_DESCRIPTOR}
         />
       ) : null,
-      onBack: () => setCurrentStep(3),
-      backLabel: "Volver al Paso 3: Mapeo SUID",
+      onBack: () => setCurrentStep(4),
+      backLabel: "Volver al Paso 4: Parámetros de Sincronización",
     },
   ];
 
@@ -173,4 +205,3 @@ export default function DbDbSyncToolPage() {
     </ToolWorkspaceLayout>
   );
 }
-
