@@ -55,6 +55,7 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_018_CIRCULAR_DEPENDENCY_AND_LAYER_SEPARATION_AUDIT.md`](docs/issues/ISSUE_018_CIRCULAR_DEPENDENCY_AND_LAYER_SEPARATION_AUDIT.md) — Elimination of circular dependency between domain types and worker services, layer separation audit, and permanent dependency graph integration.
 - [`ISSUE_019_EXPORT_ENCODING_GLITCH_TOLERANCE.md`](docs/issues/ISSUE_019_EXPORT_ENCODING_GLITCH_TOLERANCE.md) — Character encoding glitch and mojibake tolerance for GIS/DBF exports (letter 'Ñ' corruptions), preserving strict case and punctuation sensitivity.
 - [`ISSUE_020_WIZARD_STEP4_SYNC_PARAMETERS_DECOUPLING.md`](docs/issues/ISSUE_020_WIZARD_STEP4_SYNC_PARAMETERS_DECOUPLING.md) — Decoupling SUID mapping from SQL sync parameters into a dedicated 5-step wizard and renaming Step4ResultsView to ComparisonResultsView.
+- [`ISSUE_021_AUTOMATED_TESTING_SUITE_AND_INFRASTRUCTURE.md`](docs/issues/ISSUE_021_AUTOMATED_TESTING_SUITE_AND_INFRASTRUCTURE.md) — Automated testing infrastructure (Vitest + Playwright), non-UI services, spatial math and parsers test suite, and strict specification compliance.
 
 
 
