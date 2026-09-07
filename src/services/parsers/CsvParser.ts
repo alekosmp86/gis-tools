@@ -165,6 +165,12 @@ export class CsvParser implements ISpatialFileParser {
 
       const rowKey = `row-${lineIndex - 1}`;
       recordsMap.set(rowKey, record);
+      if (record.id !== undefined && record.id !== "") {
+        recordsMap.set(String(record.id), record);
+      }
+      if (record.suid !== undefined && record.suid !== "") {
+        recordsMap.set(String(record.suid), record);
+      }
 
       const parsedGeom = this.extractGeometry(record, spatialCols);
       if (parsedGeom) {

@@ -113,6 +113,14 @@ export class PolygonRingNormalizer {
     return allRings;
   }
 
+  public areRingsTopologicallyMatching(
+    ringA: Array<[number, number]>,
+    ringB: Array<[number, number]>,
+    epsilonDegrees: number = 0.0003
+  ): RingMatchResult {
+    return this.areRingsCyclicallyMatching(ringA, ringB, epsilonDegrees);
+  }
+
   public areRingsCyclicallyMatching(
     ringA: Array<[number, number]>,
     ringB: Array<[number, number]>,
