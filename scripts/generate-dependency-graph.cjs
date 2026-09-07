@@ -531,10 +531,14 @@ const html = `<!DOCTYPE html>
           <div class="external-badges" id="list-external"></div>
         </div>
       </div>
-     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    </aside>
+    <div id="graph-tooltip"></div>
+  </div>
+  <script src="/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      const graphData = \${JSON.stringify(analysis)};
+      const graphData = ${JSON.stringify(analysis)};
       const TYPE_CONFIG = {
         route: { label: 'Rutas (/app)', color: '#06b6d4', icon: '🌐' },
         component: { label: 'Componentes', color: '#10b981', icon: '🧩' },
@@ -565,9 +569,8 @@ const html = `<!DOCTYPE html>
       let width = window.innerWidth;
       let height = window.innerHeight - 60;
       const zoom = d3.zoom().scaleExtent([0.1, 4]).on('zoom', e => container.attr('transform', e.transform));
-      svg.call(zoom);t([0.1, 4]).on('zoom', e => container.attr('transform', e.transform));
-    svg.call(zoom);
-    const simulation = d3.forceSimulation()
+      svg.call(zoom);
+      const simulation = d3.forceSimulation()
       .force('link', d3.forceLink().id(d => d.id).distance(70))
       .force('charge', d3.forceManyBody().strength(-240))
       .force('center', d3.forceCenter(width / 2, height / 2))
