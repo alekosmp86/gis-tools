@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GIS Tools — Grafo Interactivo de Dependencias Next.js</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #07090e;
+      --bg-surface: rgba(15, 20, 32, 0.85);
+      --bg-surface-elevated: rgba(22, 30, 49, 0.95);
+      --bg-card: rgba(26, 36, 58, 0.6);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(56, 189, 248, 0.3);
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-faint: #64748b;
+      --color-route: #06b6d4;
+      --color-component: #10b981;
+      --color-hook: #f59e0b;
+      --color-service: #8b5cf6;
+      --color-util: #3b82f6;
+      --color-type: #94a3b8;
+      --color-data: #f43f5e;
+      --color-worker: #f97316;
+      --color-provider: #ec4899;
+      --color-cycle: #ef4444;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+    header.app-header {
+      height: 60px;
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 50;
+    }
+    .brand-section { display: flex; align-items: center; gap: 12px; }
+    .brand-logo {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: linear-gradient(135deg, #06b6d4, #3b82f6);
+      display: flex; align-items: center; justify-content: center;
+      color: white; box-shadow: 0 4px 14px rgba(6, 182, 212, 0.4);
+    }
+    .brand-title { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
+    .brand-subtitle { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+    .header-stats { display: flex; align-items: center; gap: 10px; }
+    .stat-chip {
+      background: var(--bg-card); border: 1px solid var(--border-subtle);
+      border-radius: 8px; padding: 5px 12px; font-size: 12px;
+      display: flex; align-items: center; gap: 6px; color: var(--text-muted);
+    }
+    .stat-chip b { color: var(--text-main); font-weight: 700; font-family: var(--font-mono); }
+    .stat-chip.warning { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.3); color: #f87171; }
+    .stat-chip.warning b { color: #fca5a5; }
+    .stat-chip.success { background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.3); color: #34d399; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    button.btn {
+      background: var(--bg-card); border: 1px solid var(--border-subtle);
+      color: var(--text-main); padding: 7px 14px; border-radius: 8px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: all 0.15s ease; font-family: var(--font-sans);
+    }
+    button.btn:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
+    button.btn-primary {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      border-color: transparent; box-shadow: 0 2px 10px rgba(37, 99, 235, 0.3);
+    }
+    .workspace { flex: 1; position: relative; overflow: hidden; }
+    svg#graph-canvas {
+      width: 100%; height: 100%; display: block;
+      background: radial-gradient(circle at center, #0f172a 0%, #07090e 100%);
+      cursor: grab;
+    }
+    svg#graph-canvas:active { cursor: grabbing; }
+    .sidebar-left {
+      position: absolute; top: 16px; left: 16px; bottom: 16px; width: 320px;
+      background: var(--bg-surface); backdrop-filter: blur(20px);
+      border: 1px solid var(--border-subtle); border-radius: 14px;
+      display: flex; flex-direction: column; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+      z-index: 30; transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .sidebar-left.collapsed { transform: translateX(-340px); }
+    .sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; }
+    .sidebar-title { font-size: 13px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px; }
+    .sidebar-content { padding: 14px 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 16px; }
+    .search-box { position: relative; }
+    .search-input {
+      width: 100%; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-subtle);
+      border-radius: 8px; padding: 8px 12px 8px 34px; font-size: 12px; color: #fff;
+      font-family: var(--font-sans); outline: none; transition: border-color 0.15s;
+    }
+    .search-input:focus { border-color: var(--color-route); box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2); }
+    .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-faint); pointer-events: none; }
+    .section-title { font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .presets-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+    .preset-btn {
+      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle);
+      border-radius: 8px; padding: 8px 10px; font-size: 11.5px; text-align: left;
+      color: var(--text-muted); cursor: pointer; display: flex; align-items: center; gap: 8px;
+      font-weight: 500; transition: all 0.15s;
+    }
+    .preset-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.15); }
+    .preset-btn.active { background: rgba(6, 182, 212, 0.12); border-color: var(--color-route); color: #67e8f9; font-weight: 600; }
+    .filter-list { display: flex; flex-direction: column; gap: 6px; }
+    .filter-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle); border-radius: 8px; cursor: pointer; }
+    .filter-left { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-main); }
+    .color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .badge-count { font-size: 10.5px; font-family: var(--font-mono); background: rgba(0, 0, 0, 0.35); padding: 2px 6px; border-radius: 6px; color: var(--text-muted); }
+    .floating-toolbar {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--bg-surface); backdrop-filter: blur(20px);
+      border: 1px solid var(--border-subtle); border-radius: 12px;
+      padding: 6px 10px; display: flex; align-items: center; gap: 6px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 25;
+    }
+    .tool-btn { width: 32px; height: 32px; border-radius: 8px; background: transparent; border: 1px solid transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+    .tool-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; border-color: var(--border-subtle); }
+    .tool-btn.active { background: rgba(6, 182, 212, 0.15); color: var(--color-route); border-color: rgba(6, 182, 212, 0.3); }
+    .sidebar-right {
+      position: absolute; top: 16px; right: 16px; bottom: 16px; width: 360px;
+      background: var(--bg-surface); backdrop-filter: blur(20px);
+      border: 1px solid var(--border-subtle); border-radius: 14px;
+      display: flex; flex-direction: column; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+      z-index: 30; transform: translateX(390px); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .sidebar-right.open { transform: translateX(0); }
+    .inspector-header { padding: 16px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .inspector-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; }
+    .inspector-filename { font-size: 15px; font-weight: 700; color: #fff; word-break: break-all; }
+    .inspector-path { font-size: 11px; color: var(--text-faint); font-family: var(--font-mono); margin-top: 4px; word-break: break-all; }
+    .close-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 6px; }
+    .inspector-body { padding: 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 16px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .meta-card { background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 8px 10px; }
+    .meta-label { font-size: 10px; text-transform: uppercase; color: var(--text-faint); font-weight: 600; }
+    .meta-value { font-size: 14px; font-weight: 700; color: #fff; font-family: var(--font-mono); margin-top: 2px; }
+    .dep-section-title { font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .dep-chips-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+    .dep-chip-item { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 6px 8px; font-size: 11.5px; color: var(--text-main); display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+    .dep-chip-item:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.2); }
+    .dep-chip-item span.dep-name { font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+    .dep-type-pill { font-size: 9.5px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+    .external-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+    .ext-badge { background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-family: var(--font-mono); }
+    .node circle { stroke-width: 2px; cursor: pointer; }
+    .node:hover circle { stroke-width: 3.5px; filter: drop-shadow(0 0 10px currentColor); }
+    .node text { font-family: var(--font-sans); font-size: 10px; fill: #e2e8f0; pointer-events: none; text-anchor: middle; font-weight: 500; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+    .node.selected circle { stroke: #ffffff !important; stroke-width: 4px !important; filter: drop-shadow(0 0 16px #38bdf8) !important; }
+    .node.highlight-neighbor circle { stroke-width: 3px !important; stroke: #38bdf8 !important; }
+    .node.dimmed { opacity: 0.12; }
+    .link { fill: none; stroke: rgba(148, 163, 184, 0.22); stroke-width: 1.2px; }
+    .link.highlight-incoming { stroke: #10b981 !important; stroke-width: 2.5px !important; opacity: 1 !important; }
+    .link.highlight-outgoing { stroke: #06b6d4 !important; stroke-width: 2.5px !important; opacity: 1 !important; }
+    .link.is-cycle { stroke: #ef4444 !important; stroke-width: 2.5px !important; stroke-dasharray: 4, 3; }
+    .link.dimmed { opacity: 0.04; }
+    #graph-tooltip { position: absolute; display: none; background: var(--bg-surface-elevated); border: 1px solid var(--border-accent); border-radius: 8px; padding: 8px 12px; font-size: 11.5px; color: #fff; pointer-events: none; z-index: 60; }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">GIS Tools — Grafo Interactivo de Dependencias Next.js</div>
+        <div class="brand-subtitle">Mapeo de Rutas (/app), Componentes, Hooks y Capas Modulares</div>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div class="stat-chip">Archivos: <b>145</b></div>
+      <div class="stat-chip">Conexiones: <b>381</b></div>
+      <div class="stat-chip">Visibles: <b id="stat-visible-nodes">145</b></div>
+      <div class="stat-chip success" title="0 ciclos detectados">
+        Ciclos: <b>0</b>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="btn-toggle-sidebar">Filtros</button>
+      <button class="btn btn-primary" id="btn-focus-app-hooks">🎯 Foco App ↔ Hooks</button>
+    </div>
+  </header>
+  <div class="workspace">
+    <svg id="graph-canvas">
+      <defs>
+        <marker id="arrow" viewBox="0 -5 10 10" refX="18" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,-5L10,0L0,5" fill="rgba(148, 163, 184, 0.4)"></path>
+        </marker>
+        <marker id="arrow-incoming" viewBox="0 -5 10 10" refX="18" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,-5L10,0L0,5" fill="#10b981"></path>
+        </marker>
+        <marker id="arrow-outgoing" viewBox="0 -5 10 10" refX="18" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,-5L10,0L0,5" fill="#06b6d4"></path>
+        </marker>
+      </defs>
+      <g id="canvas-container">
+        <g id="links-group"></g>
+        <g id="nodes-group"></g>
+      </g>
+    </svg>
+    <aside class="sidebar-left" id="sidebar-left">
+      <div class="sidebar-header">
+        <div class="sidebar-title">Filtros y Navegación</div>
+        <button class="close-btn" id="btn-close-sidebar-left">✕</button>
+      </div>
+      <div class="sidebar-content">
+        <div class="search-box">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" class="search-input" id="search-input" placeholder="Buscar archivo o componente...">
+        </div>
+        <div>
+          <div class="section-title">Vistas Rápidas (Presets)</div>
+          <div class="presets-grid">
+            <button class="preset-btn active" data-preset="all">🗺️ Grafo Completo (145 archivos)</button>
+            <button class="preset-btn" data-preset="app-component-hook">🎯 App ↔ Componentes ↔ Hooks</button>
+            <button class="preset-btn" data-preset="routes-only">🌐 Rutas y Páginas Clave</button>
+            <button class="preset-btn" data-preset="top-hubs">⭐ Nodos Más Conectados (Hubs)</button>
+          </div>
+        </div>
+        <div>
+          <div class="section-title">
+            <span>Filtro por Tipo</span>
+            <span style="font-size: 10px; cursor: pointer; color: var(--color-route)" id="btn-toggle-all-filters">Alternar</span>
+          </div>
+          <div class="filter-list" id="filter-list"></div>
+        </div>
+      </div>
+    </aside>
+    <div class="floating-toolbar">
+      <button class="tool-btn" id="btn-zoom-in" title="Acercar (+)">+</button>
+      <button class="tool-btn" id="btn-zoom-out" title="Alejar (-)">-</button>
+      <button class="tool-btn" id="btn-fit-view" title="Centrar">⊙</button>
+      <button class="tool-btn active" id="btn-toggle-labels" title="Nombres">Aa</button>
+      <button class="tool-btn active" id="btn-toggle-simulation" title="Pausar Física">⏸</button>
+    </div>
+    <aside class="sidebar-right" id="sidebar-right">
+      <div class="inspector-header">
+        <div class="inspector-title-area">
+          <span class="inspector-badge" id="inspector-badge">Tipo</span>
+          <div class="inspector-filename" id="inspector-filename">Archivo</div>
+          <div class="inspector-path" id="inspector-path">Ruta</div>
+        </div>
+        <button class="close-btn" id="btn-close-inspector">✕</button>
+      </div>
+      <div class="inspector-body">
+        <div class="meta-grid">
+          <div class="meta-card"><div class="meta-label">Líneas (LOC)</div><div class="meta-value" id="inspector-loc">-</div></div>
+          <div class="meta-card"><div class="meta-label">Tamaño</div><div class="meta-value" id="inspector-size">-</div></div>
+          <div class="meta-card"><div class="meta-label">Importado Por</div><div class="meta-value" id="inspector-in-degree">-</div></div>
+          <div class="meta-card"><div class="meta-label">Importa</div><div class="meta-value" id="inspector-out-degree">-</div></div>
+        </div>
+        <div>
+          <div class="dep-section-title">📥 Importado Por (<span id="count-imported-by">0</span>)</div>
+          <div class="dep-chips-list" id="list-imported-by"></div>
+        </div>
+        <div>
+          <div class="dep-section-title">📤 Importa (<span id="count-imports">0</span>)</div>
+          <div class="dep-chips-list" id="list-imports"></div>
+        </div>
+        <div>
+          <div class="dep-section-title">📦 Paquetes Externos (<span id="count-external">0</span>)</div>
+          <div class="external-badges" id="list-external"></div>
+        </div>
+      </div>
+     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const graphData = ${JSON.stringify(analysis)};
+      const TYPE_CONFIG = {
+        route: { label: 'Rutas (/app)', color: '#06b6d4', icon: '🌐' },
+        component: { label: 'Componentes', color: '#10b981', icon: '🧩' },
+        hook: { label: 'Hooks', color: '#f59e0b', icon: '🪝' },
+        service: { label: 'Servicios', color: '#8b5cf6', icon: '⚙️' },
+        util: { label: 'Utilidades', color: '#3b82f6', icon: '🛠️' },
+        type: { label: 'Tipos', color: '#94a3b8', icon: '🏷️' },
+        data: { label: 'Datos / Const.', color: '#f43f5e', icon: '📦' },
+        worker: { label: 'Web Workers', color: '#f97316', icon: '⚡' },
+        provider: { label: 'Providers', color: '#ec4899', icon: '🛡️' },
+        other: { label: 'Otros', color: '#64748b', icon: '📄' }
+      };
+      const state = {
+        activeTypes: new Set(Object.keys(TYPE_CONFIG)),
+        searchQuery: '',
+        selectedNode: null,
+        activePreset: 'all',
+        showLabels: true,
+        simulationRunning: true
+      };
+      const svg = d3.select('#graph-canvas');
+      const container = d3.select('#canvas-container');
+      const linksGroup = d3.select('#links-group');
+      const nodesGroup = d3.select('#nodes-group');
+      const tooltip = d3.select('#graph-tooltip');
+      const inspector = document.getElementById('sidebar-right');
+      const sidebarLeft = document.getElementById('sidebar-left');
+      let width = window.innerWidth;
+      let height = window.innerHeight - 60;
+      const zoom = d3.zoom().scaleExtent([0.1, 4]).on('zoom', e => container.attr('transform', e.transform));
+      svg.call(zoom);t([0.1, 4]).on('zoom', e => container.attr('transform', e.transform));
+    svg.call(zoom);
+    const simulation = d3.forceSimulation()
+      .force('link', d3.forceLink().id(d => d.id).distance(70))
+      .force('charge', d3.forceManyBody().strength(-240))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 6));
+    function getNodeRadius(d) {
+      return Math.max(7, Math.min(24, 7 + Math.sqrt(d.importedBy.length) * 3));
+    }
+    function initFilters() {
+      const list = document.getElementById('filter-list');
+      list.innerHTML = '';
+      Object.entries(TYPE_CONFIG).forEach(([typeKey, cfg]) => {
+        const count = graphData.summary.breakdownByType[typeKey] || 0;
+        if (!count) return;
+        const item = document.createElement('div');
+        item.className = 'filter-item';
+        item.innerHTML = '<div class="filter-left"><input type="checkbox" id="filter-' + typeKey + '" checked><span class="color-dot" style="background: ' + cfg.color + '"></span><label for="filter-' + typeKey + '">' + cfg.icon + ' ' + cfg.label + '</label></div><span class="badge-count">' + count + '</span>';
+        item.querySelector('input').addEventListener('change', e => {
+          if (e.target.checked) state.activeTypes.add(typeKey);
+          else state.activeTypes.delete(typeKey);
+          updateGraph();
+        });
+        list.appendChild(item);
+      });
+    }
+    let linkElements, nodeElements;
+    function getFilteredData() {
+      const activeNodes = graphData.nodes.filter(n => {
+        if (!state.activeTypes.has(n.type)) return false;
+        if (state.searchQuery) return n.label.toLowerCase().includes(state.searchQuery.toLowerCase());
+        return true;
+      });
+      const activeIds = new Set(activeNodes.map(n => n.id));
+      const activeLinks = graphData.edges.filter(e => {
+        const s = typeof e.source === 'object' ? e.source.id : e.source;
+        const t = typeof e.target === 'object' ? e.target.id : e.target;
+        return activeIds.has(s) && activeIds.has(t);
+      });
+      return { nodes: activeNodes, links: activeLinks };
+    }
+    function updateGraph() {
+      const { nodes, links } = getFilteredData();
+      document.getElementById('stat-visible-nodes').innerText = nodes.length;
+      linkElements = linksGroup.selectAll('.link').data(links, d => d.id);
+      linkElements.exit().remove();
+      const lEnter = linkElements.enter().append('line').attr('class', 'link').attr('marker-end', 'url(#arrow)');
+      linkElements = lEnter.merge(linkElements);
+      nodeElements = nodesGroup.selectAll('.node').data(nodes, d => d.id);
+      nodeElements.exit().remove();
+      const nEnter = nodeElements.enter().append('g').attr('class', 'node')
+        .call(d3.drag().on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
+                       .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+                       .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }))
+        .on('click', (e, d) => { e.stopPropagation(); selectNode(d); })
+        .on('mouseenter', (e, d) => {
+          tooltip.style('display', 'block').style('left', (e.pageX + 15) + 'px').style('top', (e.pageY + 10) + 'px')
+            .html('<b style="color:#fff;">' + d.label + '</b><br><span style="color:' + TYPE_CONFIG[d.type].color + ';">' + TYPE_CONFIG[d.type].label + '</span><br><span style="font-size:10px;color:#94a3b8;">' + d.path + '</span>');
+          highlight(d);
+        })
+        .on('mouseleave', () => { tooltip.style('display', 'none'); clearHighlight(); });
+      nEnter.append('circle').attr('r', d => getNodeRadius(d)).attr('fill', d => TYPE_CONFIG[d.type].color).attr('stroke', '#0f172a');
+      nEnter.append('text').attr('dy', d => getNodeRadius(d) + 12).text(d => d.label).style('display', state.showLabels ? 'block' : 'none');
+      nodeElements = nEnter.merge(nodeElements);
+      simulation.nodes(nodes);
+      simulation.force('link').links(links);
+      simulation.alpha(0.3).restart();
+    }
+    simulation.on('tick', () => {
+      if (!linkElements || !nodeElements) return;
+      linkElements.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      nodeElements.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
+    });
+    function selectNode(node) {
+      state.selectedNode = node;
+      nodeElements.classed('selected', d => d.id === node.id);
+      highlight(node);
+      const cfg = TYPE_CONFIG[node.type];
+      const badge = document.getElementById('inspector-badge');
+      badge.innerText = node.categoryLabel || cfg.label;
+      badge.style.background = cfg.color + '22';
+      badge.style.color = cfg.color;
+      document.getElementById('inspector-filename').innerText = node.label;
+      document.getElementById('inspector-path').innerText = node.path;
+      document.getElementById('inspector-loc').innerText = node.loc;
+      document.getElementById('inspector-size').innerText = (node.sizeBytes / 1024).toFixed(1) + ' KB';
+      document.getElementById('inspector-in-degree').innerText = node.importedBy.length;
+      document.getElementById('inspector-out-degree').innerText = node.imports.length;
+      document.getElementById('count-imported-by').innerText = node.importedBy.length;
+      const lIn = document.getElementById('list-imported-by');
+      lIn.innerHTML = node.importedBy.map(id => '<div class="dep-chip-item"><span class="dep-name">' + pathBasename(id) + '</span></div>').join('') || '<div style="color:#64748b;font-size:11px;">Ninguno</div>';
+      document.getElementById('count-imports').innerText = node.imports.length;
+      const lOut = document.getElementById('list-imports');
+      lOut.innerHTML = node.imports.map(id => '<div class="dep-chip-item"><span class="dep-name">' + pathBasename(id) + '</span></div>').join('') || '<div style="color:#64748b;font-size:11px;">Ninguno</div>';
+      document.getElementById('count-external').innerText = node.externalImports.length;
+      const lExt = document.getElementById('list-external');
+      lExt.innerHTML = node.externalImports.map(x => '<span class="ext-badge">' + x + '</span>').join('') || '<div style="color:#64748b;font-size:11px;">Ninguno</div>';
+      inspector.classList.add('open');
+    }
+    function pathBasename(p) { return p.split('/').pop(); }
+    function highlight(node) {
+      const neighbors = new Set([...node.imports, ...node.importedBy, node.id]);
+      nodeElements.classed('dimmed', d => !neighbors.has(d.id));
+      linkElements.classed('dimmed', d => d.source.id !== node.id && d.target.id !== node.id);
+      linkElements.classed('highlight-outgoing', d => d.source.id === node.id);
+      linkElements.classed('highlight-incoming', d => d.target.id === node.id);
+    }
+    function clearHighlight() {
+      if (state.selectedNode) return;
+      nodeElements.classed('dimmed', false);
+      linkElements.classed('dimmed', false).classed('highlight-outgoing', false).classed('highlight-incoming', false);
+    }
+    document.getElementById('search-input').addEventListener('input', e => {
+      state.searchQuery = e.target.value.trim();
+      updateGraph();
+    });
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const p = btn.dataset.preset;
+        if (p === 'all') state.activeTypes = new Set(Object.keys(TYPE_CONFIG));
+        else if (p === 'app-component-hook') state.activeTypes = new Set(['route', 'component', 'hook']);
+        else if (p === 'routes-only') state.activeTypes = new Set(['route']);
+        else if (p === 'top-hubs') state.activeTypes = new Set(Object.keys(TYPE_CONFIG));
+        Object.keys(TYPE_CONFIG).forEach(k => {
+          const cb = document.getElementById('filter-' + k);
+          if (cb) cb.checked = state.activeTypes.has(k);
+        });
+        updateGraph();
+      });
+    });
+    document.getElementById('btn-focus-app-hooks').addEventListener('click', () => {
+      document.querySelector('[data-preset="app-component-hook"]').click();
+    });
+    document.getElementById('btn-toggle-sidebar').addEventListener('click', () => sidebarLeft.classList.toggle('collapsed'));
+    document.getElementById('btn-close-sidebar-left').addEventListener('click', () => sidebarLeft.classList.add('collapsed'));
+    document.getElementById('btn-close-inspector').addEventListener('click', () => {
+      inspector.classList.remove('open');
+      state.selectedNode = null;
+      nodeElements.classed('selected', false);
+      clearHighlight();
+    });
+    document.getElementById('btn-zoom-in').addEventListener('click', () => svg.transition().duration(300).call(zoom.scaleBy, 1.3));
+    document.getElementById('btn-zoom-out').addEventListener('click', () => svg.transition().duration(300).call(zoom.scaleBy, 0.7));
+    document.getElementById('btn-fit-view').addEventListener('click', () => {
+      svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.85));
+    });
+    document.getElementById('btn-toggle-labels').addEventListener('click', function() {
+      state.showLabels = !state.showLabels;
+      this.classList.toggle('active', state.showLabels);
+      nodeElements.select('text').style('display', state.showLabels ? 'block' : 'none');
+    });
+    document.getElementById('btn-toggle-simulation').addEventListener('click', function() {
+      state.simulationRunning = !state.simulationRunning;
+      this.classList.toggle('active', state.simulationRunning);
+      if (state.simulationRunning) simulation.restart(); else simulation.stop();
+    });
+    initFilters();
+    updateGraph();
+    setTimeout(() => {
+      svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.85));
+    }, 200);
+    });
+  </script>
+</body>
+</html>
