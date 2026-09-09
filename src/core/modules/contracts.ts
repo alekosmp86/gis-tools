@@ -21,16 +21,12 @@ export const ModuleHttpMethod = {
 
 export type ModuleHttpMethod = (typeof ModuleHttpMethod)[keyof typeof ModuleHttpMethod];
 
-/** Execution environment for a generated route, mirroring the Next segment option. */
-export const ModuleRuntime = {
-  NODE: "nodejs",
-  EDGE: "edge",
-} as const;
-
-export type ModuleRuntime = (typeof ModuleRuntime)[keyof typeof ModuleRuntime];
-
 /**
  * One endpoint contributed by a module.
+ *
+ * Per-route configuration (runtime, dynamic) is deliberately absent until the route generator can
+ * honour it: a declaration nothing reads would be silently ignored, which is worse than not
+ * offering it at all.
  *
  * `handler` receives and returns the Web platform Request/Response, not a Next-specific type, so
  * core stays independent of the framework and a module could be lifted out to another host.
@@ -40,10 +36,6 @@ export interface ModuleEndpoint {
   readonly path: string;
   readonly method: ModuleHttpMethod;
   readonly handler: (request: Request) => Response | Promise<Response>;
-  /** Per-route configuration carried through to the generated route file. */
-  readonly runtime?: ModuleRuntime;
-  /** Opt out of static optimisation for streaming or per-request work. */
-  readonly dynamic?: boolean;
 }
 
 /** A navigation entry a module wants surfaced by the host application. */
