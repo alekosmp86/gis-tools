@@ -163,12 +163,15 @@ export class CsvParser implements ISpatialFileParser {
         record[header] = values[headerIndex] !== undefined ? values[headerIndex] : "";
       });
 
-      const rowKey = `row-${lineIndex - 1}`;
-      recordsMap.set(rowKey, record);
+      const recordIndex = lineIndex - 1;
+      recordsMap.set(`row-${recordIndex}`, record);
 
       const parsedGeom = this.extractGeometry(record, spatialCols);
       if (parsedGeom) {
         geojsonFeatures.push({
+          // Rows without geometry produce no feature, so the feature position drifts from the record
+          // position. The id keeps the link back to the row this feature came from.
+          id: recordIndex,
           type: "Feature",
           geometry: parsedGeom,
           properties: record,

@@ -53,5 +53,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md`](docs/issues/ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md) — Capping features in DB-CSV Step 2 preview map via unified `MAX_MAP_PREVIEW_FEATURES` while preserving full uncapped features in Step 4.
 - [`ISSUE_018_DB_TABLE_VIEWER_STALE_GEOJSON_FLOW.md`](docs/issues/ISSUE_018_DB_TABLE_VIEWER_STALE_GEOJSON_FLOW.md) — DB Table Viewer repeated PostgreSQL streaming caused by an unstable TanStack Query mutation object in the effect dependencies, plus removal of unnecessary derived-state mirroring under React Compiler.
 - [`ISSUE_019_PREVIEW_MAP_RENDER_PATH_ALLOCATION_COST.md`](docs/issues/ISSUE_019_PREVIEW_MAP_RENDER_PATH_ALLOCATION_COST.md) — Preview map render path copying the dataset through a worker that only sliced arrays, plus per-feature service allocation and click listeners, replaced by reference slicing, shared instances, delegated events and frame-paced chunks.
+- [`ISSUE_020_SELECTION_INDEX_DIVERGENCE_TABLE_VS_MAP.md`](docs/issues/ISSUE_020_SELECTION_INDEX_DIVERGENCE_TABLE_VS_MAP.md) — Attribute table and preview map sharing one selection index while indexing different arrays, corrected by stamping the record index on every feature and translating at the map boundary.
 
 

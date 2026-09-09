@@ -7,6 +7,7 @@ import { AlertMessage } from "@/components/shared/AlertMessage";
 import { AlertType } from "@/types/ui";
 import type { DbConfig } from "@/types/db";
 import { useDbTableViewerState } from "@/hooks/useDbTableViewerState";
+import { buildFeatureRecordIndex } from "@/utils/spatial/FeatureRecordIndex";
 import styles from "./DbTableViewerContainer.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -25,7 +26,9 @@ export const DbTableViewerContainer: React.FC<DbTableViewerContainerProps> = ({
   columns,
   totalRows,
 }) => {
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  // Selection is held as a record index: a record whose geometry did not parse has no feature, but
+  // its row must still be selectable.
+  const [selectedRecordIndex, setSelectedRecordIndex] = useState<number | null>(null);
   const {
     records,
     geojson,
@@ -38,6 +41,9 @@ export const DbTableViewerContainer: React.FC<DbTableViewerContainerProps> = ({
   } = useDbTableViewerState(config, columns, totalRows);
 
   const hasGeometry = Boolean(geojson && geojson.features && geojson.features.length > 0);
+  const featureRecordIndex = buildFeatureRecordIndex(geojson?.features);
+  const selectedFeatureIndex =
+    selectedRecordIndex === null ? null : featureRecordIndex.toFeatureIndex(selectedRecordIndex);
 
   return (
     <div className={styles.container}>
@@ -66,8 +72,12 @@ export const DbTableViewerContainer: React.FC<DbTableViewerContainerProps> = ({
                 <SpatialMapPreview
                   geojson={geojson}
                   title={`VISTA ESPACIAL POSTGIS — ${config.schema_name}.${config.table_name}`}
-                  selectedFeatureIndex={selectedIndex}
-                  onSelectFeature={setSelectedIndex}
+                  selectedFeatureIndex={selectedFeatureIndex}
+                  onSelectFeature={(featureIndex) =>
+                    setSelectedRecordIndex(
+                      featureIndex === null ? null : featureRecordIndex.toRecordIndex(featureIndex)
+                    )
+                  }
                 />
               </div>
 
@@ -99,8 +109,8 @@ export const DbTableViewerContainer: React.FC<DbTableViewerContainerProps> = ({
           <AttributeTable
             records={records}
             attributes={columns}
-            selectedIndex={selectedIndex}
-            onSelectRow={setSelectedIndex}
+            selectedIndex={selectedRecordIndex}
+            onSelectRow={setSelectedRecordIndex}
           />
         </div>
       )}
