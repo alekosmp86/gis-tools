@@ -19,8 +19,8 @@ Global configuration lives in `~/.claude/` and applies to every project:
 | Commit, merge, push | Antigravity session / `git-operator` agent | Gemini 3.8 Flash / Haiku 4.5 |
 
 **Dual-Session Split (Claude + Antigravity)**:
-- **Claude (Opus)** drives high-level reasoning, system architecture, task decomposition, and writes/maintains `implementation_plan.md`.
-- **Antigravity (Gemini)** acts as the dedicated implementer: ingests `implementation_plan.md`, applies code modifications, writes tests, runs the quality gauntlet, and verifies cleanly.
+- **Claude (Opus)** drives high-level reasoning, system architecture, task decomposition, and writes/maintains `.agents/handoff/TO_IMPLEMENTER.md`.
+- **Antigravity (Gemini)** acts as the dedicated implementer: ingests `.agents/handoff/TO_IMPLEMENTER.md`, applies code modifications, writes tests, runs the quality gauntlet, verifies cleanly, and reports back in `.agents/handoff/TO_ORCHESTRATOR.md`.
 - **Claude (Opus)** runs a fresh-context review against `git diff` before approval and branch promotion.
 
 **The reviewer is a separate agent/context even though it shares the orchestrator's model.** It starts with
@@ -65,10 +65,34 @@ and the definition of done. An underspecified brief produces a confident, wrong 
 Every brief must point at `AGENTS.md` and the relevant `.agents/rules/*.md`, since those carry this
 project's binding constraints on layering, naming, styling, UI language and testing.
 
+## 3b. The handoff channel — `.agents/handoff/`
+
+The orchestrator and the implementer run in **separate sessions that never share context**. They
+communicate only through two documents. Neither agent's chat output is a substitute for them; if it
+is not written in the handoff file, the other side never sees it.
+
+| File | Written by | Read by | Holds |
+|---|---|---|---|
+| `.agents/handoff/TO_IMPLEMENTER.md` | orchestrator (Claude / Opus) | implementer (Antigravity / Gemini) | the plan, binding decisions, out-of-scope, every fix round, adjudicated review findings, definition of done |
+| `.agents/handoff/TO_ORCHESTRATOR.md` | implementer | orchestrator | what was actually changed and why, per finding; real pasted gauntlet output; anything refused, deferred or not understood |
+
+Rules of the channel:
+
+- **Append, never overwrite, within a mission.** Each exchange is a new dated section
+  (`# Fix round N — …`), so the history of what was asked and what came back stays readable. Both
+  files are reset together when a new mission starts.
+- **The orchestrator writes findings, never fixes.** Section 6's obligations still hold: no
+  implementation code in the orchestrator session beyond the trivial-edit escape hatch.
+- **The implementer reports per finding, by id.** A finding it did not fix is stated as not fixed,
+  with the reason. Silence is treated as a skipped gate.
+- **A claim in `TO_ORCHESTRATOR.md` is a claim, not evidence.** The orchestrator re-runs the gauntlet
+  itself and reads the diff before believing any of it.
+- The user reads both files. They are the record of the mission, not scratch paper.
+
 ## 4. Interaction with the existing workflow
 
-- **Planning rule** — the orchestrator writes or updates `implementation_plan.md` before delegating,
-  satisfying the mandatory planning requirement, and points the implementer at that file.
+- **Planning rule** — the orchestrator writes or updates `.agents/handoff/TO_IMPLEMENTER.md` before
+  delegating, satisfying the mandatory planning requirement, and points the implementer at that file.
 - **Quality gauntlet** — the `implementer` runs the full local loop
   (`modules:routes:check`, `lint`, `test`, `build`, `doctor`) on its own branch before reporting,
   and pastes real output. Review never runs against unverified code.
@@ -82,6 +106,10 @@ project's binding constraints on layering, naming, styling, UI language and test
   and a push is never implied by a commit.
 
 ## 5. Severity taxonomy
+
+Review scope, focus and obligations are defined in `.agents/rules/code_review_standards.md`, which
+every review brief must point at. A green gauntlet admits a diff to review; it never concludes one —
+architecture, SOLID, God components and duplication are judged explicitly, in writing, on every pass.
 
 The reviewer ranks every finding, and the ranking decides whether another round happens.
 

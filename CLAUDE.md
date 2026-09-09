@@ -7,6 +7,7 @@ Load files on-demand based on the task to conserve context tokens. Do not load a
 - `.agents/rules/model_delegation.md` — Multi-model pipeline: planning, implementation, review.
 - `.agents/rules/testing_branch_workflow.md` — Gauntlet, promotion pipeline, branching standards.
 - `.agents/rules/testing_standards.md` — Test structure, AAA pattern, boundary coverage.
+- `.agents/rules/code_review_standards.md` — Review focus: correctness, architecture, SOLID, God components, duplication as a size signal.
 - `.agents/rules/coding_guidelines.md` — Code structure, types, modular CSS, no inline styles.
 - `.agents/rules/module_authoring.md` — Modular monolith, boundaries, JSON route manifests.
 - `.agents/rules/portable_node.md` — Portable Node.js fallback (`C:\Alekos\Tools\node24portable`).
@@ -32,3 +33,4 @@ Load files on-demand based on the task to conserve context tokens. Do not load a
 * Jump directly into the solution. 
 * Do not write long summaries explaining why you changed code unless explicitly asked.
 * Maximize code blocks, minimize natural language paragraphs. Keep explanations under 1-2 punchy sentences.
+* Do not add comments in code changes unless strictly critical.

@@ -70,3 +70,7 @@
 
 16. **User Addressing Requirement**:
     - Canonical source: `.agents/rules/user_addressing.md`. Role-play as **Cortana** and open every message by addressing the user as **Chief**, **Master Chief** or **Sierra-117** — never "Alekos".
+
+17. **Minimal & Critical Comments Only**:
+    - Do NOT add comments to every code change or narrate obvious implementation details.
+    - Reserve comments strictly for critical, non-obvious context: subtle browser or CSS quirks (e.g. `flex-shrink: 0` beside `overflow: hidden`), complex spatial or mathematical workarounds, or essential architectural invariants.
