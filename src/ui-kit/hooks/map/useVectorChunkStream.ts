@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import type { FeatureCollection, GeoJsonObject } from "geojson";
-import { MAP_MICRO_CHUNK_SIZE } from "@/core/constants/mapConstants";
+import { MAP_MICRO_CHUNK_SIZE, MAP_FRAME_BUDGET_MS } from "@/core/constants/mapConstants";
 import type { MapFeatureStyle } from "@/core/types/map";
 import { createStyleResolver } from "@/ui-kit/map/MapSymbologyStyler";
 import { bindGroupFeatureEvents } from "@/ui-kit/map/MapEventHandler";
@@ -27,6 +27,14 @@ export function useVectorChunkStream(
     featureStyleRef.current = featureStyle;
   }, [featureStyle]);
 
+  // Selection is a callback, not an input to rendering. Keeping it in a ref stops a click from
+  // invalidating the effect and tearing down every rendered layer.
+  const onSelectFeatureRef = useRef(onSelectFeature);
+
+  useEffect(() => {
+    onSelectFeatureRef.current = onSelectFeature;
+  }, [onSelectFeature]);
+
   const [renderedCount, setRenderedCount] = useState<number>(0);
   const [isChunking, setIsChunking] = useState<boolean>(false);
 
@@ -40,7 +48,15 @@ export function useVectorChunkStream(
     }
 
     // If already rendered this exact geojson collection and visible, ensure viewport is fitted
-    if (lastProcessedGeojsonRef.current === geojson) {
+    // Re-fit only when this collection is already rendered AND still attached. Without the
+    // attachment check, any dependency change would run cleanup (which detaches the group) and
+    // then short-circuit here, leaving the map empty.
+    const isAlreadyRendered =
+      lastProcessedGeojsonRef.current === geojson &&
+      featureGroupRef.current !== null &&
+      mapInstance.hasLayer(featureGroupRef.current);
+
+    if (isAlreadyRendered) {
       mapInstance.invalidateSize();
       if (featureGroupRef.current) {
         const bounds = featureGroupRef.current.getBounds();
@@ -61,7 +77,9 @@ export function useVectorChunkStream(
     featureGroupRef.current = featureGroup;
 
     // One delegated listener for the whole group instead of one per rendered feature.
-    bindGroupFeatureEvents(featureGroup, geojson?.features ?? [], onSelectFeature);
+    bindGroupFeatureEvents(featureGroup, geojson?.features ?? [], (featureIndex) =>
+      onSelectFeatureRef.current?.(featureIndex)
+    );
 
     let isCancelled = false;
     const totalFeatures = geojson?.features?.length || 0;
@@ -94,9 +112,7 @@ export function useVectorChunkStream(
      * Renders one micro-batch straight from the source collection. Slicing yields references to the
      * original features, so no feature object is copied on the way to Leaflet.
      */
-    const renderNextChunk = () => {
-      if (isCancelled) return;
-
+    const renderOneChunk = () => {
       const chunkFeatures = geojson.features.slice(
         renderedOffset,
         renderedOffset + MAP_MICRO_CHUNK_SIZE
@@ -120,14 +136,37 @@ export function useVectorChunkStream(
 
       featureGroup.addLayer(geojsonSubLayer);
 
-      const isComplete = renderedOffset >= totalFeatures;
-      setRenderedCount(renderedOffset);
-      setIsChunking(!isComplete);
-
       if (!initialZoomDone) {
         initialZoomDone = true;
         fitToRenderedFeatures();
       }
+    };
+
+    /**
+     * Renders as many chunks as fit in the frame budget, then yields.
+     *
+     * Rendering exactly one chunk per frame caps throughput at roughly 400 features per 16ms, which
+     * makes a large collection take seconds to finish. Spending a bounded slice of each frame keeps
+     * the page responsive while letting fast machines finish far sooner.
+     */
+    const renderChunksWithinFrameBudget = () => {
+      if (isCancelled) return;
+
+      const frameStart = performance.now();
+
+      do {
+        renderOneChunk();
+      } while (
+        !isCancelled &&
+        renderedOffset < totalFeatures &&
+        performance.now() - frameStart < MAP_FRAME_BUDGET_MS
+      );
+
+      if (isCancelled) return;
+
+      const isComplete = renderedOffset >= totalFeatures;
+      setRenderedCount(renderedOffset);
+      setIsChunking(!isComplete);
 
       if (isComplete) {
         // Final bounds fit once every chunk is painted
@@ -135,12 +174,10 @@ export function useVectorChunkStream(
         return;
       }
 
-      // One chunk per animation frame, so the browser paints and stays responsive between batches.
-      // A timer would only have delayed the progress update: layer construction already ran.
-      scheduledFrame = requestAnimationFrame(renderNextChunk);
+      scheduledFrame = requestAnimationFrame(renderChunksWithinFrameBudget);
     };
 
-    renderNextChunk();
+    renderChunksWithinFrameBudget();
 
     return () => {
       isCancelled = true;
@@ -156,7 +193,7 @@ export function useVectorChunkStream(
         // Safe disposal
       }
     };
-  }, [mapInstanceRef, canvasRendererRef, geojson, onSelectFeature, isMapReady, isVisible]);
+  }, [mapInstanceRef, canvasRendererRef, geojson, isMapReady, isVisible]);
 
   return {
     renderedCount,

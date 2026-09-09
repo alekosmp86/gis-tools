@@ -94,6 +94,8 @@ export function getDiscrepancyLabel(type?: string): string {
 
 /** Progressive Micro-Batch Map Rendering Constants: features painted per animation frame */
 export const MAP_MICRO_CHUNK_SIZE = 400;
+/** Milliseconds of each animation frame spent painting features before yielding to the browser. */
+export const MAP_FRAME_BUDGET_MS = 8;
 
 /** Maximum number of features rendered in initial file preview maps to maintain responsiveness and prevent memory exhaustion */
 export const MAX_MAP_PREVIEW_FEATURES = 25_000;
