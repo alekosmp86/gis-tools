@@ -1,6 +1,6 @@
 import React from "react";
 import { Download, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/ui-kit/components/ui/Button";
 import styles from "./SqlPatchDrawer.module.css";
 
 export interface SqlPatchDownloadButtonProps {

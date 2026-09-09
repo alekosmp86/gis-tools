@@ -3,10 +3,10 @@ import dynamic from "next/dynamic";
 import type { FeatureCollection } from "geojson";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileSpreadsheet, Trash2, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { AlertMessage } from "@/components/shared/AlertMessage";
-import { ColumnsList } from "@/components/shared/ColumnsList";
-import { FileDropzone } from "@/components/shared/FileDropzone";
+import { Button } from "@/ui-kit/components/ui/Button";
+import { AlertMessage } from "@/ui-kit/components/AlertMessage";
+import { ColumnsList } from "@/ui-kit/components/ColumnsList";
+import { FileDropzone } from "@/ui-kit/components/FileDropzone";
 import { CsvParser } from "@/core/services/parsers/CsvParser";
 import { MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
 import { AlertType } from "@/ui-kit/types/ui";
@@ -15,7 +15,7 @@ import { formatNumber, formatFileSize } from "@/core/common/ValueFormatter";
 import styles from "./CsvUploader.module.css";
 
 const SpatialMapPreview = dynamic(
-  () => import("@/components/shared/SpatialMapPreview").then((module) => module.SpatialMapPreview),
+  () => import("@/ui-kit/components/SpatialMapPreview").then((module) => module.SpatialMapPreview),
   { ssr: false }
 );
 

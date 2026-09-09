@@ -7,7 +7,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { HeroSection } from "@/components/home/HeroSection";
 import { FilterTabs } from "@/components/home/FilterTabs";
-import { SearchInput } from "@/components/ui/SearchInput";
+import { SearchInput } from "@/ui-kit/components/ui/SearchInput";
 import { ToolCard } from "@/components/home/ToolCard";
 import { toolsList, toolCategories } from "@/data/toolsData";
 import { ToolCategory } from "@/ui-kit/types/ui";

@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
-import { AlertMessage } from "@/components/shared/AlertMessage";
-import { ProgressBar } from "@/components/shared/ProgressBar";
+import { AlertMessage } from "@/ui-kit/components/AlertMessage";
+import { ProgressBar } from "@/ui-kit/components/ProgressBar";
 import { DiscrepanciesSummaryBar } from "./DiscrepanciesSummaryBar";
 import { DiscrepanciesTable } from "./discrepancies-table/DiscrepanciesTable";
 import { SqlPatchDrawer } from "./sql-patch-drawer/SqlPatchDrawer";
@@ -20,7 +20,7 @@ import { ResyncBanner } from "./ResyncBanner";
 import styles from "./ComparisonResultsView.module.css";
 
 const SpatialMapPreview = dynamic(
-  () => import("@/components/shared/SpatialMapPreview").then((m) => m.SpatialMapPreview),
+  () => import("@/ui-kit/components/SpatialMapPreview").then((m) => m.SpatialMapPreview),
   { ssr: false }
 );
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import type { FeatureCollection } from "geojson";
-import { buildPopupHtml } from "@/utils/map/MapPopupPresenter";
+import { buildPopupHtml } from "@/ui-kit/map/MapPopupPresenter";
 
 export function useFeatureHighlight(
   mapInstanceRef: React.RefObject<L.Map | null>,

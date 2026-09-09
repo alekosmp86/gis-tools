@@ -1,5 +1,5 @@
 import React from "react";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/ui-kit/components/ui/Badge";
 import { DiscrepancyType, type ComparisonSourceDescriptor } from "@/core/types/comparison";
 import { BadgeVariant } from "@/ui-kit/types/ui";
 import styles from "./DiscrepancyTypeBadge.module.css";

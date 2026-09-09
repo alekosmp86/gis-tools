@@ -1,17 +1,17 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import type { ParsedFileDataset } from "@/core/types/parsers";
-import { AlertMessage } from "@/components/shared/AlertMessage";
+import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import { formatNumber } from "@/core/common/ValueFormatter";
 import { FileViewerUploader } from "./FileViewerUploader";
 import { FileMetaPanel } from "./FileMetaPanel";
-import { AttributeTable } from "./AttributeTable";
+import { AttributeTable } from "@/ui-kit/components/AttributeTable";
 import { buildFeatureRecordIndex } from "@/core/spatial/FeatureRecordIndex";
 import styles from "./FileViewerContainer.module.css";
 
 const SpatialMapPreview = dynamic(
-  () => import("@/components/shared/SpatialMapPreview").then((module) => module.SpatialMapPreview),
+  () => import("@/ui-kit/components/SpatialMapPreview").then((module) => module.SpatialMapPreview),
   { ssr: false }
 );
 

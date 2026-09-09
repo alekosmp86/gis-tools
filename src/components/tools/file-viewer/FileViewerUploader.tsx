@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { Upload, FileCheck, RefreshCw, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { AlertMessage } from "@/components/shared/AlertMessage";
+import { Button } from "@/ui-kit/components/ui/Button";
+import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
 import type { ParsedFileDataset } from "@/core/types/parsers";
 import { ShapefileParser } from "@/core/services/parsers/ShapefileParser";

@@ -1,7 +1,7 @@
 import React from "react";
 import { Layers } from "lucide-react";
 import { formatNumber } from "@/core/common/ValueFormatter";
-import { SearchInput } from "@/components/ui/SearchInput";
+import { SearchInput } from "@/ui-kit/components/ui/SearchInput";
 import styles from "./DiscrepanciesTable.module.css";
 
 export interface DiscrepanciesTableHeaderProps {

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import type { FeatureCollection } from "geojson";
 import type { MapFeatureStyle } from "@/core/types/map";
 import { DEFAULT_MAP_FEATURE_STYLE } from "@/core/constants/mapConstants";
-import { useLeafletMap } from "@/hooks/useLeafletMap";
+import { useLeafletMap } from "@/ui-kit/hooks/useLeafletMap";
 import { MapProgressBar } from "./map/MapProgressBar";
 import { MapHeaderBar } from "./map/MapHeaderBar";
 import { MapLegend } from "./map/MapLegend";

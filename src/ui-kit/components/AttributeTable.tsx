@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Table, Search } from "lucide-react";
-import { PaginationControls } from "@/components/shared/PaginationControls";
+import { PaginationControls } from "@/ui-kit/components/PaginationControls";
 import { formatNumber } from "@/core/common/ValueFormatter";
+import { KeyboardKey } from "@/ui-kit/types/ui";
 import styles from "./AttributeTable.module.css";
 
 interface AttributeTableProps {
@@ -22,6 +23,11 @@ export const AttributeTable: React.FC<AttributeTableProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(15);
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  /** Selecting an already-selected row clears the selection, for both pointer and keyboard. */
+  const toggleRowSelection = (originalIndex: number, isSelected: boolean) => {
+    onSelectRow?.(isSelected ? null : originalIndex);
+  };
 
   const indexedRecords = records.map((record, originalIndex) => ({ record, originalIndex }));
 
@@ -99,7 +105,14 @@ export const AttributeTable: React.FC<AttributeTableProps> = ({
                   <tr
                     key={originalIndex}
                     className={isSelected ? styles.selectedRow : undefined}
-                    onClick={() => onSelectRow?.(isSelected ? null : originalIndex)}
+                    tabIndex={0}
+                    onClick={() => toggleRowSelection(originalIndex, isSelected)}
+                    onKeyDown={(event) => {
+                      if (event.key === KeyboardKey.ENTER || event.key === KeyboardKey.SPACE) {
+                        event.preventDefault();
+                        toggleRowSelection(originalIndex, isSelected);
+                      }
+                    }}
                   >
                     <td key={`#-${originalIndex}`}>{globalIndex}</td>
                     {attributes.map((attributeKey) => {

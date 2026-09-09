@@ -1,16 +1,16 @@
 import React from "react";
 import dynamic from "next/dynamic";
 import { FileCheck, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { AlertMessage } from "@/components/shared/AlertMessage";
+import { Button } from "@/ui-kit/components/ui/Button";
+import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
-import { ColumnsList } from "@/components/shared/ColumnsList";
+import { ColumnsList } from "@/ui-kit/components/ColumnsList";
 import type { ParsedFileDataset } from "@/core/types/parsers";
 import { formatNumber, formatFileSize } from "@/core/common/ValueFormatter";
 import styles from "./LoadedShapefileCard.module.css";
 
 const SpatialMapPreview = dynamic(
-  () => import("@/components/shared/SpatialMapPreview").then((module) => module.SpatialMapPreview),
+  () => import("@/ui-kit/components/SpatialMapPreview").then((module) => module.SpatialMapPreview),
   { ssr: false }
 );
 

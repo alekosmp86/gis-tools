@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertMessage } from "@/components/shared/AlertMessage";
+import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { SqlPatchHeader } from "./SqlPatchHeader";
 import { SqlPatchCopyButton } from "./SqlPatchCopyButton";
 import { SqlPatchDownloadButton } from "./SqlPatchDownloadButton";

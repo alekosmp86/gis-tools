@@ -1,6 +1,6 @@
 import React from "react";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/ui-kit/components/ui/Button";
 import { formatNumber } from "@/core/common/ValueFormatter";
 import type { ExecuteBatchResult } from "@/core/types/db";
 import styles from "../SqlExecutionModal.module.css";

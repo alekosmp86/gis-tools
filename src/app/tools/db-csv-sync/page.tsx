@@ -3,8 +3,8 @@
 import { useState, useRef } from "react";
 import { Database, FileSpreadsheet, GitMerge, Sliders } from "lucide-react";
 import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
-import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
-import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
+import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
+import { DbConnectionForm } from "@/ui-kit/components/DbConnectionForm";
 import { CsvUploader } from "@/components/tools/db-csv-sync/CsvUploader";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
 import { SyncParametersStep } from "@/components/tools/db-sync-common/SyncParametersStep";

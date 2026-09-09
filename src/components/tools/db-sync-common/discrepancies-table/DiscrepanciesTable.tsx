@@ -4,7 +4,7 @@ import type {
   DiscrepancyFilter,
   ComparisonSourceDescriptor,
 } from "@/core/types/comparison";
-import { PaginationControls } from "@/components/shared/PaginationControls";
+import { PaginationControls } from "@/ui-kit/components/PaginationControls";
 import { useDiscrepanciesTableData } from "./useDiscrepanciesTableData";
 import { DiscrepanciesTableHeader } from "./DiscrepanciesTableHeader";
 import { DiscrepanciesTableHead } from "./DiscrepanciesTableHead";

@@ -1,12 +1,12 @@
 import React, { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { AlertMessage } from "@/components/shared/AlertMessage";
+import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import { ShapefileParser } from "@/core/services/parsers/ShapefileParser";
 import type { ParsedShapefileData } from "@/core/types/shp";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/core/types/parsers";
-import { FileDropzone } from "@/components/shared/FileDropzone";
+import { FileDropzone } from "@/ui-kit/components/FileDropzone";
 import { LoadedShapefileCard } from "./LoadedShapefileCard";
 import styles from "./ShapefileUploader.module.css";
 

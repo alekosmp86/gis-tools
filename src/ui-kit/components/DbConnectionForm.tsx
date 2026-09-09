@@ -12,11 +12,11 @@ import {
   Bookmark,
   Plus,
 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { FormField } from "@/components/ui/FormField";
-import { AlertMessage } from "@/components/shared/AlertMessage";
-import { ColumnsList } from "@/components/shared/ColumnsList";
-import { ProfileSelect } from "@/components/shared/ProfileSelect";
+import { Button } from "@/ui-kit/components/ui/Button";
+import { FormField } from "@/ui-kit/components/ui/FormField";
+import { AlertMessage } from "@/ui-kit/components/AlertMessage";
+import { ColumnsList } from "@/ui-kit/components/ColumnsList";
+import { ProfileSelect } from "@/ui-kit/components/ProfileSelect";
 import { useDbConnectionForm } from "@/hooks/useDbConnectionForm";
 import type {
   DbConfig,

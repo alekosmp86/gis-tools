@@ -1,6 +1,6 @@
 import React from "react";
 import { Sparkles } from "lucide-react";
-import { Badge } from "../ui/Badge";
+import { Badge } from "@/ui-kit/components/ui/Badge";
 import styles from "./HeroSection.module.css";
 
 export const HeroSection: React.FC = () => {

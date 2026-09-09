@@ -3,8 +3,8 @@ import L from "leaflet";
 import type { FeatureCollection, GeoJsonObject } from "geojson";
 import { MAP_MICRO_CHUNK_SIZE } from "@/core/constants/mapConstants";
 import type { MapFeatureStyle } from "@/core/types/map";
-import { createStyleResolver } from "@/utils/map/MapSymbologyStyler";
-import { bindGroupFeatureEvents } from "@/utils/map/MapEventHandler";
+import { createStyleResolver } from "@/ui-kit/map/MapSymbologyStyler";
+import { bindGroupFeatureEvents } from "@/ui-kit/map/MapEventHandler";
 
 export function useVectorChunkStream(
   mapInstanceRef: React.RefObject<L.Map | null>,

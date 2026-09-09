@@ -1,6 +1,6 @@
 import React from "react";
 import { Play, CheckCircle2, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/ui-kit/components/ui/Button";
 import styles from "./SqlPatchDrawer.module.css";
 
 export interface SqlPatchExecuteButtonProps {

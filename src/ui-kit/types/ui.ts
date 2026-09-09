@@ -91,3 +91,11 @@ export interface WizardStepDef {
   readonly backLabel?: string;
   readonly hideFooter?: boolean;
 }
+
+/** Keys that activate an interactive element, for keyboard parity with a click. */
+export const KeyboardKey = {
+  ENTER: "Enter",
+  SPACE: " ",
+} as const;
+
+export type KeyboardKey = (typeof KeyboardKey)[keyof typeof KeyboardKey];

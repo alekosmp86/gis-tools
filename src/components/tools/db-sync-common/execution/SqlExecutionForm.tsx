@@ -1,6 +1,6 @@
 import React from "react";
 import { Lock, Eye, EyeOff, ShieldCheck, AlertTriangle, Database } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/ui-kit/components/ui/Button";
 import { formatNumber } from "@/core/common/ValueFormatter";
 import type { DbConfig } from "@/core/types/db";
 import styles from "../SqlExecutionModal.module.css";

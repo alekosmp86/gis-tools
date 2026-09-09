@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import { TableMetaPanel } from "./TableMetaPanel";
-import { AttributeTable } from "../file-viewer/AttributeTable";
-import { AlertMessage } from "@/components/shared/AlertMessage";
+import { AttributeTable } from "@/ui-kit/components/AttributeTable";
+import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import type { DbConfig } from "@/core/types/db";
 import { useDbTableViewerState } from "@/hooks/useDbTableViewerState";
@@ -11,7 +11,7 @@ import { buildFeatureRecordIndex } from "@/core/spatial/FeatureRecordIndex";
 import styles from "./DbTableViewerContainer.module.css";
 
 const SpatialMapPreview = dynamic(
-  () => import("@/components/shared/SpatialMapPreview").then((m) => m.SpatialMapPreview),
+  () => import("@/ui-kit/components/SpatialMapPreview").then((m) => m.SpatialMapPreview),
   { ssr: false }
 );
 
