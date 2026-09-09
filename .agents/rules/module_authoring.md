@@ -35,14 +35,21 @@ This is enforced in `eslint.config.mjs`, not by review. A violation fails `npm r
 
 ```
 src/modules/reports/
-  module.routes.json    the module's HTTP surface — the single source of truth
-  manifest.ts           id, name, endpoints, navigation, ui contributions
-  api/handlers.ts       the handlers bound to the declarations
-  ui/ReportsCard.tsx    "use client" components contributed to slots
+  module.routes.json    the routed surface: endpoints and owned pages
+  manifest.ts           id, name, endpoints, pages, navigation, ui contributions
   types.ts              types owned by this module
+  domain/               pure logic: no fs, no fetch, no React
+  services/             I/O, with every dependency injectable
+  api/handlers.ts       thin handlers bound to the declarations
+  ui/ReportsCard.tsx    "use client" components contributed to slots
 ```
 
-**A complete working example lives in `src/modules/status`** — one endpoint, one nav entry, one UI
+**Two worked examples exist.** `src/modules/status` is the minimal one: a single endpoint and a
+home-grid card. `src/modules/cartography-watcher` is the full shape: seven endpoints, a page it
+owns, a domain layer separated from its services, and a contribution that hands a file back to its
+host. Read whichever is closer to what you are building.
+
+**The minimal example lives in `src/modules/status`** — one endpoint, one nav entry, one UI
 contribution, its own types and its own tested logic. Read it before writing a new module; the
 steps below are what it does.
 
@@ -119,22 +126,78 @@ throws. Neither is a warning — fix the declaration or delete the handler.
 
 ### Step 4 — Contribute UI (optional)
 
-A contribution is `{ slot, id, order?, Component }`. The component renders with no props, so it owns
-its own data fetching, and it MUST carry `"use client"` if it uses hooks or browser APIs.
+A contribution is `{ slot, id, order?, Component, label?, Icon? }`. The component renders with no
+props, so it owns its own data fetching, and it MUST carry `"use client"` if it uses hooks or
+browser APIs.
 
 ```ts
 ui: [{ slot: UiSlot.HOME_TOOL_GRID, id: "reports.card", order: 100, Component: ReportsCard }],
 ```
 
-**Only `UiSlot.HOME_TOOL_GRID` is mounted today** (in `src/app/page.tsx`). `TOOL_SIDEBAR`,
-`MAP_TOOLBAR` and `NAV_PRIMARY` exist in the contract but no host renders them yet: a contribution
-sent to one of those renders nowhere and fails silently. Mounting a slot is a core-side change —
-make it deliberately and separately, never as a side effect of adding a module.
+**Every component a manifest references must come from a `"use client"` module — icons included.**
+The manifest is evaluated on the server, and React can only pass a client reference across that
+boundary. A lucide icon imported straight into the manifest fails the production build with
+*"Functions cannot be passed directly to Client Components"*. Re-export it from a `"use client"`
+file in the module and reference that instead:
 
-`navigation` entries are collected and sorted by the registry but no host consumes them yet. Until
-one does, surface navigation as a `NAV_PRIMARY` contribution once that slot is mounted.
+```ts
+// ui/contributionIcons.ts
+"use client";
+export { FolderTree as CatalogTabIcon } from "lucide-react";
+```
 
-### Step 5 — Register it in the composition root
+**Mounted slots today:**
+
+| Slot | Host | Notes |
+|---|---|---|
+| `HOME_TOOL_GRID` | `src/app/page.tsx` | cards beside the core tools |
+| `FILE_SOURCE_TABS` | both sync uploaders | alternative file sources; see below |
+| `TOOL_SIDEBAR`, `MAP_TOOLBAR`, `NAV_PRIMARY` | *nothing* | declared but unrendered |
+
+A contribution sent to an unmounted slot renders nowhere and fails silently. Mounting one is a
+core-side change — make it deliberately and separately, never as a side effect of adding a module.
+
+`navigation` entries are collected and sorted by the registry but no host consumes them yet.
+
+#### Contributing a file source
+
+`FILE_SOURCE_TABS` is the first slot whose contributions need something back from their host. The
+uploader publishes `{ toolId, format, onSelectFile, isLoading }` and the contribution reads it:
+
+```tsx
+const { format, onSelectFile, isLoading } = useFileSourceSlot();
+```
+
+`ModuleTabbedSlot` renders the host's own dropzone alone when nothing is contributed — byte for
+byte what the uploader looked like before — and a tab strip when something is. Give such a
+contribution a `label` and an `Icon`, or its tab is titled with its raw id.
+
+Hand back a real `File`, exactly what the local dropzone would have produced, so the host cannot
+tell the difference.
+
+### Step 5 — Own a page (optional)
+
+A module can own a whole route, not just decorate someone else's. Declare it beside the endpoints
+in the same file:
+
+```json
+"pages": [{ "path": "", "title": "Observador Cartográfico" }]
+```
+
+and bind a component to it in the manifest:
+
+```ts
+pages: definePageContributions(routeDeclarations, { "": WatcherDashboard }),
+```
+
+It is served at `/tools/m/<id>/<path>`, and `""` owns `/tools/m/<id>`. The generator emits the route
+file, exports the declared `title` as the document title, and calls `notFound()` when no module owns
+the path — so a route left behind by a deleted module 404s instead of crashing.
+
+The page component is an ordinary client component. Wrap it in `ToolWorkspaceLayout` from ui-kit to
+get the same shell as a core tool: header, footer, and the link back to the portal.
+
+### Step 6 — Register it in the composition root
 
 `src/app/modules.registry.ts` is the only file permitted to name a module. Two lines:
 
@@ -144,7 +207,7 @@ import { reportsModule } from "@/modules/reports/manifest";
 const activeModules: ReadonlyArray<AppModuleManifest> = [reportsModule];
 ```
 
-### Step 6 — Generate the routes
+### Step 7 — Generate the routes
 
 ```
 npm run modules:routes
@@ -153,7 +216,7 @@ npm run modules:routes
 Commit what it emits. `predev` and `prebuild` run it automatically, so a forgotten regeneration
 still serves correctly in dev — the committed tree is what the gate protects.
 
-### Step 7 — Test it, next to the other tests
+### Step 8 — Test it, next to the other tests
 
 Module tests live in `tests/unit/modules/<id>/`, matching the repository's test layout. Cover the
 module's own logic against real calculations (`.agents/rules/testing_standards.md` applies in full),
@@ -224,3 +287,7 @@ Run the gauntlet from `.agents/rules/testing_branch_workflow.md`, then prove del
 | Stale `.next` type errors naming files from another branch | Cached Next type artifacts after a branch switch | Delete `.next` and rebuild |
 | Pages still larger after deleting a module | Incremental `.next` still holds its chunks | `rm -rf .next` and rebuild before measuring |
 | Test suite fails on unresolved `@/modules/<id>/...` imports | Module deleted, its test folder left behind | Delete `tests/unit/modules/<id>/` too |
+| Build fails with *"Functions cannot be passed directly to Client Components"* | A component — often a lucide icon — reaches the manifest from a server module | Re-export it from a `"use client"` file and reference that |
+| A contribution throws *"useFileSourceSlot debe usarse dentro de…"* | It is rendered outside the slot that publishes the context | Contribute it to `FILE_SOURCE_TABS`, not another slot |
+| A page route 404s although the module is registered | The generated tree is stale, or the declared path does not match the manifest key | `npm run modules:routes`, and check the key is the normalised path |
+| Handler cannot read a `[id]` path segment | Handlers receive only the `Request` | Parse `new URL(request.url).pathname`, or take the value from the body |

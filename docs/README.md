@@ -29,6 +29,7 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`DB_CSV_SYNC_TOOL.md`](docs/tools/DB_CSV_SYNC_TOOL.md) — PostgreSQL/PostGIS DB vs. CSV sync tool with EWKB Hex/WKT/LatLng spatial parsing and capped Step 2 preview.
 - [`DB_DB_SYNC_TOOL.md`](docs/tools/DB_DB_SYNC_TOOL.md) — PostgreSQL DB vs. DB replica synchronization tool architecture and workflows.
 - [`FILE_VIEWER_TOOL.md`](docs/tools/FILE_VIEWER_TOOL.md) — Spatial File Viewer architecture, bidirectional map-table selection, and attribute table pagination.
+- [`CARTOGRAPHY_WATCHER_MODULE.md`](docs/tools/CARTOGRAPHY_WATCHER_MODULE.md) — Observador de Actualizaciones Cartográficas as an extension module: CKAN delta detection (checksum, publication date, size), the server-side vault with read-through caching, the catalogue tab inside the DB-CSV and DB-Shapefile uploaders, and its own generated page at `/tools/m/cartography-watcher`.
 - [`POSTGIS_TABLE_VIEWER_TOOL.md`](docs/tools/POSTGIS_TABLE_VIEWER_TOOL.md) — PostGIS / PostgreSQL Table Viewer tool, direct table introspection, and vector map preview.
 
 ### 📋 5. Specifications (`docs/specifications/`)

@@ -233,7 +233,71 @@ And one cost to keep in view: a UI contribution adds a constant ~386 B to **ever
 the contributions list is threaded through the root layout rather than per page. Fine at this scale;
 if it stops being fine, the shell can pass only the contributions whose slots a page mounts.
 
-## 8. How the generator itself was verified
+## 8. Module-owned pages
+
+Slots decorate a host page. A module that needs a route of its own declares a page beside its
+endpoints, in the same file:
+
+```json
+{
+  "moduleId": "cartography-watcher",
+  "endpoints": [ ... ],
+  "pages": [{ "path": "", "title": "Observador de Actualizaciones Cartográficas" }]
+}
+```
+
+`definePageContributions` binds each declaration to a component with the same two-way check the
+endpoints get, and the generator emits `src/app/tools/m/<id>/<path>/page.tsx`. The emitted page
+resolves through the registry, exports the declared title as document metadata, and calls
+`notFound()` when nothing owns the path — the page-shaped equivalent of an unserved route returning
+404 rather than crashing at boot.
+
+The alternative was a dynamic `[toolId]` dispatcher: one route file matching every module page.
+Generated pages were chosen for the same reasons as generated endpoints — the route table shows what
+is actually served, and a stale tree is caught by `--check` instead of failing at request time.
+
+## 9. Slots that carry context
+
+A contribution renders with no props. That is right for a card, and useless for a file picker that
+must know what its host accepts and where to hand the result back.
+
+`FILE_SOURCE_TABS` is the first slot to solve this. The host publishes a value; the contribution
+reads it through a hook:
+
+```tsx
+// host: src/components/tools/db-csv-sync/CsvUploader.tsx
+<FileSourceSlotProvider value={{ toolId, format, onSelectFile: processFile, isLoading }}>
+  <ModuleTabbedSlot slot={UiSlot.FILE_SOURCE_TABS} defaultLabel="Subir desde PC">
+    <FileDropzone ... />
+  </ModuleTabbedSlot>
+</FileSourceSlotProvider>
+
+// contribution: src/modules/cartography-watcher/ui/CatalogTreeSelector.tsx
+const { format, onSelectFile, isLoading } = useFileSourceSlot();
+```
+
+Two properties keep this safe:
+
+- **`ModuleTabbedSlot` renders its children alone when nothing is contributed.** No tab strip, no
+  wrapper — the uploader is byte for byte what it was before the slot existed.
+- **The contribution returns a real `File`**, exactly what the local dropzone would have produced.
+  The host cannot tell where it came from, so nothing in core learns that catalogues exist.
+
+`UiContribution` gained optional `label` and `Icon` for hosts that draw chrome around a
+contribution. Both are ignored by slots that render contributions bare.
+
+### The client-reference rule
+
+A manifest is evaluated on the server. React can pass a *client reference* across that boundary but
+not an arbitrary function-bearing object, so **every component a manifest names must come from a
+`"use client"` module — icons included**. A lucide icon imported straight into a manifest fails the
+production build with *"Functions cannot be passed directly to Client Components"*. Re-export it
+from a `"use client"` file in the module and the problem disappears.
+
+This is the same rule that already applied to `Component`; it simply becomes visible the first time
+a contribution carries a second component.
+
+## 10. How the generator itself was verified
 
 Before the reference module existed, the generator was proved with a throwaway `diagnostics` module
 carrying three endpoints, including a dynamic `[id]` segment. It was deleted afterwards, so nothing
@@ -249,7 +313,7 @@ does not — multiple endpoints, a dynamic segment, and every direction of drift
 - with zero modules registered, the route table and the rendered pages are identical to what they
   were before any of this existed.
 
-## 9. Map of the machinery
+## 11. Map of the machinery
 
 | File | Responsibility |
 |---|---|
@@ -267,3 +331,7 @@ does not — multiple endpoints, a dynamic segment, and every direction of drift
 | `eslint.config.mjs` | the layer boundaries, as lint errors |
 | `src/modules/status/**` | the reference module: declaration, manifest, types, logic, handler, UI |
 | `tests/unit/modules/status/**` | its tests — part of its deletion set |
+| `src/core/modules/definePageContributions.ts` | binds page declarations to components, checking both directions |
+| `src/ui-kit/modules/ModuleTabbedSlot.tsx` | a slot offering its contributions beside the host content |
+| `src/ui-kit/modules/FileSourceSlotContext.tsx` | the context a file-source host publishes to its contributions |
+| `src/modules/cartography-watcher/**` | the full-shape example: endpoints, an owned page, domain and services |
