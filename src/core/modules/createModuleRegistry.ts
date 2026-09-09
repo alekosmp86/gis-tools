@@ -1,12 +1,11 @@
 import type {
+  ModuleHttpMethod,
   ModuleManifest,
   ModuleNavigationEntry,
   ModuleRegistry,
   RegisteredEndpoint,
 } from "./contracts";
-
-/** Separator between a module id and its endpoint path in the generated route surface. */
-const ROUTE_SEGMENT_SEPARATOR = "/";
+import { resolveModuleRoutePath } from "./moduleRoutePaths";
 
 /** Module ids become URL segments and directory names, so they are constrained. */
 const VALID_MODULE_ID = /^[a-z][a-z0-9-]*$/;
@@ -39,6 +38,11 @@ function assertUniqueModuleIds(manifests: ReadonlyArray<ModuleManifest<never>>):
   }
 }
 
+/** Key under which a registered endpoint is looked up by the route that delegates to it. */
+function routeLookupKey(method: ModuleHttpMethod, routePath: string): string {
+  return `${method} ${routePath}`;
+}
+
 /**
  * Rejects two endpoints resolving to the same route, which would otherwise be decided by
  * registration order.
@@ -47,7 +51,7 @@ function assertUniqueRoutes(endpoints: ReadonlyArray<RegisteredEndpoint>): void 
   const seenRoutes = new Set<string>();
 
   for (const registered of endpoints) {
-    const routeKey = `${registered.endpoint.method} ${registered.routePath}`;
+    const routeKey = routeLookupKey(registered.endpoint.method, registered.routePath);
     if (seenRoutes.has(routeKey)) {
       throw new Error(
         `Duplicate module route "${routeKey}" contributed by "${registered.moduleId}". Two endpoints cannot serve the same method and path.`
@@ -55,14 +59,6 @@ function assertUniqueRoutes(endpoints: ReadonlyArray<RegisteredEndpoint>): void 
     }
     seenRoutes.add(routeKey);
   }
-}
-
-/** Normalises a declared endpoint path into the route it will be served at. */
-function resolveRoutePath(moduleId: string, endpointPath: string): string {
-  const trimmedPath = endpointPath.replace(/^\/+|\/+$/g, "");
-  return trimmedPath.length === 0
-    ? moduleId
-    : `${moduleId}${ROUTE_SEGMENT_SEPARATOR}${trimmedPath}`;
 }
 
 function collectEndpoints<TUiContribution>(
@@ -75,7 +71,7 @@ function collectEndpoints<TUiContribution>(
       collected.push({
         moduleId: manifest.id,
         endpoint,
-        routePath: resolveRoutePath(manifest.id, endpoint.path),
+        routePath: resolveModuleRoutePath(manifest.id, endpoint.path),
       });
     }
   }
@@ -114,11 +110,19 @@ export function createModuleRegistry<TUiContribution = never>(
   const navigation = collectNavigation(manifests);
   const uiContributions = manifests.flatMap((manifest) => [...(manifest.ui ?? [])]);
   const modulesById = new Map(manifests.map((manifest) => [manifest.id, manifest]));
+  const endpointsByRoute = new Map(
+    endpoints.map((registered) => [
+      routeLookupKey(registered.endpoint.method, registered.routePath),
+      registered,
+    ])
+  );
 
   return {
     modules: manifests,
     findById: (moduleId) => modulesById.get(moduleId) ?? null,
     endpoints: () => endpoints,
+    findEndpoint: (method, routePath) =>
+      endpointsByRoute.get(routeLookupKey(method, routePath)) ?? null,
     navigation: () => navigation,
     uiContributions: () => uiContributions,
   };

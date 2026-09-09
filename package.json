@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "npm run modules:routes",
     "dev": "next dev",
+    "prebuild": "npm run modules:routes",
     "build": "next build",
+    "modules:routes": "node scripts/generate-module-routes.cjs",
+    "modules:routes:check": "node scripts/generate-module-routes.cjs --check",
     "start": "next start",
     "lint": "eslint",
     "doctor": "react-doctor",

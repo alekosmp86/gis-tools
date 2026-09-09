@@ -24,6 +24,36 @@ describe("createModuleRegistry", () => {
     expect(registry.navigation()).toHaveLength(0);
     expect(registry.uiContributions()).toHaveLength(0);
     expect(registry.findById("anything")).toBeNull();
+    expect(registry.findEndpoint(ModuleHttpMethod.GET, "anything")).toBeNull();
+  });
+
+  it("should find a registered endpoint by method and route path", () => {
+    // Arrange
+    const registry = createModuleRegistry([
+      buildManifest({
+        endpoints: [{ path: "records", method: ModuleHttpMethod.GET, handler: okResponse }],
+      }),
+    ]);
+
+    // Act
+    const registered = registry.findEndpoint(ModuleHttpMethod.GET, "reports/records");
+
+    // Assert
+    expect(registered?.moduleId).toBe("reports");
+    expect(registered?.endpoint.handler).toBe(okResponse);
+  });
+
+  it("should not find an endpoint under a method or path no module declared", () => {
+    // Arrange: a generated route whose module was deleted must resolve to nothing, not to a peer.
+    const registry = createModuleRegistry([
+      buildManifest({
+        endpoints: [{ path: "records", method: ModuleHttpMethod.GET, handler: okResponse }],
+      }),
+    ]);
+
+    // Act & Assert
+    expect(registry.findEndpoint(ModuleHttpMethod.POST, "reports/records")).toBeNull();
+    expect(registry.findEndpoint(ModuleHttpMethod.GET, "reports/missing")).toBeNull();
   });
 
   it("should default to an empty registry when called with no argument", () => {
