@@ -13,12 +13,17 @@ Global configuration lives in `~/.claude/` and applies to every project:
 | Phase | Actor | Model |
 |---|---|---|
 | Triage, planning, decomposition | main session (orchestrator) | Opus 5 |
-| Implementation, tests, fix rounds | `implementer` agent | Sonnet 5 |
-| Code review of the finished diff | `code-reviewer` agent | Opus 5, fresh context |
+| Implementation, tests, fix rounds | Antigravity session / `implementer` | Gemini 3.8 Flash / Sonnet 5 |
+| Code review of the finished diff | `code-reviewer` agent / Claude session | Opus 5, fresh context |
 | Adjudication of findings | main session (orchestrator) | Opus 5 |
-| Commit, merge, push | `git-operator` agent | Haiku 4.5 |
+| Commit, merge, push | Antigravity session / `git-operator` agent | Gemini 3.8 Flash / Haiku 4.5 |
 
-**The reviewer is a separate agent even though it shares the orchestrator's model.** It starts with
+**Dual-Session Split (Claude + Antigravity)**:
+- **Claude (Opus)** drives high-level reasoning, system architecture, task decomposition, and writes/maintains `implementation_plan.md`.
+- **Antigravity (Gemini)** acts as the dedicated implementer: ingests `implementation_plan.md`, applies code modifications, writes tests, runs the quality gauntlet, and verifies cleanly.
+- **Claude (Opus)** runs a fresh-context review against `git diff` before approval and branch promotion.
+
+**The reviewer is a separate agent/context even though it shares the orchestrator's model.** It starts with
 no memory of the plan, so it cannot rationalise a flaw the way its author would. The orchestrator
 then adjudicates with the plan context the reviewer lacks. The split is the point.
 
@@ -69,12 +74,12 @@ project's binding constraints on layering, naming, styling, UI language and test
   and pastes real output. Review never runs against unverified code.
 - **Tests as specification** — the implementer may never weaken an assertion to reach green, and
   the reviewer treats a weakened, skipped or deleted test as an automatic BLOCKER.
-- **Branch promotion** — `git-operator` follows `.agents/rules/testing_branch_workflow.md` exactly:
-  integrate `main`, stage on `testing` by reset, run the gauntlet, promote by `--ff-only`, and
-  `--force-with-lease` only on `testing`.
+- **Branch promotion** — the committing session (Antigravity, or `git-operator`) follows
+  `.agents/rules/testing_branch_workflow.md` exactly: integrate `main`, stage on `testing` by reset,
+  run the gauntlet, promote by `--ff-only`, and `--force-with-lease` only on `testing`.
 - **Commit control** — the standing "never commit automatically" rule is unchanged and binds the
-  orchestrator too. `git-operator` acts only on operations named explicitly in its brief, and a
-  push is never implied by a commit.
+  orchestrator too. The committing session acts only on operations named explicitly in its brief,
+  and a push is never implied by a commit.
 
 ## 5. Severity taxonomy
 
