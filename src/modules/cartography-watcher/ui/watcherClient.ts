@@ -64,6 +64,22 @@ export async function removeSource(sourceId: string): Promise<ReadonlyArray<Watc
   return payload.sources;
 }
 
+export async function updateSource(
+  sourceId: string,
+  url: string
+): Promise<ReadonlyArray<WatchedSource>> {
+  const response = await fetch(`${API_BASE}/sources/update`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sourceId, url }),
+  });
+  const payload = await readJson<{ sources: WatchedSource[] }>(
+    response,
+    "No se pudo actualizar la fuente"
+  );
+  return payload.sources;
+}
+
 export async function fetchSummaries(): Promise<ReadonlyArray<SourceSummary>> {
   const response = await fetch(`${API_BASE}/summaries`);
   const payload = await readJson<{ summaries: SourceSummary[] }>(

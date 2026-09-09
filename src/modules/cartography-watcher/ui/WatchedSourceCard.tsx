@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
-import { ExternalLink, Trash2 } from "lucide-react";
+import React, { useState } from "react";
+import { ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { EditSourceForm } from "./EditSourceForm";
 import { SourceStatusBadge } from "./SourceStatusBadge";
 import { describePendingCount, formatPublicationDate } from "../domain/formatters";
 import { SourceBadgeState } from "../types";
@@ -11,17 +12,24 @@ import styles from "./WatchedSourceCard.module.css";
 interface WatchedSourceCardProps {
   source: WatchedSource;
   summary?: SourceSummary;
-  isRemoving: boolean;
+  isPending: boolean;
+  onUpdate: (sourceId: string, url: string) => Promise<void>;
   onRemove: (sourceId: string) => void;
 }
 
 export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
   source,
   summary,
-  isRemoving,
+  isPending,
+  onUpdate,
   onRemove,
 }) => {
   const portalUrl = `https://${source.portalHost}/dataset/${source.datasetSlug}`;
+  const [isEditing, setIsEditing] = useState(false);
+
+  const handleStartEditing = () => {
+    setIsEditing(true);
+  };
 
   return (
     <article className={`glass-panel ${styles.card}`}>
@@ -36,24 +44,36 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
 
       {source.description && <p className={styles.description}>{source.description}</p>}
 
-      <dl className={styles.metrics}>
-        <div className={styles.metric}>
-          <dt className={styles.metricLabel}>Recursos</dt>
-          <dd className={styles.metricValue}>{summary?.totalResources ?? "—"}</dd>
-        </div>
-        <div className={styles.metric}>
-          <dt className={styles.metricLabel}>Novedades</dt>
-          <dd className={styles.metricValue}>
-            {summary ? describePendingCount(summary.pendingCount) : "—"}
-          </dd>
-        </div>
-        <div className={styles.metric}>
-          <dt className={styles.metricLabel}>Última consulta</dt>
-          <dd className={styles.metricValue}>
-            {summary ? formatPublicationDate(summary.checkedAt) : "—"}
-          </dd>
-        </div>
-      </dl>
+      {isEditing ? (
+        <EditSourceForm
+          initialUrl={portalUrl}
+          isSubmitting={isPending}
+          onSubmit={async (url) => {
+            await onUpdate(source.id, url);
+            setIsEditing(false);
+          }}
+          onCancel={() => setIsEditing(false)}
+        />
+      ) : (
+        <dl className={styles.metrics}>
+          <div className={styles.metric}>
+            <dt className={styles.metricLabel}>Recursos</dt>
+            <dd className={styles.metricValue}>{summary?.totalResources ?? "—"}</dd>
+          </div>
+          <div className={styles.metric}>
+            <dt className={styles.metricLabel}>Novedades</dt>
+            <dd className={styles.metricValue}>
+              {summary ? describePendingCount(summary.pendingCount) : "—"}
+            </dd>
+          </div>
+          <div className={styles.metric}>
+            <dt className={styles.metricLabel}>Última consulta</dt>
+            <dd className={styles.metricValue}>
+              {summary ? formatPublicationDate(summary.checkedAt) : "—"}
+            </dd>
+          </div>
+        </dl>
+      )}
 
       {summary?.status === SourceBadgeState.ERROR && summary.errorMessage && (
         <p className={styles.errorMessage}>{summary.errorMessage}</p>
@@ -70,17 +90,29 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
           Ver en el portal
         </a>
 
-        {!source.isDefault && (
+        <div className={styles.actionsGroup}>
           <button
             type="button"
-            className={styles.removeButton}
-            onClick={() => onRemove(source.id)}
-            disabled={isRemoving}
+            className={styles.editButton}
+            onClick={handleStartEditing}
+            disabled={isPending}
           >
-            <Trash2 size={14} />
-            Dejar de vigilar
+            <Pencil size={14} />
+            Editar
           </button>
-        )}
+
+          {!source.isDefault && (
+            <button
+              type="button"
+              className={styles.removeButton}
+              onClick={() => onRemove(source.id)}
+              disabled={isPending}
+            >
+              <Trash2 size={14} />
+              Dejar de vigilar
+            </button>
+          )}
+        </div>
       </footer>
     </article>
   );

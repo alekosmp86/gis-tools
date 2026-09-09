@@ -7,7 +7,13 @@ import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLay
 import { isQueryBusy } from "@/core/common/queryBusyState";
 import { AddSourceForm } from "./AddSourceForm";
 import { WatchedSourceCard } from "./WatchedSourceCard";
-import { addSource, fetchSources, fetchSummaries, removeSource } from "./watcherClient";
+import {
+  addSource,
+  fetchSources,
+  fetchSummaries,
+  removeSource,
+  updateSource,
+} from "./watcherClient";
 import { describePendingCount } from "../domain/formatters";
 import type { SourceSummary } from "../types";
 import styles from "./WatcherDashboard.module.css";
@@ -31,6 +37,21 @@ function indexSummariesBySourceId(
 
 function sumPendingResources(summaries: ReadonlyArray<SourceSummary> | undefined): number {
   return (summaries ?? []).reduce((total, summary) => total + summary.pendingCount, 0);
+}
+
+function resolvePendingSourceId(
+  removeVariables: string | undefined,
+  isRemoving: boolean,
+  updateVariables: { sourceId: string; url: string } | undefined,
+  isUpdating: boolean
+): string | null {
+  if (isRemoving && removeVariables) {
+    return removeVariables;
+  }
+  if (isUpdating && updateVariables) {
+    return updateVariables.sourceId;
+  }
+  return null;
 }
 
 export const WatcherDashboard: React.FC = () => {
@@ -61,10 +82,22 @@ export const WatcherDashboard: React.FC = () => {
     onSuccess: invalidateAll,
   });
 
+  const updateSourceMutation = useMutation({
+    mutationFn: ({ sourceId, url }: { sourceId: string; url: string }) =>
+      updateSource(sourceId, url),
+    onSuccess: invalidateAll,
+  });
+
   const summariesBySourceId = indexSummariesBySourceId(summariesQuery.data);
   const totalPending = sumPendingResources(summariesQuery.data);
   const mutationError = addSourceMutation.error ?? removeSourceMutation.error;
   const isSummariesBusy = isQueryBusy(summariesQuery);
+  const pendingSourceId = resolvePendingSourceId(
+    removeSourceMutation.variables,
+    removeSourceMutation.isPending,
+    updateSourceMutation.variables,
+    updateSourceMutation.isPending
+  );
 
   return (
     <ToolWorkspaceLayout
@@ -133,7 +166,10 @@ export const WatcherDashboard: React.FC = () => {
               key={source.id}
               source={source}
               summary={summariesBySourceId.get(source.id)}
-              isRemoving={removeSourceMutation.isPending}
+              isPending={pendingSourceId === source.id}
+              onUpdate={async (sourceId, url) => {
+                await updateSourceMutation.mutateAsync({ sourceId, url });
+              }}
               onRemove={(sourceId) => removeSourceMutation.mutate(sourceId)}
             />
           ))}

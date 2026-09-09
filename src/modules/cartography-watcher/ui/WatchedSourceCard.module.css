@@ -75,6 +75,7 @@
 }
 
 .portalLink,
+.editButton,
 .removeButton {
   display: inline-flex;
   align-items: center;
@@ -96,6 +97,16 @@
   border-color: rgba(6, 182, 212, 0.35);
 }
 
+.editButton:hover:not(:disabled) {
+  color: var(--accent-cyan, #06b6d4);
+  border-color: rgba(6, 182, 212, 0.35);
+}
+
+.editButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .removeButton:hover:not(:disabled) {
   color: #f87171;
   border-color: rgba(239, 68, 68, 0.35);
@@ -104,4 +115,11 @@
 .removeButton:disabled {
   opacity: 0.5;
   cursor: progress;
+}
+
+.actionsGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
