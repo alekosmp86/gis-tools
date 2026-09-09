@@ -76,21 +76,27 @@
 - **Real Logic Verification**: For domain math, spatial operations, parsers, and string normalizers, test against real calculations without mocking internal domain logic.
 
 ## Testing-First Branching & Deployment Workflow
-- **Step 1 — Sync `testing` with `main`**: When ordered to test any development or fix, first switch to `testing` and bring it up to date with the latest stable changes from `main` (`git checkout testing`, `git pull origin testing`, `git merge main`).
-- **Step 2 — Merge Candidate Branch into `testing`**: Merge the candidate fix/dev branch into `testing` (`git merge <feature-or-fix-branch>`).
-- **Step 3 — Run Quality Gauntlet**: Execute all quality gates:
-  1. `npm test` (100% green across all unit and integration test suites).
-  2. `npm run doctor` (100 / 100 Great maintainability score).
-  3. `npm run lint` (0 errors, 0 warnings).
-  4. `npm run build` (Clean Turbopack production build).
-- **Step 4A — Tactical Fork on Failure (RED)**:
-  - DO NOT use `git revert` (avoids inverted delta history pollution).
-  - Use `git reset --hard origin/testing` to return `testing` to its clean baseline.
-  - Switch back to the feature/fix branch to iterate, debug, and resolve the defect.
-- **Step 4B — Tactical Fork on Success (GREEN)**:
-  - Reset `testing` back to clean state (`git reset --hard origin/testing`).
-  - Switch to `main` (`git checkout main`).
-  - Merge the verified candidate branch (`git merge <feature-or-fix-branch>`).
-  - Push `main` to remote origin upon user command (`git push origin main`).
-  - Fast-forward `testing` to align with `main` and push (`git checkout testing`, `git merge main`, `git push origin testing`).
+> Canonical source: `.agents/rules/testing_branch_workflow.md`. Keep both in sync.
 
+- **Principle — Tooling Lives on `main`**: Branch topology governs *promotion*, never *capability*. Test runners, linters and configuration are part of the codebase, so every branch cuts from `main` and inherits the full gauntlet. Never install tooling on `testing` alone.
+- **Principle — `testing` Is Disposable Staging**: Never fix, author, or accumulate work on it. Anything on it may be discarded at any moment.
+- **Principle — Tested Commit Is the Promoted Commit**: Promotion is a fast-forward of the exact object that passed the gauntlet, never a second unverified merge.
+- **Local Loop (every branch, before requesting promotion)**: The author runs `npm run lint`, `npm test`, `npm run build` and `npm run doctor` on their own branch. `testing` confirms integration; it is not where failures are discovered.
+- **Step 1 — Integrate `main` into the Candidate**: `git fetch origin`, `git merge origin/main` on the candidate branch, so conflicts are resolved by the author where the context lives. Re-run the local loop afterwards.
+- **Step 2 — Stage the Candidate on `testing`**: `git checkout testing`, `git reset --hard <feature-or-fix-branch>`. No merge, so `testing` cannot hold a combination that differs from what will be promoted. Align a published `testing` with `git push --force-with-lease` — never plain `--force`.
+- **Step 3 — Run Quality Gauntlet** (cheapest and most frequently failing first):
+  1. `npm run lint` (0 errors, 0 warnings).
+  2. `npm test` (all suites green) — Vitest, 82 cases across 13 files. Playwright end-to-end runs separately via `npm run test:e2e` and is not part of this gauntlet.
+  3. `npm run build` (clean Turbopack production build).
+  4. `npm run doctor` (**zero findings**; the score API is unreachable behind the local TLS interception, so `Score unavailable` is expected and is not a failure).
+- **Never Weaken a Gate to Pass It**: When a test fails because the code produces an incorrect result, correct the code — never the assertion.
+- **Step 4A — Tactical Fork on Failure (RED)**:
+  - Do NOT fix on `testing`; changes made there are discarded.
+  - Do NOT use `git revert` (avoids inverted delta history pollution).
+  - Return to the candidate branch, correct the defect, re-run the local loop, then repeat from Step 1.
+- **Step 4B — Tactical Fork on Success (GREEN)**:
+  - Promote by fast-forward: `git checkout main`, `git merge --ff-only <feature-or-fix-branch>`.
+  - If the fast-forward is refused, `main` advanced during the gauntlet. That is the safety mechanism working: do not force it and do not fall back to a plain merge — re-integrate and re-run from Step 1.
+  - Push `main` to remote origin upon explicit user instruction only (`git push origin main`).
+  - Align `testing` with the promoted state (`git checkout testing`, `git reset --hard main`, `git push --force-with-lease origin testing`).
+- **Bootstrap Exception (spent)**: The change installing the test runner could not be validated by the gauntlet it created and was permitted once. That exception has been used — runner and suites now live on `main` and every branch inherits them. No further carve-outs.
