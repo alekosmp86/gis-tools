@@ -1,27 +1,34 @@
-# GIS Tools — Claude Code Entry Point
+# GIS Tools — Topic Reference & Context Index
 
-This file exists so Claude Code loads the workspace rules. The canonical rules live in `AGENTS.md`
-(shared with other agentic tools) and in the focused rule files under `.agents/rules/`. Edit those,
-never this file — it is a loader, not a source.
+Load files on-demand based on the task to conserve context tokens. Do not load all docs upfront.
 
-## Workspace rules (binding)
+## Rules & Development Workflow
+- `AGENTS.md` — Workspace summary rules (architecture, conventions, persona, quality gates).
+- `.agents/rules/model_delegation.md` — Multi-model pipeline: planning, implementation, review.
+- `.agents/rules/testing_branch_workflow.md` — Gauntlet, promotion pipeline, branching standards.
+- `.agents/rules/testing_standards.md` — Test structure, AAA pattern, boundary coverage.
+- `.agents/rules/coding_guidelines.md` — Code structure, types, modular CSS, no inline styles.
+- `.agents/rules/module_authoring.md` — Modular monolith, boundaries, JSON route manifests.
+- `.agents/rules/portable_node.md` — Portable Node.js fallback (`C:\Alekos\Tools\node24portable`).
+- `.agents/rules/user_addressing.md` — Persona and user addressing conventions.
 
-@AGENTS.md
+## Architecture & System Design
+- `docs/architecture/MODULAR_MONOLITH_AND_MODULES.md` — Modular monolith design and boundary contracts.
+- `docs/architecture/ARCHITECTURE.md` — General system architecture and data pipelines.
+- `docs/architecture/WIZARD_ORCHESTRATOR_ARCHITECTURE.md` — Wizard step orchestrator and state machines.
+- `src/modules/cartography-watcher/` — Reference module implementation.
 
-## Focused rule files
+## Tools & Domain Documentation
+- `docs/tools/` — Specific tool documentation (`DB_CSV_SYNC_TOOL.md`, `DB_SHAPEFILE_SYNC_TOOL.md`, `DB_DB_SYNC_TOOL.md`, `FILE_VIEWER_TOOL.md`, `POSTGIS_TABLE_VIEWER_TOOL.md`, `CARTOGRAPHY_WATCHER_MODULE.md`).
+- `docs/specifications/` — Functional requirements and specifications.
 
-Read the relevant one before working in its area; each is the canonical source for its topic and
-`AGENTS.md` carries only its summary.
+## Troubleshooting & Past Fixes
+- `docs/README.md` — Complete documentation map and issue directory.
+- `docs/issues/` — Root-cause analyses, diffs, and verification for past issues (001–027).
 
-- `.agents/rules/model_delegation.md` — multi-model pipeline: who plans, who implements, who reviews
-- `.agents/rules/module_authoring.md` — modular monolith, module boundaries, route declarations
-- `.agents/rules/testing_branch_workflow.md` — the gauntlet and the promotion pipeline
-- `.agents/rules/testing_standards.md` — how tests are written
-- `.agents/rules/coding_guidelines.md` — code structure and style
-- `.agents/rules/portable_node.md` — Node.js detection and the portable fallback
-- `.agents/rules/user_addressing.md` — persona and how to address the user
-
-## Architecture rationale
-
-- `docs/architecture/MODULAR_MONOLITH_AND_MODULES.md` — why the module system is shaped this way
-- `src/modules/cartography-watcher/` — the reference module; read it before authoring a new one
+## Critical Code Output Formatting (Token Optimization)
+* Speak like a caveman.
+* Never use preambles, introductory filler, or pleasantries (e.g., do not say "Sure, I can help with that" or "Here is the modified file").
+* Jump directly into the solution. 
+* Do not write long summaries explaining why you changed code unless explicitly asked.
+* Maximize code blocks, minimize natural language paragraphs. Keep explanations under 1-2 punchy sentences.
