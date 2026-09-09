@@ -1,4 +1,4 @@
-# Issue #021: Infraestructura de Pruebas Automatizadas (Vitest + Playwright) y Suite de Servicios y Parsers
+# Issue #024: Infraestructura de Pruebas Automatizadas (Vitest + Playwright) y Suite de Servicios y Parsers
 
 ## 1. Problem Statement
 
