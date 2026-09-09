@@ -1,4 +1,4 @@
-# Issue 020: Attribute table and preview map selections pointed at different entities
+# Issue 023: Attribute table and preview map selections pointed at different entities
 
 ## Problem Statement
 Selecting a row in the attribute table highlighted the wrong geometry on the map, and clicking a
@@ -87,7 +87,7 @@ npm run doctor   # exit 0, "No issues found!" across 147 scanned files
 ```
 
 `useVectorChunkStream` lists `onSelectFeature` among its effect dependencies, so an unstable callback
-would re-render the entire map — the same failure class as issue 018. React Compiler memoizes the
+would re-render the entire map — the same failure class as issue 021. React Compiler memoizes the
 translating closure on the collection it captures, and `react-doctor` reports no manual-memoization
 finding, confirming no `useMemo`/`useCallback` needs to be added by hand.
 
@@ -96,5 +96,5 @@ that row→map and map→row selection agree past the first gap. The same check 
 viewer's capped-sample path with a dataset above `MAX_MAP_PREVIEW_FEATURES`.
 
 ## Scope note
-`Step4ResultsView` renders comparison results without an attribute table, so it has no divergence to
+`ComparisonResultsView` renders comparison results without an attribute table, so it has no divergence to
 correct. Its collections are covered by the positional fallback in `buildFeatureRecordIndex`.

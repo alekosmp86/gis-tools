@@ -1,9 +1,7 @@
 import React, { useImperativeHandle } from "react";
 import { SuidSelectorCard } from "./SuidSelectorCard";
-import { PkOptimizationCard } from "./PkOptimizationCard";
 import { AttributeFieldsCard } from "./AttributeFieldsCard";
 import { GeometryToggleCard } from "../db-shapefile-sync/GeometryToggleCard";
-import { InsertDefaultsCard } from "./InsertDefaultsCard";
 import { useSuidMappingForm } from "@/hooks/useSuidMappingForm";
 import type { DbColumnMetadata } from "@/types/db";
 import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
@@ -23,7 +21,6 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
   (
     {
       dbColumns,
-      columnDetails,
       fileAttributes,
       onSuccess,
       initialConfig = null,
@@ -32,9 +29,6 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
     },
     ref
   ) => {
-    const detectedPk =
-      columnDetails?.find((detail) => detail.is_primary_key)?.column_name ?? null;
-
     const {
       selectableColumns,
       selectedSuids,
@@ -43,27 +37,19 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
       selectedFields,
       attributeMap,
       compareGeometry,
-      unmappedDbColumns,
-      insertDefaults,
-      isPkOptimizationEnabled,
-      setIsPkOptimizationEnabled,
-      selectedPkColumn,
-      setSelectedPkColumn,
       toggleSuidColumn,
       setCompareGeometry,
       toggleField,
       handleMapField,
       selectAllFields,
       clearAllFields,
-      handleUpdateInsertDefault,
       handleProceed,
     } = useSuidMappingForm(
       dbColumns,
       fileAttributes,
       onSuccess,
       initialConfig,
-      onReadyChange,
-      detectedPk
+      onReadyChange
     );
 
     useImperativeHandle(ref, () => ({
@@ -80,16 +66,6 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
           onToggleSuid={toggleSuidColumn}
         />
 
-        {/* 1.1. Primary Key UPDATE Optimization Card */}
-        <PkOptimizationCard
-          availableColumns={dbColumns}
-          detectedPrimaryKey={detectedPk}
-          selectedPrimaryKey={selectedPkColumn}
-          isEnabled={isPkOptimizationEnabled}
-          onToggleEnabled={setIsPkOptimizationEnabled}
-          onSelectPrimaryKey={setSelectedPkColumn}
-        />
-
         {/* 2. Attributes Selection & 1-to-1 Mapping Card */}
         <AttributeFieldsCard
           availableFields={availableCompareFields}
@@ -102,15 +78,7 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
           onClearAll={clearAllFields}
         />
 
-        {/* 3. Insert Defaults for Unmapped DB Fields (NOT NULL Handling) */}
-        <InsertDefaultsCard
-          unmappedColumns={unmappedDbColumns}
-          columnDetails={columnDetails}
-          defaults={insertDefaults}
-          onChangeDefault={handleUpdateInsertDefault}
-        />
-
-        {/* 4. Geometry Comparison Toggle Card (optional for spatial shapefiles) */}
+        {/* 3. Geometry Comparison Toggle Card (optional for spatial shapefiles/CSVs) */}
         {showGeometryToggle && (
           <GeometryToggleCard
             compareGeometry={compareGeometry}

@@ -1,12 +1,10 @@
-import type { ComparisonSummary, SqlPatchSummary } from "@/types/comparison";
+import type { ComparisonSummary, SqlPatchSummary, ProgressCallback } from "@/types/comparison";
 import type {
   WorkerRunComparisonInputMessage,
   WorkerGenerateSqlInputMessage,
   WorkerOutputMessage,
   SerializableFileDataset,
 } from "@/types/workerMessages";
-
-export type ProgressCallback = (phase: string, current: number, total: number) => void;
 
 /**
  * Runs the comparison inside a Web Worker.

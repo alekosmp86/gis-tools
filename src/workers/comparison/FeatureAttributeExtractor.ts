@@ -16,6 +16,7 @@ export interface ExtractFeatureParams {
   shpReader: BinaryShpReader | null;
   transformCoordinate: ((coordinate: [number, number]) => [number, number]) | null;
   dbfCompareFields: Map<string, DbfFieldDescriptor>;
+  ignoreEncodingArtifacts?: boolean;
 }
 
 export interface ExtractedFeatureResult {
@@ -52,6 +53,7 @@ export class FeatureAttributeExtractor {
       shpReader,
       transformCoordinate,
       dbfCompareFields,
+      ignoreEncodingArtifacts = true,
     } = params;
 
     const differences: AttributeDifference[] = [];
@@ -69,10 +71,11 @@ export class FeatureAttributeExtractor {
 
         if (fieldDescriptor) {
           const fileVal = dbfReader.readFieldValue(targetRecordIndex, fieldDescriptor);
-          const dbCleaned = this.suidResolver.cleanRawValue(dbVal);
-          const fileCleaned = this.suidResolver.cleanRawValue(fileVal);
+          const areEqual = this.suidResolver.areValuesEquivalent(dbVal, fileVal, {
+            ignoreEncodingArtifacts,
+          });
 
-          if (dbCleaned !== fileCleaned) {
+          if (!areEqual) {
             differences.push({
               fieldName: field,
               dbValue: dbVal as string | number | null,
@@ -109,10 +112,11 @@ export class FeatureAttributeExtractor {
           }
         }
 
-        const dbCleaned = this.suidResolver.cleanRawValue(dbVal);
-        const fileCleaned = this.suidResolver.cleanRawValue(fileVal);
+        const areEqual = this.suidResolver.areValuesEquivalent(dbVal, fileVal, {
+          ignoreEncodingArtifacts,
+        });
 
-        if (dbCleaned !== fileCleaned) {
+        if (!areEqual) {
           differences.push({
             fieldName: field,
             dbValue: dbVal as string | number | null,

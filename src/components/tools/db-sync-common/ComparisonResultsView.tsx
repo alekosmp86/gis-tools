@@ -17,14 +17,14 @@ import type { ColumnMappingConfig, ComparisonSourceDescriptor } from "@/types/co
 import { resolveComparisonDescriptor } from "@/constants/comparisonDescriptors";
 import { generateSqlPatchesInWorker, serializeFileDataset } from "@/services/workerBridge";
 import { ResyncBanner } from "./ResyncBanner";
-import styles from "./Step4ResultsView.module.css";
+import styles from "./ComparisonResultsView.module.css";
 
 const SpatialMapPreview = dynamic(
   () => import("@/components/shared/SpatialMapPreview").then((m) => m.SpatialMapPreview),
   { ssr: false }
 );
 
-interface Step4ResultsViewProps {
+export interface ComparisonResultsViewProps {
   dbConfig: DbConfig;
   fileDataset: ParsedShapefileData | ParsedFileDataset;
   mappingConfig: ColumnMappingConfig;
@@ -32,7 +32,7 @@ interface Step4ResultsViewProps {
   descriptor?: ComparisonSourceDescriptor;
 }
 
-export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
+export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
   dbConfig,
   fileDataset,
   mappingConfig,
@@ -183,3 +183,4 @@ export const Step4ResultsView: React.FC<Step4ResultsViewProps> = ({
   );
 };
 
+ComparisonResultsView.displayName = "ComparisonResultsView";

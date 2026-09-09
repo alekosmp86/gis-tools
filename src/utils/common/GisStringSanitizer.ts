@@ -1,3 +1,5 @@
+import { GisEncodingNormalizer, type AttributeEquivalenceOptions } from "./GisEncodingNormalizer";
+
 /**
  * GisStringSanitizer
  * Object-Oriented service for cleaning, normalizing, and standardizing GIS attributes and SUID identifiers.
@@ -32,10 +34,32 @@ export class GisStringSanitizer {
   }
 
   public static cleanSuid(value: unknown): string {
-    return GisStringSanitizer.cleanValue(value).toLowerCase();
+    const cleaned = GisStringSanitizer.cleanValue(value);
+    return GisStringSanitizer.repairEncoding(cleaned).toLowerCase();
+  }
+
+  /**
+   * Evaluates attribute equivalence with encoding glitch tolerance.
+   * Strictly preserves case sensitivity and punctuation sensitivity.
+   */
+  public static areValuesEquivalent(
+    databaseValue: unknown,
+    fileValue: unknown,
+    options?: AttributeEquivalenceOptions
+  ): boolean {
+    const cleanedDb = GisStringSanitizer.cleanValue(databaseValue);
+    const cleanedFile = GisStringSanitizer.cleanValue(fileValue);
+    return GisEncodingNormalizer.areAttributesEquivalent(cleanedDb, cleanedFile, options);
+  }
+
+  public static repairEncoding(value: string): string {
+    return GisEncodingNormalizer.repairEncoding(value);
   }
 }
 
 /** Convenience exports */
 export const cleanValue = GisStringSanitizer.cleanValue;
 export const cleanSuid = GisStringSanitizer.cleanSuid;
+export const areValuesEquivalent = GisStringSanitizer.areValuesEquivalent;
+export const repairEncoding = GisStringSanitizer.repairEncoding;
+

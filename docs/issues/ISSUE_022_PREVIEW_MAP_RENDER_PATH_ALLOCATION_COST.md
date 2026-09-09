@@ -1,4 +1,4 @@
-# Issue 019: Preview map render path allocated and copied the dataset several times per render
+# Issue 022: Preview map render path allocated and copied the dataset several times per render
 
 ## Problem Statement
 Rendering large spatial datasets in the shared preview map was slow and memory-hungry well before
@@ -102,7 +102,7 @@ Measured after the change, same harness and inputs: the removable overhead drops
 
 **Still to verify in the browser**, since the harness deliberately excludes Leaflet layer
 construction: end-to-end time from dataset ready to fully painted map, and behaviour parity across
-every consumer of `SpatialMapPreview` — the CSV and Shapefile load steps, `Step4ResultsView`, the file
+every consumer of `SpatialMapPreview` — the CSV and Shapefile load steps, `ComparisonResultsView`, the file
 viewer and the DB table viewer. Popups, discrepancy colouring, progressive rendering and
 bidirectional row↔map selection must behave as before.
 

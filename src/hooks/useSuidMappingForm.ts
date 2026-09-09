@@ -1,13 +1,12 @@
 import { useState } from "react";
-import type { ColumnMappingConfig, InsertFieldDefault } from "@/types/comparison";
+import type { ColumnMappingConfig } from "@/types/comparison";
 
 export function useSuidMappingForm(
   dbColumns: string[],
   fileAttributes: string[],
   onSuccess: (mappingConfig: ColumnMappingConfig) => void,
   initialConfig?: ColumnMappingConfig | null,
-  onReadyChange?: (ready: boolean) => void,
-  detectedPrimaryKey?: string | null
+  onReadyChange?: (ready: boolean) => void
 ) {
   // Allow all non-geometry columns OR geometry columns for SUID/Attribute selection
   const selectableColumns = dbColumns.filter(
@@ -28,21 +27,6 @@ export function useSuidMappingForm(
   const [compareGeometry, setCompareGeometry] = useState<boolean>(
     initialConfig?.compareGeometry ?? false
   );
-
-  const [insertDefaults, setInsertDefaults] = useState<Record<string, InsertFieldDefault>>(
-    initialConfig?.insertDefaults || {}
-  );
-
-  const [isPkOptimizationEnabled, setIsPkOptimizationEnabled] = useState<boolean>(() => {
-    if (initialConfig?.primaryKeyColumn !== undefined) {
-      return initialConfig.primaryKeyColumn !== null;
-    }
-    return Boolean(detectedPrimaryKey);
-  });
-
-  const [selectedPkColumn, setSelectedPkColumn] = useState<string>(() => {
-    return initialConfig?.primaryKeyColumn || detectedPrimaryKey || "";
-  });
 
   // Pre-index source file attributes in a Map for fast O(1) lookups
   const fileAttrMap = new Map<string, string>();
@@ -75,21 +59,20 @@ export function useSuidMappingForm(
       return;
     }
 
-    // Check common spatial name aliases (geom vs geom_wkb, geometry vs wkb_geometry)
-    if (targetLower.includes("geom")) {
-      const fileGeom = fileAttributes.find((attr) => attr.toLowerCase().includes("geom"));
-      if (fileGeom) {
-        attributeMap[dbCol] = fileGeom;
-        return;
-      }
+    // Default to self if field name matches loosely or fallback to empty
+    const directMatch = fileAttributes.find(
+      (fileAttr) => fileAttr.toLowerCase() === targetLower
+    );
+    if (directMatch) {
+      attributeMap[dbCol] = directMatch;
     }
-
-    attributeMap[dbCol] = ""; // Unmapped
   });
 
-  // Match selected DB SUID columns to source file attributes
+  // Resolve matching File SUID columns (1-to-1 matching for each DB SUID column)
   const matchedFileSuids = selectedSuids.map((suidCol) => {
-    if (attributeMap[suidCol]) return attributeMap[suidCol];
+    if (customAttributeMap[suidCol]) {
+      return customAttributeMap[suidCol];
+    }
     const targetLower = suidCol.toLowerCase();
     const target10Lower = targetLower.slice(0, 10);
 
@@ -103,12 +86,6 @@ export function useSuidMappingForm(
   // Filter out selected SUID columns from available comparison fields (allow all DB columns)
   const suidSet = new Set(selectedSuids);
   const availableCompareFields = dbColumns.filter((column) => !suidSet.has(column));
-
-  // Unmapped DB columns (columns not chosen as SUID or comparison attributes)
-  const mappedSet = new Set([...selectedSuids, ...selectedFields]);
-  const unmappedDbColumns = dbColumns.filter(
-    (column) => !mappedSet.has(column) && !["geom", "geometry", "wkb_geometry"].includes(column.toLowerCase())
-  );
 
   const toggleSuidColumn = (column: string) => {
     setSelectedSuids((prev) => {
@@ -145,27 +122,23 @@ export function useSuidMappingForm(
     setSelectedFields([]);
   };
 
-  const handleUpdateInsertDefault = (fieldName: string, fieldDefault: InsertFieldDefault) => {
-    setInsertDefaults((prev) => ({
-      ...prev,
-      [fieldName]: fieldDefault,
-    }));
-  };
-
   const handleProceed = () => {
     if (selectedSuids.length === 0) return;
 
-    const effectivePk =
-      isPkOptimizationEnabled && selectedPkColumn ? selectedPkColumn : null;
+    const baseConfig: ColumnMappingConfig = initialConfig ?? {
+      suidColumns: [],
+      matchedFileSuidColumns: [],
+      fieldsToCompare: [],
+      compareGeometry: false,
+    };
 
     const config: ColumnMappingConfig = {
+      ...baseConfig,
       suidColumns: selectedSuids,
       matchedFileSuidColumns: matchedFileSuids,
       fieldsToCompare: selectedFields,
       attributeMap,
       compareGeometry,
-      insertDefaults,
-      primaryKeyColumn: effectivePk,
     };
     onSuccess(config);
   };
@@ -178,19 +151,12 @@ export function useSuidMappingForm(
     selectedFields,
     attributeMap,
     compareGeometry,
-    unmappedDbColumns,
-    insertDefaults,
-    isPkOptimizationEnabled,
-    setIsPkOptimizationEnabled,
-    selectedPkColumn,
-    setSelectedPkColumn,
     toggleSuidColumn,
     setCompareGeometry,
     toggleField,
     handleMapField,
     selectAllFields,
     clearAllFields,
-    handleUpdateInsertDefault,
     handleProceed,
   };
 }

@@ -3,8 +3,7 @@
  * Synchronous SSR / fallback comparison engine — delegates execution to SpatialComparisonEngine.
  */
 import type { WorkerRunComparisonInputMessage } from "@/types/workerMessages";
-import type { ComparisonSummary } from "@/types/comparison";
-import type { ProgressCallback } from "@/services/workerBridge";
+import type { ComparisonSummary, ProgressCallback } from "@/types/comparison";
 import { SpatialComparisonEngine } from "./comparison/SpatialComparisonEngine";
 
 const comparisonEngine = new SpatialComparisonEngine();

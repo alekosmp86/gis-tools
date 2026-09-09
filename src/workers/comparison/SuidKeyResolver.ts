@@ -1,4 +1,4 @@
-import { cleanValue, cleanSuid } from "@/utils/common/GisStringSanitizer";
+import { cleanValue, cleanSuid, areValuesEquivalent } from "@/utils/common/GisStringSanitizer";
 
 /**
  * SuidKeyResolver
@@ -11,6 +11,14 @@ export class SuidKeyResolver {
 
   public cleanKeyString(value: unknown): string {
     return cleanSuid(value);
+  }
+
+  public areValuesEquivalent(
+    databaseValue: unknown,
+    fileValue: unknown,
+    options?: { ignoreEncodingArtifacts?: boolean }
+  ): boolean {
+    return areValuesEquivalent(databaseValue, fileValue, options);
   }
 
   private resolveRecordValue(record: Record<string, unknown>, columnName: string): unknown {

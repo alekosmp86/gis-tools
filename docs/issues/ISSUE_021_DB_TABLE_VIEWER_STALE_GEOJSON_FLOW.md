@@ -1,4 +1,4 @@
-# Issue 018: DB Table Viewer repeated PostgreSQL streaming and unnecessary derived-state mirroring
+# Issue 021: DB Table Viewer repeated PostgreSQL streaming and unnecessary derived-state mirroring
 
 ## Problem Statement
 While extracting the DB table viewer data flow into a dedicated hook, the streaming effect was rewritten

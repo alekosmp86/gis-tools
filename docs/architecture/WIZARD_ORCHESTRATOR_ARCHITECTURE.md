@@ -7,7 +7,7 @@
 
 ## 1. Overview & Rationale
 
-Previously, each child form and tool view (`DbConnectionForm`, `CsvUploader`, `ShapefileUploader`, `SuidMappingStep`, `Step4ResultsView`) managed its own hardcoded step titles (e.g., `1. Configure Connection...`) and internal back/next buttons.
+Previously, each child form and tool view (`DbConnectionForm`, `CsvUploader`, `ShapefileUploader`, `SuidMappingStep`, `SyncParametersStep`, `ComparisonResultsView`) managed its own hardcoded step titles (e.g., `1. Configure Connection...`) and internal back/next buttons.
 
 This cross-cutting concern tightly coupled inner components to specific step positions, preventing them from being reused in other workflows (such as the DB vs. DB sync tool, which requires two separate DB connection form instances).
 
