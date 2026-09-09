@@ -7,6 +7,7 @@ import {
 import { countPendingResources, evaluateResourceDelta } from "../domain/deltaEvaluation";
 import { CatalogFormatFilter, DeltaStatus, VaultRenameResult } from "../types";
 import { formatTitleFromSlug, parsePortalReference, sanitizeSlug } from "../domain/sourceNaming";
+import { sourceNotFoundMessage } from "../domain/sourceOverrides";
 import { CkanPortalClient } from "./CkanPortalClient";
 import { VaultStorageService } from "./VaultStorageService";
 import { WatchedSourcesStorageService } from "./WatchedSourcesStorageService";
@@ -83,7 +84,7 @@ export class WatcherOrchestrator {
     const sources = await this.sourcesStorage.loadSources();
     const existing = sources.find((source) => source.id === sourceId);
     if (!existing) {
-      throw new Error(`No se encontró la fuente vigilada con identificador "${sourceId}".`);
+      throw new Error(sourceNotFoundMessage(sourceId));
     }
 
     this.assertReferenceIsFree(sources, portalHost, datasetSlug, sourceId);

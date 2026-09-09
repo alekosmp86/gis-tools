@@ -19,11 +19,19 @@ export function isUntouchedDefault(source: WatchedSource): boolean {
 }
 
 /**
+ * Shared message when a requested watched source id does not exist.
+ */
+export function sourceNotFoundMessage(sourceId: string): string {
+  return `No se encontró la fuente vigilada con identificador "${sourceId}".`;
+}
+
+/**
  * Combines persisted rows with the shipped defaults.
  *
  * Persisted rows matching a default ID act as overrides over the shipped default, with
  * isDefault: true re-stamped. Persisted custom rows are included with isDefault: false.
  * Persisted rows with unknown IDs claiming to be defaults are ignored to prevent shadowing.
+ * Retiring a shipped default requires a migration, because override rows for it will otherwise be dropped.
  */
 export function mergeOverridesOverDefaults(
   persistedRows: ReadonlyArray<WatchedSource>

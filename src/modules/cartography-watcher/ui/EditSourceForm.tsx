@@ -40,12 +40,6 @@ export const EditSourceForm: React.FC<EditSourceFormProps> = ({
     }
   };
 
-  const handleCancel = () => {
-    setEditError(null);
-    setEditUrl(initialUrl);
-    onCancel();
-  };
-
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
       <label className={styles.label} htmlFor={inputId}>
@@ -72,7 +66,7 @@ export const EditSourceForm: React.FC<EditSourceFormProps> = ({
         <button
           type="button"
           className={styles.cancelButton}
-          onClick={handleCancel}
+          onClick={onCancel}
           disabled={isSubmitting}
         >
           Cancelar

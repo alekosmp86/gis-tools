@@ -12,7 +12,8 @@ import styles from "./WatchedSourceCard.module.css";
 interface WatchedSourceCardProps {
   source: WatchedSource;
   summary?: SourceSummary;
-  isPending: boolean;
+  isRemoving: boolean;
+  isUpdating: boolean;
   onUpdate: (sourceId: string, url: string) => Promise<void>;
   onRemove: (sourceId: string) => void;
 }
@@ -20,7 +21,8 @@ interface WatchedSourceCardProps {
 export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
   source,
   summary,
-  isPending,
+  isRemoving,
+  isUpdating,
   onUpdate,
   onRemove,
 }) => {
@@ -47,8 +49,9 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
       {isEditing ? (
         <EditSourceForm
           initialUrl={portalUrl}
-          isSubmitting={isPending}
+          isSubmitting={isUpdating}
           onSubmit={async (url) => {
+            // Closing only after the await resolves is what keeps a rejected edit on screen.
             await onUpdate(source.id, url);
             setIsEditing(false);
           }}
@@ -95,7 +98,7 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
             type="button"
             className={styles.editButton}
             onClick={handleStartEditing}
-            disabled={isPending}
+            disabled={isUpdating || isRemoving}
           >
             <Pencil size={14} />
             Editar
@@ -106,7 +109,7 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
               type="button"
               className={styles.removeButton}
               onClick={() => onRemove(source.id)}
-              disabled={isPending}
+              disabled={isRemoving || isUpdating}
             >
               <Trash2 size={14} />
               Dejar de vigilar

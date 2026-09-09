@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_WATCHED_SOURCES } from "../data/defaultSources";
-import { isUntouchedDefault, mergeOverridesOverDefaults } from "../domain/sourceOverrides";
+import {
+  isUntouchedDefault,
+  mergeOverridesOverDefaults,
+  sourceNotFoundMessage,
+} from "../domain/sourceOverrides";
 import type { WatchedSource } from "../types";
 
 /**
@@ -31,18 +35,21 @@ export class WatchedSourcesStorageService {
         );
       }
     } catch {
-      // No usable file yet; the defaults alone are a valid state.
+      // A missing or corrupt file yields the defaults rather than an error; the next write repairs the file.
     }
 
     return mergeOverridesOverDefaults(persistedRows);
   }
 
-  /** Adds a source, replacing any existing entry with the same id. Defaults are never touched. */
+  /**
+   * Adds a source, replacing any entry with the same id. The orchestrator guarantees the id does
+   * not collide with a shipped default.
+   */
   public async addSource(source: WatchedSource): Promise<WatchedSource[]> {
     const existing = await this.loadSources();
     const otherSources = existing.filter((candidate) => candidate.id !== source.id);
 
-    await this.persist([...otherSources, { ...source, isDefault: false }]);
+    await this.persistOverrides([...otherSources, { ...source, isDefault: false }]);
     return this.loadSources();
   }
 
@@ -58,7 +65,7 @@ export class WatchedSourcesStorageService {
     const targetIndex = existing.findIndex((candidate) => candidate.id === sourceId);
 
     if (targetIndex === -1) {
-      throw new Error(`No se encontró la fuente vigilada con identificador "${sourceId}".`);
+      throw new Error(sourceNotFoundMessage(sourceId));
     }
 
     const target = existing[targetIndex];
@@ -72,7 +79,7 @@ export class WatchedSourcesStorageService {
     const updatedSources = [...existing];
     updatedSources[targetIndex] = updated;
 
-    await this.persist(updatedSources);
+    await this.persistOverrides(updatedSources);
     return this.loadSources();
   }
 
@@ -87,11 +94,11 @@ export class WatchedSourcesStorageService {
     const existing = await this.loadSources();
     const remaining = existing.filter((candidate) => candidate.id !== sourceId);
 
-    await this.persist(remaining);
+    await this.persistOverrides(remaining);
     return this.loadSources();
   }
 
-  private async persist(sources: ReadonlyArray<WatchedSource>): Promise<void> {
+  private async persistOverrides(sources: ReadonlyArray<WatchedSource>): Promise<void> {
     const rowsToPersist = sources.filter((source) => !isUntouchedDefault(source));
     await fs.promises.mkdir(path.dirname(this.sourcesFilePath), { recursive: true });
     await fs.promises.writeFile(

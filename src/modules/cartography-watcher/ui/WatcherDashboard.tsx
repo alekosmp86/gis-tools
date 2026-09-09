@@ -39,21 +39,6 @@ function sumPendingResources(summaries: ReadonlyArray<SourceSummary> | undefined
   return (summaries ?? []).reduce((total, summary) => total + summary.pendingCount, 0);
 }
 
-function resolvePendingSourceId(
-  removeVariables: string | undefined,
-  isRemoving: boolean,
-  updateVariables: { sourceId: string; url: string } | undefined,
-  isUpdating: boolean
-): string | null {
-  if (isRemoving && removeVariables) {
-    return removeVariables;
-  }
-  if (isUpdating && updateVariables) {
-    return updateVariables.sourceId;
-  }
-  return null;
-}
-
 export const WatcherDashboard: React.FC = () => {
   const queryClient = useQueryClient();
 
@@ -92,12 +77,6 @@ export const WatcherDashboard: React.FC = () => {
   const totalPending = sumPendingResources(summariesQuery.data);
   const mutationError = addSourceMutation.error ?? removeSourceMutation.error;
   const isSummariesBusy = isQueryBusy(summariesQuery);
-  const pendingSourceId = resolvePendingSourceId(
-    removeSourceMutation.variables,
-    removeSourceMutation.isPending,
-    updateSourceMutation.variables,
-    updateSourceMutation.isPending
-  );
 
   return (
     <ToolWorkspaceLayout
@@ -166,7 +145,13 @@ export const WatcherDashboard: React.FC = () => {
               key={source.id}
               source={source}
               summary={summariesBySourceId.get(source.id)}
-              isPending={pendingSourceId === source.id}
+              isRemoving={
+                removeSourceMutation.isPending && removeSourceMutation.variables === source.id
+              }
+              isUpdating={
+                updateSourceMutation.isPending &&
+                updateSourceMutation.variables?.sourceId === source.id
+              }
               onUpdate={async (sourceId, url) => {
                 await updateSourceMutation.mutateAsync({ sourceId, url });
               }}

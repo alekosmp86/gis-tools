@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { VaultStorageService } from "@/modules/cartography-watcher/services/VaultStorageService";
 import { WatchedSourcesStorageService } from "@/modules/cartography-watcher/services/WatchedSourcesStorageService";
 import { DEFAULT_WATCHED_SOURCES } from "@/modules/cartography-watcher/data/defaultSources";
+import { sourceNotFoundMessage } from "@/modules/cartography-watcher/domain/sourceOverrides";
 import { VaultRenameResult } from "@/modules/cartography-watcher/types";
 import type { CkanResource, WatchedSource } from "@/modules/cartography-watcher/types";
 
@@ -397,5 +398,16 @@ describe("WatchedSourcesStorageService", () => {
     expect(updated?.title).toBe("Padrón Rural Modificado");
     expect(updated?.description).toBe("Nueva descripción");
     expect(updated?.isDefault).toBe(true);
+  });
+
+  it("should throw a Spanish error when updating an unknown source id", async () => {
+    // Arrange
+    const storage = new WatchedSourcesStorageService(vaultRoot);
+    const unknownId = "fuente-inexistente";
+
+    // Act & Assert
+    await expect(
+      storage.updateSource(unknownId, { title: "Nuevo" })
+    ).rejects.toThrow(sourceNotFoundMessage(unknownId));
   });
 });
