@@ -91,29 +91,48 @@ another module. Cross-module needs go through contracts defined in core.
 | 3 — Extract ui-kit | done | d7c92dc |
 | 4 — Contracts, registry, composition root | done | 33db302 |
 | 5 — UI extension slots | done | 7e09b60 |
-| 6 — Endpoint generation | **blocked on a decision** | — |
+| 6 — Endpoint generation | done | — |
 | 7 — Reference module and deletion proof | not started | — |
-| 8 — Rules and documentation | not started | — |
+| 8 — Rules and documentation | done | — |
 
-### Phase 6 open question: how does the generator read endpoint declarations?
+### Phase 6 decision: declarative JSON per module
 
-The generator is a plain Node script and cannot import a TypeScript manifest without a loader.
-No TS-capable runner is installed (`tsx` / `ts-node` absent), and installing one on this machine is
-slow and unreliable because of the local TLS interception. Three options, none yet chosen:
+The open question was how a plain Node generator reads endpoint declarations without a TypeScript
+loader. **Option 1 was chosen**: each module declares its HTTP surface in
+`src/modules/<id>/module.routes.json`, and its TypeScript manifest imports the same file and binds a
+handler to each declaration through `defineModuleEndpoints`. One source of truth, read by both
+halves, and no new dependency behind the local TLS interception.
 
-1. **Declarative JSON per module** (`src/modules/<id>/module.routes.json`) listing path, method,
-   runtime and dynamic. The TypeScript manifest imports the same JSON and maps each path to its
-   handler, so there is one source of truth and nothing to drift. Needs `resolveJsonModule`.
-   No new dependencies. Currently the front-runner.
-2. **Convention-based discovery**: the generator globs `src/modules/*/api/**/handler.ts` and derives
-   the route from the file path. Zero declaration, but it splits endpoint knowledge away from the
-   manifest the registry validates.
-3. **Add a TypeScript loader** so the generator imports the real manifest. Cleanest single source of
-   truth, at the cost of a dependency and an install that has already proven painful here.
+Convention-based discovery was rejected because it moves the endpoint surface into file names, away
+from the manifest the registry validates. A TypeScript loader was rejected on install risk, and
+because importing a manifest at generate time would drag the module's whole graph — `pg`, core
+services — into a build script.
 
-Whichever is chosen, the staleness controls stay as specified: `predev` / `prebuild` hooks so the
-generator always runs before dev and build, and a `--check` mode wired into the gauntlet so a
-committed stale tree fails loudly.
+The binding is checked rather than trusted: a declaration with no handler, or a handler for an
+endpoint nobody declared, throws at startup. Methods, runtimes and caching modes arriving from JSON
+are validated on both sides, and the generator's mirrored copies of those constants are held to
+core's by a unit test.
+
+### Phase 6 as built
+
+- `src/modules/<id>/module.routes.json` — the declaration file: `moduleId` (must match the folder)
+  and endpoints of `path`, `method`, optional `runtime` and `dynamic`.
+- `src/core/modules/defineModuleEndpoints.ts` — binds declarations to handlers, validating both ways.
+- `src/core/modules/createModuleRouteHandler.ts` — per-request dispatch through the registry, so a
+  generated route never imports a module and a route left behind by a deleted one answers 404
+  instead of crashing at boot.
+- `src/core/modules/moduleRoutePaths.ts` — the path arithmetic the registry, the binder and the
+  generator all agree on.
+- `scripts/generate-module-routes.cjs` — emits one banner-carrying route file per path under
+  `src/app/api/m/**`, groups methods that share a path into one file, and rejects two methods on one
+  path asking for different runtimes (Next configures those per file).
+- `npm run modules:routes` / `modules:routes:check`, wired into `predev`, `prebuild` and the gauntlet.
+
+**Verified** with a temporary `diagnostics` module carrying three endpoints, including a dynamic
+`[id]` segment: `npm run build` served all three, a live server answered each of them, an undeclared
+method got 405, and deleting the module's folder emptied the generated tree without touching the
+hand-written routes under `src/app/api/db/**`. The module was removed again — phase 7 builds the
+real pilot.
 
 ## Phase 6 — Endpoint generation
 **Files:** `scripts/generate-module-routes.cjs`, `package.json`, generated `src/app/api/m/**`
@@ -154,6 +173,53 @@ a stale tree fails the gauntlet.
   `core/modules/`.
 - Document the layer table, the invariant, and the module authoring steps.
 - Regenerate the dependency graph (`npm run graph`) as visual proof the boundaries hold.
+
+### Phase 8 as built
+
+- `.agents/rules/module_authoring.md` — canonical, prescriptive: module-or-core decision, layer
+  table, module anatomy, the six-step recipe, eight hard rules, the done checklist, and a failure
+  table mapping each error message the machinery emits to its cause and fix.
+- `docs/architecture/MODULAR_MONOLITH_AND_MODULES.md` — the rationale: layers, contracts, registry,
+  slots, the generation pipeline, why JSON was chosen over discovery and a TS loader, the staleness
+  controls, and a map of every file in the machinery.
+- `AGENTS.md` gained a "Modular Monolith & Module Authoring" section pointing at both, and the type
+  rule gained its carve-out (core types in `core/types/`, presentation types in `ui-kit/types/`,
+  host/module contracts in `core/modules/`, module types inside the module). Mirrored into
+  `.agents/rules/coding_guidelines.md`, whose stale `src/types/` and "Alekos" items were corrected.
+- Both documents state plainly that only `HOME_TOOL_GRID` is mounted and that
+  `registry.navigation()` has no consumer, so nobody contributes into a slot that renders nowhere.
+
+- The dependency graph classifier was taught the new layers: `core/` splits by concern (spatial,
+  binary, services, workers, types, constants, module contracts), `ui-kit/` by components, hooks,
+  types and extension slots, plus a `module` type carrying extension modules and the composition
+  root, and a distinct subtype for generated module routes. The dead `services/` / `utils/` /
+  `types/` / `workers/` top-level branches were removed. Regenerated: **160 files, 410 imports, 0
+  cycles, 0 unclassified**.
+
+### Finding from the regenerated graph: one upward import in ui-kit
+
+`ui-kit/components/DbConnectionForm.tsx` imports `@/hooks/useDbConnectionForm`, and that hook in turn
+imports `@/hooks/useDbQueries` and `@/data/dbConfigData`. ui-kit is supposed to import `core` and
+`ui-kit` only.
+
+Lint did not catch it: the ui-kit zone in `eslint.config.mjs` restricts `@/app/*` and
+`@/components/tools/*` but never `@/hooks/*`, `@/components/*` or `@/data/*`. The rule is narrower
+than the table it was meant to express.
+
+The chain is small and has no upward dependencies of its own, so the fix is mechanical:
+
+| Move | Why |
+|---|---|
+| `src/hooks/useDbQueries.ts` → `src/ui-kit/hooks/` | depends only on `@tanstack/react-query` and core; consumed by ui-kit and one tool hook |
+| `src/hooks/useDbConnectionForm.ts` → `src/ui-kit/hooks/` | single consumer, and it is the ui-kit component itself |
+| `src/data/dbConfigData.ts` → `src/core/constants/` | one `DbConfig` default, typed by a core type |
+
+Then widen the ui-kit lint zone to `@/hooks/*`, `@/components/*`, `@/data/*` and `@/providers/*` so
+the gap cannot reopen. The lint rule must be widened *after* the moves, or the gauntlet fails on the
+existing violation.
+
+**Not yet applied** — it touches DB machinery every tool uses, and the UI half has no automated
+coverage.
 
 ---
 

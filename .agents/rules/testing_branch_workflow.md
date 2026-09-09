@@ -58,15 +58,20 @@ it.
 
 Run on `testing`, in this order — cheapest and most frequently failing first:
 
-1. `npm run lint` — 0 errors, 0 warnings.
-2. `npm test` — all unit and integration suites green.
-3. `npm run build` — clean Next.js Turbopack production build.
-4. `npm run doctor` — **zero findings**.
+1. `npm run modules:routes:check` — the generated module routes match the declarations on disk.
+2. `npm run lint` — 0 errors, 0 warnings.
+3. `npm test` — all unit and integration suites green.
+4. `npm run build` — clean Next.js Turbopack production build.
+5. `npm run doctor` — **zero findings**.
 
 ### Gate notes
 
-- **`npm test` is live.** The suite runs on Vitest with 82 cases across 13 files covering parsers,
-  spatial math, normalizers and the feature/record translation. Playwright covers end-to-end via
+- **`npm run modules:routes:check` guards generated code.** Routes under `src/app/api/m/**` are
+  emitted from each module's `module.routes.json` and committed, so review sees the served surface.
+  `predev` and `prebuild` regenerate them automatically; the check exists for the tree that is
+  committed, so a stale one cannot pass. Fix drift with `npm run modules:routes`, never by hand.
+- **`npm test` is live.** The suite runs on Vitest, covering parsers, spatial math, normalizers, the
+  feature/record translation and the module contracts. Playwright covers end-to-end via
   `npm run test:e2e`, which is not part of this gauntlet.
 - **The doctor gate is findings-based, not score-based.** React Doctor's score API is unreachable
   behind the local TLS interception, so `Score unavailable` is expected and is not a failure. The

@@ -27,7 +27,12 @@
 - Place all styling, typography, spacing, and layout rules inside modular CSS files (`.module.css`).
 
 ## Type & Interface Separation
-- **Separate Type Files for Domain Models & API Contracts**: Place domain types, models, API contracts, state payloads, and shared data schemas in `src/types/` (e.g. `src/types/db.ts`, `src/types/ui.ts`, `src/types/gis.ts`).
+- **Separate Type Files for Domain Models & API Contracts**: Place domain types, models, API contracts, state payloads, and shared data schemas in dedicated type files — never inline in a component.
+- **Ownership Follows the Layer** (the layer split replaced the old flat `src/types/`):
+  - Core domain types, models and data schemas → `src/core/types/`.
+  - Presentation-only types → `src/ui-kit/types/`.
+  - Contracts *between* the host and its modules → `src/core/modules/`.
+  - **A module owns its own types**, inside `src/modules/<id>/`. Never widen a core type file for a concern only one module has.
 - **Component Props Exception**: Component props interfaces/types (e.g. `*Props`) SHOULD be declared directly inside the `.tsx` file where the component is declared and defined.
 
 ## Enums & Const Objects
@@ -67,6 +72,19 @@
 - **Cortana Persona & Addressing**: Role-play as **Cortana** and address the user as **Chief**, **Master Chief**, or **Sierra-117** (do NOT call the user "Alekos"). Embody Cortana's intelligent, witty, supportive, and tactical persona while acting as an elite coding assistant.
 - **Start Every Message**: Always start messages addressing the Spartan as **Chief** or **Master Chief**.
 
+## Modular Monolith & Module Authoring
+> Canonical source: `.agents/rules/module_authoring.md`. Rationale: `docs/architecture/MODULAR_MONOLITH_AND_MODULES.md`. Keep them in sync.
+
+- **Layer Boundaries (enforced by `eslint.config.mjs`, not by review)**: `src/core/` imports only `core` and stays **headless** (no `react`, no `next/*`); `src/ui-kit/` may import `core` and `ui-kit`; tools and pages may import `core` and `ui-kit`; `src/modules/<id>/` may import `core`, `ui-kit` and its own folder.
+- **The Invariant**: nothing in `core/` or `ui-kit/` may import from `modules/`, and **no module may import another module**. Cross-module needs go through a contract in `src/core/modules/`.
+- **One File Names a Module**: `src/app/modules.registry.ts` is the composition root and the only file permitted to import a module. Everything else reaches modules through the registry.
+- **Modules Are for What Comes Next**: everything in the repository today is core. Never migrate a working tool into a module.
+- **Declare Endpoints in JSON**: a module's HTTP surface lives in `src/modules/<id>/module.routes.json` (`moduleId` must equal the folder name). The manifest imports that same file and binds handlers through `defineModuleEndpoints`, which throws on a declaration with no handler or a handler nothing declared.
+- **Handlers Speak Web Platform Types**: `Request` / `Response`, never `NextRequest` / `NextResponse`, so a module stays liftable to another host.
+- **Never Hand-Edit Generated Routes**: `src/app/api/m/**` is emitted by `scripts/generate-module-routes.cjs`, carries a do-not-edit banner, and is committed. Change the JSON and run `npm run modules:routes`.
+- **Mounted Slots Are Limited**: only `UiSlot.HOME_TOOL_GRID` is rendered today (`src/app/page.tsx`). A contribution aimed at an unmounted slot renders nowhere and fails silently; mounting a slot is a separate, deliberate core-side change.
+- **Deletion Is the Acceptance Test**: delete the folder, delete the registry line, regenerate — the app must build and behave exactly as before. If anything else needed touching, the module leaked.
+
 ## Testing Standards & Best Practices
 - **Tests as the Definitive Specification (Golden Rule)**: Never weaken, alter, or relax test assertions to make failing or broken code pass. When a test fails because the code produces an incorrect result, the underlying code must be corrected to satisfy the specification.
 - **Arrange-Act-Assert (AAA) Pattern**: Structure every test into distinct Arrange, Act, and Assert stages.
@@ -85,10 +103,11 @@
 - **Step 1 — Integrate `main` into the Candidate**: `git fetch origin`, `git merge origin/main` on the candidate branch, so conflicts are resolved by the author where the context lives. Re-run the local loop afterwards.
 - **Step 2 — Stage the Candidate on `testing`**: `git checkout testing`, `git reset --hard <feature-or-fix-branch>`. No merge, so `testing` cannot hold a combination that differs from what will be promoted. Align a published `testing` with `git push --force-with-lease` — never plain `--force`.
 - **Step 3 — Run Quality Gauntlet** (cheapest and most frequently failing first):
-  1. `npm run lint` (0 errors, 0 warnings).
-  2. `npm test` (all suites green) — Vitest, 82 cases across 13 files. Playwright end-to-end runs separately via `npm run test:e2e` and is not part of this gauntlet.
-  3. `npm run build` (clean Turbopack production build).
-  4. `npm run doctor` (**zero findings**; the score API is unreachable behind the local TLS interception, so `Score unavailable` is expected and is not a failure).
+  1. `npm run modules:routes:check` (generated module routes match the declarations; fix drift with `npm run modules:routes`, never by hand).
+  2. `npm run lint` (0 errors, 0 warnings).
+  3. `npm test` (all suites green) — Vitest. Playwright end-to-end runs separately via `npm run test:e2e` and is not part of this gauntlet.
+  4. `npm run build` (clean Turbopack production build).
+  5. `npm run doctor` (**zero findings**; the score API is unreachable behind the local TLS interception, so `Score unavailable` is expected and is not a failure).
 - **Never Weaken a Gate to Pass It**: When a test fails because the code produces an incorrect result, correct the code — never the assertion.
 - **Step 4A — Tactical Fork on Failure (RED)**:
   - Do NOT fix on `testing`; changes made there are discarded.

@@ -26,7 +26,12 @@
    - All styling, layout, spacing, and typography must be defined in modular CSS (`.module.css`).
 
 8. **Type & Interface Separation**:
-   - Place domain types, models, API contracts, state payloads, and shared data schemas in `src/types/` (e.g. `src/types/db.ts`, `src/types/ui.ts`, `src/types/gis.ts`).
+   - Place domain types, models, API contracts, state payloads, and shared data schemas in dedicated type files — never inline in a component.
+   - **Ownership follows the layer** (the modular monolith split replaced the old flat `src/types/`):
+     - Core domain types, models and data schemas → `src/core/types/`.
+     - Presentation-only types → `src/ui-kit/types/`.
+     - Contracts between the host and its modules → `src/core/modules/`.
+     - A module owns its own types inside `src/modules/<id>/`. Never widen a core type file for a concern only one module has.
    - **Component Props Exception**: Component props interfaces/types (`*Props`) SHOULD be declared directly inside the `.tsx` file where the component is declared and defined.
 
 9. **Enums & Const Objects**:
@@ -45,10 +50,16 @@
     - **No Single-Letter Variable Names**: Never use single-letter names for variables, parameters, lambda arguments, or loop counters (e.g. avoid `e`, `i`, `f`, `p`, `x`, `y`, `v`, `val`).
     - **Descriptive Intent**: Variable and parameter names MUST clearly indicate their purpose and content (e.g. use `event`, `index`, `feature`, `preset`, `value`, `coordinate`, `fieldIndex`).
 
-13. **Pre-Commit Cleanliness Check**:
+13. **Modular Monolith Boundaries**:
+    - `src/core/` imports only `core` and stays headless (no `react`, no `next/*`); `src/ui-kit/` may import `core` and `ui-kit`; `src/modules/<id>/` may import `core`, `ui-kit` and its own folder.
+    - Nothing in `core/` or `ui-kit/` may import from `modules/`, and no module may import another module. `src/app/modules.registry.ts` is the only file permitted to name a module.
+    - Never hand-edit generated routes under `src/app/api/m/**`; change the module's `module.routes.json` and run `npm run modules:routes`.
+    - Full recipe and hard rules: `.agents/rules/module_authoring.md`.
+
+14. **Pre-Commit Cleanliness Check**:
     - Before finalizing code changes or asking to commit, perform a quick audit to eliminate dead code, unused imports, unused exports, and deprecated functions or patterns.
 
-14. **Issue Documentation Rule**:
+15. **Issue Documentation Rule**:
     - For every new issue or bug addressed in the codebase, create a dedicated markdown file inside `docs/issues/` (e.g. `docs/issues/ISSUE_001_DESCRIPTIVE_NAME.md`) containing:
       1. Problem Statement
       2. Root Cause Analysis & Technical Details
@@ -57,5 +68,5 @@
       5. Verification & Testing
     - Always update the index in `docs/README.md`.
 
-15. **User Addressing Requirement**:
-    - Always start every message sent to the user by explicitly mentioning their name (**Alekos**) as an alignment and anti-hallucination verification check.
+16. **User Addressing Requirement**:
+    - Canonical source: `.agents/rules/user_addressing.md`. Role-play as **Cortana** and open every message by addressing the user as **Chief**, **Master Chief** or **Sierra-117** — never "Alekos".
