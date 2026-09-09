@@ -1,177 +1,193 @@
-# Implementation plan — Cartography Watcher as a first-class module
+# Implementation plan — React Query SSR hydration mismatch in module refresh buttons
 
-> The previous mission (modular monolith: core, ui-kit, extension modules, phases 1–8) is complete and
-> merged. Its record lives in git history and in `docs/architecture/MODULAR_MONOLITH_AND_MODULES.md`.
+> The previous mission (cartography watcher as a first-class module) is complete and merged. Its
+> record lives in git history and in `docs/architecture/MODULAR_MONOLITH_AND_MODULES.md`.
+
+## Symptom
+
+Loading the home page raises a React hydration error in the browser console:
+
+```
+A tree hydrated but some attributes of the server rendered HTML didn't match the client properties.
+
+  <button
+    type="button"
+    className="ServerStatusCard-module__TaSY2q__refreshButton"
+    onClick={function t14}
++   disabled={true}      <- client
+-   disabled={null}      <- server
+  >
+```
+
+The reported element is the refresh button of `ServerStatusCard`, the status module's contribution
+to `UiSlot.HOME_TOOL_GRID`.
+
+## Root cause
+
+TanStack Query v5's `useQuery` returns an **optimistic** result. On the client's first render — the
+hydration render — the observer already knows it will fetch on mount (there is no cached data and
+`refetchOnMount` defaults to true), so it reports `fetchStatus: "fetching"` and therefore
+`isFetching === true` before any effect has run.
+
+On the server there is no mount and no fetch is ever scheduled, so `fetchStatus` stays `"idle"` and
+`isFetching === false`.
+
+`isFetching` is therefore **structurally guaranteed to differ** between the SSR HTML and the first
+client render. Any DOM output derived from it mismatches on hydration.
+
+`isPending`, by contrast, is `true` on both sides — neither the server nor the first client render
+has data. That asymmetry is the key, and it is what the fix exploits.
+
+### Why the error named only `disabled`
+
+Three outputs on that one button derive from `isFetching`, not one:
+
+| File | Line | Output |
+|---|---|---|
+| `src/modules/status/ui/ServerStatusCard.tsx` | 83 | `disabled={isFetching}` |
+| `src/modules/status/ui/ServerStatusCard.tsx` | 85 | `className={isFetching ? styles.spinning : undefined}` |
+| `src/modules/status/ui/ServerStatusCard.tsx` | 86 | label text `{isFetching ? "Actualizando..." : "Actualizar"}` |
+
+React reported the attribute mismatch first and bailed out of the subtree, masking the className and
+text mismatches behind it. Fixing only `disabled` would leave two live mismatches.
+
+### A second, latent instance
+
+`src/modules/cartography-watcher/ui/WatcherDashboard.tsx` carries the identical triple on
+`summariesQuery.isFetching`:
+
+| Line | Output |
+|---|---|
+| 91 | `disabled={summariesQuery.isFetching}` |
+| 95 | `className={summariesQuery.isFetching ? styles.spin : undefined}` |
+| 97 | label text `{summariesQuery.isFetching ? "Actualizando..." : "Revisar ahora"}` |
+
+That component is a module page, so it is server-rendered on direct navigation and reproduces the
+same bug. It is in scope: it is the same defect, not a second feature.
+
+`WatcherHomeCard.tsx` and the other `isPending`/mutation `isPending` consumers are **not** affected —
+`isPending` agrees across server and client, and mutation state is idle on both sides.
 
 ## Goal
-Rebuild the cartography watcher — recovered from `stash@{0}` on `feat/cartography-watcher-service` —
-as a module that obeys the rules now in force, instead of the parallel module system it shipped with.
 
-The feature: watch open CKAN portals (catalogodatos.gub.uy / IDEuy) for republished cartographic
-datasets, detect deltas against a local vault, cache downloads server-side, and let the DB-CSV and
-DB-Shapefile sync tools pull a departmental file straight from the catalogue instead of forcing a
-manual portal visit, download and file-picker dance.
+When this is done:
 
-## What the stash got right, and what changes
+1. The home page hydrates with **zero** hydration warnings in the browser console.
+2. The cartography watcher dashboard page hydrates with zero hydration warnings.
+3. Both refresh buttons still correctly show a busy state during an in-flight fetch and return to an
+   idle state afterwards.
+4. The rule that produces a hydration-safe busy flag is pinned by unit tests.
 
-The stash built its own module system: a mutable singleton registry, import-time side-effect
-registration, and catch-all dispatchers at `/api/modules/[module]` and `/tools/modules/[toolId]`.
-The domain work underneath it is sound and is preserved almost intact.
+## Approach
 
-| Stash | Here |
-|---|---|
-| catch-all `/api/modules/[module]` with `?action=` dispatch | one declared path per endpoint, generated into `/api/m/cartography-watcher/**` |
-| `/tools/modules/[toolId]` dynamic dispatcher | a **generated page route**, resolved through the registry (new core capability) |
-| `extensionRegistry` singleton + `useSyncExternalStore` | a `FILE_SOURCE_TABS` UI slot with host-supplied context (new core capability) |
-| registration by import side effect into global state | the manifest, named once in the composition root |
-| two composition roots (`modules/index.ts`, `modules/server.ts`) | one `src/app/modules.registry.ts` |
-| sources in `localStorage` **and** `sources.json`, reconciled optimistically | server-side `sources.json` only |
-| `WatcherApiAction` string dispatch table | REST paths; the router does the dispatching |
+Derive a single busy flag that agrees across server and client:
 
-Preserved as-is because it is good: the three-tier delta evaluation (hash → timestamp → size), the
-vault layout with sidecar metadata, transparent read-through caching, and the CKAN URL/slug parsing.
+```ts
+isBusy = isPending || isFetching
+```
 
----
+| Situation | `isPending` | `isFetching` | `isBusy` |
+|---|---|---|---|
+| Server render | true | false | **true** |
+| Client hydration render | true | true | **true** |
+| After data arrives | false | false | false |
+| Interval refetch / manual refresh | false | true | true |
 
-## Phase A — Core capability: module-owned pages
-**Files:** `src/core/modules/**`, `src/ui-kit/modules/**`, `scripts/generate-module-routes.cjs`
+Server and client first renders both produce `true`, so the hydrated DOM matches. Use the one flag
+for **all three** outputs on each button — `disabled`, the spinner class and the label — so no
+`isFetching`-derived output survives.
 
-A module cannot own a page today. Slots decorate host pages; there is no way to contribute a whole
-route. The watcher dashboard needs one.
+This also corrects a real UX defect: today the button reads "Actualizar" and is clickable during the
+initial load, when the card is demonstrably still loading. After the fix it reads "Actualizando..."
+and is disabled, which is the truth.
 
-- Extend the declaration file with an optional `pages` array (`path`, `title`), so one file still
-  describes a module's whole routed surface.
-- `definePageContributions` binds declarations to components, checked both ways like endpoints.
-- Registry gains `pages()` / `findPage(routePath)`.
-- The generator emits `src/app/tools/m/<id>/<path>/page.tsx`: resolves through the registry, calls
-  `notFound()` when nothing serves it, exports `metadata` from the declared title. It never imports
-  a module — same property the endpoint routes have.
-- `--check`, `predev` and `prebuild` cover pages exactly as they cover endpoints.
+### Alternatives considered and rejected
 
-**Done when:** a module declaring a page is served at `/tools/m/<id>`, and deleting it removes the
-route file and leaves the app building.
+- **`suppressHydrationWarning`** — silences the symptom, leaves the DOM genuinely divergent, and does
+  not cover the text child. Rejected: it hides the class of bug rather than fixing it.
+- **A mounted-gate (`useState(false)` + `useEffect`)** — works, but adds a render pass and a piece of
+  ceremony to every component that ever touches `isFetching`. Rejected as heavier than the invariant
+  needs.
+- **Server prefetch + `HydrationBoundary`** — the architecturally strongest answer, and it would also
+  remove the loading flash. Rejected **for this fix**: it means a real data-fetching redesign
+  (per-request `QueryClient`, prefetch in a server component, a dehydrated state through the slot
+  system), which is a feature, not a bug fix. Recorded in the issue doc as possible future work.
 
-## Phase B — Core capability: slots that carry context
-**Files:** `src/ui-kit/modules/**`, `src/components/tools/db-csv-sync/CsvUploader.tsx`,
-`src/components/tools/db-shapefile-sync/ShapefileUploader.tsx`
+### Where the shared helper lives
 
-A contribution renders with no props, which is right for a card and useless for a file picker that
-must hand a `File` back to its host.
+Both affected components are modules, and **no module may import another module**
+(`eslint.config.mjs`, `CROSS_MODULE_MESSAGE`). The shared rule therefore belongs in `core/`, which
+both may import. It is pure boolean logic with no React import, so it respects the headless-core
+constraint.
 
-- Add `UiSlot.FILE_SOURCE_TABS`, plus `FileSourceSlotContext` in ui-kit: the host publishes
-  `{ toolId, format, onSelectFile, isLoading }`, the contribution reads it through a hook.
-- Add `ModuleTabbedSlot`: renders its children alone when nothing is contributed — byte-identical to
-  today — and a tab strip plus the active panel when something is. `UiContribution` gains optional
-  `label` and `Icon` for hosts that draw chrome around a contribution.
-- Mount the slot in both uploaders. With no modules registered they behave exactly as they do now.
+**`src/core/common/queryBusyState.ts`** — sits alongside the existing pure helpers in
+`src/core/common/` (`ValueFormatter.ts`, `GisStringSanitizer.ts`).
 
-**Done when:** both uploaders render unchanged with zero modules, and host a tab when one contributes.
+It must accept a **plain structural object**, not a TanStack Query type, so `core` gains no
+dependency on the query library:
 
-## Phase C — The module: domain and services
-**Files:** `src/modules/cartography-watcher/**`
+```ts
+export interface QueryBusyStateInput {
+  readonly isPending: boolean;
+  readonly isFetching: boolean;
+}
 
-- `domain/` — pure, no `fs`, no `fetch`: delta evaluation, vault naming, catalogue mapping and format
-  predicates, portal URL parsing, summary derivation, Spanish formatters.
-- `services/` — I/O only: `CkanPortalClient` (injectable fetch), `VaultStorageService` (injectable
-  root), `WatchedSourcesStorageService`, and `WatcherOrchestrator` composing them.
-- Dependencies are injected at every seam, so the logic is testable without network or disk.
+export function isQueryBusy(queryState: QueryBusyStateInput): boolean;
+```
 
-## Phase D — The module: endpoints, page, contributions
-- Endpoints, one path each: `GET sources`, `POST sources`, `POST sources/remove`, `GET summaries`,
-  `GET catalog`, `GET catalog/file`, `POST resources/download`.
-- Page: the dashboard at `/tools/m/cartography-watcher`.
-- Contributions: a home-grid card, and the catalogue tree into `FILE_SOURCE_TABS`.
-- `src/data/toolsData.ts` is **not** touched — the module brings its own card.
+The doc comment on that function is the real payload: it must explain *why* the rule exists, so the
+next author does not "simplify" it back to `isFetching` and reintroduce the bug.
 
-## Phase E — Tests
-Domain logic against real calculations; services against a temp vault directory; the CKAN client
-against an injected fetch; handlers against an injected orchestrator; the manifest for binding, page
-declaration and slot targeting. Component rendering is not covered — the suite has no DOM runner.
+## Files
 
-## Phase F — Verification and documentation
-- Gauntlet; live run against the real portal (reachable: `ide-ejes-vias-circulacion` currently
-  publishes 21 resources, 19 of them departmental CSVs).
-- Deletion proof: folder + registry line + test folder, regenerate, clean `.next`, gauntlet.
-- Document the two new core capabilities in the authoring rule and the architecture doc, and the
-  module itself under `docs/tools/`.
+**Created**
+- `src/core/common/queryBusyState.ts`
+- `tests/unit/core/common/queryBusyState.test.ts`
+- `docs/issues/ISSUE_025_REACT_QUERY_SSR_HYDRATION_MISMATCH.md`
 
----
+**Changed**
+- `src/modules/status/ui/ServerStatusCard.tsx` — use `isQueryBusy` for all three button outputs
+- `src/modules/cartography-watcher/ui/WatcherDashboard.tsx` — same, for its three
+- `docs/README.md` — add ISSUE_025 to the index
+- `implementation_plan.md` — this file
 
-## Deliberately out of scope
-- **Auto-load by query parameter.** The stash let the dashboard hand a file to a sync tool through
-  `?sourceSlug=&resourceId=`, which required core uploaders to know about an extension's `autoLoad`.
-  The catalogue tab reaches the same outcome from inside the tool, so the extra contract is not
-  bought yet.
-- **Vault eviction.** The vault grows without bound, as it did in the stash. Worth solving; not now.
+**Deleted** — none.
 
-## Known limitation being carried
-A handler receives only the `Request`, so a declared dynamic segment (`[id]`) has to be read by
-parsing the URL. That is why removal is `POST sources/remove` with a body rather than
-`DELETE sources/[id]`. Passing route params into handlers is a candidate follow-up.
+## Tests
 
----
+`tests/unit/core/common/queryBusyState.test.ts`, AAA-structured, covering the real truth table:
 
-## Outcome
+1. server render (`isPending: true, isFetching: false`) → `true`
+2. client hydration render (`isPending: true, isFetching: true`) → `true`
+3. **the invariant that fixes the bug**: cases 1 and 2 return the *same* value — assert them equal,
+   so a regression is caught as the hydration bug it is rather than as a bare boolean change
+4. settled with data (`false, false`) → `false`
+5. background refetch (`false, true`) → `true`
+6. offline/paused query (`isPending: true, isFetching: false`) → `true`
 
-All phases delivered. `npm test` 301 cases across 29 files; lint, build and doctor clean
-(100 / 100, zero findings); the generated tree matches its declarations.
+No component render test: Vitest runs `environment: "node"`, `include` matches only
+`tests/unit/**/*.test.ts`, and the project has no jsdom, happy-dom or Testing Library. Installing UI
+test infrastructure is a separate, deliberate decision and is **out of scope** here.
 
-### Core capabilities added
+## Out of scope
 
-| Capability | Files |
-|---|---|
-| Module-owned pages | `core/modules/contracts.ts`, `definePageContributions.ts`, `createModuleRegistry.ts`, the generator |
-| Slots that carry context | `ui-kit/modules/ModuleTabbedSlot.tsx`, `FileSourceSlotContext.tsx`, both uploaders |
+- Installing jsdom / Testing Library / any UI test infrastructure.
+- Server-side prefetch or `HydrationBoundary` (recorded as future work in the issue doc).
+- Any change to `src/providers/QueryProvider.tsx`.
+- `WatcherHomeCard.tsx`, `CatalogTreeSelector.tsx`, `DbTableViewerContainer.tsx`,
+  `DbConnectionForm.tsx` and every other `isPending` / mutation-state consumer — not affected.
+- Restyling, relabelling or otherwise redesigning either card beyond the busy-state strings already
+  present.
+- Touching `src/app/api/m/**` (generated) or any module route declaration.
 
-`ToolWorkspaceLayout`, `Header` and `Footer` moved from `src/components/layout/` into
-`src/ui-kit/components/layout/`. All five tool pages already shared them, and a module page needs
-the same shell to look native — modules may not import `@/components/*`.
+## Risks
 
-### Verified against the live portal
-
-`catalogodatos.gub.uy` was reachable throughout, so the module was exercised against real data
-rather than a fixture:
-
-- `catalog?format=CSV` returned both shipped sources with 19 departmental CSVs each.
-- A cold `catalog/file` transferred 1 278 337 bytes and wrote `flores.csv` with its sidecar; the
-  next request returned identical bytes without transferring the file again.
-- `summaries` reported `NOT_DOWNLOADED, 20/21 pendientes` for a source with one file downloaded.
-- The generated page, the home card and both API surfaces render and answer.
-
-### Deletion proof
-
-Folder, registry line and test folder removed, tree regenerated, `.next` cleared: route table back
-to baseline, 188 tests green, lint and build clean. Restored: 301 tests, doctor 100 / 100.
-
-### Defects found and fixed during the build
-
-1. **The badge contradicted its own count.** A source with one file downloaded and twenty missing
-   reported *al día* beside "20 pendientes". This is the misleading zero-delta state the original
-   ISSUE_021 set out to kill — fixed there in the count, but the badge rule kept the old shape. The
-   badge now agrees with the count: a stale copy outranks a missing one, and nothing else is
-   "up to date".
-2. **The cache served stale files for ever.** `getResourceFile` returned whatever was in the vault
-   without checking whether the portal had republished it. It now re-checks metadata on every
-   request and re-fetches when superseded. That also removed the need for a separate forced-download
-   endpoint, which had no caller left.
-3. **A matching checksum was being overruled by a newer timestamp**, causing pointless re-downloads
-   of unchanged files. A checksum that matches now settles the question.
-4. **Icons could not cross the RSC boundary.** A lucide icon referenced from a manifest is evaluated
-   on the server and fails the production build. Every component a manifest names must come from a
-   `"use client"` module; the rule is documented and the module re-exports its icon accordingly.
-
-### Not verified
-
-The catalogue tab renders inside an uploader that only mounts after a live PostgreSQL connection,
-and the suite has no DOM runner, so the tab strip itself was never rendered end to end. What is
-covered: the contribution reaches the client (it appears in the RSC payload), the slot renders
-children alone when nothing is contributed, and every piece of logic behind the tab. Driving it
-would need Playwright with a stubbed database.
-
-### Carried forward
-
-- A handler receives only the `Request`, so a declared `[id]` segment must be parsed out of the URL.
-  Passing route params into handlers is the obvious follow-up.
-- The vault grows without bound.
-- `useFileSourceSlot` is an unused export in a tree with no file-source contribution registered; the
-  doctor flags it in that state only.
+- **Offline/paused queries.** When a query is paused for lack of network, `fetchStatus` is
+  `"paused"`, so `isFetching` is false while `isPending` stays true, leaving the button disabled for
+  as long as the client is offline. This is deliberate — there genuinely is no data to refresh — but
+  it must be called out in the issue doc.
+- **Incomplete application.** Fixing `disabled` while leaving the className or label on raw
+  `isFetching` leaves the bug alive and the console still dirty. All three outputs per button, both
+  components, or the fix is not done.
+- **Regression pressure.** `isPending || isFetching` looks redundant to a reader who does not know
+  the SSR reason. The doc comment and test 3 exist to defend it.

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, AlertTriangle, RefreshCw } from "lucide-react";
 import { Badge } from "@/ui-kit/components/ui/Badge";
 import { BadgeVariant } from "@/ui-kit/types/ui";
+import { isQueryBusy } from "@/core/common/queryBusyState";
 import { ServerEnvironment } from "../types";
 import type { ServerStatusResponse } from "../types";
 import styles from "./ServerStatusCard.module.css";
@@ -39,6 +40,7 @@ export const ServerStatusCard: React.FC = () => {
 
   const snapshot = data?.status;
   const isProduction = snapshot?.environment === ServerEnvironment.PRODUCTION;
+  const isBusy = isQueryBusy({ isPending, isFetching });
 
   return (
     <div className={`glass-panel ${styles.card}`}>
@@ -80,10 +82,10 @@ export const ServerStatusCard: React.FC = () => {
           type="button"
           className={styles.refreshButton}
           onClick={() => refetch()}
-          disabled={isFetching}
+          disabled={isBusy}
         >
-          <RefreshCw size={14} className={isFetching ? styles.spinning : undefined} />
-          {isFetching ? "Actualizando..." : "Actualizar"}
+          <RefreshCw size={14} className={isBusy ? styles.spinning : undefined} />
+          {isBusy ? "Actualizando..." : "Actualizar"}
         </button>
       </div>
     </div>

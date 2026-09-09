@@ -4,6 +4,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, RefreshCw, Radio } from "lucide-react";
 import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLayout";
+import { isQueryBusy } from "@/core/common/queryBusyState";
 import { AddSourceForm } from "./AddSourceForm";
 import { WatchedSourceCard } from "./WatchedSourceCard";
 import { addSource, fetchSources, fetchSummaries, removeSource } from "./watcherClient";
@@ -63,6 +64,7 @@ export const WatcherDashboard: React.FC = () => {
   const summariesBySourceId = indexSummariesBySourceId(summariesQuery.data);
   const totalPending = sumPendingResources(summariesQuery.data);
   const mutationError = addSourceMutation.error ?? removeSourceMutation.error;
+  const isSummariesBusy = isQueryBusy(summariesQuery);
 
   return (
     <ToolWorkspaceLayout
@@ -88,13 +90,13 @@ export const WatcherDashboard: React.FC = () => {
           type="button"
           className={styles.refreshButton}
           onClick={() => queryClient.invalidateQueries({ queryKey: SUMMARIES_QUERY_KEY })}
-          disabled={summariesQuery.isFetching}
+          disabled={isSummariesBusy}
         >
           <RefreshCw
             size={15}
-            className={summariesQuery.isFetching ? styles.spin : undefined}
+            className={isSummariesBusy ? styles.spin : undefined}
           />
-          {summariesQuery.isFetching ? "Actualizando..." : "Revisar ahora"}
+          {isSummariesBusy ? "Actualizando..." : "Revisar ahora"}
         </button>
       </section>
 
