@@ -1,0 +1,78 @@
+.loadedCard {
+  background: rgba(9, 13, 22, 0.7);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.loadedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 16px;
+}
+
+.fileMeta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.successIcon {
+  color: var(--accent-emerald, #10b981);
+}
+
+.fileName {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+}
+
+.fileSub {
+  font-size: 0.825rem;
+  color: var(--text-dim, #94a3b8);
+  margin-top: 2px;
+}
+
+.discardText {
+  color: var(--accent-rose, #f43f5e);
+}
+
+.metaRow {
+  display: flex;
+  gap: 32px;
+}
+
+.metaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metaLabel {
+  font-size: 0.775rem;
+  color: var(--text-dim, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.metaValue {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent-cyan, #06b6d4);
+}
+
+.mapSection {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.previewNotice {
+  margin-bottom: 2px;
+}
