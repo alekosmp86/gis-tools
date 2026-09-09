@@ -51,5 +51,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md`](docs/issues/ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md) — Lazy preview-only SQL generation on step 4 transition, immediate modal opening on "Ejecutar en BD", and chunked generation/execution upon confirmation.
 - [`ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md`](docs/issues/ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md) — SQL UPDATE patch generation for geometry discrepancies in CSV and tabular datasets by lifting Shapefile-only binary DBF constraints.
 - [`ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md`](docs/issues/ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md) — Capping features in DB-CSV Step 2 preview map via unified `MAX_MAP_PREVIEW_FEATURES` while preserving full uncapped features in Step 4.
+- [`ISSUE_018_DB_TABLE_VIEWER_STALE_GEOJSON_FLOW.md`](docs/issues/ISSUE_018_DB_TABLE_VIEWER_STALE_GEOJSON_FLOW.md) — DB Table Viewer repeated PostgreSQL streaming caused by an unstable TanStack Query mutation object in the effect dependencies, plus removal of unnecessary derived-state mirroring under React Compiler.
 
 
