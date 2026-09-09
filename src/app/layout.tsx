@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { ModuleContributionsProvider } from "@/ui-kit/modules/ModuleContributionsContext";
+import { moduleRegistry } from "./modules.registry";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,7 +17,11 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <ModuleContributionsProvider contributions={moduleRegistry.uiContributions()}>
+            {children}
+          </ModuleContributionsProvider>
+        </QueryProvider>
       </body>
     </html>
   );

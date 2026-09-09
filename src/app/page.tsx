@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { ModuleSlot } from "@/ui-kit/modules/ModuleSlot";
+import { UiSlot } from "@/ui-kit/modules/contracts";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
 import { Header } from "@/components/layout/Header";
@@ -62,6 +64,8 @@ export default function Home() {
           {filteredTools.map((tool) => (
             <ToolCard key={tool.id} tool={tool} onLaunch={handleLaunch} />
           ))}
+          {/* Modules may contribute additional cards here; renders nothing when none do. */}
+          <ModuleSlot slot={UiSlot.HOME_TOOL_GRID} />
         </section>
       </main>
 
