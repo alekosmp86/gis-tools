@@ -52,5 +52,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md`](docs/issues/ISSUE_016_CSV_GEOMETRY_UPDATE_PATCH_GENERATION.md) — SQL UPDATE patch generation for geometry discrepancies in CSV and tabular datasets by lifting Shapefile-only binary DBF constraints.
 - [`ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md`](docs/issues/ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md) — Capping features in DB-CSV Step 2 preview map via unified `MAX_MAP_PREVIEW_FEATURES` while preserving full uncapped features in Step 4.
 - [`ISSUE_018_DB_TABLE_VIEWER_STALE_GEOJSON_FLOW.md`](docs/issues/ISSUE_018_DB_TABLE_VIEWER_STALE_GEOJSON_FLOW.md) — DB Table Viewer repeated PostgreSQL streaming caused by an unstable TanStack Query mutation object in the effect dependencies, plus removal of unnecessary derived-state mirroring under React Compiler.
+- [`ISSUE_019_PREVIEW_MAP_RENDER_PATH_ALLOCATION_COST.md`](docs/issues/ISSUE_019_PREVIEW_MAP_RENDER_PATH_ALLOCATION_COST.md) — Preview map render path copying the dataset through a worker that only sliced arrays, plus per-feature service allocation and click listeners, replaced by reference slicing, shared instances, delegated events and frame-paced chunks.
 
 

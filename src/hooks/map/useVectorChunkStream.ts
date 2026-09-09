@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import type { FeatureCollection } from "geojson";
-import { MAP_MICRO_CHUNK_SIZE, MAP_CHUNK_DELAY_MS } from "@/constants/mapConstants";
+import type { FeatureCollection, GeoJsonObject } from "geojson";
+import { MAP_MICRO_CHUNK_SIZE } from "@/constants/mapConstants";
 import type { MapFeatureStyle } from "@/types/map";
-import { MapChunkMessageType } from "@/types/workerMessages";
-import type { MapChunkOutputMessage } from "@/types/workerMessages";
-import { computeFeatureStyle, createPointToLayer } from "@/utils/map/MapSymbologyStyler";
-import { bindFeatureEvents } from "@/utils/map/MapEventHandler";
+import { createStyleResolver } from "@/utils/map/MapSymbologyStyler";
+import { bindGroupFeatureEvents } from "@/utils/map/MapEventHandler";
 
 export function useVectorChunkStream(
   mapInstanceRef: React.RefObject<L.Map | null>,
@@ -62,6 +60,9 @@ export function useVectorChunkStream(
     const featureGroup = L.featureGroup().addTo(mapInstance);
     featureGroupRef.current = featureGroup;
 
+    // One delegated listener for the whole group instead of one per rendered feature.
+    bindGroupFeatureEvents(featureGroup, geojson?.features ?? [], onSelectFeature);
+
     let isCancelled = false;
     const totalFeatures = geojson?.features?.length || 0;
 
@@ -76,77 +77,76 @@ export function useVectorChunkStream(
     }
 
     let initialZoomDone = false;
-    let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
+    let scheduledFrame: number | null = null;
+    let renderedOffset = 0;
 
     mapInstance.invalidateSize();
 
-    const worker = new Worker(new URL("../../workers/mapChunkWorker.ts", import.meta.url));
-
-    worker.onmessage = (event: MessageEvent<MapChunkOutputMessage>) => {
-      if (isCancelled) return;
-      const { type, payload } = event.data;
-
-      if (type === MapChunkMessageType.CHUNK_BATCH && payload.chunk) {
-        const chunkCollection: FeatureCollection = {
-          type: "FeatureCollection",
-          features: payload.chunk,
-        };
-
-        const currentStyle = featureStyleRef.current;
-        const canvasRenderer = canvasRendererRef.current;
-
-        const geojsonSubLayer = L.geoJSON(chunkCollection as import("geojson").GeoJsonObject, {
-          style: (feature) => computeFeatureStyle(feature, currentStyle, canvasRenderer),
-          pointToLayer: (feature, latlng) =>
-            createPointToLayer(feature, latlng, currentStyle, canvasRenderer),
-          onEachFeature: (feature, layer) =>
-            bindFeatureEvents(feature, layer, geojson.features, onSelectFeature),
-        });
-
-        featureGroup.addLayer(geojsonSubLayer);
-
-        pendingTimeout = setTimeout(() => {
-          if (!isCancelled) {
-            setRenderedCount(payload.current);
-            setIsChunking(payload.current < payload.total);
-
-            if (!initialZoomDone) {
-              initialZoomDone = true;
-              mapInstance.invalidateSize();
-              const bounds = featureGroup.getBounds();
-              if (bounds.isValid()) {
-                mapInstance.fitBounds(bounds, { padding: [30, 30] });
-              }
-            }
-          }
-        }, MAP_CHUNK_DELAY_MS);
-      } else if (type === MapChunkMessageType.CHUNK_DONE) {
-        if (!isCancelled) {
-          setRenderedCount(payload.total);
-          setIsChunking(false);
-
-          // Final bounds fit after all chunks are painted
-          mapInstance.invalidateSize();
-          const finalBounds = featureGroup.getBounds();
-          if (finalBounds.isValid()) {
-            mapInstance.fitBounds(finalBounds, { padding: [30, 30] });
-          }
-        }
+    const fitToRenderedFeatures = () => {
+      mapInstance.invalidateSize();
+      const bounds = featureGroup.getBounds();
+      if (bounds.isValid()) {
+        mapInstance.fitBounds(bounds, { padding: [30, 30] });
       }
     };
 
-    worker.postMessage({
-      type: MapChunkMessageType.CHUNK_GEOJSON,
-      payload: {
-        features: geojson.features,
-        chunkSize: MAP_MICRO_CHUNK_SIZE,
-      },
-    });
+    /**
+     * Renders one micro-batch straight from the source collection. Slicing yields references to the
+     * original features, so no feature object is copied on the way to Leaflet.
+     */
+    const renderNextChunk = () => {
+      if (isCancelled) return;
+
+      const chunkFeatures = geojson.features.slice(
+        renderedOffset,
+        renderedOffset + MAP_MICRO_CHUNK_SIZE
+      );
+      renderedOffset += chunkFeatures.length;
+
+      const styleResolver = createStyleResolver(
+        featureStyleRef.current,
+        canvasRendererRef.current
+      );
+
+      const chunkCollection: FeatureCollection = {
+        type: "FeatureCollection",
+        features: chunkFeatures,
+      };
+
+      const geojsonSubLayer = L.geoJSON(chunkCollection as GeoJsonObject, {
+        style: (feature) => styleResolver.resolvePathStyle(feature),
+        pointToLayer: (feature, latlng) => styleResolver.createPointLayer(feature, latlng),
+      });
+
+      featureGroup.addLayer(geojsonSubLayer);
+
+      const isComplete = renderedOffset >= totalFeatures;
+      setRenderedCount(renderedOffset);
+      setIsChunking(!isComplete);
+
+      if (!initialZoomDone) {
+        initialZoomDone = true;
+        fitToRenderedFeatures();
+      }
+
+      if (isComplete) {
+        // Final bounds fit once every chunk is painted
+        fitToRenderedFeatures();
+        return;
+      }
+
+      // One chunk per animation frame, so the browser paints and stays responsive between batches.
+      // A timer would only have delayed the progress update: layer construction already ran.
+      scheduledFrame = requestAnimationFrame(renderNextChunk);
+    };
+
+    renderNextChunk();
 
     return () => {
       isCancelled = true;
-      if (pendingTimeout !== null) clearTimeout(pendingTimeout);
-      worker.terminate();
+      if (scheduledFrame !== null) {
+        cancelAnimationFrame(scheduledFrame);
+      }
       try {
         featureGroup.clearLayers();
         if (mapInstance.hasLayer(featureGroup)) {

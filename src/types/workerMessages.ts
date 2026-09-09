@@ -4,32 +4,6 @@ import type {
   DiscrepancyItem,
   SqlPatchSummary,
 } from "@/types/comparison";
-import type { Feature, Geometry, GeoJsonProperties } from "geojson";
-
-export const MapChunkMessageType = {
-  CHUNK_GEOJSON: "CHUNK_GEOJSON",
-  CHUNK_BATCH: "CHUNK_BATCH",
-  CHUNK_DONE: "CHUNK_DONE",
-} as const;
-
-export type MapChunkMessageType = (typeof MapChunkMessageType)[keyof typeof MapChunkMessageType];
-
-export interface MapChunkInputMessage {
-  type: typeof MapChunkMessageType.CHUNK_GEOJSON;
-  payload: {
-    features: Array<Feature<Geometry, GeoJsonProperties>>;
-    chunkSize: number;
-  };
-}
-
-export interface MapChunkOutputMessage {
-  type: typeof MapChunkMessageType.CHUNK_BATCH | typeof MapChunkMessageType.CHUNK_DONE;
-  payload: {
-    chunk?: Array<Feature<Geometry, GeoJsonProperties>>;
-    current: number;
-    total: number;
-  };
-}
 
 export const ComparisonWorkerMessageType = {
   RUN_COMPARISON: "RUN_COMPARISON",
