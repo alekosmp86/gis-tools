@@ -39,6 +39,9 @@ function getNodeClassification(relPath) {
   const topDir = segments[0];
 
   if (topDir === 'app') {
+    // The composition root is the only file allowed to name a module, so it is graphed with them.
+    if (relPath === 'app/modules.registry.ts') return { type: 'module', subType: 'Composition Root', categoryLabel: 'Raíz de Composición' };
+    if (relPath.includes('/api/m/')) return { type: 'route', subType: 'Generated Module Route', categoryLabel: 'Ruta de Módulo (generada)' };
     if (relPath.includes('/api/')) return { type: 'route', subType: 'API Route', categoryLabel: 'Ruta API' };
     if (relPath.endsWith('layout.tsx')) return { type: 'route', subType: 'Layout', categoryLabel: 'Layout Raíz' };
     if (relPath.endsWith('page.tsx')) {
@@ -47,6 +50,47 @@ function getNodeClassification(relPath) {
     }
     return { type: 'route', subType: 'App Internal', categoryLabel: 'App Interno' };
   }
+
+  // Headless domain layer. Split by concern so the graph shows what core is made of, not one blob.
+  if (topDir === 'core') {
+    const sub = segments[1];
+    if (sub === 'modules') return { type: 'type', subType: 'Module Contract', categoryLabel: 'Contrato de Módulo' };
+    if (sub === 'services') {
+      if (segments[2] === 'parsers') return { type: 'service', subType: 'Parser Service', categoryLabel: 'Servicio de Parseo' };
+      if (segments[2] === 'engines') return { type: 'service', subType: 'Comparison Engine', categoryLabel: 'Motor de Comparación' };
+      if (segments[2] === 'streaming') return { type: 'service', subType: 'Streaming Service', categoryLabel: 'Servicio de Streaming' };
+      return { type: 'service', subType: 'Domain Service', categoryLabel: 'Servicio de Dominio' };
+    }
+    if (sub === 'workers') return { type: 'worker', subType: 'Web Worker', categoryLabel: 'Web Worker' };
+    if (sub === 'types') return { type: 'type', subType: 'Domain Type', categoryLabel: 'Tipo de Dominio' };
+    if (sub === 'constants') return { type: 'data', subType: 'Constant', categoryLabel: 'Constante de Núcleo' };
+    if (sub === 'spatial') return { type: 'util', subType: 'Spatial Utility', categoryLabel: 'Utilidad Espacial' };
+    if (sub === 'binary') return { type: 'util', subType: 'Binary Reader', categoryLabel: 'Lector Binario' };
+    return { type: 'util', subType: 'Core Utility', categoryLabel: 'Utilidad de Núcleo' };
+  }
+
+  // Shared presentation layer.
+  if (topDir === 'ui-kit') {
+    const sub = segments[1];
+    if (sub === 'hooks') {
+      if (segments[2] === 'map') return { type: 'hook', subType: 'Map Hook', categoryLabel: 'Hook de Mapa' };
+      return { type: 'hook', subType: 'Shared Hook', categoryLabel: 'Hook Compartido' };
+    }
+    if (sub === 'types') return { type: 'type', subType: 'UI Type', categoryLabel: 'Tipo de Presentación' };
+    if (sub === 'modules') {
+      if (relPath.endsWith('contracts.ts')) return { type: 'type', subType: 'Module Contract', categoryLabel: 'Contrato de Módulo' };
+      return { type: 'component', subType: 'Extension Slot', categoryLabel: 'Slot de Extensión' };
+    }
+    if (sub === 'components') {
+      if (segments[2] === 'ui') return { type: 'component', subType: 'UI Primitive', categoryLabel: 'Componente UI Primitivo' };
+      if (segments[2] === 'map') return { type: 'component', subType: 'Map Component', categoryLabel: 'Componente de Mapa' };
+      return { type: 'component', subType: 'Shared Component', categoryLabel: 'Componente Compartido' };
+    }
+    return { type: 'component', subType: 'UI Kit', categoryLabel: 'Componente de UI Kit' };
+  }
+
+  // Extension modules. Nothing here today; phase 7 lands the first one.
+  if (topDir === 'modules') return { type: 'module', subType: 'Extension Module', categoryLabel: 'Módulo de Extensión' };
 
   if (topDir === 'components') {
     const sub = segments[1];
@@ -67,11 +111,7 @@ function getNodeClassification(relPath) {
   }
 
   if (topDir === 'providers') return { type: 'provider', subType: 'Provider', categoryLabel: 'Context Provider' };
-  if (topDir === 'services') return { type: 'service', subType: 'Service', categoryLabel: 'Servicio' };
-  if (topDir === 'utils') return { type: 'util', subType: 'Utility', categoryLabel: 'Utilidad' };
-  if (topDir === 'types') return { type: 'type', subType: 'Type Definition', categoryLabel: 'Definición de Tipo' };
-  if (topDir === 'constants' || topDir === 'data') return { type: 'data', subType: 'Constant/Data', categoryLabel: 'Datos / Constantes' };
-  if (topDir === 'workers') return { type: 'worker', subType: 'Web Worker', categoryLabel: 'Web Worker' };
+  if (topDir === 'data') return { type: 'data', subType: 'Constant/Data', categoryLabel: 'Datos / Constantes' };
 
   return { type: 'other', subType: 'Other', categoryLabel: 'Otro' };
 }
@@ -230,7 +270,9 @@ const analysis = {
       util: nodes.filter(n => n.type === 'util').length,
       type: nodes.filter(n => n.type === 'type').length,
       data: nodes.filter(n => n.type === 'data').length,
-      worker: nodes.filter(n => n.type === 'worker').length
+      worker: nodes.filter(n => n.type === 'worker').length,
+      module: nodes.filter(n => n.type === 'module').length,
+      other: nodes.filter(n => n.type === 'other').length
     }
   },
   cycles,
@@ -270,6 +312,7 @@ const html = `<!DOCTYPE html>
       --color-data: #f43f5e;
       --color-worker: #f97316;
       --color-provider: #ec4899;
+      --color-module: #a3e635;
       --color-cycle: #ef4444;
       --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
@@ -549,6 +592,7 @@ const html = `<!DOCTYPE html>
         data: { label: 'Datos / Const.', color: '#f43f5e', icon: '📦' },
         worker: { label: 'Web Workers', color: '#f97316', icon: '⚡' },
         provider: { label: 'Providers', color: '#ec4899', icon: '🛡️' },
+        module: { label: 'Módulos', color: '#a3e635', icon: '🧱' },
         other: { label: 'Otros', color: '#64748b', icon: '📄' }
       };
       const state = {
