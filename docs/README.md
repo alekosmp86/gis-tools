@@ -63,5 +63,6 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_024_AUTOMATED_TESTING_SUITE_AND_INFRASTRUCTURE.md`](docs/issues/ISSUE_024_AUTOMATED_TESTING_SUITE_AND_INFRASTRUCTURE.md) — Automated testing infrastructure (Vitest + Playwright), non-UI services, spatial math and parsers test suite, and strict specification compliance.
 - [`ISSUE_025_REACT_QUERY_SSR_HYDRATION_MISMATCH.md`](docs/issues/ISSUE_025_REACT_QUERY_SSR_HYDRATION_MISMATCH.md) — React Query SSR hydration mismatch on module refresh buttons caused by the optimistic `isFetching` result differing between server and client renders, fixed by a shared hydration-safe busy flag derived from `isPending || isFetching`.
 - [`ISSUE_026_CATALOG_TREE_GROUP_COLLAPSE_UNDER_FLEX_SHRINK.md`](docs/issues/ISSUE_026_CATALOG_TREE_GROUP_COLLAPSE_UNDER_FLEX_SHRINK.md) — Catalogue tree groups squashing and clipping each other instead of scrolling, because `overflow: hidden` zeroes a flex item's automatic minimum size inside a capped-height column, fixed by pinning `flex-shrink: 0`.
+- [`ISSUE_027_WATCHED_SOURCE_CARD_FOOTER_ALIGNMENT.md`](docs/issues/ISSUE_027_WATCHED_SOURCE_CARD_FOOTER_ALIGNMENT.md) — Cartography Watcher cards displaying misaligned "Ver en el portal" buttons due to differing content heights, resolved by pinning the card footer to the bottom via `margin-top: auto`.
 
 
