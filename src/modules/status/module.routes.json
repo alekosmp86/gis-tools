@@ -1,0 +1,11 @@
+{
+  "moduleId": "status",
+  "endpoints": [
+    {
+      "path": "",
+      "method": "GET",
+      "runtime": "nodejs",
+      "dynamic": "force-dynamic"
+    }
+  ]
+}

@@ -92,7 +92,7 @@ another module. Cross-module needs go through contracts defined in core.
 | 4 — Contracts, registry, composition root | done | 33db302 |
 | 5 — UI extension slots | done | 7e09b60 |
 | 6 — Endpoint generation | done | — |
-| 7 — Reference module and deletion proof | not started | — |
+| 7 — Reference module and deletion proof | done | — |
 | 8 — Rules and documentation | done | — |
 
 ### Phase 6 decision: declarative JSON per module
@@ -164,6 +164,52 @@ a stale tree fails the gauntlet.
   a hypothesis.
 
 **Done when:** add → works, delete → nothing breaks, restore → works, gauntlet green at each step.
+
+### Phase 7 as built
+
+The pilot is `src/modules/status` — "Estado del Servidor" — deliberately minimal but real: it
+publishes the server's uptime, Node version and execution environment.
+
+```
+src/modules/status/
+  module.routes.json          GET "" -> nodejs runtime, force-dynamic
+  manifest.ts                 id from the JSON, endpoint, nav entry, ui contribution
+  types.ts                    ServerEnvironment, ServerStatusSnapshot, the response envelope
+  serverStatusSnapshot.ts     the pure logic: uptime maths and its Spanish rendering
+  api/statusHandler.ts        thin: reads the process, delegates, serialises
+  ui/ServerStatusCard.tsx     "use client" card contributed to HOME_TOOL_GRID
+  ui/ServerStatusCard.module.css
+```
+
+The clock and `process` are injected into the builder rather than read by it, so the module's real
+logic is deterministic and covered without mocking anything: 21 tests across two files — uptime
+flooring, the clamp when the clock moves backwards, every unit boundary (60 s, 3600 s, 86400 s), the
+dropped zero remainder, environment normalisation, plus the handler's envelope and the manifest's
+binding, slot targeting and registration.
+
+### The acceptance test
+
+| Step | Result |
+|---|---|
+| **Add** | `/api/m/status` served; two requests 2 s apart returned uptime 0 then 2 with an unchanged start instant, so `force-dynamic` is honoured; the card server-renders into the home grid; POST to the module route returns 405; core routes unaffected |
+| **Delete** (folder + registry line + test folder) | `git status` **empty** — the tree is byte-identical to `main`. Route table back to baseline, 148 tests green, lint/build/doctor clean, `/api/m/status` returns 404, home page renders core tools only |
+| **Restore** | route back, 169 tests green, gauntlet clean, card and endpoint live again |
+
+Two things the pilot taught that no amount of design would have:
+
+1. **A module's tests are part of its deletion set.** They live in `tests/unit/modules/<id>/`,
+   matching the repository's test layout, so removing a module means removing three things, not two.
+   Left behind, they fail the suite on imports that no longer resolve.
+2. **Removal must be verified against a clean `.next`.** An incremental build keeps the deleted
+   module's chunks and inflated every page by roughly 4 KB, which looks exactly like a leak. After
+   `rm -rf .next` the pages came back byte-for-byte identical to the pre-module baseline (home
+   18586 B, db-csv-sync 25354 B, db-table-viewer 22255 B, file-viewer 13889 B).
+
+One characteristic worth knowing: a UI contribution costs a constant ~386 B on **every** page, not
+only the page mounting its slot, because the contributions list is passed through the root layout.
+Acceptable at this scale; if it ever matters, the shell can pass only the contributions whose slots
+the current page mounts.
+
 
 ## Phase 8 — Rules and documentation
 **Files:** `AGENTS.md`, `.agents/rules/**`, `docs/architecture/**`

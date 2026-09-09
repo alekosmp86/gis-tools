@@ -1,4 +1,5 @@
 import { createModuleRegistry } from "@/core/modules/createModuleRegistry";
+import { statusModule } from "@/modules/status/manifest";
 import type { UiContribution } from "@/ui-kit/modules/contracts";
 import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
 
@@ -14,6 +15,6 @@ import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
  *
  * An empty list is a valid, fully working application.
  */
-const activeModules: ReadonlyArray<AppModuleManifest> = [];
+const activeModules: ReadonlyArray<AppModuleManifest> = [statusModule];
 
 export const moduleRegistry = createModuleRegistry<UiContribution>(activeModules);

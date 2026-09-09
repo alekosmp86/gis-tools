@@ -189,10 +189,56 @@ tool is touched, because nothing there ever knew the module existed.
 This is the acceptance test for the whole architecture, and it is exercised as one: add → works,
 delete → nothing breaks, restore → works, gauntlet green at each step.
 
-## 7. Verified behaviour
+## 7. The reference module
 
-The generator was proved end to end with a temporary `diagnostics` module carrying three endpoints,
-including a dynamic `[id]` segment:
+`src/modules/status` is the worked example: minimal, but a real module rather than a fixture. It
+publishes the server's uptime, Node version and execution environment at `GET /api/m/status`, and
+contributes a card to the home tool grid that polls it.
+
+| Piece | File | Note |
+|---|---|---|
+| Declaration | `module.routes.json` | one `GET ""`, `runtime: nodejs`, `dynamic: force-dynamic` |
+| Manifest | `manifest.ts` | takes its `id` from the declaration, so folder, prefix and id cannot disagree |
+| Types | `types.ts` | owned by the module; nothing here belongs in core |
+| Logic | `serverStatusSnapshot.ts` | pure: clock and process readings are injected |
+| Handler | `api/statusHandler.ts` | thin: reads the process, delegates, serialises |
+| UI | `ui/ServerStatusCard.tsx` | `"use client"`, renders with no props, owns its own fetching |
+
+The split between handler and builder is the part worth copying. A handler that reads `process` and
+`Date.now()` inline can only be tested by mocking the world; injecting both leaves the real logic —
+uptime maths, unit boundaries, the clamp for a backwards clock, environment normalisation — covered
+by ordinary deterministic tests.
+
+### What the acceptance test established
+
+| Step | Result |
+|---|---|
+| **Add** | endpoint served; uptime advanced 0 → 2 s across two requests with an unchanged start instant, proving `dynamic: force-dynamic` reached the generated route; card server-rendered into the grid; an undeclared method returned 405 |
+| **Delete** | `git status` empty — the tree byte-identical to the commit before the module existed; route table back to baseline; 148 tests green; `/api/m/status` 404 |
+| **Restore** | everything back, 169 tests green, gauntlet clean |
+
+Until this ran, the extension points were a hypothesis. They are now demonstrated: **add → works,
+delete → nothing breaks, restore → works**, with the gauntlet green at each step.
+
+### Two properties the pilot exposed
+
+- **A module's deletion set is three things**, not two: the folder, the registry line, and
+  `tests/unit/modules/<id>/`. Tests live with the repository's other tests rather than inside the
+  module, so they must be removed deliberately.
+- **Removal can only be measured against a clean `.next`.** An incremental build keeps the removed
+  module's chunks and inflates every page by roughly 4 KB — indistinguishable from a leak until you
+  rebuild from scratch, at which point the pages match the pre-module baseline exactly.
+
+And one cost to keep in view: a UI contribution adds a constant ~386 B to **every** page, because
+the contributions list is threaded through the root layout rather than per page. Fine at this scale;
+if it stops being fine, the shell can pass only the contributions whose slots a page mounts.
+
+## 8. How the generator itself was verified
+
+Before the reference module existed, the generator was proved with a throwaway `diagnostics` module
+carrying three endpoints, including a dynamic `[id]` segment. It was deleted afterwards, so nothing
+in the tree corresponds to it; the results are kept because they cover ground the status module
+does not — multiple endpoints, a dynamic segment, and every direction of drift:
 
 - `npm run build` listed all three under `/api/m/diagnostics/**`;
 - a live server returned each handler's payload, and an undeclared method returned 405 from Next;
@@ -203,7 +249,7 @@ including a dynamic `[id]` segment:
 - with zero modules registered, the route table and the rendered pages are identical to what they
   were before any of this existed.
 
-## 8. Map of the machinery
+## 9. Map of the machinery
 
 | File | Responsibility |
 |---|---|
@@ -219,3 +265,5 @@ including a dynamic `[id]` segment:
 | `src/app/modules.registry.ts` | the composition root — the only file naming a module |
 | `scripts/generate-module-routes.cjs` | emits and verifies `src/app/api/m/**` |
 | `eslint.config.mjs` | the layer boundaries, as lint errors |
+| `src/modules/status/**` | the reference module: declaration, manifest, types, logic, handler, UI |
+| `tests/unit/modules/status/**` | its tests — part of its deletion set |

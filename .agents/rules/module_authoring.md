@@ -42,6 +42,10 @@ src/modules/reports/
   types.ts              types owned by this module
 ```
 
+**A complete working example lives in `src/modules/status`** — one endpoint, one nav entry, one UI
+contribution, its own types and its own tested logic. Read it before writing a new module; the
+steps below are what it does.
+
 Route files under `src/app/api/m/**` are **generated** from `module.routes.json`. They are committed
 so the served surface is visible in review, and they are never hand-edited.
 
@@ -149,6 +153,22 @@ npm run modules:routes
 Commit what it emits. `predev` and `prebuild` run it automatically, so a forgotten regeneration
 still serves correctly in dev — the committed tree is what the gate protects.
 
+### Step 7 — Test it, next to the other tests
+
+Module tests live in `tests/unit/modules/<id>/`, matching the repository's test layout. Cover the
+module's own logic against real calculations (`.agents/rules/testing_standards.md` applies in full),
+its handlers' responses, and its manifest: that the endpoint is bound to the intended handler, that
+the declared `runtime`/`dynamic` survive, and that the contribution targets a slot a host actually
+mounts.
+
+Keep the logic worth testing out of the handler. `src/modules/status` injects the clock and the
+process readings into a pure builder, so its uptime maths and Spanish rendering are covered
+deterministically without mocking anything.
+
+**These tests are part of the module's deletion set.** Removing a module means removing three
+things: the folder, the registry line, and `tests/unit/modules/<id>/`. Left behind, they fail the
+suite on imports that no longer resolve.
+
 ## 5. Hard rules
 
 1. **Never hand-edit anything under `src/app/api/m/**`.** It is generated, carries a do-not-edit
@@ -162,9 +182,10 @@ still serves correctly in dev — the committed tree is what the gate protects.
    core itself needs the type; add to `src/core/modules/` only when it is a contract *between*
    modules and the host.
 5. **Handlers speak Web `Request`/`Response`**, never Next types.
-6. **A module must be deletable.** Delete the folder, delete the registry line, regenerate: the
-   application must build and behave exactly as before. If anything else needs touching, the module
-   leaked and the leak is the bug.
+6. **A module must be deletable.** Its deletion set is three things: the folder, the registry line,
+   and `tests/unit/modules/<id>/`. Remove them, regenerate, and the application must build and
+   behave exactly as before. If anything else needs touching, the module leaked and the leak is the
+   bug.
 7. **A contribution must tolerate failure.** Slots wrap every contribution in an error boundary that
    drops it and logs; do not defeat this by throwing during module load instead of during render.
 8. **Inherited standards still apply inside a module**: Spanish UI text, Lucide icons only, zero
@@ -181,9 +202,11 @@ Run the gauntlet from `.agents/rules/testing_branch_workflow.md`, then prove del
    `tests/unit/`, following `.agents/rules/testing_standards.md`.
 4. `npm run build` — the new routes appear in the route table as `/api/m/<id>/...`.
 5. `npm run doctor` — zero findings.
-6. **Deletion proof**: remove the folder and the registry line, regenerate, run the gauntlet again,
-   confirm the route table is back to its previous state and no core route was touched. Restore and
-   confirm once more.
+6. **Deletion proof**: remove the folder, the registry line and the test folder, regenerate, run the
+   gauntlet again, and confirm the route table is back to its previous state with no core route
+   touched. `git status` should come back empty. Restore and confirm once more.
+   **Delete `.next` before measuring the result**: an incremental build keeps the removed module's
+   chunks and inflates every page, which looks exactly like a leak that is not there.
 
 ## 7. Failure modes
 
@@ -199,3 +222,5 @@ Run the gauntlet from `.agents/rules/testing_branch_workflow.md`, then prove del
 | Contribution renders nowhere, no error | The target slot is not mounted in any host page | Use `HOME_TOOL_GRID`, or mount the slot as a separate core change |
 | `Modules may not be imported here` (lint) | Something other than the composition root named a module | Route it through the registry |
 | Stale `.next` type errors naming files from another branch | Cached Next type artifacts after a branch switch | Delete `.next` and rebuild |
+| Pages still larger after deleting a module | Incremental `.next` still holds its chunks | `rm -rf .next` and rebuild before measuring |
+| Test suite fails on unresolved `@/modules/<id>/...` imports | Module deleted, its test folder left behind | Delete `tests/unit/modules/<id>/` too |

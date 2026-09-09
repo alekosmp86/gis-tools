@@ -83,7 +83,8 @@
 - **Handlers Speak Web Platform Types**: `Request` / `Response`, never `NextRequest` / `NextResponse`, so a module stays liftable to another host.
 - **Never Hand-Edit Generated Routes**: `src/app/api/m/**` is emitted by `scripts/generate-module-routes.cjs`, carries a do-not-edit banner, and is committed. Change the JSON and run `npm run modules:routes`.
 - **Mounted Slots Are Limited**: only `UiSlot.HOME_TOOL_GRID` is rendered today (`src/app/page.tsx`). A contribution aimed at an unmounted slot renders nowhere and fails silently; mounting a slot is a separate, deliberate core-side change.
-- **Deletion Is the Acceptance Test**: delete the folder, delete the registry line, regenerate — the app must build and behave exactly as before. If anything else needed touching, the module leaked.
+- **A Worked Example Exists**: `src/modules/status` is the reference module — one endpoint, one nav entry, one UI contribution, its own types and its own tested logic. Read it before writing a new one.
+- **Deletion Is the Acceptance Test**: a module's deletion set is three things — the folder, the registry line, and `tests/unit/modules/<id>/`. Remove them, regenerate, and the app must build and behave exactly as before. If anything else needed touching, the module leaked. Measure against a clean `.next`; an incremental build keeps the removed module's chunks.
 
 ## Testing Standards & Best Practices
 - **Tests as the Definitive Specification (Golden Rule)**: Never weaken, alter, or relax test assertions to make failing or broken code pass. When a test fails because the code produces an incorrect result, the underlying code must be corrected to satisfy the specification.
