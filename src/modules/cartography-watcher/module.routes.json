@@ -1,0 +1,14 @@
+{
+  "moduleId": "cartography-watcher",
+  "endpoints": [
+    { "path": "sources", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "sources", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "sources/remove", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "summaries", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "catalog", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "catalog/file", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" }
+  ],
+  "pages": [
+    { "path": "", "title": "Observador de Actualizaciones Cartográficas" }
+  ]
+}
