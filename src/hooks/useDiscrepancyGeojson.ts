@@ -10,6 +10,12 @@ import type { ParsedShapefileData } from "@/core/types/shp";
 import { cleanSuid } from "@/core/common/GisStringSanitizer";
 import { normalizeGeometry } from "@/core/spatial/SpatialGeometryComparator";
 
+/** The discrepancy map shows discrepancies or nothing; it never falls back to the source dataset. */
+const EMPTY_DISCREPANCY_COLLECTION: FeatureCollection = {
+  type: "FeatureCollection",
+  features: [],
+};
+
 /**
  * Builds an index of geometries from an existing FeatureCollection keyed by cleaned SUID.
  */
@@ -83,6 +89,7 @@ function createDiscrepancyFeatures(
         ...(item.dbRecord || {}),
         suid: item.suid,
         _discrepancyType: isMatch ? "MATCH" : "DB_FEATURE",
+        _pairId: item.id,
         _featureSource: "DB",
         _sourceLabel: "Base de Datos (PostGIS)",
         _discrepancyNote: item.note,
@@ -99,6 +106,7 @@ function createDiscrepancyFeatures(
         ...(item.shpFeatureProps || {}),
         suid: item.suid,
         _discrepancyType: isMatch ? "MATCH" : "FILE_FEATURE",
+        _pairId: item.id,
         _featureSource: "FILE",
         _sourceLabel: "Archivo Fuente (Shapefile)",
         _discrepancyNote: item.note,
@@ -124,7 +132,7 @@ export function useDiscrepancyGeojson(
   }
 
   if (!summary || !summary.items) {
-    return fileDataset.geojson || null;
+    return EMPTY_DISCREPANCY_COLLECTION;
   }
 
   const geoMap = buildDatasetGeometryMap(fileDataset.geojson);
@@ -135,10 +143,6 @@ export function useDiscrepancyGeojson(
   const features = itemsToRender.flatMap((item) =>
     createDiscrepancyFeatures(item, geoMap)
   );
-
-  if (features.length === 0 && fileDataset.geojson) {
-    return fileDataset.geojson;
-  }
 
   return {
     type: "FeatureCollection",

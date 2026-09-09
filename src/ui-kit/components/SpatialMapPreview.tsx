@@ -6,6 +6,7 @@ import type { FeatureCollection } from "geojson";
 import type { MapFeatureStyle } from "@/core/types/map";
 import { DEFAULT_MAP_FEATURE_STYLE, MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
 import { formatNumber } from "@/core/common/ValueFormatter";
+import { capFeaturesWithoutSplittingGroups } from "@/core/spatial/FeaturePreviewCap";
 import { useLeafletMap } from "@/ui-kit/hooks/useLeafletMap";
 import { MapProgressBar } from "./map/MapProgressBar";
 import { MapHeaderBar } from "./map/MapHeaderBar";
@@ -20,6 +21,8 @@ export interface SpatialMapPreviewProps {
   onSelectFeature?: (index: number | null) => void;
   initialStyle?: Partial<MapFeatureStyle>;
   isVisible?: boolean;
+  /** Maximum features to draw. Pass null to render everything, as the discrepancy map requires. */
+  maxFeatures?: number | null;
   /** Set false when the caller already explains the cap, to avoid two banners saying the same thing. */
   showCapNotice?: boolean;
 }
@@ -31,6 +34,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   onSelectFeature,
   initialStyle,
   isVisible = true,
+  maxFeatures = MAX_MAP_PREVIEW_FEATURES,
   showCapNotice = true,
 }) => {
   const [mapContainerNode, setMapContainerNode] = useState<HTMLDivElement | null>(null);
@@ -43,9 +47,13 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   const suppliedFeatures = geojson?.features ?? [];
   const suppliedFeatureCount = suppliedFeatures.length;
 
-  const isCapped = suppliedFeatureCount > MAX_MAP_PREVIEW_FEATURES;
+  const cappedFeatures =
+    maxFeatures === null
+      ? suppliedFeatures
+      : capFeaturesWithoutSplittingGroups(suppliedFeatures, maxFeatures);
+  const isCapped = cappedFeatures.length < suppliedFeatureCount;
   const previewGeojson: FeatureCollection = isCapped
-    ? { type: "FeatureCollection", features: suppliedFeatures.slice(0, MAX_MAP_PREVIEW_FEATURES) }
+    ? { type: "FeatureCollection", features: [...cappedFeatures] }
     : geojson;
 
   const totalFeatures = previewGeojson?.features?.length || 0;
@@ -99,7 +107,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
         <div className={styles.capNotice}>
           <Info size={14} />
           <span>
-            {`Vista previa limitada: mostrando ${formatNumber(MAX_MAP_PREVIEW_FEATURES)} de ${formatNumber(
+            {`Vista previa limitada: mostrando ${formatNumber(cappedFeatures.length)} de ${formatNumber(
               suppliedFeatureCount
             )} entidades para mantener la fluidez del mapa.`}
           </span>

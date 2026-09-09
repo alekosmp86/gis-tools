@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
+import { AlertType } from "@/ui-kit/types/ui";
 import { ProgressBar } from "@/ui-kit/components/ProgressBar";
 import { DiscrepanciesSummaryBar } from "./DiscrepanciesSummaryBar";
 import { DiscrepanciesTable } from "./discrepancies-table/DiscrepanciesTable";
@@ -129,10 +130,18 @@ export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
           {/* Map View with Color-Coded Discrepancies (Preserved in DOM to eliminate 500k layer teardown overhead) */}
           {hasGeojson && discrepancyGeojson && (
             <div className={activeViewTab === ResultsViewTab.MAP ? undefined : styles.tabHidden}>
+              {discrepancyGeojson.features.length === 0 && (
+                <AlertMessage
+                  type={AlertType.INFO}
+                  text="No se encontraron discrepancias para el filtro seleccionado."
+                />
+              )}
               <SpatialMapPreview
                 geojson={discrepancyGeojson}
                 title="MAPA DE DISCREPANCIAS ESPACIALES"
                 isVisible={activeViewTab === ResultsViewTab.MAP}
+                /* The discrepancy map must show every difference found, so it is never capped. */
+                maxFeatures={null}
               />
             </div>
           )}
