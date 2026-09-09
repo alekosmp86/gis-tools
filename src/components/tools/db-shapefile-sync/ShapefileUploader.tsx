@@ -7,6 +7,9 @@ import { ShapefileParser } from "@/core/services/parsers/ShapefileParser";
 import type { ParsedShapefileData } from "@/core/types/shp";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/core/types/parsers";
 import { FileDropzone } from "@/ui-kit/components/FileDropzone";
+import { ModuleTabbedSlot } from "@/ui-kit/modules/ModuleTabbedSlot";
+import { FileSourceSlotProvider } from "@/ui-kit/modules/FileSourceSlotContext";
+import { UiSlot, FileSourceFormat } from "@/ui-kit/modules/contracts";
 import { LoadedShapefileCard } from "./LoadedShapefileCard";
 import styles from "./ShapefileUploader.module.css";
 
@@ -106,17 +109,28 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
 
       {/* Upload Dropzone */}
       {!data && !loading && (
-        <FileDropzone
-          isDragOver={isDragOver}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          onKeyDown={handleDropzoneKeyDown}
-          title="Arrastre y suelte su archivo Shapefile (.zip) o GeoJSON aquí"
-          subtitle="o haga clic para seleccionar un archivo desde su equipo"
-          formatBadges={[".ZIP (SHP + DBF)", ".GEOJSON"]}
-        />
+        <FileSourceSlotProvider
+          value={{
+            toolId: "db-shapefile-sync",
+            format: FileSourceFormat.SHP,
+            onSelectFile: processFile,
+            isLoading: loading,
+          }}
+        >
+          <ModuleTabbedSlot slot={UiSlot.FILE_SOURCE_TABS} defaultLabel="Subir desde PC">
+            <FileDropzone
+              isDragOver={isDragOver}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={handleDropzoneKeyDown}
+              title="Arrastre y suelte su archivo Shapefile (.zip) o GeoJSON aquí"
+              subtitle="o haga clic para seleccionar un archivo desde su equipo"
+              formatBadges={[".ZIP (SHP + DBF)", ".GEOJSON"]}
+            />
+          </ModuleTabbedSlot>
+        </FileSourceSlotProvider>
       )}
 
       {/* Loading State */}

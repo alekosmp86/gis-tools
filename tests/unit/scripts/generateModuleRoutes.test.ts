@@ -19,6 +19,12 @@ import {
 const requireCjs = createRequire(import.meta.url);
 const generator = requireCjs("../../../scripts/generate-module-routes.cjs");
 
+/** Endpoint half of a parsed declaration file, which is what most of these tests assert on. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseEndpoints(fileContents: string, moduleDirName: string): any[] {
+  return generator.parseDeclarationFile(fileContents, moduleDirName).endpoints;
+}
+
 function buildDeclarationJson(endpoints: unknown, moduleId = "reports"): string {
   return JSON.stringify({ moduleId, endpoints });
 }
@@ -29,7 +35,7 @@ describe("generate-module-routes: declaration parsing", () => {
     const declarationJson = buildDeclarationJson([{ path: "records/stream", method: "GET" }]);
 
     // Act
-    const [endpoint] = generator.parseDeclarationFile(declarationJson, "reports");
+    const [endpoint] = parseEndpoints(declarationJson, "reports");
 
     // Assert
     expect(endpoint.routePath).toBe("reports/records/stream");
@@ -41,7 +47,7 @@ describe("generate-module-routes: declaration parsing", () => {
     const declarationJson = buildDeclarationJson([{ path: "", method: "GET" }]);
 
     // Act
-    const [endpoint] = generator.parseDeclarationFile(declarationJson, "reports");
+    const [endpoint] = parseEndpoints(declarationJson, "reports");
 
     // Assert
     expect(endpoint.routePath).toBe("reports");
@@ -52,7 +58,7 @@ describe("generate-module-routes: declaration parsing", () => {
     const declarationJson = buildDeclarationJson([{ path: "records/[id]", method: "GET" }]);
 
     // Act
-    const [endpoint] = generator.parseDeclarationFile(declarationJson, "reports");
+    const [endpoint] = parseEndpoints(declarationJson, "reports");
 
     // Assert
     expect(endpoint.routePath).toBe("reports/records/[id]");
@@ -79,7 +85,7 @@ describe("generate-module-routes: declaration parsing", () => {
     const declarationJson = `\uFEFF${buildDeclarationJson([{ path: "records", method: "GET" }])}`;
 
     // Act
-    const [endpoint] = generator.parseDeclarationFile(declarationJson, "reports");
+    const [endpoint] = parseEndpoints(declarationJson, "reports");
 
     // Assert
     expect(endpoint.routePath).toBe("reports/records");
@@ -140,7 +146,7 @@ describe("generate-module-routes: declaration parsing", () => {
 describe("generate-module-routes: route planning", () => {
   it("should emit one route file per path, carrying every method declared on it", () => {
     // Arrange
-    const endpoints = generator.parseDeclarationFile(
+    const endpoints = parseEndpoints(
       buildDeclarationJson([
         { path: "records", method: "POST" },
         { path: "records", method: "GET" },
@@ -158,7 +164,7 @@ describe("generate-module-routes: route planning", () => {
 
   it("should reject two methods on one path asking for different runtimes", () => {
     // Arrange: Next configures runtime per file, so the two cannot both be honoured.
-    const endpoints = generator.parseDeclarationFile(
+    const endpoints = parseEndpoints(
       buildDeclarationJson([
         { path: "records", method: "GET", runtime: "edge" },
         { path: "records", method: "POST", runtime: "nodejs" },
@@ -172,25 +178,25 @@ describe("generate-module-routes: route planning", () => {
 
   it("should place a generated route under src/app/api/m mirroring its route path", () => {
     // Arrange
-    const endpoints = generator.parseDeclarationFile(
+    const endpoints = parseEndpoints(
       buildDeclarationJson([{ path: "records/stream", method: "GET" }]),
       "reports"
     );
 
     // Act
-    const [file] = generator.planGeneratedFiles(endpoints);
+    const [file] = generator.planGeneratedFiles({ endpoints, pages: [] });
 
     // Assert
     expect(file.relativePath).toBe("src/app/api/m/reports/records/stream/route.ts");
   });
 
   it("should plan nothing when no module declares an endpoint", () => {
-    expect(generator.planGeneratedFiles([])).toEqual([]);
+    expect(generator.planGeneratedFiles({ endpoints: [], pages: [] })).toEqual([]);
   });
 
   it("should emit a do-not-edit banner, a handler per method and no module import", () => {
     // Arrange
-    const endpoints = generator.parseDeclarationFile(
+    const endpoints = parseEndpoints(
       buildDeclarationJson([
         { path: "records", method: "GET" },
         { path: "records", method: "DELETE" },
@@ -199,7 +205,7 @@ describe("generate-module-routes: route planning", () => {
     );
 
     // Act
-    const [file] = generator.planGeneratedFiles(endpoints);
+    const [file] = generator.planGeneratedFiles({ endpoints, pages: [] });
 
     // Assert
     expect(file.contents).toContain("GENERATED FILE — DO NOT EDIT");
@@ -212,20 +218,20 @@ describe("generate-module-routes: route planning", () => {
 
   it("should emit runtime and dynamic exports only when they are declared", () => {
     // Arrange
-    const configuredEndpoints = generator.parseDeclarationFile(
+    const configuredEndpoints = parseEndpoints(
       buildDeclarationJson([
         { path: "records", method: "GET", runtime: "edge", dynamic: "force-dynamic" },
       ]),
       "reports"
     );
-    const plainEndpoints = generator.parseDeclarationFile(
+    const plainEndpoints = parseEndpoints(
       buildDeclarationJson([{ path: "records", method: "GET" }]),
       "reports"
     );
 
     // Act
-    const [configuredFile] = generator.planGeneratedFiles(configuredEndpoints);
-    const [plainFile] = generator.planGeneratedFiles(plainEndpoints);
+    const [configuredFile] = generator.planGeneratedFiles({ endpoints: configuredEndpoints, pages: [] });
+    const [plainFile] = generator.planGeneratedFiles({ endpoints: plainEndpoints, pages: [] });
 
     // Assert
     expect(configuredFile.contents).toContain('export const runtime = "edge";');
@@ -268,5 +274,110 @@ describe("generate-module-routes: staleness check", () => {
 
     // Assert
     expect(exitCode).toBe(0);
+  });
+});
+
+describe("generate-module-routes: page declarations", () => {
+  function buildPageDeclarationJson(pages: unknown, moduleId = "reports"): string {
+    return JSON.stringify({ moduleId, endpoints: [], pages });
+  }
+
+  it("should resolve a declared page into the route it will be served at", () => {
+    // Arrange
+    const declarationJson = buildPageDeclarationJson([{ path: "", title: "Reportes" }]);
+
+    // Act
+    const { pages } = generator.parseDeclarationFile(declarationJson, "reports");
+
+    // Assert
+    expect(pages[0].routePath).toBe("reports");
+    expect(pages[0].title).toBe("Reportes");
+  });
+
+  it("should treat pages as optional", () => {
+    // Arrange: most modules contribute endpoints only.
+    const declarationJson = JSON.stringify({ moduleId: "reports", endpoints: [] });
+
+    // Act & Assert
+    expect(generator.parseDeclarationFile(declarationJson, "reports").pages).toEqual([]);
+  });
+
+  it("should reject a page without a usable title", () => {
+    // Arrange: the title becomes the document title, so an empty one is a defect.
+    expect(() =>
+      generator.parseDeclarationFile(buildPageDeclarationJson([{ path: "", title: "  " }]), "reports")
+    ).toThrow(/needs a non-empty "title"/);
+
+    expect(() =>
+      generator.parseDeclarationFile(buildPageDeclarationJson([{ path: "" }]), "reports")
+    ).toThrow(/needs a non-empty "title"/);
+  });
+
+  it("should reject the same page path declared twice", () => {
+    // Arrange
+    const declarationJson = buildPageDeclarationJson([
+      { path: "detalle", title: "Detalle" },
+      { path: "/detalle/", title: "Duplicado" },
+    ]);
+
+    // Act & Assert
+    expect(() => generator.parseDeclarationFile(declarationJson, "reports")).toThrow(
+      /declares page "detalle" twice/
+    );
+  });
+
+  it("should place a generated page under src/app/tools/m mirroring its route path", () => {
+    // Arrange
+    const { pages } = generator.parseDeclarationFile(
+      buildPageDeclarationJson([{ path: "detalle", title: "Detalle" }]),
+      "reports"
+    );
+
+    // Act
+    const [file] = generator.planGeneratedFiles({ endpoints: [], pages });
+
+    // Assert
+    expect(file.relativePath).toBe("src/app/tools/m/reports/detalle/page.tsx");
+  });
+
+  it("should emit a page that resolves through the registry and never imports a module", () => {
+    // Arrange
+    const { pages } = generator.parseDeclarationFile(
+      buildPageDeclarationJson([{ path: "", title: "Reportes" }]),
+      "reports"
+    );
+
+    // Act
+    const [file] = generator.planGeneratedFiles({ endpoints: [], pages });
+
+    // Assert
+    expect(file.contents).toContain("GENERATED FILE — DO NOT EDIT");
+    expect(file.contents).toContain('const PAGE_ROUTE_PATH = "reports";');
+    expect(file.contents).toContain("moduleRegistry.findPage(PAGE_ROUTE_PATH)");
+    expect(file.contents).toContain("ModuleErrorBoundary");
+    expect(file.contents).toContain("notFound()");
+    expect(file.contents).toContain('title: "Reportes"');
+    // The invariant: only the composition root may name a module.
+    expect(file.contents).not.toContain("@/modules/");
+  });
+
+  it("should plan endpoint and page files together for one module", () => {
+    // Arrange
+    const declarationJson = JSON.stringify({
+      moduleId: "reports",
+      endpoints: [{ path: "datos", method: "GET" }],
+      pages: [{ path: "", title: "Reportes" }],
+    });
+
+    // Act
+    const planned = generator.planGeneratedFiles(
+      generator.parseDeclarationFile(declarationJson, "reports")
+    );
+
+    // Assert
+    expect(planned.map((file: { relativePath: string }) => file.relativePath)).toEqual([
+      "src/app/api/m/reports/datos/route.ts",
+      "src/app/tools/m/reports/page.tsx",
+    ]);
   });
 });

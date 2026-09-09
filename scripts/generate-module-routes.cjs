@@ -18,10 +18,12 @@ const path = require('path');
 
 const rootDir = path.resolve(__dirname, '..');
 const modulesDir = path.join(rootDir, 'src', 'modules');
-const generatedDir = path.join(rootDir, 'src', 'app', 'api', 'm');
+const generatedApiDir = path.join(rootDir, 'src', 'app', 'api', 'm');
+const generatedPageDir = path.join(rootDir, 'src', 'app', 'tools', 'm');
 
 const DECLARATION_FILE_NAME = 'module.routes.json';
 const ROUTE_FILE_NAME = 'route.ts';
+const PAGE_FILE_NAME = 'page.tsx';
 const CHECK_FLAG = '--check';
 
 /**
@@ -141,7 +143,7 @@ function parseDeclarationFile(fileContents, moduleDirName) {
   }
 
   const seenKeys = new Set();
-  return parsed.endpoints.map((declaration) => {
+  const endpoints = parsed.endpoints.map((declaration) => {
     const endpoint = validateDeclaration(declaration, parsed.moduleId, context);
     const key = endpointKey(endpoint.method, endpoint.path);
 
@@ -152,6 +154,42 @@ function parseDeclarationFile(fileContents, moduleDirName) {
 
     return endpoint;
   });
+
+  return { endpoints, pages: parsePageDeclarations(parsed, context) };
+}
+
+/** Validates the optional `pages` array: a module may own whole routes as well as endpoints. */
+function parsePageDeclarations(parsed, context) {
+  if (parsed.pages === undefined) {
+    return [];
+  }
+  if (!Array.isArray(parsed.pages)) {
+    fail(`${context}: "pages" must be an array when present.`);
+  }
+
+  const seenPaths = new Set();
+  return parsed.pages.map((declaration) => {
+    if (typeof declaration.path !== 'string') {
+      fail(`${context}: every page needs a string "path" (use "" to own the module root).`);
+    }
+    if (typeof declaration.title !== 'string' || declaration.title.trim().length === 0) {
+      fail(`${context}: every page needs a non-empty "title"; it becomes the document title.`);
+    }
+    assertValidEndpointPath(declaration.path, context);
+
+    const normalizedPath = normalizeEndpointPath(declaration.path);
+    if (seenPaths.has(normalizedPath)) {
+      fail(`${context}: declares page "${normalizedPath}" twice. Each page path may be declared once.`);
+    }
+    seenPaths.add(normalizedPath);
+
+    return {
+      moduleId: parsed.moduleId,
+      path: normalizedPath,
+      title: declaration.title,
+      routePath: resolveRoutePath(parsed.moduleId, declaration.path),
+    };
+  });
 }
 
 /** Collects the declarations of every module that has a declaration file. */
@@ -160,18 +198,25 @@ function readModuleDeclarations(modulesDirectory = modulesDir) {
     return [];
   }
 
-  return fs
+  const declarations = { endpoints: [], pages: [] };
+
+  const moduleDirNames = fs
     .readdirSync(modulesDirectory, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .sort()
-    .flatMap((moduleDirName) => {
-      const declarationPath = path.join(modulesDirectory, moduleDirName, DECLARATION_FILE_NAME);
-      if (!fs.existsSync(declarationPath)) {
-        return [];
-      }
-      return parseDeclarationFile(fs.readFileSync(declarationPath, 'utf8'), moduleDirName);
-    });
+    .sort();
+
+  for (const moduleDirName of moduleDirNames) {
+    const declarationPath = path.join(modulesDirectory, moduleDirName, DECLARATION_FILE_NAME);
+    if (!fs.existsSync(declarationPath)) {
+      continue;
+    }
+    const parsed = parseDeclarationFile(fs.readFileSync(declarationPath, 'utf8'), moduleDirName);
+    declarations.endpoints.push(...parsed.endpoints);
+    declarations.pages.push(...parsed.pages);
+  }
+
+  return declarations;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -264,12 +309,66 @@ ${renderRouteConfiguration(group)}${renderRouteHandlers(group)}
 `;
 }
 
-/** Builds the complete generated tree: output paths relative to the repo root, and their contents. */
-function planGeneratedFiles(endpoints) {
-  return groupEndpointsByRoute(endpoints).map((group) => ({
+/**
+ * Renders a page route.
+ *
+ * Like a generated API route it names its module only as a string and resolves through the
+ * registry, so the composition root keeps its monopoly. `notFound()` covers the case of a route
+ * file left behind by a module that no longer owns it.
+ */
+function renderPageFile(page) {
+  return `/**
+ * GENERATED FILE — DO NOT EDIT.
+ *
+ * Emitted by scripts/generate-module-routes.cjs from
+ * src/modules/${page.moduleId}/${DECLARATION_FILE_NAME}.
+ *
+ * Regenerate with \`npm run modules:routes\`. \`npm run modules:routes:check\` fails when this tree
+ * is stale, so the served surface always matches the declarations that produced it.
+ */
+import { notFound } from "next/navigation";
+import { moduleRegistry } from "@/app/modules.registry";
+import { ModuleErrorBoundary } from "@/ui-kit/modules/ModuleErrorBoundary";
+
+const PAGE_ROUTE_PATH = "${page.routePath}";
+
+export const metadata = {
+  title: "${page.title.replace(/"/g, '\\"')}",
+};
+
+export default function ModuleOwnedPage() {
+  const registeredPage = moduleRegistry.findPage(PAGE_ROUTE_PATH);
+
+  if (!registeredPage) {
+    notFound();
+  }
+
+  const ModuleOwnedPageContent = registeredPage.page.Component;
+
+  return (
+    <ModuleErrorBoundary contributionId={PAGE_ROUTE_PATH}>
+      <ModuleOwnedPageContent />
+    </ModuleErrorBoundary>
+  );
+}
+`;
+}
+
+/** Builds the complete generated tree: output paths relative to the repo root, and contents. */
+function planGeneratedFiles(declarations) {
+  const endpointFiles = groupEndpointsByRoute(declarations.endpoints).map((group) => ({
     relativePath: path.posix.join('src/app/api/m', group.routePath, ROUTE_FILE_NAME),
     contents: renderRouteFile(group),
   }));
+
+  const pageFiles = [...declarations.pages]
+    .sort((first, second) => first.routePath.localeCompare(second.routePath))
+    .map((page) => ({
+      relativePath: path.posix.join('src/app/tools/m', page.routePath, PAGE_FILE_NAME),
+      contents: renderPageFile(page),
+    }));
+
+  return [...endpointFiles, ...pageFiles];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -298,7 +397,10 @@ function toRelativePosixPath(absolutePath) {
 
 function diffAgainstDisk(plannedFiles) {
   const plannedByPath = new Map(plannedFiles.map((file) => [file.relativePath, file.contents]));
-  const existingPaths = listExistingFiles(generatedDir).map(toRelativePosixPath);
+  const existingPaths = [
+    ...listExistingFiles(generatedApiDir),
+    ...listExistingFiles(generatedPageDir),
+  ].map(toRelativePosixPath);
 
   const stalePaths = existingPaths.filter((existingPath) => !plannedByPath.has(existingPath)).sort();
   const missingPaths = [];
@@ -349,7 +451,8 @@ function writeGeneratedFiles(plannedFiles, drift) {
     fs.writeFileSync(absolutePath, file.contents, 'utf8');
   }
 
-  removeEmptyDirectories(generatedDir);
+  removeEmptyDirectories(generatedApiDir);
+  removeEmptyDirectories(generatedPageDir);
 }
 
 function describeDrift(drift) {
@@ -409,6 +512,7 @@ module.exports = {
   planGeneratedFiles,
   readModuleDeclarations,
   renderRouteFile,
+  renderPageFile,
   resolveRoutePath,
   DYNAMIC_MODES,
   HTTP_METHODS,

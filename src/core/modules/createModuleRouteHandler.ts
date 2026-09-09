@@ -23,8 +23,8 @@ function buildUnservedRouteResponse(method: ModuleHttpMethod, routePath: string)
   );
 }
 
-export function createModuleRouteHandler<TUiContribution>(
-  registry: ModuleRegistry<TUiContribution>,
+export function createModuleRouteHandler<TUiContribution, TPageComponent>(
+  registry: ModuleRegistry<TUiContribution, TPageComponent>,
   method: ModuleHttpMethod,
   routePath: string
 ): ModuleEndpointHandler {

@@ -1,6 +1,6 @@
 import { createModuleRegistry } from "@/core/modules/createModuleRegistry";
 import { statusModule } from "@/modules/status/manifest";
-import type { UiContribution } from "@/ui-kit/modules/contracts";
+import type { ModulePageComponent, UiContribution } from "@/ui-kit/modules/contracts";
 import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
 
 /**
@@ -17,4 +17,4 @@ import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
  */
 const activeModules: ReadonlyArray<AppModuleManifest> = [statusModule];
 
-export const moduleRegistry = createModuleRegistry<UiContribution>(activeModules);
+export const moduleRegistry = createModuleRegistry<UiContribution, ModulePageComponent>(activeModules);

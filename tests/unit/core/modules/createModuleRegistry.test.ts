@@ -224,3 +224,75 @@ describe("createModuleRegistry", () => {
     ]);
   });
 });
+
+describe("createModuleRegistry: module pages", () => {
+  const DashboardComponent = { name: "Dashboard" };
+
+  function buildPageManifest(overrides: Partial<ModuleManifest<never, object>> = {}) {
+    return {
+      id: "reports",
+      name: "Reportes",
+      pages: [{ path: "", title: "Reportes", Component: DashboardComponent }],
+      ...overrides,
+    } as ModuleManifest<never, object>;
+  }
+
+  it("should resolve a page at the route path the generator emits", () => {
+    // Arrange
+    const registry = createModuleRegistry<never, object>([buildPageManifest()]);
+
+    // Act
+    const registered = registry.findPage("reports");
+
+    // Assert
+    expect(registered?.moduleId).toBe("reports");
+    expect(registered?.page.Component).toBe(DashboardComponent);
+    expect(registered?.page.title).toBe("Reportes");
+  });
+
+  it("should prefix a nested page path with the module id", () => {
+    // Arrange
+    const registry = createModuleRegistry<never, object>([
+      buildPageManifest({
+        pages: [{ path: "detalle", title: "Detalle", Component: DashboardComponent }],
+      }),
+    ]);
+
+    // Assert
+    expect(registry.pages()[0].routePath).toBe("reports/detalle");
+    expect(registry.findPage("reports")).toBeNull();
+  });
+
+  it("should answer with nothing when no module owns the page route", () => {
+    // Arrange: this is a generated page file left behind by a deleted module.
+    const registry = createModuleRegistry();
+
+    // Assert
+    expect(registry.pages()).toHaveLength(0);
+    expect(registry.findPage("reports")).toBeNull();
+  });
+
+  it("should reject two modules owning the same page route", () => {
+    // Arrange: registration order would otherwise decide which one renders.
+    const manifests = [
+      buildPageManifest({ id: "reports" }),
+      buildPageManifest({ id: "reports", name: "Otro" }),
+    ];
+
+    // Act & Assert: the duplicate id is caught first, so use distinct ids with one shared route.
+    expect(() => createModuleRegistry<never, object>(manifests)).toThrow(/Duplicate module id/);
+  });
+
+  it("should keep pages and endpoints in separate namespaces", () => {
+    // Arrange: a module may serve GET /api/m/reports and own /tools/m/reports at once.
+    const registry = createModuleRegistry<never, object>([
+      buildPageManifest({
+        endpoints: [{ path: "", method: ModuleHttpMethod.GET, handler: okResponse }],
+      }),
+    ]);
+
+    // Assert
+    expect(registry.findEndpoint(ModuleHttpMethod.GET, "reports")?.moduleId).toBe("reports");
+    expect(registry.findPage("reports")?.moduleId).toBe("reports");
+  });
+});

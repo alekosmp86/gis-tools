@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from "react";
 import { Database, MapPin } from "lucide-react";
-import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
+import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 import { DbConnectionForm } from "@/ui-kit/components/DbConnectionForm";
 import { DbTableViewerContainer } from "@/components/tools/db-table-viewer/DbTableViewerContainer";

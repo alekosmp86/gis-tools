@@ -2,18 +2,18 @@
 
 import { useState, useRef } from "react";
 import { Database, FileSpreadsheet, GitMerge, Sliders } from "lucide-react";
-import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
-import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
-import { DbConnectionForm } from "@/ui-kit/components/DbConnectionForm";
+import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLayout";
 import { CsvUploader } from "@/components/tools/db-csv-sync/CsvUploader";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
 import { SyncParametersStep } from "@/components/tools/db-sync-common/SyncParametersStep";
 import { ComparisonResultsView } from "@/components/tools/db-sync-common/ComparisonResultsView";
-import { DB_VS_CSV_DESCRIPTOR } from "@/core/constants/comparisonDescriptors";
-import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/core/types/db";
-import type { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/core/types/comparison";
-import type { WizardStepDef } from "@/ui-kit/types/ui";
+import { DbColumnMetadata, DbConfig, DbConnectionFormRef } from "@/core/types/db";
 import { ParsedFileDataset } from "@/core/types/parsers";
+import { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/core/types/comparison";
+import { WizardStepDef } from "@/ui-kit/types/ui";
+import { DbConnectionForm } from "@/ui-kit/components/DbConnectionForm";
+import { DB_VS_CSV_DESCRIPTOR } from "@/core/constants/comparisonDescriptors";
+import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 
 export default function DbCsvSyncToolPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);

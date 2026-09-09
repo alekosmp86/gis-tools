@@ -4,6 +4,7 @@ import type {
   ModuleNavigationEntry,
   ModuleRegistry,
   RegisteredEndpoint,
+  RegisteredPage,
 } from "./contracts";
 import { resolveModuleRoutePath } from "./moduleRoutePaths";
 
@@ -61,8 +62,8 @@ function assertUniqueRoutes(endpoints: ReadonlyArray<RegisteredEndpoint>): void 
   }
 }
 
-function collectEndpoints<TUiContribution>(
-  manifests: ReadonlyArray<ModuleManifest<TUiContribution>>
+function collectEndpoints<TUiContribution, TPageComponent>(
+  manifests: ReadonlyArray<ModuleManifest<TUiContribution, TPageComponent>>
 ): ReadonlyArray<RegisteredEndpoint> {
   const collected: RegisteredEndpoint[] = [];
 
@@ -79,8 +80,43 @@ function collectEndpoints<TUiContribution>(
   return collected;
 }
 
-function collectNavigation<TUiContribution>(
-  manifests: ReadonlyArray<ModuleManifest<TUiContribution>>
+/**
+ * Rejects two modules owning the same page route, which would otherwise be decided by
+ * registration order.
+ */
+function assertUniquePageRoutes(pages: ReadonlyArray<RegisteredPage<unknown>>): void {
+  const seenRoutes = new Set<string>();
+
+  for (const registered of pages) {
+    if (seenRoutes.has(registered.routePath)) {
+      throw new Error(
+        `Duplicate module page "${registered.routePath}" contributed by "${registered.moduleId}". Two modules cannot own the same page route.`
+      );
+    }
+    seenRoutes.add(registered.routePath);
+  }
+}
+
+function collectPages<TUiContribution, TPageComponent>(
+  manifests: ReadonlyArray<ModuleManifest<TUiContribution, TPageComponent>>
+): ReadonlyArray<RegisteredPage<TPageComponent>> {
+  const collected: RegisteredPage<TPageComponent>[] = [];
+
+  for (const manifest of manifests) {
+    for (const page of manifest.pages ?? []) {
+      collected.push({
+        moduleId: manifest.id,
+        page,
+        routePath: resolveModuleRoutePath(manifest.id, page.path),
+      });
+    }
+  }
+
+  return collected;
+}
+
+function collectNavigation<TUiContribution, TPageComponent>(
+  manifests: ReadonlyArray<ModuleManifest<TUiContribution, TPageComponent>>
 ): ReadonlyArray<ModuleNavigationEntry> {
   const collected = manifests.flatMap((manifest) => [...(manifest.navigation ?? [])]);
   return collected.sort(
@@ -96,9 +132,9 @@ function collectNavigation<TUiContribution>(
  * registry that answers every query with nothing — which is what makes removing the last module a
  * non-event.
  */
-export function createModuleRegistry<TUiContribution = never>(
-  manifests: ReadonlyArray<ModuleManifest<TUiContribution>> = []
-): ModuleRegistry<TUiContribution> {
+export function createModuleRegistry<TUiContribution = never, TPageComponent = never>(
+  manifests: ReadonlyArray<ModuleManifest<TUiContribution, TPageComponent>> = []
+): ModuleRegistry<TUiContribution, TPageComponent> {
   for (const manifest of manifests) {
     assertValidModuleId(manifest.id);
   }
@@ -107,9 +143,13 @@ export function createModuleRegistry<TUiContribution = never>(
   const endpoints = collectEndpoints(manifests);
   assertUniqueRoutes(endpoints);
 
+  const pages = collectPages(manifests);
+  assertUniquePageRoutes(pages);
+
   const navigation = collectNavigation(manifests);
   const uiContributions = manifests.flatMap((manifest) => [...(manifest.ui ?? [])]);
   const modulesById = new Map(manifests.map((manifest) => [manifest.id, manifest]));
+  const pagesByRoute = new Map(pages.map((registered) => [registered.routePath, registered]));
   const endpointsByRoute = new Map(
     endpoints.map((registered) => [
       routeLookupKey(registered.endpoint.method, registered.routePath),
@@ -125,5 +165,7 @@ export function createModuleRegistry<TUiContribution = never>(
       endpointsByRoute.get(routeLookupKey(method, routePath)) ?? null,
     navigation: () => navigation,
     uiContributions: () => uiContributions,
+    pages: () => pages,
+    findPage: (routePath) => pagesByRoute.get(routePath) ?? null,
   };
 }

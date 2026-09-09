@@ -85,15 +85,29 @@ export interface ModuleRouteDeclaration {
 }
 
 /**
+ * One page a module contributes, as declared in `module.routes.json`.
+ *
+ * A page is a whole route the module owns, rather than a contribution rendered inside a host page.
+ */
+export interface ModulePageDeclaration {
+  /** Path relative to the module, e.g. "detalle". "" serves the module root. */
+  readonly path: string;
+  /** Document title for the generated route. */
+  readonly title: string;
+}
+
+/**
  * A module's route declaration file.
  *
- * The single source of truth for the module's HTTP surface: the manifest imports it to bind
- * handlers, and the generator reads it to emit routes. Neither side may add an endpoint the other
- * does not know about.
+ * The single source of truth for the module's routed surface — HTTP endpoints and owned pages.
+ * The manifest imports it to bind handlers and components; the generator reads it to emit routes.
+ * Neither side may add a route the other does not know about.
  */
 export interface ModuleRouteDeclarationFile {
   readonly moduleId: string;
   readonly endpoints: ReadonlyArray<ModuleRouteDeclaration>;
+  /** Omitted by modules that contribute no page of their own. */
+  readonly pages?: ReadonlyArray<ModulePageDeclaration>;
 }
 
 /** A navigation entry a module wants surfaced by the host application. */
@@ -110,13 +124,34 @@ export interface ModuleNavigationEntry {
  *
  * @typeParam TUiContribution - concrete UI contribution type, supplied by the presentation layer.
  */
-export interface ModuleManifest<TUiContribution = never> {
+export interface ModuleManifest<TUiContribution = never, TPageComponent = never> {
   readonly id: string;
   readonly name: string;
   readonly description?: string;
   readonly endpoints?: ReadonlyArray<ModuleEndpoint>;
   readonly navigation?: ReadonlyArray<ModuleNavigationEntry>;
   readonly ui?: ReadonlyArray<TUiContribution>;
+  readonly pages?: ReadonlyArray<ModulePage<TPageComponent>>;
+}
+
+/**
+ * One page contributed by a module: a declaration bound to the component that renders it.
+ *
+ * Generic over the component type for the same reason the manifest is — core knows a module may
+ * own a page, but has no opinion about what renders it.
+ */
+export interface ModulePage<TPageComponent = never> {
+  readonly path: string;
+  readonly title: string;
+  readonly Component: TPageComponent;
+}
+
+/** A page paired with the module that contributed it. */
+export interface RegisteredPage<TPageComponent = never> {
+  readonly moduleId: string;
+  readonly page: ModulePage<TPageComponent>;
+  /** Full path served by the generated route, e.g. "cartography-watcher/detalle". */
+  readonly routePath: string;
 }
 
 /** An endpoint paired with the module that contributed it. */
@@ -128,9 +163,9 @@ export interface RegisteredEndpoint {
 }
 
 /** Read model exposed to hosts. Deliberately query-only: nothing registers after construction. */
-export interface ModuleRegistry<TUiContribution = never> {
-  readonly modules: ReadonlyArray<ModuleManifest<TUiContribution>>;
-  findById(moduleId: string): ModuleManifest<TUiContribution> | null;
+export interface ModuleRegistry<TUiContribution = never, TPageComponent = never> {
+  readonly modules: ReadonlyArray<ModuleManifest<TUiContribution, TPageComponent>>;
+  findById(moduleId: string): ModuleManifest<TUiContribution, TPageComponent> | null;
   endpoints(): ReadonlyArray<RegisteredEndpoint>;
   /**
    * Resolves the endpoint a generated route delegates to. Returns null when no module serves it,
@@ -139,4 +174,10 @@ export interface ModuleRegistry<TUiContribution = never> {
   findEndpoint(method: ModuleHttpMethod, routePath: string): RegisteredEndpoint | null;
   navigation(): ReadonlyArray<ModuleNavigationEntry>;
   uiContributions(): ReadonlyArray<TUiContribution>;
+  pages(): ReadonlyArray<RegisteredPage<TPageComponent>>;
+  /**
+   * Resolves the page a generated route renders. Returns null when no module owns it, which is
+   * what a route file left behind by a deleted module looks like.
+   */
+  findPage(routePath: string): RegisteredPage<TPageComponent> | null;
 }

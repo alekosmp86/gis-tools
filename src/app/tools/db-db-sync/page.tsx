@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Database, GitMerge, Sliders } from "lucide-react";
-import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
+import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 import { DbConnectionForm } from "@/ui-kit/components/DbConnectionForm";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";

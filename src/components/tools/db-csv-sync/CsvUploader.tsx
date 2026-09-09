@@ -6,6 +6,9 @@ import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { ColumnsList } from "@/ui-kit/components/ColumnsList";
 import { FileDropzone } from "@/ui-kit/components/FileDropzone";
+import { ModuleTabbedSlot } from "@/ui-kit/modules/ModuleTabbedSlot";
+import { FileSourceSlotProvider } from "@/ui-kit/modules/FileSourceSlotContext";
+import { UiSlot, FileSourceFormat } from "@/ui-kit/modules/contracts";
 import { CsvParser } from "@/core/services/parsers/CsvParser";
 import { MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
 import { AlertType } from "@/ui-kit/types/ui";
@@ -118,17 +121,28 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
 
       {/* Upload Zone */}
       {!data && !loading && (
-        <FileDropzone
-          isDragOver={isDragOver}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          onKeyDown={handleDropzoneKeyDown}
-          title="Arrastre y suelte su archivo CSV (.csv) aquí"
-          subtitle="o haga clic para seleccionar un archivo desde su equipo"
-          formatBadges={[".CSV", "DELIMITADO POR COMAS"]}
-        />
+        <FileSourceSlotProvider
+          value={{
+            toolId: "db-csv-sync",
+            format: FileSourceFormat.CSV,
+            onSelectFile: processFile,
+            isLoading: loading,
+          }}
+        >
+          <ModuleTabbedSlot slot={UiSlot.FILE_SOURCE_TABS} defaultLabel="Subir desde PC">
+            <FileDropzone
+              isDragOver={isDragOver}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={handleDropzoneKeyDown}
+              title="Arrastre y suelte su archivo CSV (.csv) aquí"
+              subtitle="o haga clic para seleccionar un archivo desde su equipo"
+              formatBadges={[".CSV", "DELIMITADO POR COMAS"]}
+            />
+          </ModuleTabbedSlot>
+        </FileSourceSlotProvider>
       )}
 
       {/* Loading State */}

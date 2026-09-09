@@ -1,6 +1,6 @@
 "use client";
 
-import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
+import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLayout";
 import { FileViewerContainer } from "@/components/tools/file-viewer/FileViewerContainer";
 
 export default function FileViewerToolPage() {
