@@ -77,6 +77,9 @@ export class ShapefileParser implements ISpatialFileParser {
 
           if (geometry) {
             features.push({
+              // Records without geometry produce no feature, so the feature position drifts from the
+              // record position. The id keeps the link back to the record this feature came from.
+              id: recordIndex,
               type: "Feature",
               geometry,
               properties,

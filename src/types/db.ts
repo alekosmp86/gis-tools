@@ -1,3 +1,5 @@
+import type { FeatureCollection } from "geojson";
+
 export interface DbConfig {
   host: string;
   port: string;
@@ -92,4 +94,15 @@ export interface DbStreamRecordsParams {
   config: DbConfig;
   totalRows?: number;
   onProgress?: (phase: string, current?: number, total?: number) => void;
+}
+
+export interface DbTableViewerState {
+  records: Array<Record<string, unknown>>;
+  geojson: FeatureCollection | null;
+  detectedGeometryType: string | null;
+  detectedSrid: number | null;
+  progressText: string;
+  isPending: boolean;
+  isError: boolean;
+  error: Error | null;
 }

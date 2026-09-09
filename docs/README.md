@@ -55,8 +55,9 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_018_CIRCULAR_DEPENDENCY_AND_LAYER_SEPARATION_AUDIT.md`](docs/issues/ISSUE_018_CIRCULAR_DEPENDENCY_AND_LAYER_SEPARATION_AUDIT.md) — Elimination of circular dependency between domain types and worker services, layer separation audit, and permanent dependency graph integration.
 - [`ISSUE_019_EXPORT_ENCODING_GLITCH_TOLERANCE.md`](docs/issues/ISSUE_019_EXPORT_ENCODING_GLITCH_TOLERANCE.md) — Character encoding glitch and mojibake tolerance for GIS/DBF exports (letter 'Ñ' corruptions), preserving strict case and punctuation sensitivity.
 - [`ISSUE_020_WIZARD_STEP4_SYNC_PARAMETERS_DECOUPLING.md`](docs/issues/ISSUE_020_WIZARD_STEP4_SYNC_PARAMETERS_DECOUPLING.md) — Decoupling SUID mapping from SQL sync parameters into a dedicated 5-step wizard and renaming Step4ResultsView to ComparisonResultsView.
-- [`ISSUE_021_AUTOMATED_TESTING_SUITE_AND_INFRASTRUCTURE.md`](docs/issues/ISSUE_021_AUTOMATED_TESTING_SUITE_AND_INFRASTRUCTURE.md) — Automated testing infrastructure (Vitest + Playwright), non-UI services, spatial math and parsers test suite, and strict specification compliance.
-
-
+- [`ISSUE_021_DB_TABLE_VIEWER_STALE_GEOJSON_FLOW.md`](docs/issues/ISSUE_021_DB_TABLE_VIEWER_STALE_GEOJSON_FLOW.md) — DB Table Viewer repeated PostgreSQL streaming caused by an unstable TanStack Query mutation object in the effect dependencies, plus removal of unnecessary derived-state mirroring under React Compiler.
+- [`ISSUE_022_PREVIEW_MAP_RENDER_PATH_ALLOCATION_COST.md`](docs/issues/ISSUE_022_PREVIEW_MAP_RENDER_PATH_ALLOCATION_COST.md) — Preview map render path copying the dataset through a worker that only sliced arrays, plus per-feature service allocation and click listeners, replaced by reference slicing, shared instances, delegated events and frame-paced chunks.
+- [`ISSUE_023_SELECTION_INDEX_DIVERGENCE_TABLE_VS_MAP.md`](docs/issues/ISSUE_023_SELECTION_INDEX_DIVERGENCE_TABLE_VS_MAP.md) — Attribute table and preview map sharing one selection index while indexing different arrays, corrected by stamping the record index on every feature and translating at the map boundary.
+- [`ISSUE_024_AUTOMATED_TESTING_SUITE_AND_INFRASTRUCTURE.md`](docs/issues/ISSUE_024_AUTOMATED_TESTING_SUITE_AND_INFRASTRUCTURE.md) — Automated testing infrastructure (Vitest + Playwright), non-UI services, spatial math and parsers test suite, and strict specification compliance.
 
 

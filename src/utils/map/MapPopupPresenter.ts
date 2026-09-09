@@ -6,6 +6,9 @@ import { getDiscrepancyColor, getDiscrepancyLabel } from "@/constants/mapConstan
  * Object-Oriented Presenter constructing HTML cards and popup metadata views for Leaflet vector layers.
  */
 export class MapPopupPresenter {
+  /** Shared stateless instance; popup markup is built on demand for many features per render. */
+  private static readonly sharedInstance = new MapPopupPresenter();
+
   /**
    * Builds sanitized HTML markup with styled badges and attributes for a clicked spatial feature.
    */
@@ -47,8 +50,7 @@ export class MapPopupPresenter {
   }
 
   public static buildPopupHtml(feature: Feature<Geometry, GeoJsonProperties>): string {
-    const presenter = new MapPopupPresenter();
-    return presenter.buildPopupHtml(feature);
+    return MapPopupPresenter.sharedInstance.buildPopupHtml(feature);
   }
 }
 

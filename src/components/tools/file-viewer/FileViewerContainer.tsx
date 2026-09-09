@@ -7,6 +7,7 @@ import { formatNumber } from "@/utils/common/ValueFormatter";
 import { FileViewerUploader } from "./FileViewerUploader";
 import { FileMetaPanel } from "./FileMetaPanel";
 import { AttributeTable } from "./AttributeTable";
+import { buildFeatureRecordIndex } from "@/utils/spatial/FeatureRecordIndex";
 import styles from "./FileViewerContainer.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -16,7 +17,9 @@ const SpatialMapPreview = dynamic(
 
 export const FileViewerContainer: React.FC = () => {
   const [parsedDataset, setParsedDataset] = useState<ParsedFileDataset | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  // Selection is held as a record index: the map may omit records whose geometry did not parse, and
+  // for large datasets it renders only a capped sample, while the table lists every record.
+  const [selectedRecordIndex, setSelectedRecordIndex] = useState<number | null>(null);
 
   const recordsList = parsedDataset?.recordsMap
     ? Array.from(parsedDataset.recordsMap.values())
@@ -28,13 +31,17 @@ export const FileViewerContainer: React.FC = () => {
       parsedDataset.geojson.features.length > 0
   );
 
+  const featureRecordIndex = buildFeatureRecordIndex(parsedDataset?.geojson?.features);
+  const selectedFeatureIndex =
+    selectedRecordIndex === null ? null : featureRecordIndex.toFeatureIndex(selectedRecordIndex);
+
   return (
     <div className={styles.container}>
       <FileViewerUploader
         parsedDataset={parsedDataset}
         onFileParsed={(dataset) => {
           setParsedDataset(dataset);
-          setSelectedIndex(null);
+          setSelectedRecordIndex(null);
         }}
       />
 
@@ -53,8 +60,12 @@ export const FileViewerContainer: React.FC = () => {
                 <SpatialMapPreview
                   geojson={parsedDataset.geojson}
                   title={`VISTA ESPACIAL — ${parsedDataset.fileName}`}
-                  selectedFeatureIndex={selectedIndex}
-                  onSelectFeature={setSelectedIndex}
+                  selectedFeatureIndex={selectedFeatureIndex}
+                  onSelectFeature={(featureIndex) =>
+                    setSelectedRecordIndex(
+                      featureIndex === null ? null : featureRecordIndex.toRecordIndex(featureIndex)
+                    )
+                  }
                 />
               </div>
 
@@ -75,8 +86,8 @@ export const FileViewerContainer: React.FC = () => {
         <AttributeTable
           records={recordsList}
           attributes={parsedDataset.attributes}
-          selectedIndex={selectedIndex}
-          onSelectRow={setSelectedIndex}
+          selectedIndex={selectedRecordIndex}
+          onSelectRow={setSelectedRecordIndex}
         />
       )}
     </div>

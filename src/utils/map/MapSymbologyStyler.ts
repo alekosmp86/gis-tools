@@ -3,11 +3,28 @@ import type { Feature } from "geojson";
 import { getDiscrepancyColor, getDashArrayFromPattern } from "@/constants/mapConstants";
 import type { MapFeatureStyle } from "@/types/map";
 
+/** Cache key used for features that carry no discrepancy type. */
+const DEFAULT_DISCREPANCY_KEY = "__default__";
+
+/**
+ * Resolves symbology for a batch of features sharing one style and renderer, reusing the computed
+ * path options across every feature of the same discrepancy type.
+ */
+export interface FeatureStyleResolver {
+  resolvePathStyle(feature: Feature | undefined): L.PathOptions;
+  createPointLayer(feature: Feature | undefined, latlng: L.LatLng): L.CircleMarker;
+}
+
 /**
  * MapSymbologyStyler
  * Object-Oriented Presenter for Leaflet vector symbology, stroke formatting, and discrepancy theming.
  */
 export class MapSymbologyStyler {
+  /**
+   * Shared stateless instance. Symbology is computed once per feature during chunked rendering, so
+   * allocating a presenter per call showed up as tens of thousands of throwaway objects per render.
+   */
+  private static readonly sharedInstance = new MapSymbologyStyler();
   /**
    * Computes Leaflet PathOptions for polygon, polyline, or geojson layers based on discrepancy states.
    */
@@ -72,26 +89,46 @@ export class MapSymbologyStyler {
     });
   }
 
-  public static computeFeatureStyle(
-    feature: Feature | undefined,
+  /**
+   * Builds a resolver bound to one style and renderer. Path options are computed once per
+   * discrepancy type and shared across features: Leaflet copies the options onto each layer rather
+   * than retaining the source object, so sharing is safe.
+   */
+  public createStyleResolver(
     currentStyle: MapFeatureStyle,
     canvasRenderer: L.Canvas | null
-  ): L.PathOptions {
-    const styler = new MapSymbologyStyler();
-    return styler.computePathStyle(feature, currentStyle, canvasRenderer);
+  ): FeatureStyleResolver {
+    const pathStyleCache = new Map<string, L.PathOptions>();
+
+    return {
+      resolvePathStyle: (feature) => {
+        const cacheKey = this.resolveDiscrepancyKey(feature);
+        const cachedStyle = pathStyleCache.get(cacheKey);
+        if (cachedStyle) {
+          return cachedStyle;
+        }
+
+        const computedStyle = this.computePathStyle(feature, currentStyle, canvasRenderer);
+        pathStyleCache.set(cacheKey, computedStyle);
+        return computedStyle;
+      },
+      createPointLayer: (feature, latlng) =>
+        this.createPointMarker(feature, latlng, currentStyle, canvasRenderer),
+    };
   }
 
-  public static createPointToLayer(
-    feature: Feature | undefined,
-    latlng: L.LatLng,
+  private resolveDiscrepancyKey(feature: Feature | undefined): string {
+    const discrepancyType = feature?.properties?._discrepancyType;
+    return typeof discrepancyType === "string" ? discrepancyType : DEFAULT_DISCREPANCY_KEY;
+  }
+
+  public static createStyleResolver(
     currentStyle: MapFeatureStyle,
     canvasRenderer: L.Canvas | null
-  ): L.CircleMarker {
-    const styler = new MapSymbologyStyler();
-    return styler.createPointMarker(feature, latlng, currentStyle, canvasRenderer);
+  ): FeatureStyleResolver {
+    return MapSymbologyStyler.sharedInstance.createStyleResolver(currentStyle, canvasRenderer);
   }
 }
 
-/** Convenience exports */
-export const computeFeatureStyle = MapSymbologyStyler.computeFeatureStyle;
-export const createPointToLayer = MapSymbologyStyler.createPointToLayer;
+/** Convenience export */
+export const createStyleResolver = MapSymbologyStyler.createStyleResolver;
