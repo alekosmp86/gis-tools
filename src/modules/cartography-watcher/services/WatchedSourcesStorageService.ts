@@ -1,15 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_WATCHED_SOURCES } from "../data/defaultSources";
+import { isUntouchedDefault, mergeOverridesOverDefaults } from "../domain/sourceOverrides";
 import type { WatchedSource } from "../types";
 
 /**
- * Persists the list of watched sources on the server.
- *
  * Server-side on purpose. The catalogue is read while rendering and while serving the sync tools,
  * neither of which can see a browser's storage — a source saved only in `localStorage` would be
- * invisible exactly where it is needed. One file, one responsibility, separate from the vault that
- * stores downloaded bytes.
+ * invisible exactly where it is needed.
  */
 export class WatchedSourcesStorageService {
   private readonly sourcesFilePath: string;
@@ -18,39 +16,63 @@ export class WatchedSourcesStorageService {
     this.sourcesFilePath = path.join(rootDir, "sources.json");
   }
 
-  /**
-   * Reads the persisted sources, always with the shipped defaults in front.
-   *
-   * A missing or corrupt file yields the defaults rather than an error: the watcher stays usable,
-   * and the next write repairs the file.
-   */
   public async loadSources(): Promise<WatchedSource[]> {
-    let customSources: WatchedSource[] = [];
+    let persistedRows: WatchedSource[] = [];
 
     try {
       const rawJson = await fs.promises.readFile(this.sourcesFilePath, "utf8");
       const parsed = JSON.parse(rawJson) as unknown;
       if (Array.isArray(parsed)) {
-        customSources = parsed.filter(
+        persistedRows = parsed.filter(
           (entry): entry is WatchedSource =>
-            typeof entry === "object" && entry !== null && !(entry as WatchedSource).isDefault
+            typeof entry === "object" &&
+            entry !== null &&
+            typeof (entry as WatchedSource).id === "string"
         );
       }
     } catch {
       // No usable file yet; the defaults alone are a valid state.
     }
 
-    return [...DEFAULT_WATCHED_SOURCES, ...customSources];
+    return mergeOverridesOverDefaults(persistedRows);
   }
 
   /** Adds a source, replacing any existing entry with the same id. Defaults are never touched. */
   public async addSource(source: WatchedSource): Promise<WatchedSource[]> {
     const existing = await this.loadSources();
-    const customSources = existing.filter(
-      (candidate) => !candidate.isDefault && candidate.id !== source.id
-    );
+    const otherSources = existing.filter((candidate) => candidate.id !== source.id);
 
-    await this.persist([...customSources, { ...source, isDefault: false }]);
+    await this.persist([...otherSources, { ...source, isDefault: false }]);
+    return this.loadSources();
+  }
+
+  /**
+   * Updates an existing source's properties while preserving its immutable id.
+   * Throws a Spanish error when sourceId does not exist.
+   */
+  public async updateSource(
+    sourceId: string,
+    changes: Partial<Omit<WatchedSource, "id">>
+  ): Promise<WatchedSource[]> {
+    const existing = await this.loadSources();
+    const targetIndex = existing.findIndex((candidate) => candidate.id === sourceId);
+
+    if (targetIndex === -1) {
+      throw new Error(`No se encontró la fuente vigilada con identificador "${sourceId}".`);
+    }
+
+    const target = existing[targetIndex];
+    const updated: WatchedSource = {
+      ...target,
+      ...changes,
+      id: target.id,
+      isDefault: target.isDefault,
+    };
+
+    const updatedSources = [...existing];
+    updatedSources[targetIndex] = updated;
+
+    await this.persist(updatedSources);
     return this.loadSources();
   }
 
@@ -63,19 +85,18 @@ export class WatchedSourcesStorageService {
     }
 
     const existing = await this.loadSources();
-    const customSources = existing.filter(
-      (candidate) => !candidate.isDefault && candidate.id !== sourceId
-    );
+    const remaining = existing.filter((candidate) => candidate.id !== sourceId);
 
-    await this.persist(customSources);
+    await this.persist(remaining);
     return this.loadSources();
   }
 
-  private async persist(customSources: ReadonlyArray<WatchedSource>): Promise<void> {
+  private async persist(sources: ReadonlyArray<WatchedSource>): Promise<void> {
+    const rowsToPersist = sources.filter((source) => !isUntouchedDefault(source));
     await fs.promises.mkdir(path.dirname(this.sourcesFilePath), { recursive: true });
     await fs.promises.writeFile(
       this.sourcesFilePath,
-      JSON.stringify(customSources, null, 2),
+      JSON.stringify(rowsToPersist, null, 2),
       "utf8"
     );
   }

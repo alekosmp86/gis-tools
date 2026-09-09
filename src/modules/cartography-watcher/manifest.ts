@@ -27,6 +27,7 @@ export const cartographyWatcherModule: AppModuleManifest = {
     "GET sources": handlers.listSources,
     "POST sources": handlers.addSource,
     "POST sources/remove": handlers.removeSource,
+    "POST sources/update": handlers.updateSource,
     "GET summaries": handlers.readSummaries,
     "GET catalog": handlers.readCatalog,
     "GET catalog/file": handlers.readCatalogFile,

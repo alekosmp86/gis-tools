@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { VaultStorageService } from "@/modules/cartography-watcher/services/VaultStorageService";
 import { WatchedSourcesStorageService } from "@/modules/cartography-watcher/services/WatchedSourcesStorageService";
 import { DEFAULT_WATCHED_SOURCES } from "@/modules/cartography-watcher/data/defaultSources";
+import { VaultRenameResult } from "@/modules/cartography-watcher/types";
 import type { CkanResource, WatchedSource } from "@/modules/cartography-watcher/types";
 
 /**
@@ -170,6 +171,98 @@ describe("VaultStorageService", () => {
     expect(stored?.content.toString()).toBe("nuevo");
     expect(stored?.meta.hash).toBe("def456");
   });
+
+  it("should rename a source directory to follow a slug change", async () => {
+    // Arrange
+    const vault = new VaultStorageService(vaultRoot);
+    await vault.writeResource("old-slug", buildResource(), Buffer.from("contenido"));
+
+    // Act
+    const renamed = await vault.renameSourceDir("old-slug", "new-slug");
+
+    // Assert
+    expect(renamed).toBe(VaultRenameResult.RENAMED);
+    expect(fs.existsSync(path.join(vaultRoot, "old-slug"))).toBe(false);
+    expect(fs.existsSync(path.join(vaultRoot, "new-slug"))).toBe(true);
+    expect(fs.existsSync(path.join(vaultRoot, "new-slug", "flores.csv"))).toBe(true);
+    const read = await vault.readResource("new-slug", "res-1");
+    expect(read?.content.toString()).toBe("contenido");
+  });
+
+  it("should refuse to rename and return destination_exists when destination directory already exists", async () => {
+    // Arrange
+    const vault = new VaultStorageService(vaultRoot);
+    await vault.writeResource("old-slug", buildResource(), Buffer.from("uno"));
+    await vault.writeResource("new-slug", buildResource({ id: "res-2" }), Buffer.from("dos"));
+
+    // Act
+    const renamed = await vault.renameSourceDir("old-slug", "new-slug");
+
+    // Assert
+    expect(renamed).toBe(VaultRenameResult.DESTINATION_EXISTS);
+    expect(fs.existsSync(path.join(vaultRoot, "old-slug"))).toBe(true);
+    expect(fs.existsSync(path.join(vaultRoot, "new-slug"))).toBe(true);
+  });
+
+  it("should no-op and return source_absent when source directory does not exist", async () => {
+    // Arrange
+    const vault = new VaultStorageService(vaultRoot);
+
+    // Act
+    const renamed = await vault.renameSourceDir("non-existent-source", "new-slug");
+
+    // Assert
+    expect(renamed).toBe(VaultRenameResult.SOURCE_ABSENT);
+    expect(fs.existsSync(path.join(vaultRoot, "new-slug"))).toBe(false);
+  });
+
+  it("should return failed when directory rename encounters a filesystem error", async () => {
+    // Arrange
+    const vault = new VaultStorageService(vaultRoot);
+    await vault.writeResource("old-slug", buildResource(), Buffer.from("contenido"));
+    const renameSpy = vi.spyOn(fs.promises, "rename").mockRejectedValueOnce(
+      new Error("EPERM: operation not permitted")
+    );
+
+    // Act
+    const renamed = await vault.renameSourceDir("old-slug", "new-slug");
+
+    // Assert
+    expect(renamed).toBe(VaultRenameResult.FAILED);
+    renameSpy.mockRestore();
+  });
+
+  it("should continue updating other sidecars when one sidecar is corrupt", async () => {
+    // Arrange
+    const vault = new VaultStorageService(vaultRoot);
+    await vault.writeResource(
+      "old-slug",
+      buildResource({
+        id: "res-1",
+        name: "primero.csv",
+        url: "https://catalogodatos.gub.uy/download/primero.csv",
+      }),
+      Buffer.from("1")
+    );
+    await vault.writeResource(
+      "old-slug",
+      buildResource({
+        id: "res-2",
+        name: "segundo.csv",
+        url: "https://catalogodatos.gub.uy/download/segundo.csv",
+      }),
+      Buffer.from("2")
+    );
+    fs.writeFileSync(path.join(vaultRoot, "old-slug", "res-1.meta.json"), "invalid json");
+
+    // Act
+    const renamed = await vault.renameSourceDir("old-slug", "new-slug");
+
+    // Assert
+    expect(renamed).toBe(VaultRenameResult.RENAMED);
+    const meta2 = await vault.readMeta("new-slug", "res-2");
+    expect(meta2?.relativeFilePath).toBe("new-slug/segundo.csv");
+  });
 });
 
 describe("WatchedSourcesStorageService", () => {
@@ -283,5 +376,26 @@ describe("WatchedSourcesStorageService", () => {
 
     // Assert
     expect(sources).toHaveLength(DEFAULT_WATCHED_SOURCES.length);
+  });
+
+  it("should preserve an edited default override when loadSources is called", async () => {
+    // Arrange
+    const storage = new WatchedSourcesStorageService(vaultRoot);
+    const defaultSource = DEFAULT_WATCHED_SOURCES[0];
+
+    // Act
+    await storage.updateSource(defaultSource.id, {
+      datasetSlug: "padron-rural",
+      title: "Padrón Rural Modificado",
+      description: "Nueva descripción",
+    });
+    const sources = await storage.loadSources();
+    const updated = sources.find((source) => source.id === defaultSource.id);
+
+    // Assert
+    expect(updated?.datasetSlug).toBe("padron-rural");
+    expect(updated?.title).toBe("Padrón Rural Modificado");
+    expect(updated?.description).toBe("Nueva descripción");
+    expect(updated?.isDefault).toBe(true);
   });
 });

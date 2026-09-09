@@ -57,6 +57,16 @@ export interface VaultResourceMeta {
   readonly relativeFilePath: string;
 }
 
+/** Outcome of renaming a source vault directory across a slug change. */
+export const VaultRenameResult = {
+  RENAMED: "RENAMED",
+  SOURCE_ABSENT: "SOURCE_ABSENT",
+  DESTINATION_EXISTS: "DESTINATION_EXISTS",
+  FAILED: "FAILED",
+} as const;
+
+export type VaultRenameResult = (typeof VaultRenameResult)[keyof typeof VaultRenameResult];
+
 /** How a remote resource compares with the copy in the vault. */
 export const DeltaStatus = {
   UP_TO_DATE: "UP_TO_DATE",

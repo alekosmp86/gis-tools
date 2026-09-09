@@ -4,6 +4,7 @@
     { "path": "sources", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "sources", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "sources/remove", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "sources/update", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "summaries", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "catalog", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "catalog/file", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" }

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { resolveResourceFilename, sanitizeSlug } from "../domain/sourceNaming";
+import { VaultRenameResult } from "../types";
 import type { CkanResource, VaultResourceMeta } from "../types";
 
 /**
@@ -135,5 +136,66 @@ export class VaultStorageService {
     );
 
     return meta;
+  }
+
+  /**
+   * Renames a source's vault directory to follow a slug change.
+   *
+   * Carrying a vault directory across a slug change cannot serve a stale file, because
+   * evaluateResourceDelta re-checks the portal on every read — the worst case is one re-download.
+   */
+  public async renameSourceDir(oldSlug: string, newSlug: string): Promise<VaultRenameResult> {
+    const sourceDir = this.resolveSourceDir(oldSlug);
+    const destinationDir = this.resolveSourceDir(newSlug);
+
+    try {
+      await fs.promises.access(sourceDir);
+    } catch {
+      return VaultRenameResult.SOURCE_ABSENT;
+    }
+
+    try {
+      await fs.promises.access(destinationDir);
+      return VaultRenameResult.DESTINATION_EXISTS;
+    } catch {
+      // Absent destination is the only case a rename may proceed in.
+    }
+
+    try {
+      await fs.promises.rename(sourceDir, destinationDir);
+    } catch {
+      return VaultRenameResult.FAILED;
+    }
+
+    await this.rewriteSidecarPaths(destinationDir, newSlug);
+
+    return VaultRenameResult.RENAMED;
+  }
+
+  private async rewriteSidecarPaths(destinationDir: string, newSlug: string): Promise<void> {
+    try {
+      const entries = await fs.promises.readdir(destinationDir);
+      for (const entry of entries) {
+        if (entry.endsWith(".meta.json")) {
+          try {
+            const metaPath = path.join(destinationDir, entry);
+            const rawJson = await fs.promises.readFile(metaPath, "utf8");
+            const meta = JSON.parse(rawJson) as VaultResourceMeta;
+            if (meta?.relativeFilePath) {
+              const filename = path.basename(meta.relativeFilePath);
+              const updatedMeta: VaultResourceMeta = {
+                ...meta,
+                relativeFilePath: path.posix.join(sanitizeSlug(newSlug), filename),
+              };
+              await fs.promises.writeFile(metaPath, JSON.stringify(updatedMeta, null, 2), "utf8");
+            }
+          } catch {
+            // Corrupt or locked sidecar skipped to allow updating remaining sidecars
+          }
+        }
+      }
+    } catch {
+      // Directory listing failure
+    }
   }
 }

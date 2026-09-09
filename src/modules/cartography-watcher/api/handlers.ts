@@ -29,6 +29,7 @@ const QueryParameter = {
 export interface WatcherHandlers {
   readonly listSources: ModuleEndpointHandler;
   readonly addSource: ModuleEndpointHandler;
+  readonly updateSource: ModuleEndpointHandler;
   readonly removeSource: ModuleEndpointHandler;
   readonly readSummaries: ModuleEndpointHandler;
   readonly readCatalog: ModuleEndpointHandler;
@@ -97,6 +98,35 @@ export function createWatcherHandlers(
         return jsonResponse({ success: true, sources: await orchestrator.addSource(rawUrl) });
       } catch (error: unknown) {
         return toErrorResponse(error, "No se pudo agregar la fuente.");
+      }
+    },
+
+    updateSource: async (request) => {
+      const body = await readJsonBody(request);
+      const sourceId = typeof body.sourceId === "string" ? body.sourceId : "";
+      const rawUrl = typeof body.url === "string" ? body.url : "";
+
+      if (sourceId.trim().length === 0) {
+        return failure(
+          'Indique el identificador de la fuente en el campo "sourceId".',
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
+      if (rawUrl.trim().length === 0) {
+        return failure(
+          'Indique la URL o el identificador del conjunto de datos en el campo "url".',
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
+      try {
+        return jsonResponse({
+          success: true,
+          sources: await orchestrator.updateSource(sourceId.trim(), rawUrl.trim()),
+        });
+      } catch (error: unknown) {
+        return toErrorResponse(error, "No se pudo actualizar la fuente.");
       }
     },
 

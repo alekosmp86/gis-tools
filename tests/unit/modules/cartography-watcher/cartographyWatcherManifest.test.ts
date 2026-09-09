@@ -51,6 +51,7 @@ describe("cartography watcher manifest", () => {
       [ModuleHttpMethod.GET, "cartography-watcher/sources"],
       [ModuleHttpMethod.POST, "cartography-watcher/sources"],
       [ModuleHttpMethod.POST, "cartography-watcher/sources/remove"],
+      [ModuleHttpMethod.POST, "cartography-watcher/sources/update"],
       [ModuleHttpMethod.GET, "cartography-watcher/summaries"],
       [ModuleHttpMethod.GET, "cartography-watcher/catalog"],
       [ModuleHttpMethod.GET, "cartography-watcher/catalog/file"],

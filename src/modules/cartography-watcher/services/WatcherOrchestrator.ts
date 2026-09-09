@@ -5,12 +5,11 @@ import {
   toCatalogResourceItem,
 } from "../domain/catalogMapping";
 import { countPendingResources, evaluateResourceDelta } from "../domain/deltaEvaluation";
-import { DeltaStatus } from "../types";
+import { CatalogFormatFilter, DeltaStatus, VaultRenameResult } from "../types";
 import { formatTitleFromSlug, parsePortalReference, sanitizeSlug } from "../domain/sourceNaming";
 import { CkanPortalClient } from "./CkanPortalClient";
 import { VaultStorageService } from "./VaultStorageService";
 import { WatchedSourcesStorageService } from "./WatchedSourcesStorageService";
-import { CatalogFormatFilter } from "../types";
 import type {
   CatalogResourceItem,
   CatalogSourceGroup,
@@ -52,10 +51,20 @@ export class WatcherOrchestrator {
    */
   public async addSource(rawInput: string): Promise<WatchedSource[]> {
     const { portalHost, datasetSlug } = parsePortalReference(rawInput);
+
+    const sources = await this.sourcesStorage.loadSources();
+    this.assertReferenceIsFree(sources, portalHost, datasetSlug);
+
+    const derivedId = sanitizeSlug(datasetSlug);
+    const collisionById = sources.find((source) => source.id === derivedId);
+    if (collisionById) {
+      throw new Error(`Ya existe una fuente vigilada con identificador "${derivedId}".`);
+    }
+
     const ckanPackage = await this.portal.fetchPackage(datasetSlug, portalHost);
 
     return this.sourcesStorage.addSource({
-      id: sanitizeSlug(datasetSlug),
+      id: derivedId,
       title: ckanPackage.title || formatTitleFromSlug(datasetSlug),
       datasetSlug,
       portalHost,
@@ -66,6 +75,36 @@ export class WatcherOrchestrator {
 
   public async removeSource(sourceId: string): Promise<WatchedSource[]> {
     return this.sourcesStorage.removeSource(sourceId);
+  }
+
+  public async updateSource(sourceId: string, rawInput: string): Promise<WatchedSource[]> {
+    const { portalHost, datasetSlug } = parsePortalReference(rawInput);
+
+    const sources = await this.sourcesStorage.loadSources();
+    const existing = sources.find((source) => source.id === sourceId);
+    if (!existing) {
+      throw new Error(`No se encontró la fuente vigilada con identificador "${sourceId}".`);
+    }
+
+    this.assertReferenceIsFree(sources, portalHost, datasetSlug, sourceId);
+
+    const ckanPackage = await this.portal.fetchPackage(datasetSlug, portalHost);
+
+    if (existing.datasetSlug !== datasetSlug) {
+      const renameResult = await this.vault.renameSourceDir(existing.datasetSlug, datasetSlug);
+      if (renameResult === VaultRenameResult.FAILED) {
+        throw new Error(
+          `No se pudo renombrar el directorio del vault para "${datasetSlug}".`
+        );
+      }
+    }
+
+    return this.sourcesStorage.updateSource(sourceId, {
+      portalHost,
+      datasetSlug,
+      title: ckanPackage.title || formatTitleFromSlug(datasetSlug),
+      description: ckanPackage.notes ?? "",
+    });
   }
 
   /** Compares every resource of one source against the vault. */
@@ -82,8 +121,6 @@ export class WatcherOrchestrator {
   }
 
   /**
-   * Summarises every watched source.
-   *
    * One unreachable portal must not hide the others, so a failure becomes that source's summary
    * rather than the whole request's error.
    */
@@ -229,5 +266,27 @@ export class WatcherOrchestrator {
       portalHost,
       isDefault: false,
     };
+  }
+
+  /**
+   * Refuses a portal reference that already belongs to another watched source.
+   */
+  private assertReferenceIsFree(
+    sources: ReadonlyArray<WatchedSource>,
+    portalHost: string,
+    datasetSlug: string,
+    exceptSourceId?: string
+  ): void {
+    const collision = sources.find(
+      (source) =>
+        (exceptSourceId === undefined || source.id !== exceptSourceId) &&
+        source.portalHost.toLowerCase() === portalHost.toLowerCase() &&
+        source.datasetSlug.toLowerCase() === datasetSlug.toLowerCase()
+    );
+    if (collision) {
+      throw new Error(
+        `Ya existe una fuente vigilada para el conjunto "${datasetSlug}" en "${portalHost}".`
+      );
+    }
   }
 }

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { CkanPortalClient } from "@/modules/cartography-watcher/services/CkanPortalClient";
 import { VaultStorageService } from "@/modules/cartography-watcher/services/VaultStorageService";
 import { WatchedSourcesStorageService } from "@/modules/cartography-watcher/services/WatchedSourcesStorageService";
@@ -10,6 +10,7 @@ import { createWatcherHandlers } from "@/modules/cartography-watcher/api/handler
 import {
   CatalogFormatFilter,
   SourceBadgeState,
+  VaultRenameResult,
 } from "@/modules/cartography-watcher/types";
 import type { CkanPackage } from "@/modules/cartography-watcher/types";
 
@@ -336,6 +337,277 @@ describe("WatcherOrchestrator: sources", () => {
     expect(added?.title).toBe("Titulo publicado");
     expect(added?.isDefault).toBe(false);
   });
+
+  it("should refuse adding a source whose portal reference already belongs to a watched source", async () => {
+    // Arrange
+    const orchestrator = buildOrchestrator(buildDefaultPortal());
+
+    // Act & Assert
+    await expect(
+      orchestrator.addSource("https://catalogodatos.gub.uy/dataset/ide-ejes-vias-circulacion")
+    ).rejects.toThrow(/Ya existe una fuente vigilada para el conjunto/);
+  });
+
+  it("should refuse adding a source that collides with an edited default's slug or id", async () => {
+    // Arrange
+    const portal = new FakePortal(
+      new Map<string, CkanPackage | Error>([
+        [DEFAULT_SLUG, buildPackage()],
+        ["ide-direcciones-geograficas-del-uruguay", buildPackage({ resources: [] })],
+        ["padron-rural", buildPackage({ name: "padron-rural", title: "Padrón Rural" })],
+      ])
+    );
+    const orchestrator = buildOrchestrator(portal);
+
+    // Act 1: Edit default #1 to 'padron-rural'
+    await orchestrator.updateSource(DEFAULT_SLUG, "padron-rural");
+
+    // Act 2 & Assert: Attempt to add original default slug back -> refuses by derived id collision
+    await expect(
+      orchestrator.addSource("https://catalogodatos.gub.uy/dataset/ide-ejes-vias-circulacion")
+    ).rejects.toThrow(/Ya existe una fuente vigilada con identificador "ide-ejes-vias-circulacion"/);
+
+    // Act 3 & Assert: Attempt to add 'padron-rural' again -> refuses by datasetSlug collision
+    await expect(
+      orchestrator.addSource("https://catalogodatos.gub.uy/dataset/padron-rural")
+    ).rejects.toThrow(/Ya existe una fuente vigilada para el conjunto "padron-rural"/);
+
+    // Act 4 & Assert: Verify loadSources / listSources still has edited default
+    const sources = await orchestrator.listSources();
+    const defaultRow = sources.find((source) => source.id === DEFAULT_SLUG);
+    expect(defaultRow?.datasetSlug).toBe("padron-rural");
+    expect(defaultRow?.isDefault).toBe(true);
+  });
+
+  it("should keep the source id when its portal reference changes", async () => {
+    // Arrange
+    const portal = new FakePortal(
+      new Map<string, CkanPackage | Error>([
+        [DEFAULT_SLUG, buildPackage()],
+        ["ide-direcciones-geograficas-del-uruguay", buildPackage({ resources: [] })],
+        ["nuevo-slug", buildPackage({ name: "nuevo-slug", title: "Nuevo Titulo" })],
+      ])
+    );
+    const orchestrator = buildOrchestrator(portal);
+
+    // Act
+    const updated = await orchestrator.updateSource(
+      DEFAULT_SLUG,
+      "https://catalogodatos.gub.uy/dataset/nuevo-slug"
+    );
+
+    // Assert
+    const source = updated.find((entry) => entry.id === DEFAULT_SLUG);
+    expect(source?.datasetSlug).toBe("nuevo-slug");
+    expect(source?.id).toBe(DEFAULT_SLUG);
+  });
+
+  it("should refresh the title and description from the portal when a source is edited", async () => {
+    // Arrange
+    const portal = new FakePortal(
+      new Map<string, CkanPackage | Error>([
+        [DEFAULT_SLUG, buildPackage()],
+        ["ide-direcciones-geograficas-del-uruguay", buildPackage({ resources: [] })],
+        [
+          "nuevo-slug",
+          buildPackage({
+            name: "nuevo-slug",
+            title: "Titulo Refrescado Desde Portal",
+            notes: "Notas del portal",
+          }),
+        ],
+        [
+          "sin-notas",
+          buildPackage({
+            name: "sin-notas",
+            title: "Titulo Sin Notas",
+            notes: undefined,
+          }),
+        ],
+      ])
+    );
+    const orchestrator = buildOrchestrator(portal);
+
+    // Act 1: edit with notes present
+    const updatedWithNotes = await orchestrator.updateSource(DEFAULT_SLUG, "nuevo-slug");
+    const sourceWithNotes = updatedWithNotes.find((entry) => entry.id === DEFAULT_SLUG);
+    expect(sourceWithNotes?.title).toBe("Titulo Refrescado Desde Portal");
+    expect(sourceWithNotes?.description).toBe("Notas del portal");
+
+    // Act 2: edit with notes absent -> falls back to empty string and overrides default
+    const updatedWithoutNotes = await orchestrator.updateSource(DEFAULT_SLUG, "sin-notas");
+    const sourceWithoutNotes = updatedWithoutNotes.find((entry) => entry.id === DEFAULT_SLUG);
+    expect(sourceWithoutNotes?.title).toBe("Titulo Sin Notas");
+    expect(sourceWithoutNotes?.description).toBe("");
+
+    const reloaded = await orchestrator.listSources();
+    const reloadedDefault = reloaded.find((entry) => entry.id === DEFAULT_SLUG);
+    expect(reloadedDefault?.description).toBe("");
+  });
+
+  it("should refuse an edit whose reference the portal cannot resolve, leaving the stored row untouched", async () => {
+    // Arrange
+    const orchestrator = buildOrchestrator(buildDefaultPortal());
+
+    // Act & Assert
+    await expect(orchestrator.updateSource(DEFAULT_SLUG, "slug-inexistente")).rejects.toThrow(
+      /no publica/
+    );
+    const sources = await orchestrator.listSources();
+    const source = sources.find((entry) => entry.id === DEFAULT_SLUG);
+    expect(source?.datasetSlug).toBe(DEFAULT_SLUG);
+  });
+
+  it("should refuse an edit that collides with another watched source", async () => {
+    // Arrange
+    const orchestrator = buildOrchestrator(buildDefaultPortal());
+
+    // Act & Assert
+    await expect(
+      orchestrator.updateSource(DEFAULT_SLUG, "ide-direcciones-geograficas-del-uruguay")
+    ).rejects.toThrow(/Ya existe una fuente vigilada/);
+  });
+
+  it("should refuse an edit naming a source that is not watched", async () => {
+    // Arrange
+    const orchestrator = buildOrchestrator(buildDefaultPortal());
+
+    // Act & Assert
+    await expect(orchestrator.updateSource("fuente-inexistente", "nuevo-slug")).rejects.toThrow(
+      /No se encontró la fuente vigilada/
+    );
+  });
+
+  it("should persist an edit to a shipped default while still refusing to remove it", async () => {
+    // Arrange
+    const portal = new FakePortal(
+      new Map<string, CkanPackage | Error>([
+        [DEFAULT_SLUG, buildPackage()],
+        ["ide-direcciones-geograficas-del-uruguay", buildPackage({ resources: [] })],
+        ["slug-modificado", buildPackage({ name: "slug-modificado", title: "Ejes Actualizados" })],
+      ])
+    );
+    const orchestrator = buildOrchestrator(portal);
+
+    // Act
+    await orchestrator.updateSource(DEFAULT_SLUG, "slug-modificado");
+    const reloadedSources = await orchestrator.listSources();
+    const editedDefault = reloadedSources.find((entry) => entry.id === DEFAULT_SLUG);
+
+    // Assert
+    expect(editedDefault?.datasetSlug).toBe("slug-modificado");
+    expect(editedDefault?.isDefault).toBe(true);
+    await expect(orchestrator.removeSource(DEFAULT_SLUG)).rejects.toThrow(
+      /viene incluida con el módulo/
+    );
+  });
+
+  it("should carry the vault directory over when the dataset slug changes", async () => {
+    // Arrange
+    const portal = new FakePortal(
+      new Map<string, CkanPackage | Error>([
+        [DEFAULT_SLUG, buildPackage()],
+        ["ide-direcciones-geograficas-del-uruguay", buildPackage({ resources: [] })],
+        ["nuevo-slug", buildPackage({ name: "nuevo-slug", title: "Nuevo Slug" })],
+      ])
+    );
+    const vault = new VaultStorageService(vaultRoot);
+    await vault.writeResource(
+      DEFAULT_SLUG,
+      {
+        id: "res-1",
+        name: "test.csv",
+        format: "CSV",
+        url: "http://example.com/test.csv",
+      },
+      Buffer.from("datos")
+    );
+    const orchestrator = new WatcherOrchestrator(
+      portal.buildClient(),
+      vault,
+      new WatchedSourcesStorageService(vaultRoot)
+    );
+
+    // Act
+    await orchestrator.updateSource(DEFAULT_SLUG, "nuevo-slug");
+
+    // Assert
+    expect(fs.existsSync(path.join(vaultRoot, DEFAULT_SLUG))).toBe(false);
+    expect(fs.existsSync(path.join(vaultRoot, "nuevo-slug"))).toBe(true);
+    expect(fs.existsSync(path.join(vaultRoot, "nuevo-slug", "test.csv"))).toBe(true);
+  });
+
+  it("should leave both directories alone when the destination vault directory already exists", async () => {
+    // Arrange
+    const portal = new FakePortal(
+      new Map<string, CkanPackage | Error>([
+        [DEFAULT_SLUG, buildPackage()],
+        ["ide-direcciones-geograficas-del-uruguay", buildPackage({ resources: [] })],
+        ["nuevo-slug", buildPackage({ name: "nuevo-slug", title: "Nuevo Slug" })],
+      ])
+    );
+    const vault = new VaultStorageService(vaultRoot);
+    await vault.writeResource(
+      DEFAULT_SLUG,
+      {
+        id: "res-1",
+        name: "test1.csv",
+        format: "CSV",
+        url: "http://example.com/test1.csv",
+      },
+      Buffer.from("datos1")
+    );
+    await vault.writeResource(
+      "nuevo-slug",
+      {
+        id: "res-2",
+        name: "test2.csv",
+        format: "CSV",
+        url: "http://example.com/test2.csv",
+      },
+      Buffer.from("datos2")
+    );
+    const orchestrator = new WatcherOrchestrator(
+      portal.buildClient(),
+      vault,
+      new WatchedSourcesStorageService(vaultRoot)
+    );
+
+    // Act
+    await orchestrator.updateSource(DEFAULT_SLUG, "nuevo-slug");
+
+    // Assert
+    expect(fs.existsSync(path.join(vaultRoot, DEFAULT_SLUG))).toBe(true);
+    expect(fs.existsSync(path.join(vaultRoot, "nuevo-slug"))).toBe(true);
+  });
+
+  it("should abort update and leave sources untouched when vault rename fails", async () => {
+    // Arrange
+    const portal = new FakePortal(
+      new Map<string, CkanPackage | Error>([
+        [DEFAULT_SLUG, buildPackage()],
+        ["ide-direcciones-geograficas-del-uruguay", buildPackage({ resources: [] })],
+        ["nuevo-slug", buildPackage({ name: "nuevo-slug", title: "Nuevo Slug" })],
+      ])
+    );
+    const vault = new VaultStorageService(vaultRoot);
+    const orchestrator = new WatcherOrchestrator(
+      portal.buildClient(),
+      vault,
+      new WatchedSourcesStorageService(vaultRoot)
+    );
+
+    vi.spyOn(vault, "renameSourceDir").mockResolvedValueOnce(VaultRenameResult.FAILED);
+
+    // Act & Assert
+    await expect(orchestrator.updateSource(DEFAULT_SLUG, "nuevo-slug")).rejects.toThrow(
+      /No se pudo renombrar el directorio del vault para "nuevo-slug"/
+    );
+
+    const sources = await orchestrator.listSources();
+    const source = sources.find((entry) => entry.id === DEFAULT_SLUG);
+    expect(source?.datasetSlug).toBe(DEFAULT_SLUG);
+  });
 });
 
 describe("watcher HTTP handlers", () => {
@@ -400,6 +672,34 @@ describe("watcher HTTP handlers", () => {
 
     // Assert
     expect(response.status).toBe(400);
+  });
+
+  it("should reject an update with no sourceId", async () => {
+    // Arrange
+    const handlers = createWatcherHandlers(buildOrchestrator(buildDefaultPortal()));
+
+    // Act
+    const response = await handlers.updateSource(
+      buildRequest("http://localhost/sources/update", { url: "algun-slug" })
+    );
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("sourceId");
+  });
+
+  it("should reject an update with no url", async () => {
+    // Arrange
+    const handlers = createWatcherHandlers(buildOrchestrator(buildDefaultPortal()));
+
+    // Act
+    const response = await handlers.updateSource(
+      buildRequest("http://localhost/sources/update", { sourceId: "ide-ejes" })
+    );
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("url");
   });
 
   it("should filter the catalogue by the requested format", async () => {
