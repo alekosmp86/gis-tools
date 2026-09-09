@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
+import { Info } from "lucide-react";
 import type { FeatureCollection } from "geojson";
 import type { MapFeatureStyle } from "@/core/types/map";
-import { DEFAULT_MAP_FEATURE_STYLE } from "@/core/constants/mapConstants";
+import { DEFAULT_MAP_FEATURE_STYLE, MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
+import { formatNumber } from "@/core/common/ValueFormatter";
 import { useLeafletMap } from "@/ui-kit/hooks/useLeafletMap";
 import { MapProgressBar } from "./map/MapProgressBar";
 import { MapHeaderBar } from "./map/MapHeaderBar";
@@ -18,6 +20,8 @@ export interface SpatialMapPreviewProps {
   onSelectFeature?: (index: number | null) => void;
   initialStyle?: Partial<MapFeatureStyle>;
   isVisible?: boolean;
+  /** Set false when the caller already explains the cap, to avoid two banners saying the same thing. */
+  showCapNotice?: boolean;
 }
 
 export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
@@ -27,6 +31,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   onSelectFeature,
   initialStyle,
   isVisible = true,
+  showCapNotice = true,
 }) => {
   const [mapContainerNode, setMapContainerNode] = useState<HTMLDivElement | null>(null);
   const [basemapKey, setBasemapKey] = useState<string>("osm");
@@ -35,11 +40,19 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
     ...initialStyle,
   }));
 
-  const totalFeatures = geojson?.features?.length || 0;
+  const suppliedFeatures = geojson?.features ?? [];
+  const suppliedFeatureCount = suppliedFeatures.length;
+
+  const isCapped = suppliedFeatureCount > MAX_MAP_PREVIEW_FEATURES;
+  const previewGeojson: FeatureCollection = isCapped
+    ? { type: "FeatureCollection", features: suppliedFeatures.slice(0, MAX_MAP_PREVIEW_FEATURES) }
+    : geojson;
+
+  const totalFeatures = previewGeojson?.features?.length || 0;
 
   const { renderedCount, isChunking, handleFitBounds } = useLeafletMap(
     mapContainerNode,
-    geojson,
+    previewGeojson,
     basemapKey,
     featureStyle,
     selectedFeatureIndex,
@@ -50,9 +63,9 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   const progressPct = totalFeatures > 0 ? Math.min(100, Math.round((renderedCount / totalFeatures) * 100)) : 0;
 
   const typesSet = new Set<string>();
-  if (geojson?.features) {
-    for (let featureIndex = 0; featureIndex < geojson.features.length; featureIndex++) {
-      const type = geojson.features[featureIndex].properties?._discrepancyType;
+  if (previewGeojson?.features) {
+    for (let featureIndex = 0; featureIndex < previewGeojson.features.length; featureIndex++) {
+      const type = previewGeojson.features[featureIndex].properties?._discrepancyType;
       if (typeof type === "string" && type) {
         typesSet.add(type);
       }
@@ -81,6 +94,17 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
         onResetFeatureStyle={handleResetFeatureStyle}
         hasDiscrepancies={presentTypes.length > 0}
       />
+
+      {isCapped && showCapNotice && (
+        <div className={styles.capNotice}>
+          <Info size={14} />
+          <span>
+            {`Vista previa limitada: mostrando ${formatNumber(MAX_MAP_PREVIEW_FEATURES)} de ${formatNumber(
+              suppliedFeatureCount
+            )} entidades para mantener la fluidez del mapa.`}
+          </span>
+        </div>
+      )}
 
       <MapLegend presentTypes={presentTypes} />
 
