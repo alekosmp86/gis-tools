@@ -218,8 +218,13 @@ Then widen the ui-kit lint zone to `@/hooks/*`, `@/components/*`, `@/data/*` and
 the gap cannot reopen. The lint rule must be widened *after* the moves, or the gauntlet fails on the
 existing violation.
 
-**Not yet applied** — it touches DB machinery every tool uses, and the UI half has no automated
-coverage.
+**Applied.** `useDbQueries` and `useDbConnectionForm` moved into `src/ui-kit/hooks/`,
+`INITIAL_DB_CONFIG` into `src/core/constants/dbConfigDefaults.ts`, and the ui-kit and modules lint
+zones now forbid `@/app/*`, `@/components/*`, `@/hooks/*`, `@/data/*` and `@/providers/*` — the
+previous `@/components/tools/*` group was narrower than the table it expressed. The regenerated
+graph reports **0 boundary violations, 0 cycles, 0 unclassified**. Because the UI half has no
+automated coverage, all five tool pages were loaded against a production build: every one returns
+200, and the four that use `DbConnectionForm` still server-render it.
 
 ---
 

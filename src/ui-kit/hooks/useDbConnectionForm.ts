@@ -1,7 +1,7 @@
 import { useState, useEffect, startTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { INITIAL_DB_CONFIG } from "@/data/dbConfigData";
-import { useFetchDbColumns } from "@/hooks/useDbQueries";
+import { INITIAL_DB_CONFIG } from "@/core/constants/dbConfigDefaults";
+import { useFetchDbColumns } from "@/ui-kit/hooks/useDbQueries";
 import {
   loadDbProfilesFromLocalStorage,
   saveDbProfileToLocalStorage,

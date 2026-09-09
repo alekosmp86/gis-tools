@@ -55,7 +55,10 @@ const eslintConfig = defineConfig([
     files: ["src/ui-kit/**/*.{ts,tsx}"],
     rules: restrict([
       { group: ["@/modules", "@/modules/*", "@/modules/**"], message: MODULE_IMPORT_MESSAGE },
-      { group: ["@/app/*", "@/components/tools/*"], message: UPWARD_IMPORT_MESSAGE },
+      {
+        group: ["@/app/*", "@/components/*", "@/hooks/*", "@/data/*", "@/providers/*"],
+        message: UPWARD_IMPORT_MESSAGE,
+      },
     ]),
   },
 
@@ -65,7 +68,10 @@ const eslintConfig = defineConfig([
     files: ["src/modules/**/*.{ts,tsx}"],
     rules: restrict([
       { group: ["@/modules", "@/modules/*", "@/modules/**"], message: CROSS_MODULE_MESSAGE },
-      { group: ["@/app/*"], message: UPWARD_IMPORT_MESSAGE },
+      {
+        group: ["@/app/*", "@/components/*", "@/hooks/*", "@/data/*", "@/providers/*"],
+        message: UPWARD_IMPORT_MESSAGE,
+      },
     ]),
   },
 

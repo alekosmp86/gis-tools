@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useStreamDbRecords } from "@/hooks/useDbQueries";
+import { useStreamDbRecords } from "@/ui-kit/hooks/useDbQueries";
 import { parseRecordsToGeoJson } from "@/core/spatial/GeoJsonDatasetBuilder";
 import type { DbConfig, DbTableViewerState } from "@/core/types/db";
 

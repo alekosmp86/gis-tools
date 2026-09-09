@@ -17,7 +17,7 @@ import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { ColumnsList } from "@/ui-kit/components/ColumnsList";
 import { ProfileSelect } from "@/ui-kit/components/ProfileSelect";
-import { useDbConnectionForm } from "@/hooks/useDbConnectionForm";
+import { useDbConnectionForm } from "@/ui-kit/hooks/useDbConnectionForm";
 import type {
   DbConfig,
   DbColumnMetadata,
