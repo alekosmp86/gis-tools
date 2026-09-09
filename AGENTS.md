@@ -8,6 +8,19 @@
 ## Mandatory Planning Requirement
 - **Always plan before implement**: Exercise judgement and create or update the `implementation_plan.md` artifact before making code modifications for any complex task or feature.
 
+## Multi-Model Delegation Workflow
+> Canonical source: `.agents/rules/model_delegation.md`. Global config: `~/.claude/` (`CLAUDE.md`, `agents/*.md`, `skills/dev-cycle/`). Keep them in sync.
+
+- **Role Assignment**: the main session (**Opus 5**) orchestrates — triage, planning, decomposition, adjudication. The `implementer` agent (**Sonnet 5**) writes all code, tests and fixes. The `code-reviewer` agent (**Opus 5**, fresh context) reviews the finished diff. The `git-operator` agent (**Haiku 4.5**) performs version control.
+- **Orchestrator Never Implements**: for any feature, bug fix, refactor, test authoring, or change spanning multiple files or ~20+ lines, load the `dev-cycle` skill and delegate. Handle inline only: typos, comments and docs, a verified one-line change, config value tweaks, a tool-verified rename, and all reading/explaining/investigating. When unclear, it is not trivial.
+- **Diagnosis Is Never Delegated**: an unknown root cause is reasoning work. The orchestrator investigates, then delegates the fix.
+- **The Loop**: plan → `implementer` → `code-reviewer` → adjudicate → fix round → **re-review**. Fixes are code, so every fix round returns to review. Bounded at **3 rounds**; a loop that will not converge signals a flawed plan, and the orchestrator takes over or returns to the user.
+- **Briefs Are Self-Contained**: subagents inherit no conversation context. Every brief carries the task, branch, `implementation_plan.md` path, `file:line` pointers already found, the rules files to honour (`AGENTS.md` + relevant `.agents/rules/*.md`), explicit requirements, required test coverage, **explicit out-of-scope**, and the definition of done.
+- **Gauntlet Before Review**: the `implementer` runs the full local loop (`modules:routes:check`, `lint`, `test`, `build`, `doctor`) on its branch and pastes real output before reporting. Review never runs against unverified code.
+- **Severity Decides the Round**: **BLOCKER** (wrong behaviour, data loss, crash, security hole, or a test weakened/skipped to force green) and **MAJOR** (real defect, genuine performance problem, violated project rule, meaningful coverage gap) must be fixed before commit. **MINOR**/**NIT** never trigger a round on their own. Every finding above NIT carries a concrete failure scenario.
+- **Delegate Execution, Never Judgement**: architecture, layer boundaries, module contracts, data models and dependency choices stay with the orchestrator. Never approve a diff you have not read; verify a finding in the code before rejecting it.
+- **No Laundered Claims**: a subagent's failure, skipped gate or partial result is reported to the user in plain terms. Delegation must never convert an unverified claim into a confident summary.
+
 ## Git Commit Control
 - **NEVER execute `git commit` automatically.** Only run `git commit` when the user explicitly instructs to commit changes.
 
