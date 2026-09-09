@@ -1,5 +1,4 @@
 import { createModuleRegistry } from "@/core/modules/createModuleRegistry";
-import { statusModule } from "@/modules/status/manifest";
 import { cartographyWatcherModule } from "@/modules/cartography-watcher/manifest";
 import type { ModulePageComponent, UiContribution } from "@/ui-kit/modules/contracts";
 import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
@@ -16,6 +15,6 @@ import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
  *
  * An empty list is a valid, fully working application.
  */
-const activeModules: ReadonlyArray<AppModuleManifest> = [statusModule, cartographyWatcherModule];
+const activeModules: ReadonlyArray<AppModuleManifest> = [cartographyWatcherModule];
 
 export const moduleRegistry = createModuleRegistry<UiContribution, ModulePageComponent>(activeModules);

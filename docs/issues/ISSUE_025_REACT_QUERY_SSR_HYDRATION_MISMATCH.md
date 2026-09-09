@@ -1,5 +1,11 @@
 # Issue 025: React Query SSR hydration mismatch on module refresh buttons
 
+> **Note (added later):** the status module — including `ServerStatusCard.tsx`, cited throughout
+> this document — was subsequently removed from the application; the user judged it gave no
+> useful insight for this app's purpose. The bug and its fix described below remain fully valid:
+> the same defect was fixed in `WatcherDashboard.tsx`, which remains, and the file paths below
+> record where the bug was actually found and fixed at the time.
+
 ## Problem Statement
 Loading the home page raised a React hydration error in the browser console:
 

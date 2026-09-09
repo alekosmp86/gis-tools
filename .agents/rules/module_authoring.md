@@ -44,14 +44,10 @@ src/modules/reports/
   ui/ReportsCard.tsx    "use client" components contributed to slots
 ```
 
-**Two worked examples exist.** `src/modules/status` is the minimal one: a single endpoint and a
-home-grid card. `src/modules/cartography-watcher` is the full shape: seven endpoints, a page it
-owns, a domain layer separated from its services, and a contribution that hands a file back to its
-host. Read whichever is closer to what you are building.
-
-**The minimal example lives in `src/modules/status`** — one endpoint, one nav entry, one UI
-contribution, its own types and its own tested logic. Read it before writing a new module; the
-steps below are what it does.
+**The worked example lives in `src/modules/cartography-watcher`** — the full shape: six
+endpoints, a page it owns, a domain layer separated from its services, and a contribution that
+hands a file back to its host. Read it before writing a new module; the steps below are what it
+does.
 
 Route files under `src/app/api/m/**` are **generated** from `module.routes.json`. They are committed
 so the served surface is visible in review, and they are never hand-edited.
@@ -224,9 +220,10 @@ its handlers' responses, and its manifest: that the endpoint is bound to the int
 the declared `runtime`/`dynamic` survive, and that the contribution targets a slot a host actually
 mounts.
 
-Keep the logic worth testing out of the handler. `src/modules/status` injects the clock and the
-process readings into a pure builder, so its uptime maths and Spanish rendering are covered
-deterministically without mocking anything.
+Keep the logic worth testing out of the handler. `cartography-watcher`'s `WatcherOrchestrator`
+takes its portal client, vault and source-list storage as injected constructor dependencies, so
+`watcherOrchestration.test.ts` exercises the real orchestration logic against a fake portal and a
+temporary vault directory, without mocking anything the module itself owns.
 
 **These tests are part of the module's deletion set.** Removing a module means removing three
 things: the folder, the registry line, and `tests/unit/modules/<id>/`. Left behind, they fail the

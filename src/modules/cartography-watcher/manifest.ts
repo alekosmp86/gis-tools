@@ -12,7 +12,7 @@ import { CatalogTabIcon } from "./ui/contributionIcons";
 /**
  * The cartography watcher module.
  *
- * Everything it contributes is optional and independently removable: seven endpoints, one page it
+ * Everything it contributes is optional and independently removable: six endpoints, one page it
  * owns outright, a card in the home grid and a catalogue tab inside the sync tools. Nothing in core
  * names it except the composition root.
  */

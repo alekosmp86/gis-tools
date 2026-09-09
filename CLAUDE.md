@@ -24,4 +24,4 @@ Read the relevant one before working in its area; each is the canonical source f
 ## Architecture rationale
 
 - `docs/architecture/MODULAR_MONOLITH_AND_MODULES.md` — why the module system is shaped this way
-- `src/modules/status/` — the reference module; read it before authoring a new one
+- `src/modules/cartography-watcher/` — the reference module; read it before authoring a new one

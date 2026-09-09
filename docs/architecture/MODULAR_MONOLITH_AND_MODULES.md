@@ -191,25 +191,35 @@ delete → nothing breaks, restore → works, gauntlet green at each step.
 
 ## 7. The reference module
 
-`src/modules/status` is the worked example: minimal, but a real module rather than a fixture. It
-publishes the server's uptime, Node version and execution environment at `GET /api/m/status`, and
-contributes a card to the home tool grid that polls it.
+`src/modules/cartography-watcher` is the worked example: the full shape, not a fixture. It watches
+open CKAN portals for republished cartography, keeps a local vault with read-through caching, and
+contributes a dashboard page, a home-grid card and a catalogue tab inside the sync tools.
 
 | Piece | File | Note |
 |---|---|---|
-| Declaration | `module.routes.json` | one `GET ""`, `runtime: nodejs`, `dynamic: force-dynamic` |
+| Declaration | `module.routes.json` | six endpoints and one owned page, all `runtime: nodejs`, `dynamic: force-dynamic` |
 | Manifest | `manifest.ts` | takes its `id` from the declaration, so folder, prefix and id cannot disagree |
 | Types | `types.ts` | owned by the module; nothing here belongs in core |
-| Logic | `serverStatusSnapshot.ts` | pure: clock and process readings are injected |
-| Handler | `api/statusHandler.ts` | thin: reads the process, delegates, serialises |
-| UI | `ui/ServerStatusCard.tsx` | `"use client"`, renders with no props, owns its own fetching |
+| Domain | `domain/deltaEvaluation.ts`, `domain/catalogMapping.ts`, `domain/sourceNaming.ts`, `domain/formatters.ts` | pure: no `fs`, no `fetch`, no clock |
+| Services | `services/WatcherOrchestrator.ts` | composes the portal client, the vault and the source list, all three injected |
+| Handler | `api/handlers.ts` | thin: parses the request, calls the orchestrator, shapes the response |
+| Page | `ui/WatcherDashboard.tsx` | owns `/tools/m/cartography-watcher` |
+| UI | `ui/WatcherHomeCard.tsx`, `ui/CatalogTreeSelector.tsx` | `"use client"`, contributed to `HOME_TOOL_GRID` and `FILE_SOURCE_TABS` |
 
-The split between handler and builder is the part worth copying. A handler that reads `process` and
-`Date.now()` inline can only be tested by mocking the world; injecting both leaves the real logic —
-uptime maths, unit boundaries, the clamp for a backwards clock, environment normalisation — covered
-by ordinary deterministic tests.
+The split between `domain/` (pure) and `services/` (I/O, every dependency injectable) is the part
+worth copying. `WatcherOrchestrator` takes its portal client, vault and source-list storage as
+constructor arguments; tests replace the portal with a fake and the vault with a temporary
+directory, so the real orchestration — delta evaluation, catalogue building, summarisation — is
+covered by ordinary deterministic tests without mocking anything the module owns.
 
 ### What the acceptance test established
+
+> **Note (added after the removal below):** everything from here to the end of this section — this
+> table, the two properties, and the per-page cost measurement — describes the pilot as it ran
+> against `src/modules/status`, the module used to prove the deletion property the first time. That
+> module was later removed — see the note after section 10 — which exercised the same property a
+> third time. The counts below are historical and are not re-measured here; the ~386 B figure in
+> particular was measured against that module's card, not against the current contribution set.
 
 | Step | Result |
 |---|---|
@@ -313,6 +323,13 @@ does not — multiple endpoints, a dynamic segment, and every direction of drift
 - with zero modules registered, the route table and the rendered pages are identical to what they
   were before any of this existed.
 
+> **Note (added later):** `src/modules/status`, referenced above as ground the `diagnostics`
+> throwaway did not cover, was itself removed afterwards — the user's call, since it gave no
+> useful insight for this app. Its removal exercised the deletion property a third time (after
+> `diagnostics` and the `status` pilot's own add/delete/restore cycle in section 7), with no
+> other code needing to change. This section otherwise describes the state at the time it was
+> written and is left as the historical record of how the generator was proved.
+
 ## 11. Map of the machinery
 
 | File | Responsibility |
@@ -329,9 +346,7 @@ does not — multiple endpoints, a dynamic segment, and every direction of drift
 | `src/app/modules.registry.ts` | the composition root — the only file naming a module |
 | `scripts/generate-module-routes.cjs` | emits and verifies `src/app/api/m/**` |
 | `eslint.config.mjs` | the layer boundaries, as lint errors |
-| `src/modules/status/**` | the reference module: declaration, manifest, types, logic, handler, UI |
-| `tests/unit/modules/status/**` | its tests — part of its deletion set |
 | `src/core/modules/definePageContributions.ts` | binds page declarations to components, checking both directions |
 | `src/ui-kit/modules/ModuleTabbedSlot.tsx` | a slot offering its contributions beside the host content |
 | `src/ui-kit/modules/FileSourceSlotContext.tsx` | the context a file-source host publishes to its contributions |
-| `src/modules/cartography-watcher/**` | the full-shape example: endpoints, an owned page, domain and services |
+| `src/modules/cartography-watcher/**` | the reference module: declaration, manifest, types, domain, services, handler, UI |
