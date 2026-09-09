@@ -53,7 +53,7 @@ Designed for high-speed, zero-allocation memory operations capable of handling 1
 ### 🌐 `src/utils/spatial/` — Spatial Geometry & Projection Engine
 Encapsulates spatial math, coordinate transformations, and topological comparison:
 - **`ProjectionEngine.ts` (`ProjectionEngine`)**: Dynamically parses ESRI PRJ WKT or EPSG definitions via `proj4`, caches compiled converters, and converts metric/projected coordinates to geographic WGS84 (`EPSG:4326`) degrees.
-- **`EwkbGeometryParser.ts` (`EwkbGeometryParser`)**: Decodes PostGIS Extended Well-Known Binary hex strings and converts UTM Zone 19S meters into latitude/longitude.
+- **`EwkbGeometryParser.ts` (`EwkbGeometryParser`)**: Decodes PostGIS Extended Well-Known Binary hex strings and converts UTM Zone 21S meters into latitude/longitude.
 - **`WktGeometryParser.ts` (`WktGeometryParser`)**: Parses Well-Known Text (`POINT`, `LINESTRING`, `POLYGON`, `MULTIPOLYGON`) and generic geometry string cells.
 - **`SpatialGeometryComparator.ts` (`SpatialGeometryComparator`)**: Performs topological comparison between database and file geometries with configurable spatial tolerance (~10m) and ring canonicalization.
 - **`GeoJsonDatasetBuilder.ts` (`GeoJsonDatasetBuilder`)**: Scans tabular query rows and generates validated GeoJSON `FeatureCollection` datasets.

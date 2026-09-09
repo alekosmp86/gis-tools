@@ -17,7 +17,7 @@ The [`CsvParser.ts`](src/services/parsers/CsvParser.ts) service decodes these sp
 
 1. **EWKB Hex Parsing** ([`ewkbParser.ts`](src/utils/ewkbParser.ts)):
    - Decodes binary byte arrays, endianness flag, geometry type, and SRID presence.
-   - Automatically converts UTM Zone 19S (EPSG:32719) metric coordinates (`utm19sToWgs84`) to WGS84 latitude/longitude degrees.
+   - Automatically converts UTM Zone 21S (EPSG:32721) metric coordinates (`utm21sToWgs84`) to WGS84 latitude/longitude degrees.
 
 2. **WKT Text Parsing** ([`wktParser.ts`](src/utils/wktParser.ts)):
    - Parses `POINT(x y)`, `LINESTRING(...)`, `POLYGON(...)`, and `MULTIPOLYGON(...)` geometry strings.

@@ -8,13 +8,13 @@ export interface IGeometryParser {
 /**
  * EwkbGeometryParser
  * Object-Oriented parser for PostGIS Extended Well-Known Binary (EWKB) Hex strings.
- * Includes UTM Zone 19S (EPSG:32719) reprojection and coordinate normalization algorithms.
+ * Includes UTM Zone 21S (EPSG:32721) reprojection and coordinate normalization algorithms.
  */
 export class EwkbGeometryParser implements IGeometryParser {
   /**
-   * Converts UTM Zone 19S (EPSG:32719) coordinates in meters to WGS84 (longitude, latitude) degrees.
+   * Converts UTM Zone 21S (EPSG:32721) coordinates in meters to WGS84 (longitude, latitude) degrees.
    */
-  public static utm19sToWgs84(easting: number, northing: number): [number, number] {
+  public static utm21sToWgs84(easting: number, northing: number): [number, number] {
     const k0 = 0.9996;
     const semiMajorAxis = 6378137.0; // WGS84 semi-major axis (a)
     const flattening = 1 / 298.257223563; // WGS84 flattening (f)
@@ -116,7 +116,7 @@ export class EwkbGeometryParser implements IGeometryParser {
    */
   public static normalizeCoordinate(xCoordinate: number, yCoordinate: number): [number, number] {
     if (EwkbGeometryParser.isUtmCoordinates(xCoordinate, yCoordinate)) {
-      return EwkbGeometryParser.utm19sToWgs84(xCoordinate, yCoordinate);
+      return EwkbGeometryParser.utm21sToWgs84(xCoordinate, yCoordinate);
     }
     return [xCoordinate, yCoordinate];
   }
