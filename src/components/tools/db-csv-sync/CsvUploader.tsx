@@ -1,70 +1,44 @@
-import React, { useState, useRef } from "react";
-import dynamic from "next/dynamic";
-import type { FeatureCollection } from "geojson";
+import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, Trash2, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Loader2 } from "lucide-react";
 import { AlertMessage } from "@/components/shared/AlertMessage";
-import { ColumnsList } from "@/components/shared/ColumnsList";
-import { FileDropzone } from "@/components/shared/FileDropzone";
-import { CsvParser } from "@/services/parsers/CsvParser";
-import { MAX_MAP_PREVIEW_FEATURES } from "@/constants/mapConstants";
 import { AlertType } from "@/types/ui";
+import { CsvParser } from "@/services/parsers/CsvParser";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
-import { formatNumber, formatFileSize } from "@/utils/common/ValueFormatter";
+import { DefaultFileSourceTab, SupportedExtensionFormat } from "@/types/extensions";
+import { FileSourceSelectionArea } from "@/components/shared/FileSourceSelectionArea";
+import { useFileSourceExtensions } from "@/hooks/useFileSourceExtensions";
+import { useAutoLoadFileSource } from "@/hooks/useAutoLoadFileSource";
+import { LoadedCsvCard } from "./LoadedCsvCard";
 import styles from "./CsvUploader.module.css";
 
-const SpatialMapPreview = dynamic(
-  () => import("@/components/shared/SpatialMapPreview").then((module) => module.SpatialMapPreview),
-  { ssr: false }
-);
-
-/**
- * Builds a capped FeatureCollection subset for map preview to preserve UI responsiveness.
- */
-function buildCappedPreviewGeoJson(
-  geojson: FeatureCollection | undefined,
-  maxFeatures: number
-): FeatureCollection | null {
-  if (!geojson || !geojson.features || geojson.features.length === 0) {
-    return null;
-  }
-  if (geojson.features.length <= maxFeatures) {
-    return geojson;
-  }
-  return {
-    ...geojson,
-    features: geojson.features.slice(0, maxFeatures),
-  };
-}
-
-interface CsvUploaderProps {
+export interface CsvUploaderProps {
   onSuccess: (data: ParsedFileDataset) => void;
   onDiscard: () => void;
   loadedData?: ParsedFileDataset | null;
+  toolId?: string;
+  sourceSlug?: string;
+  resourceId?: string;
 }
 
 export const CsvUploader: React.FC<CsvUploaderProps> = ({
   onSuccess,
   onDiscard,
   loadedData = null,
+  toolId = "db-csv-sync",
+  sourceSlug,
+  resourceId,
 }) => {
   const queryClient = useQueryClient();
+  const extensions = useFileSourceExtensions(toolId, SupportedExtensionFormat.CSV);
   const [data, setData] = useState<ParsedFileDataset | null>(loadedData);
+  const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const previewGeojson = buildCappedPreviewGeoJson(
-    data?.geojson,
-    MAX_MAP_PREVIEW_FEATURES
-  );
-
-  const isPreviewCapped = Boolean(
-    data?.geojson?.features &&
-      data.geojson.features.length > MAX_MAP_PREVIEW_FEATURES
-  );
+  const defaultTabId =
+    extensions.length > 0 ? extensions[0].id : DefaultFileSourceTab.PC;
+  const activeSourceTab = selectedTabId ?? defaultTabId;
 
   const processFile = async (file: File) => {
     setLoading(true);
@@ -78,82 +52,48 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
       onSuccess(parsed);
       setLoading(false);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Error al procesar el archivo CSV.";
+      const message =
+        error instanceof Error ? error.message : "Error al procesar el archivo CSV.";
       setErrorMessage(message);
       setLoading(false);
     }
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      processFile(files[0]);
-    }
-  };
-
-  const handleDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(false);
-    const files = event.dataTransfer.files;
-    if (files && files.length > 0) {
-      processFile(files[0]);
-    }
-  };
-
-  const handleDropzoneKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      fileInputRef.current?.click();
-    }
-  };
+  useAutoLoadFileSource({
+    extensions,
+    sourceSlug,
+    resourceId,
+    hasData: Boolean(data),
+    onLoadFile: (file) => processFile(file),
+    onError: (message) => setErrorMessage(message),
+    onLoadingChange: (isLoading) => setLoading(isLoading),
+  });
 
   const handleDiscard = () => {
     queryClient.removeQueries({ queryKey: ["datasetComparison"] });
     setData(null);
     setErrorMessage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
     onDiscard();
   };
 
   return (
     <div className={styles.container}>
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".csv,.txt"
-        aria-label="Seleccionar archivo CSV"
-        className={styles.hiddenInput}
-      />
-
-      {/* Upload Zone */}
       {!data && !loading && (
-        <FileDropzone
-          isDragOver={isDragOver}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          onKeyDown={handleDropzoneKeyDown}
-          title="Arrastre y suelte su archivo CSV (.csv) aquí"
-          subtitle="o haga clic para seleccionar un archivo desde su equipo"
-          formatBadges={[".CSV", "DELIMITADO POR COMAS"]}
+        <FileSourceSelectionArea
+          extensions={extensions}
+          activeTabId={activeSourceTab}
+          onSelectTab={setSelectedTabId}
+          format={SupportedExtensionFormat.CSV}
+          onSelectFile={(file) => processFile(file)}
+          isLoading={loading}
+          accept=".csv,.txt"
+          inputAriaLabel="Seleccionar archivo CSV"
+          dropzoneTitle="Arrastre y suelte su archivo CSV (.csv) aquí"
+          dropzoneSubtitle="o haga clic para seleccionar un archivo desde su equipo"
+          dropzoneFormatBadges={[".CSV", "DELIMITADO POR COMAS"]}
         />
       )}
 
-      {/* Loading State */}
       {loading && (
         <div className={styles.loadingArea}>
           <Loader2 size={32} className={styles.spin} />
@@ -161,66 +101,9 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
         </div>
       )}
 
-      {/* Error Alert */}
       {errorMessage && <AlertMessage type={AlertType.ERROR} text={errorMessage} />}
 
-      {/* Loaded File Info Card */}
-      {data && (
-        <div className={styles.loadedCard}>
-          <div className={styles.loadedHeader}>
-            <div className={styles.fileMeta}>
-              <FileSpreadsheet size={28} className={styles.successIcon} />
-              <div>
-                <div className={styles.fileName}>{data.fileName}</div>
-                <div className={styles.fileSub}>
-                  Tamaño: {formatFileSize(data.fileSize)} &bull; {formatNumber(data.featureCount)} filas
-                </div>
-              </div>
-            </div>
-
-            <Button variant="ghost" onClick={handleDiscard}>
-              <Trash2 size={16} color="var(--accent-rose)" />
-              <span className={styles.discardText}>Descartar archivo</span>
-            </Button>
-          </div>
-
-          <div className={styles.metaRow}>
-            <div className={styles.metaItem}>
-              <span className={styles.metaLabel}>Total de Filas / Registros:</span>
-              <span className={styles.metaValue}>{formatNumber(data.featureCount)} filas</span>
-            </div>
-
-            <div className={styles.metaItem}>
-              <span className={styles.metaLabel}>Columnas Encontradas:</span>
-              <span className={styles.metaValue}>{formatNumber(data.attributes.length)} columnas</span>
-            </div>
-          </div>
-
-          {/* Reusable ColumnsList component for CSV Header tags */}
-          <ColumnsList
-            columns={data.attributes}
-            title="Encabezados / Columnas del Archivo CSV"
-          />
-
-          {/* Interactive Spatial Map Preview if CSV contains Geometry (EWKB / WKT / GeoJSON) */}
-          {previewGeojson && previewGeojson.features.length > 0 && (
-            <div className={styles.mapSection}>
-              {isPreviewCapped && data.geojson && (
-                <AlertMessage
-                  type={AlertType.WARNING}
-                  className={styles.previewNotice}
-                  text={`Vista previa de muestra: Mostrando los primeros ${formatNumber(previewGeojson.features.length)} de ${formatNumber(data.geojson.features.length)} registros con geometría en el mapa inicial para asegurar fluidez de navegación. La totalidad de los ${formatNumber(data.featureCount)} registros se auditará y visualizará en el paso final.`}
-                />
-              )}
-              <SpatialMapPreview
-                geojson={previewGeojson}
-                title="VISTA PREVIA ESPACIAL DEL ARCHIVO CSV"
-              />
-            </div>
-          )}
-
-        </div>
-      )}
+      {data && <LoadedCsvCard data={data} onDiscard={handleDiscard} />}
     </div>
   );
 };

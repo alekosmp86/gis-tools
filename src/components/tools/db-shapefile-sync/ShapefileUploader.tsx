@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { AlertMessage } from "@/components/shared/AlertMessage";
@@ -6,30 +6,42 @@ import { AlertType } from "@/types/ui";
 import { ShapefileParser } from "@/services/parsers/ShapefileParser";
 import type { ParsedShapefileData } from "@/types/shp";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
-import { FileDropzone } from "@/components/shared/FileDropzone";
+import { DefaultFileSourceTab, SupportedExtensionFormat } from "@/types/extensions";
+import { FileSourceSelectionArea } from "@/components/shared/FileSourceSelectionArea";
+import { useFileSourceExtensions } from "@/hooks/useFileSourceExtensions";
+import { useAutoLoadFileSource } from "@/hooks/useAutoLoadFileSource";
 import { LoadedShapefileCard } from "./LoadedShapefileCard";
 import styles from "./ShapefileUploader.module.css";
-
 
 export interface ShapefileUploaderProps {
   onSuccess: (data: ParsedShapefileData) => void;
   onDiscard: () => void;
   loadedData?: ParsedShapefileData | null;
+  toolId?: string;
+  sourceSlug?: string;
+  resourceId?: string;
 }
 
 export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
   onSuccess,
   onDiscard,
   loadedData = null,
+  toolId = "db-shapefile-sync",
+  sourceSlug,
+  resourceId,
 }) => {
   const queryClient = useQueryClient();
+  const extensions = useFileSourceExtensions(toolId, SupportedExtensionFormat.SHP);
   const [data, setData] = useState<ParsedFileDataset | null>(
-    loadedData ? (loadedData as unknown as ParsedFileDataset) : null
+    (loadedData as unknown as ParsedFileDataset) ?? null
   );
+  const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const defaultTabId =
+    extensions.length > 0 ? extensions[0].id : DefaultFileSourceTab.PC;
+  const activeSourceTab = selectedTabId ?? defaultTabId;
 
   const processFile = async (file: File) => {
     setLoading(true);
@@ -50,76 +62,41 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
     }
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      processFile(files[0]);
-    }
-  };
-
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragOver(false);
-    const files = event.dataTransfer.files;
-    if (files && files.length > 0) {
-      processFile(files[0]);
-    }
-  };
-
-  const handleDropzoneKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      fileInputRef.current?.click();
-    }
-  };
+  useAutoLoadFileSource({
+    extensions,
+    sourceSlug,
+    resourceId,
+    hasData: Boolean(data),
+    onLoadFile: (file) => processFile(file),
+    onError: (message) => setErrorMessage(message),
+    onLoadingChange: (isLoading) => setLoading(isLoading),
+  });
 
   const handleDiscard = () => {
     queryClient.removeQueries({ queryKey: ["datasetComparison"] });
     setData(null);
     setErrorMessage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
     onDiscard();
   };
 
   return (
     <div className={styles.container}>
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".zip,.geojson,.json"
-        aria-label="Seleccionar archivo Shapefile o GeoJSON"
-        className={styles.hiddenInput}
-      />
-
-      {/* Upload Dropzone */}
       {!data && !loading && (
-        <FileDropzone
-          isDragOver={isDragOver}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          onKeyDown={handleDropzoneKeyDown}
-          title="Arrastre y suelte su archivo Shapefile (.zip) o GeoJSON aquí"
-          subtitle="o haga clic para seleccionar un archivo desde su equipo"
-          formatBadges={[".ZIP (SHP + DBF)", ".GEOJSON"]}
+        <FileSourceSelectionArea
+          extensions={extensions}
+          activeTabId={activeSourceTab}
+          onSelectTab={setSelectedTabId}
+          format={SupportedExtensionFormat.SHP}
+          onSelectFile={(file) => processFile(file)}
+          isLoading={loading}
+          accept=".zip,.geojson,.json"
+          inputAriaLabel="Seleccionar archivo Shapefile o GeoJSON"
+          dropzoneTitle="Arrastre y suelte su archivo Shapefile (.zip) o GeoJSON aquí"
+          dropzoneSubtitle="o haga clic para seleccionar un archivo desde su equipo"
+          dropzoneFormatBadges={[".ZIP (SHP + DBF)", ".GEOJSON"]}
         />
       )}
 
-      {/* Loading State */}
       {loading && (
         <div className={styles.loadingArea}>
           <Loader2 size={32} className={styles.spin} />
@@ -127,10 +104,8 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
         </div>
       )}
 
-      {/* Error Alert */}
       {errorMessage && <AlertMessage type={AlertType.ERROR} text={errorMessage} />}
 
-      {/* Loaded File Metadata & Spatial Map Card */}
       {data && <LoadedShapefileCard data={data} onDiscard={handleDiscard} />}
     </div>
   );

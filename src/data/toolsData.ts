@@ -1,4 +1,4 @@
-import { GitCompare, FileSpreadsheet, Eye, Database } from "lucide-react";
+import { GitCompare, FileSpreadsheet, Eye, Database, Radio } from "lucide-react";
 import { ToolCategory, type ToolCardData } from "@/types/ui";
 import { BadgeVariant } from "@/types/ui";
 
@@ -69,5 +69,17 @@ export const toolsList: ToolCardData[] = [
     tags: ["PostgreSQL", "PostGIS", "Visor Mapa", "Atributos"],
     enabled: true,
     route: "/tools/db-table-viewer",
+  },
+  {
+    id: "cartography-watcher",
+    title: "Observador de Actualizaciones Cartográficas",
+    category: [ToolCategory.SYNC],
+    badge: { label: "Nuevo", type: BadgeVariant.ACTIVE },
+    icon: Radio,
+    description:
+      "Monitoree catálogos abiertos de datos espaciales (CKAN IDEuy), detecte automáticamente la publicación de nuevas versiones de ejes viales y descargue los datasets al vault local.",
+    tags: ["CKAN", "IDEuy", "Descarga Automática", "Ejes Viales"],
+    enabled: true,
+    route: "/tools/modules/cartography-watcher",
   },
 ];

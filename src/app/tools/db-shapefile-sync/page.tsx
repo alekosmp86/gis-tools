@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Database, Layers, GitMerge, Sliders } from "lucide-react";
 import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
@@ -15,7 +16,11 @@ import type { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } f
 import type { WizardStepDef } from "@/types/ui";
 import type { ParsedShapefileData } from "@/types/shp";
 
-export default function DbShapefileSyncToolPage() {
+function DbShapefileSyncToolContent() {
+  const searchParams = useSearchParams();
+  const sourceSlug = searchParams.get("sourceSlug") || undefined;
+  const resourceId = searchParams.get("resourceId") || undefined;
+
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [dbConfig, setDbConfig] = useState<DbConfig | null>(null);
   const [dbColumns, setDbColumns] = useState<string[]>([]);
@@ -99,6 +104,8 @@ export default function DbShapefileSyncToolPage() {
           onSuccess={handleShapefileSuccess}
           onDiscard={handleShapefileDiscard}
           loadedData={shapefileData}
+          sourceSlug={sourceSlug}
+          resourceId={resourceId}
         />
       ),
       canProceed: Boolean(shapefileData),
@@ -179,5 +186,13 @@ export default function DbShapefileSyncToolPage() {
     >
       <WizardOrchestrator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
     </ToolWorkspaceLayout>
+  );
+}
+
+export default function DbShapefileSyncToolPage() {
+  return (
+    <Suspense fallback={<div>Cargando herramienta de sincronización...</div>}>
+      <DbShapefileSyncToolContent />
+    </Suspense>
   );
 }

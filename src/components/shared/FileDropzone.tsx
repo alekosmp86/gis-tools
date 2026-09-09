@@ -11,7 +11,7 @@ export interface FileDropzoneProps {
   onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   title?: string;
   subtitle?: string;
-  formatBadges?: string[];
+  formatBadges?: readonly string[];
 }
 
 export const FileDropzone: React.FC<FileDropzoneProps> = ({

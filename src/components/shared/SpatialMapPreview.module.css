@@ -270,7 +270,7 @@
 }
 
 /* Leaflet Popup Custom Styling & Overflows Fix */
-:global(.leaflet-popup-content-wrapper) {
+.mapContainer :global(.leaflet-popup-content-wrapper) {
   max-width: 310px;
   border-radius: 12px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
@@ -278,7 +278,7 @@
   overflow: hidden;
 }
 
-:global(.leaflet-popup-content) {
+.mapContainer :global(.leaflet-popup-content) {
   margin: 12px 14px;
   max-width: 280px;
   word-break: break-word;
@@ -286,14 +286,14 @@
   font-family: inherit;
 }
 
-:global(.leaflet-popup-close-button) {
+.mapContainer :global(.leaflet-popup-close-button) {
   padding: 6px 8px 0 0 !important;
   color: #64748b !important;
   font-size: 18px !important;
   font-weight: bold;
 }
 
-:global(.leaflet-popup-close-button:hover) {
+.mapContainer :global(.leaflet-popup-close-button:hover) {
   color: #0f172a !important;
 }
 
