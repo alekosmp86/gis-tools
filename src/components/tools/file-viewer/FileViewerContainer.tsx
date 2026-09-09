@@ -21,8 +21,11 @@ export const FileViewerContainer: React.FC = () => {
   // for large datasets it renders only a capped sample, while the table lists every record.
   const [selectedRecordIndex, setSelectedRecordIndex] = useState<number | null>(null);
 
+  // Parsers alias one record under several keys (row ordinal, id, suid), so the raw values are
+  // deduplicated by identity. A Set preserves insertion order, which keeps each record at its row
+  // ordinal — the position `feature.id` refers to.
   const recordsList = parsedDataset?.recordsMap
-    ? Array.from(parsedDataset.recordsMap.values())
+    ? Array.from(new Set(parsedDataset.recordsMap.values()))
     : [];
 
   const hasGeometry = Boolean(
