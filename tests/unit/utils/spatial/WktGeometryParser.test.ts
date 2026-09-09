@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { WktGeometryParser } from "@/utils/spatial/WktGeometryParser";
+import { WktGeometryParser } from "@/core/spatial/WktGeometryParser";
 
 describe("WktGeometryParser", () => {
   const parser = new WktGeometryParser();

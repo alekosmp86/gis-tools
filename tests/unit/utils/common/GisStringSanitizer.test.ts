@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { GisStringSanitizer } from "@/utils/common/GisStringSanitizer";
+import { GisStringSanitizer } from "@/core/common/GisStringSanitizer";
 
 describe("GisStringSanitizer", () => {
   describe("cleanValue", () => {

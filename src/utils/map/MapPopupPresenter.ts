@@ -1,5 +1,5 @@
 import type { Feature, Geometry, GeoJsonProperties } from "geojson";
-import { getDiscrepancyColor, getDiscrepancyLabel } from "@/constants/mapConstants";
+import { getDiscrepancyColor, getDiscrepancyLabel } from "@/core/constants/mapConstants";
 
 /**
  * MapPopupPresenter

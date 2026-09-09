@@ -1,5 +1,5 @@
 import type { FeatureCollection } from "geojson";
-import type { MapFeatureStyle } from "@/types/map";
+import type { MapFeatureStyle } from "@/core/types/map";
 import { useMapInstance } from "./map/useMapInstance";
 import { useBasemapTileLayer } from "./map/useBasemapTileLayer";
 import { useVectorChunkStream } from "./map/useVectorChunkStream";

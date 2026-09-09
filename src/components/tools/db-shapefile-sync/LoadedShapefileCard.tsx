@@ -3,10 +3,10 @@ import dynamic from "next/dynamic";
 import { FileCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
-import { AlertType } from "@/types/ui";
+import { AlertType } from "@/ui-kit/types/ui";
 import { ColumnsList } from "@/components/shared/ColumnsList";
-import type { ParsedFileDataset } from "@/types/parsers";
-import { formatNumber, formatFileSize } from "@/utils/common/ValueFormatter";
+import type { ParsedFileDataset } from "@/core/types/parsers";
+import { formatNumber, formatFileSize } from "@/core/common/ValueFormatter";
 import styles from "./LoadedShapefileCard.module.css";
 
 const SpatialMapPreview = dynamic(

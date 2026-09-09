@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CsvParser } from "@/services/parsers/CsvParser";
+import { CsvParser } from "@/core/services/parsers/CsvParser";
 
 /**
  * The parser aliases one record under several keys (row ordinal, id, suid) so lookups by

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ComparisonProgress } from "@/types/comparison";
+import type { ComparisonProgress } from "@/core/types/comparison";
 
 const INITIAL_PROGRESS: ComparisonProgress = {
   phase: "",

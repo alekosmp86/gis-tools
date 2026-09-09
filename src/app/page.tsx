@@ -10,7 +10,7 @@ import { FilterTabs } from "@/components/home/FilterTabs";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ToolCard } from "@/components/home/ToolCard";
 import { toolsList, toolCategories } from "@/data/toolsData";
-import { ToolCategory } from "@/types/ui";
+import { ToolCategory } from "@/ui-kit/types/ui";
 
 export default function Home() {
   const router = useRouter();

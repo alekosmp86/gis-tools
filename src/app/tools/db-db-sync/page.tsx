@@ -8,11 +8,11 @@ import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
 import { SyncParametersStep } from "@/components/tools/db-sync-common/SyncParametersStep";
 import { ComparisonResultsView } from "@/components/tools/db-sync-common/ComparisonResultsView";
-import { DB_VS_DB_DESCRIPTOR } from "@/constants/comparisonDescriptors";
-import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
-import { FileSourceKind, type ParsedFileDataset } from "@/types/parsers";
-import type { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/types/comparison";
-import type { WizardStepDef } from "@/types/ui";
+import { DB_VS_DB_DESCRIPTOR } from "@/core/constants/comparisonDescriptors";
+import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/core/types/db";
+import { FileSourceKind, type ParsedFileDataset } from "@/core/types/parsers";
+import type { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/core/types/comparison";
+import type { WizardStepDef } from "@/ui-kit/types/ui";
 
 export default function DbDbSyncToolPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);

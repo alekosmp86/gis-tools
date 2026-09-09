@@ -4,7 +4,7 @@ import { SqlExecutionHeader } from "./execution/SqlExecutionHeader";
 import { SqlExecutionForm } from "./execution/SqlExecutionForm";
 import { SqlExecutionProgress } from "./execution/SqlExecutionProgress";
 import { SqlExecutionSummary } from "./execution/SqlExecutionSummary";
-import type { DbConfig, ExecuteBatchResult } from "@/types/db";
+import type { DbConfig, ExecuteBatchResult } from "@/core/types/db";
 import styles from "./SqlExecutionModal.module.css";
 
 export interface SqlExecutionModalProps {

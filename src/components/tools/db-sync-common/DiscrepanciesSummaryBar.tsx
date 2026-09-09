@@ -11,13 +11,13 @@ import {
   Shapes,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { formatNumber } from "@/utils/common/ValueFormatter";
+import { formatNumber } from "@/core/common/ValueFormatter";
 import {
   DiscrepancyFilter,
   type ComparisonSummary,
   type ComparisonSourceDescriptor,
   type ComparisonIconKind,
-} from "@/types/comparison";
+} from "@/core/types/comparison";
 import { SummaryKpiCard } from "./SummaryKpiCard";
 import styles from "./DiscrepanciesSummaryBar.module.css";
 

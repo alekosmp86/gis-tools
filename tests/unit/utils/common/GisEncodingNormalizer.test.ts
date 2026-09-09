@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { GisEncodingNormalizer } from "@/utils/common/GisEncodingNormalizer";
+import { GisEncodingNormalizer } from "@/core/common/GisEncodingNormalizer";
 
 describe("GisEncodingNormalizer", () => {
   describe("hasCorruptedGlyphs", () => {

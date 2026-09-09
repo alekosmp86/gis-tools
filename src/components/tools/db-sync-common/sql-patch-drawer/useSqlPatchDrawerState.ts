@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { SqlScriptType } from "@/types/comparison";
-import type { ExecuteBatchResult } from "@/types/db";
-import { AlertType } from "@/types/ui";
+import { SqlScriptType } from "@/core/types/comparison";
+import type { ExecuteBatchResult } from "@/core/types/db";
+import { AlertType } from "@/ui-kit/types/ui";
 
 const MAX_PREVIEW_LINES = 25;
 

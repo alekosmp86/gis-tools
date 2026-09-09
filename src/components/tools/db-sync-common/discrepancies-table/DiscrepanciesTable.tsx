@@ -3,7 +3,7 @@ import type {
   DiscrepancyItem,
   DiscrepancyFilter,
   ComparisonSourceDescriptor,
-} from "@/types/comparison";
+} from "@/core/types/comparison";
 import { PaginationControls } from "@/components/shared/PaginationControls";
 import { useDiscrepanciesTableData } from "./useDiscrepanciesTableData";
 import { DiscrepanciesTableHeader } from "./DiscrepanciesTableHeader";

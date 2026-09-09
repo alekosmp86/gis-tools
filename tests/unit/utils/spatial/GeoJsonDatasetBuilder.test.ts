@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseRecordsToGeoJson } from "@/utils/spatial/GeoJsonDatasetBuilder";
+import { parseRecordsToGeoJson } from "@/core/spatial/GeoJsonDatasetBuilder";
 
 const COLUMNS = ["gid", "nombre", "geom"];
 

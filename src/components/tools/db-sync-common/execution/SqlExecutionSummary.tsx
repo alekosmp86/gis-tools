@@ -1,8 +1,8 @@
 import React from "react";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { formatNumber } from "@/utils/common/ValueFormatter";
-import type { ExecuteBatchResult } from "@/types/db";
+import { formatNumber } from "@/core/common/ValueFormatter";
+import type { ExecuteBatchResult } from "@/core/types/db";
 import styles from "../SqlExecutionModal.module.css";
 
 export interface SqlExecutionSummaryProps {

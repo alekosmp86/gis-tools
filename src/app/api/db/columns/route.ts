@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Client } from "pg";
-import type { DbColumnMetadata } from "@/types/db";
+import type { DbColumnMetadata } from "@/core/types/db";
 
 interface RawColumnRow {
   column_name: string;

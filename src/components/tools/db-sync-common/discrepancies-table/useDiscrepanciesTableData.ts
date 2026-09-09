@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { DiscrepancyItem } from "@/types/comparison";
-import { DiscrepancyFilter } from "@/types/comparison";
+import type { DiscrepancyItem } from "@/core/types/comparison";
+import { DiscrepancyFilter } from "@/core/types/comparison";
 
 interface UseDiscrepanciesTableDataParams {
   items: DiscrepancyItem[];

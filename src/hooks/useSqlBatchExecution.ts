@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { executeSqlInChunks } from "@/services/dbExecutionService";
-import type { DbConfig, ExecuteChunkProgress, ExecuteBatchResult } from "@/types/db";
+import { executeSqlInChunks } from "@/core/services/dbExecutionService";
+import type { DbConfig, ExecuteChunkProgress, ExecuteBatchResult } from "@/core/types/db";
 
 interface UseSqlBatchExecutionParams {
   dbConfig: DbConfig;

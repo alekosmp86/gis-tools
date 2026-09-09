@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import type { FeatureCollection, GeoJsonObject } from "geojson";
-import { MAP_MICRO_CHUNK_SIZE } from "@/constants/mapConstants";
-import type { MapFeatureStyle } from "@/types/map";
+import { MAP_MICRO_CHUNK_SIZE } from "@/core/constants/mapConstants";
+import type { MapFeatureStyle } from "@/core/types/map";
 import { createStyleResolver } from "@/utils/map/MapSymbologyStyler";
 import { bindGroupFeatureEvents } from "@/utils/map/MapEventHandler";
 

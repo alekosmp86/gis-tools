@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CsvParser } from "@/services/parsers/CsvParser";
+import { CsvParser } from "@/core/services/parsers/CsvParser";
 
 describe("CsvParser", () => {
   const parser = new CsvParser();

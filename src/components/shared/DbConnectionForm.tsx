@@ -23,7 +23,7 @@ import type {
   DbColumnMetadata,
   DbConnectionFormRef,
   DbConnectionStatusPayload,
-} from "@/types/db";
+} from "@/core/types/db";
 import styles from "./DbConnectionForm.module.css";
 
 export interface DbConnectionFormProps {

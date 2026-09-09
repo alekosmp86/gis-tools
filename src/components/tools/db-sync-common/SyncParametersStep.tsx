@@ -3,8 +3,8 @@ import { EncodingToleranceCard } from "./EncodingToleranceCard";
 import { PkOptimizationCard } from "./PkOptimizationCard";
 import { InsertDefaultsCard } from "./InsertDefaultsCard";
 import { useSyncParametersForm } from "@/hooks/useSyncParametersForm";
-import type { DbColumnMetadata } from "@/types/db";
-import type { ColumnMappingConfig, SyncParametersStepRef } from "@/types/comparison";
+import type { DbColumnMetadata } from "@/core/types/db";
+import type { ColumnMappingConfig, SyncParametersStepRef } from "@/core/types/comparison";
 import styles from "./SyncParametersStep.module.css";
 
 export interface SyncParametersStepProps {

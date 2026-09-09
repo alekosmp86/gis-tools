@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { DbColumnMetadata } from "@/types/db";
-import type { ColumnMappingConfig, InsertFieldDefault } from "@/types/comparison";
+import type { DbColumnMetadata } from "@/core/types/db";
+import type { ColumnMappingConfig, InsertFieldDefault } from "@/core/types/comparison";
 
 export interface UseSyncParametersFormProps {
   dbColumns: string[];

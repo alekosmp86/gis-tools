@@ -1,6 +1,6 @@
 import React from "react";
-import type { DiscrepancyItem, ComparisonSourceDescriptor, DiscrepancyFilter } from "@/types/comparison";
-import { DiscrepancyType } from "@/types/comparison";
+import type { DiscrepancyItem, ComparisonSourceDescriptor, DiscrepancyFilter } from "@/core/types/comparison";
+import { DiscrepancyType } from "@/core/types/comparison";
 import { DiscrepancySuidCell } from "../DiscrepancySuidCell";
 import { DiscrepancyTypeBadge } from "../DiscrepancyTypeBadge";
 import styles from "./DiscrepanciesTable.module.css";

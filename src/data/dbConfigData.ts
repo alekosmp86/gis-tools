@@ -1,4 +1,4 @@
-import type { DbConfig } from "@/types/db";
+import type { DbConfig } from "@/core/types/db";
 
 export const INITIAL_DB_CONFIG: DbConfig = {
   host: "localhost",

@@ -1,7 +1,7 @@
 import React from "react";
 import { ProgressBar } from "@/components/shared/ProgressBar";
-import { formatNumber } from "@/utils/common/ValueFormatter";
-import type { ExecuteChunkProgress } from "@/types/db";
+import { formatNumber } from "@/core/common/ValueFormatter";
+import type { ExecuteChunkProgress } from "@/core/types/db";
 import styles from "../SqlExecutionModal.module.css";
 
 export interface SqlExecutionProgressProps {

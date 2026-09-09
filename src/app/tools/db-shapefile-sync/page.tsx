@@ -9,11 +9,11 @@ import { ShapefileUploader } from "@/components/tools/db-shapefile-sync/Shapefil
 import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
 import { SyncParametersStep } from "@/components/tools/db-sync-common/SyncParametersStep";
 import { ComparisonResultsView } from "@/components/tools/db-sync-common/ComparisonResultsView";
-import { DB_VS_SHAPEFILE_DESCRIPTOR } from "@/constants/comparisonDescriptors";
-import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/types/db";
-import type { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/types/comparison";
-import type { WizardStepDef } from "@/types/ui";
-import type { ParsedShapefileData } from "@/types/shp";
+import { DB_VS_SHAPEFILE_DESCRIPTOR } from "@/core/constants/comparisonDescriptors";
+import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/core/types/db";
+import type { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/core/types/comparison";
+import type { WizardStepDef } from "@/ui-kit/types/ui";
+import type { ParsedShapefileData } from "@/core/types/shp";
 
 export default function DbShapefileSyncToolPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);

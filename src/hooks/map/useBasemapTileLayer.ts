@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
-import { BASEMAP_TILES } from "@/constants/mapConstants";
+import { BASEMAP_TILES } from "@/core/constants/mapConstants";
 
 export function useBasemapTileLayer(
   mapInstanceRef: React.RefObject<L.Map | null>,

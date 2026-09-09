@@ -1,7 +1,7 @@
 import React from "react";
 import { Database, Table, Layers, HardDrive, Hash, Globe } from "lucide-react";
-import { formatNumber } from "@/utils/common/ValueFormatter";
-import type { DbConfig } from "@/types/db";
+import { formatNumber } from "@/core/common/ValueFormatter";
+import type { DbConfig } from "@/core/types/db";
 import styles from "./TableMetaPanel.module.css";
 
 interface TableMetaPanelProps {

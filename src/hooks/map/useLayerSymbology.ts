@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import L from "leaflet";
-import type { MapFeatureStyle } from "@/types/map";
-import { getDiscrepancyColor, getDashArrayFromPattern } from "@/constants/mapConstants";
+import type { MapFeatureStyle } from "@/core/types/map";
+import { getDiscrepancyColor, getDashArrayFromPattern } from "@/core/constants/mapConstants";
 
 export function useLayerSymbology(
   featureGroupRef: React.RefObject<L.FeatureGroup | null>,

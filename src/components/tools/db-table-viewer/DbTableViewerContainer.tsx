@@ -4,10 +4,10 @@ import { Loader2 } from "lucide-react";
 import { TableMetaPanel } from "./TableMetaPanel";
 import { AttributeTable } from "../file-viewer/AttributeTable";
 import { AlertMessage } from "@/components/shared/AlertMessage";
-import { AlertType } from "@/types/ui";
-import type { DbConfig } from "@/types/db";
+import { AlertType } from "@/ui-kit/types/ui";
+import type { DbConfig } from "@/core/types/db";
 import { useDbTableViewerState } from "@/hooks/useDbTableViewerState";
-import { buildFeatureRecordIndex } from "@/utils/spatial/FeatureRecordIndex";
+import { buildFeatureRecordIndex } from "@/core/spatial/FeatureRecordIndex";
 import styles from "./DbTableViewerContainer.module.css";
 
 const SpatialMapPreview = dynamic(

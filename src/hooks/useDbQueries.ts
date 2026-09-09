@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MAX_MAP_PREVIEW_FEATURES } from "@/constants/mapConstants";
+import { MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
 import type {
   DbConfig,
   ColumnsResponse,
   DatabaseFetchResult,
   DbStreamRecordsParams,
-} from "@/types/db";
+} from "@/core/types/db";
 
 async function fetchDbColumnsApi(config: DbConfig): Promise<ColumnsResponse> {
   const res = await fetch("/api/db/columns", {
@@ -38,7 +38,7 @@ export async function streamDbRecordsApi(
   params: DbStreamRecordsParams
 ): Promise<DatabaseFetchResult> {
   const { DatabaseStreamReader } = await import(
-    "@/services/streaming/DatabaseStreamReader"
+    "@/core/services/streaming/DatabaseStreamReader"
   );
   const previewLimit =
     params.totalRows && params.totalRows > MAX_MAP_PREVIEW_FEATURES

@@ -1,7 +1,7 @@
 import React from "react";
 import { PlusSquare, AlertTriangle, CheckCircle2, Code2, Sparkles } from "lucide-react";
-import type { DbColumnMetadata } from "@/types/db";
-import type { InsertFieldDefault } from "@/types/comparison";
+import type { DbColumnMetadata } from "@/core/types/db";
+import type { InsertFieldDefault } from "@/core/types/comparison";
 import styles from "./InsertDefaultsCard.module.css";
 
 interface InsertDefaultsCardProps {

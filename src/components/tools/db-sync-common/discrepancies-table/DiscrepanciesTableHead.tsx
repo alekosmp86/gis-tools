@@ -1,5 +1,5 @@
 import React from "react";
-import type { ComparisonSourceDescriptor } from "@/types/comparison";
+import type { ComparisonSourceDescriptor } from "@/core/types/comparison";
 import { ComparisonIcon } from "@/components/ui/ComparisonIcon";
 import styles from "./DiscrepanciesTable.module.css";
 

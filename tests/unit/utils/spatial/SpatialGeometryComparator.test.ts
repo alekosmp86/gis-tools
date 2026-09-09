@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SpatialGeometryComparator } from "@/utils/spatial/SpatialGeometryComparator";
+import { SpatialGeometryComparator } from "@/core/spatial/SpatialGeometryComparator";
 
 describe("SpatialGeometryComparator", () => {
   const comparator = new SpatialGeometryComparator();

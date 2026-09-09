@@ -1,5 +1,5 @@
 import React from "react";
-import { BadgeVariant } from "@/types/ui";
+import { BadgeVariant } from "@/ui-kit/types/ui";
 import styles from "./Badge.module.css";
 
 export interface BadgeProps {

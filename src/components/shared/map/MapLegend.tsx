@@ -1,5 +1,5 @@
 import React from "react";
-import { getDiscrepancyLabel } from "@/constants/mapConstants";
+import { getDiscrepancyLabel } from "@/core/constants/mapConstants";
 import styles from "../SpatialMapPreview.module.css";
 
 export interface MapLegendProps {

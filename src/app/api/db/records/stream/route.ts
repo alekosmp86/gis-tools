@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import { STREAMING_RECORD_THRESHOLD, STREAMING_CHUNK_BATCH_SIZE } from "@/constants/databaseConstants";
+import { STREAMING_RECORD_THRESHOLD, STREAMING_CHUNK_BATCH_SIZE } from "@/core/constants/databaseConstants";
 
 export const dynamic = "force-dynamic";
 

@@ -1,11 +1,11 @@
 import { useQuery, useIsMutating } from "@tanstack/react-query";
 import { useComparisonProgress } from "./useComparisonProgress";
-import { DbVsFileComparisonEngine } from "@/services/engines/DbVsFileComparisonEngine";
-import { DbVsDbComparisonEngine } from "@/services/engines/DbVsDbComparisonEngine";
-import type { DbConfig } from "@/types/db";
-import type { ParsedShapefileData } from "@/types/shp";
-import type { ParsedFileDataset } from "@/types/parsers";
-import type { ColumnMappingConfig, ComparisonSummary, ComparisonProgress } from "@/types/comparison";
+import { DbVsFileComparisonEngine } from "@/core/services/engines/DbVsFileComparisonEngine";
+import { DbVsDbComparisonEngine } from "@/core/services/engines/DbVsDbComparisonEngine";
+import type { DbConfig } from "@/core/types/db";
+import type { ParsedShapefileData } from "@/core/types/shp";
+import type { ParsedFileDataset } from "@/core/types/parsers";
+import type { ColumnMappingConfig, ComparisonSummary, ComparisonProgress } from "@/core/types/comparison";
 
 export interface UseDatasetComparisonParams {
   dbConfig: DbConfig;

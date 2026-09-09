@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { SqlPatchGenerator } from "@/workers/comparison/SqlPatchGenerator";
-import { DiscrepancyType, type ColumnMappingConfig, type DiscrepancyItem } from "@/types/comparison";
+import { SqlPatchGenerator } from "@/core/workers/comparison/SqlPatchGenerator";
+import { DiscrepancyType, type ColumnMappingConfig, type DiscrepancyItem } from "@/core/types/comparison";
 
 describe("SqlPatchGenerator", () => {
   const baseMapping: ColumnMappingConfig = {

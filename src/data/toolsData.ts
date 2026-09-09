@@ -1,6 +1,6 @@
 import { GitCompare, FileSpreadsheet, Eye, Database } from "lucide-react";
-import { ToolCategory, type ToolCardData } from "@/types/ui";
-import { BadgeVariant } from "@/types/ui";
+import { ToolCategory, type ToolCardData } from "@/ui-kit/types/ui";
+import { BadgeVariant } from "@/ui-kit/types/ui";
 
 export const toolCategories: string[] = [
   ToolCategory.ALL,

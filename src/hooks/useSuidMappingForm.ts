@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ColumnMappingConfig } from "@/types/comparison";
+import type { ColumnMappingConfig } from "@/core/types/comparison";
 
 export function useSuidMappingForm(
   dbColumns: string[],

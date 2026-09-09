@@ -1,7 +1,7 @@
 import React from "react";
 import { Palette, RotateCcw, Check } from "lucide-react";
-import { MapStrokePattern, type MapFeatureStyle } from "@/types/map";
-import { MAP_STYLE_PRESET_COLORS } from "@/constants/mapConstants";
+import { MapStrokePattern, type MapFeatureStyle } from "@/core/types/map";
+import { MAP_STYLE_PRESET_COLORS } from "@/core/constants/mapConstants";
 import { StyleSliderControl } from "./StyleSliderControl";
 import styles from "./MapStylePopover.module.css";
 

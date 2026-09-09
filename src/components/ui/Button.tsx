@@ -1,5 +1,5 @@
 import React from "react";
-import { ButtonVariant } from "@/types/ui";
+import { ButtonVariant } from "@/ui-kit/types/ui";
 import styles from "./Button.module.css";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

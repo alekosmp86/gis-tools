@@ -8,7 +8,7 @@ import { SqlPatchTabs } from "./SqlPatchTabs";
 import { SqlPatchPreviewBox } from "./SqlPatchPreviewBox";
 import { SqlExecutionModal } from "../SqlExecutionModal";
 import { useSqlPatchDrawerState } from "./useSqlPatchDrawerState";
-import type { DbConfig } from "@/types/db";
+import type { DbConfig } from "@/core/types/db";
 import styles from "./SqlPatchDrawer.module.css";
 
 export interface SqlPatchDrawerProps {

@@ -1,14 +1,14 @@
 import type { FeatureCollection, Feature, Geometry, GeoJsonProperties } from "geojson";
-import { DiscrepancyFilter, DiscrepancyType } from "@/types/comparison";
+import { DiscrepancyFilter, DiscrepancyType } from "@/core/types/comparison";
 import type {
   ComparisonSummary,
   DiscrepancyFilter as DiscrepancyFilterType,
   DiscrepancyItem,
-} from "@/types/comparison";
-import type { ParsedFileDataset } from "@/types/parsers";
-import type { ParsedShapefileData } from "@/types/shp";
-import { cleanSuid } from "@/utils/common/GisStringSanitizer";
-import { normalizeGeometry } from "@/utils/spatial/SpatialGeometryComparator";
+} from "@/core/types/comparison";
+import type { ParsedFileDataset } from "@/core/types/parsers";
+import type { ParsedShapefileData } from "@/core/types/shp";
+import { cleanSuid } from "@/core/common/GisStringSanitizer";
+import { normalizeGeometry } from "@/core/spatial/SpatialGeometryComparator";
 
 /**
  * Builds an index of geometries from an existing FeatureCollection keyed by cleaned SUID.

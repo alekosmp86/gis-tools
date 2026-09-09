@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Feature } from "geojson";
-import { buildFeatureRecordIndex } from "@/utils/spatial/FeatureRecordIndex";
+import { buildFeatureRecordIndex } from "@/core/spatial/FeatureRecordIndex";
 
 function buildFeature(id?: number): Feature {
   return {

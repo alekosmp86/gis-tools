@@ -1,6 +1,6 @@
 import React from "react";
 import { Check } from "lucide-react";
-import type { WizardStepDef } from "@/types/ui";
+import type { WizardStepDef } from "@/ui-kit/types/ui";
 import styles from "./StepIndicator.module.css";
 
 export interface StepIndicatorProps {

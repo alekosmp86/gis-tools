@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Plus, Bookmark, ChevronDown, Check } from "lucide-react";
-import type { SavedDbProfile } from "@/types/db";
+import type { SavedDbProfile } from "@/core/types/db";
 import styles from "./ProfileSelect.module.css";
 
 export interface ProfileSelectProps {

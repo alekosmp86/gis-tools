@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PolygonRingNormalizer } from "@/utils/spatial/PolygonRingNormalizer";
+import { PolygonRingNormalizer } from "@/core/spatial/PolygonRingNormalizer";
 
 describe("PolygonRingNormalizer", () => {
   const normalizer = new PolygonRingNormalizer(10000); // 4 decimal places

@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/Button";
 import { AlertMessage } from "@/components/shared/AlertMessage";
 import { ColumnsList } from "@/components/shared/ColumnsList";
 import { FileDropzone } from "@/components/shared/FileDropzone";
-import { CsvParser } from "@/services/parsers/CsvParser";
-import { MAX_MAP_PREVIEW_FEATURES } from "@/constants/mapConstants";
-import { AlertType } from "@/types/ui";
-import type { ISpatialFileParser, ParsedFileDataset } from "@/types/parsers";
-import { formatNumber, formatFileSize } from "@/utils/common/ValueFormatter";
+import { CsvParser } from "@/core/services/parsers/CsvParser";
+import { MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
+import { AlertType } from "@/ui-kit/types/ui";
+import type { ISpatialFileParser, ParsedFileDataset } from "@/core/types/parsers";
+import { formatNumber, formatFileSize } from "@/core/common/ValueFormatter";
 import styles from "./CsvUploader.module.css";
 
 const SpatialMapPreview = dynamic(

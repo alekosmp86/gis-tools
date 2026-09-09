@@ -1,7 +1,7 @@
 import L from "leaflet";
 import type { Feature } from "geojson";
-import { getDiscrepancyColor, getDashArrayFromPattern } from "@/constants/mapConstants";
-import type { MapFeatureStyle } from "@/types/map";
+import { getDiscrepancyColor, getDashArrayFromPattern } from "@/core/constants/mapConstants";
+import type { MapFeatureStyle } from "@/core/types/map";
 
 /** Cache key used for features that carry no discrepancy type. */
 const DEFAULT_DISCREPANCY_KEY = "__default__";

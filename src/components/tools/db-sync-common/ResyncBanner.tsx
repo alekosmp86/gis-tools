@@ -1,7 +1,7 @@
 import React from "react";
 import { RefreshCw } from "lucide-react";
 import { ProgressBar } from "@/components/shared/ProgressBar";
-import type { ComparisonProgress } from "@/types/comparison";
+import type { ComparisonProgress } from "@/core/types/comparison";
 import styles from "./ResyncBanner.module.css";
 
 export interface ResyncBannerProps {

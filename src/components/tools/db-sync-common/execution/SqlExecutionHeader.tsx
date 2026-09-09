@@ -1,5 +1,5 @@
 import { Database, X, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
-import type { ExecuteBatchResult, ExecuteChunkProgress } from "@/types/db";
+import type { ExecuteBatchResult, ExecuteChunkProgress } from "@/core/types/db";
 import styles from "../SqlExecutionModal.module.css";
 
 export interface SqlExecutionHeaderProps {

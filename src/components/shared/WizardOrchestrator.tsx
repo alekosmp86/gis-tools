@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { StepIndicator } from "@/components/shared/StepIndicator";
-import type { WizardStepDef } from "@/types/ui";
+import type { WizardStepDef } from "@/ui-kit/types/ui";
 import styles from "./WizardOrchestrator.module.css";
 
 export interface WizardOrchestratorProps {

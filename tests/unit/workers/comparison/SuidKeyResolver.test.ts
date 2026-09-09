@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SuidKeyResolver } from "@/workers/comparison/SuidKeyResolver";
+import { SuidKeyResolver } from "@/core/workers/comparison/SuidKeyResolver";
 
 describe("SuidKeyResolver", () => {
   const resolver = new SuidKeyResolver();

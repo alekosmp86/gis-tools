@@ -3,8 +3,8 @@ import { SuidSelectorCard } from "./SuidSelectorCard";
 import { AttributeFieldsCard } from "./AttributeFieldsCard";
 import { GeometryToggleCard } from "../db-shapefile-sync/GeometryToggleCard";
 import { useSuidMappingForm } from "@/hooks/useSuidMappingForm";
-import type { DbColumnMetadata } from "@/types/db";
-import type { ColumnMappingConfig, SuidMappingStepRef } from "@/types/comparison";
+import type { DbColumnMetadata } from "@/core/types/db";
+import type { ColumnMappingConfig, SuidMappingStepRef } from "@/core/types/comparison";
 import styles from "./SuidMappingStep.module.css";
 
 export interface SuidMappingStepProps {

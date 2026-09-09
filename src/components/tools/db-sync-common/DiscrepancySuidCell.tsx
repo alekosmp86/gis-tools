@@ -1,5 +1,5 @@
 import React from "react";
-import type { DiscrepancyItem, ComparisonSourceDescriptor } from "@/types/comparison";
+import type { DiscrepancyItem, ComparisonSourceDescriptor } from "@/core/types/comparison";
 import styles from "./DiscrepancySuidCell.module.css";
 
 export interface DiscrepancySuidCellProps {

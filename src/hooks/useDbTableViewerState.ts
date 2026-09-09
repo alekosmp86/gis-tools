@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStreamDbRecords } from "@/hooks/useDbQueries";
-import { parseRecordsToGeoJson } from "@/utils/spatial/GeoJsonDatasetBuilder";
-import type { DbConfig, DbTableViewerState } from "@/types/db";
+import { parseRecordsToGeoJson } from "@/core/spatial/GeoJsonDatasetBuilder";
+import type { DbConfig, DbTableViewerState } from "@/core/types/db";
 
 const INITIAL_PROGRESS_TEXT = "Conectando a base de datos PostgreSQL...";
 

@@ -6,8 +6,8 @@ import { ToolWorkspaceLayout } from "@/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/components/shared/WizardOrchestrator";
 import { DbConnectionForm } from "@/components/shared/DbConnectionForm";
 import { DbTableViewerContainer } from "@/components/tools/db-table-viewer/DbTableViewerContainer";
-import type { DbConfig, DbConnectionFormRef } from "@/types/db";
-import type { WizardStepDef } from "@/types/ui";
+import type { DbConfig, DbConnectionFormRef } from "@/core/types/db";
+import type { WizardStepDef } from "@/ui-kit/types/ui";
 
 export default function DbTableViewerPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);

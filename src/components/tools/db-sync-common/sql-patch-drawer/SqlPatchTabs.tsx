@@ -1,6 +1,6 @@
 import React from "react";
 import { RefreshCw, PlusSquare } from "lucide-react";
-import { SqlScriptType } from "@/types/comparison";
+import { SqlScriptType } from "@/core/types/comparison";
 import styles from "./SqlPatchDrawer.module.css";
 
 export interface SqlPatchTabsProps {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { FileDatasetIndexer } from "@/workers/comparison/FileDatasetIndexer";
-import type { SerializableFileDataset } from "@/types/workerMessages";
+import { FileDatasetIndexer } from "@/core/workers/comparison/FileDatasetIndexer";
+import type { SerializableFileDataset } from "@/core/types/workerMessages";
 
 describe("FileDatasetIndexer", () => {
   const indexer = new FileDatasetIndexer();

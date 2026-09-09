@@ -1,7 +1,7 @@
 import React from "react";
 import { Table, MapPin, FileCode } from "lucide-react";
-import { ResultsViewTab } from "@/types/comparison";
-import { formatNumber } from "@/utils/common/ValueFormatter";
+import { ResultsViewTab } from "@/core/types/comparison";
+import { formatNumber } from "@/core/common/ValueFormatter";
 import styles from "./ResultsControlsBar.module.css";
 
 type ResultsViewTabType = (typeof ResultsViewTab)[keyof typeof ResultsViewTab];

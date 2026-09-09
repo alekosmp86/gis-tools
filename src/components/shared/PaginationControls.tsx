@@ -1,6 +1,6 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-import { formatNumber } from "@/utils/common/ValueFormatter";
+import { formatNumber } from "@/core/common/ValueFormatter";
 import styles from "./PaginationControls.module.css";
 
 export interface PaginationControlsProps {

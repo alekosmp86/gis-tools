@@ -1,6 +1,6 @@
 import React from "react";
 import { Database, FileSpreadsheet, Layers } from "lucide-react";
-import type { ComparisonIconKind } from "@/types/comparison";
+import type { ComparisonIconKind } from "@/core/types/comparison";
 
 export interface ComparisonIconProps {
   kind: ComparisonIconKind;

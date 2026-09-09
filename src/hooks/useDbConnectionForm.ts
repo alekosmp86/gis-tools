@@ -7,10 +7,10 @@ import {
   saveDbProfileToLocalStorage,
   deleteDbProfileFromLocalStorage,
   generateDefaultProfileName,
-} from "@/services/localStorageDbConfig";
-import { AlertType } from "@/types/ui";
-import { formatNumber } from "@/utils/common/ValueFormatter";
-import type { DbConfig, DbColumnMetadata, DbConnectionStatusPayload, SavedDbProfile } from "@/types/db";
+} from "@/core/services/localStorageDbConfig";
+import { AlertType } from "@/ui-kit/types/ui";
+import { formatNumber } from "@/core/common/ValueFormatter";
+import type { DbConfig, DbColumnMetadata, DbConnectionStatusPayload, SavedDbProfile } from "@/core/types/db";
 
 interface UseDbConnectionFormCallbacks {
   onSuccess: (

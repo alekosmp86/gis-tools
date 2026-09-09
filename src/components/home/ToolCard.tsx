@@ -1,6 +1,6 @@
 import React from "react";
 import { Badge } from "../ui/Badge";
-import type { ToolCardData } from "@/types/ui";
+import type { ToolCardData } from "@/ui-kit/types/ui";
 import styles from "./ToolCard.module.css";
 
 export interface ToolCardProps {

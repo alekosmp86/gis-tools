@@ -1,5 +1,5 @@
 import React from "react";
-import { formatNumber } from "@/utils/common/ValueFormatter";
+import { formatNumber } from "@/core/common/ValueFormatter";
 import styles from "./ColumnsList.module.css";
 
 export interface ColumnsListProps {

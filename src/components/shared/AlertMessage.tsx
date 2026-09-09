@@ -1,6 +1,6 @@
 import React from "react";
 import { CheckCircle2, AlertCircle, Info, AlertTriangle } from "lucide-react";
-import { AlertType } from "@/types/ui";
+import { AlertType } from "@/ui-kit/types/ui";
 import styles from "./AlertMessage.module.css";
 
 export interface AlertMessageProps {
