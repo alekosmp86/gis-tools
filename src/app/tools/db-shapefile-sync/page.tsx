@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Database, Layers, GitMerge, Sliders } from "lucide-react";
+import { Database, Layers } from "lucide-react";
 import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLayout";
 import { ShapefileUploader } from "@/components/tools/db-shapefile-sync/ShapefileUploader";
-import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
-import { SyncParametersStep } from "@/components/tools/db-sync-common/SyncParametersStep";
-import { ComparisonResultsView } from "@/components/tools/db-sync-common/ComparisonResultsView";
+import {
+  buildResultsStep,
+  buildSuidMappingStep,
+  buildSyncParametersStep,
+} from "@/components/tools/db-sync-common/wizardSteps";
 import { DbColumnMetadata, DbConfig, DbConnectionFormRef } from "@/core/types/db";
 import { ParsedShapefileData } from "@/core/types/shp";
 import { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/core/types/comparison";
@@ -105,71 +107,43 @@ export default function DbShapefileSyncToolPage() {
       onNext: () => setCurrentStep(3),
       onBack: () => setCurrentStep(1),
     },
-    {
-      id: 3,
-      title: "Mapeo SUID",
-      subtitle: "Identificador y Atributos",
-      cardTitle: "Configuración de SUID y Campos a Comparar",
-      cardSubtitle: "Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure la comparación de geometrías.",
-      icon: GitMerge,
-      content: shapefileData ? (
-        <SuidMappingStep
-          ref={suidMappingRef}
-          dbColumns={dbColumns}
-          columnDetails={columnDetails}
-          fileAttributes={shapefileData.attributes}
-          onSuccess={handleMappingSuccess}
-          initialConfig={mappingConfig}
-          onReadyChange={setIsMappingReady}
-        />
-      ) : null,
-      canProceed: isMappingReady,
-      nextLabel: "Continuar a Parámetros de Sincronización",
-      onNext: () => suidMappingRef.current?.proceed(),
+    // react-doctor-disable-next-line react-hooks-js/refs
+    // eslint-disable-next-line react-hooks/refs
+    buildSuidMappingStep({
+      ref: suidMappingRef,
+      isSourceReady: Boolean(shapefileData),
+      dbColumns,
+      columnDetails,
+      fileAttributes: shapefileData?.attributes || [],
+      initialConfig: mappingConfig,
+      onReadyChange: setIsMappingReady,
+      onSuccess: handleMappingSuccess,
+      cardSubtitle:
+        "Seleccione una o más columnas como clave SUID única o compuesta, escoja los atributos a comparar y configure la comparación de geometrías.",
       onBack: () => setCurrentStep(2),
-    },
-    {
-      id: 4,
-      title: "Parámetros",
-      subtitle: "Tolerancia y Parches SQL",
-      cardTitle: "Parámetros Avanzados de Sincronización",
-      cardSubtitle: "Configure la tolerancia a fallas de codificación, optimización de sentencias UPDATE y valores por defecto para INSERT.",
-      icon: Sliders,
-      content: (
-        <SyncParametersStep
-          ref={syncParametersRef}
-          dbColumns={dbColumns}
-          columnDetails={columnDetails}
-          initialConfig={mappingConfig}
-          onSuccess={handleSyncParametersSuccess}
-        />
-      ),
-      canProceed: true,
-      nextLabel: "Iniciar Análisis y Comparación",
-      onNext: () => syncParametersRef.current?.proceed(),
+      isMappingReady,
+    }),
+    // react-doctor-disable-next-line react-hooks-js/refs
+    // eslint-disable-next-line react-hooks/refs
+    buildSyncParametersStep({
+      ref: syncParametersRef,
+      dbColumns,
+      columnDetails,
+      initialConfig: mappingConfig,
+      onSuccess: handleSyncParametersSuccess,
       onBack: () => setCurrentStep(3),
-      backLabel: "Volver al Paso 3: Mapeo SUID",
-    },
-    {
-      id: 5,
-      title: "Resultados",
-      subtitle: "Discrepancias y Script",
-      cardTitle: "Resultados de Análisis y Discrepancias",
-      cardSubtitle: dbConfig && shapefileData
-        ? `Correlación realizada entre ${dbConfig.schema_name}.${dbConfig.table_name} y ${shapefileData.fileName}.`
-        : "Visualice las diferencias detectadas y genere scripts SQL de sincronización.",
-      icon: Database,
-      content: dbConfig && shapefileData && mappingConfig ? (
-        <ComparisonResultsView
-          dbConfig={dbConfig}
-          fileDataset={shapefileData}
-          mappingConfig={mappingConfig}
-          descriptor={DB_VS_SHAPEFILE_DESCRIPTOR}
-        />
-      ) : null,
+    }),
+    buildResultsStep({
+      dbConfig,
+      fileDataset: shapefileData,
+      mappingConfig,
+      descriptor: DB_VS_SHAPEFILE_DESCRIPTOR,
+      cardSubtitleWhenReady:
+        dbConfig && shapefileData
+          ? `Correlación realizada entre ${dbConfig.schema_name}.${dbConfig.table_name} y ${shapefileData.fileName}.`
+          : "",
       onBack: () => setCurrentStep(4),
-      backLabel: "Volver al Paso 4: Parámetros de Sincronización",
-    },
+    }),
   ];
 
   return (

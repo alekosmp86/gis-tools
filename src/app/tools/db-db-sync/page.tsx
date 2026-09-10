@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Database, GitMerge, Sliders } from "lucide-react";
+import { Database } from "lucide-react";
 import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 import { DbConnectionForm } from "@/ui-kit/components/DbConnectionForm";
-import { SuidMappingStep } from "@/components/tools/db-sync-common/SuidMappingStep";
-import { SyncParametersStep } from "@/components/tools/db-sync-common/SyncParametersStep";
-import { ComparisonResultsView } from "@/components/tools/db-sync-common/ComparisonResultsView";
+import {
+  buildResultsStep,
+  buildSuidMappingStep,
+  buildSyncParametersStep,
+} from "@/components/tools/db-sync-common/wizardSteps";
 import { DB_VS_DB_DESCRIPTOR } from "@/core/constants/comparisonDescriptors";
 import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/core/types/db";
 import { FileSourceKind, type ParsedFileDataset } from "@/core/types/parsers";
@@ -123,73 +125,45 @@ export default function DbDbSyncToolPage() {
       onNext: () => db2FormRef.current?.proceed(),
       onBack: () => setCurrentStep(1),
     },
-    {
-      id: 3,
-      title: "Mapeo SUID",
-      subtitle: "Identificador y Atributos",
-      cardTitle: "Configuración de SUID y Campos a Comparar",
-      cardSubtitle: "Seleccione una o más columnas como clave SUID única o compuesta y configure atributos a comparar entre ambas tablas.",
-      icon: GitMerge,
-      content: dbColumns1.length > 0 ? (
-        <SuidMappingStep
-          ref={suidMappingRef}
-          dbColumns={dbColumns2}
-          columnDetails={columnDetails2}
-          fileAttributes={dbColumns1}
-          onSuccess={handleMappingSuccess}
-          initialConfig={mappingConfig}
-          showGeometryToggle={false}
-          onReadyChange={setIsMappingReady}
-        />
-      ) : null,
-      canProceed: isMappingReady,
-      nextLabel: "Continuar a Parámetros de Sincronización",
-      onNext: () => suidMappingRef.current?.proceed(),
+    // react-doctor-disable-next-line react-hooks-js/refs
+    // eslint-disable-next-line react-hooks/refs
+    buildSuidMappingStep({
+      ref: suidMappingRef,
+      isSourceReady: dbColumns1.length > 0,
+      dbColumns: dbColumns2,
+      columnDetails: columnDetails2,
+      fileAttributes: dbColumns1,
+      initialConfig: mappingConfig,
+      showGeometryToggle: false,
+      onReadyChange: setIsMappingReady,
+      onSuccess: handleMappingSuccess,
+      cardSubtitle:
+        "Seleccione una o más columnas como clave SUID única o compuesta y configure atributos a comparar entre ambas tablas.",
       onBack: () => setCurrentStep(2),
-    },
-    {
-      id: 4,
-      title: "Parámetros",
-      subtitle: "Tolerancia y Parches SQL",
-      cardTitle: "Parámetros Avanzados de Sincronización",
-      cardSubtitle: "Configure la tolerancia a fallas de codificación, optimización de sentencias UPDATE y valores por defecto para INSERT.",
-      icon: Sliders,
-      content: (
-        <SyncParametersStep
-          ref={syncParametersRef}
-          dbColumns={dbColumns2}
-          columnDetails={columnDetails2}
-          initialConfig={mappingConfig}
-          onSuccess={handleSyncParametersSuccess}
-        />
-      ),
-      canProceed: true,
-      nextLabel: "Iniciar Análisis y Comparación",
-      onNext: () => syncParametersRef.current?.proceed(),
+      isMappingReady,
+    }),
+    // react-doctor-disable-next-line react-hooks-js/refs
+    // eslint-disable-next-line react-hooks/refs
+    buildSyncParametersStep({
+      ref: syncParametersRef,
+      dbColumns: dbColumns2,
+      columnDetails: columnDetails2,
+      initialConfig: mappingConfig,
+      onSuccess: handleSyncParametersSuccess,
       onBack: () => setCurrentStep(3),
-      backLabel: "Volver al Paso 3: Mapeo SUID",
-    },
-    {
-      id: 5,
-      title: "Resultados",
-      subtitle: "Discrepancias y Script",
-      cardTitle: "Resultados de Análisis y Discrepancias",
-      cardSubtitle: dbConfig1 && dbConfig2
-        ? `Correlación realizada entre DB 1 (${dbConfig1.db_name}.${dbConfig1.table_name}) y DB 2 (${dbConfig2.db_name}.${dbConfig2.table_name}).`
-        : "Visualice las diferencias detectadas y genere scripts SQL de sincronización.",
-      icon: Database,
-      content: dbConfig2 && sourceDataset && mappingConfig ? (
-        <ComparisonResultsView
-          dbConfig={dbConfig2}
-          fileDataset={sourceDataset}
-          mappingConfig={mappingConfig}
-          sourceDbConfig={dbConfig1 || undefined}
-          descriptor={DB_VS_DB_DESCRIPTOR}
-        />
-      ) : null,
+    }),
+    buildResultsStep({
+      dbConfig: dbConfig2,
+      fileDataset: sourceDataset,
+      mappingConfig,
+      sourceDbConfig: dbConfig1 || undefined,
+      descriptor: DB_VS_DB_DESCRIPTOR,
+      cardSubtitleWhenReady:
+        dbConfig1 && dbConfig2
+          ? `Correlación realizada entre DB 1 (${dbConfig1.db_name}.${dbConfig1.table_name}) y DB 2 (${dbConfig2.db_name}.${dbConfig2.table_name}).`
+          : "",
       onBack: () => setCurrentStep(4),
-      backLabel: "Volver al Paso 4: Parámetros de Sincronización",
-    },
+    }),
   ];
 
   return (
