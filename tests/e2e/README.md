@@ -59,7 +59,7 @@ Este directorio alberga la suite de pruebas de caracterización y extremo a extr
 
 - Todos los tests utilizan el runner extendido en `tests/e2e/support/testFixture.ts`.
 - **Detección Automática de Anomalías**:
-  - Cualquier llamada a `console.error` o evento `pageerror` (como desajustes de hidratación en React, promesas rechazadas no capturadas o errores de React Query) provoca la falla inmediata del test.
+  - Cualquier llamada a `console.error` o evento `pageerror` (como desajustes de hidratación en React, promesas rechazadas no capturadas o errores de React Query) es capturada e inspeccionada en la etapa de teardown, provocando la falla del test al finalizar su ejecución si se detectaron anomalías no permitidas.
 - **Excepción Explícita para Flujos de Error**:
   - Si un test evalúa intencionalmente una ruta de error que genera logs en consola (ej. respuesta HTTP 400/500 del servidor), debe invocar explícitamente:
     ```ts
