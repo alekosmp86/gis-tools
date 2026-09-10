@@ -529,3 +529,298 @@ unit tests must remain byte-identical. Playwright spec count may only go up from
 (H1-H10) and state plainly anything not done and why.
 
 Do not commit.
+
+---
+
+# Mission — extract the shared wizard steps (God-component sweep, target 1 of 2)
+
+> Previous mission (Playwright characterization safety net) merged to `main`. 313 unit tests, 23
+> Playwright specs, all green. This mission is the first thing that safety net was built to protect.
+
+**Branch**: `refactor/sync-wizard-shared-steps`, cut from `main`.
+**Note**: `npm` is not on PATH — prepend `C:\Alekos\Tools\node24portable` per
+`.agents/rules/portable_node.md`.
+
+## Why — and why NOT the other "God" candidates
+
+The orchestrator swept every file in the top 20 by import fan-out (regenerated dependency graph,
+193 files / 504 imports / 0 cycles) and read each one's actual structure, not just its size. Full
+verdict below. **Only two are real; everything else is a false positive** — high fan-out produced by
+good decomposition (a composition root injecting many already-tested, single-purpose collaborators),
+not by God-component sprawl. Do not "fix" anything in the false-positive list; that would be
+churn against working, well-factored code.
+
+| File | Fan-out / LOC | Verdict | Why |
+|---|---|---|---|
+| `app/tools/db-{csv,shapefile,db}-sync/page.tsx` | 11-12 / 172-207 | **REAL — this mission** | Steps 3-4-5 of the wizard are near-verbatim duplicated three times |
+| `components/tools/db-sync-common/ComparisonResultsView.tsx` | 16 / 177 | **REAL — separate mission, see below** | Genuinely mixes tab state, worker invocation, geojson loading, search state, resync banner |
+| `core/workers/comparison/SpatialComparisonEngine.ts` | 13 / 269 | False positive | DI composition root, 8 injected single-purpose collaborators, each independently tested |
+| `components/tools/db-csv-sync/CsvUploader.tsx`, `ShapefileUploader.tsx`, `file-viewer/FileViewerUploader.tsx` | 7-12 / 135-196 | False positive | Three siblings of the same shape: drag-drop boilerplate, parsing delegated to a tested parser class |
+| `components/tools/db-sync-common/sql-patch-drawer/SqlPatchDrawer.tsx` | 10 / 132 | False positive | Textbook: composes 8 pre-decomposed sub-components, state lives in `useSqlPatchDrawerState` |
+| `app/page.tsx` | 10 / 66 | False positive | Thin page composing 7 named atomic components — the *result* of good decomposition, not a symptom of bad |
+| `modules/cartography-watcher/manifest.ts` | 8 / 60 | False positive | Purely declarative wiring object, zero logic |
+| `modules/cartography-watcher/services/WatcherOrchestrator.ts` | 8 / 256 | False positive | Already reviewed three rounds deep in the prior mission; composition root, ten short methods. Flagged then as "next to split if an 11th operation lands" — still not now |
+| `ui-kit/components/SpatialMapPreview.tsx` | 8 / 107 | False positive | Composes 3 sub-components + a dedicated `useLeafletMap` hook |
+| `components/tools/db-sync-common/discrepancies-table/DiscrepanciesTable.tsx` | 7 / 64 | False positive | Perfect orchestrator: state in a hook, renders 4 dedicated children |
+| `components/tools/db-table-viewer/DbTableViewerContainer.tsx`, `file-viewer/FileViewerContainer.tsx` | 7-8 / 89-110 | False positive | Thin containers delegating to sub-components and hooks |
+| `hooks/useDatasetComparison.ts` | 7 / 97 | False positive | Thin React Query hook, actual comparison work delegated to two engine classes |
+| `ui-kit/hooks/useDbConnectionForm.ts` | 6 / 209 | **Real but minor — explicitly out of scope, see below** | Mixes connection-form state with saved-profile CRUD (select/save/update/delete + localStorage) |
+
+## The target
+
+Read all three pages in full (`db-csv-sync/page.tsx` 184 lines, `db-shapefile-sync/page.tsx` 183,
+`db-db-sync/page.tsx` 207). Finding, precise: **steps 3, 4 and 5 — SUID mapping, sync parameters,
+results — are near-verbatim identical across all three pages.** Step 4 (`SyncParametersStep`) is
+byte-for-byte identical wiring in every page: same title/subtitle/cardTitle/cardSubtitle/icon, same
+`nextLabel`, same `backLabel`, same `onBack`. Step 3 and step 5 differ only in a few interpolated
+strings and which page-local state feeds them.
+
+**Steps 1 (and step 2 for db-db) are genuinely different, not duplicated**: CSV/shapefile use
+`DbConnectionForm` + a file uploader; db-db uses `DbConnectionForm` twice, wired to two independent
+pieces of state, with no upload step at all. Do not force these into a shared abstraction.
+
+## Binding decisions
+
+**D1 — scope is the shared-step extraction only.** `ComparisonResultsView`'s internal decomposition
+is a separate, later mission on its own branch, not touched here. The two refactors are independent
+files; doing them together doubles the blast radius the moment either one goes wrong, and conflates
+two structural changes in front of one review cycle. Sequence: this mission merges and is stable
+first.
+
+**D2 — no generic `<SyncWizardShell>` component or hook.** Do not build an abstraction that
+parametrizes over step count, uploader type, or "how many sources." Steps 1 and 2 stay hand-written,
+per page, exactly as they are today. Forcing db-db's two-DB-connection shape and the other two tools'
+one-DB-plus-upload shape into one parametrized shell needs conditional branching that costs more than
+the duplication it removes — precisely the over-abstraction `.agents/rules/code_review_standards.md`
+§2 warns against. If you find yourself writing a discriminated union or a `hasUpload: boolean` prop,
+stop — that is the wrong direction.
+
+**D3 — extract three pure step-factory functions**, not a component, into a new file
+`src/components/tools/db-sync-common/wizardSteps.tsx`:
+
+```ts
+export function buildSuidMappingStep(params: BuildSuidMappingStepParams): WizardStepDef
+export function buildSyncParametersStep(params: BuildSyncParametersStepParams): WizardStepDef
+export function buildResultsStep(params: BuildResultsStepParams): WizardStepDef
+```
+
+Each is a pure function: given typed params, return a `WizardStepDef` (`src/ui-kit/types/ui.ts:79`).
+No React state, no hooks inside the factories — refs, callbacks and already-computed values are
+passed in by the page, which still owns all state exactly as it does today. This keeps the factories
+trivially testable in isolation later if ever needed, and keeps every page's state ownership
+unchanged — only the step *object construction* moves.
+
+**Exact parameter contracts — do not redesign these, copy them:**
+
+```ts
+export interface BuildSuidMappingStepParams {
+  ref: React.RefObject<SuidMappingStepRef | null>;
+  isSourceReady: boolean;           // gates content: csvDataset ? ... : null, etc.
+  dbColumns: string[];
+  columnDetails?: DbColumnMetadata[];
+  fileAttributes: string[];         // "the other side's" attributes — csvDataset.attributes /
+                                     // shapefileData.attributes / dbColumns1 for db-db
+  initialConfig: ColumnMappingConfig | null;
+  showGeometryToggle?: boolean;     // CSV passes true, shapefile omits (defaults true), db-db passes false — preserve exactly
+  onReadyChange: (ready: boolean) => void;
+  onSuccess: (config: ColumnMappingConfig) => void;
+  cardSubtitle: string;             // VARIES — db-db's wording differs from CSV/shapefile's. Pass verbatim per page, do not unify the text.
+  onBack: () => void;               // setCurrentStep(2) for CSV/shapefile, setCurrentStep(2) for db-db too — still pass explicitly, do not hardcode
+}
+
+export interface BuildSyncParametersStepParams {
+  ref: React.RefObject<SyncParametersStepRef | null>;
+  dbColumns: string[];
+  columnDetails?: DbColumnMetadata[];
+  initialConfig: ColumnMappingConfig | null;
+  onSuccess: (finalConfig: ColumnMappingConfig) => void;
+  onBack: () => void;               // every page does setCurrentStep(3) — pass it anyway, the factory cannot reach page state
+}
+// title/subtitle/cardTitle/cardSubtitle/icon/nextLabel/backLabel are IDENTICAL in all three pages
+// today (verified) — hardcode them inside the factory. Do not add params for these.
+
+export interface BuildResultsStepParams {
+  dbConfig: DbConfig | null;
+  fileDataset: ParsedShapefileData | ParsedFileDataset | null;
+  mappingConfig: ColumnMappingConfig | null;
+  sourceDbConfig?: DbConfig;
+  descriptor: ComparisonSourceDescriptor;
+  cardSubtitleWhenReady: string;    // VARIES — the interpolated "Correlación realizada entre X y Y." text per tool
+  onBack: () => void;               // every page does setCurrentStep(4)
+}
+// cardSubtitleDefault ("Visualice las diferencias detectadas y genere scripts SQL de
+// sincronización.") is IDENTICAL in all three — hardcode it. content gating
+// (dbConfig && fileDataset && mappingConfig ? <ComparisonResultsView .../> : null) belongs inside
+// the factory.
+```
+
+**D4 — preserve every user-facing string byte for byte.** Headings, subtitles, button labels — the
+Playwright suite asserts many of them literally (`getByRole("heading", { name: "..." })`,
+`getByRole("button", { name: "Solo en Archivo CSV" })`, etc.). A single re-wrapped sentence breaks a
+test for a reason that has nothing to do with structure. Where a string is confirmed identical across
+all three pages (see contracts above), hardcode it in the factory; where it varies, it must arrive as
+a parameter, verbatim from the current page source.
+
+**D5 — do not touch `WizardOrchestrator`, `StepIndicator`, or the `key={step-content-${activeStep.id}}`
+remount.** That remount is a pinned defect (`useDbConnectionForm` never fires `onStatusChange` on
+mount, so the parent's `isDbConnected` survives a step-content remount the child's internal state does
+not) with a dedicated Playwright assertion in all three wizard specs
+(`support/wizardSteps.ts:assertStep1RemountQuirk`). This mission does not fix it and must not
+accidentally remove it by restructuring how step content mounts.
+
+**D6 — the Playwright suite is the acceptance gate, not a formality.** All 23 specs must pass with
+**zero assertion changes** — the point of this mission is proving the safety net built for exactly
+this refactor actually holds. Import-path changes are fine if a spec imports something that moved;
+an assertion text or locator change is not, and signals the refactor altered behaviour.
+
+**D7 — each page keeps its own state, refs and step 1 (and step 2 for db-db) exactly as they are.**
+Only the construction of step objects 3/4/5 moves into the shared factories. Do not lift state into
+the new file, do not add a fourth abstraction layer.
+
+## Explicitly out of scope
+
+- **`ComparisonResultsView` decomposition.** Real finding, separate mission, sequenced after this one
+  merges and is verified stable (D1).
+- **`useDbConnectionForm` profile-CRUD split.** Real but minor — the hook mixes connection-form state
+  with saved-profile CRUD and localStorage persistence, which are two different concerns. Not a "God
+  component" by size or by the user's framing (it is 209 lines with 9 reasonably-sized handlers), and
+  unrelated to the wizard-duplication problem this mission solves. Log it; do not touch it here.
+- **Any change to `WizardOrchestrator`, `StepIndicator`, or any `ui-kit` component** (D5).
+- **Any change to production API routes, handlers, or the comparison engines.**
+- **Adding component-test infrastructure.** The Playwright suite already covers this surface — that
+  is the entire premise of doing this refactor now rather than earlier.
+- **Every false positive in the table above.** Do not "clean up" `SpatialComparisonEngine`,
+  `SqlPatchDrawer`, `app/page.tsx`, or anything else in that list. They are not in scope because they
+  are not broken.
+
+## Rules that bind this work
+
+`AGENTS.md`, `.agents/rules/coding_guidelines.md`, `.agents/rules/module_authoring.md`,
+`.agents/rules/testing_standards.md`, `.agents/rules/code_review_standards.md` (the review that
+follows this mission will be judged against §2 — architecture, duplication, over-abstraction —
+explicitly, not just correctness).
+
+## Definition of done
+
+Full gauntlet green, real output pasted into `.agents/handoff/TO_ORCHESTRATOR.md`:
+
+```
+npm run modules:routes:check
+npm run lint
+npm test
+npm run build
+npm run doctor
+npm run test:e2e
+npm run test:coverage
+```
+
+313 unit tests unchanged. **All 23 Playwright specs pass with zero assertion changes** — this is the
+literal acceptance criterion, not a nice-to-have. Report the LOC delta on the three page files and
+confirm `wizardSteps.tsx` is the only new file. State plainly anything you could not preserve exactly
+and why.
+
+Do not commit.
+
+---
+
+# Fix round 1 — narrow the suppression, tighten one contract
+
+The gauntlet re-ran green independently (routes ✅, lint ✅, 313/313 unit tests ✅ — `git diff main --
+tests/` empty, build ✅, doctor 100/100 ✅). Two independent reviewers (the orchestrator's own read and
+a fresh-context `code-reviewer` subagent) read every line of `wizardSteps.tsx` and all three pages in
+full, not just the diff hunks, and cross-checked every hardcoded and interpolated string against
+`git show main:...` for each original page. D1, D2, D4, D5, D6, D7 all hold exactly. Both reviewers
+independently traced the `hasDatasets`/`cardSubtitleWhenReady` gating in `buildResultsStep` for
+`db-db-sync` specifically — `sourceDataset` is derived as `dbConfig1 ? {...} : null`, so it is truthy
+iff `dbConfig1` is — and confirmed the factory's `Boolean(params.dbConfig && params.fileDataset)` is a
+true logical equivalent of the original page's `dbConfig1 && dbConfig2` subtitle condition, not just a
+superficial match. **This is a clean extraction.** Everything below is the one real defect and one
+contract tightening — nothing here questions the shape of the refactor itself.
+
+## R1 [MAJOR] — the ESLint suppression is scoped to the wrong boundary
+
+`eslint.config.mjs:100-106` disables `react-hooks/refs` for the glob `src/app/tools/**/*.{ts,tsx}`,
+which matches **5 page files** — but only 3 (`db-csv-sync`, `db-db-sync`, `db-shapefile-sync`)
+actually pass a `RefObject` into a factory function during render, the one pattern that legitimately
+trips this rule. Verified by grep: `db-table-viewer/page.tsx` uses `ref={dbFormRef}` as a JSX prop and
+`dbFormRef.current` only inside an event-callback `onNext` — the *safe* pattern the rule is designed
+to allow through. `file-viewer/page.tsx` and `m/cartography-watcher/page.tsx` don't reference `.current`
+at all. All three match the glob anyway and lose the check for no reason, as would any future file
+dropped into `src/app/tools/**`.
+
+> A later change to `db-table-viewer/page.tsx` (or a new tool page) reads `someRef.current` inline
+> during render — exactly the bug class `react-hooks/refs` exists to catch, per its own message
+> ("Accessing a ref value during render can cause your component not to update as expected").
+> `npm run lint` stays green because the rule is off for the whole directory. The regression ships and
+> surfaces only as flaky/stale UI state, never as a caught lint error.
+
+**Fix:** Delete the `eslint.config.mjs:100-106` block entirely. Add
+`// eslint-disable-next-line react-hooks/refs` immediately above each of the 6 factory call sites
+(`buildSuidMappingStep(...)` / `buildSyncParametersStep(...)` in each of the three pages) — the exact
+same line those calls already carry for the React Doctor diagnostic
+(`// react-doctor-disable-next-line react-hooks-js/refs`). This is not a new pattern: the codebase
+already prefers line-level or narrowly-scoped overrides over directory-wide ones (see
+`eslint.config.mjs:92-98`, scoped to `tests/e2e/support/**` specifically because that is where the
+callback-triggers-rules-of-hooks pattern actually occurs). Do the same here.
+
+This does not reopen D1/D2/D3. `ISSUE_028`'s Option A (container components) and Option B (invert
+control, drop `ref` from the factory params) are both real engineering options but solve a bigger
+problem than the one that exists — the ref-in-params contract itself is fine, only the suppression's
+blast radius is wrong. See Rejected below.
+
+## R2 [MINOR] — `isMappingReady` is an optional param every caller supplies unconditionally
+
+`wizardSteps.tsx:29,71`: `BuildSuidMappingStepParams.isMappingReady?: boolean` with a
+`params.isMappingReady ?? true` fallback feeding `canProceed`. All three call sites
+(`db-csv-sync/page.tsx:124`, `db-db-sync/page.tsx:142`, `db-shapefile-sync/page.tsx:123`) pass it
+every time. An optional field that is always supplied is a weak contract per
+`code_review_standards.md` §2 ("optional fields that are always present"): the `?? true` branch is
+dead in practice, and a caller that forgets to pass it would silently get `canProceed: true` — a wizard
+step advancing when it shouldn't — instead of a type error at the call site.
+
+**This one is mine, not yours.** D3's published parameter contract for `BuildSuidMappingStepParams`
+never included a field for `canProceed`'s source at all — an omission in the plan, not a decision you
+made. You correctly noticed every page needed `canProceed: isMappingReady` and patched the gap by
+adding an optional param. The fix is small: make it `isMappingReady: boolean` (required), drop the
+`?? true` fallback, update the three call sites to pass it as already-typed (no behavior change, they
+already do).
+
+## Rejected — do not implement
+
+- **`ISSUE_028` Option A (idiomatic container components, e.g. `<SuidMappingStepPanel ref={...} />`)
+  and Option B (invert control, remove `ref` from the factory params entirely).** Both are real,
+  reasonable designs, and both were on the table pending this review. Rejected for this round: the
+  actual defect is an over-broad ESLint glob, not a flaw in D3's ref-in-params contract — R1's
+  line-level fix removes the compiler-safety hole with zero architectural change and zero risk to the
+  already-verified 23 Playwright specs. Revisit Option A/B only if a future factory needs to hold ref
+  logic that a line-level suppression can no longer localize cleanly; not needed here.
+
+## Definition of done
+
+Gauntlet green again, real output pasted: `modules:routes:check`, `lint`, `test`, `build`, `doctor`,
+plus `test:e2e` (all 23 specs, zero assertion changes — same acceptance bar as the mission). 313 unit
+tests byte-identical. Report per id (R1, R2). State plainly anything not done and why.
+
+Do not commit.
+
+---
+
+# Review round 2 — approved, no findings
+
+Independently re-verified by two readers (the orchestrator, and a fresh-context `code-reviewer`
+subagent that ran its own gauntlet): `modules:routes:check` ✅, `lint` ✅ 0/0, `test` ✅ 313/313,
+`build` ✅ clean TypeScript + Turbopack, `doctor` ✅ 100/100. `git diff main -- tests/` empty.
+
+**R1 — fully resolved.** `eslint.config.mjs` reverted byte-for-byte to `main` (confirmed empty diff).
+All 6 factory call sites carry `// eslint-disable-next-line react-hooks/refs` alongside the existing
+`// react-doctor-disable-next-line react-hooks-js/refs`. `db-table-viewer/page.tsx`,
+`file-viewer/page.tsx`, and `m/cartography-watcher/page.tsx` are untouched and still covered by the
+rule.
+
+**R2 — fully resolved.** `isMappingReady: boolean` is required in `BuildSuidMappingStepParams`;
+`canProceed: params.isMappingReady` has no fallback. All three callers already supplied it; build
+confirms no caller broke.
+
+No new findings survive from either read — no unused imports, no dead suppression comments, no string
+drift introduced by the fix itself. This mission is clean. Next step (branch promotion / commit) is
+the user's call, not implied here.
