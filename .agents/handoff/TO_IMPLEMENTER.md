@@ -824,3 +824,167 @@ confirms no caller broke.
 No new findings survive from either read — no unused imports, no dead suppression comments, no string
 drift introduced by the fix itself. This mission is clean. Next step (branch promotion / commit) is
 the user's call, not implied here.
+
+---
+
+# Mission — fix the Luso-letter gap in GisEncodingNormalizer
+
+**Branch**: `fix/gis-encoding-normalizer-luso-letters`, cut from `main`.
+**Note**: `npm` is not on PATH — prepend `C:\Alekos\Tools\node24portable` per
+`.agents/rules/portable_node.md`.
+
+## The bug
+
+User-reported (screenshot from a live `db-db-sync` run, table `nombre_via`, department RIVERA):
+`"EPAMINONDAS MENDONÇA"` (DB) vs `"EPAMINONDAS MENDON\uFFFDA"` (file, DBCS-corrupted) is flagged as
+`Diferencia de Atributos` — a real difference — when it should be tolerated as the same encoding
+artifact the comparator already tolerates for standard Spanish text.
+
+## Root cause (diagnosed, orchestrator, do not re-investigate)
+
+`src/core/common/GisEncodingNormalizer.ts`. `areAttributesEquivalent` correctly detects the
+corrupted glyph (`CORRUPTED_GLYPH_REGEX` already matches `\uFFFD` — that part is fine) and calls
+`matchesCorruptedAgainstClean`, which builds a regex wildcard to align the corrupted span against
+the clean reference string via `resolveGlitchWildcard` (lines ~129-199).
+
+The wildcard classes, and every letter/case test feeding them, are hardcoded to standard Spanish
+accented letters only: `[A-ZÁÉÍÓÚÑÜ]` / `[a-záéíóúñü]` — see the `hasUpper`/`hasLower` checks
+(lines 137-138), the returned wildcard classes (142, 145, 187, 195, 198), and the
+prevLetter/nextLetter boundary-scan regexes (152, 156, 168, 172). RIVERA borders Brazil, so surnames
+carry Portuguese letters — Ç, Ã, Õ, Â, À, Ê, Ô, Ì, Ù and lowercase forms. None of those are in the
+class, so when one is corrupted to `\uFFFD` the generated regex cannot match it against the clean
+DB value, `matchesCorruptedAgainstClean` returns `false`, and the attribute is wrongly flagged as
+different. Confirmed by hand: `"EPAMINONDAS MENDON\uFFFDA"` vs `"EPAMINONDAS MENDONÇA"` fails today.
+
+## Required fix
+
+Do not hand-add more accented letters to the hardcoded classes — the file's own docstring claims
+this module is algorithmic with "ZERO hardcoded pairs" / no lookup tables, and a Spanish-only
+whitelist contradicts that for any border-region or foreign-origin name. **Generalize instead**:
+replace every hardcoded Latin-accented character class used for letter/case/boundary detection in
+this file with Unicode property escapes under the `u` regex flag — `\p{Lu}` (uppercase letter),
+`\p{Ll}` (lowercase letter), `\p{L}` (any letter) as appropriate for each site:
+
+- `hasUpper` / `hasLower` checks (lines 137-138) → test against `\p{Lu}` / `\p{Ll}` with `u` flag.
+- The four wildcard classes `resolveGlitchWildcard` returns (142, 145, 187, 195) → `\p{Lu}{min,max}`
+  or `\p{Ll}{min,max}` respectively; the mixed-case fallback (198) → `\p{L}{min,max}`.
+- The prevLetter/nextLetter boundary scans (152, 156, 168, 172) and the `isPrevUpper`/`isPrevLower`/
+  `isNextUpper`/`isNextLower` checks (177-180) → `\p{L}` for "is a letter", `\p{Lu}`/`\p{Ll}` for
+  case.
+- Every regex literal touched needs the `u` flag added (required for `\p{...}` to work in JS).
+
+Do not touch `CORRUPTED_GLYPH_REGEX` / `CORRUPTED_GLYPH_GLOBAL_REGEX` (corruption detection is
+already correct) or `WIN1252_LOOKUP` / `algorithmicUnmojibake` (unrelated code path). Preserve
+exactly: strict case sensitivity, strict punctuation sensitivity, and the `{minLetters,maxLetters}`
+length bounds (`matchLength` to `matchLength * 2`) on every wildcard.
+
+## Tests required
+
+In `tests/unit/utils/common/GisEncodingNormalizer.test.ts`, following the file's existing AAA style
+(see e.g. line 101's "should resolve Hangul double-byte corruption..." test):
+
+1. `areAttributesEquivalent` tolerates `"EPAMINONDAS MENDONÇA"` (DB) vs
+   `"EPAMINONDAS MENDON\uFFFDA"` (file) with `ignoreEncodingArtifacts: true` — the reported bug,
+   pinned as a regression test.
+2. Same pair rejected when `ignoreEncodingArtifacts: false` — existing strict-mode contract
+   preserved.
+3. Case sensitivity still strict with a Ç-bearing string: uppercase corrupted span must not match a
+   lowercase clean span (mirror the existing "should strictly enforce case sensitivity even when
+   corrupted" test at line 129, using Ç/ç instead of Ñ/ñ).
+4. A second Luso letter (Ã/ã) to prove the fix isn't Ç-specific, e.g. a DB value containing "ÃGUA"
+   or similar against a `\uFFFD`-corrupted file value.
+5. Confirm every existing test in the file still passes unchanged — do not weaken or delete any
+   existing assertion.
+
+Run the full existing test file, plus grep the repo for other consumers of `GisEncodingNormalizer`
+(e.g. spatial/comparison workers) and re-run whatever unit suites touch them, to confirm broadening
+the letter classes to `\p{L}` introduces no regression.
+
+## Out of scope
+
+- `CORRUPTED_GLYPH_REGEX`, `CORRUPTED_GLYPH_GLOBAL_REGEX`, `WIN1252_LOOKUP`, `algorithmicUnmojibake`,
+  `repairEncoding` — untouched, this bug is not there.
+- Any other file. This is a single-file, single-concern fix.
+- Adding a hardcoded lookup table of "other languages' letters" — that is exactly the pattern being
+  removed, not extended.
+
+## Rules that bind this work
+
+`.agents/rules/testing_standards.md`, `.agents/rules/code_review_standards.md`.
+
+## Definition of done
+
+Gauntlet green with real output pasted into `.agents/handoff/TO_ORCHESTRATOR.md`:
+`modules:routes:check`, `lint`, `test`, `build`, `doctor`. The full existing 313-test unit suite
+(now +5 or so with the new cases) must pass; no existing assertion altered. Report the new test
+count and paste the relevant `test` gate output.
+
+Do not commit.
+
+---
+
+# Fix round 1 — word-initial capital letters still mismatch
+
+The gauntlet re-ran green independently (routes ✅, lint ✅, 317/317 unit tests ✅, build ✅,
+doctor 100/100 ✅). A fresh-context `code-reviewer` confirmed the `u`-flag change is safe (no new
+regex-throw risk on realistic street/address text, verified by fuzzing the escape function), single
+BMP code units cover the whole Spanish/Portuguese accented alphabet (no surrogate-pair risk), and
+the only production consumer chain (`GisStringSanitizer` → `SuidKeyResolver` /
+`FeatureAttributeExtractor`) passes unchanged. **The Ç/Ã fix itself is correct and stays.**
+
+## F1 [MAJOR] — word-initial corrupted letter infers the wrong case from the next letter alone
+
+`GisEncodingNormalizer.ts`, `resolveGlitchWildcard`'s mixed-case branch (~lines 148-198). When a
+corrupted glyph sits at the very start of a word (no `prevLetter` — the backward scan hits a space
+or string start first), the code falls back to guessing the corrupted letter's case from the single
+following letter: `(prevLetter === "" && isNextUpper)` → `\p{Lu}`, `(prevLetter === "" &&
+isNextLower)` → `\p{Ll}`. That guess is only valid for ALL-CAPS or all-lowercase words. It is wrong
+for Title Case — a capitalized first letter followed by lowercase letters, which is the normal
+shape of a place name.
+
+**Confirmed failing today** (reviewer verified by direct execution, reproducible on `main` too with
+a plain-Spanish equivalent — this is a pre-existing defect in the exact branch this mission
+rewrote, not a new regression):
+
+```ts
+GisEncodingNormalizer.areAttributesEquivalent(
+  "Cachoeira do Sul Ãgua Branca",
+  "Cachoeira do Sul �gua Branca",
+  { ignoreEncodingArtifacts: true }
+); // returns false — should be true
+```
+
+`Água` is exactly the shape of name this mission exists to tolerate (RIVERA/border-region place
+names are typically Title Case), so leaving this branch broken defeats the point of generalizing
+the heuristic in the first place.
+
+**Required fix:** when `prevLetter === ""` (no letter precedes the corrupted span — start of word
+or string), do **not** infer the corrupted letter's case from `nextLetter` alone. Drop the two
+`prevLetter === "" && isNextUpper` / `prevLetter === "" && isNextLower` branches and let word-initial
+corrupted letters fall through to the existing generic `\p{L}{min,max}` wildcard (the same fallback
+already used for genuinely mixed-case strings). This only loosens case-strictness for the single
+corrupted glyph at a word boundary where the case is genuinely ambiguous from local context — every
+other character in the string, including the rest of the same word, remains a literal, case-strict
+comparison. Do not touch the `isPrevUpper`/`isPrevLower` branches (those stay correct — a letter
+*within* a word, with a real preceding letter to anchor on, keeps its existing inference).
+
+**Add the regression test** the reviewer's finding implies: the exact `"Cachoeira do Sul Ãgua
+Branca"` case above, asserting `true` with `ignoreEncodingArtifacts: true`. Also add one negative
+control confirming case-strictness is not lost elsewhere: a mid-word corrupted letter with a real
+`prevLetter` must still reject a wrong-case clean counterpart (this already has coverage via the
+existing "should strictly enforce case sensitivity" tests — just confirm it still passes, no new
+test required there unless you find a gap).
+
+## Rejected — do not implement
+
+- Any deeper redesign of the case-inference heuristic (e.g. multi-letter lookahead to distinguish
+  Title Case from ALL-CAPS at word start). Falling through to `\p{L}` at word boundaries is the
+  narrow, correct-enough fix; do not build a more elaborate disambiguation scheme.
+
+## Definition of done
+
+Gauntlet green again, real output pasted: `modules:routes:check`, `lint`, `test`, `build`,
+`doctor`. 313 pre-existing + prior-round tests byte-identical; only additions. Report F1's
+resolution and paste the `test` gate output showing the new count.
+
+Do not commit.
