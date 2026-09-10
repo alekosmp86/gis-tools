@@ -175,5 +175,75 @@ describe("GisEncodingNormalizer", () => {
       expect(GisEncodingNormalizer.areAttributesEquivalent(null, "")).toBe(false);
       expect(GisEncodingNormalizer.areAttributesEquivalent("ABC", null)).toBe(false);
     });
+
+    it("should tolerate a corrupted Luso surname letter (Ç) against clean database text when tolerance is enabled", () => {
+      // Arrange
+      const dbValue = "EPAMINONDAS MENDONÇA";
+      const fileValue = "EPAMINONDAS MENDON�A";
+
+      // Act
+      const result = GisEncodingNormalizer.areAttributesEquivalent(dbValue, fileValue, {
+        ignoreEncodingArtifacts: true,
+      });
+
+      // Assert
+      expect(result).toBe(true);
+    });
+
+    it("should reject the corrupted Luso surname match when tolerance is disabled", () => {
+      // Arrange
+      const dbValue = "EPAMINONDAS MENDONÇA";
+      const fileValue = "EPAMINONDAS MENDON�A";
+
+      // Act
+      const result = GisEncodingNormalizer.areAttributesEquivalent(dbValue, fileValue, {
+        ignoreEncodingArtifacts: false,
+      });
+
+      // Assert
+      expect(result).toBe(false);
+    });
+
+    it("should strictly enforce case sensitivity even when the corrupted letter is a Luso character (Ç)", () => {
+      // Arrange: Lowercase file value against Uppercase DB value
+      const dbValue = "EPAMINONDAS MENDONÇA";
+      const fileValue = "epaminondas mendon�a";
+
+      // Act
+      const result = GisEncodingNormalizer.areAttributesEquivalent(dbValue, fileValue, {
+        ignoreEncodingArtifacts: true,
+      });
+
+      // Assert
+      expect(result).toBe(false);
+    });
+
+    it("should tolerate a second Luso letter (Ã) to prove the fix is not Ç-specific", () => {
+      // Arrange
+      const dbValue = "CACHOEIRA DO SUL ÃGUA BRANCA";
+      const fileValue = "CACHOEIRA DO SUL �GUA BRANCA";
+
+      // Act
+      const result = GisEncodingNormalizer.areAttributesEquivalent(dbValue, fileValue, {
+        ignoreEncodingArtifacts: true,
+      });
+
+      // Assert
+      expect(result).toBe(true);
+    });
+
+    it("should tolerate a word-initial corrupted capital letter in a Title Case place name", () => {
+      // Arrange: "Água" is Title Case — capital Á followed by lowercase letters
+      const dbValue = "Cachoeira do Sul Água Branca";
+      const fileValue = "Cachoeira do Sul �gua Branca";
+
+      // Act
+      const result = GisEncodingNormalizer.areAttributesEquivalent(dbValue, fileValue, {
+        ignoreEncodingArtifacts: true,
+      });
+
+      // Assert
+      expect(result).toBe(true);
+    });
   });
 });

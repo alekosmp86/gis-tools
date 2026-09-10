@@ -134,22 +134,22 @@ export class GisEncodingNormalizer {
     const minLetters = matchLength;
     const maxLetters = matchLength * 2;
 
-    const hasUpper = /[A-ZÁÉÍÓÚÑÜ]/.test(corruptedString);
-    const hasLower = /[a-záéíóúñü]/.test(corruptedString);
+    const hasUpper = /\p{Lu}/u.test(corruptedString);
+    const hasLower = /\p{Ll}/u.test(corruptedString);
 
     // If the entire corrupted string has only one case, enforce that exact case
     if (hasUpper && !hasLower) {
-      return `[A-ZÁÉÍÓÚÑÜ]{${minLetters},${maxLetters}}`;
+      return `\\p{Lu}{${minLetters},${maxLetters}}`;
     }
     if (hasLower && !hasUpper) {
-      return `[a-záéíóúñü]{${minLetters},${maxLetters}}`;
+      return `\\p{Ll}{${minLetters},${maxLetters}}`;
     }
 
     // In mixed-case strings, inspect the immediate token context
     let prevLetter = "";
     for (let index = matchIndex - 1; index >= 0; index--) {
       const char = corruptedString[index];
-      if (/[A-Za-zÁÉÍÓÚáéíóúÑñÜü]/.test(char)) {
+      if (/\p{L}/u.test(char)) {
         prevLetter = char;
         break;
       }
@@ -165,7 +165,7 @@ export class GisEncodingNormalizer {
       index++
     ) {
       const char = corruptedString[index];
-      if (/[A-Za-zÁÉÍÓÚáéíóúÑñÜü]/.test(char)) {
+      if (/\p{L}/u.test(char)) {
         nextLetter = char;
         break;
       }
@@ -174,28 +174,22 @@ export class GisEncodingNormalizer {
       }
     }
 
-    const isPrevUpper = prevLetter !== "" && /[A-ZÁÉÍÓÚÑÜ]/.test(prevLetter);
-    const isPrevLower = prevLetter !== "" && /[a-záéíóúñü]/.test(prevLetter);
-    const isNextUpper = nextLetter !== "" && /[A-ZÁÉÍÓÚÑÜ]/.test(nextLetter);
-    const isNextLower = nextLetter !== "" && /[a-záéíóúñü]/.test(nextLetter);
+    const isPrevUpper = prevLetter !== "" && /\p{Lu}/u.test(prevLetter);
+    const isPrevLower = prevLetter !== "" && /\p{Ll}/u.test(prevLetter);
+    const isNextUpper = nextLetter !== "" && /\p{Lu}/u.test(nextLetter);
+    const isNextLower = nextLetter !== "" && /\p{Ll}/u.test(nextLetter);
 
     // Uppercase token context
-    if (
-      (isPrevUpper && (isNextUpper || nextLetter === "")) ||
-      (prevLetter === "" && isNextUpper)
-    ) {
-      return `[A-ZÁÉÍÓÚÑÜ]{${minLetters},${maxLetters}}`;
+    if (isPrevUpper && (isNextUpper || nextLetter === "")) {
+      return `\\p{Lu}{${minLetters},${maxLetters}}`;
     }
 
     // Lowercase token context
-    if (
-      (isPrevLower && (isNextLower || nextLetter === "")) ||
-      (prevLetter === "" && isNextLower)
-    ) {
-      return `[a-záéíóúñü]{${minLetters},${maxLetters}}`;
+    if (isPrevLower && (isNextLower || nextLetter === "")) {
+      return `\\p{Ll}{${minLetters},${maxLetters}}`;
     }
 
-    return `[A-Za-zÁÉÍÓÚáéíóúÑñÜü]{${minLetters},${maxLetters}}`;
+    return `\\p{L}{${minLetters},${maxLetters}}`;
   }
 
   /**
@@ -247,7 +241,7 @@ export class GisEncodingNormalizer {
         .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$";
 
     try {
-      const dynamicRegex = new RegExp(patternString);
+      const dynamicRegex = new RegExp(patternString, "u");
       return dynamicRegex.test(cleanString);
     } catch {
       return false;
