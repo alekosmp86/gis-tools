@@ -180,6 +180,12 @@ test.describe("Herramienta: Sincronización DB vs. DB (/tools/db-db-sync)", () =
     await expect(page.getByRole("button", { name: /Solo en DB Origen/i })).toBeVisible();
     await expect(page.getByRole("cell", { name: "3", exact: true })).toBeVisible();
 
+    // H5: una comparación DB vs DB no trae geometría en este fixture, así que la pestaña de mapa
+    // nunca debe aparecer — si lo hiciera, el usuario vería un lienzo de Leaflet vacío.
+    await expect(
+      page.getByRole("button", { name: /Mapa de Discrepancias Espaciales/i })
+    ).toHaveCount(0);
+
     // Retroceso al paso 4
     const backToStep4 = page.getByRole("button", {
       name: "Volver al Paso 4: Parámetros de Sincronización",

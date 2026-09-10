@@ -65,6 +65,28 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     await expect(page.getByRole("button", { name: "Solo en Archivo Shapefile" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Discrepancias Atributos/i })).toBeVisible();
 
+    // H3 (ronda 3): el conteo mostrado en cada tarjeta debe corresponder al dato real de resumen,
+    // no solo probar que la tarjeta existe. Fixture: PAD-001 coincide, PAD-002 tiene discrepancia
+    // de atributos, PAD-003 solo en BD, PAD-004 solo en archivo — 4 registros evaluados en total.
+    await expect(
+      page.getByRole("button", { name: /Total Evaluados/i }).getByText("4", { exact: true })
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("button", { name: /Solo en Base de Datos/i })
+        .getByText("1", { exact: true })
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("button", { name: "Solo en Archivo Shapefile" })
+        .getByText("1", { exact: true })
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("button", { name: /Discrepancias Atributos/i })
+        .getByText("1", { exact: true })
+    ).toBeVisible();
+
     // Tabla de discrepancias activa por defecto
     await expect(page.getByRole("table")).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "SUID" })).toBeVisible();
@@ -104,6 +126,29 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
 
     // Volver a mostrar todos haciendo clic en Total Evaluados
     await page.getByRole("button", { name: /Total Evaluados/i }).click();
+    await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PAD-003" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
+  });
+
+  // H4 (ronda 3): la búsqueda de texto libre nunca se había ejercitado. Su estado
+  // (searchQuery/onSearchChange) se enhebra desde ComparisonResultsView a través de
+  // DiscrepanciesTable hasta el encabezado de la tabla — exactamente el cableado que una
+  // descomposición puede romper sin que ninguna otra prueba lo note.
+  test("debe filtrar la tabla mediante el campo de búsqueda de texto libre", async ({ page }) => {
+    await navigateToResultsStep(page);
+
+    const searchInput = page.getByPlaceholder("Filtrar por SUID o atributo...");
+    await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PAD-003" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
+
+    await searchInput.fill("PAD-004");
+    await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PAD-002" })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: "PAD-003" })).toHaveCount(0);
+
+    await searchInput.fill("");
     await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "PAD-003" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
@@ -157,8 +202,9 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     // H2: Cambiar a la pestaña de Mapa de Discrepancias
     await page.getByRole("button", { name: /Mapa de Discrepancias Espaciales/i }).click();
 
-    // El contenedor del mapa debe estar visible y la tabla debe estar oculta
-    await expect(page.getByText(/MAPA DE DISCREPANCIAS ESPACIALES/i)).toBeVisible();
+    // El contenedor del mapa debe estar visible y la tabla debe estar oculta.
+    // El selector de mapa base es exclusivo del panel del mapa (a diferencia del texto de la
+    // pestaña, que coincide también con su propia etiqueta), así que es la prueba inequívoca.
     await expect(page.getByRole("combobox", { name: /Seleccionar mapa base/i })).toBeVisible();
     await expect(page.getByRole("table")).toBeHidden();
 

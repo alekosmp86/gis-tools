@@ -159,6 +159,12 @@ test.describe("Herramienta: Sincronización DB vs. Archivo CSV (/tools/db-csv-sy
     await expect(page.getByRole("button", { name: /Solo en Archivo CSV/i })).toBeVisible();
     await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
 
+    // H5: un CSV no tiene geometría, así que la pestaña de mapa nunca debe aparecer aquí — si lo
+    // hiciera, el usuario vería un lienzo de Leaflet vacío en una comparación que no tiene mapa.
+    await expect(
+      page.getByRole("button", { name: /Mapa de Discrepancias Espaciales/i })
+    ).toHaveCount(0);
+
     // Botón para retroceder al paso 4
     const backToStep4 = page.getByRole("button", {
       name: "Volver al Paso 4: Parámetros de Sincronización",
