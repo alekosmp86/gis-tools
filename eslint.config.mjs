@@ -89,6 +89,14 @@ const eslintConfig = defineConfig([
     rules: { "no-restricted-imports": "off" },
   },
 
+  // Playwright test fixtures use the callback parameter `use`, which triggers React's rules-of-hooks.
+  {
+    files: ["tests/e2e/support/**/*.{ts,tsx}"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
+
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -98,6 +106,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "scripts/**",
     "public/**",
+    "coverage/**",
   ]),
 ]);
 
