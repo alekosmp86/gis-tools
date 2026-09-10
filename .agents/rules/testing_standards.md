@@ -35,3 +35,6 @@ All automated tests in the project must strictly adhere to the following standar
 ## 6. Real Logic Verification (No Mocking of Pure Algorithms)
 - For spatial math, parsers, string sanitizers, and encoding engines, test against **real computations** and real inputs rather than mocking internal logic.
 - Reserve mocking strictly for external I/O boundaries (PostgreSQL network queries, file system access, browser UI APIs).
+
+## 7. E2E & UI Characterization Suite
+- For end-to-end and characterization tests protecting UI components against refactor regressions, see `tests/e2e/README.md` for architecture, mock fixtures, and console-error guard conventions.

@@ -110,6 +110,7 @@
 - **Edge-Case & Boundary Completeness**: Cover happy paths, boundary limits, null/undefined/empty states, malformed inputs, and exception paths.
 - **Hermetic Isolation & Determinism**: Zero inter-test coupling; each test runs independently without shared mutable state or non-deterministic dependencies.
 - **Real Logic Verification**: For domain math, spatial operations, parsers, and string normalizers, test against real calculations without mocking internal domain logic.
+- **E2E & UI Characterization Suite**: See `tests/e2e/README.md` for characterization philosophy, fixture mocking conventions, and the Playwright test runner architecture.
 
 ## Testing-First Branching & Deployment Workflow
 > Canonical source: `.agents/rules/testing_branch_workflow.md`. Keep both in sync.
