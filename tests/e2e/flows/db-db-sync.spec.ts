@@ -1,6 +1,10 @@
 import { test, expect } from "../support/testFixture";
-import { DEFAULT_DB2_COLUMNS_RESPONSE } from "../fixtures/dbFixtures";
-import { connectDb } from "../support/wizardSteps";
+import {
+  DEFAULT_DB2_COLUMNS_RESPONSE,
+  DEFAULT_STREAM_META,
+  buildNdjsonStream,
+} from "../fixtures/dbFixtures";
+import { connectDb, assertStep1RemountQuirk } from "../support/wizardSteps";
 
 test.describe("Herramienta: Sincronización DB vs. DB (/tools/db-db-sync)", () => {
   test.beforeEach(async ({ mockBackend }) => {
@@ -13,6 +17,32 @@ test.describe("Herramienta: Sincronización DB vs. DB (/tools/db-db-sync)", () =
           ...DEFAULT_DB2_COLUMNS_RESPONSE,
           tableName: "parcelas_origen",
         };
+      },
+      recordsStream: (body) => {
+        if (body.table_name === "parcelas_replica") {
+          return buildNdjsonStream(DEFAULT_STREAM_META, {
+            type: "CHUNK",
+            current: 2,
+            total: 2,
+            rows: [
+              {
+                gid: 1,
+                suid: "PAD-001",
+                departamento: "MONTEVIDEO",
+                codigo: "A1",
+                geom: null,
+              },
+              {
+                gid: 2,
+                suid: "PAD-002",
+                departamento: "CANELONES",
+                codigo: "B2_REPLICA_DIFF",
+                geom: null,
+              },
+            ],
+          });
+        }
+        return buildNdjsonStream();
       },
     });
   });
@@ -73,22 +103,16 @@ test.describe("Herramienta: Sincronización DB vs. DB (/tools/db-db-sync)", () =
       page.getByRole("heading", { name: "1. Configurar Base de Datos Origen (DB 1)" })
     ).toBeVisible();
 
-    // Caracterización del comportamiento actual (D4 / G6):
-    // El botón "Continuar al Paso 2" permanece habilitado en el padre, pero el formulario
-    // hijo se desmontó y perdió su isConnected interno. Al hacer clic, proceed() no avanza y se queda en el paso 1.
-    await expect(nextToStep2).toBeEnabled();
-    await nextToStep2.click();
-    await expect(
-      page.getByRole("heading", { name: "1. Configurar Base de Datos Origen (DB 1)" })
-    ).toBeVisible();
-
-    // Reconectar DB 1 para rearmar el formulario y avanzar al paso 2
-    await connectDb(page, {
-      database: "sig_origen",
-      user: "postgres",
-      table: "parcelas_origen",
-    });
-    await nextToStep2.click();
+    // Caracterización del comportamiento actual (D4 / G6 / H10):
+    await assertStep1RemountQuirk(
+      page,
+      {
+        database: "sig_origen",
+        user: "postgres",
+        table: "parcelas_origen",
+      },
+      "1. Configurar Base de Datos Origen (DB 1)"
+    );
 
     // Conectar DB 2
     await connectDb(page, {
@@ -151,6 +175,10 @@ test.describe("Herramienta: Sincronización DB vs. DB (/tools/db-db-sync)", () =
     ).toBeVisible();
     // G1: Verificar que ComparisonResultsView montó su contenido real
     await expect(page.getByRole("button", { name: /Total Evaluados/i })).toBeVisible();
+
+    // H4: Verificar título KPI derivado del descriptor DB vs DB y fila concreta de discrepancia
+    await expect(page.getByRole("button", { name: /Solo en DB Origen/i })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "3", exact: true })).toBeVisible();
 
     // Retroceso al paso 4
     const backToStep4 = page.getByRole("button", {

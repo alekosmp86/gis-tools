@@ -1,4 +1,5 @@
 import { test, expect } from "../support/testFixture";
+import { connectDb } from "../support/wizardSteps";
 
 test.describe("Módulo: Observador Cartográfico (/tools/m/cartography-watcher)", () => {
   test.beforeEach(async ({ mockBackend }) => {
@@ -17,10 +18,14 @@ test.describe("Módulo: Observador Cartográfico (/tools/m/cartography-watcher)"
     await expect(page.getByText("Catastro Nacional de Parcelas")).toBeVisible();
     await expect(page.getByText("Red Vial Nacional")).toBeVisible();
 
-    // Debe mostrar métricas de recursos y novedades
-    await expect(page.getByText("Recursos").first()).toBeVisible();
-    await expect(page.getByText("Novedades").first()).toBeVisible();
-    await expect(page.getByText("Última consulta").first()).toBeVisible();
+    // H6: Verificar valores reales y ambos estados de SourceStatusBadge sin selectores ambiguos .first()
+    await expect(page.getByText("Al día")).toBeVisible();
+    await expect(page.getByText("Actualización disponible")).toBeVisible();
+    await expect(page.getByText("Sin novedades")).toBeVisible();
+    await expect(
+      page.getByRole("definition").filter({ hasText: "1 archivo pendiente" })
+    ).toBeVisible();
+    await expect(page.getByText("4", { exact: true })).toBeVisible();
   });
 
   test("debe agregar una nueva fuente vigilada desde el formulario", async ({ page }) => {
@@ -32,8 +37,8 @@ test.describe("Módulo: Observador Cartográfico (/tools/m/cartography-watcher)"
 
     await page.getByRole("button", { name: "Vigilar fuente" }).click();
 
-    // Debe aparecer la tarjeta de la nueva fuente agregada con título derivado
-    await expect(page.getByText("Fuente nueva-fuente-sig")).toBeVisible();
+    // H6: Debe aparecer la tarjeta con el título fijo mockeado
+    await expect(page.getByText("Nueva Fuente SIG E2E")).toBeVisible();
   });
 
   test("debe mantener el formulario abierto, conservar la URL ingresada y mostrar el error si el servidor rechaza la edición", async ({
@@ -41,8 +46,8 @@ test.describe("Módulo: Observador Cartográfico (/tools/m/cartography-watcher)"
     mockBackend,
     allowConsoleErrors,
   }) => {
-    // Permitir el log de error de red correspondiente a la respuesta 400
-    allowConsoleErrors();
+    // H8: Tolerar únicamente el error de red esperado (HTTP 400)
+    allowConsoleErrors(/Failed to load resource/);
 
     // Configurar respuesta de rechazo del servidor en /sources/update
     await mockBackend({
@@ -94,12 +99,8 @@ test.describe("Módulo: Observador Cartográfico (/tools/m/cartography-watcher)"
   }) => {
     await page.goto("/tools/db-csv-sync");
 
-    // Paso 1: Conexión
-    await page.getByLabel("Nombre de Base de Datos").fill("sig_db");
-    await page.getByLabel("Usuario").fill("postgres");
-    await page.getByLabel("Nombre de la Tabla").fill("parcelas_catastro");
-    await page.getByRole("button", { name: "Conectar y Obtener Columnas" }).click();
-    await expect(page.getByText("Conexión establecida con éxito")).toBeVisible();
+    // H10: Paso 1: Conexión mediante helper reutilizable connectDb
+    await connectDb(page);
     await page.getByRole("button", { name: "Continuar al Paso 2" }).click();
 
     // Paso 2: Abrir pestaña de Catálogo Cartográfico del módulo

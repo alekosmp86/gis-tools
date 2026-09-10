@@ -1,6 +1,6 @@
 import { test, expect } from "../support/testFixture";
 import { SAMPLE_GEOJSON_CONTENT } from "../fixtures/sampleFiles";
-import { connectDb } from "../support/wizardSteps";
+import { connectDb, assertStep1RemountQuirk } from "../support/wizardSteps";
 
 test.describe("Herramienta: Sincronización DB vs. Shapefile (/tools/db-shapefile-sync)", () => {
   test.beforeEach(async ({ mockBackend }) => {
@@ -59,18 +59,8 @@ test.describe("Herramienta: Sincronización DB vs. Shapefile (/tools/db-shapefil
       page.getByRole("heading", { name: "1. Conectar a Base de Datos PostgreSQL" })
     ).toBeVisible();
 
-    // Caracterización del comportamiento actual (D4 / G6):
-    // El botón "Continuar al Paso 2" permanece habilitado en el padre, pero el formulario
-    // hijo se desmontó y perdió su isConnected interno. Al hacer clic, proceed() no avanza y se queda en el paso 1.
-    await expect(nextToStep2).toBeEnabled();
-    await nextToStep2.click();
-    await expect(
-      page.getByRole("heading", { name: "1. Conectar a Base de Datos PostgreSQL" })
-    ).toBeVisible();
-
-    // Reconectar para rearmar el formulario y avanzar al paso 2
-    await connectDb(page);
-    await nextToStep2.click();
+    // Caracterización del comportamiento actual (D4 / G6 / H10):
+    await assertStep1RemountQuirk(page);
 
     // Cargar archivo GeoJSON
     await page.getByLabel("Seleccionar archivo Shapefile o GeoJSON").setInputFiles({

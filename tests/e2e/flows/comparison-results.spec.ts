@@ -61,7 +61,8 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     await expect(page.getByRole("button", { name: /Total Evaluados/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /Coincidencias/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /Solo en Base de Datos/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Solo en Archivo/i })).toBeVisible();
+    // H4: Ajustar texto exacto para descriptor de shapefile
+    await expect(page.getByRole("button", { name: "Solo en Archivo Shapefile" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Discrepancias Atributos/i })).toBeVisible();
 
     // Tabla de discrepancias activa por defecto
@@ -95,8 +96,8 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     await expect(page.getByRole("cell", { name: "PAD-003" })).toHaveCount(0);
     await expect(page.getByRole("cell", { name: "PAD-004" })).toHaveCount(0);
 
-    // Filtrar por "Solo en Archivo"
-    await page.getByRole("button", { name: /Solo en Archivo/i }).click();
+    // Filtrar por "Solo en Archivo Shapefile"
+    await page.getByRole("button", { name: "Solo en Archivo Shapefile" }).click();
     await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "PAD-002" })).toHaveCount(0);
     await expect(page.getByRole("cell", { name: "PAD-003" })).toHaveCount(0);
@@ -108,7 +109,7 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
   });
 
-  test("debe alternar pestañas entre Tabla y Script SQL, mostrando el parche generado", async ({
+  test("debe alternar pestañas entre Tabla y Script SQL, mostrando el parche generado con exclusión mutua", async ({
     page,
   }) => {
     await navigateToResultsStep(page);
@@ -116,28 +117,84 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     // Cambiar a la pestaña de Script SQL
     await page.getByRole("button", { name: /Script SQL PostGIS/i }).click();
 
+    // H1: La tabla de discrepancias debe quedar oculta al activar la pestaña SQL
+    await expect(page.getByRole("table")).toBeHidden();
+
     // Verificar que el drawer de parches SQL se visualiza con sus pestañas UPDATE e INSERT
     const updateTab = page.getByRole("button", { name: /Script UPDATE/i });
     const insertTab = page.getByRole("button", { name: /Script INSERT/i });
     await expect(updateTab).toBeVisible();
     await expect(insertTab).toBeVisible();
 
-    // Verificar que la vista previa contiene sentencias SQL UPDATE generadas y es visible
+    // H1: Verificar que la vista previa UPDATE es visible y la INSERT está oculta
     const updatePre = page.locator("pre").filter({ hasText: "UPDATE" });
+    const insertPre = page.locator("pre").filter({ hasText: "INSERT INTO" });
     await expect(updatePre).toBeVisible();
+    await expect(insertPre).toBeHidden();
     await expect(updatePre).toContainText('UPDATE "public"."parcelas_catastro"');
     await expect(updatePre).toContainText("'B2_MODIFIED'");
 
-    // Cambiar a la pestaña Script INSERT y verificar que se torna visible
+    // H1: Cambiar a la pestaña Script INSERT y verificar que se torna visible mientras UPDATE se oculta
     await insertTab.click();
-    const insertPre = page.locator("pre").filter({ hasText: "INSERT INTO" });
     await expect(insertPre).toBeVisible();
+    await expect(updatePre).toBeHidden();
     await expect(insertPre).toContainText('INSERT INTO "public"."parcelas_catastro"');
     await expect(insertPre).toContainText("'PAD-004'");
 
-    // Volver a la pestaña de Tabla
+    // Volver a la pestaña de Tabla y verificar que vuelve a estar visible mientras las previews SQL quedan ocultas
     await page.getByRole("button", { name: /Tabla de Discrepancias/i }).click();
+    await expect(page.getByRole("table")).toBeVisible();
+    await expect(updatePre).toBeHidden();
+    await expect(insertPre).toBeHidden();
     await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
+  });
+
+  test("debe alternar a la pestaña de Mapa, visualizar el contenedor y mostrar estado vacío con filtro sin geometrías", async ({
+    page,
+  }) => {
+    await navigateToResultsStep(page);
+
+    // H2: Cambiar a la pestaña de Mapa de Discrepancias
+    await page.getByRole("button", { name: /Mapa de Discrepancias Espaciales/i }).click();
+
+    // El contenedor del mapa debe estar visible y la tabla debe estar oculta
+    await expect(page.getByText(/MAPA DE DISCREPANCIAS ESPACIALES/i)).toBeVisible();
+    await expect(page.getByRole("combobox", { name: /Seleccionar mapa base/i })).toBeVisible();
+    await expect(page.getByRole("table")).toBeHidden();
+
+    // Filtrar por "Solo en Base de Datos" (PAD-003 tiene geom null, por lo que la colección queda vacía)
+    await page.getByRole("button", { name: /Solo en Base de Datos/i }).click();
+
+    // Debe mostrar la alerta informativa de estado vacío para el mapa
+    await expect(
+      page.getByText("No se encontraron discrepancias para el filtro seleccionado.")
+    ).toBeVisible();
+  });
+
+  test("debe permitir ejecutar el script SQL en base de datos y marcar la pestaña como ejecutada", async ({
+    page,
+  }) => {
+    await navigateToResultsStep(page);
+
+    // H7: Cambiar a pestaña de Script SQL
+    await page.getByRole("button", { name: /Script SQL PostGIS/i }).click();
+
+    // Abrir modal de confirmación de ejecución
+    await page.getByRole("button", { name: /Ejecutar en BD/i }).click();
+
+    // Ingresar contraseña en el modal
+    await page.getByLabel("Contraseña de PostgreSQL").fill("secret123");
+
+    // Iniciar ejecución por lotes
+    await page.getByRole("button", { name: /Iniciar Ejecución por Lotes/i }).click();
+
+    // Verificar resumen de ejecución exitosa
+    const finishBtn = page.getByRole("button", { name: /Finalizar y Actualizar Resultados/i });
+    await expect(finishBtn).toBeVisible();
+    await finishBtn.click();
+
+    // El marcador (Ejecutado) debe reflejarse en la pestaña correspondiente
+    await expect(page.getByRole("button", { name: /Script UPDATE \(Ejecutado\)/i })).toBeVisible();
   });
 
   test("debe mostrar el estado de error cuando la consulta de registros falla", async ({
@@ -145,7 +202,7 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     mockBackend,
     allowConsoleErrors,
   }) => {
-    allowConsoleErrors();
+    allowConsoleErrors(/Failed to load resource/);
 
     await mockBackend({
       recordsStatus: 500,
@@ -182,10 +239,11 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
 
     await navigateToResultsStep(page);
 
-    // Verificar que el indicador de carga (barra de progreso o mensaje) está visible mientras el stream está retenido
+    // H5: Verificar exactamente la rama ProgressBar que realmente renderiza (sin alternancia regex)
     await expect(
-      page.getByText(/Conectando a base de datos PostgreSQL|Consultando registros PostGIS/i)
+      page.getByText("Conectando a base de datos PostgreSQL...")
     ).toBeVisible();
+    await expect(page.getByText("0%")).toBeVisible();
 
     // Liberar la respuesta del stream
     releaseStream();

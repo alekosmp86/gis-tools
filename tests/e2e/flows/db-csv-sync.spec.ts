@@ -1,6 +1,10 @@
 import { test, expect } from "../support/testFixture";
 import { SAMPLE_CSV_CONTENT } from "../fixtures/sampleFiles";
-import { connectDb } from "../support/wizardSteps";
+import {
+  connectDb,
+  assertStep1RemountQuirk,
+  fillDbCredentials,
+} from "../support/wizardSteps";
 
 test.describe("Herramienta: Sincronización DB vs. Archivo CSV (/tools/db-csv-sync)", () => {
   test.beforeEach(async ({ mockBackend }) => {
@@ -65,18 +69,8 @@ test.describe("Herramienta: Sincronización DB vs. Archivo CSV (/tools/db-csv-sy
       page.getByRole("heading", { name: "1. Conectar a Base de Datos PostgreSQL" })
     ).toBeVisible();
 
-    // Caracterización del comportamiento actual (D4 / G6):
-    // El botón "Continuar al Paso 2" permanece habilitado en el padre, pero el formulario
-    // hijo se desmontó y perdió su isConnected interno. Al hacer clic, proceed() no avanza y se queda en el paso 1.
-    await expect(nextToStep2).toBeEnabled();
-    await nextToStep2.click();
-    await expect(
-      page.getByRole("heading", { name: "1. Conectar a Base de Datos PostgreSQL" })
-    ).toBeVisible();
-
-    // Reconectar para rearmar el formulario y avanzar al paso 2
-    await connectDb(page);
-    await nextToStep2.click();
+    // Caracterización del comportamiento actual (D4 / G6 / H10):
+    await assertStep1RemountQuirk(page);
 
     // Cargar archivo CSV
     await page.getByLabel("Seleccionar archivo CSV").setInputFiles({
@@ -95,12 +89,38 @@ test.describe("Herramienta: Sincronización DB vs. Archivo CSV (/tools/db-csv-sy
       page.getByRole("heading", { name: "3. Configuración de SUID y Campos a Comparar" })
     ).toBeVisible();
 
+    // H3: Navegación hacia atrás mediante el indicador de pasos (Stepper)
+    // En el paso 3, los pasos 4 y 5 no deben tener role="button"
+    await expect(page.getByRole("button", { name: /PASO 4/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /PASO 5/i })).toHaveCount(0);
+
+    // Hacer clic en PASO 1 en el stepper y verificar retorno a la vista del paso 1
+    const step1StepperBtn = page.getByRole("button", { name: /PASO 1/i });
+    await expect(step1StepperBtn).toBeVisible();
+    await step1StepperBtn.click();
+    await expect(
+      page.getByRole("heading", { name: "1. Conectar a Base de Datos PostgreSQL" })
+    ).toBeVisible();
+
+    // Reconectar y volver al paso 3 para continuar el flujo
+    await connectDb(page);
+    await page.getByRole("button", { name: "Continuar al Paso 2" }).click();
+    await page.getByRole("button", { name: "Continuar al Paso 3" }).click();
+
     // Probar retroceso al paso 2
     await page.getByRole("button", { name: "Volver al Paso 2" }).click();
     await expect(
       page.getByRole("heading", { name: "2. Cargar Archivo de Datos CSV" })
     ).toBeVisible();
     await page.getByRole("button", { name: "Continuar al Paso 3" }).click();
+
+    // Seleccionar 'suid' y deseleccionar 'gid' para que coincida la clave con el CSV
+    await page.getByRole("button", { name: "suid", exact: true }).click();
+    await page.getByRole("button", { name: "gid", exact: true }).click();
+
+    // Seleccionar atributos a comparar: departamento y codigo
+    await page.getByRole("checkbox", { name: "departamento", exact: true }).click();
+    await page.getByRole("checkbox", { name: "codigo", exact: true }).click();
 
     // Avanzar al paso 4
     const nextToStep4 = page.getByRole("button", {
@@ -135,6 +155,10 @@ test.describe("Herramienta: Sincronización DB vs. Archivo CSV (/tools/db-csv-sy
     // G1: Verificar que ComparisonResultsView montó su contenido real
     await expect(page.getByRole("button", { name: /Total Evaluados/i })).toBeVisible();
 
+    // H4: Verificar título KPI derivado del descriptor específico y fila concreta de discrepancia
+    await expect(page.getByRole("button", { name: /Solo en Archivo CSV/i })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
+
     // Botón para retroceder al paso 4
     const backToStep4 = page.getByRole("button", {
       name: "Volver al Paso 4: Parámetros de Sincronización",
@@ -144,5 +168,24 @@ test.describe("Herramienta: Sincronización DB vs. Archivo CSV (/tools/db-csv-sy
     await expect(
       page.getByRole("heading", { name: "4. Parámetros Avanzados de Sincronización" })
     ).toBeVisible();
+  });
+
+  test("debe mostrar alerta de error cuando el servidor falla al obtener columnas (HTTP 500)", async ({
+    page,
+    mockBackend,
+    allowConsoleErrors,
+  }) => {
+    allowConsoleErrors(/Failed to load resource/);
+    await mockBackend({
+      columnsStatus: 500,
+    });
+
+    await page.goto("/tools/db-csv-sync");
+    await fillDbCredentials(page);
+    await page.getByRole("button", { name: "Conectar y Obtener Columnas" }).click();
+
+    // Debe mostrar la alerta de error con el mensaje de fallo y mantener el avance bloqueado
+    await expect(page.getByText("Error al inspeccionar tabla")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continuar al Paso 2" })).toBeDisabled();
   });
 });
