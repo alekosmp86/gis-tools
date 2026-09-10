@@ -71,5 +71,6 @@ diff specifically; an assertion loosened to reach green is worse than a failing 
   real types before passing it to an implementer.
 - **Challenge the premise.** If the plan or the requirement is what produced a bad structure, say so
   and name the decision. Reviewing only what the implementer controlled hides the real cause.
-- **Report faithfully.** Never launder an unverified claim. Re-run the gates rather than trusting a
-  report that says they passed.
+- **Report faithfully.** Never launder an unverified claim. Have the gates independently re-run —
+  folded into the `code-reviewer` subagent's brief, never executed by the orchestrator itself —
+  rather than trusting a report that says they passed.

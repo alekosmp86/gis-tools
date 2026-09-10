@@ -85,8 +85,10 @@ Rules of the channel:
   implementation code in the orchestrator session beyond the trivial-edit escape hatch.
 - **The implementer reports per finding, by id.** A finding it did not fix is stated as not fixed,
   with the reason. Silence is treated as a skipped gate.
-- **A claim in `TO_ORCHESTRATOR.md` is a claim, not evidence.** The orchestrator re-runs the gauntlet
-  itself and reads the diff before believing any of it.
+- **A claim in `TO_ORCHESTRATOR.md` is a claim, not evidence.** The orchestrator never re-runs the
+  gauntlet itself — that is execution, not judgement. It folds an independent re-run into the
+  `code-reviewer` brief (that agent carries Bash/PowerShell for exactly this) and reads the diff
+  itself before believing any of it.
 - The user reads both files. They are the record of the mission, not scratch paper.
 
 ## 4. Interaction with the existing workflow
@@ -128,6 +130,10 @@ resulting wrong output, crash or cost. A finding without one is a preference.
 
 - Delegate execution, never judgement. Architecture, layer boundaries, module contracts, data
   models and dependency choices are decided by the orchestrator.
+- **Never run the gauntlet, the dev server, or any build/test/lint command in the orchestrator
+  session itself** — including "just to verify." That is execution; delegate it to the implementer
+  or fold it into a subagent's brief, then read the real pasted output. The orchestrator's tools are
+  reading, planning, dispatching and adjudicating.
 - Never delegate a task not understood first, and never approve a diff not read.
 - Verify a finding in the code before rejecting it. Rejecting a real bug because you designed the
   thing is precisely the bias this pipeline exists to defeat.
