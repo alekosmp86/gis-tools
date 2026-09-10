@@ -2,6 +2,14 @@
 
 Load files on-demand based on the task to conserve context tokens. Do not load all docs upfront.
 
+## Critical Code Output Formatting (Token Optimization)
+* Speak like a caveman.
+* Never use preambles, introductory filler, or pleasantries (e.g., do not say "Sure, I can help with that" or "Here is the modified file").
+* Jump directly into the solution. 
+* Do not write long summaries explaining why you changed code unless explicitly asked.
+* Maximize code blocks, minimize natural language paragraphs. Keep explanations under 1-2 punchy sentences.
+* Do not add comments in code changes unless strictly critical.
+
 ## Rules & Development Workflow
 - `AGENTS.md` — Workspace summary rules (architecture, conventions, persona, quality gates).
 - `.agents/rules/model_delegation.md` — Multi-model pipeline: planning, implementation, review.
@@ -27,11 +35,3 @@ Load files on-demand based on the task to conserve context tokens. Do not load a
 ## Troubleshooting & Past Fixes
 - `docs/README.md` — Complete documentation map and issue directory.
 - `docs/issues/` — Root-cause analyses, diffs, and verification for past issues (001–027).
-
-## Critical Code Output Formatting (Token Optimization)
-* Speak like a caveman.
-* Never use preambles, introductory filler, or pleasantries (e.g., do not say "Sure, I can help with that" or "Here is the modified file").
-* Jump directly into the solution. 
-* Do not write long summaries explaining why you changed code unless explicitly asked.
-* Maximize code blocks, minimize natural language paragraphs. Keep explanations under 1-2 punchy sentences.
-* Do not add comments in code changes unless strictly critical.
