@@ -56,7 +56,7 @@ export const DEFAULT_DB2_COLUMNS_RESPONSE = {
 /**
  * 3 rows in database:
  * - PAD-001: matches incoming file record
- * - PAD-002: has codigo='B2' (file has 'B2_DIFF', generating ATTRIBUTE_MISMATCH)
+ * - PAD-002: has codigo='B2' (file has 'B2_MODIFIED', generating ATTRIBUTE_MISMATCH)
  * - PAD-003: only exists in DB (file does not have PAD-003, generating ONLY_IN_DB)
  */
 export const DEFAULT_DB_ROWS = [

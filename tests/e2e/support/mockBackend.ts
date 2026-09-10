@@ -1,4 +1,9 @@
 import type { Page, Request as PlaywrightRequest, Route } from "@playwright/test";
+import type {
+  WatchedSource,
+  SourceSummary,
+  CatalogSourceGroup,
+} from "@/modules/cartography-watcher/types";
 import {
   DEFAULT_DB_COLUMNS_RESPONSE,
   DEFAULT_EXECUTE_RESPONSE,
@@ -15,9 +20,6 @@ import {
 export type DbColumnsResponse = typeof DEFAULT_DB_COLUMNS_RESPONSE;
 export type DbExecuteResponse = typeof DEFAULT_EXECUTE_RESPONSE;
 export type DbTestResponse = typeof DEFAULT_TEST_RESPONSE;
-export type WatchedSourceFixture = (typeof DEFAULT_WATCHED_SOURCES)[number];
-export type SourceSummaryFixture = (typeof DEFAULT_SOURCE_SUMMARIES)[number];
-export type CatalogGroupFixture = (typeof DEFAULT_CATALOG_GROUPS)[number];
 
 export interface MockBackendOptions {
   columns?: DbColumnsResponse | ((body: Record<string, unknown>) => DbColumnsResponse);
@@ -26,20 +28,13 @@ export interface MockBackendOptions {
   recordsStatus?: number;
   execute?: DbExecuteResponse | ((body: Record<string, unknown>) => DbExecuteResponse);
   executeStatus?: number;
-  testDb?: DbTestResponse | ((body: Record<string, unknown>) => DbTestResponse);
   watcherSources?:
-    | WatchedSourceFixture[]
-    | ((req: PlaywrightRequest) => WatchedSourceFixture[]);
+    | WatchedSource[]
+    | ((req: PlaywrightRequest) => WatchedSource[]);
   watcherSummaries?:
-    | SourceSummaryFixture[]
-    | ((req: PlaywrightRequest) => SourceSummaryFixture[]);
-  watcherCatalog?: CatalogGroupFixture[] | ((url: URL) => CatalogGroupFixture[]);
-  watcherCatalogFile?:
-    | { content: string | Buffer; contentType?: string }
-    | ((url: URL) => { content: string | Buffer; contentType?: string });
-  watcherRemove?:
-    | { success: boolean; sources?: WatchedSourceFixture[] }
-    | ((body: Record<string, unknown>) => { success: boolean; sources?: WatchedSourceFixture[] });
+    | SourceSummary[]
+    | ((req: PlaywrightRequest) => SourceSummary[]);
+  watcherCatalog?: CatalogSourceGroup[] | ((url: URL) => CatalogSourceGroup[]);
   watcherUpdate?:
     | { status?: number; body?: unknown }
     | ((body: Record<string, unknown>) => { status?: number; body?: unknown });
@@ -64,7 +59,9 @@ function resolveOverride<TArg, TResult>(
  * Callers can selectively override individual endpoint responses.
  */
 export async function mockBackend(page: Page, options: MockBackendOptions = {}) {
-  let currentSources: WatchedSourceFixture[] = Array.isArray(options.watcherSources)
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+
+  let currentSources: WatchedSource[] = Array.isArray(options.watcherSources)
     ? [...options.watcherSources]
     : [...DEFAULT_WATCHED_SOURCES];
 
@@ -140,12 +137,10 @@ export async function mockBackend(page: Page, options: MockBackendOptions = {}) 
       pattern: "**/api/db/test",
       handler: async (route) => {
         if (route.request().method() !== "POST") return route.fallback();
-        const body = (route.request().postDataJSON() || {}) as Record<string, unknown>;
-        const resp = resolveOverride(options.testDb, body, DEFAULT_TEST_RESPONSE);
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(resp),
+          body: JSON.stringify(DEFAULT_TEST_RESPONSE),
         });
       },
     },
@@ -159,14 +154,13 @@ export async function mockBackend(page: Page, options: MockBackendOptions = {}) 
         if (body.sourceId) {
           currentSources = currentSources.filter((sourceItem) => sourceItem.id !== body.sourceId);
         }
-        const resp = resolveOverride(options.watcherRemove, body, () => ({
-          success: true,
-          sources: currentSources,
-        }));
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(resp),
+          body: JSON.stringify({
+            success: true,
+            sources: currentSources,
+          }),
         });
       },
     },
@@ -201,16 +195,11 @@ export async function mockBackend(page: Page, options: MockBackendOptions = {}) 
       pattern: "**/api/m/cartography-watcher/sources",
       handler: async (route) => {
         if (route.request().method() === "POST") {
-          const body = (route.request().postDataJSON() || {}) as { url?: string };
-          const rawUrl = body.url || "nueva-fuente";
-          const slug = rawUrl.includes("/dataset/")
-            ? rawUrl.split("/dataset/")[1].replace(/\/.*$/, "")
-            : rawUrl.replace(/^https?:\/\/[^/]+\//, "");
-          const newSource: WatchedSourceFixture = {
+          const newSource: WatchedSource = {
             id: `src-added-${Date.now()}`,
-            title: `Fuente ${slug}`,
+            title: "Nueva Fuente SIG E2E",
             portalHost: "catalogodatos.gub.uy",
-            datasetSlug: slug,
+            datasetSlug: "nueva-fuente-sig",
             description: "Fuente agregada dinámicamente",
             isDefault: false,
           };
@@ -224,7 +213,10 @@ export async function mockBackend(page: Page, options: MockBackendOptions = {}) 
             }),
           });
         }
-        const list = resolveOverride(options.watcherSources, route.request(), currentSources);
+        const list =
+          typeof options.watcherSources === "function"
+            ? options.watcherSources(route.request())
+            : currentSources;
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -254,18 +246,13 @@ export async function mockBackend(page: Page, options: MockBackendOptions = {}) 
     {
       pattern: "**/api/m/cartography-watcher/catalog/file**",
       handler: async (route) => {
-        const url = new URL(route.request().url());
-        const fileData = resolveOverride(options.watcherCatalogFile, url, {
-          content: SAMPLE_CATALOG_FILE_CSV,
-          contentType: "text/csv; charset=utf-8",
-        });
         await route.fulfill({
           status: 200,
           headers: {
-            "Content-Type": fileData.contentType || "text/csv; charset=utf-8",
+            "Content-Type": "text/csv; charset=utf-8",
             "Content-Disposition": 'attachment; filename="parcelas_montevideo.csv"',
           },
-          body: fileData.content,
+          body: SAMPLE_CATALOG_FILE_CSV,
         });
       },
     },

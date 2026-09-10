@@ -1,8 +1,15 @@
+import type {
+  WatchedSource,
+  SourceSummary,
+  CatalogSourceGroup,
+} from "@/modules/cartography-watcher/types";
+import { SourceBadgeState } from "@/modules/cartography-watcher/types";
+
 /**
  * Fixtures for Cartography Watcher module API endpoints.
  */
 
-export const DEFAULT_WATCHED_SOURCES = [
+export const DEFAULT_WATCHED_SOURCES: WatchedSource[] = [
   {
     id: "src-catastro-default",
     title: "Catastro Nacional de Parcelas",
@@ -21,28 +28,28 @@ export const DEFAULT_WATCHED_SOURCES = [
   },
 ];
 
-export const DEFAULT_SOURCE_SUMMARIES = [
+export const DEFAULT_SOURCE_SUMMARIES: SourceSummary[] = [
   {
     sourceId: "src-catastro-default",
     datasetSlug: "catastro-nacional",
     title: "Catastro Nacional de Parcelas",
-    status: "UP_TO_DATE",
+    status: SourceBadgeState.UP_TO_DATE,
     totalResources: 4,
     pendingCount: 0,
-    checkedAt: "2026-09-10T10:00:00.000Z",
+    checkedAt: "2024-03-01T10:00:00.000Z",
   },
   {
     sourceId: "src-vialidad-custom",
     datasetSlug: "red-vial-nacional",
     title: "Red Vial Nacional",
-    status: "UPDATE_AVAILABLE",
+    status: SourceBadgeState.UPDATE_AVAILABLE,
     totalResources: 2,
     pendingCount: 1,
-    checkedAt: "2026-09-10T10:00:00.000Z",
+    checkedAt: "2024-03-02T10:00:00.000Z",
   },
 ];
 
-export const DEFAULT_CATALOG_GROUPS = [
+export const DEFAULT_CATALOG_GROUPS: CatalogSourceGroup[] = [
   {
     sourceId: "src-catastro-default",
     datasetSlug: "catastro-nacional",
