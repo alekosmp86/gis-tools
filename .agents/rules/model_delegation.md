@@ -12,16 +12,16 @@ Global configuration lives in `~/.claude/` and applies to every project:
 
 | Phase | Actor | Model |
 |---|---|---|
-| Triage, planning, decomposition | main session (orchestrator) | Opus 5 |
+| Triage, planning, decomposition | main session (orchestrator) | Sonnet 5 |
 | Implementation, tests, fix rounds | Antigravity session / `implementer` | Gemini 3.8 Flash / Sonnet 5 |
-| Code review of the finished diff | `code-reviewer` agent / Claude session | Opus 5, fresh context |
-| Adjudication of findings | main session (orchestrator) | Opus 5 |
+| Code review of the finished diff | `code-reviewer` agent / Claude session | Sonnet 5, fresh context |
+| Adjudication of findings | main session (orchestrator) | Sonnet 5 |
 | Commit, merge, push | Antigravity session / `git-operator` agent | Gemini 3.8 Flash / Haiku 4.5 |
 
 **Dual-Session Split (Claude + Antigravity)**:
-- **Claude (Opus)** drives high-level reasoning, system architecture, task decomposition, and writes/maintains `.agents/handoff/TO_IMPLEMENTER.md`.
+- **Claude (Sonnet)** drives high-level reasoning, system architecture, task decomposition, and writes/maintains `.agents/handoff/TO_IMPLEMENTER.md`.
 - **Antigravity (Gemini)** acts as the dedicated implementer: ingests `.agents/handoff/TO_IMPLEMENTER.md`, applies code modifications, writes tests, runs the quality gauntlet, verifies cleanly, and reports back in `.agents/handoff/TO_ORCHESTRATOR.md`.
-- **Claude (Opus)** runs a fresh-context review against `git diff` before approval and branch promotion.
+- **Claude (Sonnet)** runs a fresh-context review against `git diff` before approval and branch promotion.
 
 **The reviewer is a separate agent/context even though it shares the orchestrator's model.** It starts with
 no memory of the plan, so it cannot rationalise a flaw the way its author would. The orchestrator
@@ -73,7 +73,7 @@ is not written in the handoff file, the other side never sees it.
 
 | File | Written by | Read by | Holds |
 |---|---|---|---|
-| `.agents/handoff/TO_IMPLEMENTER.md` | orchestrator (Claude / Opus) | implementer (Antigravity / Gemini) | the plan, binding decisions, out-of-scope, every fix round, adjudicated review findings, definition of done |
+| `.agents/handoff/TO_IMPLEMENTER.md` | orchestrator (Claude / Sonnet) | implementer (Antigravity / Gemini) | the plan, binding decisions, out-of-scope, every fix round, adjudicated review findings, definition of done |
 | `.agents/handoff/TO_ORCHESTRATOR.md` | implementer | orchestrator | what was actually changed and why, per finding; real pasted gauntlet output; anything refused, deferred or not understood |
 
 Rules of the channel:

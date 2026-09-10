@@ -1,6 +1,6 @@
 # Handoff Commands
 
-The shared vocabulary between the user, the orchestrator (Claude / Opus) and the implementer
+The shared vocabulary between the user, the orchestrator (Claude / Sonnet) and the implementer
 (Antigravity / Gemini). One word replaces a paragraph. Both agents read this file; both must honour
 every verb addressed to their lane.
 
