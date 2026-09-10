@@ -140,6 +140,45 @@ export function buildNdjsonStream(
   ].join("\n") + "\n";
 }
 
+export function buildProjectedNdjsonStream(requestBody: Record<string, unknown>): string {
+  const suidColumns = Array.isArray(requestBody.suid_columns)
+    ? (requestBody.suid_columns as string[])
+    : typeof requestBody.suid_column === "string"
+    ? [requestBody.suid_column]
+    : [];
+  const fieldsToCompare = Array.isArray(requestBody.fields_to_compare)
+    ? (requestBody.fields_to_compare as string[])
+    : [];
+  const primaryKeyColumn =
+    typeof requestBody.primary_key_column === "string" ? [requestBody.primary_key_column] : [];
+
+  const requestedColumns = Array.from(
+    new Set([...suidColumns, ...fieldsToCompare, ...primaryKeyColumn])
+  );
+  const allColumns = Object.keys(DEFAULT_STREAM_META.columnTypes);
+  const targetColumns = new Set(requestedColumns.length > 0 ? requestedColumns : allColumns);
+  targetColumns.add("geom"); // The real route always appends the geometry column when present.
+
+  const projectedRows = DEFAULT_DB_ROWS.map((row) => {
+    const projected: Record<string, unknown> = {};
+    for (const column of Object.keys(row)) {
+      if (targetColumns.has(column)) {
+        projected[column] = (row as Record<string, unknown>)[column];
+      }
+    }
+    return projected;
+  });
+
+  const projectedChunk = { ...DEFAULT_STREAM_CHUNK, rows: projectedRows };
+  return (
+    [
+      JSON.stringify(DEFAULT_STREAM_META),
+      JSON.stringify(projectedChunk),
+      JSON.stringify(DEFAULT_STREAM_DONE),
+    ].join("\n") + "\n"
+  );
+}
+
 export const DEFAULT_EXECUTE_RESPONSE = {
   success: true,
   affectedRows: 2,

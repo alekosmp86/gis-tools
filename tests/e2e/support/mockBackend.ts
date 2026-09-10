@@ -8,7 +8,7 @@ import {
   DEFAULT_DB_COLUMNS_RESPONSE,
   DEFAULT_EXECUTE_RESPONSE,
   DEFAULT_TEST_RESPONSE,
-  buildNdjsonStream,
+  buildProjectedNdjsonStream,
 } from "../fixtures/dbFixtures";
 import {
   DEFAULT_WATCHED_SOURCES,
@@ -105,7 +105,9 @@ export async function mockBackend(page: Page, options: MockBackendOptions = {}) 
           });
         }
         const body = (route.request().postDataJSON() || {}) as Record<string, unknown>;
-        const ndjson = resolveOverride(options.recordsStream, body, () => buildNdjsonStream());
+        const ndjson = resolveOverride(options.recordsStream, body, () =>
+          buildProjectedNdjsonStream(body)
+        );
         await route.fulfill({
           status: 200,
           headers: {
@@ -287,5 +289,24 @@ export async function mockBackend(page: Page, options: MockBackendOptions = {}) 
 
   for (const { pattern, handler } of routes) {
     await page.route(pattern, handler);
+  }
+
+  // Leaflet fetches real map tiles from third-party hosts the moment a map mounts. A
+  // characterization suite that depends on the live internet is not hermetic and is not a test we
+  // can run offline, so every basemap this app configures is intercepted with a 1x1 transparent
+  // PNG regardless of which spec asked for mockBackend().
+  const oneByOneTransparentPng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    "base64"
+  );
+  const tilePatterns = [
+    "**tile.openstreetmap.org/**",
+    "**server.arcgisonline.com/**",
+    "**basemaps.cartocdn.com/**",
+  ];
+  for (const tilePattern of tilePatterns) {
+    await page.route(tilePattern, (route) =>
+      route.fulfill({ status: 200, contentType: "image/png", body: oneByOneTransparentPng })
+    );
   }
 }
