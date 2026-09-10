@@ -1,11 +1,12 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./support/testFixture";
 
 /**
- * Basic smoke test scaffolding for future UI / E2E test missions.
+ * Basic smoke test verifying home page title and initial render offline.
  */
 test.describe("GIS Tools Application Smoke Tests", () => {
-  test("should verify app home page loads successfully", async ({ page }) => {
+  test("should verify app home page loads successfully", async ({ page, mockBackend }) => {
+    await mockBackend();
     await page.goto("/");
-    await expect(page).toHaveTitle(/GIS Tools/i);
+    await expect(page).toHaveTitle("Suite de Herramientas SIG | Procesamiento Espacial");
   });
 });
