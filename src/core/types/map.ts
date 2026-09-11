@@ -1,3 +1,9 @@
+/**
+ * 2D Bounding Box represented as [minX, minY, maxX, maxY].
+ * In standard GIS geographic coordinate systems, this corresponds to [minLng, minLat, maxLng, maxLat].
+ */
+export type BBox = [number, number, number, number];
+
 export interface TileLayerConfig {
   url: string;
   subdomains?: string;
