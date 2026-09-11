@@ -67,6 +67,7 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_028_WIZARD_STEP_FACTORY_REF_PASSING_REACT_COMPILER.md`](docs/issues/ISSUE_028_WIZARD_STEP_FACTORY_REF_PASSING_REACT_COMPILER.md) — React Compiler and React Doctor performance degradation and ref access errors triggered by passing mutable `useRef` handles through procedural wizard step factories during render.
 - [`ISSUE_029_GIS_ENCODING_NORMALIZER_LUSO_CHARACTERS.md`](docs/issues/ISSUE_029_GIS_ENCODING_NORMALIZER_LUSO_CHARACTERS.md) — Attribute comparison false discrepancies on Portuguese surnames and border place names, resolved by replacing Spanish-only hardcoded character classes with Unicode property escapes and fixing Title Case word-initial heuristics.
 - [`ISSUE_030_VIEWPORT_WINDOWED_MAP_RENDERING.md`](docs/issues/ISSUE_030_VIEWPORT_WINDOWED_MAP_RENDERING.md) — Viewport-windowed map rendering over uniform 2D grid spatial index, bounding concurrent Leaflet DOM/canvas layer allocations to screen density and enabling smooth 1M+ feature rendering.
+- [`ISSUE_031_CATALOG_DOWNLOAD_PROGRESS_AND_PARSE_FREEZE.md`](docs/issues/ISSUE_031_CATALOG_DOWNLOAD_PROGRESS_AND_PARSE_FREEZE.md) — Catalogue-file streaming download progress feedback, macrotask event-loop yielding (`PARSE_PROGRESS_CHUNK_SIZE`), and `<ProgressBar>` integration eliminating UI freezes during large file processing.
 
 
 

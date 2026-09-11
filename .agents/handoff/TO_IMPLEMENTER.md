@@ -1520,3 +1520,356 @@ code findings remain. Awaiting the record correction above, then this is ready f
 explicit commit instruction — implementer and orchestrator do not commit on their own.
 
 Do not commit.
+
+---
+
+# Mission — catalogue-file download progress and main-thread parse freeze
+
+> New, independent mission. Cut fresh from `main`, not from the still-open
+> `feat/viewport-windowed-map-rendering` branch above (that branch's fabricated-telemetry
+> correction is still outstanding and is a separate thread — do not resolve it as part of this
+> mission).
+
+**Branch**: `fix/catalog-download-progress-and-parse-freeze`, cut from `main`.
+**Note**: `npm` is not on PATH — prepend `C:\Alekos\Tools\node24portable` per
+`.agents/rules/portable_node.md`.
+
+## The bug, as diagnosed by the orchestrator
+
+User report: loading a file from an external catalogue source shows no progress bar, the UI
+sometimes freezes, then it jumps straight to the preview map.
+
+Two distinct root causes, both real, both in scope:
+
+**A — no progress feedback anywhere in the chain.** Every hop buffers the whole payload with no
+streaming reader: `CkanPortalClient.downloadResource` (`src/modules/cartography-watcher/services/CkanPortalClient.ts:60-74`,
+`fetch().arrayBuffer()`), the API route `readCatalogFile` (`src/modules/cartography-watcher/api/handlers.ts:171-198`,
+returns the full buffer, `Content-Length` already set at line 192), and the browser's own
+`fetchCatalogFile` (`src/modules/cartography-watcher/ui/watcherClient.ts:107-125`, plain
+`fetch().blob()`). `CatalogTreeSelector.tsx` (`src/modules/cartography-watcher/ui/CatalogTreeSelector.tsx:148-163`)
+only disables the clicked resource button while its mutation is pending — no spinner, no percentage.
+
+**B — the actual freeze is synchronous main-thread parsing, not the download.** Once the `File`
+lands, `CsvUploader.processFile` (`src/components/tools/db-csv-sync/CsvUploader.tsx:41-57`) and
+`ShapefileUploader.processFile` (`src/components/tools/db-shapefile-sync/ShapefileUploader.tsx:37-54`)
+call `parser.parse(file)`, whose body has zero yield points:
+- `CsvParser.processRows` (`src/core/services/parsers/CsvParser.ts:145-191`) — one unbroken `for`
+  loop over every row, char-by-char tokenizing + WKT/EWKB parsing.
+- `ShapefileParser.parse` (`src/core/services/parsers/ShapefileParser.ts:71-88`) — loops up to
+  `MAX_MAP_PREVIEW_FEATURES` (150,000, `src/core/constants/mapConstants.ts`) synchronously calling
+  `shpReader.readGeometry()` + projection conversion per record. `BinaryShpReader.buildRecordIndex`
+  (`src/core/binary/BinaryShpReader.ts:47-52`, loop from `:78`) scans the *entire* file first,
+  uncapped by the preview limit.
+
+`setLoading(true)` fires, but the synchronous parse can start before the browser paints that state,
+so the spinner never shows and everything unblocks at once straight into the preview map. This is
+the same mechanism already diagnosed in `docs/issues/ISSUE_015_LAZY_SQL_GENERATION_AND_IMMEDIATE_EXECUTION_MODAL.md`.
+`docs/issues/ISSUE_005_POSTGIS_LARGE_DATASET_QUERY_PROGRESS_FREEZE.md` already solved the analogous
+DB-query case with a streaming reader feeding `ProgressBar` — that is the template for this mission,
+not a new pattern.
+
+## Binding decisions
+
+**D1 — reuse the existing progress contract, do not invent a new one.** `ProgressCallback =
+(phase: string, current: number, total: number) => void` already exists in
+`src/core/types/comparison.ts:4` and is already the shape `DatabaseStreamReader`
+(`src/core/services/streaming/DatabaseStreamReader.ts`) and every `IComparisonEngine` use. Every new
+progress callback added in this mission — parser progress, download progress — uses this exact
+type. Import it; do not redeclare it.
+
+**D2 — reuse the existing progress-bar rendering pattern, do not invent a new one.**
+`ComparisonResultsView.tsx:56,73-83` already establishes the pattern this codebase uses for
+"loading with a progress readout": `showProgress = loading && progress.phase !== "" && progress.total > 0`
+→ render `<ProgressBar phase current total pct />` (`src/ui-kit/components/ProgressBar.tsx`);
+otherwise render the existing `Loader2` spin icon with a phase-text label (indeterminate state, no
+known total). Every new loading UI in this mission (`CsvUploader`, `ShapefileUploader`,
+`CatalogTreeSelector`) follows this same conditional — same component, same gating expression
+shape, not a new one per file.
+
+**D3 — the yield primitive is `await new Promise<void>((resolve) => setTimeout(resolve, 0))`,
+called periodically inside the parse loops.** Not `requestAnimationFrame` (unavailable under
+Vitest's `environment: "node"`, and only fires while the tab is visible/painting — irrelevant here,
+the goal is freeing the event loop for input/paint, which a macrotask boundary already does) and not
+a Web Worker (bigger blast radius, new build/bundling surface, not needed — chunked yielding is
+sufficient to keep the main thread responsive). Put this in one small shared helper, e.g.
+`src/core/common/mainThreadYield.ts` exporting `yieldToMainThread(): Promise<void>`, used by both
+`CsvParser` and `ShapefileParser` — do not duplicate the `setTimeout` line in each file.
+
+**D4 — chunk size is a named constant, not a magic number.** Add it alongside the existing parsing
+caps in `src/core/constants/mapConstants.ts` (where `MAX_MAP_PREVIEW_FEATURES` already lives) —
+e.g. `PARSE_PROGRESS_CHUNK_SIZE = 2000`. Every `chunkIndex % PARSE_PROGRESS_CHUNK_SIZE === 0` check
+calls `onProgress` then `await yieldToMainThread()`. One shared constant for both parsers unless you
+find a concrete reason CSV rows and shapefile records need different chunk sizes — if so, name both
+explicitly and say why in your report.
+
+**D5 — `parse()` gains an optional trailing `onProgress?: ProgressCallback` parameter on both
+`CsvParser` and `ShapefileParser`, and on the shared `ISpatialFileParser` interface
+(`src/core/types/parsers.ts`) they implement.** Optional and backward compatible: every existing
+caller that does not pass it keeps compiling and behaving exactly as today (confirm
+`src/components/tools/file-viewer/FileViewerUploader.tsx`, the third consumer of these parsers,
+still compiles and runs unchanged — it is not required to grow a progress UI in this mission, just
+not to break).
+
+**D6 — `BinaryDbfReader`'s field/record parsing gets the same chunked-yield treatment only if you
+confirm its cost actually scales with record count.** Read it before deciding. If it is
+proportional to `recordCount` (a per-record loop), treat it the same as `buildRecordIndex` and the
+feature-extraction loop. If it is bounded by field count / header size only, leave it untouched and
+say so in your report — do not add yielding to work that is not the freeze's cause.
+
+**D7 — download progress covers the browser-to-our-API hop only, not the external CKAN fetch
+itself.** `fetchCatalogFile` (`watcherClient.ts:107-125`) gains an optional trailing
+`onProgress?: ProgressCallback` parameter. Read the response via `response.body!.getReader()` in a
+loop, decode nothing (this is binary), track `receivedBytes` against the `Content-Length` header
+(already set server-side at `handlers.ts:192`) if present; call
+`onProgress("Descargando archivo del catálogo...", receivedBytes, totalBytes)` per chunk, with
+`totalBytes = 0` when `Content-Length` is absent (the UI's D2 gating already renders the
+indeterminate state correctly in that case). Reassemble the received chunks into the `Blob`/`File`
+exactly as today — do not change the returned type or the filename-resolution logic at
+`watcherClient.ts:120-124`.
+
+**Do not touch `CkanPortalClient.ts`, `VaultStorageService.ts`, or the response construction in
+`handlers.ts`.** True end-to-end streaming from the external CKAN portal through our API to the
+browser in real time (a tee'd pass-through stream) is a materially bigger architectural change —
+note it in your report as a follow-up, do not build it now. The server-side wait before headers
+arrive will render as the indeterminate phase from D7/D2; that is the accepted, honest behavior for
+this mission, not a bug to chase further.
+
+**D8 — `CatalogTreeSelector.tsx` wires its own download progress into its own local UI**, next to
+the resource button that is loading (not threaded through `onSelectFile`/`processFile` — that
+boundary stays exactly as it is; the uploader components only ever receive the finished `File`).
+Use the D2 pattern at the scale that fits a tree row — a compact `ProgressBar` or equivalent inline
+phase+pct text is fine; keep it a small, self-contained piece of UI, not a new abstraction shared
+across files that do not need it.
+
+**D9 — `CsvUploader`/`ShapefileUploader` replace their static `Loader2` + fixed-label loading block
+(`CsvUploader.tsx:140-145`, `ShapefileUploader.tsx:136-142`) with the D2 pattern**, fed by the
+parser's `onProgress`. Track a `progress: ComparisonProgress`-shaped state
+(`{phase, current, total, pct}` — the type already exists at
+`src/core/types/comparison.ts:129-134`, reuse it) local to each component, initialized to an
+indeterminate "Leyendo archivo..." phase before the parser's first callback fires.
+
+## Explicitly out of scope
+
+- `CkanPortalClient`, `VaultStorageService`, `handlers.ts` response construction (D7 note).
+- Web Workers / offloading parsing off the main thread — chunked yielding is the chosen fix.
+- Any change to `MAX_MAP_PREVIEW_FEATURES`, `BinaryShpReader`'s/`BinaryDbfReader`'s public method
+  signatures beyond what D5/D6 require, projection/geometry math, `ZipShapefileExtractor`.
+- `ComparisonResultsView.tsx`, `DatabaseStreamReader.ts`, or any DB-comparison progress plumbing —
+  already correct, referenced only as the pattern to copy.
+- New progress UI in `FileViewerUploader.tsx` — must keep compiling and working, does not need to
+  gain a progress bar in this mission.
+- Playwright coverage for the new progress UI. Real evidence here is the unit tests below; do not
+  attempt to make a Playwright fixture large enough to observably chunk — likely flaky, not worth
+  the risk in this mission.
+- The `feat/viewport-windowed-map-rendering` branch's outstanding fabricated-telemetry correction
+  (see the mission above this one). Unrelated thread, not touched here.
+
+## Tests required
+
+- `CsvParser`: `onProgress` is invoked with strictly increasing `current` across multiple chunks for
+  a row count that spans several `PARSE_PROGRESS_CHUNK_SIZE` boundaries, and the final call reports
+  `current === total`. `parse()` still resolves correctly and all existing `CsvParser.test.ts` /
+  `CsvParserRecordAliasing.test.ts` assertions remain unchanged when `onProgress` is omitted.
+- Prove the loop actually yields, not just reports: a test using fake timers (or a `setTimeout` spy)
+  showing the parse promise does not resolve until the scheduled macrotask yields are flushed.
+- `ShapefileParser`: same shape — `onProgress` fires across `buildRecordIndex` and the
+  feature-extraction loop for a record count spanning multiple chunks, final call reaches the true
+  total, and `isLargeDataset`/preview-cap behavior is provably unchanged.
+- `fetchCatalogFile`: a test with a mocked `Response` whose `body` is a `ReadableStream` emitting
+  known chunk sizes plus a `Content-Length` header — assert `onProgress` calls carry correct
+  `current`/`total` and the final `File`'s bytes and filename are unchanged from today. A second
+  test for the no-`Content-Length` path: `onProgress` called with `total === 0`, function still
+  resolves correctly.
+- `yieldToMainThread`: trivial unit test that it resolves after a macrotask tick.
+
+## Rules that bind this work
+
+`AGENTS.md`, `.agents/rules/coding_guidelines.md`, `.agents/rules/module_authoring.md`,
+`.agents/rules/testing_standards.md`, `.agents/rules/code_review_standards.md`.
+
+## Definition of done
+
+Full gauntlet green, real output pasted into `.agents/handoff/TO_ORCHESTRATOR.md`:
+
+```
+npm run modules:routes:check
+npm run lint
+npm test
+npm run build
+npm run doctor
+```
+
+(`test:e2e` unaffected by this mission per the out-of-scope note above — run it anyway and confirm
+the existing 23 specs still pass unchanged, since the uploader loading-state markup is changing.)
+
+State plainly: the D6 `BinaryDbfReader` decision and why, the final chunk-size constant(s) chosen,
+and confirm `FileViewerUploader.tsx` still compiles and works untouched.
+
+Do not commit.
+
+---
+
+# Fix round 1 — one implementer defect, one gap in my own plan
+
+Round 1 of 3. Gauntlet re-run independently by a fresh-context `code-reviewer`, genuinely green:
+
+```
+> npm run modules:routes:check   → Generated module routes are up to date (7 route file(s))
+> npm run lint                   → 0 errors, 0 warnings
+> npm test                       → Test Files 34 passed (34), Tests 353 passed (353)
+> npm run build                  → Compiled successfully, TypeScript clean, 18 routes generated
+> npm run doctor                 → No issues found!
+```
+
+(`test:e2e` was not independently re-run this round — the reviewer judged the change surface small
+enough and time-boxed the review; if you touch any uploader/tree markup while fixing the items
+below, re-run it yourself and paste real numbers before reporting done.)
+
+`doctor`'s score readout came back as "Score unavailable (could not reach the score API)" this run
+instead of the "100/100" your report claimed — the substantive check ("No issues found!") still
+passed both times, so this reads as the score API being flaky/unreachable in this environment, not
+a regression. Not an action item, noting it so the discrepancy isn't silently dropped.
+
+Everything else holds: `ProgressCallback` reused from `src/core/types/comparison.ts` (not
+redeclared, D1 honored), the D2 progress-bar pattern followed consistently in `CsvUploader` /
+`ShapefileUploader` / `CatalogTreeSelector`, the CSV/Shapefile parser yield-gating is correct at
+every chunk boundary (verified against 2000/2050/2100-row/feature test cases, no double-fire, no
+skipped terminal callback), the streaming download's chunk accumulation / `Content-Length`
+handling / blob-fallback / error paths are all correct, `FileViewerUploader.tsx` is untouched and
+still compiles, D6's `BinaryDbfReader` no-op is correctly justified, and the `CsvParser.test.ts`
+diff is purely additive — no weakened or deleted assertion anywhere in the test diff.
+
+## M1 [MAJOR] — unrelated doc comments deleted from `mapConstants.ts`
+
+`src/core/constants/mapConstants.ts:95-100` (current file). The diff against `main` deletes the
+multi-line rationale comments that stood above `MAP_MICRO_CHUNK_SIZE`, `MAX_MAP_PREVIEW_FEATURES`,
+`MAX_VIEWPORT_RENDER_FEATURES`, `VIEWPORT_INDEX_PADDING_RATIO`, and
+`SPATIAL_INDEX_TARGET_FEATURES_PER_CELL` — none of which this mission touches otherwise. Those
+constants belong to the unrelated ISSUE_030 viewport-windowing feature (consumed by
+`ViewportFeatureIndex.ts`, `SpatialMapPreview.tsx`, `useVectorChunkStream.ts`,
+`useViewportFeatureWindow.ts`, `useLeafletMap.ts`) and were written deliberately, one round at a
+time, across that mission's own review cycle (see `MAX_MAP_PREVIEW_FEATURES`'s comment above — it
+recorded the exact 1,051,248-feature / 2.5GB measurement from
+`BINARY_SHAPEFILE_1M_OPTIMIZATION.md` and its proportional scaling to the 150,000 cap;
+`SPATIAL_INDEX_TARGET_FEATURES_PER_CELL`'s comment recorded the grid-dimension clamp formula). This
+is exactly the "critical, non-obvious context" `AGENTS.md` reserves comments for, and it is now
+gone for no reason connected to this mission's scope.
+
+**Failure scenario:** not a runtime bug — a documentation loss. The next engineer who needs to
+retune `MAX_MAP_PREVIEW_FEATURES` or `SPATIAL_INDEX_TARGET_FEATURES_PER_CELL` has no comment
+pointing them at the measurement or the formula that justified the current value, and has to
+re-derive it or go spelunking through `BINARY_SHAPEFILE_1M_OPTIMIZATION.md` and the ISSUE_030
+thread in this same file to recover what used to be one comment away.
+
+**Fix:** restore the five deleted comment blocks exactly as they were on `main`
+(`git show main:src/core/constants/mapConstants.ts` has them), then add `PARSE_PROGRESS_CHUNK_SIZE`
+with its own one-line comment underneath, touching nothing else in the file.
+
+## M2 [MAJOR] — download progress has no throttle, unlike every parse loop in this same mission
+
+**This one is mine, not yours.** D7 of the original brief said "call `onProgress(...)` per chunk"
+without specifying a throttle, while D4 explicitly gated the parser loops on
+`PARSE_PROGRESS_CHUNK_SIZE`. You implemented D7 exactly as written — the gap is in the plan, not
+the execution.
+
+`src/modules/cartography-watcher/ui/watcherClient.ts:126-146` (`fetchCatalogFile`'s streaming
+loop) calls `onProgress` on every single `reader.read()` resolution, no count/byte gate. Consumed
+by `CatalogTreeSelector.tsx:161-172`'s `setDownloadProgress` inside `selectFileMutation`, with no
+memoization on `CatalogResourceRow`/`CatalogGroup`. Confirmed by your own test
+(`tests/unit/modules/cartography-watcher/fetchCatalogFile.test.ts:52`): two enqueued chunks produce
+two `onProgress` calls, by design — one `setState` per network chunk, unconditionally.
+
+**Failure scenario:** a 100–200MB catalogue shapefile downloaded over a fast/local connection
+arrives as hundreds to several thousand `ReadableStream` chunks (typical browser chunk sizes are
+tens of KB). Each one forces a re-render of the whole catalog tree. Because each `await
+reader.read()` resumption is a separate task/microtask boundary, React doesn't collapse these into
+one paint — this reintroduces exactly the kind of main-thread churn this mission exists to
+eliminate, just moved from parsing to downloading.
+
+**Fix:** gate `onProgress` in the download loop the same way the parsers gate theirs — fire on a
+byte-interval or every Nth chunk, plus one unconditional final 100% call (same shape as
+`PARSE_PROGRESS_CHUNK_SIZE`'s pattern; reuse that constant or a byte-based sibling, your call, name
+it and say why). This also absorbs a minor duplicate-call artifact at
+`watcherClient.ts:141-146`: when `Content-Length` is known, the last loop iteration already reports
+`current === total` and the unconditional post-loop block fires an identical call again — a
+correctly-throttled version naturally collapses to one terminal call, so no separate fix needed
+there once M2 lands.
+
+## Rejected — do not implement
+
+- **Extracting `CsvUploader`/`ShapefileUploader`'s `ParseProgress` interface and progress-handling
+  block into a shared hook.** Both already reuse the pre-existing `ProgressBar` component
+  (`src/ui-kit/components/ProgressBar.tsx`, already shared with `ComparisonResultsView.tsx` /
+  `SqlExecutionProgress.tsx`) — the ~15 duplicated lines are a small parallel conditional and a
+  percentage-calc closure, not duplicated presentation logic, and mirror this codebase's
+  established pattern of parallel-but-separate CSV/Shapefile upload components (the same pattern
+  the wizard-steps mission explicitly declined to collapse for the analogous three sync wizards).
+  Not worth a fix round.
+
+## Definition of done for this round
+
+Gauntlet green again, real output pasted: `modules:routes:check`, `lint`, `test`, `build`, `doctor`.
+If you touched any uploader/catalog markup while fixing M2, re-run `test:e2e` and paste real
+numbers. 353 existing tests byte-identical; only additions for M2's new throttling behavior (assert
+the call count no longer scales 1:1 with chunk count, and that the terminal call still reports
+100%). Report M1 and M2's resolution plainly.
+
+Do not commit.
+
+---
+
+# Round 2 review — approved with one non-blocking note
+
+Gauntlet re-run independently by a fresh-context `code-reviewer`, genuinely green:
+
+```
+> npm run modules:routes:check   → Generated module routes are up to date (7 route file(s))
+> npm run lint                   → 0 errors, 0 warnings
+> npm test                       → Test Files 34 passed (34), Tests 354 passed (354)
+> npm run build                  → Compiled successfully, TypeScript clean, all routes generated
+> npm run doctor                 → No issues found! (score API unreachable again — same
+                                     environmental flakiness noted last round, not a regression)
+```
+
+`test:e2e` not re-run this round — no uploader/catalog markup changed beyond what the prior 23/23
+pass already covered.
+
+**M1 — accepted, not restored.** The claimed user override was confirmed directly with the user
+this round: they gave that instruction to the implementer session personally. The comments in
+`mapConstants.ts` stay deleted. Independently of the override, the domain-separation refactor
+(`PARSE_PROGRESS_CHUNK_SIZE` → `src/core/constants/parserConstants.ts`,
+`DOWNLOAD_PROGRESS_BYTE_INTERVAL` → `src/modules/cartography-watcher/constants.ts`) was verified
+sound: correct exports, correctly consumed, no circular imports, no stale imports of the old
+location. Closed.
+
+**M2 — fully resolved, verified by independent boundary-math derivation, not just re-reading the
+description.** The `lastReportedBytes` throttle in `fetchCatalogFile`
+(`watcherClient.ts:126-166`) was traced by hand across four cases — multi-chunk with known total,
+single-chunk with known total, and both of those with `Content-Length` absent — with no double-fire
+and no skipped terminal call in any of them. The new test's 10×10KB-chunks-against-a-64KB-threshold
+scenario was independently re-derived (fires at 10KB, 80KB, terminal 100KB = 3 calls) and matches
+the test's own assertions exactly, not just trusted at face value. Closed.
+
+## N1 [MINOR] — download progress reports 100% on every throttled tick when Content-Length is absent
+
+`watcherClient.ts:151-160`. When the server omits `Content-Length` (`totalBytes = 0`), every
+throttled `onProgress` call reports `total: receivedBytes` — i.e. `current === total` on every
+single fire, not only the last one. `CatalogTreeSelector.tsx:73` computes
+`Math.round((current/total)*100)` from this, so the badge reads "100%" at every intermediate
+throttle point during such a download, never showing genuine partial progress until the download
+actually finishes.
+
+**Pre-existing, not introduced this round** — present in the original streaming implementation
+before M1/M2 even existed as findings, confirmed by re-checking the base-mission diff. Not part of
+M1/M2's scope and not gating this round's closure. Logged here so it isn't lost: worth a follow-up
+if CKAN's file endpoint is ever observed omitting `Content-Length` in practice (it currently always
+sets it server-side per the original mission brief's D7, `handlers.ts:192`, so this may be
+purely theoretical today).
+
+## Status
+
+Mission complete. No BLOCKER or MAJOR findings remain open. M1 and M2 both closed. N1 logged as a
+non-blocking follow-up candidate, not required before commit. Ready for the user's explicit commit
+instruction — implementer and orchestrator do not commit on their own.
+
+Do not commit.
