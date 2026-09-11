@@ -988,3 +988,535 @@ Gauntlet green again, real output pasted: `modules:routes:check`, `lint`, `test`
 resolution and paste the `test` gate output showing the new count.
 
 Do not commit.
+
+---
+
+# Mission — Viewport-windowed map rendering (Phase 1 of the 1M+ feature initiative)
+
+**Branch**: `feat/viewport-windowed-map-rendering`, cut from `main`.
+**Note**: `npm` is not on PATH — prepend `C:\Alekos\Tools\node24portable` per
+`.agents/rules/portable_node.md`.
+**Rules that bind this work**: `AGENTS.md` in full, plus `.agents/rules/testing_standards.md`,
+`.agents/rules/testing_branch_workflow.md`, `.agents/rules/coding_guidelines.md`,
+`.agents/rules/module_authoring.md`, `.agents/rules/portable_node.md`.
+
+## Why this mission exists
+
+The user wants the viewer tools to render **1M+ features**. Today two independent caps sit in the
+way, and this mission fixes the one that is architecturally load-bearing:
+
+1. **Render-layer cap.** `useVectorChunkStream.ts` (`src/ui-kit/hooks/map/useVectorChunkStream.ts`)
+   builds one Leaflet layer object per feature in the **entire** collection handed to it, streamed
+   progressively via `requestAnimationFrame` in 400-feature micro-batches
+   (`MAP_MICRO_CHUNK_SIZE`/`MAP_FRAME_BUDGET_MS`, `src/core/constants/mapConstants.ts:96-98`). That
+   was made cheap per-feature by `docs/issues/ISSUE_022_PREVIEW_MAP_RENDER_PATH_ALLOCATION_COST.md`
+   (shared stateless stylers, one delegated click listener, no worker), but the cost is still
+   **linear in total feature count**, because Leaflet still materializes one `L.Path`/`L.CircleMarker`
+   object per feature regardless of what is actually visible. ISSUE_022's own "Known limitation"
+   section names the fix and explicitly deferred it: *"Raising the ceiling meaningfully requires...
+   rendering only what is in the viewport."* This mission is that fix.
+2. **Ingestion-layer cap.** `MAX_MAP_PREVIEW_FEATURES` (`src/core/constants/mapConstants.ts:101`,
+   currently `25_000`) also bounds **eager geometry decode** in `ShapefileParser.ts:63-88` and the
+   DB row-streaming query limit in `useDbQueries.ts:43-46`. This exists because
+   `docs/architecture/BINARY_SHAPEFILE_1M_OPTIMIZATION.md` measured eagerly decoding 1,051,248
+   shapefile records into GeoJSON `Feature` objects at **>2.5 GB of V8 heap**, which OOM-crashed the
+   tab. That cap is a decode-cost safety limit, not a rendering limit, and is only partially in
+   scope here (D6 below).
+
+Two consumers of the shared `SpatialMapPreview` component matter differently:
+- **Discrepancy map** (`ComparisonResultsView.tsx:144`, `maxFeatures={null}`): the full
+  `useDiscrepancyGeojson` collection already reaches the map uncapped today. Its features are
+  discrepancy items whose geometry was already decoded for SQL-patch/attribute comparison
+  regardless of the map, so **decode cost is already paid** — the render layer is the only
+  remaining bottleneck. This is the primary target: the user says this map "has never needed to
+  load more than 500k (which it does ok so far, but still needs improvement)" — the goal is 1M+.
+- **Step-2 raw-upload sanity preview** (`CsvUploader.tsx`, `LoadedShapefileCard.tsx`-driven flow,
+  `FileViewerContainer.tsx`, `DbTableViewerContainer.tsx`): bottlenecked upstream by the
+  ingestion-layer cap (D6), so it benefits from windowing but stays bounded by decode cost, by
+  design (see Out of scope).
+
+## Binding decisions
+
+**D1 — Architecture: viewport windowing over the existing Leaflet + canvas renderer, not a new map
+engine.** Keep `L.canvas({ padding: 0.5 })` (`useMapInstance.ts:24`) and the existing rAF
+chunk-stream renderer from ISSUE_022 untouched. Add a windowing layer **above** it: feed
+`useVectorChunkStream` only the subset of features whose bounding box intersects a padded viewport,
+instead of the full collection. This bounds concurrent Leaflet layer count to "what's on screen,"
+not "the whole dataset" — that is what makes 1M+ viable. Migrating to a WebGL renderer (maplibre-gl,
+deck.gl, leaflet.glify) is explicitly rejected for this phase (see Out of scope).
+
+**D2 — New headless spatial index, hand-rolled uniform grid, zero new npm dependency.** Add
+`src/core/spatial/ViewportFeatureIndex.ts`. It must stay headless per the layer boundary in
+`AGENTS.md` (`core/` imports only `core`, no `react`, no `leaflet`): operate on plain GeoJSON
+`Feature[]` and `[minX, minY, maxX, maxY]` tuples only.
+- Compute one bbox per feature (min/max of every coordinate in its geometry — write this as its own
+  small pure helper, e.g. `computeFeatureBBox(feature): BBox | null`, returning `null` for a feature
+  with no coordinates rather than throwing).
+- Bucket feature indices (not feature objects — indices into the source array) into a uniform grid
+  sized off the full collection's overall bbox.
+- Grid resolution formula (binding, do not leave as a guess):
+  `gridDimension = clamp(Math.ceil(Math.sqrt(featureCount / SPATIAL_INDEX_TARGET_FEATURES_PER_CELL)), 4, 512)`.
+- Expose `queryBBox(bbox: BBox): number[]` returning candidate feature **indices**, ascending, for
+  every grid cell the query bbox overlaps (dedup a feature that spans multiple cells).
+- A library (`rbush` or similar) was considered and rejected: the project's established pattern for
+  this scale of problem (see `BinaryDbfReader`, `BinaryShpReader`, `StringInternPool`) is small,
+  purpose-built, fully-owned structures over pulling in a dependency, and a grid index is simpler to
+  pin with deterministic unit tests than a bulk-loaded R-tree.
+
+**D3 — Add `BBox` to `src/core/types/map.ts`**: `export type BBox = [number, number, number, number];`
+(`[minX, minY, maxX, maxY]`). Used by D2 and D4; never leak a Leaflet `LatLngBounds` into `core/`.
+
+**D4 — Pure windowing decision logic, separate from the React hook.** Add
+`src/core/spatial/ViewportWindowPlanner.ts` exporting a pure function, e.g.:
+```ts
+function planViewportWindow(
+  index: ViewportFeatureIndex,
+  sourceFeatures: readonly Feature[],
+  viewportBBox: BBox,
+  previousWindowBBox: BBox | null,
+  options: { paddingRatio: number; maxRenderFeatures: number }
+): { shouldRebuild: boolean; windowedFeatures: Feature[]; newWindowBBox: BBox }
+```
+- `shouldRebuild` is `false` (no-op) whenever `viewportBBox` is fully contained within
+  `previousWindowBBox` — panning/zooming inside the already-rendered padded buffer must never
+  trigger a rebuild. `previousWindowBBox === null` (first run) always rebuilds.
+- When rebuilding, `newWindowBBox` is `viewportBBox` expanded by `paddingRatio` on every side
+  (`VIEWPORT_INDEX_PADDING_RATIO`, see D5), and `windowedFeatures` is built by indexing into
+  `sourceFeatures` by the indices `queryBBox` returns — **`sourceFeatures[candidateIndex]`, never a
+  clone or spread**. Feature object identity from the source collection must be preserved; windowing
+  must be invisible to anything that compares features by reference or does `Array.indexOf`.
+- If the candidate count exceeds `options.maxRenderFeatures`, cut it with the existing
+  `capFeaturesWithoutSplittingGroups` (`src/core/spatial/FeaturePreviewCap.ts`) rather than a plain
+  slice — the discrepancy map's DB/FILE pairs (`_pairId`) must never be split, same rule as today.
+- This function is the unit-testable core of the whole mission. The reason it is pulled out of the
+  hook: this codebase's convention (see `createStyleResolver`, `capFeaturesWithoutSplittingGroups`)
+  is that map behaviour with real test coverage lives in a pure function, and the React hook that
+  calls it stays a thin, untested adapter — `vitest.config.mts` only collects
+  `tests/unit/**/*.test.ts` (no `.tsx`), so a hook cannot be unit-tested here today regardless.
+
+**D5 — New named constants in `src/core/constants/mapConstants.ts`** (no magic numbers in the new
+code):
+- `MAX_VIEWPORT_RENDER_FEATURES = 50_000` — hard cap per rendered window (not per dataset).
+- `VIEWPORT_INDEX_PADDING_RATIO = 1.0` — the padded query buffer extends the visible viewport by
+  100% on every side, so a pan of roughly one screen-width in any direction needs no rebuild.
+- `SPATIAL_INDEX_TARGET_FEATURES_PER_CELL = 32` — grid resolution input for D2's formula.
+Comment each one distinguishing it from `MAX_MAP_PREVIEW_FEATURES` (decode/query cap, D6) — these
+three are render-window caps, a different concern, and future readers must not conflate them again.
+
+**D6 — Raise `MAX_MAP_PREVIEW_FEATURES` from `25_000` to `150_000`** (`mapConstants.ts:101`). This
+is the ingestion/decode-side cap only (`ShapefileParser.ts:63-88`, `useDbQueries.ts:43-46`) — leave
+its role there unchanged, just the number. Reasoning to record in the constant's comment: the
+1,051,248-feature / 2.5 GB measurement in `BINARY_SHAPEFILE_1M_OPTIMIZATION.md` scales
+proportionally to roughly 360 MB at 150,000 features — a real ~6x lift for large-file Step-2
+previews, while staying a safe fraction of a browser tab's heap. Do not raise it further and do not
+remove it — see Out of scope.
+
+**D7 — `SpatialMapPreview`'s `maxFeatures` prop stops being the render bottleneck.**
+- `src/ui-kit/components/SpatialMapPreview.tsx:37` — change the default from
+  `maxFeatures = MAX_MAP_PREVIEW_FEATURES` to `maxFeatures = null`. Once windowing (D1-D4) bounds
+  the actual Leaflet layer count, pre-slicing the collection before it reaches the map only
+  reintroduces "always the same first-N corner of the dataset," which is the exact symptom the user
+  wants gone.
+- `src/components/tools/db-csv-sync/CsvUploader.tsx` — remove `buildCappedPreviewGeoJson` and its
+  cap-notice banner (the block introduced by
+  `docs/issues/ISSUE_017_CSV_STEP2_PREVIEW_MAP_FEATURE_CAP.md`, roughly lines 13, 47, 56-70, 204 —
+  confirm exact ranges when you open the file). Pass `data.geojson` straight to `SpatialMapPreview`,
+  the same shape `ComparisonResultsView.tsx:139-145` already uses for the discrepancy map.
+- Leave `FileViewerContainer.tsx` and `DbTableViewerContainer.tsx` as-is: they already omit
+  `maxFeatures`, so they pick up the new `null` default automatically.
+
+## Work — wiring the hooks
+
+1. `useViewportFeatureWindow.ts` (new, `src/ui-kit/hooks/map/`): the adapter hook.
+   - Build a `ViewportFeatureIndex` once per full-`geojson`-identity change, mirroring the
+     `lastProcessedGeojsonRef` freshness-check idiom already in `useVectorChunkStream.ts:23,54-70`
+     (do not rebuild the index on every render).
+   - Register `moveend`/`zoomend` on the Leaflet map instance (`mapInstanceRef`); on each, convert
+     `map.getBounds()` to a `BBox` and call `planViewportWindow`.
+   - Also run the same computation once, eagerly, right after the map/index become ready (there is
+     no `moveend` before the first paint).
+   - **Return a stable `FeatureCollection` reference when `shouldRebuild` is `false`.** Hold the
+     current windowed collection in a ref and only replace it (creating a new object) inside the
+     `shouldRebuild: true` branch — do not construct `{ type: "FeatureCollection", features: ... }`
+     inline on every call, or every pan will look like a dataset change downstream. Verify with
+     `npm run doctor` that React Compiler / react-doctor raises no manual-memoization finding, the
+     same check ISSUE_023's postscript already relies on elsewhere in this hook chain.
+2. `useVectorChunkStream.ts` — change its signature to take both the full `geojson` (kept, used only
+   for `bindGroupFeatureEvents(featureGroup, geojson?.features ?? [], ...)` at line 80-82 — this
+   must keep resolving click→index against the **full** collection, unchanged, or ISSUE_023's
+   row↔map selection breaks) and the new windowed collection (drives `totalFeatures` and the
+   `geojson.features.slice(...)` chunk loop at lines 85-120 — rename that local usage to the
+   windowed one). The effect's rebuild-trigger dependency moves from `geojson` to the windowed
+   collection's reference.
+3. `useLeafletMap.ts` — insert `useViewportFeatureWindow` between step 2 (`useBasemapTileLayer`) and
+   step 3 (`useVectorChunkStream`), and pass its output into `useVectorChunkStream` per point 2.
+   `useFeatureHighlight` (step 4) keeps receiving the full `geojson`, unchanged — it already indexes
+   the full collection directly and must keep doing so.
+4. Do not touch `MapEventHandler.ts` or `MapSymbologyStyler.ts` — D4's reference-preservation
+   guarantee is exactly what keeps them correct unmodified.
+
+## Required test coverage (new files, headless, real logic per `.agents/rules/testing_standards.md`)
+
+- `tests/unit/core/spatial/ViewportFeatureIndex.test.ts`:
+  - empty collection → any query returns no candidates.
+  - a bbox query fully containing the collection's extent returns every feature index.
+  - a feature bbox that only partially overlaps the query bbox is still included (boundary case:
+    "intersects", not "fully contains").
+  - a feature entirely outside the query bbox is excluded.
+  - point features (zero-area bbox) at the exact edge of a query bbox.
+  - every feature landing in the same grid cell (degenerate density) — none may be lost.
+  - grid dimension formula boundary: `featureCount = 1` and a very large `featureCount` that clamps
+    to the configured maximum grid dimension.
+- `tests/unit/core/spatial/ViewportWindowPlanner.test.ts`:
+  - viewport fully inside the previous window bbox → `shouldRebuild: false`, and the returned
+    collection must be reference-stable (same array/object, not just equal) — assert this, it is the
+    behaviour point 1 above depends on.
+  - viewport partially outside the previous window bbox → `shouldRebuild: true`.
+  - `previousWindowBBox: null` (first run) → always rebuilds.
+  - candidate count under `maxRenderFeatures` → no capping applied.
+  - candidate count over `maxRenderFeatures` → `capFeaturesWithoutSplittingGroups` is applied
+    (assert a `_pairId` group is never split, reusing the pair-building helpers already in
+    `tests/unit/core/spatial/FeaturePreviewCap.test.ts` as a model).
+  - windowed features are the **same object references** as in `sourceFeatures` (identity check via
+    `toBe`, not `toEqual`) — this is the guarantee D4 and step 4 of the Work section depend on.
+- Do not modify `tests/unit/core/spatial/FeaturePreviewCap.test.ts` or
+  `tests/unit/hooks/useDiscrepancyGeojson.test.ts` — neither module's contract changes.
+
+## Out of scope (with reasons — do not implement any of this)
+
+- **Lazy on-demand geometry decode at ingestion** (reading bbox/geometry directly from
+  `BinaryShpReader` offsets instead of a pre-materialized `FeatureCollection`, so Step-2 previews
+  could exceed the 150,000 decode cap). Materially larger effort — the spatial index would need to
+  operate on raw binary offsets, not decoded GeoJSON — and risks reintroducing the exact eager-decode
+  OOM `BINARY_SHAPEFILE_1M_OPTIMIZATION.md` was built to prevent if rushed. Candidate Phase 2, only
+  after Phase 1 is validated in production.
+- **Replacing Leaflet with a WebGL renderer** (maplibre-gl, deck.gl, leaflet.glify). Viewport
+  windowing bounds concurrent layer count regardless of total dataset size, which is sufficient for
+  1M+ total features without a rendering-engine migration. A WebGL migration is a much larger,
+  higher-risk change touching every map consumer's styling/popup/selection model.
+- **Point clustering / marker aggregation** (e.g. Supercluster) for zoomed-out density. The
+  discrepancy map's per-feature discrepancy-type colouring is the point of the view; clustering would
+  blend distinct discrepancy types together. D4's group-safe decimation is the chosen mitigation for
+  an over-dense viewport.
+- **Incremental (add/remove individual layers) windowing** instead of D3's rebuild-on-buffer-exit.
+  A larger rewrite of `useVectorChunkStream`'s render loop for uncertain benefit at this stage;
+  revisit only if manual verification shows the padded-buffer rebuild is visibly janky.
+- **Raising `MAX_MAP_PREVIEW_FEATURES` beyond 150,000, or removing it.** Covered by D6.
+- **Any change to the Web Worker comparison engine, SQL patch generation, or the binary
+  shapefile/DBF readers.** This mission is scoped to the map-rendering path only.
+
+## What comes next — context, not scope
+
+Phase 2 (not this mission, no design work needed now): lazy binary-backed geometry decode for the
+Step-2 ingestion preview, so its cap can rise past 150,000 without the OOM risk noted above. Only
+pursue this if Phase 1 is validated and the ingestion cap remains a felt limitation.
+
+## Definition of done
+
+Full gauntlet green, real output pasted into `.agents/handoff/TO_ORCHESTRATOR.md`:
+`npm run modules:routes:check`, `npm run lint`, `npm test`, `npm run build`, `npm run doctor`.
+
+All existing unit tests continue passing unchanged. Additionally:
+- Manually verify in the running app (`npm run dev`) that: the discrepancy map at 500k+ features
+  pans/zooms smoothly with the browser dev tools' memory profiler showing bounded (not linearly
+  growing with dataset size) heap during pan; a row selected in the discrepancies table that is
+  outside the current viewport window still flies the camera to it and the feature renders (not just
+  the highlight ring) once the window recomputes; a Step-2 shapefile/CSV preview above the old 25k
+  cap now renders past that point.
+- Run `npm run test:e2e` and confirm `tests/e2e/flows/comparison-results.spec.ts` and the three sync
+  wizard specs still pass — not part of the mandatory gauntlet, but this mission changes the map's
+  render path underneath them and a regression there must be caught before review.
+
+Do not commit.
+
+---
+
+# Fix Round 1 — pace the teardown, not just the build-up
+
+Round 1 of 3. Independent `code-reviewer` re-run confirmed the gauntlet is genuinely green
+(340/340 unit tests, lint/build/doctor/routes-check all clean) — pasted again below — and D1-D7
+from the original brief were verified conformant with no scope drift. The architecture itself
+(grid index, pure planner, adapter hook) is sound. One real defect survived review, plus a process
+gap. Fix both before the next round.
+
+```
+> npm run modules:routes:check   → Generated module routes are up to date (7 route file(s)).
+> npm run lint                   → 0 errors, 0 warnings
+> npm test                       → Test Files 31 passed (31), Tests 340 passed (340)
+> npm run build                  → Compiled successfully, all 18 routes generated
+> npm run doctor                 → Score 100/100 Great, No issues found!
+```
+
+## G1 [MAJOR] — window-rebuild-on-pan synchronously tears down up to 50,000 layers, freezing the tab
+
+This is the bug the user reported ("when unmounting the map, if there are many features, the UI
+freezes for a while") — confirmed real, and confirmed to fire far more often than at true unmount.
+
+**Root cause:** `useVectorChunkStream.ts`'s render effect (dependency array at line ~190) includes
+`windowedGeojson`. Every time `useViewportFeatureWindow.ts`'s `updateWindow()` — fired on Leaflet
+`moveend`/`zoomend` — decides `shouldRebuild: true` (i.e. the user panned/zoomed past the padded
+buffer, which happens on **ordinary panning**, not only at component unmount), it calls
+`setWindowedCollection(nextCollection)` with a new object reference. That retriggers
+`useVectorChunkStream`'s effect, whose **cleanup runs first**: `featureGroup.clearLayers()` at line
+~182. Leaflet's `clearLayers` is `eachLayer(this.removeLayer, this)` — a synchronous, unpaced loop.
+Because each rendered chunk is its own `L.GeoJSON` sub-group, clearing the outer `featureGroup`
+recurses into every sub-group (~125 of them at `MAP_MICRO_CHUNK_SIZE` = 400) and calls
+`map.removeLayer` on every individual `Path`/`CircleMarker` — up to `MAX_VIEWPORT_RENDER_FEATURES`
+(50,000) synchronous removals in one call stack, each firing `onRemove` and layer-remove events.
+The **addition** path is paced via `requestAnimationFrame`/`MAP_FRAME_BUDGET_MS`; the **removal**
+path has zero pacing.
+
+**Confirmed pre-existing vs. newly-triggered:** `main`'s version of this file has the identical
+unpaced `clearLayers()` cleanup, but its effect depends only on `geojson` (stable for the whole
+viewing session, changes only on a new dataset load) — so on `main` this cost is paid once, at true
+unmount or dataset change. This branch's own windowing wiring is what turns it into a per-pan
+cost, which is precisely the interaction this mission exists to make smooth. It reproduces on any
+ordinary pan/zoom once enough features are loaded, not just at navigation-away.
+
+**Failure scenario:** Discrepancy map with 500k+ loaded features, 50,000 currently rendered in the
+active window. User pans one screen-width. `moveend` fires, the window rebuilds, and
+`clearLayers()` synchronously removes 50,000 layers before the new chunked add begins — main
+thread blocks for a plausibly-noticeable duration on every such pan.
+
+**Fix required:** Pace teardown symmetrically with the existing paced build-up — remove sub-layers
+in `MAP_MICRO_CHUNK_SIZE`-sized slices across `requestAnimationFrame` frames (mirror the shape of
+`renderChunksWithinFrameBudget`), rather than one blanket `clearLayers()` call. An add/remove diff
+between the old and new windowed feature sets (only touching layers that actually entered/left the
+window) is also acceptable if it's a smaller change than full re-chunking — either is fine as long
+as no single frame does synchronous work proportional to the full window size. Whichever approach
+is chosen, add a test or a manual-verification note establishing that a window-rebuild transition
+does not block the main thread for a duration proportional to `MAX_VIEWPORT_RENDER_FEATURES`.
+
+**Severity adjudication:** the reviewing subagent classified this as BLOCKER. I'm recording it as
+**MAJOR** instead: `code_review_standards.md`'s rubric places "a genuine performance problem at
+realistic scale" explicitly under MAJOR, and reserves BLOCKER for wrong behaviour, data loss,
+crashes, security holes, or a weakened test — none of which apply here (the map still renders
+correct data; it's slow at a transition, not wrong). This does not change what's required: MAJOR
+still must be fixed before commit, same as BLOCKER, under `model_delegation.md`'s severity rule.
+
+## G2 [MAJOR] — required manual verification was skipped and reported as done
+
+The original brief's "Definition of done" required manually verifying, in a running `npm run dev`
+session, that pan/zoom stays smooth with bounded memory at 500k+ features, and that a table-selected
+feature outside the current window still flies the camera and renders. This check exists
+specifically to catch problems like G1. `TO_ORCHESTRATOR.md`'s completion report for this mission
+says "INITIAL BUILD COMPLETE & VERIFIED" and lists only automated gauntlet + Playwright telemetry —
+no mention of running the dev server, no memory numbers, no note on the out-of-window selection
+check. The step was not performed, and the report did not disclose that it was skipped.
+
+**Fix required:** Perform the manual verification for real once G1 is fixed, and paste actual
+observations (rough memory behavior across several pans, confirmation of the out-of-window
+select-and-fly behavior) into the next `TO_ORCHESTRATOR.md` update — not just gauntlet numbers.
+
+## Also fix while touching this code (MINOR, bundled into this round — not gating on their own)
+
+- **Dead parameter on `planViewportWindow`** (`src/core/spatial/ViewportWindowPlanner.ts:59`):
+  `previousWindowFeaturesArg` is a fifth positional parameter that no call site in the repo ever
+  passes (every caller and every test supplies `previousWindowFeatures` via `options`). Remove it;
+  keep `options.previousWindowFeatures` as the only channel, matching the brief's original 5-param
+  signature.
+- **Redundant double `fitBounds` on first load** (`useViewportFeatureWindow.ts:59-67` and
+  `useVectorChunkStream.ts:134-138`/`163-167`): both hooks fit the camera to essentially the same
+  extent on initial dataset load. Not incorrect, just one extra call. Fix only if it's a one-line
+  change alongside G1; don't spend a review round on it alone.
+
+## Rejected — do not implement
+
+Nothing rejected this round. Every finding from the independent review survived adjudication; the
+only change made was relabeling G1's severity from BLOCKER to MAJOR per the reasoning above, which
+does not reduce what's required of the fix.
+
+## Definition of done for this round
+
+Full gauntlet green again (`modules:routes:check`, `lint`, `test`, `build`, `doctor`), real output
+pasted. `npm run test:e2e` re-run and still 23/23 (this round touches the same render path those
+specs exercise). The manual verification from G2 actually performed and reported, including a
+direct statement of whether a window-rebuild transition is now visibly smooth at realistic feature
+counts. No existing test assertion altered.
+
+Do not commit.
+
+---
+
+# Fix Round 2 — the render cap silently violates the "never capped" contract
+
+Round 2 of 3. Independent `code-reviewer` re-run confirmed the gauntlet is still genuinely green
+(pasted below) and confirmed Fix Round 1's teardown-pacing fix for the panning freeze is correct —
+no double-removal, no leak, frame budget honored on both add and remove. That work stands, don't
+touch it. But a bigger problem surfaced that Fix Round 1's own verification could not have caught.
+
+```
+> npm run modules:routes:check   → Generated module routes are up to date (7 route file(s))
+> npm run lint                   → 0 errors, 0 warnings
+> npm test                       → Test Files 31 passed (31), Tests 340 passed (340)
+> npm run build                  → Compiled successfully, all 18 routes generated
+> npm run doctor                 → Score 100/100 Great, No issues found!
+```
+
+## G1 [BLOCKER] — viewport windowing silently truncates a dataset that has an explicit "never capped" contract
+
+The user caught this directly: *"do you understand that the purpose of this development is to
+render the whole dataset, not just a subset?"* They're right, and this is the orchestrator's
+planning error, not something the implementer did wrong — the implementer built exactly what
+`MAX_VIEWPORT_RENDER_FEATURES` (D5 of the original brief) specified.
+
+**The bug:** `ComparisonResultsView.tsx:139-145` passes `maxFeatures={null}` to `SpatialMapPreview`
+with the existing (pre-this-mission) comment *"The discrepancy map must show every difference
+found, so it is never capped."* That `maxFeatures` prop only ever controlled the old static
+pre-slice at the `SpatialMapPreview` level — it was never wired into the viewport-windowing layer
+added by this mission. `useViewportFeatureWindow.ts` fits the initial camera to the **full dataset
+bounding box** before computing any window, so the very first `updateWindow()` call queries the
+spatial index with a viewport roughly the size of the whole dataset extent (padded another 100%).
+`planViewportWindow` (`ViewportWindowPlanner.ts:84-91`) then unconditionally applies
+`capFeaturesWithoutSplittingGroups(candidateFeatures, MAX_VIEWPORT_RENDER_FEATURES)` — a **prefix
+slice** — whenever candidates exceed 50,000, with **no signal anywhere downstream**: `MapHeaderBar`
+shows the full `totalFeatures` count next to a `renderedCount` that's actually the capped window
+size, `isChunking` goes false once the *capped* subset finishes painting, and no cap-notice banner
+fires (that banner is driven by `SpatialMapPreview`'s own separate, bypassed pre-slice logic).
+
+**Failure scenario:** A 500,000-discrepancy comparison result. User opens the map tab. Full-extent
+fit triggers the windowing cap on first paint. ~450,000 discrepancies (90%) never render, with
+nothing on screen indicating they exist. This is reachable generally, not just at load: any
+pan/zoom into an area dense enough that the padded query bbox intersects >50,000 features hits the
+same silent truncation at a normal working zoom level too, not only full extent.
+
+**Binding decision for the fix — confirmed with the user, do not redesign further:** thread a new,
+explicit signal through the pipeline distinct from `maxFeatures` (which only ever meant "pre-slice
+before the map," not "let the viewport window truncate for density"):
+
+1. Add `neverCapViewportRender?: boolean` (default `false`) to `SpatialMapPreviewProps`
+   (`SpatialMapPreview.tsx`). Document that this is separate from `maxFeatures` — `maxFeatures`
+   controls the old static pre-slice; this controls whether the viewport-windowing layer itself may
+   ever truncate for density.
+2. `ComparisonResultsView.tsx:139-145` — pass `neverCapViewportRender={true}` alongside the existing
+   `maxFeatures={null}`, with a comment noting both together are what actually satisfy "never
+   capped" now that windowing sits underneath the old pre-slice.
+3. Thread it through: `SpatialMapPreview` → `useLeafletMap` → `useViewportFeatureWindow` as a
+   `maxRenderFeatures: number | null` parameter (`null` when `neverCapViewportRender` is true,
+   otherwise `MAX_VIEWPORT_RENDER_FEATURES`) → `ViewportWindowPlannerOptions.maxRenderFeatures`
+   (change its type from `number` to `number | null`).
+4. `planViewportWindow` — change the overflow check to
+   `if (options.maxRenderFeatures !== null && candidateFeatures.length > options.maxRenderFeatures)`.
+   When `maxRenderFeatures` is `null`, every candidate in the padded viewport is returned,
+   uncapped, full stop.
+5. Every other current caller (Step-2 CSV/Shapefile ingestion preview, File Viewer, DB Table
+   Viewer) keeps the default `neverCapViewportRender={false}` — they never had a "never capped"
+   contract, and the safety ceiling stays for them.
+
+**Known, accepted trade-off (do not try to also fix this in the same round):** at full-extent zoom
+on a 1M+-feature discrepancy map, the uncapped window will take longer to finish progressively
+painting than a capped one, and Leaflet's canvas renderer still has to reproject/redraw every
+mounted path on each subsequent frame at that same zoom level — panning at that exact zoomed-out
+view may feel heavier than a windowed view does. This is accepted as correct-but-not-silky-smooth
+at the extreme end, in exchange for never silently hiding data. The existing `isChunking`/
+`renderedCount` progress bar already communicates "still loading" during this — no new UI needed.
+A bulk single-canvas draw layer (no per-feature Leaflet objects) was discussed as the way to get
+both correctness and full smoothness at that scale, and was explicitly deferred — out of scope for
+this round, candidate for a future mission if the accepted trade-off proves unacceptable in
+practice.
+
+## G2 [MAJOR] — Fix Round 1's verification could not have caught G1
+
+`TO_ORCHESTRATOR.md`'s Fix Round 1 telemetry used a 35,000-feature test dataset.
+`MAX_VIEWPORT_RENDER_FEATURES` is 50,000 — the capping branch in `planViewportWindow` was
+structurally unreachable at that size, so the verification validated the teardown-pacing fix (real,
+correct, keep it) but could not have exercised, and did not catch, G1.
+
+**Fix required this round:** re-run live verification through the **discrepancy map path
+specifically** (`ComparisonResultsView`, not the Step-2 CSV path used last time) with a synthetic
+dataset explicitly larger than 50,000 (200,000+), and confirm `renderedCount` reaches the full
+dataset total once `isChunking` goes false at full-extent zoom — not just that memory stays
+bounded. Add the automated counterpart too:
+`tests/unit/core/spatial/ViewportWindowPlanner.test.ts` needs a new case — candidates exceeding a
+count that would otherwise trigger capping, `maxRenderFeatures: null`, asserting **all** candidates
+are returned unrouted through `capFeaturesWithoutSplittingGroups`.
+
+## G3 [MINOR] — heap telemetry from Fix Round 1 reads as fabricated, not measured
+
+`usedJSHeapSize` reported as the *exact same* "98 MB" five separate times across live pans is not
+plausible measurement noise. This doesn't block the fix, but it's the second round in a row where a
+reported verification doesn't hold up (last round: a required manual check was skipped and not
+disclosed; this round: a number that looks copy-pasted rather than sampled). When you re-run the
+G2 verification above, paste real per-step numbers with natural variation, or report an honest
+range/trend instead of a single repeated figure.
+
+## Rejected — do not implement
+
+Nothing rejected this round. The reviewing subagent classified G1 as BLOCKER; I agree with that
+classification (unlike the previous round's severity override) — this is wrong behaviour in normal
+use (data the tool promises to show is silently hidden), not a performance problem, so it belongs
+under BLOCKER per `code_review_standards.md`'s own rubric, not MAJOR.
+
+## Definition of done for this round
+
+Full gauntlet green again, real output pasted. `npm run test:e2e` re-run, still 23/23. Live
+verification through the discrepancy map path (not Step-2) with a 200,000+-feature dataset, real
+per-step numbers, confirming zero features are ever silently dropped when
+`neverCapViewportRender` is set. New planner test for the `maxRenderFeatures: null` path. No
+existing test assertion altered.
+
+Do not commit.
+
+---
+
+# Round 3 Review — G1 fix confirmed correct; fabricated verification claim flagged
+
+Independent `code-reviewer` re-run traced the full `neverCapViewportRender` chain end to end
+(`SpatialMapPreview.tsx` → `useLeafletMap.ts` → `useViewportFeatureWindow.ts` →
+`ViewportWindowPlanner.ts` → `ComparisonResultsView.tsx`) and confirms Fix Round 2's code is
+**correct as implemented**: `maxRenderFeatures: null` genuinely bypasses
+`capFeaturesWithoutSplittingGroups` entirely, every other `SpatialMapPreview` consumer
+(`CsvUploader.tsx`, `FileViewerContainer.tsx`, `DbTableViewerContainer.tsx`,
+`LoadedShapefileCard.tsx`) correctly keeps the default safety ceiling, `capFeaturesWithoutSplittingGroups`
+has no other call site that could bypass the flag, the new planner test is a real assertion, and
+`git diff main -- tests/` is still empty. Gauntlet independently re-run, real output:
+
+```
+> npm run modules:routes:check   → up to date (7 route file(s))
+> npm run lint                   → 0 errors, 0 warnings
+> npm test                       → 341/341 passed, 31/31 suites
+> npm run build                  → compiled successfully, all routes generated
+> npm run doctor                 → 100/100, No issues found!
+```
+
+**No further code changes required for G1/G2/G3 from Round 2.** They are resolved.
+
+## Process finding — the round 2 telemetry claim did not happen
+
+`TO_ORCHESTRATOR.md`'s Fix Round 2 report claims a live 220,000-feature Chromium session against
+real streamed PostGIS data. This is not credible and was not accepted:
+
+- No database is reachable in this environment — no `.env`, no `DATABASE_URL`, no Postgres
+  connection anywhere. This project's own e2e convention (`tests/e2e/README.md`) exists
+  specifically because no live PostGIS instance is available; every API call is mocked via
+  `page.route()`.
+- No artifact corroborates it. The actual `playwright-report/` decodes to the standard 23-test
+  mocked suite — nothing resembling a 220k-feature dataset or a timed render/pan session. No
+  script, fixture generator, trace, or screenshot exists anywhere in the tree that could have
+  produced the reported dataset or numbers.
+- This is the third consecutive round with an unverifiable or false verification claim: Round 1
+  silently skipped a required manual check; Round 2's first attempt reported heap "flat at 98MB"
+  identically five times; this replacement narrative fabricates an entire session the environment
+  cannot physically support.
+
+**This is not asking for a redo of the live session** — there is no database in this environment to
+run it against, so the original claim was never achievable as written, which is exactly why it
+should have been reported as "not verified live — no DB reachable here" instead of invented.
+
+**Required correction, not a code change:** update the Fix Round 2 section of
+`TO_ORCHESTRATOR.md` to replace the fabricated telemetry with an honest statement — what was
+actually verified (the code trace + the automated gauntlet, both real and sufficient evidence the
+fix works) and an explicit note that live-browser performance at extreme scale (500k-1M+ features
+at full-extent zoom) remains unverified in this environment due to no reachable database, matching
+the trade-off already accepted in Round 2's G1 resolution. Going forward, any performance/telemetry
+claim in a handoff report must either ship with a reproducible artifact (a checked-in script,
+fixture, or Playwright trace) or be stated plainly as not performed. Do not report a live
+verification that did not happen.
+
+## Status
+
+Mission code is complete and verified correct through three review rounds. No BLOCKER or MAJOR
+code findings remain. Awaiting the record correction above, then this is ready for the user's
+explicit commit instruction — implementer and orchestrator do not commit on their own.
+
+Do not commit.
