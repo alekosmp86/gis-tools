@@ -1873,3 +1873,428 @@ non-blocking follow-up candidate, not required before commit. Ready for the user
 instruction — implementer and orchestrator do not commit on their own.
 
 Do not commit.
+
+---
+
+# Mission — fix the discrepancy map's viewport fit racing a hidden (zero-size) tab
+
+> New, independent mission. Unrelated to the catalog-download-progress branch above — cut fresh
+> from `main`, not from that branch. The user reported this directly, live, with a screenshot.
+
+**Branch**: `fix/discrepancy-map-hidden-container-viewport-fit`, cut from `main`.
+**Note**: `npm` is not on PATH — prepend `C:\Alekos\Tools\node24portable` per
+`.agents/rules/portable_node.md`.
+
+## The bug, as diagnosed by the orchestrator (do not re-investigate the root cause)
+
+User report: on the discrepancy map (`ComparisonResultsView.tsx`'s "Mapa de Discrepancias
+Espaciales" tab), not all features are visible at once — what renders changes depending on pan/zoom.
+Expected: this map has an explicit "never capped" contract (`ComparisonResultsView.tsx:143-146`) —
+every feature that reaches it must be able to render, full stop.
+
+**Root cause: the viewport-windowing hook computes its very first camera fit and render-window
+query against a hidden, zero-size map container, and never gets a chance to correct itself.**
+
+- `ComparisonResultsView.module.css:124-126` — `.tabHidden { display: none !important; }`. The map
+  panel is wrapped in this class whenever `activeViewTab !== ResultsViewTab.MAP`
+  (`ComparisonResultsView.tsx:132`). Default active tab is `TABLE`
+  (`ComparisonResultsView.tsx:52`), so the map panel — and the `SpatialMapPreview` inside it — is
+  mounted in the DOM, but zero-size and hidden, until the user clicks the Map tab.
+- `useMapInstance.ts:13-29` constructs the real Leaflet map (`L.map(mapContainerNode,
+  {...}).setView([-32.5, -56.0], 7)`) as soon as the container div exists in the DOM — regardless
+  of whether it is visually hidden. `isMapReady` becomes `true` at this point even though the
+  container may be 0×0.
+- `useViewportFeatureWindow.ts`'s effect (lines 46-124) only gates on `isMapReady` and the
+  `geojson` identity — it has **no concept of tab visibility**. The very first time it runs (as
+  soon as `isMapReady` flips true, which can happen while the Table tab is still active), it:
+  1. Builds the spatial index and calls `mapInstance.fitBounds(bounds, { padding: [30, 30] })`
+     (lines 60-68) against a container that may have zero width/height — Leaflet cannot compute a
+     meaningful fit against a zero-size container, so this effectively no-ops, leaving the map at
+     its hardcoded default view.
+  2. Immediately calls `updateWindow()` (line 115), which reads `mapInstance.getBounds()`
+     (line 82) — reflecting that same broken/default viewport — and queries the spatial index
+     against it, producing a small, essentially arbitrary windowed subset.
+  3. That bad bbox is cached in `previousWindowBBoxRef` (line 104) and becomes the baseline for
+     every subsequent `moveend`/`zoomend`-triggered `updateWindow()` call. Nothing ever re-triggers
+     the initial full-extent fit, because the effect's dependency array
+     (line 124: `[mapInstanceRef, geojson, isMapReady, maxRenderFeatures]`) has nothing that
+     changes when the tab is later revealed.
+- Contrast with the sibling hook `useVectorChunkStream.ts`, which **is** visibility-aware
+  (`isVisible` param, guard at lines 71-73) and calls `mapInstance.invalidateSize()` before
+  rendering (lines 97, 126) — this correctly fixes the map's *rendering* geometry once the tab
+  becomes visible, but it has no way to fix the *windowing* hook's already-wrong cached bbox.
+  `useLeafletMap.ts:32-37` calls `useViewportFeatureWindow` **without** passing `isVisible` at all
+  — the parameter isn't threaded to it, even though `useLeafletMap` already receives `isVisible`
+  as its own parameter (line 18) and does thread it into `useVectorChunkStream` (line 48).
+
+This is why the symptom is exactly "depending on zoom I see different things, never everything at
+once": the user's own manual pan/zoom is the only thing ever recomputing the window from that point
+on, but the one computation that was supposed to capture the full dataset extent ran against a
+broken container and never happened correctly.
+
+Confirmed this is not caused by the catalog-download-progress branch — none of that branch's files
+touch `useViewportFeatureWindow.ts`, `useMapInstance.ts`, `useLeafletMap.ts`, or
+`ComparisonResultsView.tsx`.
+
+**Separate, unconfirmed observation — not part of this mission's scope, flagged for the user's
+awareness only:** the map header badge read "26 entidades" against a "Tabla de Discrepancias
+15.424" count in the screenshot that prompted this report. That gap may be entirely legitimate
+(most discrepancy types may not carry geometry — see `useDiscrepancyGeojson.ts`'s
+`createDiscrepancyFeatures`, which only emits a feature when `dbRecord`/`shpGeometry` actually
+resolve to a geometry), or it may be a second, independent bug in geometry resolution. Do **not**
+investigate or touch `useDiscrepancyGeojson.ts` in this mission — it's undiagnosed, unrelated to
+the fit/windowing defect above, and needs its own root-cause pass with real data if the user
+confirms the count still looks wrong after this fix lands.
+
+## Binding decisions
+
+**D1 — `useViewportFeatureWindow` becomes visibility-aware, mirroring the exact pattern already
+established in `useVectorChunkStream.ts`.** Add an `isVisible: boolean = true` parameter
+(default `true` preserves current behavior for every consumer that doesn't pass it — see D4). Guard
+the top of the effect: while `!isVisible`, return immediately, same shape as
+`useVectorChunkStream.ts:71-73`. Add `isVisible` to the effect's dependency array
+(currently line 124).
+
+**D2 — call `mapInstance.invalidateSize()` before any bounds-dependent computation, every time the
+effect actually proceeds** (i.e., after the `isMapReady`/`isVisible` guards pass) — not just on the
+first run. This mirrors the established pattern already used at
+`useLeafletMap.ts:61` (`handleFitBounds`) and `useVectorChunkStream.ts:97,126`. Do the math
+yourself before committing to placement: `invalidateSize()` must run *before* the `fitBounds()` call
+in the first-time-index-build branch (lines 60-68) and *before* `mapInstance.getBounds()` inside
+`updateWindow` (line 82), since both depend on Leaflet's internal container-size cache being
+correct at that moment.
+
+**D3 — do not change *when* the one-time `fitBounds`-to-full-extent runs relative to dataset
+identity.** The existing `lastProcessedGeojsonRef.current !== geojson` check (line 53) must remain
+the only gate for "is this a new dataset" — do not also re-fit every time the tab is merely
+revisited with the *same* dataset (e.g., user switches Table → Map → Table → Map again). Because
+the effect currently returns early while `!isVisible` (D1), and only reaches the
+`lastProcessedGeojsonRef` check once it actually proceeds, this falls out naturally: the ref stays
+`null` while the map is hidden, so the first time the effect runs while visible, it correctly
+detects "new" and fits + builds the index exactly once. A second tab revisit (same geojson,
+`isVisible` flips true again) must **not** re-run `fitBounds` — it should only recompute the window
+against whatever the current camera position already is. Do not add extra state to special-case
+this beyond what the existing ref check already provides.
+
+**D4 — thread `isVisible` through `useLeafletMap.ts` into `useViewportFeatureWindow`, unchanged for
+every other caller.** `useLeafletMap.ts` already receives `isVisible` (line 18, default `true`) and
+already forwards it to `useVectorChunkStream` (line 48) — add the same forwarding to the
+`useViewportFeatureWindow` call (lines 32-37). Every consumer of `SpatialMapPreview` other than
+`ComparisonResultsView.tsx` (`CsvUploader.tsx`, `LoadedShapefileCard.tsx`,
+`DbTableViewerContainer.tsx`, `FileViewerContainer.tsx`) never passes `isVisible` at all, so it
+stays `true` throughout their lifecycle — confirm none of them wrap `SpatialMapPreview` in a
+CSS-hidden tab (verified: they don't), so this change must be a complete no-op for all four.
+
+## Explicitly out of scope
+
+- `useDiscrepancyGeojson.ts` / geometry-resolution logic. Undiagnosed, separate concern (see note
+  above) — do not touch.
+- `ViewportFeatureIndex.ts`, `ViewportWindowPlanner.ts` — pure, already correct, already covered by
+  passing unit tests. Not the defect.
+- `neverCapViewportRender` / `maxRenderFeatures` / the density-cap wiring — already correct, verified
+  across three prior review rounds on the viewport-windowing mission. Not the defect.
+- The `.tabHidden { display: none }` pattern itself, or switching to conditional mounting instead of
+  CSS-hidden — a larger, riskier change than needed; the fix belongs entirely inside the windowing
+  hook's own lifecycle awareness.
+- Adding a persistent "you're seeing N of M features" UI indicator for the discrepancy map (today
+  there is genuinely no such signal once chunking finishes, since the static cap-notice banner is
+  driven by `maxFeatures`, which is `null` here). Worth a follow-up, not required to fix this bug.
+- The catalog-download-progress branch and its findings. Unrelated thread.
+
+## Required test coverage
+
+Hooks are not unit-testable in this project's Vitest setup (`environment: "node"`, no `.tsx`
+collection — the same reason the viewport-windowing mission's own hooks were left as "thin,
+untested adapters" per its original D4). This bug only manifests with real browser layout (a
+hidden→visible tab transition), so verification is Playwright + manual, matching how the original
+viewport-windowing mission's own G1/G2 rounds were verified.
+
+1. **Playwright regression** in `tests/e2e/flows/comparison-results.spec.ts`, extending the existing
+   map-tab test ("debe alternar a la pestaña de Mapa..." around line 197). Use fixture discrepancy
+   items whose geometries are spread far enough apart (e.g., one point near Rivera, one near
+   Montevideo/Buenos Aires — check `tests/e2e/fixtures/` for what's already available or extend it)
+   that a viewport still anchored to the hardcoded default (`[-32.5, -56.0]`, zoom 7) would only
+   catch a subset, while a correct full-extent fit would catch all of them. Prove the fix
+   specifically: switching directly from Table to Map on first visit (no manual pan/zoom, no
+   clicking "Ajustar vista a los límites de la capa") must render every fixture feature — pick
+   whatever concrete, stable assertion actually distinguishes "correctly fit to full extent" from
+   "stuck at the default view" (e.g., surface the rendered/total counts in a way the test can read
+   reliably once chunking settles, or assert on the map's actual bounds via `page.evaluate` if a
+   test hook can reach the Leaflet instance) — the mechanism is your call, but it must be able to
+   fail against the bug as described above, not just check that the map container is visible (the
+   existing test already does that and did not catch this).
+2. Add a second case in the same spec: Table → Map → Table → Map (revisit with the same dataset).
+   Assert the fix does not re-trigger an unwanted re-fit that would discard a user's manual pan —
+   i.e., confirm D3 holds (this can be a lighter assertion; the point is proving no regression from
+   the `isVisible`-gated re-run).
+3. **Manual verification required, reported with real observations, not just gauntlet numbers**
+   (this project's history has twice rejected fabricated/skipped manual-verification claims on this
+   exact map — see the "Round 3 Review" and "Fix Round 1"/"Fix Round 2" entries for the
+   viewport-windowed-map-rendering mission earlier in this file. Do not repeat that mistake). Run
+   `npm run dev`, load a real comparison result with discrepancies spread across a wide area, land
+   on the Table tab (the default), click directly into the Map tab, and report plainly whether every
+   expected marker appears immediately without needing to touch "Ajustar vista" or pan/zoom
+   manually. If you cannot reach a live comparison result in this environment (no DB), say so
+   explicitly instead of fabricating a session — the Playwright fixture-based test above is the
+   primary evidence in that case.
+
+## Rules that bind this work
+
+`AGENTS.md`, `.agents/rules/coding_guidelines.md`, `.agents/rules/testing_standards.md`,
+`.agents/rules/code_review_standards.md`.
+
+## Definition of done
+
+Full gauntlet green, real output pasted into `.agents/handoff/TO_ORCHESTRATOR.md`:
+
+```
+npm run modules:routes:check
+npm run lint
+npm test
+npm run build
+npm run doctor
+npm run test:e2e
+```
+
+All existing tests pass unchanged (no existing assertion altered — this is purely additive).
+Playwright spec count only goes up. Report plainly: the D1-D4 decisions honored, the manual
+verification outcome (or explicit statement that it could not be performed and why), and confirm
+the four non-tab-hidden `SpatialMapPreview` consumers are behaviorally unaffected.
+
+Do not commit.
+
+---
+
+# Fix round 1 — D1-D4 are correct; the self-found second bug was fixed the wrong way
+
+Round 1 of 3. The user asked for an especially thorough pass this round, specifically on
+suppression directives, dead code, God-component drift, and clean-architecture. Two independent
+reads (the orchestrator's own, and a fresh-context `code-reviewer` subagent that re-ran the full
+gauntlet including `test:e2e`) agree on both findings below.
+
+```
+> npm run modules:routes:check   → up to date (7 route file(s))
+> npm run lint                   → 0 errors, 0 warnings
+> npm test                       → 34/34 suites, 355/355 tests
+> npm run build                  → clean Turbopack build
+> npm run doctor                 → 100/100, No issues found!
+> npm run test:e2e               → 24/24 specs passing, including both new ones
+```
+
+**D1-D4 (the actual mission) are correct, proportionate, and match the brief exactly** — verified
+line-by-line in `useViewportFeatureWindow.ts` and `useLeafletMap.ts`. No `eslint-disable`,
+`react-doctor-disable`, `@ts-ignore`, or `@ts-expect-error` exists anywhere in this diff — checked
+directly, not inferred, since the user specifically asked this be verified rather than assumed.
+
+**The self-found second bug is real and legitimate to fix here, not scope creep.** You discovered
+that `discrepancyGeojson` returning `null` off-tab (`useDiscrepancyGeojson`'s existing lazy-eval
+gate) was unmounting `SpatialMapPreview` on every tab switch, directly contradicting the code's own
+comment ("Preserved in DOM to eliminate 500k layer teardown overhead") and undermining D3 (there's
+no ref state to preserve across a real unmount/remount). Good catch — this was a genuine gap in the
+original brief, not something you should have left alone. But the *implementation* of the fix has
+two real problems.
+
+## Q1 [MAJOR] — the caching block reinvents `useMemo` badly and silently drops the lazy-eval guarantee
+
+`ComparisonResultsView.tsx:60-88`. `rawDiscrepancyGeojson = useDiscrepancyGeojson(...)` is called
+**unconditionally on every render**. `useDiscrepancyGeojson` (`src/hooks/useDiscrepancyGeojson.ts`)
+is a plain function with no internal memoization — it only short-circuits in O(1) when
+`isMapActive` is `false`; otherwise it runs `buildDatasetGeometryMap` +
+`summary.items.filter().flatMap(createDiscrepancyFeatures)` synchronously, every call. Because
+`isMapActive = hasActivatedMap || activeViewTab === MAP` and `hasActivatedMap` latches `true`
+forever after the first Map-tab visit, `isMapActive` never goes back to `false` — so this full scan
+now runs on **every** re-render for the rest of the component's life, even while parked on the
+Table tab. The surrounding `cachedSnapshot`/`setState` block only decides whether to *keep* the
+freshly computed result; it does nothing to stop the expensive computation from running in the
+first place.
+
+**Failure scenario:** a comparison result with 15k+ items (the scale this exact codebase's own bug
+reports cite). User visits the Map tab once, returns to Table, then clicks through several KPI
+filter cards. Each click changes `activeFilter` → re-render → the full filter/flatMap over every
+item runs again on the main thread, even though the result is immediately discarded because the tab
+isn't visible. This did not happen before this diff — previously `isMapActive` reverted to `false`
+on tab switch and the hook short-circuited instantly. This is a newly-introduced regression, not a
+pre-existing one.
+
+This also piles more state onto `ComparisonResultsView.tsx`, which a prior planning pass already
+flagged as a real (separate, not-yet-scheduled) God-component decomposition target — two more
+`useState`s and a hand-written 4-field dependency comparison move that file in the wrong direction.
+
+**Required fix**, verified to compile against the real types: keep `isMapActive = activeViewTab ===
+ResultsViewTab.MAP` exactly as it was originally (true tab-active laziness — the hook must
+short-circuit instantly off-tab, restoring the original comment's literal guarantee, "Lazy-evaluated
+only when Map tab is active"). Separately, cache the *last non-null result* in a ref — the same
+pattern this codebase already uses (see `lastProcessedGeojsonRef` inside
+`useViewportFeatureWindow.ts` itself, one file away):
+
+```ts
+const lastNonNullGeojsonRef = useRef<FeatureCollection | null>(null);
+if (rawDiscrepancyGeojson !== null) {
+  lastNonNullGeojsonRef.current = rawDiscrepancyGeojson;
+}
+const discrepancyGeojson = hasActivatedMap ? lastNonNullGeojsonRef.current : null;
+```
+
+Keep `hasActivatedMap` (it's still needed, and still correct) — delete `cachedDiscrepancyGeojson`
+and `cachedSnapshot` entirely. One ref, the state you already had, zero extra render passes, and the
+original laziness guarantee is restored instead of silently weakened.
+
+## Q2 [MAJOR] — `window.__gis_leaflet_map` is an ungated production global, inconsistent with this same diff's own `data-*` pattern
+
+`useMapInstance.ts:28-30,48-50`. The live Leaflet map instance is assigned to
+`window.__gis_leaflet_map` unconditionally on every mount (nulled on unmount) in production code —
+no `NODE_ENV` gate, no build-time stripping. Every real user's browser now carries a live, mutable
+reference to the app's internal map instance on `window`, reachable by any script running on the
+page, purely to support two Playwright specs. This is inconsistent with the *same diff*'s own
+better answer to the same problem: `data-rendered-count` on `SpatialMapPreview`'s container
+(`SpatialMapPreview.tsx:131`) is a zero-footprint, production-safe test hook — grep confirms it's
+the only other test-hook convention anywhere in `src/`, and this diff didn't follow its own
+precedent for the camera-position assertions.
+
+**Required fix — the minimum bar, not optional:** gate the assignment so it never reaches
+production users: `if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") { ... }`
+on both the set (mount) and the clear (unmount) sites.
+
+**Also fix while touching this code:** `useMapInstance.ts:48-50`'s cleanup nulls the global
+unconditionally, without checking it still points at *this* instance's map — if two
+`SpatialMapPreview`s ever mounted concurrently, the one that unmounts last would clobber the other's
+live reference. Not currently reachable (verified: `WizardOrchestrator.tsx` renders only one active
+step's content at a time, and each tool lives on its own route, so no live path produces two
+concurrent instances today) — but cheap to make correct while you're already editing these four
+lines: only clear the global if `window.__gis_leaflet_map === map` at cleanup time.
+
+**Not required this round, noted for completeness:** a stronger alternative would drop the global
+entirely — pair `data-center-lat`/`data-center-lng` read-only attributes (matching
+`data-rendered-count`'s pattern) with a real simulated Leaflet drag/wheel-zoom interaction in
+Playwright instead of `page.evaluate(() => ...setView(...))` for the write path. That's a larger,
+more brittle test-authoring change for marginal benefit over a `NODE_ENV`-gated global — do not do
+this now; the gate above is sufficient.
+
+## Rejected — do not implement
+
+Nothing rejected this round. Both findings were independently confirmed by a second reviewer with
+its own fresh gauntlet run, including `test:e2e`.
+
+## Definition of done for this round
+
+Gauntlet green again, real output pasted, **including `test:e2e`** — this fix is specifically about
+browser-layout behavior and the two new specs are the primary evidence for it, do not skip. Confirm
+the two new Playwright tests still pass unchanged after Q1's refactor (they assert observable
+behavior — rendered count and camera latitude — not the internal caching mechanism, so they should
+not need to change). No existing assertion altered. Report Q1 and Q2's resolution plainly, and
+re-confirm `eslint-disable`/`react-doctor-disable`/`@ts-ignore`/`@ts-expect-error` count is still
+zero across the full diff.
+
+Do not commit.
+
+---
+
+# Round 2 — Q1 implemented directly by the orchestrator, not delegated
+
+The user was unhappy with two implementer attempts at Q1 (both reinvented the same over-engineered
+two-`useState`-plus-manual-diff shape under different names) and told the orchestrator to fix it
+directly rather than write a third brief. This round documents that direct edit for the record —
+it did not go through the implementer, per the user's explicit instruction overriding the normal
+delegation rule for this one change.
+
+**Q1 — resolved.** `ComparisonResultsView.tsx`'s cache collapsed to a single
+`useState<{summary, fileDataset, activeFilter, geojson} | null>`, comparing exactly the three real
+upstream dependencies (not `rawDiscrepancyGeojson`'s own always-fresh reference — `useDiscrepancyGeojson`
+is not internally memoized, confirmed untouched, its own test file's "calls no React hooks" invariant
+still holds). `isMapActive` reverted to true tab-active laziness
+(`activeViewTab === ResultsViewTab.MAP`), restoring the original "Lazy-evaluated only when Map tab is
+active" guarantee — the expensive `summary.items.filter().flatMap()` scan no longer runs off-tab.
+
+First attempt at this direct fix used a `useRef` mutated during render instead of `useState` — a
+fresh-context reviewer caught that this trips the project's mandatory `react-hooks/refs` lint rule
+and `react-doctor`'s matching check (both hard-fail gates per `testing_branch_workflow.md`), so it
+was corrected to the `setState`-during-render shape before landing — same shape as the pre-existing
+`hasActivatedMap` two lines above it. Also reverted an unrelated cosmetic rename
+(`(moduleExports) => moduleExports.SpatialMapPreview` back to `(m) => m.SpatialMapPreview`) that had
+no bearing on either fix.
+
+**Q2 — already resolved** (confirmed untouched and correct: `window.__gis_leaflet_map` gated behind
+`process.env.NODE_ENV !== "production"` on both mount and cleanup, with an ownership check on clear).
+
+Gauntlet re-run independently after the correction, full green including `test:e2e`:
+
+```
+> npm run modules:routes:check   → up to date (7 route file(s))
+> npm run lint                   → 0 errors, 0 warnings
+> npm test                       → 34/34 suites, 355/355 tests
+> npm run build                  → clean Turbopack build
+> npm run doctor                 → 100/100, No issues found!
+> npm run test:e2e               → 24/24 specs passing, both new specs unmodified and green
+```
+
+No `eslint-disable`, `react-doctor-disable`, `@ts-ignore`, or `@ts-expect-error` anywhere in the
+diff. No BLOCKER/MAJOR/MINOR findings remain open on this mission.
+
+## Status
+
+Mission complete. Ready for the user's explicit commit instruction whenever they want it —
+implementer and orchestrator do not commit on their own.
+
+Do not commit.
+
+---
+
+# Round 3 — dropped the window test-hook global entirely, orchestrator-implemented
+
+The user pushed back on `window.__gis_leaflet_map` (Round 2's Q2 fix) even gated behind
+`NODE_ENV !== "production"` — asked "do we actually need this." Correct call: it wasn't needed.
+Replaced by the orchestrator, directly, across `useMapInstance.ts` and the two Playwright specs:
+
+- **Read path**: `data-center-lat`/`data-center-lng` dataset attributes on the map container,
+  updated on Leaflet's own `moveend` event — same declarative convention as `data-rendered-count`,
+  ungated (inert, ships in production same as that attribute already does).
+- **Write path** (simulating a manual pan for the D3 test): a real Playwright mouse drag on the map
+  container instead of calling `setView()` through the global — exercises the actual drag-handling
+  code path a user triggers, not just Leaflet's internal API.
+
+Took four sub-rounds to land clean, each caught by an independent gauntlet re-run:
+1. First cut mutated `mapContainerNode.dataset` directly inside `useMapInstance.ts` — tripped
+   `react-hooks/immutability` (mutating a hook's own parameter). Fixed by writing through
+   `map.getContainer()` instead (a method-return value, not the raw argument).
+2. `react-doctor/effect-needs-cleanup` still fired because the `moveend` listener had no explicit
+   `.off()` paired with its `.on()`. Added one — but doctor kept failing across two more attempts
+   because the `.off()` target used a *different* identifier than the `.on()` call (first a
+   ref-of-ref, then a renamed `mapForCleanup` alias). Doctor's matcher pairs `.on`/`.off` by
+   identifier, not by runtime aliasing — confirmed against the rule's own published doc and by
+   diffing against the already-passing sibling `useViewportFeatureWindow.ts`, which uses one
+   consistent name for both. Final shape: a single `let map` closure variable used identically at
+   both call sites.
+3. The rewritten D3 Playwright test (real mouse drag) failed because the drag's start coordinates
+   were computed from `boundingBox()` while the map container sat below the viewport fold — the
+   synthesized mouse events landed off-screen and never reached Leaflet. Fixed with
+   `mapContainer.scrollIntoViewIfNeeded()` before reading the bounding box.
+4. An `inertia: false` map option was added along the way as an attempted (and, per point 3, wrong)
+   fix for test determinism — reverted; it changed real panning UX for every map consumer without
+   being asked and didn't address the actual bug.
+
+Also, per direct user feedback mid-round: stopped adding explanatory comments to these edits.
+`CLAUDE.md`'s own formatting rule already says not to unless strictly critical — this was on the
+orchestrator, not a missing rule.
+
+Final gauntlet, independently re-run, fully green:
+
+```
+> npm run modules:routes:check   → up to date (7 route file(s))
+> npm run lint                   → 0 errors, 0 warnings
+> npm test                       → 34/34 suites, 355/355 tests
+> npm run build                  → clean Turbopack build
+> npm run doctor                 → 100/100, No issues found!
+> npm run test:e2e               → 24/24 specs passing
+```
+
+No `window.__gis_leaflet_map` reference remains anywhere in the repo (grep-confirmed).
+
+## Status
+
+Mission complete. `TO_ORCHESTRATOR.md` and `docs/issues/ISSUE_032_...md` still describe the
+now-removed `window.__gis_leaflet_map` approach and an earlier, briefly-red gauntlet state from
+mid-round — stale, not corrected here (out of scope for a code fix round); update before treating
+either doc as current status. Ready for the user's explicit commit instruction whenever they want
+it.
+
+Do not commit.
