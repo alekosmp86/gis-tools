@@ -125,7 +125,11 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
 
       <MapLegend presentTypes={presentTypes} />
 
-      <div ref={setMapContainerNode} className={styles.mapElement} />
+      <div
+        ref={setMapContainerNode}
+        className={styles.mapElement}
+        data-rendered-count={renderedCount}
+      />
     </div>
   );
 };

@@ -13,8 +13,11 @@ export function useMapInstance(mapContainerNode: HTMLDivElement | null): {
   useEffect(() => {
     if (!mapContainerNode) return;
 
+    let map: L.Map | null = null;
+    let writeCenterAttributes: (() => void) | null = null;
+
     if (!mapInstanceRef.current) {
-      const map = L.map(mapContainerNode, {
+      map = L.map(mapContainerNode, {
         zoomControl: false,
         attributionControl: false,
       }).setView([-32.5, -56.0], 7);
@@ -25,6 +28,16 @@ export function useMapInstance(mapContainerNode: HTMLDivElement | null): {
 
       mapInstanceRef.current = map;
       canvasRendererRef.current = canvasRenderer;
+
+      writeCenterAttributes = () => {
+        const center = map!.getCenter();
+        const container = map!.getContainer();
+        container.dataset.centerLat = String(center.lat);
+        container.dataset.centerLng = String(center.lng);
+      };
+      writeCenterAttributes();
+      map.on("moveend", writeCenterAttributes);
+
       setIsMapReady(true);
     }
 
@@ -41,6 +54,9 @@ export function useMapInstance(mapContainerNode: HTMLDivElement | null): {
     return () => {
       if (resizeObserver) {
         resizeObserver.disconnect();
+      }
+      if (map && writeCenterAttributes) {
+        map.off("moveend", writeCenterAttributes);
       }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();

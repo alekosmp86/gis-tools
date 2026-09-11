@@ -31,7 +31,8 @@ export function useViewportFeatureWindow(
   mapInstanceRef: React.RefObject<L.Map | null>,
   geojson: FeatureCollection,
   isMapReady: boolean = false,
-  maxRenderFeatures: number | null = MAX_VIEWPORT_RENDER_FEATURES
+  maxRenderFeatures: number | null = MAX_VIEWPORT_RENDER_FEATURES,
+  isVisible: boolean = true
 ): FeatureCollection {
   const indexRef = useRef<ViewportFeatureIndex | null>(null);
   const lastProcessedGeojsonRef = useRef<FeatureCollection | null>(null);
@@ -45,9 +46,11 @@ export function useViewportFeatureWindow(
 
   useEffect(() => {
     const mapInstance = mapInstanceRef.current;
-    if (!mapInstance || !isMapReady) {
+    if (!mapInstance || !isMapReady || !isVisible) {
       return;
     }
+
+    mapInstance.invalidateSize();
 
     // Build ViewportFeatureIndex once per full-geojson identity change
     if (lastProcessedGeojsonRef.current !== geojson) {
@@ -78,6 +81,8 @@ export function useViewportFeatureWindow(
       if (!activeMap) {
         return;
       }
+
+      activeMap.invalidateSize();
 
       const bounds = activeMap.getBounds();
       if (!bounds.isValid()) {
@@ -121,7 +126,7 @@ export function useViewportFeatureWindow(
       mapInstance.off("moveend", updateWindow);
       mapInstance.off("zoomend", updateWindow);
     };
-  }, [mapInstanceRef, geojson, isMapReady, maxRenderFeatures]);
+  }, [mapInstanceRef, geojson, isMapReady, maxRenderFeatures, isVisible]);
 
   return windowedCollection;
 }

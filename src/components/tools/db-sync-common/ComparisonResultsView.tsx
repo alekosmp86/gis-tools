@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
+import type { FeatureCollection } from "geojson";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import { ProgressBar } from "@/ui-kit/components/ProgressBar";
@@ -46,7 +47,6 @@ export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
     mappingConfig,
     sourceDbConfig,
   });
-
   const [activeFilter, setActiveFilter] = useState<DiscrepancyFilter>(DiscrepancyFilter.ALL);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeViewTab, setActiveViewTab] = useState<ResultsViewTab>(ResultsViewTab.TABLE);
@@ -56,10 +56,34 @@ export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
   const showProgress = loading && progress.phase !== "";
   const hasGeojson = Boolean(fileDataset.geojson && fileDataset.geojson.features && fileDataset.geojson.features.length > 0);
 
+  const [hasActivatedMap, setHasActivatedMap] = useState<boolean>(false);
+  if (activeViewTab === ResultsViewTab.MAP && !hasActivatedMap) {
+    setHasActivatedMap(true);
+  }
+
   const isMapActive = activeViewTab === ResultsViewTab.MAP;
 
   // Hook encapsulating discrepancy GeoJSON feature collection creation (Lazy-evaluated only when Map tab is active)
-  const discrepancyGeojson = useDiscrepancyGeojson(summary, fileDataset, activeFilter, isMapActive);
+  const rawDiscrepancyGeojson = useDiscrepancyGeojson(summary, fileDataset, activeFilter, isMapActive);
+
+  const [discrepancyGeojsonCache, setDiscrepancyGeojsonCache] = useState<{
+    summary: typeof summary;
+    fileDataset: typeof fileDataset;
+    activeFilter: typeof activeFilter;
+    geojson: FeatureCollection;
+  } | null>(null);
+
+  if (
+    rawDiscrepancyGeojson !== null &&
+    (!discrepancyGeojsonCache ||
+      discrepancyGeojsonCache.summary !== summary ||
+      discrepancyGeojsonCache.fileDataset !== fileDataset ||
+      discrepancyGeojsonCache.activeFilter !== activeFilter)
+  ) {
+    setDiscrepancyGeojsonCache({ summary, fileDataset, activeFilter, geojson: rawDiscrepancyGeojson });
+  }
+
+  const discrepancyGeojson = hasActivatedMap ? (discrepancyGeojsonCache?.geojson ?? null) : null;
 
   const descriptor = resolveComparisonDescriptor({
     descriptor: customDescriptor,

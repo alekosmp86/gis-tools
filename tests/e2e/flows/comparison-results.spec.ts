@@ -208,6 +208,13 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     await expect(page.getByRole("combobox", { name: /Seleccionar mapa base/i })).toBeVisible();
     await expect(page.getByRole("table")).toBeHidden();
 
+    // Comprobar que el mapa ajustó su vista a la extensión real de las discrepancias (D1/D2)
+    // Las discrepancias en el fixture están en latitud ~ -34.85 (fuera de la vista inicial por defecto en -32.5)
+    const mapContainer = page.locator("[data-rendered-count]");
+    await expect(mapContainer).toHaveAttribute("data-rendered-count", "3");
+    const centerLatitude = Number(await mapContainer.getAttribute("data-center-lat"));
+    expect(centerLatitude).toBeLessThan(-34.0);
+
     // Filtrar por "Solo en Base de Datos" (PAD-003 tiene geom null, por lo que la colección queda vacía)
     await page.getByRole("button", { name: /Solo en Base de Datos/i }).click();
 
@@ -215,6 +222,46 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     await expect(
       page.getByText("No se encontraron discrepancias para el filtro seleccionado.")
     ).toBeVisible();
+  });
+
+  test("debe preservar la posición de la cámara del usuario al alternar entre pestañas y revisitar el mapa", async ({
+    page,
+  }) => {
+    await navigateToResultsStep(page);
+
+    // 1. Alternar a la pestaña de Mapa en primera visita
+    await page.getByRole("button", { name: /Mapa de Discrepancias Espaciales/i }).click();
+    const mapContainer = page.locator("[data-rendered-count]");
+    await expect(mapContainer).toHaveAttribute("data-rendered-count", "3");
+    const fittedLatitude = Number(await mapContainer.getAttribute("data-center-lat"));
+
+    // 2. Simular un desplazamiento manual real del usuario (arrastre del mapa con el mouse)
+    await mapContainer.scrollIntoViewIfNeeded();
+    const mapBox = await mapContainer.boundingBox();
+    if (!mapBox) throw new Error("No se pudo obtener el área del mapa para simular el arrastre.");
+    const startX = mapBox.x + mapBox.width * 0.25;
+    const startY = mapBox.y + mapBox.height * 0.25;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 150, startY + 150, { steps: 10 });
+    await page.mouse.up();
+
+    await expect
+      .poll(async () => Number(await mapContainer.getAttribute("data-center-lat")))
+      .not.toBeCloseTo(fittedLatitude, 2);
+    const shiftedLatitude = Number(await mapContainer.getAttribute("data-center-lat"));
+
+    // 3. Volver a la pestaña de Tabla
+    await page.getByRole("button", { name: /Tabla de Discrepancias/i }).click();
+    await expect(page.getByRole("table")).toBeVisible();
+
+    // 4. Regresar a la pestaña de Mapa
+    await page.getByRole("button", { name: /Mapa de Discrepancias Espaciales/i }).click();
+    await expect(mapContainer).toBeVisible();
+
+    // 5. Verificar que la cámara preservó la posición manual y no reajustó la extensión (D3)
+    const revisitedLatitude = Number(await mapContainer.getAttribute("data-center-lat"));
+    expect(revisitedLatitude).toBeCloseTo(shiftedLatitude, 2);
   });
 
   test("debe permitir ejecutar el script SQL en base de datos y marcar la pestaña como ejecutada", async ({
