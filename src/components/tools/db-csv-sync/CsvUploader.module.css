@@ -133,10 +133,6 @@
   gap: 12px;
 }
 
-.previewNotice {
-  margin-bottom: 2px;
-}
-
 .spin {
   animation: spin 1s linear infinite;
 }

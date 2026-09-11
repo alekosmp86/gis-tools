@@ -140,8 +140,12 @@ export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
                 geojson={discrepancyGeojson}
                 title="MAPA DE DISCREPANCIAS ESPACIALES"
                 isVisible={activeViewTab === ResultsViewTab.MAP}
-                /* The discrepancy map must show every difference found, so it is never capped. */
+                /* The discrepancy map must show every difference found, so it is never capped.
+                 * maxFeatures={null} disables static pre-slice, while neverCapViewportRender={true}
+                 * prevents the viewport-windowing layer from truncating for density. Both together
+                 * satisfy the "never capped" contract. */
                 maxFeatures={null}
+                neverCapViewportRender={true}
               />
             </div>
           )}

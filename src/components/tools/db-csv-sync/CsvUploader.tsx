@@ -10,7 +10,6 @@ import { ModuleTabbedSlot } from "@/ui-kit/modules/ModuleTabbedSlot";
 import { FileSourceSlotProvider } from "@/ui-kit/modules/FileSourceSlotContext";
 import { UiSlot, FileSourceFormat } from "@/ui-kit/modules/contracts";
 import { CsvParser } from "@/core/services/parsers/CsvParser";
-import { MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
 import { AlertType } from "@/ui-kit/types/ui";
 import type { ISpatialFileParser, ParsedFileDataset } from "@/core/types/parsers";
 import { formatNumber, formatFileSize } from "@/core/common/ValueFormatter";
@@ -21,9 +20,6 @@ const SpatialMapPreview = dynamic(
   { ssr: false }
 );
 
-/**
- * Builds a capped FeatureCollection subset for map preview to preserve UI responsiveness.
- */
 interface CsvUploaderProps {
   onSuccess: (data: ParsedFileDataset) => void;
   onDiscard: () => void;
@@ -41,11 +37,6 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const isPreviewCapped = Boolean(
-    data?.geojson?.features &&
-      data.geojson.features.length > MAX_MAP_PREVIEW_FEATURES
-  );
 
   const processFile = async (file: File) => {
     setLoading(true);
@@ -197,16 +188,8 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
           {/* Interactive Spatial Map Preview if CSV contains Geometry (EWKB / WKT / GeoJSON) */}
           {data.geojson && data.geojson.features.length > 0 && (
             <div className={styles.mapSection}>
-              {isPreviewCapped && data.geojson && (
-                <AlertMessage
-                  type={AlertType.WARNING}
-                  className={styles.previewNotice}
-                  text={`Vista previa de muestra: Mostrando los primeros ${formatNumber(MAX_MAP_PREVIEW_FEATURES)} de ${formatNumber(data.geojson.features.length)} registros con geometría en el mapa inicial para asegurar fluidez de navegación. La totalidad de los ${formatNumber(data.featureCount)} registros se auditará y visualizará en el paso final.`}
-                />
-              )}
               <SpatialMapPreview
                 geojson={data.geojson}
-                showCapNotice={false}
                 title="VISTA PREVIA ESPACIAL DEL ARCHIVO CSV"
               />
             </div>
