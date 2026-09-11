@@ -133,3 +133,16 @@ export const CatalogFormatFilter = {
 
 export type CatalogFormatFilter =
   (typeof CatalogFormatFilter)[keyof typeof CatalogFormatFilter];
+
+/** Live download progress payload for a catalogue resource. */
+export interface CatalogDownloadProgress {
+  readonly phase: string;
+  readonly current: number;
+  readonly total: number;
+}
+
+/** Selection request bundling the selected resource with its parent group. */
+export interface CatalogSelectionRequest {
+  readonly group: CatalogSourceGroup;
+  readonly resource: CatalogResourceItem;
+}

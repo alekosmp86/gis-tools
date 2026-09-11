@@ -1,11 +1,18 @@
 import shp from "shpjs";
 import type { FeatureCollection, Geometry, GeoJsonProperties, Feature } from "geojson";
-import { FileSourceKind, type ISpatialFileParser, type ParsedFileDataset } from "@/core/types/parsers";
+import {
+  FileSourceKind,
+  type ISpatialFileParser,
+  type ParsedFileDataset,
+  type ProgressCallback,
+} from "@/core/types/parsers";
 import { extractShapefileZip } from "@/core/binary/ZipShapefileExtractor";
 import { BinaryDbfReader } from "@/core/binary/BinaryDbfReader";
 import { BinaryShpReader, ShapeType } from "@/core/binary/BinaryShpReader";
-import { createProjectionConverter } from "@/core/spatial/ProjectionEngine";
 import { MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
+import { PARSE_PROGRESS_CHUNK_SIZE } from "@/core/constants/parserConstants";
+import { yieldToMainThread } from "@/core/common/mainThreadYield";
+import { createProjectionConverter } from "@/core/spatial/ProjectionEngine";
 
 function resolveShapeTypeName(shapeType: number): string {
   switch (shapeType) {
@@ -34,7 +41,7 @@ export class ShapefileParser implements ISpatialFileParser {
   readonly formatName = "Shapefile / GeoJSON";
   readonly supportedExtensions = [".zip", ".geojson", ".json"];
 
-  async parse(file: File): Promise<ParsedFileDataset> {
+  async parse(file: File, onProgress?: ProgressCallback): Promise<ParsedFileDataset> {
     const fileName = file.name;
     const fileSize = file.size;
     const rawBuffer = await file.arrayBuffer();
@@ -69,6 +76,12 @@ export class ShapefileParser implements ISpatialFileParser {
 
         // Build representative subset for map preview (up to MAX_MAP_PREVIEW_FEATURES)
         for (let recordIndex = 0; recordIndex < previewLimit; recordIndex++) {
+          if (recordIndex > 0 && recordIndex % PARSE_PROGRESS_CHUNK_SIZE === 0) {
+            onProgress?.("Extrayendo geometrías...", recordIndex, previewLimit);
+            // react-doctor-disable-next-line react-doctor/async-await-in-loop
+            await yieldToMainThread();
+          }
+
           const geometry = shpReader
             ? shpReader.readGeometry(recordIndex, transformCoordinate)
             : null;
@@ -85,6 +98,10 @@ export class ShapefileParser implements ISpatialFileParser {
               properties,
             });
           }
+        }
+
+        if (onProgress && previewLimit > 0) {
+          onProgress("Extrayendo geometrías...", previewLimit, previewLimit);
         }
 
         const geojson: FeatureCollection = {
@@ -118,23 +135,24 @@ export class ShapefileParser implements ISpatialFileParser {
         featureCollection = fallbackResult as FeatureCollection<Geometry, GeoJsonProperties>;
       }
 
-      return this.buildDatasetFromGeoJson(fileName, fileSize, featureCollection);
+      return this.buildDatasetFromGeoJson(fileName, fileSize, featureCollection, onProgress);
     }
 
     if (fileName.toLowerCase().endsWith(".json") || fileName.toLowerCase().endsWith(".geojson")) {
       const text = new TextDecoder().decode(rawBuffer);
       const featureCollection = JSON.parse(text) as FeatureCollection<Geometry, GeoJsonProperties>;
-      return this.buildDatasetFromGeoJson(fileName, fileSize, featureCollection);
+      return this.buildDatasetFromGeoJson(fileName, fileSize, featureCollection, onProgress);
     }
 
     throw new Error("Formato no soportado. Por favor suba un archivo .zip (SHP+DBF) o .geojson.");
   }
 
-  private buildDatasetFromGeoJson(
+  private async buildDatasetFromGeoJson(
     fileName: string,
     fileSize: number,
-    featureCollection: FeatureCollection<Geometry, GeoJsonProperties>
-  ): ParsedFileDataset {
+    featureCollection: FeatureCollection<Geometry, GeoJsonProperties>,
+    onProgress?: ProgressCallback
+  ): Promise<ParsedFileDataset> {
     if (!featureCollection || !featureCollection.features) {
       throw new Error("No se encontraron entidades vectoriales en el archivo.");
     }
@@ -154,7 +172,15 @@ export class ShapefileParser implements ISpatialFileParser {
       ? allFeatures.slice(0, MAX_MAP_PREVIEW_FEATURES)
       : allFeatures;
 
-    previewFeatures.forEach((feature, featureIndex) => {
+    const previewCount = previewFeatures.length;
+    for (let featureIndex = 0; featureIndex < previewCount; featureIndex++) {
+      if (featureIndex > 0 && featureIndex % PARSE_PROGRESS_CHUNK_SIZE === 0) {
+        onProgress?.("Procesando entidades GeoJSON...", featureIndex, previewCount);
+        // react-doctor-disable-next-line react-doctor/async-await-in-loop
+        await yieldToMainThread();
+      }
+
+      const feature = previewFeatures[featureIndex];
       const record = feature.properties ? (feature.properties as Record<string, unknown>) : {};
       if (feature.properties) {
         Object.keys(feature.properties).forEach((attributeKey) => {
@@ -164,7 +190,11 @@ export class ShapefileParser implements ISpatialFileParser {
 
       const featureKey = `feat-${featureIndex}`;
       recordsMap.set(featureKey, record);
-    });
+    }
+
+    if (onProgress && previewCount > 0) {
+      onProgress("Procesando entidades GeoJSON...", previewCount, previewCount);
+    }
 
     const previewGeojson: FeatureCollection<Geometry, GeoJsonProperties> = {
       type: "FeatureCollection",

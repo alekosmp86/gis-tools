@@ -3,9 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
+import { ProgressBar } from "@/ui-kit/components/ProgressBar";
 import { ShapefileParser } from "@/core/services/parsers/ShapefileParser";
 import type { ParsedShapefileData } from "@/core/types/shp";
-import type { ISpatialFileParser, ParsedFileDataset } from "@/core/types/parsers";
+import type { ISpatialFileParser, ParsedFileDataset, FileParseProgress } from "@/core/types/parsers";
 import { FileDropzone } from "@/ui-kit/components/FileDropzone";
 import { ModuleTabbedSlot } from "@/ui-kit/modules/ModuleTabbedSlot";
 import { FileSourceSlotProvider } from "@/ui-kit/modules/FileSourceSlotContext";
@@ -30,18 +31,28 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
     loadedData ? (loadedData as unknown as ParsedFileDataset) : null
   );
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<FileParseProgress | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = async (file: File) => {
     setLoading(true);
+    setProgress(null);
     setErrorMessage(null);
     queryClient.removeQueries({ queryKey: ["datasetComparison"] });
 
     try {
       const parser: ISpatialFileParser = new ShapefileParser();
-      const parsed = await parser.parse(file);
+      const parsed = await parser.parse(file, (phase: string, current: number, total: number) => {
+        const percentage = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+        setProgress({
+          phase,
+          current,
+          total,
+          pct: percentage,
+        });
+      });
       setData(parsed);
       onSuccess(parsed as unknown as ParsedShapefileData);
       setLoading(false);
@@ -89,6 +100,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
   const handleDiscard = () => {
     queryClient.removeQueries({ queryKey: ["datasetComparison"] });
     setData(null);
+    setProgress(null);
     setErrorMessage(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -136,8 +148,21 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
       {/* Loading State */}
       {loading && (
         <div className={styles.loadingArea}>
-          <Loader2 size={32} className={styles.spin} />
-          <span>Leyendo e inspeccionando atributos del Shapefile en memoria...</span>
+          {progress && progress.total > 0 ? (
+            <div className={styles.progressWrapper}>
+              <ProgressBar
+                phase={progress.phase}
+                current={progress.current}
+                total={progress.total}
+                pct={progress.pct}
+              />
+            </div>
+          ) : (
+            <>
+              <Loader2 size={32} className={styles.spin} />
+              <span>Leyendo e inspeccionando atributos del Shapefile en memoria...</span>
+            </>
+          )}
         </div>
       )}
 

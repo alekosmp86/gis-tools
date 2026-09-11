@@ -51,6 +51,11 @@
   font-size: 0.9rem;
 }
 
+.progressWrapper {
+  width: 100%;
+  max-width: 480px;
+}
+
 .loadedCard {
   background: rgba(9, 13, 22, 0.6);
   border: 1px solid var(--border-color);

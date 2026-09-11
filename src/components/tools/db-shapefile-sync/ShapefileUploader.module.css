@@ -20,6 +20,11 @@
   font-size: 0.95rem;
 }
 
+.progressWrapper {
+  width: 100%;
+  max-width: 480px;
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }

@@ -92,35 +92,9 @@ export function getDiscrepancyLabel(type?: string): string {
   return DISCREPANCY_LABELS[type] || DEFAULT_DISCREPANCY_LABEL;
 }
 
-/** Progressive Micro-Batch Map Rendering Constants: features painted per animation frame */
 export const MAP_MICRO_CHUNK_SIZE = 400;
-/** Milliseconds of each animation frame spent painting features before yielding to the browser. */
 export const MAP_FRAME_BUDGET_MS = 8;
-
-/**
- * Maximum number of features eagerly decoded during initial file ingestion (e.g. Shapefile/DB row streaming).
- * The 1,051,248-feature / 2.5 GB measurement in BINARY_SHAPEFILE_1M_OPTIMIZATION.md scales proportionally
- * to roughly 360 MB at 150,000 features — a 6x lift for large-file Step-2 previews, while staying a safe
- * fraction of a browser tab's V8 heap. This is an ingestion/decode cap, distinct from render-window caps below.
- */
 export const MAX_MAP_PREVIEW_FEATURES = 150_000;
-
-/**
- * Maximum number of features concurrently rendered inside the active padded viewport window.
- * Unlike MAX_MAP_PREVIEW_FEATURES which bounds eager dataset ingestion/decode, this cap bounds
- * concurrent Leaflet DOM/canvas layer count to keep 60fps pan/zoom performance intact.
- */
 export const MAX_VIEWPORT_RENDER_FEATURES = 50_000;
-
-/**
- * The buffer ratio by which the query window expands beyond the visible viewport on all sides.
- * A ratio of 1.0 extends the query bounding box by 100% of viewport width and height in every direction,
- * allowing roughly a full screen-width pan without triggering a canvas layer rebuild.
- */
 export const VIEWPORT_INDEX_PADDING_RATIO = 1.0;
-
-/**
- * Target average feature density per grid cell used to dynamically compute uniform spatial grid resolution:
- * gridDimension = clamp(Math.ceil(Math.sqrt(featureCount / SPATIAL_INDEX_TARGET_FEATURES_PER_CELL)), 4, 512).
- */
 export const SPATIAL_INDEX_TARGET_FEATURES_PER_CELL = 32;

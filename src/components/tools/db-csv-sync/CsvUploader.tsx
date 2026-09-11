@@ -6,12 +6,13 @@ import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { ColumnsList } from "@/ui-kit/components/ColumnsList";
 import { FileDropzone } from "@/ui-kit/components/FileDropzone";
+import { ProgressBar } from "@/ui-kit/components/ProgressBar";
 import { ModuleTabbedSlot } from "@/ui-kit/modules/ModuleTabbedSlot";
 import { FileSourceSlotProvider } from "@/ui-kit/modules/FileSourceSlotContext";
 import { UiSlot, FileSourceFormat } from "@/ui-kit/modules/contracts";
 import { CsvParser } from "@/core/services/parsers/CsvParser";
 import { AlertType } from "@/ui-kit/types/ui";
-import type { ISpatialFileParser, ParsedFileDataset } from "@/core/types/parsers";
+import type { ISpatialFileParser, ParsedFileDataset, FileParseProgress } from "@/core/types/parsers";
 import { formatNumber, formatFileSize } from "@/core/common/ValueFormatter";
 import styles from "./CsvUploader.module.css";
 
@@ -34,18 +35,28 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
   const queryClient = useQueryClient();
   const [data, setData] = useState<ParsedFileDataset | null>(loadedData);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<FileParseProgress | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = async (file: File) => {
     setLoading(true);
+    setProgress(null);
     setErrorMessage(null);
     queryClient.removeQueries({ queryKey: ["datasetComparison"] });
 
     try {
       const parser: ISpatialFileParser = new CsvParser();
-      const parsed = await parser.parse(file);
+      const parsed = await parser.parse(file, (phase: string, current: number, total: number) => {
+        const percentage = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+        setProgress({
+          phase,
+          current,
+          total,
+          pct: percentage,
+        });
+      });
       setData(parsed);
       onSuccess(parsed);
       setLoading(false);
@@ -92,6 +103,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
   const handleDiscard = () => {
     queryClient.removeQueries({ queryKey: ["datasetComparison"] });
     setData(null);
+    setProgress(null);
     setErrorMessage(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -139,8 +151,21 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
       {/* Loading State */}
       {loading && (
         <div className={styles.loadingArea}>
-          <Loader2 size={32} className={styles.spin} />
-          <span>Leyendo e inspeccionando columnas del archivo CSV en memoria...</span>
+          {progress && progress.total > 0 ? (
+            <div className={styles.progressWrapper}>
+              <ProgressBar
+                phase={progress.phase}
+                current={progress.current}
+                total={progress.total}
+                pct={progress.pct}
+              />
+            </div>
+          ) : (
+            <>
+              <Loader2 size={32} className={styles.spin} />
+              <span>Leyendo e inspeccionando columnas del archivo CSV en memoria...</span>
+            </>
+          )}
         </div>
       )}
 

@@ -75,4 +75,58 @@ describe("CsvParser", () => {
     // Act & Assert
     await expect(parser.parse(file)).rejects.toThrow("El archivo CSV está vacío.");
   });
+
+  it("should report progress at completion for datasets under chunk size", async () => {
+    // Arrange
+    const csvContent = "id,nombre\n1,Alpha\n2,Beta";
+    const file = new File([csvContent], "datos.csv", { type: "text/csv" });
+    const progressCalls: Array<{ phase: string; current: number; total: number }> = [];
+
+    // Act
+    const parsed = await parser.parse(file, (phase: string, current: number, total: number) => {
+      progressCalls.push({ phase, current, total });
+    });
+
+    // Assert
+    expect(parsed.featureCount).toBe(2);
+    expect(progressCalls).toHaveLength(1);
+    expect(progressCalls[0]).toEqual({
+      phase: "Procesando filas CSV...",
+      current: 2,
+      total: 2,
+    });
+  });
+
+  it("should report chunk progress and completion when dataset exceeds PARSE_PROGRESS_CHUNK_SIZE", async () => {
+    // Arrange
+    const rowCount = 2050;
+    const header = "id,nombre";
+    const rows: string[] = [header];
+    for (let rowIndex = 1; rowIndex <= rowCount; rowIndex++) {
+      rows.push(`${rowIndex},Item_${rowIndex}`);
+    }
+    const csvContent = rows.join("\n");
+    const file = new File([csvContent], "large.csv", { type: "text/csv" });
+    const progressCalls: Array<{ phase: string; current: number; total: number }> = [];
+
+    // Act
+    const parsed = await parser.parse(file, (phase: string, current: number, total: number) => {
+      progressCalls.push({ phase, current, total });
+    });
+
+    // Assert
+    expect(parsed.featureCount).toBe(rowCount);
+    // At least 2 calls: one at chunk threshold (2000) and one at completion (2050)
+    expect(progressCalls.length).toBeGreaterThanOrEqual(2);
+    expect(progressCalls[0]).toEqual({
+      phase: "Procesando filas CSV...",
+      current: 2000,
+      total: rowCount,
+    });
+    expect(progressCalls[progressCalls.length - 1]).toEqual({
+      phase: "Procesando filas CSV...",
+      current: rowCount,
+      total: rowCount,
+    });
+  });
 });

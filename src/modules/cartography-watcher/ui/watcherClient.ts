@@ -4,6 +4,8 @@ import type {
   SourceSummary,
   WatchedSource,
 } from "../types";
+import type { ProgressCallback } from "@/core/types/parsers";
+import { DOWNLOAD_PROGRESS_BYTE_INTERVAL } from "../constants";
 
 /**
  * Browser-side access to the module's own endpoints.
@@ -107,7 +109,8 @@ export async function fetchCatalog(
 export async function fetchCatalogFile(
   datasetSlug: string,
   resourceId: string,
-  fallbackName: string
+  fallbackName: string,
+  onProgress?: ProgressCallback
 ): Promise<File> {
   const response = await fetch(
     `${API_BASE}/catalog/file?dataset=${encodeURIComponent(datasetSlug)}&resource=${encodeURIComponent(resourceId)}`
@@ -121,5 +124,50 @@ export async function fetchCatalogFile(
   const filenameMatch = disposition.match(/filename="([^"]+)"/);
   const filename = filenameMatch ? filenameMatch[1] : fallbackName;
 
-  return new File([await response.blob()], filename);
+  const contentLengthHeader = response.headers.get("Content-Length");
+  const totalBytes = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
+
+  if (!response.body) {
+    const blob = await response.blob();
+    if (onProgress) {
+      onProgress("Descargando archivo...", blob.size, blob.size);
+    }
+    return new File([blob], filename);
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+  let lastReportedBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    if (value) {
+      chunks.push(value);
+      receivedBytes += value.length;
+      if (
+        onProgress &&
+        (lastReportedBytes === 0 || receivedBytes - lastReportedBytes >= DOWNLOAD_PROGRESS_BYTE_INTERVAL)
+      ) {
+        onProgress(
+          "Descargando archivo...",
+          receivedBytes,
+          totalBytes
+        );
+        lastReportedBytes = receivedBytes;
+      }
+    }
+  }
+
+  if (onProgress && receivedBytes > 0) {
+    if (totalBytes === 0 || lastReportedBytes < totalBytes || lastReportedBytes === 0) {
+      const finalBytes = totalBytes > 0 ? totalBytes : receivedBytes;
+      onProgress("Descargando archivo...", finalBytes, finalBytes);
+    }
+  }
+
+  return new File(chunks as BlobPart[], filename);
 }

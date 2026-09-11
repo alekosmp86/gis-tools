@@ -1,7 +1,14 @@
 import type { FeatureCollection, Feature, Geometry, GeoJsonProperties } from "geojson";
-import { FileSourceKind, type ISpatialFileParser, type ParsedFileDataset } from "@/core/types/parsers";
+import {
+  FileSourceKind,
+  type ISpatialFileParser,
+  type ParsedFileDataset,
+  type ProgressCallback,
+} from "@/core/types/parsers";
 import { parseAnyGeometryString } from "@/core/spatial/WktGeometryParser";
 import { normalizeCoordinate } from "@/core/spatial/EwkbGeometryParser";
+import { yieldToMainThread } from "@/core/common/mainThreadYield";
+import { PARSE_PROGRESS_CHUNK_SIZE } from "@/core/constants/parserConstants";
 
 interface SpatialColumnHeaders {
   geomColHeader?: string;
@@ -17,7 +24,7 @@ export class CsvParser implements ISpatialFileParser {
    * Main orchestrator: coordinates file reading, delimiter detection, header parsing,
    * row processing, and GeoJSON dataset construction.
    */
-  async parse(file: File): Promise<ParsedFileDataset> {
+  async parse(file: File, onProgress?: ProgressCallback): Promise<ParsedFileDataset> {
     const fileName = file.name;
     const fileSize = file.size;
     const rawText = await file.text();
@@ -31,11 +38,12 @@ export class CsvParser implements ISpatialFileParser {
     const headers = this.extractHeaders(lines[0], delimiter);
     const spatialCols = this.resolveSpatialColumnHeaders(headers);
 
-    const { recordsMap, geojsonFeatures } = this.processRows(
+    const { recordsMap, geojsonFeatures } = await this.processRows(
       lines,
       headers,
       delimiter,
-      spatialCols
+      spatialCols,
+      onProgress
     );
 
     const featureCollection = this.buildFeatureCollection(geojsonFeatures);
@@ -142,19 +150,28 @@ export class CsvParser implements ISpatialFileParser {
   /**
    * Iterates through data rows, builds recordsMap, and extracts any valid geometries.
    */
-  private processRows(
+  private async processRows(
     lines: string[],
     headers: string[],
     delimiter: string,
-    spatialCols: SpatialColumnHeaders
-  ): {
+    spatialCols: SpatialColumnHeaders,
+    onProgress?: ProgressCallback
+  ): Promise<{
     recordsMap: Map<string, Record<string, unknown>>;
     geojsonFeatures: Array<Feature<Geometry, GeoJsonProperties>>;
-  } {
+  }> {
     const recordsMap = new Map<string, Record<string, unknown>>();
     const geojsonFeatures: Array<Feature<Geometry, GeoJsonProperties>> = [];
+    const totalRows = lines.length - 1;
 
     for (let lineIndex = 1; lineIndex < lines.length; lineIndex++) {
+      const recordIndex = lineIndex - 1;
+      if (recordIndex > 0 && recordIndex % PARSE_PROGRESS_CHUNK_SIZE === 0) {
+        onProgress?.("Procesando filas CSV...", recordIndex, totalRows);
+        // react-doctor-disable-next-line react-doctor/async-await-in-loop
+        await yieldToMainThread();
+      }
+
       const values = this.parseCsvLine(lines[lineIndex], delimiter);
       if (values.length === 0) continue;
 
@@ -164,7 +181,6 @@ export class CsvParser implements ISpatialFileParser {
       });
 
       // Row ordinal keeps features linked back to their source row (see issue 023).
-      const recordIndex = lineIndex - 1;
       recordsMap.set(`row-${recordIndex}`, record);
       // Alias the same record under its identifiers so lookups by id/suid resolve directly.
       if (record.id !== undefined && record.id !== "") {
@@ -185,6 +201,10 @@ export class CsvParser implements ISpatialFileParser {
           properties: record,
         });
       }
+    }
+
+    if (onProgress && totalRows > 0) {
+      onProgress("Procesando filas CSV...", totalRows, totalRows);
     }
 
     return { recordsMap, geojsonFeatures };

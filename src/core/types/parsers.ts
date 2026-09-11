@@ -1,4 +1,7 @@
 import type { FeatureCollection } from "geojson";
+import type { ProgressCallback } from "./comparison";
+
+export type { ProgressCallback };
 
 export const FileSourceKind = {
   SHAPEFILE: "shapefile",
@@ -31,7 +34,14 @@ export interface ParsedFileDataset {
 export interface ISpatialFileParser {
   readonly formatName: string;
   readonly supportedExtensions: string[];
-  parse(file: File): Promise<ParsedFileDataset>;
+  parse(file: File, onProgress?: ProgressCallback): Promise<ParsedFileDataset>;
+}
+
+export interface FileParseProgress {
+  phase: string;
+  current: number;
+  total: number;
+  pct: number;
 }
 
 

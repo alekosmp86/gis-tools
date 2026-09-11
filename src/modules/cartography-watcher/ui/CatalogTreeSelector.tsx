@@ -16,7 +16,12 @@ import { FileSourceFormat } from "@/ui-kit/modules/contracts";
 import { formatFileSize, formatPublicationDate } from "../domain/formatters";
 import { fetchCatalog, fetchCatalogFile } from "./watcherClient";
 import { CatalogFormatFilter } from "../types";
-import type { CatalogResourceItem, CatalogSourceGroup } from "../types";
+import type {
+  CatalogDownloadProgress,
+  CatalogResourceItem,
+  CatalogSelectionRequest,
+  CatalogSourceGroup,
+} from "../types";
 import styles from "./CatalogTreeSelector.module.css";
 
 /**
@@ -34,21 +39,17 @@ function resolveCatalogFilter(format: FileSourceFormat): CatalogFormatFilter {
   return format === FileSourceFormat.CSV ? CatalogFormatFilter.CSV : CatalogFormatFilter.SHP;
 }
 
-/** What one selection needs: the group supplies the dataset, the resource the file. */
-interface SelectionRequest {
-  group: CatalogSourceGroup;
-  resource: CatalogResourceItem;
-}
-
 interface CatalogResourceRowProps {
   resource: CatalogResourceItem;
   isBusy: boolean;
+  downloadProgress: CatalogDownloadProgress | null;
   onSelect: (resource: CatalogResourceItem) => void;
 }
 
 const CatalogResourceRow: React.FC<CatalogResourceRowProps> = ({
   resource,
   isBusy,
+  downloadProgress,
   onSelect,
 }) => (
   <li className={styles.resourceRow}>
@@ -64,12 +65,19 @@ const CatalogResourceRow: React.FC<CatalogResourceRowProps> = ({
         {resource.format} · {formatFileSize(resource.sizeBytes)} ·{" "}
         {formatPublicationDate(resource.lastModified)}
       </span>
-      {resource.isCached && (
+      {isBusy ? (
+        <span className={styles.downloadingBadge}>
+          <Loader2 size={12} className={styles.spin} />
+          {downloadProgress && downloadProgress.total > 0
+            ? `${Math.round((downloadProgress.current / downloadProgress.total) * 100)}%`
+            : "Descargando..."}
+        </span>
+      ) : resource.isCached ? (
         <span className={styles.cachedBadge}>
           <HardDriveDownload size={12} />
           En caché
         </span>
-      )}
+      ) : null}
     </button>
   </li>
 );
@@ -78,6 +86,7 @@ interface CatalogGroupProps {
   group: CatalogSourceGroup;
   isExpanded: boolean;
   busyResourceId: string | null;
+  downloadProgress: CatalogDownloadProgress | null;
   onToggle: (sourceId: string) => void;
   onSelectResource: (group: CatalogSourceGroup, resource: CatalogResourceItem) => void;
 }
@@ -86,6 +95,7 @@ const CatalogGroup: React.FC<CatalogGroupProps> = ({
   group,
   isExpanded,
   busyResourceId,
+  downloadProgress,
   onToggle,
   onSelectResource,
 }) => (
@@ -107,6 +117,7 @@ const CatalogGroup: React.FC<CatalogGroupProps> = ({
               key={resource.id}
               resource={resource}
               isBusy={busyResourceId === resource.id}
+              downloadProgress={busyResourceId === resource.id ? downloadProgress : null}
               onSelect={() => onSelectResource(group, resource)}
             />
           ))
@@ -121,6 +132,8 @@ export const CatalogTreeSelector: React.FC = () => {
   const { format, onSelectFile, isLoading } = useFileSourceSlot();
   const [expandedSourceIds, setExpandedSourceIds] = useState<ReadonlySet<string>>(new Set());
   const [expandedError, setExpandedError] = useState<string | null>(null);
+
+  const [downloadProgress, setDownloadProgress] = useState<CatalogDownloadProgress | null>(null);
 
   const catalogFilter = resolveCatalogFilter(format);
   const {
@@ -146,9 +159,19 @@ export const CatalogTreeSelector: React.FC = () => {
   };
 
   const selectFileMutation = useMutation({
-    mutationFn: ({ group, resource }: SelectionRequest) =>
-      fetchCatalogFile(group.datasetSlug, resource.id, resource.name),
+    mutationFn: ({ group, resource }: CatalogSelectionRequest) => {
+      setDownloadProgress(null);
+      return fetchCatalogFile(
+        group.datasetSlug,
+        resource.id,
+        resource.name,
+        (phase: string, current: number, total: number) => {
+          setDownloadProgress({ phase, current, total });
+        }
+      );
+    },
     onMutate: () => setExpandedError(null),
+    onSettled: () => setDownloadProgress(null),
     onSuccess: (file) => {
       onSelectFile(file);
       // Fetching a file caches it in the vault, so the cached badges are now out of date.
@@ -212,6 +235,7 @@ export const CatalogTreeSelector: React.FC = () => {
               group={group}
               isExpanded={expandedSourceIds.has(group.sourceId)}
               busyResourceId={isLoading ? null : busyResourceId}
+              downloadProgress={busyResourceId ? downloadProgress : null}
               onToggle={handleToggleGroup}
               onSelectResource={(group, resource) =>
                 selectFileMutation.mutate({ group, resource })

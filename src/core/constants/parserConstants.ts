@@ -1,0 +1,1 @@
+export const PARSE_PROGRESS_CHUNK_SIZE = 2000;
