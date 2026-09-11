@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Info } from "lucide-react";
 import type { FeatureCollection } from "geojson";
 import type { MapFeatureStyle } from "@/core/types/map";
-import { DEFAULT_MAP_FEATURE_STYLE, MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
+import { DEFAULT_MAP_FEATURE_STYLE, MAX_VIEWPORT_RENDER_FEATURES } from "@/core/constants/mapConstants";
 import { formatNumber } from "@/core/common/ValueFormatter";
 import { capFeaturesWithoutSplittingGroups } from "@/core/spatial/FeaturePreviewCap";
 import { useLeafletMap } from "@/ui-kit/hooks/useLeafletMap";
@@ -25,6 +25,11 @@ export interface SpatialMapPreviewProps {
   maxFeatures?: number | null;
   /** Set false when the caller already explains the cap, to avoid two banners saying the same thing. */
   showCapNotice?: boolean;
+  /**
+   * Controls whether the viewport-windowing layer may ever truncate features for density.
+   * Separate from maxFeatures, which only controls the static pre-slice before the map.
+   */
+  neverCapViewportRender?: boolean;
 }
 
 export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
@@ -34,8 +39,9 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   onSelectFeature,
   initialStyle,
   isVisible = true,
-  maxFeatures = MAX_MAP_PREVIEW_FEATURES,
+  maxFeatures = null,
   showCapNotice = true,
+  neverCapViewportRender = false,
 }) => {
   const [mapContainerNode, setMapContainerNode] = useState<HTMLDivElement | null>(null);
   const [basemapKey, setBasemapKey] = useState<string>("osm");
@@ -58,6 +64,8 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
 
   const totalFeatures = previewGeojson?.features?.length || 0;
 
+  const maxRenderFeatures = neverCapViewportRender ? null : MAX_VIEWPORT_RENDER_FEATURES;
+
   const { renderedCount, isChunking, handleFitBounds } = useLeafletMap(
     mapContainerNode,
     previewGeojson,
@@ -65,7 +73,8 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
     featureStyle,
     selectedFeatureIndex,
     onSelectFeature,
-    isVisible
+    isVisible,
+    maxRenderFeatures
   );
 
   const progressPct = totalFeatures > 0 ? Math.min(100, Math.round((renderedCount / totalFeatures) * 100)) : 0;

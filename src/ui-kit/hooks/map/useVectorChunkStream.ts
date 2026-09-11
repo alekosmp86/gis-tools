@@ -10,6 +10,7 @@ export function useVectorChunkStream(
   mapInstanceRef: React.RefObject<L.Map | null>,
   canvasRendererRef: React.RefObject<L.Canvas | null>,
   geojson: FeatureCollection,
+  windowedGeojson: FeatureCollection,
   featureStyle: MapFeatureStyle,
   onSelectFeature?: (index: number | null) => void,
   isMapReady: boolean = false,
@@ -20,8 +21,12 @@ export function useVectorChunkStream(
   featureGroupRef: React.RefObject<L.FeatureGroup | null>;
 } {
   const featureGroupRef = useRef<L.FeatureGroup | null>(null);
-  const lastProcessedGeojsonRef = useRef<FeatureCollection | null>(null);
+  const lastProcessedWindowRef = useRef<FeatureCollection | null>(null);
+  const lastBoundGeojsonRef = useRef<FeatureCollection | null>(null);
   const featureStyleRef = useRef(featureStyle);
+
+  const pendingTeardownLayersRef = useRef<L.Layer[]>([]);
+  const renderedSubLayersRef = useRef<L.Layer[]>([]);
 
   useEffect(() => {
     featureStyleRef.current = featureStyle;
@@ -35,6 +40,24 @@ export function useVectorChunkStream(
     onSelectFeatureRef.current = onSelectFeature;
   }, [onSelectFeature]);
 
+  // Clean unmount of featureGroup container without synchronous 50,000-layer recursive traversal
+  useEffect(() => {
+    const mapInstance = mapInstanceRef.current;
+    return () => {
+      const featureGroup = featureGroupRef.current;
+      if (featureGroup && mapInstance) {
+        try {
+          (featureGroup as unknown as { _layers: Record<string, unknown> })._layers = {};
+          if (mapInstance.hasLayer(featureGroup)) {
+            mapInstance.removeLayer(featureGroup);
+          }
+        } catch {
+          // Safe disposal
+        }
+      }
+    };
+  }, [mapInstanceRef]);
+
   const [renderedCount, setRenderedCount] = useState<number>(0);
   const [isChunking, setIsChunking] = useState<boolean>(false);
 
@@ -42,49 +65,52 @@ export function useVectorChunkStream(
     const mapInstance = mapInstanceRef.current;
     if (!mapInstance || !isMapReady) return;
 
+    const pendingTeardownLayers = pendingTeardownLayersRef.current;
+
     // If the map is currently hidden, defer rendering until it becomes visible
     if (!isVisible) {
       return;
     }
 
-    // If already rendered this exact geojson collection and visible, ensure viewport is fitted
-    // Re-fit only when this collection is already rendered AND still attached. Without the
-    // attachment check, any dependency change would run cleanup (which detaches the group) and
-    // then short-circuit here, leaving the map empty.
+    // Ensure persistent featureGroup is initialized and attached
+    if (!featureGroupRef.current) {
+      featureGroupRef.current = L.featureGroup().addTo(mapInstance);
+    } else if (!mapInstance.hasLayer(featureGroupRef.current)) {
+      mapInstance.addLayer(featureGroupRef.current);
+    }
+    const featureGroup = featureGroupRef.current;
+
+    // Delegate click events once per full-dataset identity change
+    if (lastBoundGeojsonRef.current !== geojson) {
+      lastBoundGeojsonRef.current = geojson;
+      bindGroupFeatureEvents(featureGroup, geojson?.features ?? [], (featureIndex) =>
+        onSelectFeatureRef.current?.(featureIndex)
+      );
+    }
+
+    // If already rendered this exact windowed collection and visible, ensure size is valid
     const isAlreadyRendered =
-      lastProcessedGeojsonRef.current === geojson &&
-      featureGroupRef.current !== null &&
-      mapInstance.hasLayer(featureGroupRef.current);
+      lastProcessedWindowRef.current === windowedGeojson &&
+      mapInstance.hasLayer(featureGroup);
 
     if (isAlreadyRendered) {
       mapInstance.invalidateSize();
-      if (featureGroupRef.current) {
-        const bounds = featureGroupRef.current.getBounds();
-        if (bounds.isValid()) {
-          mapInstance.fitBounds(bounds, { padding: [30, 30] });
-        }
-      }
       return;
     }
 
-    lastProcessedGeojsonRef.current = geojson;
+    lastProcessedWindowRef.current = windowedGeojson;
 
-    if (featureGroupRef.current) {
-      mapInstance.removeLayer(featureGroupRef.current);
+    // Queue currently rendered sublayers for frame-budgeted progressive teardown
+    if (renderedSubLayersRef.current.length > 0) {
+      pendingTeardownLayersRef.current.push(...renderedSubLayersRef.current);
+      renderedSubLayersRef.current = [];
     }
 
-    const featureGroup = L.featureGroup().addTo(mapInstance);
-    featureGroupRef.current = featureGroup;
-
-    // One delegated listener for the whole group instead of one per rendered feature.
-    bindGroupFeatureEvents(featureGroup, geojson?.features ?? [], (featureIndex) =>
-      onSelectFeatureRef.current?.(featureIndex)
-    );
-
     let isCancelled = false;
-    const totalFeatures = geojson?.features?.length || 0;
+    const windowedFeatures = windowedGeojson?.features ?? [];
+    const totalFeatures = windowedFeatures.length;
 
-    if (totalFeatures === 0) {
+    if (totalFeatures === 0 && pendingTeardownLayersRef.current.length === 0) {
       requestAnimationFrame(() => {
         if (!isCancelled) {
           setRenderedCount(0);
@@ -94,26 +120,18 @@ export function useVectorChunkStream(
       return;
     }
 
-    let initialZoomDone = false;
     let scheduledFrame: number | null = null;
     let renderedOffset = 0;
 
     mapInstance.invalidateSize();
-
-    const fitToRenderedFeatures = () => {
-      mapInstance.invalidateSize();
-      const bounds = featureGroup.getBounds();
-      if (bounds.isValid()) {
-        mapInstance.fitBounds(bounds, { padding: [30, 30] });
-      }
-    };
+    setIsChunking(true);
 
     /**
-     * Renders one micro-batch straight from the source collection. Slicing yields references to the
+     * Renders one micro-batch straight from the windowed collection. Slicing yields references to the
      * original features, so no feature object is copied on the way to Leaflet.
      */
     const renderOneChunk = () => {
-      const chunkFeatures = geojson.features.slice(
+      const chunkFeatures = windowedFeatures.slice(
         renderedOffset,
         renderedOffset + MAP_MICRO_CHUNK_SIZE
       );
@@ -135,32 +153,44 @@ export function useVectorChunkStream(
       });
 
       featureGroup.addLayer(geojsonSubLayer);
-
-      if (!initialZoomDone) {
-        initialZoomDone = true;
-        fitToRenderedFeatures();
-      }
+      renderedSubLayersRef.current.push(geojsonSubLayer);
     };
 
     /**
-     * Renders as many chunks as fit in the frame budget, then yields.
-     *
-     * Rendering exactly one chunk per frame caps throughput at roughly 400 features per 16ms, which
-     * makes a large collection take seconds to finish. Spending a bounded slice of each frame keeps
-     * the page responsive while letting fast machines finish far sooner.
+     * Symmetrically paces both sublayer teardown and new chunk additions within MAP_FRAME_BUDGET_MS,
+     * ensuring no individual animation frame blocks the main thread for duration proportional to window size.
      */
-    const renderChunksWithinFrameBudget = () => {
+    const processChunksWithinFrameBudget = () => {
       if (isCancelled) return;
 
       const frameStart = performance.now();
 
-      do {
-        renderOneChunk();
-      } while (
-        !isCancelled &&
+      // Phase 1: Progressive teardown of retiring sublayers
+      while (
+        pendingTeardownLayersRef.current.length > 0 &&
+        performance.now() - frameStart < MAP_FRAME_BUDGET_MS
+      ) {
+        const subLayer = pendingTeardownLayersRef.current.pop();
+        if (subLayer && featureGroup.hasLayer(subLayer)) {
+          featureGroup.removeLayer(subLayer);
+        }
+      }
+
+      if (isCancelled) return;
+
+      // If teardown still has layers and frame budget is exhausted, yield to next frame
+      if (pendingTeardownLayersRef.current.length > 0) {
+        scheduledFrame = requestAnimationFrame(processChunksWithinFrameBudget);
+        return;
+      }
+
+      // Phase 2: Progressive construction of new windowed chunks
+      while (
         renderedOffset < totalFeatures &&
         performance.now() - frameStart < MAP_FRAME_BUDGET_MS
-      );
+      ) {
+        renderOneChunk();
+      }
 
       if (isCancelled) return;
 
@@ -168,32 +198,25 @@ export function useVectorChunkStream(
       setRenderedCount(renderedOffset);
       setIsChunking(!isComplete);
 
-      if (isComplete) {
-        // Final bounds fit once every chunk is painted
-        fitToRenderedFeatures();
-        return;
+      if (!isComplete) {
+        scheduledFrame = requestAnimationFrame(processChunksWithinFrameBudget);
       }
-
-      scheduledFrame = requestAnimationFrame(renderChunksWithinFrameBudget);
     };
 
-    renderChunksWithinFrameBudget();
+    scheduledFrame = requestAnimationFrame(processChunksWithinFrameBudget);
 
     return () => {
       isCancelled = true;
       if (scheduledFrame !== null) {
         cancelAnimationFrame(scheduledFrame);
       }
-      try {
-        featureGroup.clearLayers();
-        if (mapInstance.hasLayer(featureGroup)) {
-          mapInstance.removeLayer(featureGroup);
-        }
-      } catch {
-        // Safe disposal
+      // Preserve any rendered layers into pending teardown for the next window cycle
+      if (renderedSubLayersRef.current.length > 0) {
+        pendingTeardownLayers.push(...renderedSubLayersRef.current);
+        renderedSubLayersRef.current = [];
       }
     };
-  }, [mapInstanceRef, canvasRendererRef, geojson, isMapReady, isVisible]);
+  }, [mapInstanceRef, canvasRendererRef, windowedGeojson, geojson, isMapReady, isVisible]);
 
   return {
     renderedCount,

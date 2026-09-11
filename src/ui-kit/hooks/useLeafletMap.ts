@@ -1,7 +1,9 @@
 import type { FeatureCollection } from "geojson";
 import type { MapFeatureStyle } from "@/core/types/map";
+import { MAX_VIEWPORT_RENDER_FEATURES } from "@/core/constants/mapConstants";
 import { useMapInstance } from "./map/useMapInstance";
 import { useBasemapTileLayer } from "./map/useBasemapTileLayer";
+import { useViewportFeatureWindow } from "./map/useViewportFeatureWindow";
 import { useVectorChunkStream } from "./map/useVectorChunkStream";
 import { useFeatureHighlight } from "./map/useFeatureHighlight";
 import { useLayerSymbology } from "./map/useLayerSymbology";
@@ -13,7 +15,8 @@ export function useLeafletMap(
   featureStyle: MapFeatureStyle,
   selectedFeatureIndex?: number | null,
   onSelectFeature?: (index: number | null) => void,
-  isVisible: boolean = true
+  isVisible: boolean = true,
+  maxRenderFeatures: number | null = MAX_VIEWPORT_RENDER_FEATURES
 ): {
   renderedCount: number;
   isChunking: boolean;
@@ -25,11 +28,20 @@ export function useLeafletMap(
   // 2. Manage Active Basemap Tile Layer
   useBasemapTileLayer(mapInstanceRef, basemapKey, isMapReady);
 
-  // 3. Stream Vector GeoJSON Features via Web Worker (Visibility-Aware)
+  // 3. Dynamic Viewport Windowing
+  const windowedGeojson = useViewportFeatureWindow(
+    mapInstanceRef,
+    geojson,
+    isMapReady,
+    maxRenderFeatures
+  );
+
+  // 4. Stream Vector GeoJSON Features via Micro-Batches (Visibility-Aware)
   const { renderedCount, isChunking, featureGroupRef } = useVectorChunkStream(
     mapInstanceRef,
     canvasRendererRef,
     geojson,
+    windowedGeojson,
     featureStyle,
     onSelectFeature,
     isMapReady,
