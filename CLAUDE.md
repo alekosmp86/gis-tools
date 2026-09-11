@@ -17,6 +17,7 @@ Load files on-demand based on the task to conserve context tokens. Do not load a
 - `.agents/rules/testing_standards.md` — Test structure, AAA pattern, boundary coverage.
 - `.agents/rules/code_review_standards.md` — Review focus: correctness, architecture, SOLID, God components, duplication as a size signal.
 - `.agents/rules/handoff_commands.md` — Shared command vocabulary: `/plan` `/build` `/review` `/apply` `/drop` `/hold` `/commit` `/promote` `/push` `/where`.
+- `.agents/rules/architecture_navigation.md` — Consult the generated dependency graph (`npm run graph`, `docs/architecture/dependency-graph.html`) for "where is X" / architecture / module-connection questions before scanning source; use its file-level data to target exact files, then narrow to line-level with `Grep` instead of reading whole files.
 - `.agents/rules/coding_guidelines.md` — Code structure, types, modular CSS, no inline styles.
 - `.agents/rules/module_authoring.md` — Modular monolith, boundaries, JSON route manifests.
 - `.agents/rules/portable_node.md` — Portable Node.js fallback (`C:\Alekos\Tools\node24portable`).
