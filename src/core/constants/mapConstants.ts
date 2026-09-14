@@ -94,7 +94,6 @@ export function getDiscrepancyLabel(type?: string): string {
 
 export const MAP_MICRO_CHUNK_SIZE = 400;
 export const MAP_FRAME_BUDGET_MS = 8;
-export const MAX_MAP_PREVIEW_FEATURES = 150_000;
 export const MAX_VIEWPORT_RENDER_FEATURES = 50_000;
 export const VIEWPORT_INDEX_PADDING_RATIO = 1.0;
 export const SPATIAL_INDEX_TARGET_FEATURES_PER_CELL = 32;

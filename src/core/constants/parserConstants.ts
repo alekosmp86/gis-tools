@@ -1,1 +1,3 @@
 export const PARSE_PROGRESS_CHUNK_SIZE = 2000;
+export const LARGE_DATASET_THRESHOLD = 100_000;
+

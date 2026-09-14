@@ -47,27 +47,15 @@ export const toolsList: ToolCardData[] = [
     route: "/tools/db-db-sync",
   },
   {
-    id: "file-viewer",
-    title: "Visor de Archivos Espaciales",
-    category: [ToolCategory.VIEWERS],
-    badge: { label: "Activa", type: BadgeVariant.ACTIVE },
-    icon: Eye,
-    description:
-      "Visualice interactivamente entidades geográficas y tablas de atributos a partir de archivos Shapefile (.zip), GeoJSON o CSV.",
-    tags: ["Shapefile", "GeoJSON", "CSV", "Visor Mapa"],
-    enabled: true,
-    route: "/tools/file-viewer",
-  },
-  {
-    id: "db-table-viewer",
-    title: "Visor de Tabla PostGIS / PostgreSQL",
+    id: "spatial-explorer",
+    title: "Explorador Espacial WebGL",
     category: [ToolCategory.VIEWERS, ToolCategory.DATABASE],
     badge: { label: "Activa", type: BadgeVariant.ACTIVE },
     icon: Eye,
     description:
-      "Conéctese a cualquier tabla de PostgreSQL/PostGIS para visualizar sus geometrías espaciales en el mapa interactivo de Leaflet, inspeccionar metadatos y consultar sus atributos en una tabla paginada.",
-    tags: ["PostgreSQL", "PostGIS", "Visor Mapa", "Atributos"],
+      "Visualice interactivamente entidades geográficas, metadatos y tablas de atributos desde archivos locales (Shapefile, GeoJSON, CSV) o tablas PostGIS sobre un motor gráfico WebGL con deck.gl.",
+    tags: ["Shapefile", "GeoJSON", "CSV", "PostGIS", "WebGL", "deck.gl"],
     enabled: true,
-    route: "/tools/db-table-viewer",
+    route: "/tools/spatial-explorer",
   },
 ];

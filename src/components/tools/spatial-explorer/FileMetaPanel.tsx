@@ -51,7 +51,7 @@ export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
 
       {dataset.isLargeDataset && (
         <div className={styles.largeDatasetNotice}>
-          <Zap size={16} color="#38bdf8" />
+          <Zap size={16} />
           <span>
             Motor de Alta Capacidad (1M Registros) activo con lectura binaria de bajo consumo en memoria RAM.
           </span>
@@ -60,7 +60,7 @@ export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
 
       {!hasGeometry && !dataset.shpBuffer && (
         <div className={styles.warningNote}>
-          <AlertTriangle size={16} color="#eab308" />
+          <AlertTriangle size={16} />
           <span>
             Este archivo no contiene geometría dibujable en el mapa. Visualizando solo la tabla de atributos.
           </span>
@@ -74,9 +74,9 @@ export const FileMetaPanel: React.FC<FileMetaPanelProps> = ({ dataset }) => {
         </h5>
 
         <div className={styles.attributesBadgeList}>
-          {dataset.attributes.map((attr) => (
-            <span key={attr} className={styles.attributeBadge}>
-              {attr}
+          {dataset.attributes.map((attribute) => (
+            <span key={attribute} className={styles.attributeBadge}>
+              {attribute}
             </span>
           ))}
         </div>

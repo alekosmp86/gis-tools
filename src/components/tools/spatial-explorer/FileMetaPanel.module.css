@@ -60,6 +60,9 @@
   font-weight: 600;
   color: #cbd5e1;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .attributesBadgeList {
@@ -104,4 +107,3 @@
   align-items: center;
   gap: 8px;
 }
-

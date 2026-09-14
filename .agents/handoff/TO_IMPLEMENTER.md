@@ -2298,3 +2298,224 @@ either doc as current status. Ready for the user's explicit commit instruction w
 it.
 
 Do not commit.
+
+---
+
+# Mission — Unify file-viewer + db-table-viewer into `spatial-explorer` on MapLibre/deck.gl
+
+**Branch**: `feature/spatial-explorer-deckgl`, cut from `main`.
+**Note**: `npm` is not on PATH — prepend `C:\Alekos\Tools\node24portable` per
+`.agents/rules/portable_node.md`.
+
+## Why this mission exists
+
+The app's two spatial viewers (`file-viewer`, `db-table-viewer`) render through Leaflet
+(`ui-kit/components/SpatialMapPreview.tsx`), which caps out well before the feature counts this app
+now needs to preview and has no path to 2.5D (polygon extrusion / custom models). This mission
+consolidates both viewers into one tool on a WebGL stack (MapLibre GL + deck.gl) that can carry that
+load and grow into extrusion later. This is app #5→#4 of "the five tools": two viewers become one.
+
+Pre-production, single user, no backward-compat constraints — this is a direct cut to the target
+shape, not a staged migration. Delete the old code in the same branch; do not keep it around "just
+in case."
+
+## Binding decision D0 — this ships as a core tool, NOT a module
+
+Read `.agents/rules/module_authoring.md:7-17` and `AGENTS.md:98` before writing a single file:
+
+> "Nothing that exists today is a module. Modules are for what comes next. Do not migrate a working
+> tool into a module because the machinery exists." — and the table right above it: "A change to one
+> of the five existing tools → the tool's own folder. **Not** a module."
+
+This was discussed with the user as a "module" for several turns before this brief was written. That
+framing is **wrong** per the project's own written rule and is overridden here: consolidating two
+existing tools is explicitly the "change to an existing tool" bucket, not "a new capability that
+could be switched off without anyone missing it." (Deleting a module must leave the app "behaving
+exactly as before" — deleting this tool would remove the app's only way to view spatial files/tables,
+which fails that test on its face.)
+
+**Do not create** `module.routes.json`, a `manifest.ts`, a `src/app/modules.registry.ts` entry, or a
+`UiSlot` contribution. Build this exactly like `db-csv-sync` or `db-shapefile-sync`: a page under
+`src/app/tools/<id>/`, a container under `src/components/tools/<id>/`, an entry in
+`src/data/toolsData.ts`. If anything in this brief seems to point toward module machinery, it's
+wrong — flag it in `TO_ORCHESTRATOR.md` rather than building it.
+
+## Binding decisions D1–D7
+
+**D1 — Tool id: `spatial-explorer`.** Route `/tools/spatial-explorer`. Folders:
+`src/app/tools/spatial-explorer/`, `src/components/tools/spatial-explorer/`.
+
+**D2 — One page, one entry point, internal source switcher.** Not two pages, not a wizard-per-source.
+The page renders a source switcher (tabs: "Archivo" / "Base de Datos PostGIS") plus whichever
+source's config UI is active (file dropzone vs. `DbConnectionForm`), and once that source has data,
+the shared map + attribute table underneath. Reference the two current pages for what each config
+step needs: `src/app/tools/db-table-viewer/page.tsx:12-90` (wizard: `DbConnectionForm` →
+`DbTableViewerContainer`) and `src/app/tools/file-viewer/page.tsx` (single-step: `FileViewerContainer`
+already combines upload + view). You do not need to reuse `WizardOrchestrator` — a simple tab switch
+plus conditional render is enough; do not force the wizard abstraction onto a shape it wasn't built
+for.
+
+**D3 — `DataSourceAdapter` is a type owned by this tool's own folder**, not core, not a cross-tool
+contract (there is no cross-module contracts file involved here — this is one tool). Put it in
+`src/components/tools/spatial-explorer/types.ts`. Shape:
+
+```ts
+interface DataSourceAdapter {
+  id: "file" | "db";
+  label: string;
+  ConfigPanel: React.FC<{ onDataReady: (geojson: FeatureCollection, meta: SourceMeta) => void }>;
+}
+```
+
+Exact prop shape is the implementer's call — the binding part is: **a plain discriminated union of
+2 known members, not a registry/plugin system.** There is no known third source yet; do not build
+generic registration machinery for a hypothetical one. Adding a third source later means adding a
+third union member and a third `ConfigPanel` — that's an acceptable, deliberate future change, not
+something to abstract away now.
+
+- **File adapter**: reuse `ShapefileParser` / `CsvParser` (`src/core/services/parsers/`) exactly as
+  `FileViewerUploader.tsx:26-56` already wires them up (extension-sniffing → parser selection →
+  `.parse(file)` → `ParsedFileDataset`). Move `FileViewerUploader.tsx` and `FileMetaPanel` into the
+  new tool folder as the file `ConfigPanel`; do not rewrite the parsing logic.
+- **DB adapter**: reuse `DbConnectionForm` (ui-kit, untouched) for connection/table selection, then
+  the streaming logic in `src/hooks/useDbTableViewerState.ts` (wraps `useStreamDbRecords` →
+  `/api/db/records/stream` → `parseRecordsToGeoJson`). Move this hook into the new tool folder
+  (`src/components/tools/spatial-explorer/hooks/`) since after this migration nothing else uses it —
+  confirm with a repo-wide grep before moving, and delete `src/hooks/useDbTableViewerState.ts` once
+  moved. Move `TableMetaPanel` alongside it.
+- **Do not touch `/api/db/*` endpoints.** A tool fetching a core-owned HTTP route is not a module
+  boundary violation (no TS import crosses a forbidden layer) — these stay exactly as they are,
+  still shared with `db-csv-sync`/`db-shapefile-sync`/`db-db-sync`.
+
+**D4 — New rendering lane in `ui-kit`, alongside the Leaflet lane, not replacing it.**
+`db-csv-sync`, `db-shapefile-sync` and `db-sync-common`'s `ComparisonResultsView.tsx` still render
+through `SpatialMapPreview.tsx` / Leaflet — **do not touch them, do not delete any Leaflet ui-kit
+code.** They are explicitly out of scope (see below).
+
+Add:
+```
+src/ui-kit/hooks/map-gl/
+  useDeckMapInstance.ts       — MapLibre Map + Deck overlay lifecycle. Mirrors useMapInstance.ts.
+  useMapLibreBasemap.ts       — basemap style swap. Mirrors useBasemapTileLayer.ts.
+  useDeckViewportWindow.ts    — MapLibre-flavored replacement for useViewportFeatureWindow.ts.
+  useDeckFeatureLayers.ts     — builds a deck.gl GeoJsonLayer from the windowed features + featureStyle.
+  useDeckFeatureHighlight.ts  — selected-feature highlight + camera fly-to. Mirrors useFeatureHighlight.ts.
+src/ui-kit/components/
+  DeckMapPreview.tsx          — same external prop contract as SpatialMapPreview.tsx (src/ui-kit/components/SpatialMapPreview.tsx:17-33): geojson, title, selectedFeatureIndex, onSelectFeature, initialStyle, isVisible, maxFeatures, showCapNotice, neverCapViewportRender.
+```
+
+**Critical reuse point — read `src/ui-kit/hooks/map/useViewportFeatureWindow.ts:1-133` before writing
+`useDeckViewportWindow.ts`.** That hook is thin Leaflet glue (`L.Map.getBounds()`,
+`moveend`/`zoomend` events) around two already-headless, already-renderer-agnostic core functions:
+`planViewportWindow` (`src/core/spatial/ViewportWindowPlanner.ts`) and `ViewportFeatureIndex`
+(`src/core/spatial/ViewportFeatureIndex.ts`). **Reuse both from core completely unchanged.**
+`useDeckViewportWindow.ts` only needs to swap the Leaflet-specific parts: MapLibre GL JS exposes the
+same `moveend`/`zoomend` events and a `map.getBounds()` that returns a `LngLatBounds` — convert that
+to the `BBox` tuple the same way `latLngBoundsToBBox` does (`useViewportFeatureWindow.ts:12-19`), then
+call the same `planViewportWindow`. **No core changes are required for 2D feature-parity rendering.**
+`capFeaturesWithoutSplittingGroups` (`src/core/spatial/FeaturePreviewCap.ts`) is reused unchanged too.
+
+`useVectorChunkStream.ts`'s micro-batch/RAF chunking (`useLeafletMap.ts:41-50`) is a Leaflet-specific
+workaround for DOM-per-feature rendering cost — **deck.gl does not need it.** A `GeoJsonLayer` takes
+the whole windowed `FeatureCollection` as one prop update per render; do not port the chunking
+technique into `useDeckFeatureLayers.ts`.
+
+**D5 — Headless data-prep stays in core, but nothing new is needed this pass.** If, while building
+`useDeckFeatureLayers.ts`, you find a genuinely renderer-agnostic pure computation worth sharing
+(e.g. a color-ramp/style-to-deck-accessor mapping that has no DOM dependency), it can go in
+`src/core/spatial/` or `src/core/constants/mapConstants.ts` next to the existing style constants
+(`DEFAULT_MAP_FEATURE_STYLE`, `MAP_STYLE_PRESET_COLORS` at `src/core/constants/mapConstants.ts:4-23`).
+Anything that touches a canvas/WebGL context or imports `maplibre-gl`/`deck.gl` belongs in `ui-kit`,
+never in `core` (`core` stays headless — no `react`, no `next/*`, and per this same reasoning, no
+canvas/WebGL — see `docs/architecture/MODULAR_MONOLITH_AND_MODULES.md:31-36`).
+
+**D6 — New dependencies: `maplibre-gl`, `@deck.gl/core`, `@deck.gl/layers`, `@deck.gl/mapbox`** (the
+`mapbox` submodule is deck.gl's MapLibre-interleaving adapter — this is the correct package despite
+the name, confirm current deck.gl docs if unsure). Install the latest stable versions compatible with
+React 19.2.8 / Next 16.3.4 (already in `package.json`), pin exact versions (no `^`/`~` ranges beyond
+what's already the project's convention — match the existing `package.json` style), and report exactly
+what got installed in your done-report. Add `@types/*` only if the package ships without its own types
+(check — `maplibre-gl` bundles its own types, deck.gl packages are TypeScript-native).
+
+**D7 — Delete the old tools in the same branch:**
+- `src/app/tools/file-viewer/`, `src/app/tools/db-table-viewer/` (whole folders)
+- `src/components/tools/file-viewer/`, `src/components/tools/db-table-viewer/` (whole folders, after
+  moving out `FileViewerUploader`, `FileMetaPanel`, `TableMetaPanel` per D3)
+- `src/data/toolsData.ts:49-72` — the two `file-viewer`/`db-table-viewer` entries — replaced by one
+  `spatial-explorer` entry. Keep `ToolCategory.VIEWERS` in `toolCategories` (`toolsData.ts:5-10`), one
+  tool still uses it.
+- `src/hooks/useDbTableViewerState.ts` (moved per D3 — confirm no other importer first via
+  `grep -r useDbTableViewerState src`)
+
+## Explicit out of scope (do not implement)
+
+- **2.5D / polygon extrusion / custom 3D models.** This pass is 2D feature parity with the current
+  Leaflet viewers, on the new stack. Extrusion is future work once the base renderer is proven.
+- **Migrating `db-csv-sync`, `db-shapefile-sync`, `db-db-sync`, or `db-sync-common`'s
+  `ComparisonResultsView.tsx` off Leaflet.** They keep using `SpatialMapPreview.tsx` exactly as today.
+  Do not delete or restructure any Leaflet ui-kit code (`useLeafletMap.ts`, `ui-kit/hooks/map/*`,
+  `ui-kit/map/*`, `SpatialMapPreview.tsx` itself).
+- **A third data source.** Design the union to make adding one easy later; do not add one now.
+- **Any change to `/api/db/*` route handlers or their contracts.**
+- **A module, a manifest, `module.routes.json`, or a registry entry** — see D0.
+- **Redirects from the old `/tools/file-viewer` / `/tools/db-table-viewer` URLs.** Pre-production,
+  single user, no external links to preserve.
+
+## Required test coverage
+
+**Sequencing, confirmed with the user explicitly: build first, tests after — not TDD, not
+characterization-first.** The old `file-viewer`/`db-table-viewer` were never fully solid, so there is
+nothing worth pinning down before you touch them and no value in writing tests against their current
+behavior. This is deliberately **not** the same discipline as the earlier
+"Playwright safety net for the God-component work" mission above in this file (that one's D1 —
+"no component refactor lands before its characterization tests do" — applied to *stable* production
+wizards being carefully decomposed; it does not apply here). Build `spatial-explorer` to functional
+completeness against this brief first, then write the coverage below asserting what you actually
+built. Tests still gate the done-report (the gauntlet below must be green before you report done) —
+they just don't gate or precede the build itself.
+
+- **Unit** (`tests/unit/`, Vitest, real logic per `.agents/rules/testing_standards.md`): any new pure
+  function you add (e.g. a style→deck-accessor mapper if you add one per D5). If `useDeckViewportWindow`
+  ends up containing anything beyond MapLibre event glue, the underlying math is already covered by
+  existing tests for `planViewportWindow`/`ViewportFeatureIndex` — do not duplicate those tests, and
+  do not weaken them.
+- **E2E** (`tests/e2e/flows/`, Playwright, follow the pattern in `tests/e2e/flows/db-csv-sync.spec.ts`
+  and the mock-backend helper in `tests/e2e/support/mockBackend.ts` — intercept `/api/db/*`, no live
+  DB): once the tool works end to end, add `tests/e2e/flows/spatial-explorer.spec.ts` covering, at
+  minimum:
+  - switching between the file and db source tabs;
+  - loading a fixture file (reuse/extend `tests/e2e/fixtures/sampleFiles.ts`) and seeing the map +
+    attribute table render;
+  - loading via the mocked db source (reuse `tests/e2e/fixtures/dbFixtures.ts`) and seeing the same;
+  - selecting a row in the attribute table highlights the corresponding map feature (and vice versa),
+    mirroring the `selectedFeatureIndex`/`onSelectFeature` contract both old containers already had.
+  Neither old tool currently has an e2e flow of its own, so there is no characterization suite to
+  preserve — write these as fresh coverage reinforcing the finished new tool, not as a gate it has to
+  pass mid-build.
+
+## Definition of done — full gauntlet, in this order
+
+```
+npm run modules:routes:check
+npm run lint
+npm test
+npm run build
+npm run doctor
+```
+
+All green, `doctor` reporting zero findings. Paste real command output in your done-report, not a
+summary. **Do not commit** — report back for review first.
+
+## Rules this brief is bound by
+
+- `AGENTS.md` (full file) — in particular the no-inline-styles rule, Spanish UI text, Lucide icons
+  only, the type-separation rules (`AGENTS.md:45-49`), and `AGENTS.md:98` (D0 above).
+- `.agents/rules/module_authoring.md` — read in full before starting; this brief deliberately does
+  **not** follow it because this task is explicitly not a module (D0).
+- `.agents/rules/testing_standards.md` — AAA structure, real-logic verification, no weakened
+  assertions.
+- `.agents/rules/testing_branch_workflow.md` — the gauntlet above, branch hygiene.
+- `.agents/rules/portable_node.md` — `npm` path.
+- `.agents/rules/coding_guidelines.md` — modular CSS, no inline styles, structure conventions.
+
+Do not commit.

@@ -9,8 +9,7 @@ import {
 import { extractShapefileZip } from "@/core/binary/ZipShapefileExtractor";
 import { BinaryDbfReader } from "@/core/binary/BinaryDbfReader";
 import { BinaryShpReader, ShapeType } from "@/core/binary/BinaryShpReader";
-import { MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
-import { PARSE_PROGRESS_CHUNK_SIZE } from "@/core/constants/parserConstants";
+import { PARSE_PROGRESS_CHUNK_SIZE, LARGE_DATASET_THRESHOLD } from "@/core/constants/parserConstants";
 import { yieldToMainThread } from "@/core/common/mainThreadYield";
 import { createProjectionConverter } from "@/core/spatial/ProjectionEngine";
 
@@ -67,17 +66,15 @@ export class ShapefileParser implements ISpatialFileParser {
           }
         }
 
-        const isLargeDataset = featureCount > MAX_MAP_PREVIEW_FEATURES;
-        const previewLimit = isLargeDataset ? MAX_MAP_PREVIEW_FEATURES : featureCount;
+        const isLargeDataset = featureCount > LARGE_DATASET_THRESHOLD;
         const transformCoordinate = createProjectionConverter(extractedPackage.prjText);
 
         const recordsMap = new Map<string, Record<string, unknown>>();
         const features: Array<Feature<Geometry, GeoJsonProperties>> = [];
 
-        // Build representative subset for map preview (up to MAX_MAP_PREVIEW_FEATURES)
-        for (let recordIndex = 0; recordIndex < previewLimit; recordIndex++) {
+        for (let recordIndex = 0; recordIndex < featureCount; recordIndex++) {
           if (recordIndex > 0 && recordIndex % PARSE_PROGRESS_CHUNK_SIZE === 0) {
-            onProgress?.("Extrayendo geometrías...", recordIndex, previewLimit);
+            onProgress?.("Extrayendo geometrías...", recordIndex, featureCount);
             // react-doctor-disable-next-line react-doctor/async-await-in-loop
             await yieldToMainThread();
           }
@@ -100,8 +97,8 @@ export class ShapefileParser implements ISpatialFileParser {
           }
         }
 
-        if (onProgress && previewLimit > 0) {
-          onProgress("Extrayendo geometrías...", previewLimit, previewLimit);
+        if (onProgress && featureCount > 0) {
+          onProgress("Extrayendo geometrías...", featureCount, featureCount);
         }
 
         const geojson: FeatureCollection = {
@@ -167,10 +164,8 @@ export class ShapefileParser implements ISpatialFileParser {
       geometryType = allFeatures[0].geometry.type;
     }
 
-    const isLargeDataset = featureCount > MAX_MAP_PREVIEW_FEATURES;
-    const previewFeatures = isLargeDataset
-      ? allFeatures.slice(0, MAX_MAP_PREVIEW_FEATURES)
-      : allFeatures;
+    const isLargeDataset = featureCount > LARGE_DATASET_THRESHOLD;
+    const previewFeatures = allFeatures;
 
     const previewCount = previewFeatures.length;
     for (let featureIndex = 0; featureIndex < previewCount; featureIndex++) {

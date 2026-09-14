@@ -55,9 +55,6 @@ export function useDbTableViewerState(
     );
   }, [config, streamDbRecords, totalRows]);
 
-  // Spatial preview is derived from the streamed records, never mirrored into state, so it can
-  // never desync from the dataset or from a changed column list. React Compiler memoizes this
-  // derivation, so it only re-runs when `records` or `columns` actually change.
   const { geojson, detectedGeometryType } = parseRecordsToGeoJson(records, columns);
 
   return {

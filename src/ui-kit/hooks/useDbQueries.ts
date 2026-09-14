@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
 import type {
   DbConfig,
   ColumnsResponse,
@@ -40,16 +39,10 @@ export async function streamDbRecordsApi(
   const { DatabaseStreamReader } = await import(
     "@/core/services/streaming/DatabaseStreamReader"
   );
-  const previewLimit =
-    params.totalRows && params.totalRows > MAX_MAP_PREVIEW_FEATURES
-      ? MAX_MAP_PREVIEW_FEATURES
-      : undefined;
-
   return DatabaseStreamReader.fetchOrStreamRecords(
     params.config,
     undefined,
-    params.onProgress,
-    previewLimit ? { limit: previewLimit } : undefined
+    params.onProgress
   );
 }
 

@@ -1,12 +1,11 @@
-import React, { useRef, useState } from "react";
+import React from "react";
 import { Upload, FileCheck, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
 import type { ParsedFileDataset } from "@/core/types/parsers";
-import { ShapefileParser } from "@/core/services/parsers/ShapefileParser";
-import { CsvParser } from "@/core/services/parsers/CsvParser";
 import { formatNumber, formatFileSize } from "@/core/common/ValueFormatter";
+import { useFileUploader } from "./hooks/useFileUploader";
 import styles from "./FileViewerUploader.module.css";
 
 interface FileViewerUploaderProps {
@@ -18,76 +17,18 @@ export const FileViewerUploader: React.FC<FileViewerUploaderProps> = ({
   onFileParsed,
   parsedDataset,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const processFile = (file: File) => {
-    setIsLoading(true);
-    setErrorMessage(null);
-
-    const fileName = file.name.toLowerCase();
-    let parser;
-
-    if (fileName.endsWith(".zip") || fileName.endsWith(".geojson") || fileName.endsWith(".json")) {
-      parser = new ShapefileParser();
-    } else if (fileName.endsWith(".csv") || fileName.endsWith(".txt")) {
-      parser = new CsvParser();
-    } else {
-      setIsLoading(false);
-      setErrorMessage("Formato de archivo no soportado. Por favor suba un archivo .zip (Shapefile), .geojson o .csv.");
-      return;
-    }
-
-    parser
-      .parse(file)
-      .then((dataset) => {
-        onFileParsed(dataset);
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Error al procesar el archivo espacial.";
-        setErrorMessage(msg);
-        onFileParsed(null);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  };
-
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      processFile(file);
-    }
-  };
-
-  const handleDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragging(false);
-    const file = event.dataTransfer.files?.[0];
-    if (file) {
-      processFile(file);
-    }
-  };
-
-  const handleClear = () => {
-    onFileParsed(null);
-    setErrorMessage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
+  const {
+    fileInputRef,
+    isDragging,
+    isLoading,
+    errorMessage,
+    handleFileSelect,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleClear,
+    openFileDialog,
+  } = useFileUploader({ onFileParsed });
 
   return (
     <div className={styles.uploadContainer}>
@@ -99,14 +40,16 @@ export const FileViewerUploader: React.FC<FileViewerUploaderProps> = ({
         <div className={styles.activeFileInfo}>
           <div className={styles.fileDetails}>
             <div className={styles.fileIconWrapper}>
-              <FileCheck size={20} className={styles.fileIcon} />
+              <FileCheck size={20} />
             </div>
             <div className={styles.fileTexts}>
               <div className={styles.fileName} title={parsedDataset.fileName}>
                 {parsedDataset.fileName}
               </div>
               <div className={styles.fileMeta}>
-                {formatFileSize(parsedDataset.fileSize)} &bull; {formatNumber(parsedDataset.featureCount)} registros
+                <span>{formatFileSize(parsedDataset.fileSize)}</span>
+                <span>/</span>
+                <span>{formatNumber(parsedDataset.featureCount)} registros</span>
               </div>
             </div>
           </div>
@@ -124,7 +67,7 @@ export const FileViewerUploader: React.FC<FileViewerUploaderProps> = ({
       ) : (
         <div
           className={`${styles.dropZone} ${isDragging ? styles.dropZoneDragging : ""}`}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={openFileDialog}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}

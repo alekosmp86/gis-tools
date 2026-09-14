@@ -107,6 +107,35 @@ describe("ShapefileParser", () => {
     });
   });
 
+  it("should not truncate features and mark isLargeDataset for datasets exceeding LARGE_DATASET_THRESHOLD", async () => {
+    // Arrange
+    const featureCount = 100_005;
+    const generatedFeatures = [];
+    for (let featureIndex = 0; featureIndex < featureCount; featureIndex++) {
+      generatedFeatures.push({
+        type: "Feature",
+        properties: { id: featureIndex },
+        geometry: { type: "Point", coordinates: [-56.0, -34.0] },
+      });
+    }
+    const sampleGeoJson = {
+      type: "FeatureCollection",
+      features: generatedFeatures,
+    };
+    const file = new File([JSON.stringify(sampleGeoJson)], "over100k.geojson", {
+      type: "application/geo+json",
+    });
+
+    // Act
+    const parsed = await parser.parse(file);
+
+    // Assert
+    expect(parsed.featureCount).toBe(featureCount);
+    expect(parsed.geojson?.features).toHaveLength(featureCount);
+    expect(parsed.recordsMap.size).toBe(featureCount);
+    expect(parsed.isLargeDataset).toBe(true);
+  });
+
   it("should throw error for unsupported file extension", async () => {
     // Arrange
     const file = new File(["dummy"], "test.pdf", { type: "application/pdf" });
@@ -117,3 +146,4 @@ describe("ShapefileParser", () => {
     );
   });
 });
+
