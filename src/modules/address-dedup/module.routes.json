@@ -1,0 +1,10 @@
+{
+  "moduleId": "address-dedup",
+  "endpoints": [
+    { "path": "analyze", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "export", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" }
+  ],
+  "pages": [
+    { "path": "", "title": "Duplicados de Direcciones" }
+  ]
+}
