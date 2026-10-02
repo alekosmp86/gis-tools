@@ -1,0 +1,17 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.option input {
+  accent-color: var(--accent-cyan, #06b6d4);
+}

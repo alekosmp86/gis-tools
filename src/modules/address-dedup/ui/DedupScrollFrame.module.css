@@ -1,0 +1,58 @@
+.frame {
+  --dedup-scrollbar-size: 14px;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+.topScroller {
+  height: var(--dedup-scrollbar-size);
+  overflow-x: scroll;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.hidden {
+  display: none;
+}
+
+.spacer {
+  height: 1px;
+}
+
+.scroller {
+  overflow-x: auto;
+}
+
+/* Styled bars are never overlay scrollbars, so the top bar keeps its height on every OS setting. */
+.topScroller::-webkit-scrollbar,
+.scroller::-webkit-scrollbar {
+  height: var(--dedup-scrollbar-size);
+}
+
+.topScroller::-webkit-scrollbar-track,
+.scroller::-webkit-scrollbar-track {
+  background: var(--border-color);
+}
+
+.topScroller::-webkit-scrollbar-thumb,
+.scroller::-webkit-scrollbar-thumb {
+  background: var(--text-dim);
+  border-radius: 7px;
+}
+
+.topScroller::-webkit-scrollbar-thumb:hover,
+.scroller::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-cyan);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .topScroller,
+  .scroller {
+    scrollbar-width: auto;
+    scrollbar-color: var(--text-dim) var(--border-color);
+  }
+}

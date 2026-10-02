@@ -1,0 +1,20 @@
+.card {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto 20px;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.cancelRow {
+  display: flex;
+  justify-content: flex-end;
+}

@@ -1,0 +1,59 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  border-left: 3px solid var(--text-dim);
+}
+
+.neutral {
+  border-left-color: var(--accent-cyan);
+}
+
+.remove {
+  border-left-color: var(--accent-rose);
+}
+
+.keep {
+  border-left-color: var(--accent-emerald);
+}
+
+.review {
+  border-left-color: var(--accent-amber);
+}
+
+.dimmed {
+  opacity: 0.55;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.remove .value {
+  color: var(--accent-rose);
+}
+
+.keep .value {
+  color: var(--accent-emerald);
+}
+
+.review .value {
+  color: var(--accent-amber);
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}

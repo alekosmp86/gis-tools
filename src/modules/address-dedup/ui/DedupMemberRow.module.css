@@ -1,0 +1,50 @@
+.row td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.82rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.row td:first-child {
+  border-left: 3px solid transparent;
+}
+
+.keep td:first-child {
+  border-left-color: var(--accent-emerald);
+}
+
+.remove td:first-child {
+  border-left-color: var(--accent-rose);
+  background: rgba(244, 63, 94, 0.05);
+}
+
+.row:hover td {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.fuente {
+  font-weight: 700;
+}
+
+.urnCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.urn {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.removeBadge {
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--accent-rose);
+  border-color: rgba(244, 63, 94, 0.3);
+}

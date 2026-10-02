@@ -1,0 +1,72 @@
+.toolbar {
+  --dedup-toolbar-background: rgba(15, 23, 42, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--dedup-toolbar-background);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+}
+
+@media (min-width: 900px) {
+  .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+  }
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.search {
+  flex: 1;
+  min-width: 260px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.toggle input {
+  accent-color: var(--accent-amber);
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(15, 23, 42, 0.65);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.action:hover {
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 1px;
+}
+
+.count {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}

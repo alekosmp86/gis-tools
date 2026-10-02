@@ -1,0 +1,46 @@
+.cell {
+  padding: 0;
+  background: rgba(30, 41, 59, 0.9);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.toggle {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  color: var(--text-main);
+  border: none;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: -2px;
+}
+
+.title {
+  font-weight: 700;
+}
+
+.meta {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.reviewBadge {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-amber);
+  border-color: rgba(245, 158, 11, 0.35);
+}

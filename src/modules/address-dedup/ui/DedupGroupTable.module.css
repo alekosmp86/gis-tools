@@ -1,0 +1,19 @@
+.table {
+  --dedup-head-background: rgba(15, 23, 42, 1);
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+}
+
+.head {
+  padding: 10px 12px;
+  background: var(--dedup-head-background);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
