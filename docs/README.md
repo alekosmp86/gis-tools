@@ -30,6 +30,7 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`DB_DB_SYNC_TOOL.md`](docs/tools/DB_DB_SYNC_TOOL.md) — PostgreSQL DB vs. DB replica synchronization tool architecture and workflows.
 - [`FILE_VIEWER_TOOL.md`](docs/tools/FILE_VIEWER_TOOL.md) — Spatial File Viewer architecture, bidirectional map-table selection, and attribute table pagination.
 - [`CARTOGRAPHY_WATCHER_MODULE.md`](docs/tools/CARTOGRAPHY_WATCHER_MODULE.md) — Observador de Actualizaciones Cartográficas as an extension module: CKAN delta detection (checksum, publication date, size), the server-side vault with read-through caching, the catalogue tab inside the DB-CSV and DB-Shapefile uploaders, and its own generated page at `/tools/m/cartography-watcher`.
+- [`ADDRESS_DEDUP_MODULE.md`](docs/tools/ADDRESS_DEDUP_MODULE.md) — Duplicados de Direcciones as an extension module: the CGEO-2192 v3 SQL as a read-only engine, the decision table with `decision_reason`, the `protectedSiblingRemovesLone` toggle, output scope, CSV/GeoJSON exports for QGIS, and its own generated page at `/tools/m/address-dedup`.
 - [`POSTGIS_TABLE_VIEWER_TOOL.md`](docs/tools/POSTGIS_TABLE_VIEWER_TOOL.md) — PostGIS / PostgreSQL Table Viewer tool, direct table introspection, and vector map preview.
 
 ### 📋 5. Specifications (`docs/specifications/`)

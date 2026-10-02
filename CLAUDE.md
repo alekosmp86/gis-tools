@@ -30,7 +30,7 @@ Load files on-demand based on the task to conserve context tokens. Do not load a
 - `src/modules/cartography-watcher/` — Reference module implementation.
 
 ## Tools & Domain Documentation
-- `docs/tools/` — Specific tool documentation (`DB_CSV_SYNC_TOOL.md`, `DB_SHAPEFILE_SYNC_TOOL.md`, `DB_DB_SYNC_TOOL.md`, `FILE_VIEWER_TOOL.md`, `POSTGIS_TABLE_VIEWER_TOOL.md`, `CARTOGRAPHY_WATCHER_MODULE.md`).
+- `docs/tools/` — Specific tool documentation (`DB_CSV_SYNC_TOOL.md`, `DB_SHAPEFILE_SYNC_TOOL.md`, `DB_DB_SYNC_TOOL.md`, `FILE_VIEWER_TOOL.md`, `POSTGIS_TABLE_VIEWER_TOOL.md`, `CARTOGRAPHY_WATCHER_MODULE.md`, `ADDRESS_DEDUP_MODULE.md`).
 - `docs/specifications/` — Functional requirements and specifications.
 
 ## Troubleshooting & Past Fixes
