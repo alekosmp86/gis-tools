@@ -2298,3 +2298,804 @@ either doc as current status. Ready for the user's explicit commit instruction w
 it.
 
 Do not commit.
+
+
+---
+
+# Mission — `address-dedup` module (CGEO-2192 workflow ported to TypeScript)
+
+> **SUPERSEDED — DO NOT IMPLEMENT THIS SECTION.** Replaced by "Mission (REVISED ... SQL as the
+> engine)" further down this file. Kept for provenance only.
+
+**Branch:** `feat/module-address-dedup`, cut from `main` (`git checkout -b feat/module-address-dedup main`).
+**Do not commit. Do not push.** Leave the tree dirty for review.
+**Node:** `npm` is not on PATH. Prepend `C:\Alekos\Tools\node24portable` to `$env:PATH`, or call
+`C:\Alekos\Tools\node24portable\npm.cmd` directly (`.agents/rules/portable_node.md`).
+
+## Binding rules (read first, in full)
+`AGENTS.md`, `CLAUDE.md`, `.agents/rules/module_authoring.md` (the recipe, steps 1-8, hard rules),
+`.agents/rules/coding_guidelines.md`, `.agents/rules/testing_standards.md`,
+`.agents/rules/testing_branch_workflow.md`, `.agents/rules/code_review_standards.md`.
+Reference module: `src/modules/cartography-watcher/` (manifest `manifest.ts`, handlers
+`api/handlers.ts`, injectable orchestrator `services/WatcherOrchestrator.ts`, tests in
+`tests/unit/modules/cartography-watcher/`).
+
+## Background (self-contained)
+A one-off investigation (ticket CGEO-2192, read-only SQL against production Postgres) found
+duplicate addresses in `carto.v_address_build`, decided KEEP/REMOVE per row, and exported CSV /
+GeoJSON for QGIS. We are turning that into a reusable, deletable module. Source of truth for the
+logic is the v3 SQL, which you must port **faithfully**:
+- `C:\Alekos\Tasks\CGEO-2192\prod\v3\find_removal_candidates.sql` (key + decision)
+- `C:\Alekos\Tasks\CGEO-2192\prod\v3\find_infrastructure_matches.sql` (infra match context)
+- `C:\Alekos\Tasks\CGEO-2192\TRACKER.md` (why every rule is the way it is, corrections #1-#11;
+  read at least #4, #5, #7, #9, #10, #11)
+
+## Scope: INVESTIGATION ONLY
+The module reads and reports. **No endpoint, service or UI path may write to, update or delete from
+any database.**
+
+## Decisions (binding — do not revisit; raise a question in TO_ORCHESTRATOR.md instead)
+
+**D1. It is a module** at `src/modules/address-dedup/` (`moduleId` `address-dedup`). Deletion set is
+exactly: that folder, its line in `src/app/modules.registry.ts`, `tests/unit/modules/address-dedup/`,
+plus generated routes under `src/app/api/m/address-dedup/**` (regenerated, never hand-edited). Nothing
+in `core/` or `ui-kit/` may be changed except where D9 says. No import of another module.
+
+**D2. Logic lives in TS `domain/`, pure (no fs, fetch, React, pg).** SQL is reduced to two dumb
+fetches. Files:
+- `domain/placeholders.ts`: the single placeholder set `{'S/N','SN','0','','N/A'}` (case-insensitive,
+  trimmed, NULL included) maps to `"NONE"`. Two normalizers, as in SQL: `normalizeCode` (street_number,
+  letter, square, sandlot: placeholder set) and `normalizeText` (NULL/blank only maps to `"NONE"`).
+- `domain/matchKey.ts`: `buildMatchKey(row)` is **byte-for-byte the v3 `keyed` CTE** (SQL lines
+  ~82-115): `NOKEY:<urn>` when padron blank AND street name blank; else `|`-joined, upper+trimmed:
+  province, province_code, locality_code, locality, postal_code, padron-locality-or-geo-bucket,
+  street_name, street_number, letter, square, sandlot, km, padron, type_padron, rs_reftramo. The
+  geo bucket is `GEO:` + lat/lng rounded to **2** decimals when padron present, **3** when absent,
+  used only when `padron_locality` is null (SQL `coalesce` keeps an empty-string
+  `padron_locality`; replicate that exactly, do not "improve" it). Rounding must match Postgres
+  `round(numeric,n)` (half away from zero); do not use `toFixed` blindly, write a helper and test
+  the boundary. `km` renders via its text form.
+- `domain/decision.ts`: `decideGroup(members)` returns a decision per member, implementing the v3
+  `decided` CTE exactly:
+  `fuente==='IDE'` -> KEEP; matched (either infra flag) -> KEEP; group size 1 -> KEEP;
+  `fuente in {ANTEL,TLK}` && `nMatchedInGroup===0` && `poolRankInGroup===1` -> KEEP; else REMOVE.
+  `nMatchedInGroup` counts ANTEL/TLK members with a match. `poolRankInGroup` = rank among
+  **ANTEL/TLK members only** (IDE excluded), ordered by numeric urn suffix (`id:(\d+)$`) ascending,
+  NULLS LAST. `dup_group_size` counts ALL members including IDE. Tie-break for equal/missing urn
+  numbers must be deterministic (fall back to urn string compare). **There is no FLAGGED state in
+  v3. Do not implement it.**
+- `domain/groups.ts`: group rows by key, attach `dupGroupSize`, `nMatchedInGroup`,
+  `poolRankInGroup`, `decision`; keep only groups with at least one REMOVE (v3 `remove_groups`); assign
+  `groupId` (1-based, deterministic: sort keys with plain code-unit comparison; numbering is not
+  required to equal Postgres' collation order, group ids were already documented as unstable);
+  order members within a group: non-REMOVE first, then fuente, then urn (matches v3 ORDER BY
+  `(decision='REMOVE'), fuente, urn`).
+- `domain/summary.ts`: counts per decision x fuente (the "Headline numbers" table shape) and group
+  count.
+- `domain/export.ts`: rows to CSV string (RFC-4180 quoting, `\r\n`, UTF-8, header from a const
+  column list); rows to GeoJSON `FeatureCollection` of Points `[lng, lat]` with all row fields in
+  `properties` (skip rows with null/NaN coords, count how many were skipped and return that);
+  groups to GeoJSON LineStrings joining each group's members (QGIS clustering note in TRACKER
+  "Method"), properties `{groupId, size}`; skip groups with fewer than 2 locatable members.
+- `types.ts`: `AddressRow`, `Fuente` (`const` object, not raw strings), `Decision`, `DecidedRow`,
+  `DedupGroup`, `DedupSummary`, `DedupScope`, `DedupRules`, `ExportFormat`.
+- `constants.ts`: source/table/column names, placeholder set, decimals, row cap, statement
+  timeout, HTTP statuses, query param names. No raw string literals compared inline.
+
+**D3. Rules are data.** `DedupRules` const default in `constants.ts`: `detectionFonts` (the
+`id_font` list `[1, 9, 10]`), `removableFuentes` (`['ANTEL','TLK']`), `protectedFuentes` (`['IDE']`),
+`geoDecimalsWithPadron: 2`, `geoDecimalsWithoutPadron: 3`. `fuente` is derived from
+`v_address_build.name_font` exactly as in the SQL (values `ANTEL`, `IDE`, `TLK`). The scope
+(`id_province`, default **7 = FLORES**) is a **request parameter**, not a constant. `document_type`
+is fixed to `'PARENT'`. The two SQL files disagree in a comment about the `id_font` mapping; the
+code in `find_removal_candidates.sql` (`IN (1, 9, 10)` with `name_font` as `fuente`) is the truth.
+Do not guess, and flag the discrepancy in TO_ORCHESTRATOR.md.
+
+**D4. Database access = reuse, do not reinvent.** The project already has:
+`DbConfig` / `SafeDbConfig` (`src/core/types/db.ts`), `INITIAL_DB_CONFIG`
+(`src/core/constants/dbConfigDefaults.ts`), profile storage without passwords
+(`src/core/services/localStorageDbConfig.ts`), and server-side `pg` `Client` usage with connection
+params + password supplied per request (`src/app/api/db/test/route.ts`,
+`src/app/api/db/execute/route.ts`). Follow that exact model:
+- Credentials arrive in the POST body (`host, port, db_name, user, password`); the password is never
+  stored server-side or in localStorage, never logged, never echoed back in a response or error.
+  Same defaults as the existing routes (`host||"localhost"`, `Number(port)||5432`).
+- `services/AddressRepository.ts` defines an **interface** (`loadAddressRows`, `loadInfraMatchedUrns`)
+  so everything above it is testable with a fake.
+- `services/PgAddressRepository.ts` is the real implementation using `pg` (`Client`, one
+  connection per analysis, `connectionTimeoutMillis: 10000`). It MUST run inside
+  `BEGIN READ ONLY` and set `SET LOCAL statement_timeout` (const, 120000 ms) and always `ROLLBACK`
+  + `client.end()` in `finally`. A write attempt must fail at the database, not rely on our code.
+- `loadAddressRows`: single parameterized query on `carto.v_address_build` with exactly the columns
+  the v3 `src` CTE selects, `WHERE id_font = ANY($1) AND id_province = $2 AND document_type =
+  'PARENT'`. All values bound as parameters; no string-built SQL from request data. Enforce
+  `MAX_SOURCE_ROWS` (const, 500000): if exceeded, fail with a Spanish error asking to narrow scope.
+  Never silently truncate.
+- `loadInfraMatchedUrns(urns)`: do **not** scan the 1.27M-row `match_tlk.direcciones_tlk_serv_cto_cgeo`.
+  Query both tables with `WHERE urn = ANY($1)` (`integrador.nap_physical_device` joins on
+  `urn_site_location`), in chunks of 10000 urns, returning two `Set<string>` (one per table, so the
+  UI can show which table justified a KEEP). Only ANTEL/TLK urns need checking.
+- Do **not** reuse `/api/db/execute` or any route under `src/app/api/db/`: they are not read-only.
+  Do **not** add `pg` helpers to `core/`; keep the adapter inside the module.
+- `services/DedupOrchestrator.ts` (constructor-injected repository, like `WatcherOrchestrator`):
+  load rows, key, group, fetch infra flags for ANTEL/TLK members of groups with size>1,
+  decide, summary. Pure orchestration; unit-tested with a fake repository.
+
+**D5. HTTP surface** (`module.routes.json`, all `nodejs` + `force-dynamic`):
+- `POST analyze`: body `{ connection:{host,port,db_name,user,password}, provinceId:number }` returns
+  `{ success:true, summary, groups, skippedWithoutCoordinates }`. Groups carry all decided rows.
+  Validate: `db_name`, `user`, `password` required, `provinceId` a positive integer (400 with
+  Spanish messages, mirroring the existing routes).
+- `POST export`: same body plus `format: "csv" | "geojson" | "links"` returns a file response with
+  `Content-Disposition: attachment` and the right content type. (POST because it carries
+  credentials; **never** accept credentials in a query string.) Re-runs the analysis (stateless;
+  no server-side cache, no session store, deliberately).
+Handlers in `api/handlers.ts` speak Web `Request`/`Response` only, thin, orchestrator injected via
+`createDedupHandlers(orchestrator = new DedupOrchestrator(new PgAddressRepository()))`. No
+`next/*` import anywhere in the module.
+
+**D6. UI** (Spanish text, Lucide only, `.module.css`, no inline styles, atomic components, no
+single-letter identifiers). Module owns a page at `/tools/m/address-dedup` wrapped in
+`ToolWorkspaceLayout` (see how `src/app/tools/db-db-sync/page.tsx` uses it), plus a
+`HOME_TOOL_GRID` card like `WatcherHomeCard`. Components, each small: `DedupDashboard`
+(orchestrates), `DedupConnectionForm` (host/port/db/user/password + province id; **reuse**
+`FormField`, `Button`, `AlertMessage`, `ProfileSelect`, `loadDbProfilesFromLocalStorage` /
+`saveDbProfileToLocalStorage`, `INITIAL_DB_CONFIG`; do NOT reuse `DbConnectionForm`, it requires a
+table and fetches columns), `DedupSummaryTable`, `DedupGroupList` (paginated with the existing
+`PaginationControls`, group members with decision badge using `Badge`), `DedupExportBar` (three
+download buttons), `dedupClient.ts` (fetch wrapper). Every component the manifest references must
+come from a `"use client"` module (module_authoring Step 4) including icons, via
+`ui/contributionIcons.ts`. Use `@tanstack/react-query` mutation like the other tools if that is
+the local convention; otherwise plain state. **No map in this mission** (see out of scope).
+
+**D7. Safety of the response.** Error messages from `pg` may include the host; they must never
+include the password. Add a test that a failing connection's error body does not contain the
+submitted password.
+
+**D8. Docs.** Add `docs/tools/ADDRESS_DEDUP_MODULE.md` (purpose, rules table with the v3 decision
+table, endpoints, how to extend rules, what is explicitly not done) and link it in
+`docs/README.md`. A one-line pointer in `CLAUDE.md`'s tools list is allowed. Do NOT copy
+production address data or CSV rows into the repo or tests.
+
+**D9. Allowed edits outside the module:** `src/app/modules.registry.ts` (one import + one array
+entry), generated `src/app/api/m/address-dedup/**` via `npm run modules:routes`, `docs/**`,
+`CLAUDE.md` pointer. Nothing else. If you believe something else must change, stop and ask.
+
+## Out of scope (do not implement; reasons)
+- **Deletes / any write path**: user decision. Investigation first, deletes later behind a separate
+  confirmed step.
+- **FLAGGED group state**: v2-only, superseded by v3.
+- **Map visualisation**: GeoJSON export for QGIS covers it; the map stack (viewport windowing,
+  hidden-container fit) is a separate, recently-fixed area; adding it doubles the review surface.
+- **Server-side caching / job queue / persisted results**: stateless on purpose.
+- **Configuring rules in the UI**: rules are a typed const + request `provinceId`; UI exposure
+  later.
+- **Streaming / workers for huge scopes**: the row cap + clear error is the guard for now.
+- **Changing the five existing tools, core types, or `/api/db/*` routes.**
+- **ANC source**: not present in `carto.address`.
+- **Running anything against production.** You have no mandate to connect to a real database. Tests
+  use fakes only.
+
+## Required tests (`tests/unit/modules/address-dedup/`, Vitest, AAA, real computations; mock only repository / pg I/O)
+`placeholders.test.ts`
+- each placeholder (`NULL`, `''`, `'  '`, `'N/A'`, `'n/a'`, `'S/N'`, `'sn'`, `'0'`) maps to `NONE`; real
+  values trimmed/uppercased and kept; `normalizeText` does NOT treat `'0'`/`'N/A'` as empty.
+
+`matchKey.test.ts`
+- identical rows give identical key; each of the 15 key fields changing alone gives a different key.
+- Regression: `cgeo:Antel:address:id:4006567` vs `4006568` (Flores, padron 4053, RURAL, number `'0'`,
+  no street, same coords): **same key**.
+- Regression: `TLK:4015195` (puerta 272) vs `TLK:4015197` (puerta 266), same padron: **different keys**.
+- Regression (correction #9): ANTEL `4004103` (389, letra BIS, square 0) vs IDE `684702` (389, letra
+  N/A, square 100): **different keys**; `4005609` vs `4756661` ("JOSE PEDRO VARELA" 154, letra
+  N/A/N/A, square 0/0): **same key**.
+- Regression (correction #7): 96 rows sharing a street, `puerta='0'`, each with a distinct padron
+  and coords: 96 distinct keys.
+- Correction #5: same padron/RURAL, `padron_locality` null, coords 50 km apart: different keys;
+  ~13 m apart (same 2-decimal bucket): same key; `padron_locality` present beats the bucket.
+- No padron + no street gives `NOKEY:<urn>`; two such rows never collide.
+- Rounding boundary: `round` half-away-from-zero for positive and negative coordinates at the
+  2- and 3-decimal buckets.
+- `km` null vs `0` differ.
+
+`decision.test.ts` (one test per branch of the v3 CASE, plus)
+- IDE always KEEP even when unmatched in a group of 5.
+- Matched ANTEL KEEP; its unmatched ANTEL and TLK siblings REMOVE.
+- Singleton unmatched ANTEL KEEP.
+- Group of two unmatched ANTEL: lowest urn number KEEP, other REMOVE; numeric (not lexicographic)
+  ordering (`...:id:999` vs `...:id:1000`).
+- Group ANTEL + TLK, none matched: lowest urn across both KEEP.
+- Group IDE + one unmatched ANTEL: ANTEL is KEEP (faithful v3 behaviour; pin it with a test whose
+  name states it, see the orchestrator's risk note).
+- Two matched members: both KEEP, a third unmatched REMOVE.
+- Matched via either infra table independently (two flags).
+- Urn without numeric suffix sorts last; deterministic tie-break.
+
+`groups.test.ts`
+- groups with no REMOVE are dropped; `dupGroupSize` counts IDE; ordering within group; `groupId`
+  deterministic across input permutations (shuffle input, same output).
+- Empty input gives empty output; no crash.
+
+`summary.test.ts`: counts by decision x fuente match a hand-computed fixture; zero-row table.
+
+`export.test.ts`
+- CSV: quoting of commas, quotes, newlines, leading/trailing spaces; `\r\n`; header order; empty
+  rows give header only.
+- GeoJSON points: `[lng, lat]` order; null/NaN coords skipped and counted.
+- Links: one LineString per group with 2+ locatable members; groups with fewer skipped.
+
+`dedupOrchestration.test.ts` (fake repository)
+- end-to-end happy path equals a hand-computed result; infra urns requested **only** for ANTEL/TLK
+  members of groups with size>1 (assert the fake's received args); chunking at the 10000 boundary
+  (10000, 10001 urns); row cap exceeded gives a Spanish error, nothing truncated; repository failure
+  propagates.
+
+`pgAddressRepository.test.ts` (fake `pg` client, the I/O boundary)
+- issues `BEGIN READ ONLY` first, `ROLLBACK` last, `end()` called on success AND on error; all
+  request values passed as bound parameters (assert text has no interpolated user value); statement
+  timeout set; a write statement is never issued.
+
+`handlers.test.ts`
+- 400 for missing `db_name`/`user`/`password`/bad `provinceId` (Spanish messages); malformed JSON
+  gives 400 not 500; success shape; export content types + `Content-Disposition`; error body never
+  contains the submitted password (D7); credentials in a query string are ignored (request still 400).
+
+`addressDedupManifest.test.ts`: mirror `cartographyWatcherManifest.test.ts`: endpoints bound to
+the intended handlers, `runtime`/`dynamic` survive, page bound at `""`, contribution targets
+`HOME_TOOL_GRID` (a mounted slot).
+
+## Definition of done: the full gauntlet, real output pasted into your report
+Run in this order from the repo root with the portable Node on PATH:
+```
+npm run modules:routes          # generate, then:
+npm run modules:routes:check
+npm run lint                    # 0 errors, 0 warnings
+npm test                        # all suites green; report suite/test counts
+npm run build                   # clean Turbopack build
+npm run doctor                  # zero findings ("Score unavailable" is expected, not a failure)
+```
+Plus the **deletability proof** (module_authoring section 6): temporarily remove the registry line, run
+`npm run modules:routes`, confirm the generated `address-dedup` routes disappear and the app still
+builds, then restore. Paste what you ran. No gate may be weakened, no assertion relaxed, no
+`eslint-disable` / `@ts-ignore` added to pass. Before reporting, audit for dead code, unused
+exports and unused imports (coding guideline 14).
+
+## Reporting
+Append your report under a new heading in `.agents/handoff/TO_ORCHESTRATOR.md`: files created,
+gauntlet output verbatim, anything skipped or partial **stated plainly**, and every question you
+hit. Do not claim a gate passed that you did not run.
+
+Do not commit.
+
+
+---
+
+# Mission (REVISED, supersedes the earlier "address-dedup module" section above) — SQL as the engine
+
+**This section replaces the previous `address-dedup` brief entirely.** If the two disagree, this one
+wins. The earlier brief's D2 (TS key/decision port), D3, the `GroupAccumulator`/streaming
+discussion and its test list are void. Everything not restated here and not contradicted (module
+shape, D1, read-only, D4's safety rules, D7, D8, D9, out-of-scope list, gauntlet) still applies, and
+is restated below so this section stands alone.
+
+**Branch:** `feat/module-address-dedup`, cut from `main`. **Do not commit. Do not push.**
+**Node:** `npm` is not on PATH. Prepend `C:\Alekos\Tools\node24portable` to `$env:PATH`, or call
+`C:\Alekos\Tools\node24portable\npm.cmd` directly (`.agents/rules/portable_node.md`).
+**Binding rules (read in full):** `AGENTS.md`, `CLAUDE.md`, `.agents/rules/module_authoring.md`,
+`coding_guidelines.md`, `testing_standards.md`, `testing_branch_workflow.md`,
+`code_review_standards.md`. Reference module: `src/modules/cartography-watcher/`.
+
+## Background
+Ticket CGEO-2192 was a read-only investigation against production Postgres: find duplicate
+addresses in `carto.v_address_build`, decide KEEP/REMOVE per row, export CSV/GeoJSON for QGIS.
+We are making it a reusable, deletable module. **Postgres does the work**: the validated v3 SQL
+is the engine and the module runs it read-only and presents the result. Source of truth:
+- `C:\Alekos\Tasks\CGEO-2192\prod\v3\find_removal_candidates.sql` (the query to port)
+- `C:\Alekos\Tasks\CGEO-2192\TRACKER.md` (why each rule exists; read corrections #4, #5, #7, #9, #10, #11)
+
+**Scope: INVESTIGATION ONLY.** No endpoint, service or UI path may write to any database.
+
+## Decisions (binding)
+
+**D1. Module** `src/modules/address-dedup/`, `moduleId` `address-dedup`. Deletion set: that folder,
+its line in `src/app/modules.registry.ts`, `tests/unit/modules/address-dedup/`, and the generated
+`src/app/api/m/address-dedup/**` (regenerated, never hand-edited). No import of another module. No
+edits to `core/` or `ui-kit/` except what D10 allows.
+
+**D2. One query, one file.** `services/queries/duplicateAnalysisQuery.ts` exports the SQL text as a
+single constant (a TS template, not a `.sql` import, so bundling stays trivial) plus the ordered
+parameter list. It is a port of `find_removal_candidates.sql` with the changes in D3. The
+match-key expression is written **once** (the `keyed` CTE) and never duplicated. Keep every
+existing comment that explains a rule's *why* (they are the tracker's institutional memory), but
+fix the comments the code contradicts (see D3, "Known comment/code mismatch"). All values are
+**bound parameters**; no SQL is assembled from request data.
+
+Parameters (cast explicitly in the SQL, e.g. `$5::int`):
+1. `$1 int[]` detection fonts (default `[1, 9, 10]`)
+2. `$2 int` province id (request parameter; UI default 7 = FLORES)
+3. `$3 text[]` removable fuentes (default `{ANTEL,TLK}`)
+4. `$4 text[]` protected fuentes (default `{IDE}`)
+5. `$5 int` geo decimals when padron present (default 2)
+6. `$6 int` geo decimals when padron absent (default 3)
+7. `$7 boolean` `protectedSiblingRemovesLone` (default **false**, see D3)
+8. `$8 text` output scope: `REMOVAL_GROUPS` (default) | `ALL_DUPLICATE_GROUPS`
+`document_type = 'PARENT'` stays a literal. Defaults live in `constants.ts` as one `DedupRules`
+const object; `fuente` comes from `v_address_build.name_font` exactly as in the SQL (values
+`ANTEL`, `IDE`, `TLK`). The two v3 SQL files disagree in a comment about the `id_font` mapping
+(`find_removal_candidates.sql` code is the truth: `IN (1, 9, 10)`, `name_font` as `fuente`). Do not
+guess; flag the discrepancy in TO_ORCHESTRATOR.md.
+
+**D3. Two behavioural additions to the v3 query (user-driven), everything else byte-faithful.**
+
+*Why:* v3 only outputs groups that contain at least one REMOVE. An unmatched ANTEL/TLK that is the
+lowest-urn ANTEL/TLK member of a group, but whose group also holds an IDE row, is KEEP (rank 1 is
+computed among ANTEL/TLK only), so its group is never exported and the user cannot see it in QGIS.
+The user wants to inspect those cases visually to decide whether that is a rule worth keeping.
+
+(a) **`decision_reason` column** on every output row, one of these const values (define them in
+`constants.ts` as a const object, mirrored in SQL as literals):
+
+| decision | reason | meaning |
+|---|---|---|
+| KEEP | `PROTECTED_SOURCE` | `fuente` in protected fuentes |
+| KEEP | `INFRA_MATCHED` | matched in either infra table |
+| KEEP | `NO_DUPLICATE` | group size 1 |
+| KEEP | `LOWEST_URN_KEPT` | no member matched; lowest-urn ANTEL/TLK, and the group has **no** protected member |
+| KEEP | `KEPT_ALONGSIDE_PROTECTED` | same branch as above but the group **does** contain a protected-source member. This is the case to review. |
+| REMOVE | `REDUNDANT_WITH_MATCHED` | another ANTEL/TLK member matched (`n_matched_in_group > 0`) |
+| REMOVE | `REDUNDANT_NOT_LOWEST_URN` | nothing matched, rank > 1 |
+| REMOVE | `REDUNDANT_WITH_PROTECTED` | only when `$7 = true`: unmatched ANTEL/TLK in a group that has a protected member |
+
+(b) **`$7` rule toggle.** When `true`, an unmatched removable-source member of a group that
+contains a protected-source member is REMOVE (`REDUNDANT_WITH_PROTECTED`). This branch sits
+**after** the `matched` and `dup_group_size = 1` KEEP branches and **before** the
+rank branch. When `false` (default) the decision is exactly v3. Needs a window flag
+`has_protected_in_group` (`bool_or(fuente = ANY($4)) OVER (PARTITION BY match_key)`).
+
+(c) **Output scope `$8`.** `REMOVAL_GROUPS` = v3 behaviour (groups with at least one REMOVE).
+`ALL_DUPLICATE_GROUPS` = every group with `dup_group_size > 1`, which includes the
+`KEPT_ALONGSIDE_PROTECTED` groups and the groups that are all-KEEP. Same column set either way.
+
+*Known comment/code mismatch (fix the comment, not the behaviour):* the v3 header says the
+lowest-urn member "across the WHOLE group (any source)" is KEEP when nothing matched. The code
+ranks ANTEL/TLK members only. The code produced the delivered numbers; keep it and make the
+comment truthful.
+
+**D4. Database access: reuse, do not reinvent.** Reuse the project model: `DbConfig` /
+`SafeDbConfig` (`src/core/types/db.ts`), `INITIAL_DB_CONFIG`
+(`src/core/constants/dbConfigDefaults.ts`), profile storage without passwords
+(`src/core/services/localStorageDbConfig.ts`), and server-side `pg` `Client` with params +
+password per request (see `src/app/api/db/test/route.ts`).
+- Credentials arrive in the POST body (`host, port, db_name, user, password`). The password is
+  never stored, logged, or echoed in any response or error. Same defaults as the existing routes
+  (`host||"localhost"`, `Number(port)||5432`).
+- `services/AddressRepository.ts`: **interface** `runDuplicateAnalysis(params): Promise<AnalysisRow[]>`.
+- `services/PgAddressRepository.ts`: real implementation with `pg` `Client`, one connection per
+  call, `connectionTimeoutMillis: 10000`. Runs in `BEGIN READ ONLY`, `SET LOCAL statement_timeout`
+  (const, 180000 ms, the query is heavy and runs on prod), always `ROLLBACK` + `client.end()` in
+  `finally`. A write attempt must fail at the database itself.
+- Do **not** reuse `/api/db/execute` or anything under `src/app/api/db/`: not read-only. Do **not**
+  put `pg` helpers in `core/`.
+- `services/DedupOrchestrator.ts`: constructor-injected repository; maps request to parameters,
+  runs the query, returns `{ rows, summary }`. Thin.
+- **No streaming, no cursor, no row cap, no snapshot file**: the query returns only the decided
+  groups (2,581 rows for Flores). Do not add them.
+
+**D5. HTTP surface** (`module.routes.json`, all `nodejs` + `force-dynamic`):
+- `POST analyze`: body `{ connection:{host,port,db_name,user,password}, provinceId:number,
+  protectedSiblingRemovesLone?:boolean, scope?:"REMOVAL_GROUPS"|"ALL_DUPLICATE_GROUPS" }` returns
+  `{ success:true, summary, groups, skippedWithoutCoordinates }`. Validate `db_name`, `user`,
+  `password` required; `provinceId` positive integer; unknown `scope` rejected (400, Spanish
+  messages mirroring the existing routes).
+- `POST export`: same body plus `format: "csv" | "geojson" | "links"` returns an attachment with
+  the right content type and `Content-Disposition`. POST because it carries credentials; **never**
+  accept credentials in a query string. Stateless, re-runs the query, no cache or session store.
+Handlers speak Web `Request`/`Response` only, thin, orchestrator injected via
+`createDedupHandlers(orchestrator = new DedupOrchestrator(new PgAddressRepository()))`.
+No `next/*` in the module.
+
+**D6. TS domain is now small and pure** (`domain/`): 
+- `summary.ts`: counts by decision x fuente (the "Headline numbers" table) **and by
+  `decision_reason`** (the user needs to see how many `KEPT_ALONGSIDE_PROTECTED` rows exist), plus
+  group count.
+- `groups.ts`: group the flat rows by `group_id`, preserving the SQL order.
+- `export.ts`: rows to CSV (RFC-4180 quoting, `\r\n`, UTF-8, header from a const column list that
+  **includes `decision` and `decision_reason`**); rows to GeoJSON Points `[lng, lat]` with all fields
+  in `properties` (`decision_reason` included so QGIS can style by it; skip null/NaN coords, count
+  them); groups to GeoJSON LineStrings joining members, properties `{groupId, size}`, skipping
+  groups with fewer than 2 locatable members.
+- `types.ts`, `constants.ts` as before. `Fuente`, `Decision`, `DecisionReason` are const objects,
+  never raw string compares.
+
+**D7. Response safety.** `pg` errors can include the host; they must never include the password.
+Test it.
+
+**D8. Docs.** `docs/tools/ADDRESS_DEDUP_MODULE.md` (purpose, the v3 decision table with the D3
+reasons, the `$7` toggle, scope, endpoints, how to change a rule, what is not done) linked from
+`docs/README.md`; one-line pointer in `CLAUDE.md` allowed. No production data in the repo.
+
+**D9. UI** (Spanish, Lucide only, `.module.css`, no inline styles, atomic components, no
+single-letter identifiers, every manifest-referenced component from a `"use client"` module including
+icons via `ui/contributionIcons.ts`). Page at `/tools/m/address-dedup` inside `ToolWorkspaceLayout`
+(see `src/app/tools/db-db-sync/page.tsx`) plus a `HOME_TOOL_GRID` card like `WatcherHomeCard`.
+Components: `DedupDashboard`, `DedupConnectionForm` (host/port/db/user/password + province id;
+**reuse** `FormField`, `Button`, `AlertMessage`, `ProfileSelect`, `loadDbProfilesFromLocalStorage` /
+`saveDbProfileToLocalStorage`, `INITIAL_DB_CONFIG`; do **not** reuse `DbConnectionForm`, it requires
+a table), `DedupOptionsPanel` (checkbox "Eliminar ANTEL/TLK duplicado de una fuente protegida (IDE)",
+default off; checkbox "Incluir grupos sin eliminaciones (para revisión)", default off),
+`DedupSummaryTable` (by decision x fuente and by reason), `DedupGroupList` (paginated with
+`PaginationControls`, `Badge` per decision/reason), `DedupExportBar` (3 download buttons),
+`dedupClient.ts`. Use a `@tanstack/react-query` mutation if that is the local convention. No map.
+
+**D10. Allowed edits outside the module:** `src/app/modules.registry.ts` (one import + one entry),
+generated `src/app/api/m/address-dedup/**`, `docs/**`, the `CLAUDE.md` pointer, and
+`package.json` / lockfile for **one new devDependency: `@electric-sql/pglite`** (D11). Nothing else;
+if you think something else must change, stop and ask.
+
+**D11. SQL is tested with a real Postgres engine: `@electric-sql/pglite` (devDependency only,
+never imported by production code).** Install with the portable `npm`. Tests create in-process
+`carto.v_address_build`, `match_tlk.direcciones_tlk_serv_cto_cgeo` (column `urn`) and
+`integrador.nap_physical_device` (column `urn_site_location`) with only the columns the query uses,
+insert **synthetic** rows, and run the **exact exported query text** with bound parameters (the
+same code path the repository uses; share a small function that runs it against any
+`{ query(text, values) }` so the pglite test and the `pg` repository execute identical SQL). If a
+construct in the query is unsupported by pglite, **do not edit the query to suit pglite**: stop and
+report it in TO_ORCHESTRATOR.md. If installing the dependency fails (registry/TLS), stop and report.
+
+## Out of scope (do not implement)
+- Deletes or any write path (user: investigation first, deletes later behind a confirmed step).
+- The infrastructure-matches stacked view (`find_infrastructure_matches.sql`): deferred to a later
+  mission; do not port it.
+- FLAGGED group state (v2 only, superseded).
+- Map view (GeoJSON export covers QGIS).
+- Streaming, cursors, row caps, snapshot files, caching, job queues, persisted results.
+- A TS re-implementation of the key or the decision (the point of this revision).
+- UI to edit fuente lists / decimals / font ids (typed const only).
+- Changes to the five existing tools, core types, `/api/db/*` routes.
+- ANC source. Connecting to a real database: tests use pglite and fakes only; you have no mandate
+  to touch production.
+
+## Required tests (`tests/unit/modules/address-dedup/`, Vitest, AAA, real computations; mock only the I/O boundary)
+
+`duplicateAnalysisQuery.test.ts` (pglite, synthetic rows, assertions on `group_id` membership,
+`decision`, `decision_reason`)
+- Regression: ANTEL `cgeo:Antel:address:id:4006567` and `4006568` (Flores, padron 4053, RURAL,
+  number `'0'`, no street, same coords) land in the **same group**.
+- Regression: TLK `4015195` (puerta 272) vs `4015197` (puerta 266), same padron: **different
+  groups**.
+- Regression (correction #9): ANTEL `4004103` (389, letra BIS, square 0) vs IDE `684702` (389, letra
+  N/A, square 100): different groups; `4005609` vs `4756661` (letra N/A/N/A, square 0/0): same group.
+- Regression (correction #7): 96 rows, same street, `puerta='0'`, each with a distinct padron and
+  coords: no group formed.
+- Correction #5: same padron/RURAL, null `padron_locality`, coords ~50 km apart: different groups;
+  ~13 m apart (same 2-decimal bucket): same group; present `padron_locality` beats the bucket.
+- No padron and no street: never grouped (`NOKEY` behaviour).
+- Placeholder equivalence: `NULL`, `''`, `'N/A'`, `'S/N'`, `'SN'`, `'0'` treated as the same "none"
+  for number/letter/square/sandlot; a real letra differentiates.
+- Every branch of the decision with its reason: IDE KEEP/`PROTECTED_SOURCE` even in a group of 5;
+  matched KEEP/`INFRA_MATCHED` (via `direcciones_tlk_serv_cto_cgeo` and via `nap_physical_device`,
+  separately); singleton KEEP/`NO_DUPLICATE`; matched member plus unmatched ANTEL and TLK siblings:
+  siblings REMOVE/`REDUNDANT_WITH_MATCHED`; two unmatched ANTEL: lowest urn number KEEP/
+  `LOWEST_URN_KEPT`, other REMOVE/`REDUNDANT_NOT_LOWEST_URN`, with numeric ordering
+  (`id:999` vs `id:1000`); ANTEL + TLK none matched: lowest across both; two matched members both
+  KEEP.
+- **The IDE case:** group IDE + one unmatched ANTEL, `$7=false`, scope `ALL_DUPLICATE_GROUPS`:
+  ANTEL is KEEP/`KEPT_ALONGSIDE_PROTECTED` and the group appears. Same fixture with scope
+  `REMOVAL_GROUPS`: group **absent** (the v3 gap, pinned by a test whose name says so). Same fixture
+  with `$7=true`: ANTEL REMOVE/`REDUNDANT_WITH_PROTECTED` and the group appears under both scopes.
+  With `$7=true`, a **matched** ANTEL beside an IDE row stays KEEP/`INFRA_MATCHED`.
+- Scope: `ALL_DUPLICATE_GROUPS` includes all-KEEP groups that `REMOVAL_GROUPS` omits; singletons never
+  appear in either.
+- Parameter binding: province filter, font filter and `document_type='PARENT'` each exclude the
+  expected rows.
+- Output order: within a group non-REMOVE first, then `fuente`, then `urn`.
+
+`summary.test.ts`: decision x fuente and by-reason counts against a hand-computed fixture; empty.
+`groups.test.ts`: grouping by `group_id` preserves order; empty input.
+`export.test.ts`: CSV quoting (commas, quotes, newlines, edge spaces), `\r\n`, header includes
+`decision_reason`, empty gives header only; GeoJSON Points `[lng, lat]` order, `decision_reason` in
+properties, null/NaN skipped and counted; Links: one LineString per group with 2+ locatable
+members, fewer skipped.
+`dedupOrchestration.test.ts` (fake repository): request maps to the 8 parameters in order (assert
+the fake's received args, including defaults); summary matches; repository failure propagates.
+`pgAddressRepository.test.ts` (fake `pg` client): `BEGIN READ ONLY` first, `ROLLBACK` last,
+`end()` on success and on error, statement timeout set, values bound (no interpolated user value in
+the text), no write statement ever issued.
+`handlers.test.ts`: 400 for missing `db_name`/`user`/`password`, bad `provinceId`, unknown `scope`
+(Spanish messages); malformed JSON gives 400 not 500; success shape; export content types +
+`Content-Disposition`; error body never contains the submitted password; credentials in a query
+string are ignored.
+`addressDedupManifest.test.ts`: mirror `cartographyWatcherManifest.test.ts` (endpoints bound,
+`runtime`/`dynamic` survive, page at `""`, contribution targets mounted slot `HOME_TOOL_GRID`).
+
+## Definition of done: full gauntlet, real output pasted
+Order, from the repo root with portable Node on PATH:
+```
+npm run modules:routes && npm run modules:routes:check
+npm run lint          # 0 errors, 0 warnings
+npm test              # all suites green; report suite/test counts
+npm run build         # clean Turbopack build
+npm run doctor        # zero findings ("Score unavailable" is expected)
+```
+Plus the **deletability proof** (module_authoring section 6): remove the registry line, run
+`npm run modules:routes`, confirm the `address-dedup` generated routes disappear and the app still
+builds, restore. Paste what you ran. No gate weakened, no assertion relaxed, no `eslint-disable` /
+`@ts-ignore`. Audit dead code, unused exports and imports before reporting (guideline 14).
+
+## Reporting
+Append a report under a new heading in `.agents/handoff/TO_ORCHESTRATOR.md`: files created,
+gauntlet output verbatim, anything skipped or partial **stated plainly**, every question hit, and
+whether pglite ran the query unmodified. Do not claim a gate passed that you did not run.
+
+Do not commit.
+
+
+---
+
+# Mission — `address-dedup` UI redesign (layout + table UX)
+
+**Branch:** stay on `feat/module-address-dedup` (uncommitted work from the previous rounds is the base). **Do not commit. Do not push.**
+**Node:** `npm` is not on PATH. Prepend `C:\Alekos\Tools\node24portable` to `$env:PATH`, or call `C:\Alekos\Tools\node24portable\npm.cmd`.
+**Binding rules (re-read):** `AGENTS.md`, `CLAUDE.md`, `.agents/rules/module_authoring.md`, `coding_guidelines.md` (Spanish UI, Lucide only, **zero inline styles**, `.module.css`, atomic components, no single-letter identifiers, const objects not raw string compares, no static data inside `.tsx`), `testing_standards.md`.
+
+## Why
+The user ran the module on real data and found the page poor: connection form, options, summary,
+export and the group list are stacked on one page, and the tables are plain (see current
+`ui/DedupSummaryTable.tsx`, `ui/DedupGroupList.tsx`, `ui/DedupDashboard.tsx`). They want a clearer
+layout and better table UX. Real result size for Flores: ~1,200 groups / ~3,300 rows, so a client-side
+table is fine; no virtualisation, no new dependency.
+
+## Scope
+**UI only.** Do NOT touch: the SQL, `services/**`, `api/**`, `module.routes.json`, `manifest.ts`,
+`domain/summary.ts|groups.ts|export.ts` behaviour, `core/`, `ui-kit/` components' behaviour, or any
+other tool. Adding new files in the module and editing the module's own `ui/`, `data/`, `constants.ts`
+is allowed. You may **read** ui-kit components and reuse them (`PaginationControls`, `Badge`,
+`Button`, `FormField`, `AlertMessage`, `ProgressBar`, existing CSS tokens from `src/app/globals.css`
+such as `--accent-*`, `--text-*`, `--border-color`, `--font-mono`). Match the look of the existing
+tools (dark glass panels); do not invent a new visual language.
+
+## Binding design decisions (do not revisit; raise questions in TO_ORCHESTRATOR.md)
+
+**U1. Two page states instead of one long stack.**
+- *Before a result:* one centred "Configuración" card (connection fields, province, the two option
+  checkboxes, the Run button). Nothing else on the page.
+- *After a result:* the form collapses into a compact **context bar** showing
+  `db_name@host · Provincia N` plus chips for the active options (e.g. "Elimina duplicados de IDE",
+  "Incluye grupos sin eliminaciones"), and the buttons **Editar parámetros** (re-expands the full
+  card above the results, with a Cancel/collapse control), **Volver a ejecutar**, and the export
+  group. Password is never shown in the bar.
+- Results live under the bar in **two tabs: "Resumen" and "Grupos (N)"** (N = group count, formatted).
+  Default tab after a run: Resumen. Tab state resets to Resumen on a new result. Implement tabs as an
+  accessible tablist (`role="tablist"`, `role="tab"`, `aria-selected`, `role="tabpanel"`, arrow-key
+  navigation). Check whether `ui-kit` already has a tabs primitive before writing one
+  (`ModuleTabbedSlot` exists: read it; reuse only if it genuinely fits, otherwise write a small module-local
+  `DedupTabs`).
+- While running: replace the results area with a loading card: indeterminate `ProgressBar` (or the
+  closest existing one) and the text that the query runs on PostgreSQL and **can take up to 3
+  minutes**. Disable the Run button. No timers/intervals/effects for an elapsed clock.
+- Errors: `AlertMessage` inside the card that caused them (config card for validation/connection
+  errors; results area for export errors). Keep the "rows without coordinates" warning, placed on the
+  Grupos/export area, not in the summary.
+
+**U2. Resumen tab.**
+1. A row of **KPI cards** (5): Grupos, Filas, A eliminar (red accent), A conservar (green accent),
+   Para revisar (amber accent; = rows with reason `KEPT_ALONGSIDE_PROTECTED`; includes a short hint
+   "Conservadas junto a una fuente protegida"; when 0 show the card dimmed with "Ninguna"). Values use
+   `formatNumber`; large number, small label, `font-variant-numeric: tabular-nums`.
+2. **"Decisión por fuente"** matrix: rows Eliminar/Conservar plus a **Total row**, columns ANTEL, TLK,
+   IDE, "Otras / sin fuente" plus a **Total column**. Numbers right-aligned, tabular-nums; zero cells
+   dimmed (muted colour, rendered as "0", not hidden); totals bold; decision cell has a coloured dot or
+   Lucide icon, not just text.
+3. **"Motivos"** as **two grouped sections** in one table: a "Eliminar" section header followed by its
+   reasons (`REDUNDANT_WITH_MATCHED`, `REDUNDANT_NOT_LOWEST_URN`, `REDUNDANT_WITH_PROTECTED`) and a
+   "Conservar" section header followed by its reasons (`PROTECTED_SOURCE`, `INFRA_MATCHED`,
+   `NO_DUPLICATE`, `LOWEST_URN_KEPT`, `KEPT_ALONGSIDE_PROTECTED`). Columns: Motivo, Filas, % del total,
+   and an **inline proportion bar** (a `<div>` whose width comes from a CSS custom property set via a
+   `data-*`-driven class bucket or `<progress>`/`<meter>`; **no inline `style` attribute** — if you
+   cannot size a bar without one, use `<meter>`/`<progress>` styled in CSS). Zero-count reasons are
+   dimmed. Each reason label gets a one-line explanatory tooltip/`title` (Spanish) taken from a const in
+   `data/dedupLabels.ts` (write them from the decision table in
+   `docs/tools/ADDRESS_DEDUP_MODULE.md`).
+4. Both tables: `<caption>` visually hidden but present, `<th scope>` correct, readable on narrow widths
+   (the matrix may scroll horizontally inside its own wrapper; page itself never scrolls sideways).
+
+**U3. Grupos tab = one real table with a toolbar (not a card list).**
+- **Toolbar** (sticky within the tab): text search (placeholder "Buscar por URN, padrón o calle";
+  matches urn, padron, street_name, street_number, locality, case-insensitive, trimmed);
+  **Decisión** select (Todas / Eliminar / Conservar); **Motivo** select (Todos + the 8 reasons);
+  **Fuente** select (Todas + the fuentes present in the data); a **"Solo para revisar"** toggle
+  (= groups containing a `KEPT_ALONGSIDE_PROTECTED` row); **Orden** select (Grupo ascendente,
+  Tamaño descendente, Eliminaciones descendente); a "Limpiar filtros" button shown only when a filter
+  is active; and a live count "Mostrando X de Y grupos".
+- **Filter semantics (pure, tested):** filtering is at **group** level; a group matches when **at
+  least one member** satisfies all active member-level criteria (decision, reason, fuente, search) —
+  all active criteria must be satisfied by the same member except the "Solo para revisar" toggle which
+  is group-level. A matching group is always displayed **with all its members** (the context is the
+  point of the tool). Changing any filter/sort resets to page 1.
+- **Table columns:** Fuente · URN (monospace, truncated with full value in `title`, plus a small
+  copy-to-clipboard icon button with an accessible label and a brief "copiado" confirmation that does
+  not use a timer-effect pattern doctor rejects; if you cannot do it cleanly, drop the confirmation
+  and keep the copy button) · Dirección (street + number + letter, "Sin dirección" fallback) · Padrón
+  (number + type) · Localidad · Decisión (badge) · Motivo (badge). Coordinates are NOT a column.
+- **Group header rows** inside the same `<table>` (one `<tbody>` per group): header shows
+  "Grupo N", member count, "X eliminar · Y conservar", an amber "Revisar" badge when the group has a
+  `KEPT_ALONGSIDE_PROTECTED` row, and an expand/collapse chevron (Lucide). Groups are **expanded by
+  default**; header is a `<button>` with `aria-expanded`; toolbar has **Expandir todo / Contraer
+  todo**. Collapse state is per-page-view (resets when filters/page change is acceptable; keep it
+  simple and deterministic).
+- **Row styling:** a left border or tint by decision (green keep / red remove), subtle zebra within a
+  group is not needed; header row visually distinct; sticky `<thead>`; table lives in a scroll
+  container with a sensible max height so toolbar + header stay visible; hover state; visible
+  `:focus-visible`.
+- **Pagination:** reuse `PaginationControls`; default page size 25 groups, options 10/25/50/100
+  (consts in `data/dedupLabels.ts`).
+- **Empty state:** when filters match nothing, a friendly centred message with a Lucide icon and the
+  "Limpiar filtros" button. When the analysis returns zero groups, say so plainly instead of rendering
+  an empty table.
+
+**U4. Export.** Keep the three exports (CSV, GeoJSON puntos, GeoJSON enlaces) but render them as one
+compact **button group in the context bar** (icon + short label, the longer description in a
+`title`), with the per-format pending/spinner state already implemented. Do not change `dedupClient`
+behaviour.
+
+**U5. Structure and code rules.**
+- Split the 145-line `DedupDashboard` into small components; the dashboard only orchestrates state.
+  Suggested (names are yours to adjust): `DedupConfigCard`, `DedupContextBar`, `DedupTabs`,
+  `DedupLoadingCard`, `DedupSummaryTab` (`DedupKpiCards`, `DedupDecisionMatrix`, `DedupReasonTable`),
+  `DedupGroupsTab` (`DedupGroupToolbar`, `DedupGroupTable`, `DedupGroupHeaderRow`, `DedupMemberRow`),
+  `useDedupGroupFilters`. Delete files that become unused (`DedupSummaryTable`, `DedupGroupList`, and
+  any CSS module no longer referenced); no dead code.
+- Pure filter/sort/derive logic goes in **`domain/groupFilters.ts`** (no React): `filterGroups(groups,
+  criteria)`, `sortGroups(groups, order)`, `countByDecision(group)`, `hasReviewRows(group)`,
+  `listFuentes(groups)`; criteria/sort/option values are const objects in `constants.ts` (`GroupSort`,
+  `DecisionFilter`, ...), never raw strings. Summary-derived numbers for KPI cards/percentages: add pure
+  helpers in `domain/summaryView.ts` (totals per decision/fuente, percentage with safe zero-division),
+  not in components.
+- Spanish text everywhere, static labels/tooltips in `data/`, no inline styles, Lucide icons only, no
+  emoji/unicode glyph icons, `.module.css` per component, design tokens not hard-coded colours (a few
+  rgba tints derived from the accent tokens are fine).
+- Keep the existing behaviours: password never shown/stored, `key={resultId}` pagination reset idea
+  (adapt it), profile selector, province id validation, error handling.
+
+## Required tests
+`tests/unit/modules/address-dedup/`, Vitest, AAA, real data shapes, no UI mocking of the pure logic:
+- `groupFilters.test.ts`: each criterion alone (decision, reason, fuente, search on urn / padron /
+  street / locality, case-insensitive + trimmed); **combined criteria must be satisfied by the same
+  member** (a group where member A is REMOVE and member B is ANTEL-KEEP must NOT match
+  decision=REMOVE + fuente=ANTEL-with-KEEP-only); matching group keeps all its members; "Solo para
+  revisar"; each sort order incl. tie-breaks (stable, then groupId asc); empty input; no match; whitespace-only
+  search = no filter; `listFuentes` unique + sorted + includes empty-fuente rows as the "other" bucket.
+- `summaryView.test.ts`: totals per decision/fuente/row/column, percentage rounding, zero total (no NaN),
+  review-count from `byReason`.
+- Update/replace `summary.test.ts` etc. only if the domain they test changed (it should not have).
+- **E2E (Playwright)**: add `tests/e2e/address-dedup.spec.ts` following `tests/e2e/README.md`
+  conventions (route-mocked API, console-error guard). It mocks `POST /api/m/address-dedup/analyze`
+  with a fixture of ~6 groups (include one `KEPT_ALONGSIDE_PROTECTED` group, an IDE row, a row with empty
+  fuente) and covers: config card shown alone before a run; run → context bar + Resumen tab with KPI
+  cards and both tables; switch to Grupos; search narrows; decision filter narrows; "Solo para revisar"
+  narrows to the amber group; clear filters; expand/collapse all; export button triggers a request to
+  `/api/m/address-dedup/export` with the chosen format; "Editar parámetros" re-expands the form. Also
+  **save screenshots** of: config state, Resumen tab, Grupos tab (default), Grupos tab filtered, to
+  `C:\Users\g611045\AppData\Local\Temp\claude\c--Alekos-Projects-gis-tools\947681d9-9c0b-4b39-8f12-44d3961eae71\scratchpad\dedup-ui\` and list the paths in your report so the orchestrator can view them.
+  This e2e spec is part of the module's **deletion set**: say so in
+  `docs/tools/ADDRESS_DEDUP_MODULE.md` and in `module_authoring`-style notes if that doc lists the deletion set.
+  Unit tests for the components themselves are NOT required (no testing-library in the repo; do not add it).
+
+## Out of scope
+New dependencies; virtualised tables; map view; changing exports/CSV columns; server/query changes;
+persisting UI state (filters, tab) in storage/URL; editing core `ui-kit` components; i18n framework;
+fixing the data discrepancy in the numbers (the orchestrator is looking at that separately).
+
+## Definition of done: full gauntlet, real output pasted
+```
+npm run modules:routes && npm run modules:routes:check
+npm run lint          # 0 errors, 0 warnings
+npm test              # all green; report counts
+npm run build         # clean
+npm run doctor        # zero findings (fix with code, never a suppression)
+npm run test:e2e      # at least the new spec green; report the whole run's result honestly
+```
+No gate weakened, no assertion relaxed, no `eslint-disable`/`@ts-ignore`. Audit for dead code, unused
+exports/imports/CSS before reporting. Re-confirm the module is still deletable (no edits outside the
+allowed set; the e2e spec is added to the deletion set).
+
+## Reporting
+Append "UI redesign" to `.agents/handoff/TO_ORCHESTRATOR.md`: files created/deleted, gauntlet output
+verbatim, screenshot paths, deviations, anything skipped or partial stated plainly, questions.
+
+Do not commit.
+
+
+---
+
+## Brief 4 — Resolve sources by name, no hardcoded `id_font` (branch `feat/module-address-dedup`, uncommitted, do NOT commit)
+
+Binding rules: `AGENTS.md`, `.agents/rules/*.md` (coding_guidelines, testing_standards, module_authoring). npm is not on PATH: use `C:\Alekos\Tools\node24portable` (see `.agents/rules/portable_node.md`).
+
+### Decision (user-mandated)
+The query must NOT hardcode numeric `id_font` values. Verified on prod: `carto.v_address_build` has `id_font`/`name_font` (1=IDE, 9=ANTEL, 10=TLK), but ids must not live in our code. Source selection is by `name_font` text.
+
+### Change
+- `src/modules/address-dedup/constants.ts:47` — delete `DETECTION_FONT_IDS`.
+- `types.ts:13` — replace `fontIds: ReadonlyArray<number>` with `detectionFuentes: ReadonlyArray<string>`.
+- `services/DedupOrchestrator.ts:8` — set `detectionFuentes` = de-duplicated union of `DedupRules.REMOVABLE_FUENTES` and `DedupRules.PROTECTED_FUENTES` (derive; no new literal list).
+- `services/queries/duplicateAnalysisQuery.ts:61,199` — `WHERE b.name_font = ANY($1::text[])`; bind `parameters.detectionFuentes`; update the `$1` doc comment (`text[] detection fuentes`) and drop the "ANTEL, IDE, TLK" inline note. Keep `$2..$8` numbering unchanged.
+- Check `runDuplicateAnalysis.ts`, `PgAddressRepository.ts`, API handlers/UI/docs (`docs/tools/ADDRESS_DEDUP_MODULE.md`) for any mention of font ids and update.
+- Tests: `tests/unit/modules/address-dedup/pgliteHarness.ts:66` and `duplicateAnalysisQuery.test.ts:520` (the "widened fonts" case: switch to a fuente-name list, e.g. add a fifth source name present in the fixture, and assert it is detected only when listed). The pglite fixture view may still carry `id_font` columns; leave them if harmless but nothing in the query may reference them. Add a test: a source absent from `detectionFuentes` is excluded even if its rows exist. Differential test vs v3 SQL must still show zero mismatches at defaults (v3 SQL uses ids; map ids to names only inside the test fixture).
+
+### Out of scope
+Any rule/key/decision change; UI changes; commit.
+
+### Definition of done
+Full gauntlet (lint, build, doctor, unit, e2e) green; paste real output; report any skipped gate plainly. Report to `.agents/handoff/TO_ORCHESTRATOR.md`.
+
+
+---
+
+## Brief 5 — Group table shows every match-key column + top/bottom horizontal scrollbars (branch `feat/module-address-dedup`, uncommitted, do NOT commit)
+
+Binding rules: `AGENTS.md`, `.agents/rules/*.md` (coding_guidelines: modular CSS, no inline styles, no hard-coded colours; testing_standards; module_authoring). npm not on PATH: use `C:\Alekos\Tools\node24portable`.
+
+### Goal
+In the groups table (`ui/DedupGroupTable.tsx`, `ui/DedupMemberRow.tsx`, `ui/DedupGroupHeaderRow.tsx`, `data/dedupLabels.ts` `GROUP_TABLE_COLUMNS`), show every field that enters `match_key` (`services/queries/duplicateAnalysisQuery.ts` lines 65-96), so the user can see why rows were grouped. Add a horizontal scrollbar above AND below the table.
+
+### Match-key fields, in key order
+province (`name_province`), province_code (`code_province`), locality_code (`rs_censal_locality_code`), locality (`rs_censal_locality_name`), postal_code, padron_locality-or-geo-bucket, street_name (`rs_name`), street_number, letter, square, sandlot, km, padron, type_padron, rs_reftramo.
+
+Already in `AnalysisRow`: province, locality, street_name, street_number, letter, square, sandlot, km, padron, type_padron, postal_code, raw_rs_censal_locality_code, rs_reftramo.
+MISSING from the SQL output, must be added: `province_code`, `padron_locality` (= `pad_cadastral_locality_name`, NOT `rs_cadastral_locality_name`), and `padron_locality_or_geo` (the effective segment actually used in the key: `coalesce(padron_locality, 'GEO:'||round(...))` with the same `$5`/`$6` rounding as the key; extract that expression ONCE in the `keyed` CTE and reuse it in `match_key` so the two cannot drift). Also expose `match_key` itself as a column (shown in the group header row as a copyable/title value, not a table column).
+
+### Binding decisions
+- Add the new fields to the final SELECT and to `AnalysisRow` (types.ts) and `mapAnalysisRow`. Append them AFTER existing columns in the SELECT.
+- CSV/GeoJSON export column list and order must stay byte-identical to today (v3 header compatibility). Do not add the new fields to exports. Add/keep a test pinning the export header.
+- Table columns become: Fuente, URN, then the 15 key columns above (use the effective padron_locality_or_geo column in place of a separate padron_locality column), then Decisión, Motivo. Remove the combined "Dirección"/"Padrón" cells (`describeAddress`/`describePadron` in `domain/rowFormat.ts`) only if they become unused; delete dead code and their tests if so.
+- Null/empty cell renders as an em dash via one shared helper; no raw "null". Values shown raw (not normalised) — except the geo-or-padron-locality column.
+- Column labels in Spanish, in `data/dedupLabels.ts`, one source of truth. Header row `colSpan` must follow the column count (derive, no literal).
+- Within a group the key-column values are identical by construction (except cosmetic case/whitespace): fine, show them per row anyway.
+- Scrollbars: a thin top scroller `div` (overflow-x:auto, inner spacer div whose width tracks the table's `scrollWidth` via ResizeObserver) synchronised two-way with the table's own scroller (guard against scroll-event feedback loops). The bottom scrollbar is the real one on the table scroller. Hide the top bar when there is no overflow. Implement as a small reusable hook/component in the module (e.g. `useSyncedHorizontalScroll` + `DedupScrollFrame`), modular CSS, theme tokens only, keyboard-focusable only if needed for a11y. Table needs `white-space: nowrap` cells and a min-width so it overflows instead of squashing; keep the existing sticky toolbar behaviour and the phone-width layout working (page itself must not scroll horizontally).
+- Performance: ~1,200 groups / ~2,500 rows is the real size; do not add per-row hooks or ResizeObservers.
+
+### Required tests (by name)
+- query: each new column present and correct (province_code, padron_locality, padron_locality_or_geo incl. GEO fallback with padron / without padron rounding, match_key equal across members of a group). pglite fixture may need `code_province`/`pad_cadastral_locality_name` values.
+- `mapAnalysisRow`: maps new fields; null stays null.
+- export: header row unchanged (pinned).
+- unit: empty-cell helper; column-count derivation.
+- e2e (`tests/e2e/flows/address-dedup.spec.ts`, fixtures in `tests/e2e/fixtures/dedupFixtures.ts`): table shows key headers; top and bottom scrollbars exist when the viewport is narrow; scrolling one moves the other; no page-level horizontal scroll at 360px. Update fixtures with the new fields.
+- Update `docs/tools/ADDRESS_DEDUP_MODULE.md`.
+
+### Out of scope
+Changing grouping rules, exports, sticky columns, column picker/visibility toggles, commit.
+
+### Definition of done
+Full gauntlet (routes check, lint, unit, build, doctor, e2e) green, real output pasted; unverified items stated plainly. Report appended to `.agents/handoff/TO_ORCHESTRATOR.md`.
+
+
+---
+
+## Brief 6 — Top scrollbar not visible / columns cut off at desktop width (branch `feat/module-address-dedup`, uncommitted, do NOT commit)
+
+Binding rules: `AGENTS.md`, `.agents/rules/*.md`. npm via `C:\Alekos\Tools\node24portable`.
+
+### Symptom (user, Windows 11, Edge/Chrome, desktop width ~1280)
+At the top of the groups table there is NO visible horizontal scrollbar; the table is clipped on the right (headers up to "NÚMERO" then cut, no right border of the frame). The only scrollbar would be at the bottom of a long table, out of view. Brief 5's e2e only proved the bars at 360px.
+
+### Hypotheses (orchestrator read of `ui/DedupScrollFrame.tsx`, `DedupScrollFrame.module.css`, `useSyncedHorizontalScroll.ts`, `DedupGroupTable.module.css`, `DedupGroupsTab.module.css`) — YOU MUST CONFIRM WITH EVIDENCE, do not assume
+1. Overlay scrollbars (Win11 default): `.topScroller` content is a 1px-high spacer, so with an overlay scrollbar the top scroller is ~1px high and effectively invisible.
+2. An ancestor lets the frame grow to the table's `max-content` width (flex/grid item with `min-width:auto`, e.g. the `.stack` or tab panel / dashboard containers up the tree), so the frame never overflows (`hasOverflow` false → top bar `display:none`) while some ancestor or the page clips/scrolls instead. The missing right frame border suggests this.
+3. Both.
+
+### Required
+- Reproduce first: write/extend a Playwright check at 1280x800 (and 1920x1080) with real data from `tests/e2e/fixtures/dedupFixtures.ts`, assert the frame's `getBoundingClientRect().right <= viewport width`, `scrollWidth > clientWidth` on the content scroller, and the top bar is visible with height >= 12px. To emulate Win11 overlay scrollbars launch Chromium with `--enable-features=OverlayScrollbar` (or equivalent) in a dedicated test/project config; keep default config otherwise. Paste the failing numbers BEFORE fixing, and the passing ones after. If neither hypothesis is the cause, report the real cause.
+- Fix whatever the evidence shows. Expected shape: (a) force the frame and every ancestor on the path to be width-constrained (`min-width: 0` on flex/grid items; do not use `overflow:hidden` on ancestors to hide the problem); (b) make both scrollbars always visible and at a fixed, tappable height independent of OS overlay setting — style with `scrollbar-width`/`scrollbar-color` and `::-webkit-scrollbar` (height 12-14px, theme tokens, no hard-coded colours) on `.topScroller` and `.scroller`, and give the top scroller an explicit height rather than relying on the 1px spacer.
+- Also make the group header toggle label (`Grupo N · x filas ...`) stay visible while scrolling horizontally (`position: sticky; left: 0` on the header's content cell/span) — that was a flagged follow-up and is now in scope.
+- Keep: no page-level horizontal scroll, phone layout, export untouched, no inline styles (imperative width on the spacer via ref is already accepted).
+
+### Tests
+- e2e as above (desktop widths, frame within viewport, top bar visible with height, scroll sync still works, header label sticky: after scrolling the content by 400px the header label's bounding left is still within the frame).
+- Keep all existing tests green.
+
+### Out of scope
+Grouping rules, exports, sticky data columns, column picker, commit.
+
+### Definition of done
+Full gauntlet (routes check, lint, unit, build, doctor, e2e) green with real output pasted; state root cause with evidence; report appended to `.agents/handoff/TO_ORCHESTRATOR.md`.

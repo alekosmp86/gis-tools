@@ -221,3 +221,259 @@ Running 24 tests using 6 workers
 ## 6. Commit Status
 
 Per workspace rules, **no `git commit` was executed automatically**. All changes are staged in the working directory on branch `fix/discrepancy-map-hidden-container-viewport-fit`, awaiting user direction.
+
+
+---
+
+# Report: module `address-dedup` (REVISED brief, SQL as the engine)
+
+Branch `feat/module-address-dedup` (cut from `main`). Nothing committed or pushed. No real database touched.
+
+## Status
+DONE. pglite ran the query **unmodified** (exact exported text, bound params, same code path as the pg repository).
+
+## Files
+- Module `src/modules/address-dedup/`: `constants.ts`, `types.ts`, `module.routes.json`, `manifest.ts`, `api/handlers.ts`, `data/dedupLabels.ts`, `domain/{summary,groups,export}.ts`, `services/{AddressRepository,PgAddressRepository,DedupOrchestrator}.ts`, `services/queries/{duplicateAnalysisQuery,mapAnalysisRow,runDuplicateAnalysis}.ts`, `ui/` (DedupDashboard, DedupConnectionForm, DedupOptionsPanel, DedupSummaryTable, DedupGroupList, DedupExportBar, DedupHomeCard, dedupClient, useDedupAnalysis, useDedupProfiles + .module.css).
+- Tests `tests/unit/modules/address-dedup/`: `duplicateAnalysisQuery`, `summary`, `groups`, `export`, `dedupOrchestration`, `pgAddressRepository`, `handlers`, `addressDedupManifest` (+ helpers `pgliteHarness.ts`, `rowFactory.ts`).
+- Outside module (D10): `src/app/modules.registry.ts` (1 import, 1 entry), generated `src/app/api/m/address-dedup/**` and `src/app/tools/m/address-dedup/page.tsx`, `docs/tools/ADDRESS_DEDUP_MODULE.md`, `docs/README.md` (link), `CLAUDE.md` (pointer), `package.json` + lockfile (`@electric-sql/pglite@^0.5.8`, devDependency only).
+
+## Gauntlet (real output, final run after restore; portable Node)
+- `npm run modules:routes && npm run modules:routes:check`: PASS, "Generated module routes are up to date (10 route file(s))."
+- `npm run lint`: PASS, no output (0 errors, 0 warnings).
+- `npm test`: PASS, `Test Files 42 passed (42)`, `Tests 463 passed (463)` (baseline without the module: 34 files / 355 tests; module adds 8 files / 108 tests).
+- `npm run build` (after `rm -rf .next`): PASS, "Compiled successfully", routes listed: `/api/m/address-dedup/analyze`, `/api/m/address-dedup/export`, `/tools/m/address-dedup`.
+- `npm run doctor`: PASS, "Score: 100 / 100 Great, No issues found!" (the score API was reachable this time). First run flagged `query-mutation-missing-invalidation` and then `react-hooks-js/todo` (try/finally); fixed by restructuring `useDedupAnalysis` (promise chain, no useMutation), no suppression.
+- Deletability proof: moved module folder and test folder out, restored registry to HEAD, `npm run modules:routes` reported orphaned `address-dedup/analyze`, `address-dedup/export`, `tools/m/address-dedup/page.tsx` and removed them; `rm -rf .next && npm run build` clean, route table back to the 7 watcher API routes + 5 tools + watcher page; `npm run lint` clean; `npm test` 34 files / 355 tests green. Restored everything, regenerated, `modules:routes:check` green. (Files outside the deletion set that remain: docs, CLAUDE.md pointer, package.json/lockfile pglite devDependency, allowed by D10.)
+- Dead-code audit: removed two unneeded exports (`isLocatable`, `PointExport`); no unused imports (eslint clean).
+- Note: bare `npx tsc --noEmit` reports a stale `.next/types/validator.ts` error about `spatial-explorer/page.js` (leftover from another branch); not present after a clean `.next` build. `next build` type-check passes.
+
+## Findings and questions for the orchestrator
+1. **`NO_DUPLICATE` can never appear in the output.** Singletons are excluded under both scopes (REMOVAL_GROUPS needs a REMOVE; ALL needs `dup_group_size > 1`), so the brief's test "singleton KEEP/NO_DUPLICATE" cannot be written as stated. The branch exists in SQL and the const; the test pins that singletons (matched or not) never appear. Not changed.
+2. **`id_font` comment discrepancy.** `find_removal_candidates.sql` code says `IN (1, 9, 10)` with comment "ANTEL, IDE, TLK"; `find_infrastructure_matches.sql` says `IN (9, 10)` "ANTEL, TLK only; IDEUY (id_font=1) excluded". Implied mapping: IDE=1, ANTEL=9, TLK=10. Kept code `[1, 9, 10]` and `name_font` as `fuente`; tests use that mapping. Unconfirmed against the real DB.
+3. **`$7` branch ordering.** Per brief the `REDUNDANT_WITH_PROTECTED` branch sits before the rank branch, and `REDUNDANT_WITH_MATCHED` is part of the trailing else, so with `$7=true` an unmatched ANTEL in a group that has both a matched ANTEL and an IDE row gets `REDUNDANT_WITH_PROTECTED` (REMOVE either way). Confirm that is the intended reason.
+4. **Query shape beyond v3.** Decision is computed as one CASE producing `decision_reason` (CTE `reasoned`); `decision` is derived from it (CTE `decided`), so branch logic is not duplicated. The v3 key also includes `rs_reftramo`; kept faithfully (not listed in the brief's key description). `pool_rank`/`n_matched` now use `$3`, `has_protected_in_group` uses `$4`; the protected KEEP branch uses `$4` instead of the literal `'IDE'`.
+5. **Row typing.** `pg` returns bigint aggregates (`group_id`, `dup_group_size`, ...) as strings, so `mapAnalysisRow` coerces numbers instead of the SQL casting (keeps SQL faithful). Verified on pglite only; pg strings handled by the same coercion, not run against real pg.
+6. **Link `size` property** = group member count (all rows), not locatable count. Brief said `{groupId, size}` only.
+7. **Analyze UI** uses a local hook (`useDedupAnalysis`) rather than a react-query mutation, because react-doctor flagged an invalidation-less mutation and the call carries credentials and should not be cached. The export button uses a react-query mutation.
+8. Error text scrubbing replaces the submitted password with `***` in 500 bodies (pg errors still may include host, per brief D7).
+9. `handlers.test` covers malformed JSON, empty body, `null`, `[]`, query-string credentials ignored, password never in error body.
+
+## Not done / unverified
+- Nothing skipped from the brief. UI was built and compiled (build, lint, doctor) but not exercised in a browser; no e2e added. The `pg` repository was tested with a fake client only (per brief); real `pg` connection behavior is unverified. No commit made.
+
+
+---
+
+# Fix round 1: address-dedup
+
+- F1: `PgClientLike` gained `on("error", listener)`. The repository attaches `client.on("error", () => undefined)` right after `createClient` and before `connect()`, not inside `createPgClient`. That way the fake client used in tests exercises the same path as the real one. Tests added: a listener is registered before connect, and a mid-query client 'error' emission rejects with the query failure with no uncaught throw, with `end()` still called. The fake throws on 'error' when no listener is registered, as EventEmitter does.
+- F2: new `mapAnalysisRow.test.ts` with 6 cases covering string numbers from pg, null/NaN coordinates, null and numeric km, booleans, and numeric output types.
+- F3: `mapAnalysisRow` maps a NULL or undefined `fuente`/`urn` to `""`. `DedupSummaryTable` has a new column "Otras / sin fuente" that sums any fuente not in ANTEL/TLK/IDE, so totals reconcile. Summary test added: a row with an empty fuente is still counted.
+- F4: `downloadExport` attaches the anchor to `document.body`, clicks, removes it, and revokes the URL in `setTimeout` using `DOWNLOAD_URL_REVOKE_DELAY_MS` (constants).
+- F5: `useDedupAnalysis` returns a `resultId` that increments on each result. `<DedupGroupList key={analysis.resultId}>` resets pagination, with no effect.
+- Docs: added section 7 "Known limitations" (CSV formula injection not neutralised).
+
+Gauntlet (portable Node, clean `.next`):
+- `modules:routes:check`: PASS (10 route files up to date).
+- `lint`: PASS (no output).
+- `npm test`: PASS, 43 files / 473 tests.
+- `build`: PASS (address-dedup routes listed).
+- `doctor`: PASS, 100/100, No issues found. A first run flagged `js-set-map-lookups` in the new column helper; fixed with a Set.
+
+Skipped: nothing. The UI was not exercised in a browser. Not committed.
+
+
+---
+
+# UI redesign: address-dedup (layout + table UX)
+
+UI-only, on `feat/module-address-dedup`, nothing committed. SQL, `services/`, `api/`, `manifest.ts`, `module.routes.json`, core and ui-kit were not touched. The only edits outside `ui/` are additive: `constants.ts`, `types.ts`, `data/dedupLabels.ts` and the new `domain/` files. `domain/summary|groups|export.ts` are unchanged. The docs deletion-set list was updated.
+
+## Files
+Created in `src/modules/address-dedup/`:
+- `domain/groupFilters.ts`, `domain/summaryView.ts`, `domain/rowFormat.ts` (pure logic).
+- `ui/` components and hooks:
+  - Layout: `DedupConfigCard`, `DedupContextBar`, `DedupLoadingCard`, `DedupTabs`, `DedupResultsView`.
+  - Resumen tab: `DedupSummaryTab`, `DedupKpiCards`, `DedupKpiCard`, `DedupDecisionMatrix`, `DedupReasonTable`.
+  - Grupos tab: `DedupGroupsTab`, `DedupGroupToolbar`, `DedupFilterSelect`, `DedupGroupTable`, `DedupGroupHeaderRow`, `DedupMemberRow`, `DedupCopyButton`, `DedupGroupsEmptyState`, `useDedupGroupFilters`.
+  - Shared: `DedupShared.module.css`, plus a `.module.css` per component.
+
+Rewritten or edited:
+- `DedupDashboard` (now orchestration only), `DedupExportBar` (compact button group), and `DedupConnectionForm` (takes `children` so the options sit before the Run button).
+- `constants.ts` (`GroupSort`, `DecisionFilter`, `FILTER_ALL`, `DedupTab`, `KpiTone`, `OTHER_FUENTE_COLUMN`), `types.ts`, `data/dedupLabels.ts`.
+
+Deleted: `DedupSummaryTable.tsx/.css`, `DedupGroupList.tsx/.css`, `DedupDashboard.module.css`.
+
+Added to the deletion set (documented in `docs/tools/ADDRESS_DEDUP_MODULE.md`): `tests/e2e/flows/address-dedup.spec.ts` and `tests/e2e/fixtures/dedupFixtures.ts`.
+
+Tests:
+- Unit: `groupFilters.test.ts`, `summaryView.test.ts`, `rowFormat.test.ts`.
+- E2E: 13 tests in `address-dedup.spec.ts`. They cover:
+  - the config card alone before a run, the context bar and Resumen KPIs and both tables, and the Grupos tab;
+  - keyboard tab navigation, search, the decision filter keeping all members and clearing, "Solo para revisar", the empty state, and expand/collapse all;
+  - the export request with `format=csv`, "Editar parámetros" and cancel, validation error placement, and the loading card.
+
+## Gauntlet (portable Node; final code state, clean `.next` for build)
+- `modules:routes && modules:routes:check`: PASS, "Generated module routes are up to date (10 route file(s))."
+- `lint`: PASS, no output.
+- `npm test`: PASS, 46 files / 523 tests (was 43 / 473).
+- `build`: PASS, Compiled successfully; address-dedup routes present.
+- `doctor`: PASS, 100/100, "No issues found!"
+  - Two intermediate warnings, `js-combine-iterations` in `rowFormat.ts` and `summaryView.ts`, were fixed with single loops, no suppression.
+- `npm run test:e2e`:
+  - The full run immediately after the build failed once: 36 passed, 1 failed. The failing test was `address-dedup.spec.ts` "debe mostrar solo la tarjeta de configuración antes de ejecutar", which is the first page hit on a cold dev server. I did not capture the failure text.
+  - It passed when re-run alone and in two further full runs: `37 passed (28.0s)` and `37 passed (28.4s)`.
+  - The previously existing 24 specs plus the 13 new ones are all green in those runs. Treat the cold-start failure as a probable timing flake, not proven.
+
+## Screenshots (`...\scratchpad\dedup-ui\`)
+- `C:\Users\g611045\AppData\Local\Temp\claude\c--Alekos-Projects-gis-tools\947681d9-9c0b-4b39-8f12-44d3961eae71\scratchpad\dedup-ui\01-config.png`
+- `...\02-resumen.png`
+- `...\03-grupos.png`
+- `...\04-grupos-filtrado.png`
+
+## Deviations and notes
+- Indeterminate loading uses a small CSS bar inside `DedupLoadingCard`, because the ui-kit `ProgressBar` is determinate only.
+- Proportion bars use `<progress>` styled in CSS, so there is no inline style.
+- Copy confirmation: the tick clears on blur or mouse leave, with no timer.
+- Switching Resumen to Grupos and back resets the Grupos filters, because the inactive tab unmounts. A new result resets everything via `key={resultId}`. Say if filters should persist across tabs.
+- The "N filas no tienen coordenadas" warning is pre-existing text and reads "1 filas"; not changed.
+- The paginator footer text "registros" comes from the ui-kit `PaginationControls` and counts groups here; ui-kit was not edited.
+- In the dev-server screenshots, the Next dev badge overlaps the first group chevron; this is a dev-only artefact.
+- Nothing skipped. Not exercised: real data volume (~1,200 groups) rendering performance, and the clipboard copy in a browser.
+
+
+---
+
+# UI fix round 1: address-dedup
+
+- G1: removed `SCREENSHOT_DIR`, `screenshotPath`, the `path` import and every `page.screenshot` call from the e2e spec. A grep for `g611045` and `claude\` over `src/`, `tests/`, `docs/`, `CLAUDE.md` and `package.json` finds nothing. The handoff files under `.agents/` still contain those paths, since they are briefs and reports, not code.
+- G2: `DedupGroupTable` no longer has a vertical clamp or a nested scroll. Only `overflow-x: auto` remains and the thead is not sticky. The 6-group fixture shows every row (screenshot 03).
+- G3: the toolbar is `position: sticky` only at `min-width: 900px`, with an opaque background via the local property `--dedup-toolbar-background`. At 360px it is static and flows with the page.
+- G4: hard-coded colours replaced. The table head uses the local `--dedup-head-background`, the member badge uses `var(--accent-rose)`, and the home card title hover uses `var(--accent-cyan)`. `globals.css` was not edited.
+- G5: new `pluralize` in `domain/rowFormat.ts` (unit-tested). The no-coordinates warning now uses `formatNumber` and the singular/plural strings from `data/dedupLabels.ts`. The group header "fila/filas" uses the same helper and the same labels.
+- G6: added `EMPTY_FUENTE` in `constants.ts`. The "Otras / sin fuente" filter option now means "any fuente that is not ANTEL/TLK/IDE", the same rule as the matrix column. `listFuentes` returns the known fuentes present plus one `OTHER` option; an unknown value such as "XYZ" is not its own option. Tests were updated, and the same-member rule tests still pass. `isKnownFuente` is exported from `summaryView.ts` and shared.
+  - Note: `EMPTY_FUENTE` is used in `DedupMemberRow`. The raw `""` compares in `groupFilters` and the toolbar are gone, since the logic now goes through `isKnownFuente` and `OTHER_FUENTE_COLUMN`.
+- G7: the SIZE_DESC and REMOVALS_DESC tie-break tests now feed `[...sortFixture()].reverse()`. With the groupId tie-break temporarily deleted, both failed ("× should sort by size descending, breaking ties by group id ascending" and "× should sort by removals descending, ..."; 2 failed | 32 passed). I then restored it.
+- G8: `fillConnection` waits for the Analizar button to be enabled and asserts each filled input with `toHaveValue`. The validation test got the same wait.
+- G9: tabpanel has `tabIndex={0}` and the padrón cell is `white-space: nowrap`.
+
+## Gauntlet (portable Node)
+- `modules:routes:check`: PASS (10 route files up to date).
+- `lint`: PASS, no output.
+- `npm test`: PASS, 46 files / 528 tests.
+- `build` (clean `.next`): PASS, Compiled successfully.
+- `doctor`: PASS, 100/100, "No issues found!"
+- `test:e2e`, run directly after the build with a cold dev server, then once more: both `37 passed` (31.5s and 26.9s). The earlier cold-start flake did not recur.
+
+## Review screenshots (throwaway script outside the repo; dev server stopped afterwards)
+Folder `C:\Users\g611045\AppData\Local\Temp\claude\c--Alekos-Projects-gis-tools\947681d9-9c0b-4b39-8f12-44d3961eae71\scratchpad\dedup-ui2\`:
+- `01-config-1280.png`, `02-resumen-1280.png`, `03-grupos-1280.png` (all 6 groups and 12 rows visible, page scroll only), `04-grupos-filtrado-1280.png`
+- `05-grupos-360.png` (full page), `06-grupos-360-scrolled.png` (the toolbar scrolls away and does not cover the screen)
+
+Skipped: nothing. Not done, per the brief: shared aria-controls id, and the unlabelled group-toggle cell.
+
+
+---
+
+# UI fix round 2: address-dedup
+
+Grupos state now survives Resumen <-> Grupos. `useDedupGroupFilters` is lifted into `DedupResultsView`, and `DedupGroupsTab` takes `view` as a prop. `key={resultId}` still resets everything on a new analysis. A new e2e test applies the Decisión=Eliminar filter, switches to Resumen and back with the filter and the count still applied, then re-runs and finds both reset.
+
+Gauntlet (portable Node, clean `.next`):
+- `modules:routes:check`: PASS (10 route files).
+- `lint`: PASS, no output.
+- `npm test`: PASS, 46 files / 528 tests.
+- `build`: PASS (Compiled successfully).
+- `doctor`: PASS, 100/100, No issues found.
+- `test:e2e`: PASS, 38 passed (40.2s).
+
+Not committed.
+
+
+---
+
+## Brief 4 — sources resolved by name, no `id_font`
+
+Status: DONE. Not committed.
+
+Changes:
+- `constants.ts`: deleted `DedupRules.DETECTION_FONT_IDS`.
+- `types.ts`: `fontIds: number[]` replaced by `detectionFuentes: string[]`.
+- `services/DedupOrchestrator.ts`: `listDetectionFuentes()` = de-duplicated union of `REMOVABLE_FUENTES` and `PROTECTED_FUENTES` (ANTEL, TLK, IDE). No new literal list.
+- `services/queries/duplicateAnalysisQuery.ts`: `WHERE b.name_font = ANY($1::text[])`, binds `detectionFuentes`, `$1` doc comment updated, "ANTEL, IDE, TLK" note dropped. `$2..$8` unchanged.
+- `docs/tools/ADDRESS_DEDUP_MODULE.md`: `$1` row and two font-id mentions updated.
+- `tests/.../pgliteHarness.ts`: removed `id_font` column, `FONT_ID_BY_FUENTE`, `idFont` fixture field (nothing references them; proves the query does not need them). `DEFAULT_PARAMETERS.detectionFuentes` = `[ANTEL, TLK, IDE]`. `urnOf` falls back to a generic prefix for an unknown fuente.
+- `duplicateAnalysisQuery.test.ts`: "widened fonts" case now uses a fifth source name `OTRA` (detected only when listed). New test: IDE row excluded when absent from `detectionFuentes`.
+- `dedupOrchestration.test.ts`: expected `$1` value changed from `[1, 9, 10]` to `[ANTEL, TLK, IDE]` (contract change, not a weakened assertion).
+
+Gauntlet (portable Node):
+- `modules:routes:check`: PASS (10 route files, up to date).
+- `lint`: PASS, no output.
+- `npm test`: PASS, 46 files / 529 tests.
+- `build`: PASS (`/tools/m/address-dedup` listed).
+- `doctor`: PASS, No issues found (score unavailable, expected).
+- `test:e2e`: PASS, 38 passed (33.6s).
+- grep for `id_font|fontIds|FONT_ID|idFont` over src/tests/docs: no matches.
+
+Deviations / notes:
+- The brief says the "differential test vs v3 SQL must still show zero mismatches". No such test exists in the repo (grep for "differential" / v3 SQL runner: only comments/docs mention `find_removal_candidates.sql`; the v3 file is outside the repo). I did not create one and could not run one. If the differential lives in a script outside the repo, re-run it against the new `$1`.
+- Exact v3 parity at defaults holds only if prod `name_font` is exactly `ANTEL`/`TLK`/`IDE` for ids 9/10/1 (verified by you per the brief).
+
+
+---
+
+## Brief 5 - group table shows every match-key column + top/bottom scrollbars
+
+Status: DONE. Not committed.
+
+Changes:
+- `services/queries/duplicateAnalysisQuery.ts`: effective segment computed once in a `CROSS JOIN LATERAL` inside `keyed` (`padron_locality_or_geo`); `match_key` reuses it. Final SELECT appends `province_code, padron_locality, padron_locality_or_geo, match_key`.
+- `types.ts`: `AnalysisRow` gains the 4 fields; new `AnalysisTextField` type.
+- `services/queries/mapAnalysisRow.ts`: maps them (match_key via `toText`).
+- `domain/export.ts`: Point `properties` now built from `EXPORT_COLUMNS` (was `...row`, which would have leaked the new fields). CSV header unchanged.
+- `data/dedupLabels.ts`: `MATCH_KEY_COLUMNS` (field + Spanish label, key order); `GROUP_TABLE_COLUMNS` and count derived from it.
+- `domain/rowFormat.ts`: `describeAddress`/`describePadron`/`NO_ADDRESS_LABEL` deleted (unused); added `EMPTY_CELL` + `formatCell`.
+- `ui/DedupMemberRow.tsx` (+css): renders key cells via `formatCell`, nowrap cells; `.padron` removed.
+- `ui/DedupGroupHeaderRow.tsx`: toggle `title` = match_key.
+- `ui/DedupGroupTable.tsx` (+css): wrapped in `DedupScrollFrame`; table `min-width: max-content`, head nowrap.
+- New `ui/DedupScrollFrame.tsx` + `.module.css`, `ui/useSyncedHorizontalScroll.ts`: top scroller with spacer (width via ResizeObserver on content and table), two-way scroll mirror, epsilon guard, top bar hidden without overflow.
+- `docs/tools/ADDRESS_DEDUP_MODULE.md`: query columns, groups table, export notes.
+- Tests: `duplicateAnalysisQuery.test.ts` (7 new: province_code, padron_locality, geo fallback with/without padron, decimals param, same key per group, key embeds segment), `mapAnalysisRow.test.ts` (2), `export.test.ts` (pinned v3 header literal; Point properties == EXPORT_COLUMNS), `rowFormat.test.ts` rewritten (formatCell, column count/order), `rowFactory.ts`, e2e fixtures + spec (15 key headers, top/bottom sync at 360px, no page overflow at 360px, top bar visible iff overflow).
+
+Gauntlet (portable Node):
+- modules:routes:check: PASS (10 route files up to date).
+- lint: PASS, no output.
+- npm test: PASS, 46 files / 542 tests.
+- build: PASS (Compiled successfully; `/tools/m/address-dedup` listed).
+- doctor: PASS, No issues found (score unavailable, expected).
+- test:e2e: PASS, 42 passed (33.4s).
+
+Deviations / notes:
+- Segment is in a LATERAL subquery, not a plain column in `keyed`'s select list (Postgres cannot reference a sibling alias). Still inside `keyed`.
+- `padron_locality_or_geo` is exposed raw (key applies upper/trim); the spec was ambiguous on "except".
+- Hide-top-bar e2e is conditional (visible iff content overflows): the page container caps width so the table overflows even at 3840px, so the no-overflow state is not reachable in e2e. The hide logic is unit-untested (no DOM test infra); verified only through that conditional.
+- Group header title is the match key (no copy button; nested button inside the toggle would be invalid).
+- Header toggle spans the full table width, so with horizontal scroll its label scrolls out of view (sticky columns out of scope).
+
+---
+
+## Brief 6 report — scrollbars at desktop width (not committed)
+
+Status: DONE.
+
+Root cause (evidence, Chromium with `--enable-features=OverlayScrollbar`, `--hide-scrollbars` removed):
+- Hypothesis 2 (ancestor grows to max-content) NOT reproduced: frame right 1248 <= 1280 and 1572 <= 1920; scrollWidth 2421 > clientWidth 1222/1230; page does not overflow.
+- Hypothesis 1 partly: top bar existed but was only 10px (global `::-webkit-scrollbar` 8px + border) with a low-contrast thumb (`rgba(100,116,139,.4)` on dark track) -> effectively invisible. Overlay did not collapse it to 1px because the global webkit rule disables overlay.
+- Header toggle label scrolled out of view: before, toggleLeft -373.5 (frame left 25) at 1280, -57.5 (frame left 341) at 1920.
+- Could not reproduce the clipped right border; added `min-width:0` to ancestors anyway.
+
+Before: topHeight 10 (expected >= 12) FAIL x2; sticky label FAIL x2.
+After: topHeight 14 at 1280 and 1920; toggleLeft 25 == frameLeft 25 (1280), 341 == 341 (1920); 6/6 pass.
+
+Changes:
+- `ui/DedupScrollFrame.module.css`: `--dedup-scrollbar-size: 14px`; top scroller explicit height + `overflow-x: scroll`; webkit scrollbar styling (track/thumb/hover from theme tokens) on both scrollers; `@supports not selector(::-webkit-scrollbar)` fallback with `scrollbar-width`/`scrollbar-color` (standard props would otherwise override the webkit ones in Chromium).
+- `ui/DedupGroupHeaderRow.module.css`: toggle `position: sticky; left: 0; width: fit-content` (side effect: clickable area is now the label, not the whole row).
+- `ui/DedupGroupsTab.module.css` `.stack`, `ui/DedupTabs.module.css` `.tabs`: `min-width: 0`.
+- New `tests/e2e/flows/address-dedup-scroll.spec.ts`: per-file `test.use` launchOptions (overlay scrollbars, real scrollbars); at 1280x800 and 1920x1080: frame within viewport, content overflows, top bar not display:none and height >= 12, no page overflow, top->content sync, header label stays within frame after scrolling 400px.
+
+Gauntlet (portable Node): modules:routes:check PASS (10 files); lint PASS (no output); npm test PASS 46 files / 542 tests; build PASS; doctor PASS (No issues found, 100/100); test:e2e PASS 48 passed (35.5s).
