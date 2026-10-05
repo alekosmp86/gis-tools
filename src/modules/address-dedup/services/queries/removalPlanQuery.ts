@@ -16,7 +16,8 @@ const REMOVE_REASON_SQL_LIST = REMOVE_REASONS.map((reason) => `'${reason}'`).joi
  * Per target it then applies the integrity guards of `carto.baja_direccion_base_v1` (one
  * address + master + urn, master not shared, a door with no internal units) and returns the
  * snapshot whose md5 is the fingerprint, plus the sorted `target_list` of the same `targets`
- * CTE that `target_count` counts. Ids leave as text so a bigint beyond 2^53 survives the JSON. Parameters `$1`..`$8` are the analysis query's.
+ * CTE that `target_count` counts. A master is shared when `resolved` (target urn -> master -> all its
+ * address rows) holds more than one address for it, so `verdicts` never re-scans `carto.address` per target. Ids leave as text so a bigint beyond 2^53 survives the JSON. Parameters `$1`..`$8` are the analysis query's.
  * Literals interpolated below are module constants, never request data.
  */
 export const REMOVAL_PLAN_SQL = `
@@ -37,13 +38,18 @@ resolved AS (
   LEFT JOIN carto.addresses_master m ON m.urn = t.urn
   LEFT JOIN carto.address a ON a.id_address_master = m.addresses_master_id
 ),
+master_address_counts AS (
+  SELECT master_id, count(DISTINCT address_id) AS address_total
+  FROM resolved
+  WHERE master_id IS NOT NULL
+  GROUP BY master_id
+),
 verdicts AS (
   SELECT r.urn,
          count(DISTINCT r.master_id) AS master_count,
          count(DISTINCT r.address_id) AS address_count,
          coalesce(array_agg(DISTINCT r.master_id) FILTER (WHERE r.master_id IS NOT NULL), '{}') AS master_ids,
-         bool_or(EXISTS (SELECT 1 FROM carto.address other
-                         WHERE other.id_address_master = r.master_id AND other.id <> r.address_id)) AS master_shared,
+         coalesce(bool_or(mac.address_total > 1), false) AS master_shared,
          bool_or(r.address_id IS NOT NULL
                  AND NOT EXISTS (SELECT 1 FROM carto.access_point ap WHERE ap.id = r.address_id)) AS not_a_door,
          bool_or(EXISTS (SELECT 1 FROM carto.internal_address ia WHERE ia.id = r.address_id)) AS is_internal,
@@ -52,6 +58,7 @@ verdicts AS (
          bool_or(EXISTS (SELECT 1 FROM carto.internal_address_access_point iaap
                          WHERE iaap.id_internal_address = r.address_id)) AS linked_as_internal
   FROM resolved r
+  LEFT JOIN master_address_counts mac ON mac.master_id = r.master_id
   GROUP BY r.urn
 ),
 verdict_reasons AS (

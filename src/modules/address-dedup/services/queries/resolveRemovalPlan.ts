@@ -48,7 +48,7 @@ async function findReferencedMasters(
   masterIds: ReadonlyArray<string>
 ): Promise<MasterReference[]> {
   const result = await queryable.query(
-    `SELECT DISTINCT ${column.quotedColumn}::text AS master_id FROM ${column.qualifiedTable} WHERE ${column.quotedColumn}::text = ANY($1::text[])`,
+    `SELECT DISTINCT ${column.quotedColumn}::text AS master_id FROM ${column.qualifiedTable} WHERE ${column.quotedColumn} = ANY($1::bigint[])`,
     [[...masterIds]]
   );
   return result.rows.map((row) => ({
