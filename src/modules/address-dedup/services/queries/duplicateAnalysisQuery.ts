@@ -3,8 +3,11 @@ import {
   DecisionReason,
   DedupScope,
   DOCUMENT_TYPE_PARENT,
+  REVIEW_REASONS,
 } from "../../constants";
 import type { DuplicateAnalysisParameters } from "../../types";
+
+const REVIEW_REASON_SQL_LIST = REVIEW_REASONS.map((reason) => `'${reason}'`).join(", ");
 
 /**
  * Port of CGEO-2192 `prod/v3/find_removal_candidates.sql`, the validated engine of this module.
@@ -123,6 +126,12 @@ stc_urns AS (
 npd_urns AS (
   SELECT DISTINCT urn_site_location AS urn FROM integrador.nap_physical_device
 ),
+internal_unit_urns AS (
+  SELECT DISTINCT am.urn
+  FROM carto.addresses_master am
+  JOIN carto.address a ON a.id_address_master = am.addresses_master_id
+  JOIN carto.internal_address_access_point iaap ON iaap.id_access_point = a.id
+),
 pool AS (
   -- every source here, not just removable ones -- protected rows are kept in
   -- the output for context (a duplicate group's protected sibling explains
@@ -131,12 +140,14 @@ pool AS (
   -- filtering rows out here).
   SELECT k.*, dc.dup_group_size, pr.pool_rank_in_group,
          (stc.urn IS NOT NULL) AS matched_serv_cto_tlk,
-         (npd.urn IS NOT NULL) AS matched_nap_physical_device
+         (npd.urn IS NOT NULL) AS matched_nap_physical_device,
+         (iu.urn IS NOT NULL) AS has_internal_units
   FROM keyed k
   JOIN dup_counts dc USING (match_key)
   LEFT JOIN pool_rank pr ON pr.urn = k.urn
   LEFT JOIN stc_urns stc ON stc.urn = k.urn
   LEFT JOIN npd_urns npd ON npd.urn = k.urn
+  LEFT JOIN internal_unit_urns iu ON iu.urn = k.urn
 ),
 pool_calc AS (
   SELECT *,
@@ -148,7 +159,7 @@ pool_calc AS (
          bool_or(fuente = ANY($4::text[])) OVER (PARTITION BY match_key) AS has_protected_in_group
   FROM pool
 ),
-reasoned AS (
+reasoned_raw AS (
   SELECT *,
          CASE
            WHEN fuente = ANY($4::text[]) THEN '${DecisionReason.PROTECTED_SOURCE}'  -- the only sources excluded from removal entirely
@@ -163,8 +174,22 @@ reasoned AS (
                   END
            WHEN n_matched_in_group > 0 THEN '${DecisionReason.REDUNDANT_WITH_MATCHED}'
            ELSE '${DecisionReason.REDUNDANT_NOT_LOWEST_URN}'
-         END AS decision_reason
+         END AS base_reason
   FROM pool_calc
+),
+reasoned AS (
+  -- a row about to be removed that still has internal/apartment units attached is kept for review:
+  -- deleting the door would orphan them (mirrors carto.baja_direccion's refusal to cascade)
+  SELECT *,
+         CASE
+           WHEN fuente = ANY($3::text[]) AND has_internal_units AND base_reason IN (
+                  '${DecisionReason.REDUNDANT_WITH_MATCHED}',
+                  '${DecisionReason.REDUNDANT_NOT_LOWEST_URN}',
+                  '${DecisionReason.REDUNDANT_WITH_PROTECTED}')
+             THEN '${DecisionReason.HAS_INTERNAL_UNITS}'
+           ELSE base_reason
+         END AS decision_reason
+  FROM reasoned_raw
 ),
 decided AS (
   SELECT *,
@@ -181,12 +206,13 @@ output_groups AS (
   SELECT DISTINCT match_key
   FROM decided
   WHERE decision = '${Decision.REMOVE}'
+     OR decision_reason = ANY(ARRAY[${REVIEW_REASON_SQL_LIST}])
      OR ($8::text = '${DedupScope.ALL_DUPLICATE_GROUPS}' AND dup_group_size > 1)
 )
 SELECT dense_rank() OVER (ORDER BY d.match_key) AS group_id,
        d.fuente, d.urn, d.province, d.locality, d.street_name, d.street_number, d.letter,
        d.square, d.sandlot, d.km, d.padron, d.type_padron, d.postal_code, d.lat, d.lng, d.document_type,
-       d.matched_serv_cto_tlk, d.matched_nap_physical_device,
+       d.matched_serv_cto_tlk, d.matched_nap_physical_device, d.has_internal_units,
        d.dup_group_size, d.n_matched_in_group, d.pool_rank_in_group, d.decision, d.decision_reason,
        d.block, d.tower, d.floor, d.unit, d.code_country, d.name_country, d.id_province,
        d.raw_rs_censal_locality_name, d.raw_rs_censal_locality_code, d.rs_cadastral_locality_name,
