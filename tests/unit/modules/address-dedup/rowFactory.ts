@@ -22,6 +22,7 @@ export function makeRow(overrides: Partial<AnalysisRow> = {}): AnalysisRow {
     document_type: "PARENT",
     matched_serv_cto_tlk: false,
     matched_nap_physical_device: false,
+    has_internal_units: false,
     dup_group_size: 2,
     n_matched_in_group: 0,
     pool_rank_in_group: 1,

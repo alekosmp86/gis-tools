@@ -198,6 +198,36 @@ describe("group derivations", () => {
     // Act & Assert
     expect(groups.map(hasReviewRows)).toEqual([false, true, false]);
   });
+
+  it("should detect a group whose only review row is HAS_INTERNAL_UNITS", () => {
+    // Arrange
+    const [group] = groupRows([
+      makeRow({ group_id: 9, urn: "cgeo:Antel:address:id:90", decision: Decision.KEEP, decision_reason: DecisionReason.LOWEST_URN_KEPT }),
+      makeRow({ group_id: 9, urn: "cgeo:Antel:address:id:91", decision: Decision.KEEP, decision_reason: DecisionReason.HAS_INTERNAL_UNITS, has_internal_units: true }),
+    ]);
+
+    // Act & Assert
+    expect(hasReviewRows(group)).toBe(true);
+    expect(filterGroups([group], criteria({ reviewOnly: true }))).toEqual([group]);
+  });
+
+  it("should toggle in a group made only of HAS_INTERNAL_UNITS members with no REMOVE row", () => {
+    // Arrange
+    const [group] = groupRows([
+      makeRow({ group_id: 9, urn: "cgeo:Antel:address:id:90", decision: Decision.KEEP, decision_reason: DecisionReason.HAS_INTERNAL_UNITS, has_internal_units: true }),
+      makeRow({ group_id: 9, urn: "cgeo:Antel:address:id:91", decision: Decision.KEEP, decision_reason: DecisionReason.HAS_INTERNAL_UNITS, has_internal_units: true }),
+    ]);
+
+    // Act
+    const reviewed = filterGroups([group], criteria({ reviewOnly: true }));
+    const unfiltered = filterGroups([group], criteria({ reviewOnly: false }));
+
+    // Assert
+    expect(group.rows.some((row) => row.decision === Decision.REMOVE)).toBe(false);
+    expect(hasReviewRows(group)).toBe(true);
+    expect(reviewed).toEqual([group]);
+    expect(unfiltered).toEqual([group]);
+  });
 });
 
 describe("sortGroups", () => {

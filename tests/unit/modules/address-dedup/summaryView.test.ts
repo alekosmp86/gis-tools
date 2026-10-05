@@ -73,6 +73,33 @@ describe("summaryView", () => {
     expect(reviewCount(summarizeRows([]))).toBe(0);
   });
 
+  it("should sum KEPT_ALONGSIDE_PROTECTED and HAS_INTERNAL_UNITS into the review count", () => {
+    // Arrange
+    const summary = summarizeRows([
+      makeRow({ decision: Decision.KEEP, decision_reason: DecisionReason.KEPT_ALONGSIDE_PROTECTED }),
+      makeRow({ decision: Decision.KEEP, decision_reason: DecisionReason.HAS_INTERNAL_UNITS }),
+      makeRow({ decision: Decision.KEEP, decision_reason: DecisionReason.HAS_INTERNAL_UNITS }),
+      makeRow({ decision: Decision.KEEP, decision_reason: DecisionReason.INFRA_MATCHED }),
+    ]);
+
+    // Act & Assert
+    expect(reviewCount(summary)).toBe(3);
+  });
+
+  it("should count review rows from a group that has no REMOVE member at all", () => {
+    // Arrange
+    const summary = summarizeRows([
+      makeRow({ group_id: 5, decision: Decision.KEEP, decision_reason: DecisionReason.LOWEST_URN_KEPT }),
+      makeRow({ group_id: 5, decision: Decision.KEEP, decision_reason: DecisionReason.HAS_INTERNAL_UNITS }),
+      makeRow({ group_id: 5, decision: Decision.KEEP, decision_reason: DecisionReason.HAS_INTERNAL_UNITS }),
+    ]);
+
+    // Act & Assert
+    expect(summary.groupCount).toBe(1);
+    expect(summary.byDecisionAndFuente[Decision.REMOVE]).toBeUndefined();
+    expect(reviewCount(summary)).toBe(2);
+  });
+
   it("should return zeros for an empty summary", () => {
     // Arrange
     const summary = summarizeRows([]);

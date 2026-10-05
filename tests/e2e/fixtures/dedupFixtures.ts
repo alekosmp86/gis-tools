@@ -50,6 +50,7 @@ function toRow(seed: RowSeed): AnalysisRow {
     lng: hasCoordinates ? -56.73 : null,
     decision: seed.decision,
     decision_reason: seed.reason,
+    has_internal_units: seed.reason === DecisionReason.HAS_INTERNAL_UNITS,
   } as AnalysisRow;
 }
 
@@ -66,11 +67,13 @@ const SEEDS: ReadonlyArray<RowSeed> = [
   { group: 5, fuente: Fuente.TLK, idNumber: 502, decision: Decision.KEEP, reason: DecisionReason.INFRA_MATCHED, street: "ROSARIO", number: "3", padron: "500", locality: "TRINIDAD" },
   { group: 6, fuente: Fuente.TLK, idNumber: 601, decision: Decision.KEEP, reason: DecisionReason.LOWEST_URN_KEPT, street: "BRUM", number: "9", padron: "600", locality: "TRINIDAD" },
   { group: 6, fuente: Fuente.ANTEL, idNumber: 602, decision: Decision.REMOVE, reason: DecisionReason.REDUNDANT_NOT_LOWEST_URN, street: "BRUM", number: "9", padron: "600", locality: "TRINIDAD" },
+  { group: 7, fuente: Fuente.TLK, idNumber: 701, decision: Decision.KEEP, reason: DecisionReason.LOWEST_URN_KEPT, street: "ARTIGAS", number: "21", padron: "700", locality: "TRINIDAD" },
+  { group: 7, fuente: Fuente.ANTEL, idNumber: 702, decision: Decision.KEEP, reason: DecisionReason.HAS_INTERNAL_UNITS, street: "ARTIGAS", number: "21", padron: "700", locality: "TRINIDAD" },
 ];
 
 export const DEDUP_ROWS: ReadonlyArray<AnalysisRow> = SEEDS.map(toRow);
 
-export const DEDUP_GROUP_COUNT = 6;
+export const DEDUP_GROUP_COUNT = 7;
 
 export const DEDUP_ANALYZE_RESPONSE = {
   success: true,

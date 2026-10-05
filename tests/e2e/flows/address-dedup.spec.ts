@@ -239,8 +239,19 @@ test.describe("Módulo: Duplicados de Direcciones (/tools/m/address-dedup)", () 
 
     await page.getByLabel("Solo para revisar").check();
 
-    await expect(page.getByText(`Mostrando 1 de ${DEDUP_GROUP_COUNT} grupos`)).toBeVisible();
+    await expect(page.getByText(`Mostrando 2 de ${DEDUP_GROUP_COUNT} grupos`)).toBeVisible();
     await expect(page.getByRole("button", { name: /Grupo 2/ })).toContainText("Revisar");
+    await expect(page.getByRole("button", { name: /Grupo 7/ })).toContainText("Revisar");
+  });
+
+  test("debe acotar con el filtro de motivo Tiene unidades internas", async ({ page }) => {
+    await runAnalysis(page);
+    await openGroupsTab(page);
+
+    await page.getByLabel("Motivo").selectOption({ label: "Tiene unidades internas (revisar)" });
+
+    await expect(page.getByText(`Mostrando 1 de ${DEDUP_GROUP_COUNT} grupos`)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Grupo 7/ })).toContainText("Revisar");
   });
 
   test("debe mostrar el estado vacío cuando los filtros no coinciden", async ({ page }) => {

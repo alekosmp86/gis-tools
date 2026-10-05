@@ -26,6 +26,7 @@ export const REASON_LABELS: Readonly<Record<DecisionReason, string>> = {
   [DecisionReason.REDUNDANT_WITH_MATCHED]: "Redundante con una vinculada",
   [DecisionReason.REDUNDANT_NOT_LOWEST_URN]: "Redundante (no es el urn más bajo)",
   [DecisionReason.REDUNDANT_WITH_PROTECTED]: "Redundante con fuente protegida",
+  [DecisionReason.HAS_INTERNAL_UNITS]: "Tiene unidades internas (revisar)",
 };
 
 export const REASON_DESCRIPTIONS: Readonly<Record<DecisionReason, string>> = {
@@ -43,6 +44,8 @@ export const REASON_DESCRIPTIONS: Readonly<Record<DecisionReason, string>> = {
     "Ningún miembro está vinculado y no es el urn más bajo del grupo.",
   [DecisionReason.REDUNDANT_WITH_PROTECTED]:
     "Duplicada de una fuente protegida y sin vínculo (solo con la opción activada).",
+  [DecisionReason.HAS_INTERNAL_UNITS]:
+    "La puerta tiene direcciones internas (apartamentos/unidades) asociadas; eliminarla las dejaría huérfanas. Se conserva para revisión manual, fuera del alcance de esta herramienta.",
 };
 
 export const REASONS_BY_DECISION: Readonly<Record<Decision, ReadonlyArray<DecisionReason>>> = {
@@ -57,6 +60,7 @@ export const REASONS_BY_DECISION: Readonly<Record<Decision, ReadonlyArray<Decisi
     DecisionReason.NO_DUPLICATE,
     DecisionReason.LOWEST_URN_KEPT,
     DecisionReason.KEPT_ALONGSIDE_PROTECTED,
+    DecisionReason.HAS_INTERNAL_UNITS,
   ],
 };
 

@@ -52,24 +52,45 @@ Evaluated top to bottom, first match wins. `decision_reason` is a column on ever
 | KEEP | `KEPT_ALONGSIDE_PROTECTED` | same branch, but the group does contain a protected member (the case to review) |
 | REMOVE | `REDUNDANT_WITH_MATCHED` | another removable member matched |
 | REMOVE | `REDUNDANT_NOT_LOWEST_URN` | nothing matched, rank above 1 |
+| KEEP | `HAS_INTERNAL_UNITS` | override: a removable-fuente row that would be one of the three REMOVE reasons but has at least one internal/apartment unit attached (needs review) |
 
 The lowest-urn rank is computed among removable (ANTEL/TLK) members only, ordered by the numeric
 `id:<n>` suffix of the urn. Protected rows are not ranked. (The v3 header comment said "across the
 whole group (any source)"; the code, which produced the delivered numbers, ranks ANTEL/TLK only.
 The comment was corrected, not the behaviour.)
 
+### Internal units override (`HAS_INTERNAL_UNITS`)
+
+Found while preparing the deletion script for CGEO-2192: `carto.baja_direccion` (dev DB only) refuses to
+delete a door that has internal/apartment sub-units attached, because that orphans them. v3 never checked
+this; against Flores prod, 250 of ~1,670 removal candidates (248 TLK, 2 ANTEL) had internal units.
+
+A removable-fuente row that would be `REDUNDANT_WITH_MATCHED`, `REDUNDANT_NOT_LOWEST_URN` or
+`REDUNDANT_WITH_PROTECTED` and has at least one internal unit is reclassified to KEEP /
+`HAS_INTERNAL_UNITS`. Rows already KEEP for another reason keep that reason. The internal units are not
+themselves evaluated for duplication (out of scope). Resolution path:
+`carto.addresses_master.urn` -> `addresses_master_id` -> `carto.address.id_address_master` -> `address.id`
+-> `carto.internal_address_access_point.id_access_point`.
+
+The query returns a boolean `has_internal_units` on every row (type `AnalysisRow`). It is deliberately not in
+the CSV/GeoJSON columns, so the exported header stays identical to v3. `HAS_INTERNAL_UNITS` counts as a
+review reason together with `KEPT_ALONGSIDE_PROTECTED` (`REVIEW_REASONS`): the "Para revisar" KPI, the
+"Solo para revisar" toggle and the amber "Revisar" badge all include it. Bound parameters `$1`..`$8` are unchanged.
+
 ### The `$7` toggle
 
 v3 only outputs groups that contain a REMOVE. A lone ANTEL/TLK that is the lowest-urn removable
-member of a group that also holds an IDE row is KEEP, so its group is never exported. With `$7`
+member of a group that also holds an IDE row is KEEP (`KEPT_ALONGSIDE_PROTECTED`). With `$7`
 true that row becomes REMOVE (`REDUNDANT_WITH_PROTECTED`). A matched row beside an IDE row stays
 `INFRA_MATCHED`.
 
 ### Output scope
 
-- `REMOVAL_GROUPS`: every group with at least one REMOVE (v3 behaviour).
-- `ALL_DUPLICATE_GROUPS`: every group with more than one member, which adds the
-  `KEPT_ALONGSIDE_PROTECTED` groups and the all-KEEP groups, for visual review.
+- `REMOVAL_GROUPS`: every group with at least one REMOVE (v3 behaviour), plus every group holding a
+  review-worthy row (`REVIEW_REASONS`: `KEPT_ALONGSIDE_PROTECTED`, `HAS_INTERNAL_UNITS`), so a group
+  whose removals were all deferred to review does not vanish.
+- `ALL_DUPLICATE_GROUPS`: every group with more than one member, which also adds the all-KEEP
+  groups, for visual review.
 
 Singletons never appear in either scope, so `NO_DUPLICATE` is defined for completeness but cannot
 occur in the output.

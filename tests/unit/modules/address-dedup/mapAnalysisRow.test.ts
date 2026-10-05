@@ -11,6 +11,7 @@ function rawPgRow(overrides: Record<string, unknown> = {}): Record<string, unkno
     km: null,
     matched_serv_cto_tlk: true,
     matched_nap_physical_device: false,
+    has_internal_units: false,
     dup_group_size: "2",
     n_matched_in_group: "1",
     pool_rank_in_group: "1",
@@ -74,6 +75,7 @@ describe("mapAnalysisRow", () => {
     // Assert
     expect(row.matched_serv_cto_tlk).toBe(true);
     expect(row.matched_nap_physical_device).toBe(false);
+    expect(row.has_internal_units).toBe(false);
   });
 
   it("should map the match key columns", () => {

@@ -1,4 +1,4 @@
-import { Decision, DecisionReason, Fuente, OTHER_FUENTE_COLUMN } from "../constants";
+import { Decision, Fuente, OTHER_FUENTE_COLUMN, REVIEW_REASONS } from "../constants";
 import type { DedupSummary } from "../types";
 
 export type FuenteColumn = Fuente | typeof OTHER_FUENTE_COLUMN;
@@ -41,5 +41,5 @@ export function percentOf(part: number, total: number): number {
 }
 
 export function reviewCount(summary: DedupSummary): number {
-  return summary.byReason[DecisionReason.KEPT_ALONGSIDE_PROTECTED] ?? 0;
+  return sum(REVIEW_REASONS.map((reason) => summary.byReason[reason] ?? 0));
 }

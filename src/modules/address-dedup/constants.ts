@@ -23,9 +23,16 @@ export const DecisionReason = {
   REDUNDANT_WITH_MATCHED: "REDUNDANT_WITH_MATCHED",
   REDUNDANT_NOT_LOWEST_URN: "REDUNDANT_NOT_LOWEST_URN",
   REDUNDANT_WITH_PROTECTED: "REDUNDANT_WITH_PROTECTED",
+  HAS_INTERNAL_UNITS: "HAS_INTERNAL_UNITS",
 } as const;
 
 export type DecisionReason = (typeof DecisionReason)[keyof typeof DecisionReason];
+
+/** Reasons that flag a row as needing a human look; the one definition of "review". */
+export const REVIEW_REASONS: ReadonlyArray<DecisionReason> = [
+  DecisionReason.KEPT_ALONGSIDE_PROTECTED,
+  DecisionReason.HAS_INTERNAL_UNITS,
+];
 
 export const DedupScope = {
   REMOVAL_GROUPS: "REMOVAL_GROUPS",

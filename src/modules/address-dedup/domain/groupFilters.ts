@@ -1,10 +1,10 @@
 import {
   Decision,
   DecisionFilter,
-  DecisionReason,
   FILTER_ALL,
   GroupSort,
   OTHER_FUENTE_COLUMN,
+  REVIEW_REASONS,
 } from "../constants";
 import { isKnownFuente } from "./summaryView";
 import type { AnalysisGroup, AnalysisRow, DecisionCounts, GroupFilterCriteria } from "../types";
@@ -54,7 +54,7 @@ function rowMatches(row: AnalysisRow, criteria: GroupFilterCriteria, needle: str
 }
 
 export function hasReviewRows(group: AnalysisGroup): boolean {
-  return group.rows.some((row) => row.decision_reason === DecisionReason.KEPT_ALONGSIDE_PROTECTED);
+  return group.rows.some((row) => REVIEW_REASONS.includes(row.decision_reason));
 }
 
 export function countByDecision(group: AnalysisGroup): DecisionCounts {

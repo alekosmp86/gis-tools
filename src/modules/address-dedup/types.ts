@@ -41,6 +41,7 @@ export interface AnalysisRow {
   readonly document_type: string | null;
   readonly matched_serv_cto_tlk: boolean;
   readonly matched_nap_physical_device: boolean;
+  readonly has_internal_units: boolean;
   readonly dup_group_size: number;
   readonly n_matched_in_group: number;
   readonly pool_rank_in_group: number | null;

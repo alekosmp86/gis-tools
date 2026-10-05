@@ -46,6 +46,7 @@ export function mapAnalysisRow(raw: RawRow): AnalysisRow {
     document_type: toNullableText(raw.document_type),
     matched_serv_cto_tlk: Boolean(raw.matched_serv_cto_tlk),
     matched_nap_physical_device: Boolean(raw.matched_nap_physical_device),
+    has_internal_units: Boolean(raw.has_internal_units),
     dup_group_size: toRequiredNumber(raw.dup_group_size),
     n_matched_in_group: toRequiredNumber(raw.n_matched_in_group),
     pool_rank_in_group: toNullableNumber(raw.pool_rank_in_group),

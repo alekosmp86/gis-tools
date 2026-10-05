@@ -24,12 +24,16 @@ const SCHEMA_SQL = `
   );
   CREATE TABLE match_tlk.direcciones_tlk_serv_cto_cgeo (urn text);
   CREATE TABLE integrador.nap_physical_device (urn_site_location text);
+  CREATE TABLE carto.addresses_master (addresses_master_id serial PRIMARY KEY, urn text);
+  CREATE TABLE carto.address (id serial PRIMARY KEY, id_address_master int);
+  CREATE TABLE carto.internal_address_access_point (id_access_point int, id_internal_address int);
 `;
 
 const RESET_SQL = `
   TRUNCATE carto.v_address_build;
   TRUNCATE match_tlk.direcciones_tlk_serv_cto_cgeo;
   TRUNCATE integrador.nap_physical_device;
+  TRUNCATE carto.addresses_master, carto.address, carto.internal_address_access_point RESTART IDENTITY;
 `;
 
 export interface AddressFixture {
@@ -120,6 +124,21 @@ export async function markMatchedInServCto(database: PGlite, urn: string): Promi
 
 export async function markMatchedInNapDevice(database: PGlite, urn: string): Promise<void> {
   await database.query("INSERT INTO integrador.nap_physical_device (urn_site_location) VALUES ($1)", [urn]);
+}
+
+export async function markHasInternalUnits(database: PGlite, urn: string): Promise<void> {
+  const master = await database.query<{ addresses_master_id: number }>(
+    "INSERT INTO carto.addresses_master (urn) VALUES ($1) RETURNING addresses_master_id",
+    [urn]
+  );
+  const address = await database.query<{ id: number }>(
+    "INSERT INTO carto.address (id_address_master) VALUES ($1) RETURNING id",
+    [master.rows[0].addresses_master_id]
+  );
+  await database.query(
+    "INSERT INTO carto.internal_address_access_point (id_access_point, id_internal_address) VALUES ($1, $2)",
+    [address.rows[0].id, address.rows[0].id + 1000]
+  );
 }
 
 export async function analyze(
