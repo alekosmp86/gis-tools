@@ -16,7 +16,7 @@ import { DedupResultsView } from "./DedupResultsView";
 import { downloadExport } from "./dedupClient";
 import { useDedupAnalysis } from "./useDedupAnalysis";
 
-/** The page this module owns, served at /tools/m/address-dedup. Investigation only: nothing here writes. */
+/** The page this module owns, served at /tools/m/address-dedup. Analysis is read-only; removal is a separate confirmed flow. */
 
 const INVALID_PROVINCE_MESSAGE = "El identificador de provincia debe ser un entero positivo.";
 const MISSING_ANALYSIS_MESSAGE = "Ejecute primero el análisis.";
@@ -93,7 +93,7 @@ export const DedupDashboard: React.FC = () => {
   return (
     <ToolWorkspaceLayout
       title="Duplicados de Direcciones"
-      description="Detecte direcciones duplicadas entre ANTEL, TLK e IDE directamente en PostgreSQL, revise la decisión de conservar o eliminar de cada fila y exporte el resultado para QGIS. Solo lectura: no se modifica ninguna base de datos."
+      description="Detecte direcciones duplicadas entre ANTEL, TLK e IDE directamente en PostgreSQL, revise la decisión de conservar o eliminar de cada fila y exporte el resultado para QGIS. La base de datos solo se modifica al confirmar y eliminar, en un paso aparte, y nunca sobre las filas para revisar."
     >
       {resultPayload && (
         <DedupContextBar
@@ -132,8 +132,8 @@ export const DedupDashboard: React.FC = () => {
 
       {analysis.isPending && <DedupLoadingCard />}
 
-      {!analysis.isPending && analysis.data && (
-        <DedupResultsView key={analysis.resultId} result={analysis.data} />
+      {!analysis.isPending && analysis.data && resultPayload && (
+        <DedupResultsView key={analysis.resultId} result={analysis.data} payload={resultPayload} />
       )}
     </ToolWorkspaceLayout>
   );

@@ -9,6 +9,7 @@ export interface FormFieldProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  maxLength?: number;
   isFullWidth?: boolean;
   className?: string;
 }
@@ -21,6 +22,7 @@ export const FormField: React.FC<FormFieldProps> = ({
   value,
   onChange,
   placeholder = "",
+  maxLength,
   isFullWidth = false,
   className = "",
 }) => {
@@ -39,6 +41,7 @@ export const FormField: React.FC<FormFieldProps> = ({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        maxLength={maxLength}
       />
     </div>
   );

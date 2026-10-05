@@ -1,0 +1,33 @@
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border-left: 3px solid var(--accent-rose);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 720px;
+}
+
+.title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.description {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.danger {
+  background: var(--accent-rose);
+  border-color: var(--accent-rose);
+  color: #fff;
+}

@@ -24,7 +24,7 @@ export const DedupHomeCard: React.FC = () => (
       <h3 className={styles.cardTitle}>Duplicados de Direcciones</h3>
       <p className={styles.cardDesc}>
         Detecte direcciones duplicadas entre ANTEL, TLK e IDE en PostgreSQL, revise qué conservar o
-        eliminar y exporte el resultado a CSV o GeoJSON para QGIS. Solo lectura.
+        eliminar y exporte el resultado a CSV o GeoJSON para QGIS. La baja se confirma antes de ejecutarse.
       </p>
     </div>
   </Link>

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { formatNumber } from "@/core/common/ValueFormatter";
 import { DedupTab } from "../constants";
-import type { AnalyzeResponsePayload, GroupFilterCriteria } from "../types";
+import type { AnalyzeResponsePayload, DedupRequestPayload, GroupFilterCriteria } from "../types";
 import { DedupGroupsTab } from "./DedupGroupsTab";
 import { DedupSummaryTab } from "./DedupSummaryTab";
 import { DedupTabs } from "./DedupTabs";
@@ -11,13 +11,14 @@ import { useDedupGroupFilters } from "./useDedupGroupFilters";
 
 interface DedupResultsViewProps {
   result: AnalyzeResponsePayload;
+  payload: DedupRequestPayload;
 }
 
 /**
  * Owns the Grupos filter state so it survives tab switches. Mount it with a key per result: a new
  * result then starts again on Resumen with every filter cleared.
  */
-export const DedupResultsView: React.FC<DedupResultsViewProps> = ({ result }) => {
+export const DedupResultsView: React.FC<DedupResultsViewProps> = ({ result, payload }) => {
   const [activeTab, setActiveTab] = useState<DedupTab>(DedupTab.SUMMARY);
   const groupFilters = useDedupGroupFilters(result.groups);
 
@@ -33,7 +34,7 @@ export const DedupResultsView: React.FC<DedupResultsViewProps> = ({ result }) =>
       onChange={setActiveTab}
     >
       {activeTab === DedupTab.SUMMARY ? (
-        <DedupSummaryTab summary={result.summary} onKpiSelect={handleKpiSelect} />
+        <DedupSummaryTab summary={result.summary} payload={payload} onKpiSelect={handleKpiSelect} />
       ) : (
         <DedupGroupsTab
           groups={result.groups}

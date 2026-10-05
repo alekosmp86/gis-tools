@@ -1,6 +1,13 @@
-import { DOWNLOAD_URL_REVOKE_DELAY_MS, type ExportFormat } from "../constants";
+import type { ExportFormat } from "../constants";
 import { buildExportFilename } from "../domain/export";
+import type {
+  RemovalExecutionRequestPayload,
+  RemovalResult,
+  RemovalSimulationPayload,
+  RemovalSimulationRequestPayload,
+} from "../removalTypes";
 import type { AnalyzeResponsePayload, DedupRequestPayload } from "../types";
+import { downloadBlob } from "./downloadBlob";
 
 /**
  * Browser-side access to the module's endpoints. Credentials travel in the POST body only.
@@ -49,12 +56,27 @@ export async function downloadExport(
     throw await readFailure(response, "No se pudo generar la exportación");
   }
 
-  const downloadUrl = URL.createObjectURL(await response.blob());
-  const anchor = document.createElement("a");
-  anchor.href = downloadUrl;
-  anchor.download = buildExportFilename(payload.provinceId, format);
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(downloadUrl), DOWNLOAD_URL_REVOKE_DELAY_MS);
+  downloadBlob(await response.blob(), buildExportFilename(payload.provinceId, format));
+}
+
+export async function simulateRemoval(
+  payload: RemovalSimulationRequestPayload
+): Promise<RemovalSimulationPayload> {
+  const response = await postJson("removal/simulate", payload);
+
+  if (!response.ok) {
+    throw await readFailure(response, "No se pudo simular la baja");
+  }
+
+  return (await response.json()) as RemovalSimulationPayload;
+}
+
+export async function executeRemoval(payload: RemovalExecutionRequestPayload): Promise<RemovalResult> {
+  const response = await postJson("removal/execute", payload);
+
+  if (!response.ok) {
+    throw await readFailure(response, "No se pudo ejecutar la baja");
+  }
+
+  return (await response.json()) as RemovalResult;
 }

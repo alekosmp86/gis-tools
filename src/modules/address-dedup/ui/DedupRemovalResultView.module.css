@@ -1,0 +1,42 @@
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.operation {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.table caption {
+  text-align: left;
+  padding-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.table th,
+.table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

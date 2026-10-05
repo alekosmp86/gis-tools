@@ -1,0 +1,27 @@
+.reminder {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: 10px;
+}
+
+.icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent-amber);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--text-main);
+}
+
+.text p {
+  margin: 0;
+  color: var(--text-muted);
+}
