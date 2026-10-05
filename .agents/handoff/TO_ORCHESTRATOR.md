@@ -747,3 +747,31 @@ Status: DONE. Not committed. pglite only; no real database touched.
 - Stored `resultado.targets` can be thousands of urns (jsonb); size not benchmarked.
 - Brief 9 / fix round 1 reports above still describe the old `cgeo_2192_baja_masiva_operacion` table; superseded by this round, history not rewritten.
 - Helper scripts used a scratchpad outside the repo; CGEO-2192 files untouched.
+
+---
+
+## Brief 10 report — simulate speed: set-based master_shared (branch `fix/address-dedup-removal-simulate-speed`, uncommitted)
+
+Status: DONE.
+
+Changes
+- `src/modules/address-dedup/services/queries/removalPlanQuery.ts`: new CTE `master_address_counts` (count(DISTINCT address_id) per master over `resolved`); `verdicts` now LEFT JOINs it and uses `coalesce(bool_or(mac.address_total > 1), false) AS master_shared`. No subquery against `carto.address` remains in `verdicts`. Doc comment updated.
+- `src/modules/address-dedup/services/queries/resolveRemovalPlan.ts`: `findReferencedMasters` now filters `col = ANY($1::bigint[])` (param side cast, column side untouched, so an index can be used); `::text` kept only on the SELECT output so ids still leave as strings.
+- `tests/unit/modules/address-dedup/removalPlanMasterShared.test.ts` (new, 7 tests): sibling blocks MASTER_SHARED; several siblings; single-address master not flagged; shared + unshared together flag only the shared; both targets shared both flagged; byte-identical fixture (fingerprint `a2dc54a0d81c231bbaaba14c21f56a68`, counts, blockers, targets) captured from the OLD SQL before any edit and passing on the new one; structural test (no `FROM carto.address other` / correlated address subquery, `master_address_counts` present).
+
+Other per-row scan audit: remaining correlated EXISTS hit `access_point` (pk), `internal_address`, `internal_address_access_point` (about 3.8k rows, unindexed) - left as the brief said. `snapshot_doc` and the rows_by_table counts are single `= ANY(...)` passes. Simulate and execute share `resolveRemovalPlan`; nothing else differs. Existing tests untouched and green.
+
+Gauntlet (portable node)
+- modules:routes:check: PASS (12 route files up to date)
+- lint: PASS (no output)
+- test: PASS 53 files / 685 tests
+- build: PASS
+- doctor: PASS (No issues found)
+- test:e2e: PASS 64 passed
+
+Deviations / notes
+- Brief asked "two targets sharing one master" test: a master maps to exactly one urn (m.urn = t.urn), so two targets cannot share one master. I tested the closest real cases: several sibling rows on one master, and two targets each with a shared master (both flagged).
+- Edge equivalence reasoned: master with no address rows gives address_total 0 (not shared); NULL master gives no join match (not shared); same as old EXISTS.
+- The `::bigint[]` cast assumes the scanned columns are integer/bigint (per brief). A text-typed `id_address_master`-like column in some table would now error instead of match; pglite cannot show that.
+
+Could NOT measure: no real DB used, so the actual speedup (10.3 s per 100 targets before; expected near-constant after) is unverified. pglite tests prove equivalence of results only. Suggest running simulate against DEV and a one-off EXPLAIN ANALYZE to confirm the SubPlan on `address other` is gone and that an `address` hash/seq scan runs once.

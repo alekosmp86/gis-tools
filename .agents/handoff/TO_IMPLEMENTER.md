@@ -3483,3 +3483,82 @@ Creating the table anywhere, any DDL in app code, storing the snapshot in the DB
 
 ### Definition of done
 Full gauntlet green with real output pasted, no assertion weakened (re-pointing a test at the new table is fine; say so). Append "Brief 9 fix round 2 report" to `.agents/handoff/TO_ORCHESTRATOR.md`, stating plainly what is unverified.
+
+
+---
+
+## Brief 10 — Removal simulate is too slow: remove the per-target full scan of carto.address (branch `fix/address-dedup-removal-simulate-speed`, cut from `main`, do NOT commit)
+
+Binding rules: `AGENTS.md`, `.agents/rules/*.md`. npm via `C:\Alekos\Tools\node24portable`. pglite only; never touch any real database. Read-only analysis path untouched. Semantics of the removal plan must NOT change (same targets, same blockers, same fingerprint for the same data).
+
+### Diagnosis (orchestrator, measured on the DEV database via EXPLAIN ANALYZE, 2026-10-05)
+User: "the simulation of deletion takes way too long, can we do it by batches?"
+`carto.address` (~977k rows) has NO index on `id_address_master` (indexes: `id` pk/idx, a gist on geometry). In `services/queries/removalPlanQuery.ts` the `verdicts` CTE computes `master_shared` with a correlated `EXISTS (SELECT 1 FROM carto.address other WHERE other.id_address_master = r.master_id AND other.id <> r.address_id)` inside `bool_or(...)`. Postgres runs it as a SubPlan: one FULL SEQ SCAN of carto.address PER resolved row. Measured: 100 targets = `SubPlan 1 Seq Scan on address other (loops=100)`, 2.4M buffer hits, 10.3 s. The real target set is ~1,400+ rows => roughly 140 s, i.e. near the 180 s statement timeout. (The other correlated EXISTS in `verdicts` hit `access_point` (pk indexed) and the two ~3.8k-row unindexed internal tables: negligible.) Batching would NOT fix this (the cost is per target, and the analysis part would be recomputed per batch, and execute would lose all-or-nothing atomicity); do not introduce batching.
+
+### Change (required)
+1. In `removalPlanQuery.ts` compute `master_shared` set-based from the data `resolved` ALREADY holds: `resolved` joins each target urn -> master -> ALL address rows of that master (`LEFT JOIN carto.address a ON a.id_address_master = m.addresses_master_id`), so a master is shared with another address iff it has more than one distinct `address_id` in `resolved`. Add a CTE such as `master_address_counts AS (SELECT master_id, count(DISTINCT address_id) AS n FROM resolved WHERE master_id IS NOT NULL GROUP BY master_id)` and derive `master_shared` per urn from it (`bool_or(mac.n > 1)` via a join), with NO subquery against `carto.address` anywhere in `verdicts`. Behaviour must be identical to the old predicate (any other address row for the same master => shared).
+2. Check the rest of the file and `resolveRemovalPlan.ts` for any other per-row subplan or per-row query against `carto.address`, `carto.addresses_master` or other large tables and remove it the same way (set-based, one pass). The master-reference scan (`scanMasterReferences`) already runs one query per referencing table; keep it, but you may drop the `::text` cast on the column side ONLY if you can bind a typed array safely (the column types are `integer`; ids are strings in JS for bigint safety: cast the parameter side to the column's type instead, e.g. `col = ANY($1::bigint[])`, so an index on a column (e.g. carto.territorial_unit, carto.addresses_2_0_edit) can be used). Preserve exact results.
+3. The same plan SQL is used by simulate and execute (shared function): verify nothing else differs.
+
+### Tests
+- Existing pglite tests for the master-shared blocker must still pass unchanged. Add: a master with two address rows (target door + sibling) is blocked MASTER_SHARED; a master with one address is not; two targets sharing one master are both flagged. Plan, blockers and fingerprint for a fixed fixture must be byte-identical to before (capture the expected fingerprint from the current implementation in a test fixture BEFORE changing the SQL, then assert it after).
+- Add a structural test asserting the plan SQL contains no correlated subquery of `carto.address` (e.g. no `FROM carto.address other`) so the regression cannot return silently.
+
+### Out of scope
+Batching; adding indexes (no DDL, and the user has no write rights in prod); changing analysis query; commit.
+
+### Definition of done
+Full gauntlet (routes check, lint, unit, build, doctor, e2e) green, real output pasted. Append "Brief 10 report" to `.agents/handoff/TO_ORCHESTRATOR.md`, stating plainly what you could not measure (no real DB).
+
+
+---
+
+## Brief 11 — closing the removal success summary re-runs the analysis (branch `feat/address-dedup-reload-after-removal`, cut from `main`)
+
+Binding rules: `AGENTS.md`, `.agents/rules/*.md` (coding_guidelines, testing_standards, module_authoring). npm via `C:\Alekos\Tools\node24portable`.
+
+### Goal
+After a successful execution, the data on screen is stale — it still reflects the pre-deletion analysis. User-requested: when the removal dialog's success summary (`RemovalPhase.DONE`, showing `DedupRemovalResultView`) is closed, automatically re-run the analysis so the dashboard reflects the post-deletion state, instead of requiring a manual "Volver a analizar" click.
+
+### Decision (orchestrator, binding)
+
+**Reuse the existing re-run path, do not build a new one.** `DedupDashboard.tsx` already has `runAnalysis(resultPayload)` wired to `DedupContextBar`'s rerun button — that is the exact same operation this needs, not a new analysis call. The fix is wiring an existing function to a new trigger, nothing more.
+
+**Only trigger on close from `RemovalPhase.DONE`.** Closing the dialog from `FORM`, `REVIEW`, or after an error must **not** re-run anything — nothing changed in those cases, and re-analyzing would just be a wasted query against a possibly-slow production connection (see Brief 10's own diagnosis of how slow the removal plan query can be before its fix lands — one more reason not to fire it needlessly). The reducer in `domain/removalFlow.ts` already models this precisely: `DONE` is the one phase that only exists after `EXECUTE_SUCCESS`.
+
+### Change
+
+Thread one new callback down the existing prop chain — do not lift `useDedupRemoval`'s state up, do not restructure the dialog:
+
+1. **`ui/DedupDashboard.tsx`**: pass a new prop to `DedupResultsView`, e.g. `onRemovalComplete={() => runAnalysis(resultPayload)}` — reuses the function already defined there (around line 66). Guard against `resultPayload` being null the same way the rest of this component already does.
+2. **`ui/DedupResultsView.tsx`**: accept `onRemovalComplete: () => void`, forward to `DedupSummaryTab`.
+3. **`ui/DedupSummaryTab.tsx`**: accept it, forward to `DedupRemovalPanel`.
+4. **`ui/DedupRemovalPanel.tsx`**: accept it. Wrap the close path: when the dialog closes and `flow.state.phase === RemovalPhase.DONE` at the moment of closing, call `flow.close()` **and then** `onRemovalComplete()`; for any other phase, call `flow.close()` only. Do not change `useDedupRemoval.ts`'s `close` itself or the reducer — this decision belongs at the call site that already knows about both the flow and the dashboard's re-run function, not inside the pure reducer.
+
+Expected (and desired) side effect, not something to fix: `DedupResultsView` is mounted with `key={analysis.resultId}` in `DedupDashboard`, so once the re-run's new data lands, it remounts fresh — back on the Resumen tab, Grupos filters cleared. That's the right behavior (the old filtered view pointed at now-deleted rows would be misleading) — don't try to preserve the prior tab/filter state across this reload.
+
+### Out of scope
+- Any change to `removalFlow.ts`'s reducer, `useDedupRemoval.ts`, or the dialog's own phases.
+- Auto-closing the dialog itself, or changing what it displays — only what happens *after* the user closes it.
+- Exporting a "before" geojson automatically before execute (raised separately by the user after discovering no before/after snapshot existed for a dev run; not part of this brief — tell us if you want that written up too).
+- Anything from Brief 10 (the simulate-speed fix) — independent branches, independent concerns.
+- Commit.
+
+### Required tests
+- e2e (`tests/e2e/flows/address-dedup.spec.ts` or a removal-specific spec): simulate → execute (mocked success) → close the summary → assert a new `analyze` request fires with the same connection/parameters, and the dashboard returns to the Resumen tab on the fresh result.
+- A case closing from the `REVIEW` phase (cancel before executing) or from an error state asserts **no** extra `analyze` request fires.
+- Unit test if `DedupRemovalPanel`'s close-wrapping logic is extracted to a plain function — otherwise the e2e case above is sufficient (no new pure `domain/` logic is introduced here).
+
+### Definition of done
+Full gauntlet, real output pasted:
+```
+npm run modules:routes:check
+npm run lint
+npm test
+npm run build
+npm run doctor
+npm run test:e2e
+```
+No gate weakened. Report appended to `.agents/handoff/TO_ORCHESTRATOR.md` as "Brief 11 report".
+
+Do not commit.
