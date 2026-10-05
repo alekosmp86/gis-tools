@@ -3327,3 +3327,73 @@ npm run test:e2e
 No gate weakened, no assertion relaxed. Update `docs/tools/ADDRESS_DEDUP_MODULE.md` with the new interaction. Report appended to `.agents/handoff/TO_ORCHESTRATOR.md` as "Brief 8 report".
 
 Do not commit.
+
+
+---
+
+## Brief 9 — execute real deletions for confirmed REMOVE candidates (branch `feat/address-dedup-removal-execution`, cut from `main`)
+
+**This is the highest-stakes brief this module has had.** It adds the module's first write path against production data. Read it twice before starting. Binding rules: `AGENTS.md`, `.agents/rules/*.md` (all of them, not just the usual four — this touches security-sensitive code). npm via `C:\Alekos\Tools\node24portable`.
+
+### Context
+
+User, after confirming the Brief 7 fix: "eventually I need to integrate the deletion sql you refactored [in CGEO-2192]." That refactored script is `CGEO-2192/prod/v3/delete_removal_candidates.sql` (outside this repo) — it mirrors `carto.baja_direccion`'s simulate → fingerprint → explicit confirm → audit-log pattern, scoped to the live-recomputed REMOVE set, explicitly excluding anything with attached internal units. This brief brings that same mechanism into gis-tools as a real feature instead of a one-off script.
+
+**Explicit, non-negotiable scope boundary (confirmed with the user 2026-10-05):** only rows with `decision = REMOVE`, from a **freshly recomputed** analysis, are ever eligible. Rows reclassified to `HAS_INTERNAL_UNITS` or `KEPT_ALONGSIDE_PROTECTED` ("Para revisar") **must stay untouched** — the user was explicit: "for the time being, those addresses that have internal addresses associated should stay untouched." This is not a UI checkbox or a default that can be toggled off — it must be structurally impossible for this code path to delete a non-`REMOVE` row, enforced in the query/service layer, not just hidden in the UI.
+
+### Architecture (binding)
+
+The existing read path is deliberately hardened: `PgAddressRepository.runDuplicateAnalysis` opens `BEGIN READ ONLY` specifically "so a write attempt is refused by Postgres itself, not by this code" (see its own doc comment). **Do not weaken or reuse that method for writes.** Add new, separate methods/classes for the write path so the existing read-only guarantee stays intact and auditable on its own.
+
+**1. New repository methods** (new file(s) under `services/`, e.g. `services/RemovalRepository.ts` + `PgRemovalRepository.ts`, following the `AddressRepository`/`PgAddressRepository` interface-plus-implementation split already in this module):
+
+- `simulateRemoval(request: RepositoryRequest): Promise<RemovalPlan>` — runs inside `BEGIN READ ONLY` (reuse that discipline, just a new query). Re-runs `DUPLICATE_ANALYSIS_SQL` fresh (same parameters as a normal analyze call — never trust a cached/previous result, this module's own query has repeatedly been shown to return different numbers minutes apart against live prod), filters server-side to `decision = '${Decision.REMOVE}'` only, then resolves each surviving urn to its row across `carto.addresses_master` → `carto.address` → `carto.access_point` → `carto.compact_address` → `carto.territorial_unit_access_point` (same join path as Brief 7's `internal_unit_urns`, plus the full snapshot shape `carto.baja_direccion` builds — read that function if you need the exact shape, it's in the dev DB, schema `carto`). Builds a full JSON snapshot of every row that would be touched, computes `md5(snapshot::text)` as the fingerprint, and returns `{ fingerprint, counts: { total, byFuente }, snapshot }`. **Must also assert, as a hard safety check inside the query, that zero resolved target rows have `decision_reason` outside the three REMOVE-mapped reasons** — if that ever fires, throw, don't silently continue.
+
+- `executeRemoval(request: RepositoryRequest, confirmation: { operationId: string; responsable: string; motivo: string; expectedFingerprint: string }): Promise<RemovalResult>` — opens a **real**, separate read-write transaction (new `Client`/connection, not the read-only one). Steps, in order, all inside one transaction:
+  1. `LOCK TABLE` the same 9 tables `baja_direccion_base_v1` locks, `SHARE ROW EXCLUSIVE` — see that function's definition in the dev DB for the exact list.
+  2. Abort if `carto.comments_address` or `carto.plural_entity_access_point` have any rows (same global guard).
+  3. Recompute the plan **fresh**, exactly as `simulateRemoval` does (same code path — factor the shared logic, don't duplicate the query).
+  4. Abort with a clear error if the recomputed fingerprint ≠ `confirmation.expectedFingerprint` — data moved since the user reviewed the plan.
+  5. Idempotency: if `confirmation.operationId` already exists in the audit table, compare stored params; identical → return the stored result (no-op, no error); different → abort.
+  6. Delete, in this exact order, scoped to the resolved target set: `internal_address_access_point`, `territorial_unit_access_point`, `compact_address`, `internal_address`, `access_point`, `address`, `addresses_master`.
+  7. Insert one row into `carto.cgeo_2192_baja_masiva_operacion` — **reuse that exact table** (already created by the CGEO-2192 script if it's been run there first; `CREATE TABLE IF NOT EXISTS` with the identical shape otherwise, so a human auditing deletions later sees one log regardless of whether a given batch ran from the raw SQL script or from this app). Commit.
+
+Shared target-resolution logic between `simulateRemoval` and `executeRemoval` belongs in one function both call — do not fork the query.
+
+**2. `DedupOrchestrator`**: add `simulateRemoval`/`executeRemoval` methods that delegate to the new repository, parallel to the existing `analyze`.
+
+**3. New API routes** (`module.routes.json`, `api/handlers.ts`, following the exact existing `analyze`/`exportResult` pattern — `ValidationResult`, `readXxx` validators, password scrubbed from every error): `POST /api/m/address-dedup/removal/simulate`, `POST /api/m/address-dedup/removal/execute`. `execute`'s body additionally requires `operationId` (server generates it if absent — don't trust a client-chosen UUID blindly without storing it), `responsable`, `motivo` (both non-empty, same validation style as `readConnection`), and `expectedFingerprint`.
+
+**4. UI**: a new "Confirmar y eliminar" action (reachable from the Grupos toolbar or the `A eliminar` KPI from Brief 8 — your call which reads more naturally, state which you picked). Flow: open a dialog requiring `responsable` + `motivo` as text inputs → calls simulate → shows the plan (counts by fuente, the fingerprint) and only then enables "Ejecutar" → on confirm, calls execute with the fingerprint from the simulate response → shows the audit result (counts actually deleted, operation id) and a **visible, permanent-looking reminder** that Solr index removal and the materialized-view refresh are separate manual steps this feature does not perform (same wording `carto.baja_direccion` itself returns). No destructive action may be reachable in fewer than those two explicit steps (simulate, then a separate confirmed execute) — do not collapse them into one click.
+
+### Out of scope
+- Touching `HAS_INTERNAL_UNITS` or `KEPT_ALONGSIDE_PROTECTED` rows under any circumstance — not configurable, not a future flag, just absent from this code path entirely.
+- Solr index removal, materialized-view refresh.
+- Partial/selective execution (deleting one group or one filtered subset at a time) — this brief always targets the full, freshly-computed REMOVE set. Note the idea for later; do not build it now.
+- Any change to `PgAddressRepository`/`runDuplicateAnalysis`'s existing read-only transaction.
+- Commit.
+
+### Required tests (by name)
+Extend `pgliteHarness.ts` (already has `addresses_master`/`address`/`internal_address_access_point` from Brief 7) with whatever `access_point`/`compact_address`/`territorial_unit_access_point`/`comments_address`/`plural_entity_access_point` minimal tables are needed to exercise the full delete chain.
+
+- `simulateRemoval` returns a fingerprint and a target set containing only `decision = REMOVE` rows — a fixture with a `HAS_INTERNAL_UNITS` row in the mix must prove it is absent from the plan.
+- `executeRemoval` with a correct fingerprint deletes exactly the planned rows from all 7 tables, in one transaction, and writes the audit row.
+- `executeRemoval` throws and makes **zero** writes when the fingerprint doesn't match (simulate a drift: insert another address between simulate and execute in the test).
+- `executeRemoval` is a no-op (returns the stored result, doesn't re-delete or error) on a replayed `operationId` with identical params, and throws on a replayed `operationId` with different params.
+- `executeRemoval` throws before touching anything when `comments_address` or `plural_entity_access_point` has any row.
+- A row forced to `HAS_INTERNAL_UNITS` is never deletable through `executeRemoval` even if its urn is somehow included in a hand-crafted request — the scope check must be server-side, not trust the caller.
+- e2e: the confirm dialog's two-step flow (simulate → review → execute), with the API mocked.
+
+### Definition of done
+Full gauntlet, real output pasted:
+```
+npm run modules:routes:check
+npm run lint
+npm test
+npm run build
+npm run doctor
+npm run test:e2e
+```
+No gate weakened. Update `docs/tools/ADDRESS_DEDUP_MODULE.md` describing the new write path, its safety mechanics, and the explicit internal-units exclusion. Report appended to `.agents/handoff/TO_ORCHESTRATOR.md` as "Brief 9 report" — be explicit and exhaustive about what the review scope check actually enforces and how you tested it; this is the one place in this module where "I'm fairly confident" is not good enough.
+
+Do not commit.

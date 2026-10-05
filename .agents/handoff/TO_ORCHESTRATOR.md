@@ -518,3 +518,31 @@ Gauntlet (portable node)
 - test:e2e: PASS 49/49
 
 Live numbers: I could not run against prod. The 49 groups / 248 rows being visible in the dashboard is UNVERIFIED in the UI; only covered by pglite unit tests and mocked e2e. Orchestrator should re-check against pg-prod. Docs (`docs/tools/ADDRESS_DEDUP_MODULE.md`) not touched this round; check whether it describes REMOVAL_GROUPS as REMOVE-only.
+
+
+---
+
+## Brief 8 report
+
+Status: DONE. Branch `feat/address-dedup-kpi-drilldown` cut from the tip of `fix/address-dedup-internal-units` (tree was clean; deviation authorised by caller). Not committed.
+
+Changes (all under `src/modules/address-dedup/ui/` unless noted):
+- `useDedupGroupFilters.ts`: `applyPreset` (wholesale `setCriteria` + `resetView(1)`); `updateCriteria` unchanged.
+- `DedupResultsView.tsx`: `handleKpiSelect` (applyPreset + switch to `DedupTab.GROUPS`), passed as `onKpiSelect`.
+- `DedupSummaryTab.tsx`: forwards `onKpiSelect` to `DedupKpiCards` only.
+- `DedupKpiCards.tsx`: per-card `onClick`; module-level `REMOVE_PRESET`/`KEEP_PRESET`/`REVIEW_PRESET` built from `EMPTY_CRITERIA`/`DecisionFilter`; Grupos/Filas use `EMPTY_CRITERIA`.
+- `DedupKpiCard.tsx`: optional `onClick`; renders `<button type="button">` when set, else the same `<div>` as before.
+- `DedupKpiCard.module.css`: `.clickable` (reset, hover with `--bg-card-hover` + lift, `:focus-visible` outline in `--accent-cyan`). No transition added (`glass-panel` already has one).
+- `tests/e2e/flows/address-dedup.spec.ts`: 4 new tests (A eliminar preset -> 4 groups; Para revisar preset -> 2 groups; Para revisar then A eliminar replaces, not merges; Grupos card clears the review filter).
+- `docs/tools/ADDRESS_DEDUP_MODULE.md`: new "KPI drill-down" subsection.
+
+Gauntlet (portable node v24.19.0):
+- modules:routes:check: PASS (up to date, 10 route files)
+- lint: PASS (eslint, no output, exit 0)
+- npm test: PASS (46 files, 555 tests)
+- build: PASS
+- doctor: PASS ("No issues found!")
+- test:e2e: PASS (53 passed)
+
+Deviations: base branch as instructed above. No docs/issues file (feature, not bug).
+Notes: edited files were rewritten with LF line endings by my script; git reports LF->CRLF warnings only (autocrlf), diff stat is small. Nothing else left undone.
