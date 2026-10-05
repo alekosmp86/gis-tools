@@ -8,6 +8,7 @@ import {
   Fuente,
   GroupSort,
   OTHER_FUENTE_COLUMN,
+  REMOVE_REASONS,
 } from "../constants";
 import type { FuenteColumn } from "../domain/summaryView";
 import type { AnalysisTextField, SelectOption } from "../types";
@@ -49,11 +50,7 @@ export const REASON_DESCRIPTIONS: Readonly<Record<DecisionReason, string>> = {
 };
 
 export const REASONS_BY_DECISION: Readonly<Record<Decision, ReadonlyArray<DecisionReason>>> = {
-  [Decision.REMOVE]: [
-    DecisionReason.REDUNDANT_WITH_MATCHED,
-    DecisionReason.REDUNDANT_NOT_LOWEST_URN,
-    DecisionReason.REDUNDANT_WITH_PROTECTED,
-  ],
+  [Decision.REMOVE]: REMOVE_REASONS,
   [Decision.KEEP]: [
     DecisionReason.PROTECTED_SOURCE,
     DecisionReason.INFRA_MATCHED,

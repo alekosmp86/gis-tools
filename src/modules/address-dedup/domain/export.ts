@@ -2,7 +2,7 @@ import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import { ExportFormat } from "../constants";
 import type { AnalysisGroup, AnalysisRow } from "../types";
 
-const CSV_LINE_BREAK = "\r\n";
+export const CSV_LINE_BREAK = "\r\n";
 
 const FILE_SUFFIX_BY_FORMAT: Readonly<Record<ExportFormat, string>> = {
   [ExportFormat.CSV]: ".csv",
@@ -77,7 +77,7 @@ export function countWithoutCoordinates(rows: ReadonlyArray<AnalysisRow>): numbe
   return rows.filter((row) => !isLocatable(row)).length;
 }
 
-function escapeCsvCell(value: unknown): string {
+export function escapeCsvCell(value: unknown): string {
   if (value === null || value === undefined) return "";
   const text = String(value);
   const needsQuoting = /[",\r\n]/.test(text) || text !== text.trim();

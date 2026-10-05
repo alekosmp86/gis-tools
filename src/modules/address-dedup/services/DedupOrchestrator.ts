@@ -1,7 +1,14 @@
 import { DedupRules } from "../constants";
 import { summarizeRows } from "../domain/summary";
+import type {
+  RemovalExecutionRequest,
+  RemovalPlan,
+  RemovalResult,
+  RemovalSimulationRequest,
+} from "../removalTypes";
 import type { DedupRequest, DedupResult, DuplicateAnalysisParameters } from "../types";
 import type { AddressRepository } from "./AddressRepository";
+import type { RemovalRepository } from "./RemovalRepository";
 
 function listDetectionFuentes(): string[] {
   return [...new Set<string>([...DedupRules.REMOVABLE_FUENTES, ...DedupRules.PROTECTED_FUENTES])];
@@ -21,9 +28,15 @@ function toParameters(request: DedupRequest): DuplicateAnalysisParameters {
   };
 }
 
-/** Maps a request to the query parameters, runs it through the repository and summarises the rows. */
+/**
+ * Maps a request to the query parameters, runs it through the repository and summarises the rows.
+ * Removal requests map to the same parameters, so the removal plan is the analysis the user saw.
+ */
 export class DedupOrchestrator {
-  constructor(private readonly repository: AddressRepository) {}
+  constructor(
+    private readonly repository: AddressRepository,
+    private readonly removalRepository: RemovalRepository
+  ) {}
 
   async analyze(request: DedupRequest): Promise<DedupResult> {
     const rows = await this.repository.runDuplicateAnalysis({
@@ -32,5 +45,24 @@ export class DedupOrchestrator {
     });
 
     return { rows, summary: summarizeRows(rows) };
+  }
+
+  simulateRemoval(request: RemovalSimulationRequest): Promise<RemovalPlan> {
+    return this.removalRepository.simulateRemoval({
+      connection: request.connection,
+      parameters: toParameters(request),
+    });
+  }
+
+  executeRemoval(request: RemovalExecutionRequest): Promise<RemovalResult> {
+    return this.removalRepository.executeRemoval(
+      { connection: request.connection, parameters: toParameters(request) },
+      {
+        operationId: request.operationId,
+        responsable: request.responsable,
+        motivo: request.motivo,
+        expectedFingerprint: request.expectedFingerprint,
+      }
+    );
   }
 }

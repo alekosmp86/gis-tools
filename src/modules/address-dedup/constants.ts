@@ -34,6 +34,13 @@ export const REVIEW_REASONS: ReadonlyArray<DecisionReason> = [
   DecisionReason.HAS_INTERNAL_UNITS,
 ];
 
+/** The only reasons a row can carry and still be removed; the removal path refuses anything else. */
+export const REMOVE_REASONS: ReadonlyArray<DecisionReason> = [
+  DecisionReason.REDUNDANT_WITH_MATCHED,
+  DecisionReason.REDUNDANT_NOT_LOWEST_URN,
+  DecisionReason.REDUNDANT_WITH_PROTECTED,
+];
+
 export const DedupScope = {
   REMOVAL_GROUPS: "REMOVAL_GROUPS",
   ALL_DUPLICATE_GROUPS: "ALL_DUPLICATE_GROUPS",

@@ -10,7 +10,8 @@ import { DedupHomeCard } from "./ui/DedupHomeCard";
 /**
  * The address duplicate analysis module.
  *
- * Read-only: Postgres runs the validated v3 query and the module presents and exports the result.
+ * Postgres runs the validated v3 query and the module presents and exports the result. Its one
+ * write path deletes confirmed REMOVE candidates only, behind a simulation and a fingerprint check.
  * Everything it contributes is optional and independently removable; nothing in core names it
  * except the composition root.
  */
@@ -20,10 +21,12 @@ export const addressDedupModule: AppModuleManifest = {
   id: routeDeclarations.moduleId,
   name: "Duplicados de Direcciones",
   description:
-    "Detecta direcciones duplicadas entre ANTEL, TLK e IDE directamente en PostgreSQL y exporta el resultado para QGIS. Solo lectura.",
+    "Detecta direcciones duplicadas entre ANTEL, TLK e IDE directamente en PostgreSQL y exporta el resultado para QGIS. Puede eliminar los duplicados confirmados, tras simular y confirmar.",
   endpoints: defineModuleEndpoints(routeDeclarations, {
     "POST analyze": handlers.analyze,
     "POST export": handlers.exportResult,
+    "POST removal/simulate": handlers.simulateRemoval,
+    "POST removal/execute": handlers.executeRemoval,
   }),
   pages: definePageContributions(routeDeclarations, {
     "": DedupDashboard,

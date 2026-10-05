@@ -17,7 +17,7 @@ const SQL_BEGIN_READ_ONLY = "BEGIN READ ONLY";
 const SQL_SET_STATEMENT_TIMEOUT = `SET LOCAL statement_timeout = ${STATEMENT_TIMEOUT_MS}`;
 const SQL_ROLLBACK = "ROLLBACK";
 
-function createPgClient(connection: DbConnection): PgClientLike {
+export function createPgClient(connection: DbConnection): PgClientLike {
   return new Client({
     host: connection.host,
     port: connection.port,
