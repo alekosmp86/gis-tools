@@ -546,3 +546,204 @@ Gauntlet (portable node v24.19.0):
 
 Deviations: base branch as instructed above. No docs/issues file (feature, not bug).
 Notes: edited files were rewritten with LF line endings by my script; git reports LF->CRLF warnings only (autocrlf), diff stat is small. Nothing else left undone.
+
+
+---
+
+## Brief 9 report
+
+Status: DONE (all of Brief 9 plus the addendum). Branch `feat/address-dedup-removal-execution`, cut from the tip of `feat/address-dedup-kpi-drilldown` (tree was clean except the `TO_IMPLEMENTER.md` addendum edit, which carried over). Nothing committed. Nothing was run against any real database: pglite only, all tests hermetic.
+
+### What was built
+Backend (all under `src/modules/address-dedup/`):
+- `removalConstants.ts`, `removalTypes.ts`: removal constants (tables, blocker reasons, the 9 locked tables, audit table name, advisory namespace, pending text, flow phases) and types.
+- `domain/removal.ts`: `RemovalRefusedError`, `assertConfirmation`, `assertExecutable` (blockers, empty plan, fingerprint), `assertTargetsInScope`, `assertDeletedMatchesPlan`, `buildBlockers`.
+- `services/queries/removalPlanQuery.ts`: ONE statement: the analysis query embedded as a CTE, REMOVE targets, per-target guards, snapshot, `md5` fingerprint.
+- `services/queries/resolveRemovalPlan.ts`: the single shared resolution function (simulate and execute both call it) plus the `pg_catalog` master-reference scan.
+- `services/queries/removalExecution.ts`: 9-table lock, global guard, locking of referencing tables, ordered deletes with a per-table count check.
+- `services/queries/removalAudit.ts`: advisory lock, replay lookup, lazy `CREATE TABLE`, audit insert.
+- `services/queries/mapRemovalRow.ts`, `services/runInTransaction.ts`, `services/RemovalRepository.ts`, `services/PgRemovalRepository.ts`.
+- `services/DedupOrchestrator.ts`: `simulateRemoval` / `executeRemoval`. The constructor now takes the removal repository as a REQUIRED second argument.
+- `api/removalHandlers.ts`, `api/httpResponses.ts`, `api/requestReaders.ts`, `api/handlers.ts`: new handlers `simulateRemoval`/`executeRemoval`; the response helpers and body readers of `api/handlers.ts` were moved (verbatim) into the two new files so the removal handlers share them without an import cycle.
+- `module.routes.json`, `manifest.ts`, generated `src/app/api/m/address-dedup/removal/{simulate,execute}/route.ts` (via `npm run modules:routes`).
+- One-word change in `services/PgAddressRepository.ts`: `createPgClient` is now `export`ed so the removal repository reuses the same client factory. `runDuplicateAnalysis` and its read-only transaction are untouched.
+- `constants.ts`: `REMOVE_REASONS`; `data/dedupLabels.ts` `REASONS_BY_DECISION[REMOVE]` now reads it (same three values).
+
+UI: `domain/removalFlow.ts` (pure reducer), `data/removalLabels.ts`, `ui/operationId.ts`, `ui/useDedupRemoval.ts`, `ui/DedupRemoval{Panel,Dialog,Form,PlanView,ResultView,Reminder}.tsx` + CSS modules, `dedupClient.ts` (two calls), wiring in `DedupSummaryTab`, `DedupResultsView`, `DedupDashboard`.
+
+Docs: `docs/tools/ADDRESS_DEDUP_MODULE.md`, new section 6 "Removal (the write path)".
+
+UI placement (your call, as the brief allowed): a panel under the KPI cards on the Resumen tab, not the Grupos toolbar and not the "A eliminar" KPI (that KPI is now a drill-down button, and the Grupos toolbar is filter state; the removal always acts on the whole fresh REMOVE set, never on the filter). Flow: "Confirmar y eliminar" opens a dialog, responsable + motivo, "Simular baja", plan view (total, by fuente, rows per table, fingerprint, blockers), then a SEPARATE "Ejecutar eliminación" (disabled while blockers exist or total is 0). The result view shows counts deleted, operation id and a permanent reminder (also shown on the plan view) that Solr removal and the materialized-view refresh are manual (wording of `carto.baja_direccion` plus an explicit sentence).
+
+### What the scope check actually enforces (exact)
+1. No request field can name an address. Handlers build the orchestrator request ONLY from connection, provinceId, protectedSiblingRemovesLone and (execute) operationId/responsable/motivo/expectedFingerprint. Test: a body carrying `urns`, `addressIds`, `decision`, `scope` reaches the repository with none of them (`removalHandlers.test.ts` asserts the exact key sets and that the urn string is absent from the request).
+2. The target set is computed in `REMOVAL_PLAN_SQL` from a fresh run of the exact `DUPLICATE_ANALYSIS_SQL` (embedded as a CTE, trailing `;` stripped, same `$1..$8`): a urn is a target only if EVERY analysis row carrying it satisfies `decision = 'REMOVE' AND fuente = ANY(removable)` (`HAVING bool_and(...)`). HAS_INTERNAL_UNITS and KEPT_ALONGSIDE_PROTECTED rows are KEEP in that query, so they cannot enter `targets`. Not a flag, not a default.
+3. `has_foreign_reason`: per target, `decision_reason <> ALL(the three REMOVE reasons)`; the JS side throws (`assertTargetsInScope`) if the count is non-zero. HONEST CAVEAT: with the current analysis SQL this can never be non-zero (REMOVE is defined by those same three reasons), so it is a tripwire against a future edit of the decision CASE; I could only unit-test the assertion function, not provoke it from data.
+4. Deletes use the ids/masters/urns returned by that same fresh query inside the execute transaction; nothing from the request. Each DELETE count must equal the plan's count for that table or the transaction rolls back.
+5. The write is unreachable without a matching fingerprint: `deleteRemovalTargets` is called only after `assertExecutable(resolved.plan, expectedFingerprint)` passes (no blockers, total > 0, recomputed fingerprint equals the confirmed one). Before that point the only statements are BEGIN, SETs, advisory lock, audit-table lookup, LOCK TABLE, the guard SELECTs and the plan SELECT.
+
+Tests that pin this (pglite, real SQL): the plan contains only REMOVE rows and its snapshot contains none of the HAS_INTERNAL_UNITS/kept urns; execute with a hand-crafted RepositoryRequest carrying `urns/addressIds/masterIds/decision` of the internal-units door deletes nothing of it (its address, master, iaap and internal_address survive) and the internal urn never appears in any bound statement value; every DELETE's bound values equal exactly the two REMOVE rows' ids/masters/urns.
+
+### Guards from the reference: ported vs NOT ported
+Ported (simulate returns them as `blockers` with urn + reason list; execute throws with zero writes while any exists; no silent skipping; the unblocked remainder is never deleted):
+- non-blank urn (URN_BLANK);
+- exactly one address + master (URN_NOT_FOUND, URN_AMBIGUOUS, which also covers "another master with the same urn");
+- master not shared by another address (MASTER_SHARED);
+- door means an access_point row (NOT_A_DOOR) and not also an internal_address (IS_INTERNAL);
+- no internal_address_access_point row with id_access_point = door (HAS_INTERNAL_UNITS);
+- door not itself an internal of another door (LINKED_AS_INTERNAL, my addition, from the iaap.id_internal_address delete predicate);
+- dynamic catalog scan of every other `carto` table (relkind r/p) with `id_address_master` / `address_master_id` / `addresses_master_id` (MASTER_REFERENCED, detail `schema.table (column)`); those tables are also locked SHARE ROW EXCLUSIVE in execute BEFORE they are scanned.
+Also ported: 9-table SHARE ROW EXCLUSIVE lock, comments_address / plural_entity_access_point global abort, advisory xact lock, replay semantics and message, fingerprint-mismatch abort, same-transaction audit, delete order, `lock_timeout 5s`, READ COMMITTED, non-blank operation/responsable/motivo/huella.
+
+NOT ported, and why:
+- Numeric reference (id) resolution: Brief 9 resolves by URN only.
+- Id expansion to "door + its internals", "relation points at a missing internal_address", "internal related to ANOTHER door": moot, because any door with ANY iaap row is blocked outright (internals are out of scope), so there is never an internal set to expand or cross-check.
+- "internal_address ids unique" and "access_point row only for the door": moot without internals; door-also-internal is IS_INTERNAL.
+- The set-level `cardinality(masters) = cardinality(ids) = cardinality(urns)` check: replaced by its per-urn equivalent (each target urn must resolve to exactly one master and one address, and the master must not be shared). I believe per-urn implies the set-level check but did not write a separate one. Say so if you want it literal.
+- The `search_path = pg_catalog, carto` function setting: not applicable (no function). Everything table-like is schema-qualified `carto.*`; unqualified built-ins (`md5`, `format`, `hashtext`, `quote_ident`, `to_regclass`) rely on `pg_catalog` being implicitly first. Low risk, stated.
+- The advisory-lock key is the addendum's `carto.address-dedup.removal`, NOT `carto.baja_direccion`, so this app and a concurrent `carto.baja_direccion(...)` call do not serialise on the advisory lock; they still serialise on the shared table locks.
+- The `referencia` / `incluir_internas` audit columns: replaced by a `parametros` jsonb.
+- A `current_setting('transaction_isolation')` assertion: the explicit `BEGIN ISOLATION LEVEL READ COMMITTED` sets it; no extra check.
+- simulate takes NO locks: Postgres refuses `LOCK ... SHARE ROW EXCLUSIVE` in a READ ONLY transaction, so simulate's blocker view is not lock-protected; execute re-checks everything under lock.
+
+### Final audit-table DDL
+`carto.cgeo_2192_baja_masiva_operacion`, created ONLY when `to_regclass` says it is missing (I deliberately avoid `CREATE TABLE IF NOT EXISTS`, which checks schema CREATE privilege even when the table exists):
+
+```sql
+CREATE TABLE carto.cgeo_2192_baja_masiva_operacion (
+  operacion uuid PRIMARY KEY,
+  huella text NOT NULL,
+  responsable text NOT NULL,
+  motivo text NOT NULL,
+  parametros jsonb NOT NULL,
+  ejecutor_bd text NOT NULL DEFAULT current_user,
+  resultado jsonb NOT NULL,
+  snapshot jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+)
+```
+
+RISK for you: I do not know the shape the CGEO-2192 script gives this table. If that script created it first with different columns (especially no `parametros` / `snapshot`), the replay lookup or the audit INSERT fails. The whole transaction then rolls back, so it fails SAFE (nothing deleted), but the feature is unusable until the shapes agree. Please compare against `CGEO-2192/prod/v3/delete_removal_candidates.sql` before any real run. The table is created lazily right before the audit insert, inside the same transaction, so an aborted run creates nothing.
+
+### What pglite cannot faithfully model (untested)
+- Concurrency of any kind: `LOCK TABLE ... SHARE ROW EXCLUSIVE` and the locks on referencing tables are issued and asserted (statement text and order) but never contended; `lock_timeout` never fires; `pg_advisory_xact_lock` is issued but never blocks (single session), so two concurrent executes of one operation id are not exercised.
+- READ COMMITTED interleaving (another session committing between my statements). `BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE` is asserted as the first statement; behaviour under contention is not.
+- Read-only enforcement by the server: I assert simulate sends `BEGIN READ ONLY`, no write/LOCK statement, and zero row changes, but did not try to make Postgres reject a write inside it.
+- The dynamic catalog scan only runs against a toy schema (one extra table I create); real `carto` has more tables, partitions (relkind p), odd column types (the `col::text` cast) and permissions.
+- Real column types: fixtures use int ids; prod ids may be bigint (arrays are cast `::bigint[]` and ids kept as strings in JS to stay safe) but this was not run against bigint.
+- Real `carto.v_address_build`, real scale (thousands of targets in array params, snapshot jsonb size in the audit row), `statement_timeout`, privileges (CREATE TABLE in carto, DELETE grants), triggers/FKs of the real schema, `current_user`.
+- The HAS_INTERNAL_UNITS blocker (iaap.id_access_point = door) is unreachable from data: the analysis flags the same join as HAS_INTERNAL_UNITS (KEEP) first, so such a urn never becomes a target. It is implemented and documented but NOT independently tested; the other eight blockers each have a test that makes them fire.
+
+### Deviations / decisions to confirm
+1. The simulate/execute requests also accept optional `protectedSiblingRemovesLone` (same validation as `analyze`). The addendum lists the request fields "only"; without the toggle the plan would silently differ from what a user who ticked "Elimina duplicados de IDE" saw in the dashboard. It only changes which rows are REMOVE (still REMOVE-only, still server-derived). Easy to drop if you disagree.
+2. Execute order: advisory lock, replay lookup, THEN table locks (per the addendum: lookup right after the advisory lock). Brief 9's step list has the locks first. The replay path therefore locks no business table.
+3. The orchestrator constructor's second argument is required; I updated the 7 `new DedupOrchestrator(...)` call sites in two existing test files to pass a `FakeRemovalRepository` (constructor arguments only, no assertion touched).
+4. UI copy that said "Solo lectura" (dashboard description, home card, manifest description) is no longer true; reworded.
+5. The server answers a deliberate refusal (fingerprint drift, blockers, replay with other params, comments/plural guard) with HTTP 409; validation with 400; anything else 500, password scrubbed from every message (tested).
+6. `operationId` is generated by the browser per dialog open (`crypto.randomUUID`, with a `getRandomValues` fallback for plain http), kept across a failed execute (so a retry is idempotent) and regenerated on "Volver a simular". The server generates one only if absent. A failed execute leaves the user on the plan view with the error and the button still enabled.
+7. The snapshot is stored in the audit row and NOT returned to the browser (it can be large); the simulate response is fingerprint + counts + blockers.
+8. Noticed but left alone: `PgAddressRepository` and `runInTransaction` now duplicate ~15 lines of connect/begin/close logic (I did not touch the read path, as instructed); the new removal e2e spec duplicates two small helpers from the existing dedup spec instead of refactoring it. Partial/selective removal is only noted as a later idea in the docs.
+
+### Tests
+New files:
+- `pgRemovalRepository.test.ts` (37, pglite, real SQL):
+  - simulate: plan is REMOVE-only with a HAS_INTERNAL_UNITS row in the mix; per-table counts; fingerprint determinism and sensitivity; read-only / rolled back / no writes; empty plan; six parametrised blocker cases (shared master, not a door, is internal, linked as internal, urn not found, ambiguous urn) plus MASTER_REFERENCED, and an unrelated referenced master not blocking.
+  - execute: deletes exactly the planned rows of the 7 tables and leaves the review rows; audit row contents; exact statement order (BEGIN READ COMMITTED, lock_timeout, advisory lock before the audit lookup, LOCK TABLE of all 9, catalog scan, plan, 7 DELETEs in order, audit INSERT, single COMMIT, no ROLLBACK); separate connection from simulate; referencing tables locked before the scan; drift between simulate and execute throws with zero writes, no audit table and ROLLBACK; replay with the same id returns the stored result and deletes nothing even with a new candidate present; replay with different responsable/motivo/toggle throws; comments_address / plural_entity_access_point row throws before any DELETE; blockers plus a correct fingerprint refuse and delete none of the remainder; empty plan refused; hand-crafted request cannot delete the HAS_INTERNAL_UNITS door; DELETE bound values are exactly the resolved ids; a trigger that makes the 6th delete fail rolls back the 5 earlier ones; reuse of a pre-existing audit table; invalid confirmation refused before any connection is opened.
+- `removalDomain.test.ts`, `removalHandlers.test.ts` (validation 400s, snapshot not leaked, only whitelisted fields forwarded, server-generated id, 409 vs 500, password scrubbing), `removalOrchestration.test.ts`, `removalFlow.test.ts` (18; execute unreachable from the form, only reachable through a simulation, blocked/empty plans never executable, in-flight guard, restart/close/reopen), `fakeRemovalRepository.ts` (helper).
+- `pgliteHarness.ts` extended (access_point, internal_address, territorial_unit_access_point, compact_address, comments_address, plural_entity_access_point tables; door/internal-unit helpers; a statement-recording pglite client).
+- `addressDedupManifest.test.ts`: one test added (removal endpoints are POST-only). Existing tests: no assertion changed or removed.
+- e2e `tests/e2e/flows/address-dedup-removal.spec.ts` (9, API mocked) with `fixtures/dedupRemovalFixtures.ts`: dialog opens with no request made and no "Ejecutar" button; simulate stays disabled until responsable AND motivo are non-blank; simulate then a SEPARATE execute click (simulate called once, execute zero times until the click); the execute body carries the simulated fingerprint, the confirmation, a UUID operationId and exactly the whitelisted keys (no address list); blocked plan disables execute and lists the reasons; a 409 shows the message and "Volver a simular" returns to the form; cancel after simulate executes nothing; reopening starts clean; the action is disabled when the analysis has no REMOVE rows. One initial failure was the suite's console-error guard on the mocked 409 ("Failed to load resource"); fixed with the suite's own `allowConsoleErrors` in that one test.
+- Note on my own authoring: my first expectation for "master shared" (only MASTER_SHARED) was wrong; a shared master correctly also fires URN_AMBIGUOUS and NOT_A_DOOR (the second address has no access_point). I corrected my new test to the true behaviour; the code was right.
+
+### Gauntlet (portable node `C:\Alekos\Tools\node24portable`, final run after the last code change)
+- `npm run modules:routes:check`: PASS, "Generated module routes are up to date (12 route file(s))."
+- `npm run lint`: PASS, 0 errors, 0 warnings (an unused-variable warning in one of my own tests was fixed first).
+- `npm test`: PASS, "Test Files 51 passed (51)" and "Tests 647 passed (647)".
+- `npm run build`: PASS, "Compiled successfully"; route table lists `/api/m/address-dedup/removal/execute` and `/removal/simulate`.
+- `npm run doctor`: PASS, "Score: 100 / 100", "No issues found!" (it flagged one `js-set-map-lookups` in my first `buildBlockers`; refactored to a Map/Set index and re-ran).
+- `npm run test:e2e`: PASS, "62 passed (39.9s)" (53 existing + 9 new).
+- Pre-existing failures: none observed.
+
+### Not done / follow-ups
+- Not run against any real DB, by instruction. Before first real use: verify the audit-table shape against the CGEO-2192 script, and run simulate against dev to compare the REMOVE count with the raw script's.
+- No `docs/issues/` file (feature, not a bug). Nothing committed.
+
+
+---
+
+## Brief 9 fix round 1 report
+
+Status: DONE (all six items). Branch `feat/address-dedup-removal-execution`, nothing committed, pglite only, no real database touched, read-only analysis path (`PgAddressRepository` / `runDuplicateAnalysis` / `DUPLICATE_ANALYSIS_SQL`) untouched.
+
+### Correction to the Brief 9 report
+The "Uncertainties" line claiming ids "are kept as strings in JS" was wrong at the time: `to_jsonb(bigint[])` emitted JSON numbers, so `JSON.parse` rounded anything above 2^53 before `mapRemovalRow.toIdList` could stringify it. Fixed in this round (item 1); the original line is left as is.
+
+### Changes
+1. Ids as strings (F3). `removalPlanQuery.ts`: `address_ids`, `master_ids` and the per-verdict `masterIds` now `to_jsonb(...::text[])`. `mapRemovalRow.ts` unchanged in behaviour (`String(entry)`), comment added. Deletes still bind with `::bigint[]`. Harness columns changed to `bigint`/`bigserial`. Test: ids 9007199254740992 (kept neighbour) and 9007199254740993 (target); the delete removes exactly ...993, ...992 survives in address and addresses_master, and the DELETE calls receive `["9007199254740993"]`.
+2. Protected sources (F1), `pgRemovalRepository.test.ts`: (a) IDE+ANTEL+TLK, toggle off: plan = TLK only, IDE and the lowest-urn ANTEL survive in addresses_master, address, access_point, territorial_unit_access_point and compact_address; (b) toggle on: targets = ANTEL+TLK, IDE survives in all tables; (c) the ANTEL row is asserted KEPT_ALONGSIDE_PROTECTED by the real analysis and absent from targets and snapshot.
+3. Audit-table shape (F2). `removalAudit.assertAuditTableUsable` reads `information_schema.columns`; if the table exists and misses any of `AUDIT_REQUIRED_COLUMNS` it throws `RemovalRefusedError("La tabla de auditoria carto.cgeo_2192_baja_masiva_operacion existe con otra estructura; faltan columnas: parametros, ejecutor_bd, snapshot.")` (HTTP 409 through the existing mapping). Called in execute right after the advisory lock (before the replay lookup, any table lock and any delete) and in simulate before the plan. Tests: execute throws, all seven tables unchanged, no DELETE/LOCK/INSERT issued, ROLLBACK last; simulate throws before the analysis statement. Existing "reuse audit table" test (full shape) still green.
+4. Length caps. `RESPONSABLE_MAX_LENGTH = 120`, `MOTIVO_MAX_LENGTH = 1000` in `removalConstants.ts`; validated in `removalHandlers.ts` after trim (400, Spanish message naming the limit); `FormField` (ui-kit) gained an optional `maxLength` prop and `DedupRemovalForm` passes both. Tests: handler boundary max accepted / max+1 rejected for both fields (it.each); e2e asserts the `maxlength` attributes.
+5. Known limits documented in `docs/tools/ADDRESS_DEDUP_MODULE.md` ("Known limits": infra-match tables not locked, pglite cannot model locks, no Solr/MV refresh). No locks added.
+6. URN list. SQL: new `target_list` column built from the same `targets` CTE that `target_count` counts, `ORDER BY urn COLLATE "C"`. `RemovalPlan.targets` / `RemovalSimulationPayload.targets: {urn, fuente}[]`, mapper, handler payload, `dedupClient` types. Execute does not accept it (the existing "no address list" handler and e2e body-key tests are green unchanged). UI: new `DedupRemovalTargetList.tsx` + CSS module, rendered inside `DedupRemovalPlanView` (review step only): count header, one read-only `<textarea>` (urn, tab, fuente per line), "Copiar URN" (newline-separated urns) and "Descargar CSV". Pure builders in `domain/removalPlanExport.ts` (CSV with header and CRLF, reusing `escapeCsvCell`/`CSV_LINE_BREAK`, now exported from `domain/export.ts`; filename `address-dedup-removal-plan-<provinceId>-<fingerprint[0..8]>.csv`). Blob download extracted to `ui/downloadBlob.ts` (revokes the URL after the click) and reused by `downloadExport`.
+
+### Tests added
+- `pgRemovalRepository.test.ts`: targets (only REMOVE, sorted with a text-vs-numeric order case, count = `counts.total`, equals snapshot urns and byFuente, kept/HAS_INTERNAL_UNITS urns absent), empty targets, 3 protected-source cases, 2 bigint cases, 2 audit-shape cases.
+- `removalPlanExport.test.ts` (new): CSV header/CRLF, empty, quoting, URN text, filename.
+- `removalHandlers.test.ts`: payload now includes `targets`; length-cap boundaries.
+- `address-dedup-removal.spec.ts`: new test: list hidden before simulate, visible in review, readonly, count equals `removal-total`, line urns equal the fixture, copy puts the urns on the clipboard, download name and content match, nothing executed; new test for `maxlength`.
+- Fixtures/fakes updated for `targets` (`fakeRemovalRepository.ts`, `dedupRemovalFixtures.ts`, `removalFlow.test.ts`).
+- One existing e2e assertion made stricter-compatible, not weaker: the blocked-plan test's `getByText("cgeo:Antel:address:id:102")` now uses `{ exact: true }` because the target textarea legitimately contains that urn too (strict-mode violation otherwise); it still asserts the blocker code element is visible.
+
+### Gauntlet (portable node 24.19.0)
+- `npm run modules:routes:check`: PASS, "Generated module routes are up to date (12 route file(s))."
+- `npm run lint`: PASS, eslint no output after the run header.
+- `npm test`: PASS, `Test Files 52 passed (52)`, `Tests 666 passed (666)` (run after all unit/test code was in place).
+- `npm run build`: PASS, route table lists `/api/m/address-dedup/removal/execute` and `/removal/simulate`.
+- `npm run doctor`: PASS, `Score: 100 / 100`, "No issues found!".
+- `npm run test:e2e`: PASS, `64 passed (39.5s)` (first run had 2 failures from my own new test and the strict-mode locator described above; fixed, rerun green).
+
+### Unverified / plainly stated
+- Nothing was run against a real Postgres: bigint round trip, `information_schema` check and `COLLATE "C"` are verified on pglite only. The real `pg` driver returns bigint as strings anyway, and `::bigint[]` binds are unchanged.
+- Remaining precision gap (documented in the module doc): the snapshot jsonb is parsed with `JSON.parse` and re-serialised into the audit row, so a bigint beyond 2^53 inside the STORED snapshot (not the ids used for delete, not the fingerprint, which is md5 in SQL) would be rounded. Fix would be to carry the snapshot as text; left alone as out of scope.
+- The target list is capped nowhere: for a very large set the response and textarea grow linearly (a few thousand rows is fine by design).
+- Clipboard e2e normalises `\r\n` to `\n` because Chromium on Windows returns CRLF from `readText`.
+
+
+---
+
+## Brief 9 fix round 2 report
+
+Status: DONE. Not committed. pglite only; no real database touched.
+
+### Changes
+- `removalConstants.ts`: `AUDIT_TABLE` = `carto.baja_direccion_operacion`; `AUDIT_REQUIRED_COLUMNS` = the 9 real columns. Old table name and all DDL removed.
+- `domain/removal.ts`: `buildRemovalReference(parameters)` -> `address-dedup:province=<id>;protectedSiblingRemovesLone=<bool>`.
+- `removalTypes.ts`: `RemovalAuditRecord` (result + provinceId + protectedSiblingRemovesLone + targets) = the `resultado` payload.
+- `services/queries/removalAudit.ts`: rewritten. No CREATE anywhere. `assertRemovalPreconditions` (table exists, 9 columns, SELECT+INSERT on audit table via `has_table_privilege(current_user,...)`, DELETE on the 7 deletion tables) with Spanish 409 `RemovalRefusedError`s. Insert = the 8 columns `baja_direccion` inserts (`ejecutor_bd` = `current_user`, `incluir_internas` false, `creado_en` default). Replay compares referencia / incluir_internas / huella / responsable / motivo; returns the stored result with `recovered: true` (only the 7 `RemovalResult` fields, scope/targets not leaked).
+- `services/PgRemovalRepository.ts`: simulate calls the preconditions before resolving the plan; execute calls them after the advisory lock and before the idempotency lookup, lock tables and any delete.
+- `tests/.../pgliteHarness.ts`: creates `carto.baja_direccion_operacion` with the real shape in schema and on every reset (drop + create).
+- `tests/.../pgRemovalRepository.test.ts`: see below.
+- `docs/tools/ADDRESS_DEDUP_MODULE.md` section 6: new audit table, prod prerequisite with the DDL, preconditions, row contents, execute step list renumbered, "shared with CGEO-2192" language removed, stored-snapshot caveat removed.
+
+### Tests (all in pgRemovalRepository.test.ts)
+- Re-pointed at the new table (not weakened): rollback/drift/empty-plan cases that asserted "audit table absent" now assert `countRows(AUDIT_TABLE) === 0` (the table always exists now); ordering test greps `INSERT INTO carto.baja_direccion_operacion`.
+- One existing assertion adjusted: the simulate read-only test's write-statement regex now ignores the two `has_table_privilege` SELECTs, whose text contains the words INSERT/DELETE as privilege names. Still asserts no real DELETE/INSERT/UPDATE/LOCK/COMMIT/CREATE.
+- Removed the "reuse the audit table when CGEO-2192 created it first" test (concept deleted).
+- New: audit row exact values (referencia string, incluir_internas false, ejecutor_bd, huella, creado_en, full `resultado` equality incl. counts, deletedByTable, sorted targets, pending message, no snapshot); missing table -> execute and simulate refuse with exact message, zero writes, no statement matching /CREATE/i; no CREATE on a successful run either; missing columns -> refusal naming them (execute and simulate); replay refused with different fingerprint, province, toggle, responsable, motivo.
+- Privileges: fake scripted client asserts the exact privilege statements/params, they run before the first LOCK, and refusal (SELECT, INSERT, both, DELETE on named tables, and simulate) issues no DELETE/LOCK/INSERT/CREATE/analysis. Plus real pglite roles (`CREATE ROLE app_limited` + `SET ROLE`): missing INSERT refused, missing DELETE on `carto.compact_address` refused, tables unchanged.
+
+### Gauntlet (portable node)
+- `npm run modules:routes:check`: PASS ("Generated module routes are up to date (12 route file(s))")
+- `npm run lint`: PASS (no output)
+- `npm test`: PASS, 52 files, 678 tests
+- `npm run build`: PASS (removal routes listed)
+- `npm run doctor`: PASS ("No issues found!")
+- `npm run test:e2e`: PASS, 64 passed. No e2e/mock text mentioned the old table or "se crea la tabla", so none changed.
+
+### Unverified / notes
+- pglite runs as superuser `postgres`; the role tests do exercise `has_table_privilege` for real, but column-level grants, ownership, PUBLIC grants, `ALTER DEFAULT PRIVILEGES` and the real prod role setup are not modelled. `has_table_privilege` on a table the role cannot even see (no schema USAGE) would error rather than return false; that surfaces as a 500, not a 409.
+- Privilege check is not a guarantee: a trigger or RLS on the deletion tables could still fail at delete time (rolls back, zero writes).
+- Locks, advisory lock, READ COMMITTED and the dynamic catalog scan remain untested for concurrency (unchanged from round 1).
+- Stored `resultado.targets` can be thousands of urns (jsonb); size not benchmarked.
+- Brief 9 / fix round 1 reports above still describe the old `cgeo_2192_baja_masiva_operacion` table; superseded by this round, history not rewritten.
+- Helper scripts used a scratchpad outside the repo; CGEO-2192 files untouched.

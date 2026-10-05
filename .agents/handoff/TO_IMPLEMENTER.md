@@ -3397,3 +3397,89 @@ npm run test:e2e
 No gate weakened. Update `docs/tools/ADDRESS_DEDUP_MODULE.md` describing the new write path, its safety mechanics, and the explicit internal-units exclusion. Report appended to `.agents/handoff/TO_ORCHESTRATOR.md` as "Brief 9 report" — be explicit and exhaustive about what the review scope check actually enforces and how you tested it; this is the one place in this module where "I'm fairly confident" is not good enough.
 
 Do not commit.
+
+
+---
+
+## Brief 9 — orchestrator addendum (binding, overrides Brief 9 where they differ)
+
+User confirmed the build (2026-10-05). Branch `feat/address-dedup-removal-execution` is cut from the tip of `feat/address-dedup-kpi-drilldown` (not main).
+
+1. **Reference.** The real `carto.baja_direccion` / `baja_direccion_base_v1` definitions were read from the dev DB and saved at
+   `C:\Users\g611045\AppData\Local\Temp\claude\c--Alekos-Projects-gis-tools\947681d9-9c0b-4b39-8f12-44d3961eae71\scratchpad\baja_direccion_reference.md`. Read it fully. Brief 9's step list is a summary; the reference has more guards.
+2. **Port the per-target integrity guards, not just the lock/delete order.** For the whole target set (doors only, no internals), simulate AND execute must check: every target resolves to exactly one address+master+non-blank URN; URN not ambiguous; master not shared with another address; no other master with the same URN; type is a door (access_point row, no internal_address row); the door has NO `internal_address_access_point` rows (such a row = HAS_INTERNAL_UNITS = out of scope: block it); and the dynamic scan: no other `carto` table with a column named `id_address_master`/`address_master_id`/`addresses_master_id` references a target master (lock them SHARE ROW EXCLUSIVE inside the execute transaction). Decision: `simulateRemoval` returns these as `blockers` (urn + reason list) and `executeRemoval` refuses (throws, zero writes) while any blocker exists. Do not silently skip blocked rows; do not delete the unblocked remainder.
+3. **Snapshot/fingerprint** per the reference snapshot shape (address, master, puerta, interna per id, plus territorios and compactas), `md5` of its canonical text, computed in SQL like the reference.
+4. **Transaction settings for execute:** `READ COMMITTED`, `SET LOCAL lock_timeout = '5s'`, advisory xact lock on the operation id (`pg_advisory_xact_lock(hashtext('carto.address-dedup.removal'), hashtext(operationId))`) before the idempotency lookup. Audit insert in the same transaction.
+5. **Ground rules.** Never run anything against any real database (dev/preprod/prod); build and verify with pglite only. The write path must be unreachable unless `executeRemoval` is called with a fingerprint that equals a freshly recomputed one. Server-side scope: the execute handler must ignore any client-supplied urn list entirely (the request carries connection, province, operationId, responsable, motivo, expectedFingerprint only). Do not commit.
+6. **Tell me plainly** in the report: every guard from the reference you did NOT port and why; the final audit-table DDL; and anything pglite cannot faithfully model (locks, advisory locks, READ COMMITTED, dynamic catalog scan) so the reviewer knows what is untested.
+
+
+---
+
+## Brief 9 — Fix round 1 (branch `feat/address-dedup-removal-execution`, uncommitted, do NOT commit)
+
+Source: code-reviewer verdict APPROVE WITH COMMENTS on Brief 9; user chose to do the fix round WITH the URN list. Same rules as Brief 9 + its addendum. pglite only; never touch any real database. Read-only analysis path stays untouched.
+
+### Changes (all required)
+1. **Ids as strings (reviewer F3).** In `services/queries/removalPlanQuery.ts` (~lines 129-131) emit `address_ids` and `master_ids` as `to_jsonb(...::text[])` so they reach JS as strings; keep `mapRemovalRow.ts` consistent. Bind them with the existing `::bigint[]` casts. Add a test with an id above 2^53 (e.g. 9007199254740993) proving it round-trips exactly and the delete removes that exact row. Correct the line in the Brief 9 report that claims ids are kept as strings (append a correction note under "Fix round 1 report", do not rewrite history).
+2. **Protected-source tests (F1).** In `pgRemovalRepository.test.ts` add pglite cases: (a) group IDE + ANTEL + TLK, toggle false → the IDE row and the lowest-urn removable row are absent from the plan and survive execute; (b) same group, `protectedSiblingRemovesLone: true` → only ANTEL/TLK rows are targets, IDE survives execute; (c) a `KEPT_ALONGSIDE_PROTECTED` row never appears in the snapshot or targets. Assert on surviving table rows, not only on the plan.
+3. **Audit-table shape (F2).** Add a test where `carto.cgeo_2192_baja_masiva_operacion` already exists with a different (e.g. dev-style `baja_direccion_operacion`-like, no `parametros`/`snapshot`) shape: execute must throw and make ZERO deletes (all seven tables unchanged). Additionally make the failure a clean, classified refusal: before any lock or delete, in execute (and in simulate if cheap), verify the audit table, when it exists, has the columns this code needs (`operacion`, `huella`, `responsable`, `motivo`, `parametros`, `ejecutor_bd`, `resultado`, `snapshot`, `created_at`) via `information_schema.columns`; if columns are missing throw `RemovalRefusedError` with a Spanish message naming the missing columns ("La tabla de auditoria carto.cgeo_2192_baja_masiva_operacion existe con otra estructura; faltan columnas: ..."), HTTP 409. Test it.
+4. **Length caps (NIT).** `responsable` max 120 chars, `motivo` max 1000, validated in `removalHandlers.ts` (400, Spanish message), constants in `removalConstants.ts`, mirrored in the dialog inputs (maxLength + visible counter not required). Tests for boundary (max ok, max+1 rejected).
+5. **Infra-match tables window (F4).** Do NOT add locks. Document the accepted window in `docs/tools/ADDRESS_DEDUP_MODULE.md` section "Removal (the write path)" in a short "Known limits" list (infra-match tables not locked; pglite cannot model locks; no Solr/MV refresh).
+6. **List of URNs to delete (user request).**
+   - `simulateRemoval` returns, in addition to counts/fingerprint/blockers, the sorted list of target URNs with their fuente (`targets: Array<{ urn: string; fuente: string }>`), derived from the SAME plan statement/scope CTE that produces the fingerprint (not a second query). Add it to the types, mapper, API response and `dedupClient`. It must not be accepted back by `execute` (execute still ignores any client address list; the existing test asserting the execute body carries no address list stays green).
+   - UI (`DedupRemovalPlanView.tsx` / dialog): show the list in the review step (scrollable, monospace, virtualised or capped-render is NOT needed up to a few thousand rows but must not freeze: render in a single `<textarea readonly>` or a plain `<pre>` block, not thousands of React nodes), with a count header, and two actions: "Copiar URN" (clipboard, newline-separated) and "Descargar CSV" (`urn,fuente`, client-side blob; file name `address-dedup-removal-plan-<provinceId>-<fingerprint first 8>.csv`; revoke the blob URL after the click like the module's existing export does). Execute stays disabled until the review step is shown, as today.
+   - Tests: unit for the plan's `targets` (only REMOVE rows, sorted, equals the set whose count the fingerprint covers; HAS_INTERNAL_UNITS/IDE urns absent); unit for the CSV builder (pure function in `domain/`, quoting, header, newline) ; e2e extend `address-dedup-removal.spec.ts`: list visible in review step, count matches total, copy and download buttons present, download content matches.
+   - Docs: document the list in section 6.
+
+### Out of scope
+Locking infra tables; selective execution; any change to the read-only analysis path; commit.
+
+### Definition of done
+Full gauntlet (routes check, lint, npm test, build, doctor, e2e) green with real output pasted; no assertion weakened. Append "Brief 9 fix round 1 report" to `.agents/handoff/TO_ORCHESTRATOR.md`, stating plainly anything unverified.
+
+
+---
+
+## Brief 9 — Fix round 2: use the existing dev audit table `carto.baja_direccion_operacion`, never create one (branch `feat/address-dedup-removal-execution`, uncommitted, do NOT commit)
+
+User decision (2026-10-05): the app has NO write/DDL permission in prod, and the dev DB already has the deletion function `carto.baja_direccion` with its own audit table. The removal must write its audit row to THAT table, `carto.baja_direccion_operacion`. This REPLACES the `carto.cgeo_2192_baja_masiva_operacion` table and the lazy `CREATE TABLE` from Brief 9 / fix round 1. Same rules as before: pglite only, never touch any real database, read-only analysis path untouched.
+
+### Real shape (read from dev via pg-dev, 2026-10-05)
+```
+carto.baja_direccion_operacion (
+  operacion        uuid        NOT NULL PRIMARY KEY,
+  referencia       text        NOT NULL,
+  incluir_internas boolean     NOT NULL,
+  huella           text        NOT NULL,
+  responsable      text        NOT NULL,
+  motivo           text        NOT NULL,
+  ejecutor_bd      text        NOT NULL,
+  creado_en        timestamptz NOT NULL DEFAULT clock_timestamp(),
+  resultado        jsonb       NOT NULL
+)
+```
+`carto.baja_direccion` inserts `(operacion, referencia, incluir_internas, huella, responsable, motivo, ejecutor_bd, resultado) VALUES (..., current_user, resultado)` and, on replay, compares referencia / incluir_internas / huella / responsable / motivo (identical -> return stored `resultado || {recuperada: true}`; else 'El UUID ya fue utilizado con otros parametros.'). Mirror exactly that.
+
+### Changes
+1. `removalConstants.ts`: `AUDIT_TABLE = "carto.baja_direccion_operacion"`; `AUDIT_REQUIRED_COLUMNS` = the 9 columns above (no `parametros`, no `snapshot`, no `created_at`). Delete every trace of the old table name and of the DDL (`CREATE_AUDIT_TABLE_SQL`, lazy create). The app must NEVER issue DDL.
+2. `services/queries/removalAudit.ts`:
+   - Insert exactly the 8 columns the DB function inserts (`creado_en` takes its default). `ejecutor_bd` = `current_user`. `incluir_internas` = false (we never include internals). `referencia` = a deterministic scope string built by one pure function in `domain/removal.ts`, e.g. `address-dedup:province=<id>;protectedSiblingRemovesLone=<bool>` (no free text).
+   - `resultado` jsonb must carry what the old `snapshot`/`parametros` columns carried for audit value: counts (total, byFuente, rowsByTable), the fingerprint, the sorted target URN list with fuente, the deleted counts, provinceId, protectedSiblingRemovesLone, and the pending-steps reminder (Solr / materialized views). The snapshot itself is NOT stored (too large and not a column); the fingerprint plus the URN list is the record.
+   - Replay lookup compares referencia, incluir_internas, huella, responsable, motivo; stored result returned with `recovered: true`.
+3. **Pre-checks, before any lock or delete, in execute (and before the plan in simulate):** the table must exist (if not: `RemovalRefusedError`, Spanish, "La tabla de auditoria carto.baja_direccion_operacion no existe en esta base. Debe crearla un administrador antes de ejecutar bajas."), have the 9 required columns (clear missing-columns message, as already built), and the connected role must have `SELECT` and `INSERT` on it (`has_table_privilege(current_user, 'carto.baja_direccion_operacion', 'SELECT')` and `'INSERT'`; Spanish refusal naming the missing privilege). Also check `has_table_privilege(current_user, ..., 'DELETE')` on the 7 deletion tables and refuse early with a clear message listing the tables lacking DELETE. All of these are HTTP 409 refusals with zero writes.
+4. Tests (pglite harness must now create `carto.baja_direccion_operacion` with the real shape above instead of the old table; privilege checks can be tested with a fake `Queryable` asserting the statements, plus pglite where roles are feasible — state what pglite cannot model):
+   - existing replay/idempotency/rollback tests re-pointed at the new table and still green;
+   - audit row has exactly the expected column values (referencia string, incluir_internas false, ejecutor_bd, resultado containing fingerprint, counts and URN list);
+   - missing table -> execute and simulate refuse, zero writes, no CREATE statement ever issued (assert no statement matches /CREATE/i);
+   - table with missing columns -> refusal naming them;
+   - missing INSERT privilege -> refusal before any lock/delete; missing DELETE privilege on a deletion table -> refusal before any lock/delete;
+   - replay with different responsable/motivo/huella/referencia -> refused.
+   - e2e/mocks: update any text mentioning the old table or "se crea la tabla".
+5. `docs/tools/ADDRESS_DEDUP_MODULE.md` section 6: document the new audit table, that it exists today only in dev and must be created in prod by an administrator before the first real run (state this as a prerequisite, with the DDL shape above), the privilege pre-checks, and what `resultado` contains. Remove the "shared with the CGEO-2192 script" language. Update the Brief 9 notes accordingly. Do NOT edit the CGEO-2192 files (outside the repo).
+
+### Out of scope
+Creating the table anywhere, any DDL in app code, storing the snapshot in the DB, commit.
+
+### Definition of done
+Full gauntlet green with real output pasted, no assertion weakened (re-pointing a test at the new table is fine; say so). Append "Brief 9 fix round 2 report" to `.agents/handoff/TO_ORCHESTRATOR.md`, stating plainly what is unverified.
