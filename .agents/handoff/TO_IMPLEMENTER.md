@@ -3562,3 +3562,24 @@ npm run test:e2e
 No gate weakened. Report appended to `.agents/handoff/TO_ORCHESTRATOR.md` as "Brief 11 report".
 
 Do not commit.
+
+
+---
+
+## Brief 12 — Fix: restore the type-agnostic master-reference scan (regression from Brief 10) (branch `fix/address-dedup-master-scan-text-cast`, cut from `main`, do NOT commit)
+
+Binding rules: `AGENTS.md`, `.agents/rules/*.md`. npm via `C:\Alekos\Tools\node24portable`. pglite only; never touch any real database; no DDL.
+
+### Problem (found in independent review of Brief 10, confirmed by reading the SQL)
+In `services/queries/resolveRemovalPlan.ts`, Brief 10 changed `findReferencedMasters` from `col::text = ANY($1::text[])` to `col = ANY($1::bigint[])`. `LIST_MASTER_REFERENCES_SQL` selects the tables to scan by COLUMN NAME only (`id_address_master`, `address_master_id`, `addresses_master_id`), never by type. If any `carto` table has such a column typed `text` (or anything not castable from bigint), the bigint comparison raises an error and the whole master-reference scan, hence simulate and execute, crashes. It fails safe (crash before any DELETE), but it is a regression against the stated condition for the change ("only if the column types are safe"). On the current dev DB every such column is `integer`, so it does not bite today; the point is not to depend on that. The per-table scan was never the real bottleneck of Brief 10 (the correlated `carto.address` subplan was), so reverting costs no speed.
+
+### Change
+1. Revert `findReferencedMasters` to the type-agnostic form: `SELECT DISTINCT <col>::text AS master_id FROM <table> WHERE <col>::text = ANY($1::text[])` with the ids bound as `text[]` (as before Brief 10). Keep everything else from Brief 10 (the set-based `master_shared`, the structural test, the fingerprint fixture) untouched.
+2. Tests (pglite): add a fixture table in `carto` with a TEXT-typed reference column (e.g. `carto.legacy_refs (addresses_master_id text)`, and one more with an integer-typed one) and prove: (a) the scan does not throw with a text-typed column present; (b) a target master referenced from the text column is reported as a blocker `master used by carto.legacy_refs (...)`; (c) a master not referenced is not blocked; (d) the integer-typed table still works. Also assert the statement text in the scan contains `::text = ANY($1::text[])`, so an accidental re-introduction of the bigint comparison fails a test. Keep the Brief 10 tests green unchanged.
+3. Update `docs/tools/ADDRESS_DEDUP_MODULE.md` only if it mentions the bigint comparison; otherwise no docs change.
+
+### Out of scope
+Any other change to the plan SQL, batching, indexes, commit.
+
+### Definition of done
+Full gauntlet (routes check, lint, unit, build, doctor, e2e) green, real output pasted. Append "Brief 12 report" to `.agents/handoff/TO_ORCHESTRATOR.md`.

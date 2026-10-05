@@ -797,3 +797,25 @@ Branch `feat/address-dedup-reload-after-removal`, cut from tip of `fix/address-d
 
 ### Notes
 - Result view has two "Cerrar" buttons (header X + footer); DONE test uses `.last()`.
+
+
+---
+
+## Brief 12 report
+
+Branch `fix/address-dedup-master-scan-text-cast` (from main, uncommitted).
+
+### Changes
+- `src/modules/address-dedup/services/queries/resolveRemovalPlan.ts` - `findReferencedMasters` reverted to `SELECT DISTINCT <col>::text AS master_id FROM <table> WHERE <col>::text = ANY($1::text[])`, ids bound as text[]. Rest of Brief 10 untouched.
+- `tests/unit/modules/address-dedup/removalMasterScan.test.ts` - new, pglite. Fixture tables `carto.legacy_refs (addresses_master_id text)` and `carto.numeric_refs (address_master_id integer)`, created/dropped per test. 5 cases: no throw with text column; master referenced from text column blocked as `carto.legacy_refs (addresses_master_id)`; unreferenced master not blocked; integer table still blocks; recorded scan statements contain `::text = ANY($1::text[])` and no `bigint`.
+- Docs: `ADDRESS_DEDUP_MODULE.md` mentions `::bigint[]` only for plan ids rebinding in execution, not the master scan; no change.
+
+### Gauntlet
+- modules:routes:check PASS (up to date, 12 files)
+- lint PASS (no output)
+- test PASS 54 files / 690 tests (new file: 5/5)
+- build PASS
+- doctor PASS (No issues found)
+- test:e2e PASS 67 passed
+
+No test weakened; Brief 10 tests unchanged and green. Not committed.
