@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { formatNumber } from "@/core/common/ValueFormatter";
 import { DedupTab } from "../constants";
-import type { AnalyzeResponsePayload } from "../types";
+import type { AnalyzeResponsePayload, GroupFilterCriteria } from "../types";
 import { DedupGroupsTab } from "./DedupGroupsTab";
 import { DedupSummaryTab } from "./DedupSummaryTab";
 import { DedupTabs } from "./DedupTabs";
@@ -21,6 +21,11 @@ export const DedupResultsView: React.FC<DedupResultsViewProps> = ({ result }) =>
   const [activeTab, setActiveTab] = useState<DedupTab>(DedupTab.SUMMARY);
   const groupFilters = useDedupGroupFilters(result.groups);
 
+  const handleKpiSelect = (criteria: GroupFilterCriteria) => {
+    groupFilters.applyPreset(criteria);
+    setActiveTab(DedupTab.GROUPS);
+  };
+
   return (
     <DedupTabs
       activeTab={activeTab}
@@ -28,7 +33,7 @@ export const DedupResultsView: React.FC<DedupResultsViewProps> = ({ result }) =>
       onChange={setActiveTab}
     >
       {activeTab === DedupTab.SUMMARY ? (
-        <DedupSummaryTab summary={result.summary} />
+        <DedupSummaryTab summary={result.summary} onKpiSelect={handleKpiSelect} />
       ) : (
         <DedupGroupsTab
           groups={result.groups}

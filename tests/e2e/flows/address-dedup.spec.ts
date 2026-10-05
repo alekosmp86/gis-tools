@@ -244,6 +244,54 @@ test.describe("Módulo: Duplicados de Direcciones (/tools/m/address-dedup)", () 
     await expect(page.getByRole("button", { name: /Grupo 7/ })).toContainText("Revisar");
   });
 
+  test("debe abrir Grupos filtrado por eliminar al pulsar la tarjeta A eliminar", async ({ page }) => {
+    await runAnalysis(page);
+
+    await page.getByRole("button", { name: /A eliminar/ }).click();
+
+    await expect(page.getByRole("tab", { name: /Grupos/ })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByLabel("Decisión")).toHaveValue("REMOVE");
+    await expect(page.getByLabel("Solo para revisar")).not.toBeChecked();
+    await expect(page.getByText(`Mostrando 4 de ${DEDUP_GROUP_COUNT} grupos`)).toBeVisible();
+  });
+
+  test("debe abrir Grupos solo para revisar al pulsar la tarjeta Para revisar", async ({ page }) => {
+    await runAnalysis(page);
+
+    await page.getByRole("button", { name: /Para revisar/ }).click();
+
+    await expect(page.getByRole("tab", { name: /Grupos/ })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByLabel("Solo para revisar")).toBeChecked();
+    await expect(page.getByLabel("Decisión")).toHaveValue("ALL");
+    await expect(page.getByText(`Mostrando 2 de ${DEDUP_GROUP_COUNT} grupos`)).toBeVisible();
+  });
+
+  test("debe reemplazar el filtro previo en lugar de combinarlo al pulsar otra tarjeta", async ({
+    page,
+  }) => {
+    await runAnalysis(page);
+    await page.getByRole("button", { name: /Para revisar/ }).click();
+    await expect(page.getByLabel("Solo para revisar")).toBeChecked();
+
+    await page.getByRole("tab", { name: "Resumen" }).click();
+    await page.getByRole("button", { name: /A eliminar/ }).click();
+
+    await expect(page.getByLabel("Decisión")).toHaveValue("REMOVE");
+    await expect(page.getByLabel("Solo para revisar")).not.toBeChecked();
+    await expect(page.getByText(`Mostrando 4 de ${DEDUP_GROUP_COUNT} grupos`)).toBeVisible();
+  });
+
+  test("debe abrir Grupos sin filtros al pulsar la tarjeta Grupos", async ({ page }) => {
+    await runAnalysis(page);
+    await page.getByRole("button", { name: /Para revisar/ }).click();
+    await page.getByRole("tab", { name: "Resumen" }).click();
+
+    await page.getByRole("button", { name: /^Grupos/ }).click();
+
+    await expect(page.getByLabel("Solo para revisar")).not.toBeChecked();
+    await expect(page.getByText(`Mostrando ${DEDUP_GROUP_COUNT} de ${DEDUP_GROUP_COUNT} grupos`)).toBeVisible();
+  });
+
   test("debe acotar con el filtro de motivo Tiene unidades internas", async ({ page }) => {
     await runAnalysis(page);
     await openGroupsTab(page);

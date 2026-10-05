@@ -10,6 +10,7 @@ interface DedupKpiCardProps {
   tone: KpiTone;
   hint?: string;
   isDimmed?: boolean;
+  onClick?: () => void;
 }
 
 const TONE_CLASS: Readonly<Record<KpiTone, string>> = {
@@ -25,10 +26,28 @@ export const DedupKpiCard: React.FC<DedupKpiCardProps> = ({
   tone,
   hint,
   isDimmed = false,
-}) => (
-  <div className={`glass-panel ${styles.card} ${TONE_CLASS[tone]} ${isDimmed ? styles.dimmed : ""}`}>
-    <span className={styles.label}>{label}</span>
-    <span className={styles.value}>{value}</span>
-    {hint && <span className={styles.hint}>{hint}</span>}
-  </div>
-);
+  onClick,
+}) => {
+  const className = [
+    "glass-panel",
+    styles.card,
+    TONE_CLASS[tone],
+    isDimmed ? styles.dimmed : "",
+    onClick ? styles.clickable : "",
+  ].join(" ");
+  const content = (
+    <>
+      <span className={styles.label}>{label}</span>
+      <span className={styles.value}>{value}</span>
+      {hint && <span className={styles.hint}>{hint}</span>}
+    </>
+  );
+
+  return onClick ? (
+    <button type="button" className={className} onClick={onClick}>
+      {content}
+    </button>
+  ) : (
+    <div className={className}>{content}</div>
+  );
+};

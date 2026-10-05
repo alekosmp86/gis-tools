@@ -52,6 +52,10 @@ export function useDedupGroupFilters(groups: ReadonlyArray<AnalysisGroup>) {
       setCriteria((previous) => ({ ...previous, ...patch }));
       resetView(1);
     },
+    applyPreset: (preset: GroupFilterCriteria) => {
+      setCriteria(preset);
+      resetView(1);
+    },
     clearFilters: () => {
       setCriteria(EMPTY_CRITERIA);
       resetView(1);

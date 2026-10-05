@@ -120,6 +120,15 @@ renders as an em dash (`formatCell`). The group header row carries the full `mat
 `title`. `DedupScrollFrame` puts a synchronised horizontal scrollbar above and below the table
 (`useSyncedHorizontalScroll`); the top one is hidden when nothing overflows.
 
+### KPI drill-down
+
+Each Resumen KPI card is a button that jumps to the Grupos tab with a preset that fully replaces the
+current filter (`applyPreset` in `useDedupGroupFilters`, not the merging `updateCriteria`): `Grupos` and
+`Filas` clear every filter, `A eliminar` sets Decisión = Eliminar, `A conservar` sets Decisión = Conservar,
+`Para revisar` turns on "Solo para revisar". `DedupResultsView.handleKpiSelect` applies the preset and
+switches the tab. `DedupKpiCard` renders a plain `div` when no `onClick` is given. The decision matrix
+and reason table are not clickable.
+
 ## 4. Exports
 
 - CSV: RFC 4180, `\r\n`, UTF-8, header includes `decision` and `decision_reason`. The column list
