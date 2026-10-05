@@ -33,7 +33,7 @@ export const DedupKpiCards: React.FC<DedupKpiCardsProps> = ({ summary }) => {
         label="Para revisar"
         value={rowsToReview > 0 ? formatNumber(rowsToReview) : "Ninguna"}
         tone={KpiTone.REVIEW}
-        hint="Conservadas junto a una fuente protegida"
+        hint="Requieren revisión manual antes de eliminar"
         isDimmed={rowsToReview === 0}
       />
     </div>
