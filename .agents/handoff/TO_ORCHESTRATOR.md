@@ -775,3 +775,25 @@ Deviations / notes
 - The `::bigint[]` cast assumes the scanned columns are integer/bigint (per brief). A text-typed `id_address_master`-like column in some table would now error instead of match; pglite cannot show that.
 
 Could NOT measure: no real DB used, so the actual speedup (10.3 s per 100 targets before; expected near-constant after) is unverified. pglite tests prove equivalence of results only. Suggest running simulate against DEV and a one-off EXPLAIN ANALYZE to confirm the SubPlan on `address other` is gone and that an `address` hash/seq scan runs once.
+
+## Brief 11 report
+
+Branch `feat/address-dedup-reload-after-removal`, cut from tip of `fix/address-dedup-removal-simulate-speed` (deviation: not from main). Uncommitted.
+
+### Changes
+- `ui/DedupDashboard.tsx` — passes `onRemovalComplete={() => runAnalysis(resultPayload)}` to `DedupResultsView`.
+- `ui/DedupResultsView.tsx`, `ui/DedupSummaryTab.tsx` — new required prop `onRemovalComplete`, forwarded.
+- `ui/DedupRemovalPanel.tsx` — `handleClose`: records `phase === DONE`, calls `flow.close()`, then `onRemovalComplete()` only if it was DONE. Dialog receives `{ ...flow, close: handleClose }` so X button, Esc and result-view Cerrar all share it. `useDedupRemoval.ts` and reducer untouched.
+- `tests/e2e/flows/address-dedup-removal.spec.ts` — new describe "reanálisis tras la eliminación", 3 cases: DONE close fires 2nd analyze with identical payload, shows fresh result (second mock has no removals) and Resumen tab; close from REVIEW fires no analyze; close after execute rejection fires no analyze.
+- No unit test: close logic not extracted (per brief).
+
+### Gauntlet
+- modules:routes:check PASS (up to date, 12 files)
+- lint PASS (no output)
+- test PASS 53 files / 685 tests
+- build PASS (Compiled successfully)
+- doctor PASS (No issues found; score API unreachable, expected)
+- test:e2e PASS 67 passed
+
+### Notes
+- Result view has two "Cerrar" buttons (header X + footer); DONE test uses `.last()`.
