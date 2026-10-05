@@ -3099,3 +3099,231 @@ Grouping rules, exports, sticky data columns, column picker, commit.
 
 ### Definition of done
 Full gauntlet (routes check, lint, unit, build, doctor, e2e) green with real output pasted; state root cause with evidence; report appended to `.agents/handoff/TO_ORCHESTRATOR.md`.
+
+
+---
+
+## Brief 7 — Removal candidates with attached internal/apartment units are never checked (branch `fix/address-dedup-internal-units`, cut from `main`)
+
+Binding rules: `AGENTS.md`, `.agents/rules/*.md` (coding_guidelines, testing_standards, module_authoring, code_review_standards). npm is not on PATH: use `C:\Alekos\Tools\node24portable` (see `.agents/rules/portable_node.md`).
+
+### Context — why this exists
+
+This module is a port of `CGEO-2192 prod/v3/find_removal_candidates.sql` (see the header comment of `duplicateAnalysisQuery.ts`). While preparing the actual deletion script for that ticket (`CGEO-2192/prod/v3/delete_removal_candidates.sql`, outside this repo), I found an existing production function, `carto.baja_direccion` (dev DB only, never deployed to preprod/prod), that performs single-address deletions properly — and it **refuses to delete a door ("puerta") address that has internal/apartment sub-units attached** (`carto.internal_address_access_point`) unless explicitly told to cascade. Deleting a door without its internals orphans those apartment-level addresses.
+
+Neither v3's SQL nor this module's port of it ever checks this. Confirmed directly against `pg-prod` on 2026-10-05: of the ~1,670 urns this module (and the v3 script) currently classify as a removal candidate in Flores, **250 (248 TLK, 2 ANTEL) have at least one internal unit attached** — something nobody evaluated for duplication on its own. The user independently found the same 1,670-urn number from this module's dashboard before I reported this, so the two are confirmed to agree today and must keep agreeing after this fix.
+
+### Decision (orchestrator, binding)
+
+A removable-fuente row that would otherwise be judged REMOVE, but has at least one attached internal unit, is reclassified: `decision_reason = HAS_INTERNAL_UNITS`, `decision = KEEP`. This mirrors `carto.baja_direccion`'s own default (refuse, don't cascade) rather than deciding anything new. It does **not** evaluate the internal units themselves for duplication — that stays out of scope, exactly as today.
+
+The override applies **only** to the three reasons that currently map to REMOVE (`REDUNDANT_WITH_MATCHED`, `REDUNDANT_NOT_LOWEST_URN`, `REDUNDANT_WITH_PROTECTED`). A row that is already KEEP for another reason (`PROTECTED_SOURCE`, `INFRA_MATCHED`, `NO_DUPLICATE`, `LOWEST_URN_KEPT`, `KEPT_ALONGSIDE_PROTECTED`) keeps that reason even if it happens to have internal units — there is nothing to intercept, since nothing was going to be removed.
+
+Resolution path (urn → internal units), since this module only ever joins `v_address_build` by `urn` and has never touched raw address ids before: `carto.addresses_master.urn` → `addresses_master_id` → `carto.address.id_address_master` → `address.id` → `carto.internal_address_access_point.id_access_point`.
+
+### Change
+
+**1. `services/queries/duplicateAnalysisQuery.ts`**
+- New CTE alongside `stc_urns`/`npd_urns`:
+  ```sql
+  internal_unit_urns AS (
+    SELECT DISTINCT am.urn
+    FROM carto.addresses_master am
+    JOIN carto.address a ON a.id_address_master = am.addresses_master_id
+    JOIN carto.internal_address_access_point iaap ON iaap.id_access_point = a.id
+  )
+  ```
+- In `pool`: `LEFT JOIN internal_unit_urns iu ON iu.urn = k.urn` and `(iu.urn IS NOT NULL) AS has_internal_units`, same style as `matched_serv_cto_tlk` / `matched_nap_physical_device`.
+- Rename the current `reasoned` CTE to `reasoned_raw` — **do not touch its CASE, branch order, or conditions.** Add a new `reasoned` CTE on top that only overrides the three REMOVE-bound reasons:
+  ```sql
+  reasoned AS (
+    SELECT *,
+           CASE
+             WHEN fuente = ANY($3::text[]) AND has_internal_units AND decision_reason IN (
+                    '${DecisionReason.REDUNDANT_WITH_MATCHED}',
+                    '${DecisionReason.REDUNDANT_NOT_LOWEST_URN}',
+                    '${DecisionReason.REDUNDANT_WITH_PROTECTED}')
+               THEN '${DecisionReason.HAS_INTERNAL_UNITS}'
+             ELSE decision_reason
+           END AS decision_reason
+    FROM reasoned_raw
+  )
+  ```
+  `decided`'s existing `decision_reason IN (...)` → `REMOVE` mapping is untouched; `HAS_INTERNAL_UNITS` is not in that list, so it resolves to `KEEP` for free.
+- Add `d.has_internal_units` to the final SELECT, next to `d.matched_serv_cto_tlk, d.matched_nap_physical_device`.
+- No new bound parameter — `$1..$8` stay exactly as they are.
+
+**2. `constants.ts`**: add `HAS_INTERNAL_UNITS: "HAS_INTERNAL_UNITS"` to `DecisionReason`; append to `REASONS_BY_DECISION[Decision.KEEP]`. Add one array, e.g. `REVIEW_REASONS = [DecisionReason.KEPT_ALONGSIDE_PROTECTED, DecisionReason.HAS_INTERNAL_UNITS]` — the single place "needs human review" is defined, consumed by both places below instead of each hardcoding `KEPT_ALONGSIDE_PROTECTED` directly.
+
+**3. `data/dedupLabels.ts`**: `REASON_LABELS[HAS_INTERNAL_UNITS]` = `"Tiene unidades internas (revisar)"`; `REASON_DESCRIPTIONS[HAS_INTERNAL_UNITS]` = `"La puerta tiene direcciones internas (apartamentos/unidades) asociadas; eliminarla las dejaría huérfanas. Se conserva para revisión manual, fuera del alcance de esta herramienta."`
+
+**4. `types.ts`**: `AnalysisRow` gains `has_internal_units: boolean`, same position as the SQL change.
+
+**5. `services/queries/mapAnalysisRow.ts`**: map the new column.
+
+**6. `domain/groupFilters.ts`**: `hasReviewRows` matches any reason in `REVIEW_REASONS`, not only `KEPT_ALONGSIDE_PROTECTED`.
+
+**7. `domain/summaryView.ts`**: `reviewCount` sums `byReason` over `REVIEW_REASONS`.
+
+**8. `domain/export.ts`**: do **not** add `has_internal_units` to the CSV/GeoJSON column list — same rule Brief 5 set for its new columns, keep the exported header byte-identical to v3. Re-confirm the pinned header test still passes unchanged.
+
+**9. `docs/tools/ADDRESS_DEDUP_MODULE.md`**: document the new reason, the new column, and that this closes a real gap found via CGEO-2192 (name the ticket).
+
+### Test fixture changes — `tests/unit/modules/address-dedup/pgliteHarness.ts`
+
+The harness only models `carto.v_address_build` plus the two infra-match tables today; nothing needed urn→id resolution before this. Add, minimally (same simplification level as the existing two infra tables — not a full schema mirror):
+- `CREATE TABLE carto.addresses_master (addresses_master_id serial PRIMARY KEY, urn text)`
+- `CREATE TABLE carto.address (id serial PRIMARY KEY, id_address_master int)`
+- `CREATE TABLE carto.internal_address_access_point (id_access_point int, id_internal_address int)`
+- Add all three to `RESET_SQL`'s `TRUNCATE` list.
+- New helper `markHasInternalUnits(database, urn)`, mirroring `markMatchedInServCto` / `markMatchedInNapDevice`: creates the backing `addresses_master`/`address` rows for that urn and inserts one `internal_address_access_point` row referencing it. `insertAddress` itself must stay untouched — most fixtures never call this helper, and the join is a `LEFT JOIN`, so no backing row means `has_internal_units = false`, exactly like today's behavior for urns never passed to `markMatchedInServCto`.
+
+### Required tests (by name) — `duplicateAnalysisQuery.test.ts`
+
+- A removable row that would be `REDUNDANT_NOT_LOWEST_URN` → with `markHasInternalUnits`, becomes `HAS_INTERNAL_UNITS` / `KEEP`.
+- Same for a row that would be `REDUNDANT_WITH_MATCHED`.
+- Same for a row that would be `REDUNDANT_WITH_PROTECTED` (requires `protectedSiblingRemovesLone: true`).
+- A removable row with internal units but `dup_group_size = 1` → stays `NO_DUPLICATE` (proves the override is scoped to REMOVE-bound reasons only, not "has internal units → always flag").
+- A removable row with internal units that also has an infra match → stays `INFRA_MATCHED` (matched wins).
+- A protected-fuente (IDE) row with internal units in a duplicate group → stays `PROTECTED_SOURCE`.
+- `has_internal_units = false` for every row where `markHasInternalUnits` was never called (no leakage across urns).
+
+### Other test updates
+- `groupFilters.test.ts`: "Solo para revisar" matches a group whose only review-worthy row is `HAS_INTERNAL_UNITS`, with no `KEPT_ALONGSIDE_PROTECTED` row present.
+- `summaryView.test.ts`: `reviewCount` sums both reasons.
+- `export.test.ts`: re-confirm the CSV header is still byte-identical.
+- e2e (`tests/e2e/flows/address-dedup.spec.ts` + fixtures): add one `HAS_INTERNAL_UNITS` row to the fixture group set so the Motivo filter and the amber "Revisar" badge each get a real case beyond `KEPT_ALONGSIDE_PROTECTED`. Pointer only — match the existing spec's style, not prescriptive of exact assertions.
+
+### Out of scope
+- Evaluating internal/apartment addresses themselves for duplication — still entirely unaddressed.
+- Any UI redesign beyond the new reason flowing through existing generic mechanisms (`REASON_FILTER_OPTIONS`, `DedupReasonTable` already iterate `Object.values(DecisionReason)` — confirm, don't rebuild).
+- Changing the `$1..$8` parameter count, order, or meaning.
+- Commit.
+
+### Definition of done
+Full gauntlet, real output pasted:
+```
+npm run modules:routes:check
+npm run lint
+npm test
+npm run build
+npm run doctor
+npm run test:e2e
+```
+No gate weakened, no assertion relaxed, no `eslint-disable`/`@ts-ignore`. Report appended to `.agents/handoff/TO_ORCHESTRATOR.md` as "Brief 7 report".
+
+Do not commit.
+
+
+---
+
+## Fix round 1 for Brief 7 — review-only groups vanish from the default view
+
+Gauntlet re-verified green (routes/lint/542 tests incl. the new ones/build/doctor 100/`test:e2e` 48/48). The query and classification change itself is correct — I independently re-ran the real pg-prod numbers and they match what the dashboard now shows (1,421 eliminar). One real bug, found by comparing those prod numbers group-by-group, not by reading the diff alone.
+
+**This one is mine, not yours** — the brief never mentioned `output_groups`, so there was nothing in scope telling you to look at it.
+
+## F1 [BLOCKER] — a group with zero remaining REMOVE rows disappears entirely, taking its review rows with it
+
+`output_groups` (`duplicateAnalysisQuery.ts:202-207`) only keeps a group when it has a `REMOVE` row, or (opt-in) when `$8 = ALL_DUPLICATE_GROUPS`. Before this brief, every group with a removable member that wasn't the sole survivor produced at least one `REMOVE` row, so this never bit. Now it does: when **every** removable member of a group gets reclassified to `HAS_INTERNAL_UNITS`, the group has no `REMOVE` row left at all — and vanishes from `output_groups`, so none of its rows reach the client. Confirmed directly against pg-prod: **49 of 843 groups, 248 of 250 `HAS_INTERNAL_UNITS` rows**, are in this state today. (The dashboard's "Para revisar: 1" is real but almost meaningless — it's only the 2 `HAS_INTERNAL_UNITS` rows whose group happens to still have an unrelated surviving `REMOVE` member. The other 248 are not undercounted, they are **not there at all** — not in `Grupos`, not in any KPI, not in CSV/GeoJSON export.)
+
+> Someone reads "Para revisar: 1", concludes there's nothing to look at, and the 248 addresses that most need a human decision (their only reason nothing is being deleted is an attached apartment) are never looked at by anyone, with no indication they exist.
+
+The same scoping gap is latent for `KEPT_ALONGSIDE_PROTECTED` too — a 2-member group (one protected, one removable-and-lowest-urn) produces zero `REMOVE` rows today and would have been invisible before this brief as well. It happened not to bite visibly before (the very first dashboard read showed "Para revisar: Ninguna" — plausibly already wrong, just small enough not to be noticed). Brief 7 didn't create this bug; it made the existing one large enough to see.
+
+**Fix:** `output_groups` must also keep a group containing any row whose `decision_reason` is review-worthy, regardless of whether a `REMOVE` row survives elsewhere in it:
+
+```sql
+output_groups AS (
+  SELECT DISTINCT match_key
+  FROM decided
+  WHERE decision = '${Decision.REMOVE}'
+     OR decision_reason = ANY(ARRAY['${DecisionReason.KEPT_ALONGSIDE_PROTECTED}', '${DecisionReason.HAS_INTERNAL_UNITS}'])
+     OR ($8::text = '${DedupScope.ALL_DUPLICATE_GROUPS}' AND dup_group_size > 1)
+)
+```
+
+Use `REVIEW_REASONS` (the constant added in Brief 7) to generate that `ARRAY[...]` list rather than hand-duplicating the two reason names a third time — interpolate it the same way the file already interpolates other `DecisionReason` constants, your call on the exact mechanism (map-and-join vs. two literals), but it must read from `REVIEW_REASONS`, not introduce a fourth place that lists these two reasons by hand.
+
+**Required test (by name), `duplicateAnalysisQuery.test.ts`:** a group with two removable members, both ending up `HAS_INTERNAL_UNITS` (no `REMOVE` anywhere in the group) → both rows are still present in the query's output under the **default** `REMOVAL_GROUPS` scope. This is the exact case that was missing from Brief 7's own test list — add it, don't just fix the SQL.
+
+**Also fix the KPI/report consumers**, since they currently assume "if it's not a REMOVE-having group, scope decides visibility" implicitly by only ever seeing what the query already filtered:
+- Re-run `groupFilters.test.ts`'s "Solo para revisar" case for this specific shape (group with *only* `HAS_INTERNAL_UNITS` members, no `REMOVE`) — confirm it still toggles the group in, now that it's actually reachable.
+- `summaryView.test.ts`: add a case where `reviewCount` includes rows from a group that has no `REMOVE` member at all.
+
+### Out of scope
+Any other change to `output_groups`'s `ALL_DUPLICATE_GROUPS` branch or to scope semantics beyond adding the review-reason condition. Commit.
+
+### Definition of done
+Full gauntlet again, real output pasted. Re-paste the live dashboard numbers (groups/rows/eliminar/conservar/para revisar) after the fix and confirm `groups_fully_deferred` (49) and `deferred_rows_in_fully_deferred_groups` (248) from this message are now visible in the UI, not just true in the database. Report as "Fix round 1 report" in `TO_ORCHESTRATOR.md`.
+
+Do not commit.
+
+
+---
+
+## Brief 8 — clicking a KPI card shows its matching records (branch `feat/address-dedup-kpi-drilldown`, cut from `main`)
+
+Binding rules: `AGENTS.md`, `.agents/rules/*.md` (coding_guidelines, testing_standards, module_authoring, code_review_standards). npm via `C:\Alekos\Tools\node24portable`.
+
+### Goal
+User-requested: clicking a KPI card on the Resumen tab (`Grupos`, `Filas`, `A eliminar`, `A conservar`, `Para revisar`) jumps to the Grupos tab already filtered to exactly that KPI's own rows — reusing the Grupos tab's existing filter machinery as the "summary of matching records" view, not building a second one.
+
+### Decision (orchestrator, binding)
+
+**No new view.** The Grupos tab (`DedupGroupsTab` + `GroupFilterCriteria` + `filterGroups`) already is a filterable table of matching records — a KPI click is a shortcut into it with a preset, full-replacement filter, not an incremental patch.
+
+Five presets, one per card, each a **complete** `GroupFilterCriteria` (not merged onto whatever filter happened to be active before — clicking `A eliminar` after `Para revisar` was active must not leave `reviewOnly` stuck on):
+
+| Card | Preset |
+|---|---|
+| `Grupos` | `EMPTY_CRITERIA` (show everything) |
+| `Filas` | `EMPTY_CRITERIA` (same — there's no row-only view distinct from groups) |
+| `A eliminar` | `{ ...EMPTY_CRITERIA, decision: DecisionFilter.REMOVE }` |
+| `A conservar` | `{ ...EMPTY_CRITERIA, decision: DecisionFilter.KEEP }` |
+| `Para revisar` | `{ ...EMPTY_CRITERIA, reviewOnly: true }` |
+
+Clicking any card also switches the active tab to `DedupTab.GROUPS`. Clicking `Para revisar` when its value is "Ninguna" (0 rows) is allowed — it just lands on the Grupos tab's existing empty state, no special-casing needed.
+
+### Change
+
+**1. `ui/useDedupGroupFilters.ts`** — add `applyPreset(criteria: GroupFilterCriteria): void` alongside the existing `updateCriteria` (merge) and `clearFilters` (reset to `EMPTY_CRITERIA`): sets `criteria` to the given value wholesale and calls the same `resetView(1)` the other setters already use. Do not change `updateCriteria`'s merge behavior — the Grupos tab's own toolbar still needs incremental patching; this is a new, distinct, full-replacement setter for the drill-down path only.
+
+**2. `ui/DedupResultsView.tsx`** — already owns both `activeTab`/`setActiveTab` and `groupFilters` (the one `useDedupGroupFilters` instance, kept alive across tab switches). Add one handler:
+```ts
+const handleKpiSelect = (criteria: GroupFilterCriteria) => {
+  groupFilters.applyPreset(criteria);
+  setActiveTab(DedupTab.GROUPS);
+};
+```
+Pass it to `DedupSummaryTab` as a new prop (e.g. `onKpiSelect`).
+
+**3. `ui/DedupSummaryTab.tsx`** — accept `onKpiSelect` and forward to `DedupKpiCards`. (Not to `DedupDecisionMatrix`/`DedupReasonTable` — those stay out of scope, see below.)
+
+**4. `ui/DedupKpiCards.tsx`** — accept `onKpiSelect: (criteria: GroupFilterCriteria) => void`, pass each card its own `onClick={() => onKpiSelect(PRESET)}` using the table above. Import `EMPTY_CRITERIA`/`DecisionFilter` from `domain/groupFilters` / `constants` as needed — do not hand-roll a second criteria shape.
+
+**5. `ui/DedupKpiCard.tsx`** — add optional `onClick?: () => void`. When present, render the card as a real `<button type="button">` (keyboard operable for free) instead of a `<div>`, keeping the exact same visual content and the `glass-panel`/tone/dimmed classes; when absent, render exactly as today (plain, non-interactive `<div>` — don't force every future caller of this component to be clickable). Add a `.clickable` modifier in `DedupKpiCard.module.css` with a hover and `:focus-visible` affordance (subtle lift/brighten using existing design tokens — no new colours, no inline styles), applied only when `onClick` is set.
+
+### Out of scope
+- `DedupDecisionMatrix` and `DedupReasonTable` are not part of this request — do not make their cells/rows clickable.
+- Changing what any preset's filter actually matches (that's the existing, already-tested `filterGroups`/`groupFilters` logic — untouched).
+- Persisting the drill-down filter across a page reload or a new analysis run (`DedupResultsView` is already remounted per-result with a fresh `key`, per its own doc comment — leave that behavior as is).
+- Commit.
+
+### Required tests
+- e2e (`tests/e2e/flows/address-dedup.spec.ts`): for at least `A eliminar` and `Para revisar`, click the KPI card from the Resumen tab and assert: the Grupos tab is now active, the corresponding filter select/toggle reflects the preset (e.g. Decisión = Eliminar, or the "Solo para revisar" toggle is on), and the visible group count matches. One more case: with a non-empty filter already active on the Grupos tab (e.g. from a prior `Para revisar` click), clicking `A eliminar` next must show the `A eliminar` preset only — not a merge of both (proves `applyPreset` fully replaces, not patches).
+- No unit test required for `useDedupGroupFilters` itself (a hook, not a pure `domain/` function — same rule already applied to this module: no React/hook testing-library infra here).
+
+### Definition of done
+Full gauntlet, real output pasted:
+```
+npm run modules:routes:check
+npm run lint
+npm test
+npm run build
+npm run doctor
+npm run test:e2e
+```
+No gate weakened, no assertion relaxed. Update `docs/tools/ADDRESS_DEDUP_MODULE.md` with the new interaction. Report appended to `.agents/handoff/TO_ORCHESTRATOR.md` as "Brief 8 report".
+
+Do not commit.

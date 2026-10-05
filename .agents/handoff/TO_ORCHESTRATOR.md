@@ -477,3 +477,44 @@ Changes:
 - New `tests/e2e/flows/address-dedup-scroll.spec.ts`: per-file `test.use` launchOptions (overlay scrollbars, real scrollbars); at 1280x800 and 1920x1080: frame within viewport, content overflows, top bar not display:none and height >= 12, no page overflow, top->content sync, header label stays within frame after scrolling 400px.
 
 Gauntlet (portable Node): modules:routes:check PASS (10 files); lint PASS (no output); npm test PASS 46 files / 542 tests; build PASS; doctor PASS (No issues found, 100/100); test:e2e PASS 48 passed (35.5s).
+
+
+## Brief 7 report
+
+Status: DONE (uncommitted, branch `fix/address-dedup-internal-units` cut from main).
+
+Changes: duplicateAnalysisQuery.ts (internal_unit_urns CTE, has_internal_units in pool, reasoned_raw + new reasoned override, final SELECT col), constants.ts (HAS_INTERNAL_UNITS, REVIEW_REASONS), dedupLabels.ts (label, description, KEEP reason list), types.ts, mapAnalysisRow.ts, groupFilters.ts (hasReviewRows), summaryView.ts (reviewCount), docs/tools/ADDRESS_DEDUP_MODULE.md. export.ts untouched; $1..$8 unchanged; CSV header test passes unchanged.
+
+Tests: pgliteHarness (3 tables, TRUNCATE, markHasInternalUnits), duplicateAnalysisQuery.test (9 new cases covering all 7 required + LOWEST_URN_KEPT), groupFilters, summaryView, mapAnalysisRow, rowFactory, e2e fixture (group 7) + spec (review filter count 2, Motivo filter test).
+
+Deviations:
+1. reasoned_raw's final alias is `base_reason` (CASE untouched), not `decision_reason`: `SELECT *, ... AS decision_reason` over a source already holding decision_reason yields two same-named columns (ambiguous in `decided`).
+2. NO_DUPLICATE test: singletons never reach the output, so it runs DUPLICATE_ANALYSIS_SQL with `dup_group_size > 1` swapped to `true` (asserts the replace happened) to observe the singleton row.
+3. e2e: new group 7 (DEDUP_GROUP_COUNT 6 -> 7); "Solo para revisar" expectation changed 1 -> 2 groups because the fixture gained a review group, with Grupo 7 badge asserted.
+
+Gauntlet: routes check PASS, lint PASS, npm test 552/552, build PASS, doctor "No issues found", e2e 49 passed.
+
+
+---
+
+## Fix round 1 report (Brief 7, F1)
+
+Status: DONE (code + tests). Live dashboard numbers UNVERIFIED in the UI (no prod access).
+
+Changes
+- `src/modules/address-dedup/services/queries/duplicateAnalysisQuery.ts`: `output_groups` now also keeps groups with a row whose `decision_reason = ANY(ARRAY[...])`; array built from `REVIEW_REASONS` via `REVIEW_REASON_SQL_LIST` (map/join), no new hand-written list.
+- `tests/unit/modules/address-dedup/duplicateAnalysisQuery.test.ts`: added "group with no REMOVE row because every removable member is HAS_INTERNAL_UNITS ... default REMOVAL_GROUPS" (3 rows visible); replaced the old "should leave the group out under REMOVAL_GROUPS (the v3 gap, pinned)" with "should list a KEPT_ALONGSIDE_PROTECTED-only group under the default REMOVAL_GROUPS scope".
+- `groupFilters.test.ts`: added all-HAS_INTERNAL_UNITS/no-REMOVE group case (toggles in under reviewOnly, hasReviewRows true).
+- `summaryView.test.ts`: added reviewCount case for a group with no REMOVE member.
+
+Deviation to confirm: the old v3-gap test asserted the lone-ANTEL+IDE group is EXCLUDED under REMOVAL_GROUPS. That pinned the very behavior F1 calls a latent bug, so I inverted it (not weakened to pass: the spec changed per brief). Brief said "Commit" under out-of-scope text; did NOT commit.
+
+Gauntlet (portable node)
+- modules:routes:check: PASS (up to date, 10 files)
+- lint: PASS (no output, 0 problems)
+- test: PASS 46 files / 555 tests
+- build: PASS
+- doctor: PASS "No issues found", score 100
+- test:e2e: PASS 49/49
+
+Live numbers: I could not run against prod. The 49 groups / 248 rows being visible in the dashboard is UNVERIFIED in the UI; only covered by pglite unit tests and mocked e2e. Orchestrator should re-check against pg-prod. Docs (`docs/tools/ADDRESS_DEDUP_MODULE.md`) not touched this round; check whether it describes REMOVAL_GROUPS as REMOVE-only.
