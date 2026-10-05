@@ -12,6 +12,9 @@ const NO_ANALYSIS: AddressRepository = {
   async runDuplicateAnalysis() {
     throw new Error("removal must not call the read repository");
   },
+  async listProvinces() {
+    throw new Error("removal must not list provinces");
+  },
 };
 
 describe("DedupOrchestrator removal", () => {

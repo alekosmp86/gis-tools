@@ -26,6 +26,9 @@ const NO_ANALYSIS: AddressRepository = {
   async runDuplicateAnalysis() {
     throw new Error("the removal handlers must not run the read analysis");
   },
+  async listProvinces() {
+    throw new Error("removal must not list provinces");
+  },
 };
 
 function handlersFor(removal: FakeRemovalRepository) {

@@ -5,6 +5,7 @@ import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
 import type { DbConfig } from "@/core/types/db";
+import type { ProvinceOption } from "../types";
 import { DedupConnectionForm } from "./DedupConnectionForm";
 import { DedupOptionsPanel } from "./DedupOptionsPanel";
 import styles from "./DedupConfigCard.module.css";
@@ -12,6 +13,9 @@ import styles from "./DedupConfigCard.module.css";
 interface DedupConfigCardProps {
   config: DbConfig;
   provinceId: string;
+  provinces: ReadonlyArray<ProvinceOption>;
+  isLoadingProvinces: boolean;
+  provincesError: string | null;
   protectedSiblingRemovesLone: boolean;
   includeGroupsWithoutRemovals: boolean;
   isSubmitting: boolean;
@@ -19,6 +23,7 @@ interface DedupConfigCardProps {
   onConfigChange: (field: keyof DbConfig, value: string) => void;
   onProfileLoaded: (config: Partial<DbConfig>) => void;
   onProvinceChange: (value: string) => void;
+  onLoadProvinces: () => void;
   onProtectedSiblingChange: (value: boolean) => void;
   onIncludeGroupsChange: (value: boolean) => void;
   onSubmit: () => void;
@@ -28,6 +33,9 @@ interface DedupConfigCardProps {
 export const DedupConfigCard: React.FC<DedupConfigCardProps> = ({
   config,
   provinceId,
+  provinces,
+  isLoadingProvinces,
+  provincesError,
   protectedSiblingRemovesLone,
   includeGroupsWithoutRemovals,
   isSubmitting,
@@ -35,6 +43,7 @@ export const DedupConfigCard: React.FC<DedupConfigCardProps> = ({
   onConfigChange,
   onProfileLoaded,
   onProvinceChange,
+  onLoadProvinces,
   onProtectedSiblingChange,
   onIncludeGroupsChange,
   onSubmit,
@@ -47,10 +56,14 @@ export const DedupConfigCard: React.FC<DedupConfigCardProps> = ({
     <DedupConnectionForm
       config={config}
       provinceId={provinceId}
+      provinces={provinces}
+      isLoadingProvinces={isLoadingProvinces}
+      provincesError={provincesError}
       isSubmitting={isSubmitting}
       onConfigChange={onConfigChange}
       onProfileLoaded={onProfileLoaded}
       onProvinceChange={onProvinceChange}
+      onLoadProvinces={onLoadProvinces}
       onSubmit={onSubmit}
     >
       <DedupOptionsPanel

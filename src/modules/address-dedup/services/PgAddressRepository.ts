@@ -1,8 +1,11 @@
 import { Client } from "pg";
 import { CONNECTION_TIMEOUT_MS, STATEMENT_TIMEOUT_MS } from "../constants";
-import type { AnalysisRow, DbConnection, RepositoryRequest } from "../types";
+import type { AnalysisRow, DbConnection, ProvinceOption, RepositoryRequest } from "../types";
 import type { AddressRepository } from "./AddressRepository";
+import { mapProvinceRow } from "./queries/mapProvinceRow";
+import { PROVINCES_SQL } from "./queries/provincesQuery";
 import { runDuplicateAnalysis, type Queryable } from "./queries/runDuplicateAnalysis";
+import { runInTransaction, type TransactionSettings } from "./runInTransaction";
 
 /** What the repository needs from a `pg` client; also what a test fake implements. */
 export interface PgClientLike extends Queryable {
@@ -13,9 +16,10 @@ export interface PgClientLike extends Queryable {
 
 export type PgClientFactory = (connection: DbConnection) => PgClientLike;
 
-const SQL_BEGIN_READ_ONLY = "BEGIN READ ONLY";
-const SQL_SET_STATEMENT_TIMEOUT = `SET LOCAL statement_timeout = ${STATEMENT_TIMEOUT_MS}`;
-const SQL_ROLLBACK = "ROLLBACK";
+const READ_ONLY_TRANSACTION: TransactionSettings = {
+  begin: "BEGIN READ ONLY",
+  settings: [`SET LOCAL statement_timeout = ${STATEMENT_TIMEOUT_MS}`],
+};
 
 export function createPgClient(connection: DbConnection): PgClientLike {
   return new Client({
@@ -29,35 +33,33 @@ export function createPgClient(connection: DbConnection): PgClientLike {
 }
 
 /**
- * Runs the analysis in a read-only transaction, so a write attempt is refused by Postgres itself,
+ * Runs every read in a read-only transaction, so a write attempt is refused by Postgres itself,
  * not by this code. One connection per call; the transaction is always rolled back and the
  * connection always closed.
  */
 export class PgAddressRepository implements AddressRepository {
   constructor(private readonly createClient: PgClientFactory = createPgClient) {}
 
-  async runDuplicateAnalysis(request: RepositoryRequest): Promise<AnalysisRow[]> {
-    const client = this.createClient(request.connection);
-    // pg emits 'error' on an unexpected disconnect; with no listener that is an uncaught exception.
-    // The pending query's rejection is what reaches the caller.
-    client.on("error", () => undefined);
-    let isTransactionOpen = false;
-
-    try {
-      await client.connect();
-      await client.query(SQL_BEGIN_READ_ONLY, []);
-      isTransactionOpen = true;
-      await client.query(SQL_SET_STATEMENT_TIMEOUT, []);
-      return await runDuplicateAnalysis(client, request.parameters);
-    } finally {
-      await this.closeQuietly(client, isTransactionOpen);
-    }
+  runDuplicateAnalysis(request: RepositoryRequest): Promise<AnalysisRow[]> {
+    return this.readOnly(request.connection, (client) =>
+      runDuplicateAnalysis(client, request.parameters)
+    );
   }
 
-  private async closeQuietly(client: PgClientLike, isTransactionOpen: boolean): Promise<void> {
-    if (isTransactionOpen) {
-      await client.query(SQL_ROLLBACK, []).catch(() => undefined);
-    }
-    await client.end().catch(() => undefined);
+  listProvinces(connection: DbConnection): Promise<ProvinceOption[]> {
+    return this.readOnly(connection, async (client) => {
+      const result = await client.query(PROVINCES_SQL, []);
+      return result.rows.flatMap((row) => {
+        const province = mapProvinceRow(row as Record<string, unknown>);
+        return Number.isInteger(province.id) && province.id > 0 ? [province] : [];
+      });
+    });
+  }
+
+  private readOnly<TResult>(
+    connection: DbConnection,
+    work: (client: PgClientLike) => Promise<TResult>
+  ): Promise<TResult> {
+    return runInTransaction(this.createClient(connection), READ_ONLY_TRANSACTION, false, work);
   }
 }

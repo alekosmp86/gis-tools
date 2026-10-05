@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { STATEMENT_TIMEOUT_MS } from "@/modules/address-dedup/constants";
 import { PgAddressRepository, type PgClientLike } from "@/modules/address-dedup/services/PgAddressRepository";
+import { PROVINCES_SQL } from "@/modules/address-dedup/services/queries/provincesQuery";
 import { DUPLICATE_ANALYSIS_SQL } from "@/modules/address-dedup/services/queries/duplicateAnalysisQuery";
 import type { DbConnection, RepositoryRequest } from "@/modules/address-dedup/types";
 import { DEFAULT_PARAMETERS } from "./pgliteHarness";
@@ -34,7 +35,7 @@ class FakeClient implements PgClientLike {
   public emitErrorDuringQuery: string | null = null;
 
   constructor(
-    private readonly options: { failOnQuery?: string; failOnConnect?: boolean } = {}
+    private readonly options: { failOnQuery?: string; failOnConnect?: boolean; provinceRows?: unknown[] } = {}
   ) {}
 
   async connect(): Promise<void> {
@@ -45,6 +46,7 @@ class FakeClient implements PgClientLike {
 
   async query(text: string, values: unknown[]): Promise<{ rows: ReadonlyArray<unknown> }> {
     this.queries.push({ text, values });
+    if (text === PROVINCES_SQL && !this.options.failOnQuery) return { rows: this.options.provinceRows ?? [] };
     if (this.emitErrorDuringQuery && text === this.emitErrorDuringQuery) {
       this.emitError(new Error("terminating connection"));
       throw new Error("terminating connection");
@@ -200,5 +202,124 @@ describe("PgAddressRepository", () => {
     // Act & Assert
     await expect(repository.runDuplicateAnalysis(REQUEST)).rejects.toThrow("terminating connection");
     expect(client.endCount).toBe(1);
+  });
+
+  describe("listProvinces", () => {
+    it("should map the rows, coercing a string id from pg to a number", async () => {
+      // Arrange
+      const client = new FakeClient({
+        provinceRows: [
+          { id: "7", name: "FLORES" },
+          { id: 1, name: "MONTEVIDEO" },
+        ],
+      });
+      const { repository, factoryCalls } = repositoryWith(client);
+
+      // Act
+      const provinces = await repository.listProvinces(CONNECTION);
+
+      // Assert
+      expect(provinces).toEqual([
+        { id: 7, name: "FLORES" },
+        { id: 1, name: "MONTEVIDEO" },
+      ]);
+      expect(factoryCalls).toEqual([CONNECTION]);
+    });
+
+    it("should drop rows whose id is null, non-numeric, zero, negative or fractional", async () => {
+      // Arrange
+      const client = new FakeClient({
+        provinceRows: [
+          { id: null, name: "NULO" },
+          { id: "abc", name: "TEXTO" },
+          { id: 0, name: "CERO" },
+          { id: -2, name: "NEGATIVO" },
+          { id: 1.5, name: "FRACCION" },
+          { id: 7, name: "FLORES" },
+        ],
+      });
+      const { repository } = repositoryWith(client);
+
+      // Act
+      const provinces = await repository.listProvinces(CONNECTION);
+
+      // Assert
+      expect(provinces).toEqual([{ id: 7, name: "FLORES" }]);
+    });
+
+    it("should return an empty list when the table has no rows", async () => {
+      // Arrange
+      const { repository } = repositoryWith(new FakeClient());
+
+      // Act & Assert
+      await expect(repository.listProvinces(CONNECTION)).resolves.toEqual([]);
+    });
+
+    it("should read inside a read-only transaction with the timeout, roll back and close the connection", async () => {
+      // Arrange
+      const client = new FakeClient();
+      const { repository } = repositoryWith(client);
+
+      // Act
+      await repository.listProvinces(CONNECTION);
+
+      // Assert
+      expect(client.queries.map((query) => query.text)).toEqual([
+        "BEGIN READ ONLY",
+        `SET LOCAL statement_timeout = ${STATEMENT_TIMEOUT_MS}`,
+        PROVINCES_SQL,
+        "ROLLBACK",
+      ]);
+      expect(client.endCount).toBe(1);
+    });
+
+    it("should roll back and close the connection when the query fails", async () => {
+      // Arrange
+      const client = new FakeClient({ failOnQuery: PROVINCES_SQL });
+      const { repository } = repositoryWith(client);
+
+      // Act & Assert
+      await expect(repository.listProvinces(CONNECTION)).rejects.toThrow("query failed");
+      expect(client.queries[client.queries.length - 1].text).toBe("ROLLBACK");
+      expect(client.endCount).toBe(1);
+    });
+
+    it("should close the connection and propagate the failure when connecting fails", async () => {
+      // Arrange
+      const client = new FakeClient({ failOnConnect: true });
+      const { repository } = repositoryWith(client);
+
+      // Act & Assert
+      await expect(repository.listProvinces(CONNECTION)).rejects.toThrow("connect failed");
+      expect(client.queries).toEqual([]);
+      expect(client.endCount).toBe(1);
+    });
+
+    it("should register an error listener before connecting", async () => {
+      // Arrange
+      const client = new FakeClient();
+      const { repository } = repositoryWith(client);
+
+      // Act
+      await repository.listProvinces(CONNECTION);
+
+      // Assert
+      expect(client.listenerCountAtConnect).toBe(1);
+    });
+
+    it("should issue no write statement and never put the password in the query text", async () => {
+      // Arrange
+      const client = new FakeClient();
+      const { repository } = repositoryWith(client);
+
+      // Act
+      await repository.listProvinces(CONNECTION);
+
+      // Assert
+      for (const query of client.queries) {
+        expect(query.text.replace(/'[^']*'/g, "")).not.toMatch(WRITE_STATEMENT);
+        expect(query.text).not.toContain(CONNECTION.password);
+      }
+    });
   });
 });

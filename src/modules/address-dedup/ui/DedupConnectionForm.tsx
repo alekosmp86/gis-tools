@@ -1,22 +1,29 @@
 "use client";
 
 import React from "react";
-import { Database, Loader2, Save, Search, User, Lock, Server, MapPin } from "lucide-react";
+import { Database, Loader2, Save, Search, User, Lock, Server } from "lucide-react";
 import { FormField } from "@/ui-kit/components/ui/FormField";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { ProfileSelect } from "@/ui-kit/components/ProfileSelect";
 import { ButtonVariant } from "@/ui-kit/types/ui";
 import type { DbConfig } from "@/core/types/db";
+import type { ProvinceOption } from "../types";
+import { canLoadProvinces } from "../domain/provinceSelection";
+import { DedupProvinceSelect } from "./DedupProvinceSelect";
 import { useDedupProfiles } from "./useDedupProfiles";
 import styles from "./DedupConnectionForm.module.css";
 
 interface DedupConnectionFormProps {
   config: DbConfig;
   provinceId: string;
+  provinces: ReadonlyArray<ProvinceOption>;
+  isLoadingProvinces: boolean;
+  provincesError: string | null;
   isSubmitting: boolean;
   onConfigChange: (field: keyof DbConfig, value: string) => void;
   onProfileLoaded: (config: Partial<DbConfig>) => void;
   onProvinceChange: (value: string) => void;
+  onLoadProvinces: () => void;
   onSubmit: () => void;
   children?: React.ReactNode;
 }
@@ -24,10 +31,14 @@ interface DedupConnectionFormProps {
 export const DedupConnectionForm: React.FC<DedupConnectionFormProps> = ({
   config,
   provinceId,
+  provinces,
+  isLoadingProvinces,
+  provincesError,
   isSubmitting,
   onConfigChange,
   onProfileLoaded,
   onProvinceChange,
+  onLoadProvinces,
   onSubmit,
   children,
 }) => {
@@ -85,13 +96,14 @@ export const DedupConnectionForm: React.FC<DedupConnectionFormProps> = ({
           value={config.password ?? ""}
           onChange={(value) => onConfigChange("password", value)}
         />
-        <FormField
-          label="Id de provincia"
-          icon={MapPin}
-          type="number"
+        <DedupProvinceSelect
+          provinces={provinces}
           value={provinceId}
+          isLoading={isLoadingProvinces}
+          canLoad={canLoadProvinces(config)}
+          errorText={provincesError}
           onChange={onProvinceChange}
-          placeholder="7"
+          onLoad={onLoadProvinces}
         />
       </div>
 

@@ -5,12 +5,18 @@ import {
   DEDUP_CSV_BODY,
   DEDUP_GROUP_COUNT,
 } from "../fixtures/dedupFixtures";
+import {
+  DEDUP_PROVINCES_RESPONSE,
+  loadAndSelectProvince,
+  mockProvinces,
+} from "../support/dedupProvince";
 
 const PAGE_URL = "/tools/m/address-dedup";
 const ANALYZE_URL = "**/api/m/address-dedup/analyze";
 const EXPORT_URL = "**/api/m/address-dedup/export";
 
 async function mockDedupApi(page: Page): Promise<void> {
+  await mockProvinces(page);
   await page.route(ANALYZE_URL, (route) => route.fulfill({ json: DEDUP_ANALYZE_RESPONSE }));
   await page.route(EXPORT_URL, (route) =>
     route.fulfill({
@@ -36,6 +42,7 @@ async function fillConnection(page: Page): Promise<void> {
     await input.fill(value);
     await expect(input).toHaveValue(value);
   }
+  await loadAndSelectProvince(page);
 }
 
 async function runAnalysis(page: Page): Promise<void> {
@@ -68,7 +75,7 @@ test.describe("Módulo: Duplicados de Direcciones (/tools/m/address-dedup)", () 
     await runAnalysis(page);
 
     await expect(page.getByText("carto@localhost")).toBeVisible();
-    await expect(page.getByText("Provincia 7")).toBeVisible();
+    await expect(page.getByText("FLORES", { exact: true })).toBeVisible();
     await expect(page.getByText("secreto")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Configuración" })).toHaveCount(0);
 
@@ -357,12 +364,59 @@ test.describe("Módulo: Duplicados de Direcciones (/tools/m/address-dedup)", () 
 
   test("debe mostrar el error de validación en la tarjeta de configuración", async ({ page }) => {
     await expect(page.getByRole("button", { name: "Analizar duplicados" })).toBeEnabled();
-    await page.getByLabel("Id de provincia").fill("0");
-    await expect(page.getByLabel("Id de provincia")).toHaveValue("0");
     await page.getByRole("button", { name: "Analizar duplicados" }).click();
 
-    await expect(page.getByText("El identificador de provincia debe ser un entero positivo.")).toBeVisible();
+    await expect(page.getByText("Seleccione un departamento.")).toBeVisible();
     await expect(page.getByRole("tablist")).toHaveCount(0);
+  });
+
+  test("debe habilitar el selector de departamento solo tras cargar la lista", async ({ page }) => {
+    await expect(page.getByLabel("Departamento")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Cargar departamentos" })).toBeDisabled();
+
+    await fillConnection(page);
+
+    await expect(page.getByLabel("Departamento")).toHaveValue("7");
+    await expect(page.getByLabel("Departamento").locator("option")).toHaveCount(
+      DEDUP_PROVINCES_RESPONSE.provinces.length + 1
+    );
+  });
+
+  test("debe vaciar la lista y la selección al cambiar la conexión", async ({ page }) => {
+    await fillConnection(page);
+
+    await page.getByLabel("Base de datos").fill("otra");
+
+    await expect(page.getByLabel("Departamento")).toBeDisabled();
+    await expect(page.getByLabel("Departamento")).toHaveValue("");
+  });
+
+  test("debe limpiar la selección cuando falla una recarga de departamentos", async ({ page }) => {
+    await fillConnection(page);
+    await expect(page.getByLabel("Departamento")).toHaveValue("7");
+    await page.route("**/api/m/address-dedup/provinces", (route) =>
+      route.fulfill({ status: 500, json: { success: false, error: "No se pudieron cargar los departamentos." } })
+    );
+
+    await page.getByRole("button", { name: "Cargar departamentos" }).click();
+
+    await expect(page.getByText("No se pudieron cargar los departamentos.")).toBeVisible();
+    await expect(page.getByLabel("Departamento")).toHaveValue("");
+  });
+
+  test("debe mostrar el error de carga de departamentos sin romper el formulario", async ({ page }) => {
+    await page.route("**/api/m/address-dedup/provinces", (route) =>
+      route.fulfill({ status: 500, json: { success: false, error: "No se pudieron cargar los departamentos." } })
+    );
+    await page.getByLabel("Base de datos").fill("carto");
+    await page.getByLabel("Usuario").fill("reader");
+    await page.getByLabel("Contraseña").fill("secreto");
+
+    await page.getByRole("button", { name: "Cargar departamentos" }).click();
+
+    await expect(page.getByText("No se pudieron cargar los departamentos.")).toBeVisible();
+    await expect(page.getByLabel("Departamento")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Analizar duplicados" })).toBeEnabled();
   });
 
   test("debe mostrar el aviso de carga mientras se ejecuta la consulta", async ({ page }) => {
@@ -379,9 +433,14 @@ test.describe("Módulo: Duplicados de Direcciones (/tools/m/address-dedup)", () 
     await page.getByRole("button", { name: "Analizar duplicados" }).click();
 
     await expect(page.getByText(/puede tardar hasta 3 minutos/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analizando..." })).toBeDisabled();
+    const loadingDialog = page.getByRole("dialog", { name: "Analizando duplicados..." });
+    await expect(loadingDialog).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(loadingDialog).toBeVisible();
 
     releaseResponse();
     await expect(page.getByRole("tab", { name: "Resumen" })).toBeVisible();
+    await expect(loadingDialog).toBeHidden();
   });
 });

@@ -3,7 +3,7 @@ import { Decision, DecisionReason, DedupScope, Fuente } from "@/modules/address-
 import { DedupOrchestrator } from "@/modules/address-dedup/services/DedupOrchestrator";
 import type { AddressRepository } from "@/modules/address-dedup/services/AddressRepository";
 import { toQueryValues } from "@/modules/address-dedup/services/queries/duplicateAnalysisQuery";
-import type { AnalysisRow, DbConnection, RepositoryRequest } from "@/modules/address-dedup/types";
+import type { AnalysisRow, DbConnection, ProvinceOption, RepositoryRequest } from "@/modules/address-dedup/types";
 import { FakeRemovalRepository } from "./fakeRemovalRepository";
 import { makeRow } from "./rowFactory";
 
@@ -18,7 +18,19 @@ const CONNECTION: DbConnection = {
 class FakeRepository implements AddressRepository {
   public readonly received: RepositoryRequest[] = [];
 
-  constructor(private readonly rows: AnalysisRow[] = [], private readonly failure?: Error) {}
+  public readonly provinceConnections: DbConnection[] = [];
+
+  constructor(
+    private readonly rows: AnalysisRow[] = [],
+    private readonly failure?: Error,
+    private readonly provinces: ProvinceOption[] = []
+  ) {}
+
+  async listProvinces(connection: DbConnection): Promise<ProvinceOption[]> {
+    this.provinceConnections.push(connection);
+    if (this.failure) throw this.failure;
+    return this.provinces;
+  }
 
   async runDuplicateAnalysis(request: RepositoryRequest): Promise<AnalysisRow[]> {
     this.received.push(request);
@@ -107,5 +119,27 @@ describe("DedupOrchestrator", () => {
     await expect(orchestrator.analyze({ connection: CONNECTION, provinceId: 7 })).rejects.toThrow(
       "connection refused"
     );
+  });
+
+  it("should pass the connection to the repository and return its provinces", async () => {
+    // Arrange
+    const provinces: ProvinceOption[] = [{ id: 7, name: "FLORES" }];
+    const repository = new FakeRepository([], undefined, provinces);
+    const orchestrator = new DedupOrchestrator(repository, new FakeRemovalRepository());
+
+    // Act
+    const result = await orchestrator.listProvinces(CONNECTION);
+
+    // Assert
+    expect(result).toEqual(provinces);
+    expect(repository.provinceConnections).toEqual([CONNECTION]);
+  });
+
+  it("should propagate a failure while listing provinces", async () => {
+    // Arrange
+    const orchestrator = new DedupOrchestrator(new FakeRepository([], new Error("connection refused")), new FakeRemovalRepository());
+
+    // Act & Assert
+    await expect(orchestrator.listProvinces(CONNECTION)).rejects.toThrow("connection refused");
   });
 });

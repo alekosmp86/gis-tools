@@ -7,7 +7,13 @@ import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import { INITIAL_DB_CONFIG } from "@/core/constants/dbConfigDefaults";
 import type { DbConfig } from "@/core/types/db";
-import { DEFAULT_PROVINCE_ID, DedupScope, type ExportFormat } from "../constants";
+import { DedupScope, type ExportFormat } from "../constants";
+import {
+  MISSING_PROVINCE_MESSAGE,
+  findProvinceName,
+  parseProvinceId,
+  toConnectionPayload,
+} from "../domain/provinceSelection";
 import type { DedupRequestPayload } from "../types";
 import { DedupConfigCard } from "./DedupConfigCard";
 import { DedupContextBar } from "./DedupContextBar";
@@ -15,16 +21,11 @@ import { DedupLoadingCard } from "./DedupLoadingCard";
 import { DedupResultsView } from "./DedupResultsView";
 import { downloadExport } from "./dedupClient";
 import { useDedupAnalysis } from "./useDedupAnalysis";
+import { useDedupProvinces } from "./useDedupProvinces";
 
 /** The page this module owns, served at /tools/m/address-dedup. Analysis is read-only; removal is a separate confirmed flow. */
 
-const INVALID_PROVINCE_MESSAGE = "El identificador de provincia debe ser un entero positivo.";
 const MISSING_ANALYSIS_MESSAGE = "Ejecute primero el análisis.";
-
-function parseProvinceId(text: string): number | null {
-  const provinceId = Number(text);
-  return Number.isInteger(provinceId) && provinceId > 0 ? provinceId : null;
-}
 
 function buildPayload(
   config: DbConfig,
@@ -33,13 +34,7 @@ function buildPayload(
   includeGroupsWithoutRemovals: boolean
 ): DedupRequestPayload {
   return {
-    connection: {
-      host: config.host,
-      port: config.port,
-      db_name: config.db_name,
-      user: config.user,
-      password: config.password ?? "",
-    },
+    connection: toConnectionPayload(config),
     provinceId,
     protectedSiblingRemovesLone,
     scope: includeGroupsWithoutRemovals ? DedupScope.ALL_DUPLICATE_GROUPS : DedupScope.REMOVAL_GROUPS,
@@ -48,14 +43,16 @@ function buildPayload(
 
 export const DedupDashboard: React.FC = () => {
   const [config, setConfig] = useState<DbConfig>(INITIAL_DB_CONFIG);
-  const [provinceIdText, setProvinceIdText] = useState(String(DEFAULT_PROVINCE_ID));
+  const [provinceIdText, setProvinceIdText] = useState("");
   const [protectedSiblingRemovesLone, setProtectedSiblingRemovesLone] = useState(false);
   const [includeGroupsWithoutRemovals, setIncludeGroupsWithoutRemovals] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [lastPayload, setLastPayload] = useState<DedupRequestPayload | null>(null);
+  const [lastProvinceName, setLastProvinceName] = useState<string | undefined>(undefined);
   const [isEditing, setIsEditing] = useState(false);
 
   const analysis = useDedupAnalysis();
+  const provinces = useDedupProvinces();
   const exportMutation = useMutation({
     mutationFn: (format: ExportFormat) => {
       if (!lastPayload) throw new Error(MISSING_ANALYSIS_MESSAGE);
@@ -70,14 +67,22 @@ export const DedupDashboard: React.FC = () => {
     void analysis.run(payload);
   };
 
+  const discardProvinceList = () => {
+    provinces.reset();
+    setProvinceIdText("");
+  };
+
   const handleSubmit = () => {
     const provinceId = parseProvinceId(provinceIdText);
-    if (provinceId === null) {
-      setValidationError(INVALID_PROVINCE_MESSAGE);
+    const provinceName =
+      provinceId === null ? undefined : findProvinceName(provinces.provinces, provinceId);
+    if (provinceId === null || provinceName === undefined) {
+      setValidationError(MISSING_PROVINCE_MESSAGE);
       return;
     }
 
     setValidationError(null);
+    setLastProvinceName(provinceName);
     runAnalysis(
       buildPayload(config, provinceId, protectedSiblingRemovesLone, includeGroupsWithoutRemovals)
     );
@@ -98,6 +103,7 @@ export const DedupDashboard: React.FC = () => {
       {resultPayload && (
         <DedupContextBar
           payload={resultPayload}
+          provinceName={lastProvinceName}
           isBusy={analysis.isPending}
           exportingFormat={exportMutation.isPending ? (exportMutation.variables ?? null) : null}
           onEdit={() => setIsEditing(true)}
@@ -110,17 +116,26 @@ export const DedupDashboard: React.FC = () => {
         <DedupConfigCard
           config={config}
           provinceId={provinceIdText}
+          provinces={provinces.provinces}
+          isLoadingProvinces={provinces.isLoading}
+          provincesError={provinces.error?.message ?? null}
           protectedSiblingRemovesLone={protectedSiblingRemovesLone}
           includeGroupsWithoutRemovals={includeGroupsWithoutRemovals}
           isSubmitting={analysis.isPending}
           errorText={configErrorText}
-          onConfigChange={(field, value) =>
-            setConfig((previous) => ({ ...previous, [field]: value }))
-          }
-          onProfileLoaded={(profileConfig) =>
-            setConfig((previous) => ({ ...previous, ...profileConfig }))
-          }
+          onConfigChange={(field, value) => {
+            discardProvinceList();
+            setConfig((previous) => ({ ...previous, [field]: value }));
+          }}
+          onProfileLoaded={(profileConfig) => {
+            discardProvinceList();
+            setConfig((previous) => ({ ...previous, ...profileConfig }));
+          }}
           onProvinceChange={setProvinceIdText}
+          onLoadProvinces={() => {
+            setProvinceIdText("");
+            void provinces.load(toConnectionPayload(config));
+          }}
           onProtectedSiblingChange={setProtectedSiblingRemovesLone}
           onIncludeGroupsChange={setIncludeGroupsWithoutRemovals}
           onSubmit={handleSubmit}
@@ -130,7 +145,7 @@ export const DedupDashboard: React.FC = () => {
 
       {exportErrorText && <AlertMessage type={AlertType.ERROR} text={exportErrorText} />}
 
-      {analysis.isPending && <DedupLoadingCard />}
+      <DedupLoadingCard isOpen={analysis.isPending} />
 
       {!analysis.isPending && analysis.data && resultPayload && (
         <DedupResultsView

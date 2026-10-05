@@ -46,6 +46,15 @@ describe("address dedup manifest", () => {
     expect(registry.findEndpoint(ModuleHttpMethod.GET, "address-dedup/export")).toBeNull();
   });
 
+  it("should expose provinces as POST only, so credentials never travel in a URL", () => {
+    // Arrange
+    const registry = createModuleRegistry([addressDedupModule]);
+
+    // Act & Assert
+    expect(registry.findEndpoint(ModuleHttpMethod.POST, "address-dedup/provinces")?.moduleId).toBe("address-dedup");
+    expect(registry.findEndpoint(ModuleHttpMethod.GET, "address-dedup/provinces")).toBeNull();
+  });
+
   it("should expose the removal endpoints as POST only, so credentials and the fingerprint never travel in a URL", () => {
     // Arrange
     const registry = createModuleRegistry([addressDedupModule]);

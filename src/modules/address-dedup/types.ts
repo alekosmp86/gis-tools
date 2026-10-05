@@ -103,18 +103,36 @@ export interface RepositoryRequest {
   readonly parameters: DuplicateAnalysisParameters;
 }
 
-/** Body the browser posts to `analyze` and `export`. Port is text because it comes from a form field. */
+/** Connection as the browser posts it. Port is text because it comes from a form field. */
+export interface ConnectionPayload {
+  readonly host: string;
+  readonly port: string;
+  readonly db_name: string;
+  readonly user: string;
+  readonly password: string;
+}
+
+/** Body the browser posts to `analyze` and `export`. */
 export interface DedupRequestPayload {
-  readonly connection: {
-    readonly host: string;
-    readonly port: string;
-    readonly db_name: string;
-    readonly user: string;
-    readonly password: string;
-  };
+  readonly connection: ConnectionPayload;
   readonly provinceId: number;
   readonly protectedSiblingRemovesLone: boolean;
   readonly scope: DedupScope;
+}
+
+/** A departamento the user can analyse: one `carto.province` row. */
+export interface ProvinceOption {
+  readonly id: number;
+  readonly name: string;
+}
+
+/** Body the browser posts to `provinces`. */
+export interface ProvincesRequestPayload {
+  readonly connection: ConnectionPayload;
+}
+
+export interface ProvincesResponsePayload {
+  readonly provinces: ReadonlyArray<ProvinceOption>;
 }
 
 export interface AnalyzeResponsePayload {

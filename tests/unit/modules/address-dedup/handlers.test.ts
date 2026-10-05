@@ -3,7 +3,7 @@ import { createDedupHandlers } from "@/modules/address-dedup/api/handlers";
 import { Decision, DecisionReason, DedupScope } from "@/modules/address-dedup/constants";
 import { DedupOrchestrator } from "@/modules/address-dedup/services/DedupOrchestrator";
 import type { AddressRepository } from "@/modules/address-dedup/services/AddressRepository";
-import type { AnalysisRow, RepositoryRequest } from "@/modules/address-dedup/types";
+import type { AnalysisRow, DbConnection, ProvinceOption, RepositoryRequest } from "@/modules/address-dedup/types";
 import { FakeRemovalRepository } from "./fakeRemovalRepository";
 import { makeRow } from "./rowFactory";
 
@@ -18,7 +18,19 @@ const VALID_BODY = {
 class FakeRepository implements AddressRepository {
   public readonly received: RepositoryRequest[] = [];
 
-  constructor(private readonly rows: AnalysisRow[] = [], private readonly failure?: Error) {}
+  public readonly provinceConnections: DbConnection[] = [];
+
+  constructor(
+    private readonly rows: AnalysisRow[] = [],
+    private readonly failure?: Error,
+    private readonly provinces: ProvinceOption[] = []
+  ) {}
+
+  async listProvinces(connection: DbConnection): Promise<ProvinceOption[]> {
+    this.provinceConnections.push(connection);
+    if (this.failure) throw this.failure;
+    return this.provinces;
+  }
 
   async runDuplicateAnalysis(request: RepositoryRequest): Promise<AnalysisRow[]> {
     this.received.push(request);
@@ -252,6 +264,87 @@ describe("address dedup handlers", () => {
       // Assert
       expect(response.status).toBe(500);
       expect(await response.text()).not.toContain(PASSWORD);
+    });
+  });
+
+  describe("provinces", () => {
+    const CONNECTION_BODY = { connection: VALID_BODY.connection };
+
+    it("should answer 200 with the provinces the repository lists", async () => {
+      // Arrange
+      const provinces = [{ id: 1, name: "MONTEVIDEO" }, { id: 7, name: "FLORES" }];
+      const repository = new FakeRepository([], undefined, provinces);
+      const handlers = handlersFor(repository);
+
+      // Act
+      const response = await handlers.provinces(post("provinces", CONNECTION_BODY));
+      const payload = await response.json();
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(payload).toEqual({ success: true, provinces });
+      expect(repository.provinceConnections).toEqual([
+        { host: "db.example", port: 5432, db_name: "carto", user: "reader", password: PASSWORD },
+      ]);
+    });
+
+    it("should answer 200 with an empty list when the table has no rows", async () => {
+      // Arrange
+      const handlers = handlersFor(new FakeRepository());
+
+      // Act
+      const response = await handlers.provinces(post("provinces", CONNECTION_BODY));
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect((await response.json()).provinces).toEqual([]);
+    });
+
+    it.each([
+      ["db_name", withConnection({ db_name: "" })],
+      ["user", withConnection({ user: " " })],
+      ["password", withConnection({ password: "" })],
+      ["connection", {}],
+    ])("should answer 400 in Spanish when %s is missing", async (_field, body) => {
+      // Arrange
+      const repository = new FakeRepository();
+      const handlers = handlersFor(repository);
+
+      // Act
+      const response = await handlers.provinces(post("provinces", body));
+      const payload = await response.json();
+
+      // Assert
+      expect(response.status).toBe(400);
+      expect(payload.success).toBe(false);
+      expect(payload.error).toMatch(/obligatori/);
+      expect(repository.provinceConnections).toEqual([]);
+    });
+
+    it.each(["{not json", "null", "[]", ""])("should answer 400, not 500, for the malformed body %j", async (body) => {
+      // Arrange
+      const handlers = handlersFor(new FakeRepository());
+
+      // Act
+      const response = await handlers.provinces(post("provinces", body));
+
+      // Assert
+      expect(response.status).toBe(400);
+    });
+
+    it("should never echo the password in an error body, even when the error mentions it", async () => {
+      // Arrange
+      const failure = new Error(`connection to db.example failed using password ${PASSWORD}`);
+      const handlers = handlersFor(new FakeRepository([], failure));
+
+      // Act
+      const response = await handlers.provinces(post("provinces", CONNECTION_BODY));
+      const text = await response.text();
+
+      // Assert
+      expect(response.status).toBe(500);
+      expect(text).not.toContain(PASSWORD);
+      expect(text).toContain("***");
     });
   });
 });

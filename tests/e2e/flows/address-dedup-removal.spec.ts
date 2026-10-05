@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { test, expect } from "../support/testFixture";
 import type { Page, Request } from "@playwright/test";
 import { DEDUP_ANALYZE_RESPONSE } from "../fixtures/dedupFixtures";
+import { loadAndSelectProvince, mockProvinces } from "../support/dedupProvince";
 import {
   DEDUP_NO_REMOVALS_RESPONSE,
   REMOVAL_BLOCKED_SIMULATION,
@@ -36,6 +37,7 @@ async function mockAnalysis(page: Page, response: unknown = DEDUP_ANALYZE_RESPON
 }
 
 async function runAnalysis(page: Page): Promise<void> {
+  await mockProvinces(page);
   await expect(page.getByRole("button", { name: "Analizar duplicados" })).toBeEnabled();
   for (const [label, value] of [
     ["Base de datos", "carto"],
@@ -46,6 +48,7 @@ async function runAnalysis(page: Page): Promise<void> {
     await input.fill(value);
     await expect(input).toHaveValue(value);
   }
+  await loadAndSelectProvince(page);
   await page.getByRole("button", { name: "Analizar duplicados" }).click();
   await expect(page.getByRole("tab", { name: "Resumen" })).toHaveAttribute("aria-selected", "true");
 }

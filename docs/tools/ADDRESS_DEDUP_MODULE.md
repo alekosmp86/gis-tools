@@ -12,7 +12,7 @@ write (the query runs in `BEGIN READ ONLY`). The module's one write path, sectio
 REMOVE candidates only, behind a simulation and a fingerprint check.
 
 It is a **module**: `src/modules/address-dedup/`. Its deletion set is that folder, its line in
-`src/app/modules.registry.ts`, `tests/unit/modules/address-dedup/`, the Playwright specs `tests/e2e/flows/address-dedup*.spec.ts` with their fixtures `tests/e2e/fixtures/dedup*Fixtures.ts`, and the generated
+`src/app/modules.registry.ts`, `tests/unit/modules/address-dedup/`, the Playwright specs `tests/e2e/flows/address-dedup*.spec.ts` with their fixtures `tests/e2e/fixtures/dedup*Fixtures.ts` and `tests/e2e/support/dedupProvince.ts`, and the generated
 `src/app/api/m/address-dedup/**` and `src/app/tools/m/address-dedup/` (regenerated, never edited).
 
 ## 1. The query
@@ -24,7 +24,7 @@ All values are bound parameters; the only literals interpolated are module const
 | Param | Type | Default | Meaning |
 |---|---|---|---|
 | `$1` | `text[]` | `{ANTEL,TLK,IDE}` | detection fuentes (`name_font`), derived from removable + protected |
-| `$2` | `int` | request | province id (UI default 7, FLORES) |
+| `$2` | `int` | request | province id (`carto.province.id`, picked in the UI) |
 | `$3` | `text[]` | `{ANTEL,TLK}` | removable fuentes |
 | `$4` | `text[]` | `{IDE}` | protected fuentes |
 | `$5` | `int` | `2` | geo decimals when a padron is present |
@@ -101,6 +101,12 @@ occur in the output.
 All endpoints are `POST`, `nodejs`, `force-dynamic` (the two removal endpoints are in section 6). Credentials travel in the body only, never in a query
 string, and are never stored, logged or echoed (the password is scrubbed from error text).
 
+- `POST /api/m/address-dedup/provinces`
+  `{ connection: { host, port, db_name, user, password } }` returns `{ success, provinces: [{ id, name }] }`
+  from `SELECT id, name FROM carto.province ORDER BY name`, in the same read-only transaction as the analysis.
+  The UI fills the "Departamento" select from it: the user fills the connection, presses "Cargar departamentos"
+  (it needs the password, so there is no load on mount) and picks one; the option value is the province id the
+  analysis binds. Any change to the connection fields or the profile clears the list and the selection.
 - `POST /api/m/address-dedup/analyze`
   `{ connection: { host, port, db_name, user, password }, provinceId, protectedSiblingRemovesLone?, scope? }`
   returns `{ success, summary, groups, skippedWithoutCoordinates }`.

@@ -12,6 +12,7 @@ import styles from "./DedupContextBar.module.css";
 
 interface DedupContextBarProps {
   payload: DedupRequestPayload;
+  provinceName?: string;
   isBusy: boolean;
   exportingFormat: ExportFormat | null;
   onEdit: () => void;
@@ -22,6 +23,7 @@ interface DedupContextBarProps {
 /** Summarises the parameters of the last run. The password is deliberately never rendered. */
 export const DedupContextBar: React.FC<DedupContextBarProps> = ({
   payload,
+  provinceName,
   isBusy,
   exportingFormat,
   onEdit,
@@ -36,7 +38,7 @@ export const DedupContextBar: React.FC<DedupContextBarProps> = ({
       </span>
       <span className={styles.target}>
         <MapPin size={15} />
-        Provincia {payload.provinceId}
+        {provinceName || `Provincia ${payload.provinceId}`}
       </span>
       {payload.protectedSiblingRemovesLone && (
         <span className={styles.chip}>{OPTION_CHIP_LABELS.PROTECTED_SIBLING}</span>

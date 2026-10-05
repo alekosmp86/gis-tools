@@ -6,7 +6,13 @@ import type {
   RemovalResult,
   RemovalSimulationRequest,
 } from "../removalTypes";
-import type { DedupRequest, DedupResult, DuplicateAnalysisParameters } from "../types";
+import type {
+  DbConnection,
+  DedupRequest,
+  DedupResult,
+  DuplicateAnalysisParameters,
+  ProvinceOption,
+} from "../types";
 import type { AddressRepository } from "./AddressRepository";
 import type { RemovalRepository } from "./RemovalRepository";
 
@@ -45,6 +51,10 @@ export class DedupOrchestrator {
     });
 
     return { rows, summary: summarizeRows(rows) };
+  }
+
+  listProvinces(connection: DbConnection): Promise<ProvinceOption[]> {
+    return this.repository.listProvinces(connection);
   }
 
   simulateRemoval(request: RemovalSimulationRequest): Promise<RemovalPlan> {

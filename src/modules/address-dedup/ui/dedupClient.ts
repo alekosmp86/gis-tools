@@ -6,7 +6,13 @@ import type {
   RemovalSimulationPayload,
   RemovalSimulationRequestPayload,
 } from "../removalTypes";
-import type { AnalyzeResponsePayload, DedupRequestPayload } from "../types";
+import type {
+  AnalyzeResponsePayload,
+  ConnectionPayload,
+  DedupRequestPayload,
+  ProvincesRequestPayload,
+  ProvincesResponsePayload,
+} from "../types";
 import { downloadBlob } from "./downloadBlob";
 
 /**
@@ -32,6 +38,16 @@ async function readFailure(response: Response, context: string): Promise<Error> 
   } catch {
     return new Error(`${context} (HTTP ${response.status}).`);
   }
+}
+
+export async function fetchProvinces(connection: ConnectionPayload): Promise<ProvincesResponsePayload> {
+  const response = await postJson("provinces", { connection } satisfies ProvincesRequestPayload);
+
+  if (!response.ok) {
+    throw await readFailure(response, "No se pudieron cargar los departamentos");
+  }
+
+  return (await response.json()) as ProvincesResponsePayload;
 }
 
 export async function analyzeDuplicates(

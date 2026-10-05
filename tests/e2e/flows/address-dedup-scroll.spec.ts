@@ -1,6 +1,7 @@
 import { test, expect } from "../support/testFixture";
 import type { Locator, Page } from "@playwright/test";
 import { DEDUP_ANALYZE_RESPONSE, DEDUP_GROUP_COUNT } from "../fixtures/dedupFixtures";
+import { loadAndSelectProvince, mockProvinces } from "../support/dedupProvince";
 
 const PAGE_URL = "/tools/m/address-dedup";
 const ANALYZE_URL = "**/api/m/address-dedup/analyze";
@@ -20,6 +21,7 @@ test.use({
 
 async function openGroupsTab(page: Page): Promise<void> {
   await page.route(ANALYZE_URL, (route) => route.fulfill({ json: DEDUP_ANALYZE_RESPONSE }));
+  await mockProvinces(page);
   await page.goto(PAGE_URL);
   await expect(page.getByRole("button", { name: "Analizar duplicados" })).toBeEnabled();
   for (const [label, value] of [
@@ -31,6 +33,7 @@ async function openGroupsTab(page: Page): Promise<void> {
     await input.fill(value);
     await expect(input).toHaveValue(value);
   }
+  await loadAndSelectProvince(page);
   await page.getByRole("button", { name: "Analizar duplicados" }).click();
   await page.getByRole("tab", { name: `Grupos (${DEDUP_GROUP_COUNT})` }).click();
   await expect(page.getByTestId("dedup-scroll-content")).toBeVisible();

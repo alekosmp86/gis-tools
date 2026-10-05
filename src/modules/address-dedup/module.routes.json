@@ -1,6 +1,7 @@
 {
   "moduleId": "address-dedup",
   "endpoints": [
+    { "path": "provinces", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "analyze", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "export", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "removal/simulate", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },

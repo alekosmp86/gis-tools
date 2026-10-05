@@ -76,9 +76,6 @@ export const STATEMENT_TIMEOUT_MS = 180000;
 export const DEFAULT_DB_HOST = "localhost";
 export const DEFAULT_DB_PORT = 5432;
 
-/** Province preselected in the UI (FLORES). */
-export const DEFAULT_PROVINCE_ID = 7;
-
 /** Delay before revoking a download URL, so the browser has started the download. */
 export const DOWNLOAD_URL_REVOKE_DELAY_MS = 1000;
 

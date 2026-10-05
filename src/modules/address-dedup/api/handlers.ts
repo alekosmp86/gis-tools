@@ -13,7 +13,7 @@ import { PgAddressRepository } from "../services/PgAddressRepository";
 import { PgRemovalRepository } from "../services/PgRemovalRepository";
 import type { DedupResult } from "../types";
 import { failure, HTTP_STATUS, jsonResponse, toErrorResponse } from "./httpResponses";
-import { readDedupRequest, readJsonBody, type ParsedBody, type ValidationResult } from "./requestReaders";
+import { readConnection, readDedupRequest, readJsonBody, type ParsedBody, type ValidationResult } from "./requestReaders";
 import { createRemovalHandlers, type RemovalHandlers } from "./removalHandlers";
 
 /**
@@ -29,8 +29,10 @@ const CONTENT_TYPE_BY_FORMAT: Readonly<Record<ExportFormat, string>> = {
 };
 
 const ANALYSIS_FAILURE_MESSAGE = "No se pudo completar el análisis.";
+const PROVINCES_FAILURE_MESSAGE = "No se pudieron cargar los departamentos.";
 
 export interface DedupHandlers extends RemovalHandlers {
+  readonly provinces: ModuleEndpointHandler;
   readonly analyze: ModuleEndpointHandler;
   readonly exportResult: ModuleEndpointHandler;
 }
@@ -88,6 +90,20 @@ export function createDedupHandlers(
 ): DedupHandlers {
   return {
     ...createRemovalHandlers(orchestrator),
+
+    provinces: async (request) => {
+      const body = await readJsonBody(request);
+      if (!body) return failure("El cuerpo de la solicitud debe ser un JSON válido.", HTTP_STATUS.BAD_REQUEST);
+
+      const connection = readConnection(body);
+      if (!connection.ok) return failure(connection.error, HTTP_STATUS.BAD_REQUEST);
+
+      try {
+        return jsonResponse({ success: true, provinces: await orchestrator.listProvinces(connection.value) });
+      } catch (error: unknown) {
+        return toErrorResponse(error, connection.value.password, PROVINCES_FAILURE_MESSAGE);
+      }
+    },
 
     analyze: async (request) => {
       const body = await readJsonBody(request);
