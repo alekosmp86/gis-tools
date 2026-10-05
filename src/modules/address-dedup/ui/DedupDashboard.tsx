@@ -133,7 +133,12 @@ export const DedupDashboard: React.FC = () => {
       {analysis.isPending && <DedupLoadingCard />}
 
       {!analysis.isPending && analysis.data && resultPayload && (
-        <DedupResultsView key={analysis.resultId} result={analysis.data} payload={resultPayload} />
+        <DedupResultsView
+          key={analysis.resultId}
+          result={analysis.data}
+          payload={resultPayload}
+          onRemovalComplete={() => runAnalysis(resultPayload)}
+        />
       )}
     </ToolWorkspaceLayout>
   );

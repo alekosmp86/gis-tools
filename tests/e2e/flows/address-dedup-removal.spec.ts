@@ -281,6 +281,78 @@ test.describe("Módulo: Duplicados de Direcciones, eliminación confirmada", () 
   });
 });
 
+test.describe("Módulo: Duplicados de Direcciones, reanálisis tras la eliminación", () => {
+  async function mockSequencedAnalysis(page: Page): Promise<Request[]> {
+    const analyzeCalls: Request[] = [];
+    await page.route(ANALYZE_URL, (route) => {
+      analyzeCalls.push(route.request());
+      return route.fulfill({
+        json: analyzeCalls.length === 1 ? DEDUP_ANALYZE_RESPONSE : DEDUP_NO_REMOVALS_RESPONSE,
+      });
+    });
+    return analyzeCalls;
+  }
+
+  test("debe reanalizar con los mismos parámetros al cerrar el resumen de una baja ejecutada", async ({ page }) => {
+    const analyzeCalls = await mockSequencedAnalysis(page);
+    await page.route(SIMULATE_URL, (route) => route.fulfill({ json: REMOVAL_SIMULATION }));
+    await page.route(EXECUTE_URL, (route) => {
+      const body = route.request().postDataJSON() as { operationId: string };
+      return route.fulfill({ json: removalExecution(body.operationId) });
+    });
+    await page.goto(PAGE_URL);
+    await runAnalysis(page);
+    await openDialog(page);
+    await simulate(page);
+    await page.getByRole("button", { name: "Ejecutar eliminación" }).click();
+    await expect(page.getByText("Baja ejecutada")).toBeVisible();
+    expect(analyzeCalls).toHaveLength(1);
+
+    await page.getByRole("dialog").getByRole("button", { name: "Cerrar" }).last().click();
+
+    await expect(page.getByText("El análisis no tiene filas a eliminar.")).toBeVisible();
+    expect(analyzeCalls).toHaveLength(2);
+    expect(analyzeCalls[1].postDataJSON()).toEqual(analyzeCalls[0].postDataJSON());
+    await expect(page.getByRole("tab", { name: "Resumen" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  });
+
+  test("no debe reanalizar al cancelar desde la revisión del plan", async ({ page }) => {
+    const analyzeCalls = await mockSequencedAnalysis(page);
+    await page.route(SIMULATE_URL, (route) => route.fulfill({ json: REMOVAL_SIMULATION }));
+    await page.goto(PAGE_URL);
+    await runAnalysis(page);
+    await openDialog(page);
+    await simulate(page);
+
+    await page.getByRole("button", { name: "Cerrar" }).click();
+
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Confirmar y eliminar" })).toBeEnabled();
+    expect(analyzeCalls).toHaveLength(1);
+  });
+
+  test("no debe reanalizar al cerrar tras un rechazo del servidor al ejecutar", async ({ page, allowConsoleErrors }) => {
+    allowConsoleErrors(/Failed to load resource/);
+    const analyzeCalls = await mockSequencedAnalysis(page);
+    await page.route(SIMULATE_URL, (route) => route.fulfill({ json: REMOVAL_SIMULATION }));
+    await page.route(EXECUTE_URL, (route) =>
+      route.fulfill({ status: 409, json: { success: false, error: "Cambió el alcance o los datos de la baja." } })
+    );
+    await page.goto(PAGE_URL);
+    await runAnalysis(page);
+    await openDialog(page);
+    await simulate(page);
+    await page.getByRole("button", { name: "Ejecutar eliminación" }).click();
+    await expect(page.getByText(/Cambió el alcance/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Cerrar" }).click();
+
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(analyzeCalls).toHaveLength(1);
+  });
+});
+
 test.describe("Módulo: Duplicados de Direcciones, sin filas a eliminar", () => {
   test("debe deshabilitar la acción cuando el análisis no tiene filas a eliminar", async ({ page }) => {
     await mockAnalysis(page, DEDUP_NO_REMOVALS_RESPONSE);

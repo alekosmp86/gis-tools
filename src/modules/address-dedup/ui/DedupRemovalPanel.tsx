@@ -6,6 +6,7 @@ import { Button } from "@/ui-kit/components/ui/Button";
 import { Decision } from "../constants";
 import { REMOVAL_LABELS } from "../data/removalLabels";
 import { decisionTotal } from "../domain/summaryView";
+import { RemovalPhase } from "../removalConstants";
 import type { DedupRequestPayload, DedupSummary } from "../types";
 import { DedupRemovalDialog } from "./DedupRemovalDialog";
 import { useDedupRemoval } from "./useDedupRemoval";
@@ -14,11 +15,17 @@ import styles from "./DedupRemovalPanel.module.css";
 interface DedupRemovalPanelProps {
   summary: DedupSummary;
   payload: DedupRequestPayload;
+  onRemovalComplete: () => void;
 }
 
 /** The only entry to the removal flow. It acts on the whole fresh REMOVE set, never on the current filter. */
-export const DedupRemovalPanel: React.FC<DedupRemovalPanelProps> = ({ summary, payload }) => {
+export const DedupRemovalPanel: React.FC<DedupRemovalPanelProps> = ({ summary, payload, onRemovalComplete }) => {
   const flow = useDedupRemoval(payload);
+  const handleClose = () => {
+    const wasDone = flow.state.phase === RemovalPhase.DONE;
+    flow.close();
+    if (wasDone) onRemovalComplete();
+  };
   const hasRemovals = decisionTotal(summary, Decision.REMOVE) > 0;
 
   return (
@@ -35,7 +42,7 @@ export const DedupRemovalPanel: React.FC<DedupRemovalPanelProps> = ({ summary, p
         <Trash2 size={15} />
         {REMOVAL_LABELS.OPEN_BUTTON}
       </Button>
-      <DedupRemovalDialog flow={flow} />
+      <DedupRemovalDialog flow={{ ...flow, close: handleClose }} />
     </section>
   );
 };
