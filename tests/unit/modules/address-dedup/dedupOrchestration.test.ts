@@ -4,6 +4,7 @@ import { DedupOrchestrator } from "@/modules/address-dedup/services/DedupOrchest
 import type { AddressRepository } from "@/modules/address-dedup/services/AddressRepository";
 import { toQueryValues } from "@/modules/address-dedup/services/queries/duplicateAnalysisQuery";
 import type { AnalysisRow, DbConnection, RepositoryRequest } from "@/modules/address-dedup/types";
+import { FakeRemovalRepository } from "./fakeRemovalRepository";
 import { makeRow } from "./rowFactory";
 
 const CONNECTION: DbConnection = {
@@ -30,7 +31,7 @@ describe("DedupOrchestrator", () => {
   it("should map a minimal request to the eight query parameters in order, with defaults", async () => {
     // Arrange
     const repository = new FakeRepository();
-    const orchestrator = new DedupOrchestrator(repository);
+    const orchestrator = new DedupOrchestrator(repository, new FakeRemovalRepository());
 
     // Act
     await orchestrator.analyze({ connection: CONNECTION, provinceId: 7 });
@@ -52,7 +53,7 @@ describe("DedupOrchestrator", () => {
   it("should pass the request overrides for province, toggle and scope", async () => {
     // Arrange
     const repository = new FakeRepository();
-    const orchestrator = new DedupOrchestrator(repository);
+    const orchestrator = new DedupOrchestrator(repository, new FakeRemovalRepository());
 
     // Act
     await orchestrator.analyze({
@@ -75,7 +76,7 @@ describe("DedupOrchestrator", () => {
       makeRow({ group_id: 1, fuente: Fuente.ANTEL, decision: Decision.KEEP, decision_reason: DecisionReason.LOWEST_URN_KEPT }),
       makeRow({ group_id: 1, fuente: Fuente.ANTEL, decision: Decision.REMOVE, decision_reason: DecisionReason.REDUNDANT_NOT_LOWEST_URN }),
     ];
-    const orchestrator = new DedupOrchestrator(new FakeRepository(rows));
+    const orchestrator = new DedupOrchestrator(new FakeRepository(rows), new FakeRemovalRepository());
 
     // Act
     const result = await orchestrator.analyze({ connection: CONNECTION, provinceId: 7 });
@@ -88,7 +89,7 @@ describe("DedupOrchestrator", () => {
 
   it("should return an empty result when the repository finds nothing", async () => {
     // Arrange
-    const orchestrator = new DedupOrchestrator(new FakeRepository());
+    const orchestrator = new DedupOrchestrator(new FakeRepository(), new FakeRemovalRepository());
 
     // Act
     const result = await orchestrator.analyze({ connection: CONNECTION, provinceId: 7 });
@@ -100,7 +101,7 @@ describe("DedupOrchestrator", () => {
 
   it("should propagate a repository failure", async () => {
     // Arrange
-    const orchestrator = new DedupOrchestrator(new FakeRepository([], new Error("connection refused")));
+    const orchestrator = new DedupOrchestrator(new FakeRepository([], new Error("connection refused")), new FakeRemovalRepository());
 
     // Act & Assert
     await expect(orchestrator.analyze({ connection: CONNECTION, provinceId: 7 })).rejects.toThrow(

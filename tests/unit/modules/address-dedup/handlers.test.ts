@@ -4,6 +4,7 @@ import { Decision, DecisionReason, DedupScope } from "@/modules/address-dedup/co
 import { DedupOrchestrator } from "@/modules/address-dedup/services/DedupOrchestrator";
 import type { AddressRepository } from "@/modules/address-dedup/services/AddressRepository";
 import type { AnalysisRow, RepositoryRequest } from "@/modules/address-dedup/types";
+import { FakeRemovalRepository } from "./fakeRemovalRepository";
 import { makeRow } from "./rowFactory";
 
 const PASSWORD = "hunter2-very-secret";
@@ -27,7 +28,7 @@ class FakeRepository implements AddressRepository {
 }
 
 function handlersFor(repository: FakeRepository) {
-  return createDedupHandlers(new DedupOrchestrator(repository));
+  return createDedupHandlers(new DedupOrchestrator(repository, new FakeRemovalRepository()));
 }
 
 function post(path: string, body: unknown, query = ""): Request {
