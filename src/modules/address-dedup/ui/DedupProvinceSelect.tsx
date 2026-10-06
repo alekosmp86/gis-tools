@@ -28,6 +28,7 @@ export const DedupProvinceSelect: React.FC<DedupProvinceSelectProps> = ({
   onLoad,
 }) => {
   const selectId = useId();
+  const needsLoad = canLoad && provinces.length === 0 && !isLoading;
 
   return (
     <div className={styles.field}>
@@ -54,6 +55,8 @@ export const DedupProvinceSelect: React.FC<DedupProvinceSelectProps> = ({
           type="button"
           variant={ButtonVariant.SECONDARY}
           isDisabled={isLoading || !canLoad}
+          className={needsLoad ? styles.attention : undefined}
+          data-attention={needsLoad ? "true" : "false"}
           onClick={onLoad}
         >
           {isLoading ? <Loader2 size={15} className={styles.spin} /> : <RefreshCw size={15} />}

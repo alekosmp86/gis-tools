@@ -382,6 +382,19 @@ test.describe("Módulo: Duplicados de Direcciones (/tools/m/address-dedup)", () 
     );
   });
 
+  test("debe resaltar el botón de carga solo cuando la conexión está lista y la lista vacía", async ({ page }) => {
+    const loadButton = page.getByRole("button", { name: "Cargar departamentos" });
+    await expect(loadButton).toHaveAttribute("data-attention", "false");
+
+    for (const [label, value] of [["Base de datos", "carto"], ["Usuario", "reader"], ["Contraseña", "secreto"]] as const) {
+      await page.getByLabel(label).fill(value);
+    }
+    await expect(loadButton).toHaveAttribute("data-attention", "true");
+
+    await loadAndSelectProvince(page);
+    await expect(loadButton).toHaveAttribute("data-attention", "false");
+  });
+
   test("debe vaciar la lista y la selección al cambiar la conexión", async ({ page }) => {
     await fillConnection(page);
 
