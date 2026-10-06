@@ -34,7 +34,7 @@ export function useFetchDbColumns() {
   });
 }
 
-export async function streamDbRecordsApi(
+async function streamDbRecordsApi(
   params: DbStreamRecordsParams
 ): Promise<DatabaseFetchResult> {
   const { DatabaseStreamReader } = await import(

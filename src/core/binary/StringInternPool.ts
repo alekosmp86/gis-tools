@@ -28,18 +28,4 @@ export class StringInternPool {
     }
     return value;
   }
-
-  /**
-   * Returns the current number of unique strings interned in the pool.
-   */
-  public get size(): number {
-    return this.pool.size;
-  }
-
-  /**
-   * Clears the string interning pool to free memory.
-   */
-  public clear(): void {
-    this.pool.clear();
-  }
 }

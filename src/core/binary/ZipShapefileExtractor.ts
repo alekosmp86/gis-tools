@@ -1,6 +1,6 @@
 import { iter } from "but-unzip";
 
-export interface ExtractedShapefilePackage {
+interface ExtractedShapefilePackage {
   shpBuffer?: Uint8Array;
   dbfBuffer?: Uint8Array;
   shxBuffer?: Uint8Array;
@@ -13,7 +13,7 @@ export interface ExtractedShapefilePackage {
  * ZipShapefileExtractor
  * Object-Oriented service for in-memory extraction of Shapefile bundles (.shp, .dbf, .shx, .prj, .cpg).
  */
-export class ZipShapefileExtractor {
+class ZipShapefileExtractor {
   private readonly decoder = new TextDecoder("utf-8");
 
   /**

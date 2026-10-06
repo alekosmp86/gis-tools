@@ -28,13 +28,6 @@ export const ToolCategory = {
 
 export type ToolCategory = (typeof ToolCategory)[keyof typeof ToolCategory];
 
-export interface StepItemData {
-  readonly id: number;
-  readonly title: string;
-  readonly subtitle: string;
-  readonly icon: LucideIcon;
-}
-
 export interface ToolBadgeData {
   readonly label: string;
   readonly type: BadgeVariant;
@@ -69,12 +62,6 @@ export const ButtonVariant = {
 } as const;
 
 export type ButtonVariant = (typeof ButtonVariant)[keyof typeof ButtonVariant];
-
-export interface FeatureHighlightData {
-  readonly icon: LucideIcon;
-  readonly title: string;
-  readonly description: string;
-}
 
 export interface WizardStepDef {
   readonly id: number;

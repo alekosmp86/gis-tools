@@ -13,7 +13,7 @@ const FEATURE_POPUP_OPTIONS: L.PopupOptions = {
  * MapEventHandler
  * Object-Oriented Mediator/Handler for Leaflet layer user interactions and selection routing.
  */
-export class MapEventHandler {
+class MapEventHandler {
   /** Shared stateless instance; one handler serves every rendered group. */
   private static readonly sharedInstance = new MapEventHandler();
 

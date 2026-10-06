@@ -1,7 +1,7 @@
 import type { FeatureCollection, Feature, Geometry } from "geojson";
 import { GeometryRawNormalizer } from "./GeometryRawNormalizer";
 
-export interface ParsedRecordGeoJsonResult {
+interface ParsedRecordGeoJsonResult {
   geojson: FeatureCollection | null;
   detectedGeometryType: string | null;
 }
@@ -21,7 +21,7 @@ const EMPTY_PARSED_RESULT: ParsedRecordGeoJsonResult = {
  * GeoJsonDatasetBuilder
  * Object-Oriented Builder for transforming raw database records or tabular datasets into GeoJSON FeatureCollections.
  */
-export class GeoJsonDatasetBuilder {
+class GeoJsonDatasetBuilder {
   private readonly normalizer = new GeometryRawNormalizer();
 
   /**

@@ -6,7 +6,7 @@ import { AlertType } from "@/ui-kit/types/ui";
 
 const MAX_PREVIEW_LINES = 25;
 
-export interface ScriptPreviewStats {
+interface ScriptPreviewStats {
   readonly previewScript: string;
   readonly isTruncated: boolean;
   readonly statementCount: number;

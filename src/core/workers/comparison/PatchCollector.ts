@@ -30,20 +30,12 @@ export class PatchCollector {
     }
   }
 
-  public get isPreviewMode(): boolean {
-    return !this.collectFullScript;
-  }
-
   public isUpdatePreviewFull(): boolean {
     return this.updatePreviewStatements.length >= this.maxPreviewLimit;
   }
 
   public isInsertPreviewFull(): boolean {
     return this.insertPreviewStatements.length >= this.maxPreviewLimit;
-  }
-
-  public isAllPreviewFull(): boolean {
-    return this.isUpdatePreviewFull() && this.isInsertPreviewFull();
   }
 
   public setTotalCounts(updateCount: number, insertCount: number): void {

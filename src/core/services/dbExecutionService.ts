@@ -6,7 +6,7 @@ import type {
 } from "@/core/types/db";
 import { formatNumber } from "@/core/common/ValueFormatter";
 
-export async function executeSqlScript(
+async function executeSqlScript(
   dbConfig: DbConfig,
   passwordInput: string,
   sqlScript: string

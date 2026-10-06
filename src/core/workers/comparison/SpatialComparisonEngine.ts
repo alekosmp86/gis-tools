@@ -271,28 +271,4 @@ export class SpatialComparisonEngine {
     }
     return dbfCompareFields;
   }
-
-  public static compareDatasets(
-    dbRecords: Record<string, unknown>[],
-    dbColumnTypes: Record<string, string> | undefined,
-    fileDataset: SerializableFileDataset,
-    mappingConfig: ColumnMappingConfig,
-    dbSchemaName: string,
-    dbTableName: string,
-    onProgress?: (phase: string, current: number, total: number) => void
-  ): ComparisonSummary {
-    const engine = new SpatialComparisonEngine();
-    return engine.executeComparison(
-      dbRecords,
-      dbColumnTypes,
-      fileDataset,
-      mappingConfig,
-      dbSchemaName,
-      dbTableName,
-      onProgress
-    );
-  }
 }
-
-/** Convenience export */
-export const executeComparison = SpatialComparisonEngine.compareDatasets;

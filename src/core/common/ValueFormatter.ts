@@ -2,7 +2,7 @@
  * ValueFormatter
  * Object-Oriented service for formatting counts, quantities, currency, and byte sizes for UI display.
  */
-export class ValueFormatter {
+class ValueFormatter {
   public static readonly DEFAULT_LOCALE = "es-UY";
 
   private readonly locale: string;

@@ -255,20 +255,6 @@
   background-color: #059669;
 }
 
-.loadingOverlay {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(9, 13, 22, 0.75);
-  backdrop-filter: blur(4px);
-  color: var(--text-muted);
-  font-size: 0.875rem;
-  gap: 10px;
-}
-
 /* Leaflet Popup Custom Styling & Overflows Fix */
 :global(.leaflet-popup-content-wrapper) {
   max-width: 310px;

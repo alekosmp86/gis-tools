@@ -41,13 +41,6 @@ export class SpatialGeometryComparator {
   }
 
   /**
-   * Normalizes all coordinates within a Geometry object to geographic WGS84 degrees.
-   */
-  public normalizeCoordinatesInGeometry(geom: Geometry): Geometry {
-    return this.rawNormalizer.normalizeCoordinatesInGeometry(geom);
-  }
-
-  /**
    * Normalizes unknown raw geometry inputs (GeoJSON objects, JSON strings, WKT, EWKB Hex).
    */
   public normalizeGeometry(raw: unknown): Geometry | null {
@@ -185,7 +178,7 @@ export class SpatialGeometryComparator {
 }
 
 /** Convenience singleton and functional exports */
-export const defaultComparator = new SpatialGeometryComparator();
+const defaultComparator = new SpatialGeometryComparator();
 export const compareGeometries = (dbGeom: unknown, fileGeom: unknown): GeometryComparisonResult =>
   defaultComparator.compare(dbGeom, fileGeom);
 export const normalizeGeometry = (raw: unknown): Geometry | null =>

@@ -5,7 +5,7 @@ import type { Feature } from "geojson";
  * geometries of one discrepancy. Capping must never divide a group: showing one half of a pair
  * reads as "only present on one side" when the truth is that both sides exist and differ.
  */
-export const FEATURE_GROUP_PROPERTY = "_pairId";
+const FEATURE_GROUP_PROPERTY = "_pairId";
 
 function readGroupId(feature: Feature | undefined): unknown {
   return feature?.properties?.[FEATURE_GROUP_PROPERTY];

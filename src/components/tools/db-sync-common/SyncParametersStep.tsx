@@ -7,7 +7,7 @@ import type { DbColumnMetadata } from "@/core/types/db";
 import type { ColumnMappingConfig, SyncParametersStepRef } from "@/core/types/comparison";
 import styles from "./SyncParametersStep.module.css";
 
-export interface SyncParametersStepProps {
+interface SyncParametersStepProps {
   dbColumns: string[];
   columnDetails?: DbColumnMetadata[];
   initialConfig?: ColumnMappingConfig | null;

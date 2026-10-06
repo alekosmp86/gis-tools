@@ -26,7 +26,7 @@ import type {
 } from "@/core/types/db";
 import styles from "./DbConnectionForm.module.css";
 
-export interface DbConnectionFormProps {
+interface DbConnectionFormProps {
   onSuccess: (
     config: DbConfig,
     columns: string[],

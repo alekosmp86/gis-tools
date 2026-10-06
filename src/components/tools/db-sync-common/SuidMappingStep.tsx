@@ -7,7 +7,7 @@ import type { DbColumnMetadata } from "@/core/types/db";
 import type { ColumnMappingConfig, SuidMappingStepRef } from "@/core/types/comparison";
 import styles from "./SuidMappingStep.module.css";
 
-export interface SuidMappingStepProps {
+interface SuidMappingStepProps {
   dbColumns: string[];
   columnDetails?: DbColumnMetadata[];
   fileAttributes: string[];

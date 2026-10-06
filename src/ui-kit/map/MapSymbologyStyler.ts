@@ -10,7 +10,7 @@ const DEFAULT_DISCREPANCY_KEY = "__default__";
  * Resolves symbology for a batch of features sharing one style and renderer, reusing the computed
  * path options across every feature of the same discrepancy type.
  */
-export interface FeatureStyleResolver {
+interface FeatureStyleResolver {
   resolvePathStyle(feature: Feature | undefined): L.PathOptions;
   createPointLayer(feature: Feature | undefined, latlng: L.LatLng): L.CircleMarker;
 }
@@ -19,7 +19,7 @@ export interface FeatureStyleResolver {
  * MapSymbologyStyler
  * Object-Oriented Presenter for Leaflet vector symbology, stroke formatting, and discrepancy theming.
  */
-export class MapSymbologyStyler {
+class MapSymbologyStyler {
   /**
    * Shared stateless instance. Symbology is computed once per feature during chunked rendering, so
    * allocating a presenter per call showed up as tens of thousands of throwaway objects per render.

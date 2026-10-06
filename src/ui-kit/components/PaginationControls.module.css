@@ -9,8 +9,7 @@
   gap: 14px;
 }
 
-:global(.tableContainer) > .paginationBar:last-child,
-.paginationBarFooter {
+:global(.tableContainer) > .paginationBar:last-child {
   border-bottom: none;
   border-top: 1px solid var(--border-color);
 }

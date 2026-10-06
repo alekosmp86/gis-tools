@@ -54,7 +54,7 @@ export const BASEMAP_TILES: Record<string, TileLayerConfig> = {
   },
 };
 
-export const DISCREPANCY_COLORS: Record<string, string> = {
+const DISCREPANCY_COLORS: Record<string, string> = {
   DB_FEATURE: "#00e5ff",
   FILE_FEATURE: "#ff0055",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "#ff0055",
@@ -66,14 +66,14 @@ export const DISCREPANCY_COLORS: Record<string, string> = {
   [DiscrepancyType.MATCH]: "#10b981",
 };
 
-export const DEFAULT_DISCREPANCY_COLOR = "#2563eb";
+const DEFAULT_DISCREPANCY_COLOR = "#2563eb";
 
 export function getDiscrepancyColor(type?: string): string {
   if (!type) return DEFAULT_DISCREPANCY_COLOR;
   return DISCREPANCY_COLORS[type] || DEFAULT_DISCREPANCY_COLOR;
 }
 
-export const DISCREPANCY_LABELS: Record<string, string> = {
+const DISCREPANCY_LABELS: Record<string, string> = {
   DB_FEATURE: "Geometría Base de Datos (PostgreSQL)",
   FILE_FEATURE: "Geometría Archivo (Shapefile / CSV)",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "Discrepancia Geométrica",
@@ -85,7 +85,7 @@ export const DISCREPANCY_LABELS: Record<string, string> = {
   [DiscrepancyType.MATCH]: "Coincidencia Exacta",
 };
 
-export const DEFAULT_DISCREPANCY_LABEL = "Entidad Espacial";
+const DEFAULT_DISCREPANCY_LABEL = "Entidad Espacial";
 
 export function getDiscrepancyLabel(type?: string): string {
   if (!type) return DEFAULT_DISCREPANCY_LABEL;

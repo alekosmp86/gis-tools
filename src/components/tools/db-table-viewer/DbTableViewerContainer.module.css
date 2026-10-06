@@ -5,36 +5,6 @@
   width: 100%;
 }
 
-.connectionSection {
-  width: 100%;
-}
-
-.toggleBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.toggleBar:hover {
-  background: rgba(15, 23, 42, 0.9);
-  border-color: rgba(56, 189, 248, 0.4);
-}
-
-.toggleMeta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-
 .loadingArea {
   display: flex;
   align-items: center;
