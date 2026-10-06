@@ -1,47 +1,42 @@
-# Multi-Model Delegation Workflow
+# Agent Pipeline (AI Toolkit)
 
-Work in this repository is delivered by a pipeline that assigns each phase to the cheapest model
-that can do it well. The orchestrating session reasons; a cheaper model implements; the
-orchestrating model reviews what the cheaper one produced.
-
-Global configuration lives in `~/.claude/` and applies to every project:
-`CLAUDE.md` (the policy), `agents/implementer.md`, `agents/code-reviewer.md`,
-`agents/git-operator.md`, and `skills/dev-cycle/SKILL.md` (the full protocol).
+Work in this repository is delivered by three agents under `.claude/agents/`, generated and
+maintained by AI Toolkit (`/ai-toolkit-init`, design doc section 7). The Antigravity/Gemini
+dual-session pipeline and the `.agents/handoff/` channel it used are retired in this repo.
 
 ## 0. Role assignment
 
 | Phase | Actor | Model |
 |---|---|---|
-| Triage, planning, decomposition | main session (orchestrator) | Sonnet 5 |
-| Implementation, tests, fix rounds | Antigravity session / `implementer` | Gemini 3.8 Flash / Sonnet 5 |
-| Code review of the finished diff | `code-reviewer` agent / Claude session | Sonnet 5, fresh context |
-| Adjudication of findings | main session (orchestrator) | Sonnet 5 |
-| Commit, merge, push | Antigravity session / `git-operator` agent | Gemini 3.8 Flash / Haiku 4.5 |
+| Triage, planning, decomposition, adjudication | main session (orchestrator) | Sonnet 5 |
+| Production code | `implementer` agent | Sonnet 5 |
+| Tests, in a separate run from the code they test | `test-writer` agent | Sonnet 5 |
+| Acceptance-criteria traceability (inform mode) | `traceability-reviewer` agent | Sonnet 5 |
+| Commit, merge, push | orchestrator, on explicit user instruction | Sonnet 5 |
 
-**Dual-Session Split (Claude + Antigravity)**:
-- **Claude (Sonnet)** drives high-level reasoning, system architecture, task decomposition, and writes/maintains `.agents/handoff/TO_IMPLEMENTER.md`.
-- **Antigravity (Gemini)** acts as the dedicated implementer: ingests `.agents/handoff/TO_IMPLEMENTER.md`, applies code modifications, writes tests, runs the quality gauntlet, verifies cleanly, and reports back in `.agents/handoff/TO_ORCHESTRATOR.md`.
-- **Claude (Sonnet)** runs a fresh-context review against `git diff` before approval and branch promotion.
+**Why `test-writer` is separate from `implementer`**: if the same agent writes test and code, the
+test validates what the code does, not what it should. The separation is meant to be technical
+(a `PreToolUse` hook denying writes outside each agent's allowed paths), not just a prompt
+convention — but **that hook does not currently work**: agent-scoped hooks declared in a subagent's
+frontmatter are documented but non-functional for subagents in the installed Claude Code version
+(upstream bugs #95650 / #18392; confirmed by spike during `/ai-toolkit-init`, recorded in
+`.claude/ai-toolkit-manifest.json` as `spikes.agent_scoped_hooks: "failed"`). Until Claude Code fixes
+this, or a `settings.json`-level hook keyed on the `agent_type` field of the hook input is built and
+verified, the split is enforced only by each agent's own instructions and by the test globs below.
 
-**The reviewer is a separate agent/context even though it shares the orchestrator's model.** It starts with
-no memory of the plan, so it cannot rationalise a flaw the way its author would. The orchestrator
-then adjudicates with the plan context the reviewer lacks. The split is the point.
+Test globs (learned in discovery, `.claude/ai-toolkit/context/structure.md`):
+`tests/unit/**/*.test.ts`, `tests/e2e/**`.
 
 ## 1. The loop
 
 ```
-plan  ->  implementer  ->  code-reviewer  ->  adjudicate
-                 ^                                 |
-                 |____ fix round (max 3) __________|
-                                                   |
-                                                   v
-                                            git-operator
-                                    (explicit user instruction only)
+plan (orchestrator) -> implementer -> test-writer -> traceability-reviewer (inform) -> adjudicate
+                              ^                                                            |
+                              |______________________ fix round (max 3) ___________________|
 ```
 
-Fixes are code, so a fix round always returns to review. After three rounds with findings still
-surviving, the orchestrator stops looping and takes the work over or returns to the user — a loop
-that will not converge signals a flawed plan, not a lazy implementer.
+A fix round is code, so it returns to the same loop. After three rounds with findings still
+surviving, the orchestrator stops looping and takes the work over or returns to the user.
 
 ## 2. Scope — when the pipeline engages
 
@@ -58,62 +53,32 @@ orchestrator. Only the fix is delegated.
 ## 3. Briefing — subagents start cold
 
 A subagent inherits **no** conversation context. Every brief is self-contained: task, repo and
-branch, the plan artifact path, `file:line` pointers the orchestrator already found, the project
-rules files to honour, explicit requirements, required test coverage, **explicit out-of-scope**,
-and the definition of done. An underspecified brief produces a confident, wrong implementation.
+branch, the feature state file path (if one exists for this work), `file:line` pointers the
+orchestrator already found, the project rules files to honour, explicit requirements, required test
+coverage, **explicit out-of-scope**, and the definition of done.
 
 Every brief must point at `AGENTS.md` and the relevant `.agents/rules/*.md`, since those carry this
 project's binding constraints on layering, naming, styling, UI language and testing.
 
-## 3b. The handoff channel — `.agents/handoff/`
-
-The orchestrator and the implementer run in **separate sessions that never share context**. They
-communicate only through two documents. Neither agent's chat output is a substitute for them; if it
-is not written in the handoff file, the other side never sees it.
-
-| File | Written by | Read by | Holds |
-|---|---|---|---|
-| `.agents/handoff/TO_IMPLEMENTER.md` | orchestrator (Claude / Sonnet) | implementer (Antigravity / Gemini) | the plan, binding decisions, out-of-scope, every fix round, adjudicated review findings, definition of done |
-| `.agents/handoff/TO_ORCHESTRATOR.md` | implementer | orchestrator | what was actually changed and why, per finding; real pasted gauntlet output; anything refused, deferred or not understood |
-
-Rules of the channel:
-
-- **Append, never overwrite, within a mission.** Each exchange is a new dated section
-  (`# Fix round N — …`), so the history of what was asked and what came back stays readable. Both
-  files are reset together when a new mission starts.
-- **The orchestrator writes findings, never fixes.** Section 6's obligations still hold: no
-  implementation code in the orchestrator session beyond the trivial-edit escape hatch.
-- **The implementer reports per finding, by id.** A finding it did not fix is stated as not fixed,
-  with the reason. Silence is treated as a skipped gate.
-- **A claim in `TO_ORCHESTRATOR.md` is a claim, not evidence.** The orchestrator never re-runs the
-  gauntlet itself — that is execution, not judgement. It folds an independent re-run into the
-  `code-reviewer` brief (that agent carries Bash/PowerShell for exactly this) and reads the diff
-  itself before believing any of it.
-- The user reads both files. They are the record of the mission, not scratch paper.
-
 ## 4. Interaction with the existing workflow
 
-- **Planning rule** — the orchestrator writes or updates `.agents/handoff/TO_IMPLEMENTER.md` before
-  delegating, satisfying the mandatory planning requirement, and points the implementer at that file.
-- **Quality gauntlet** — the `implementer` runs the full local loop
-  (`modules:routes:check`, `lint`, `test`, `build`, `doctor`) on its own branch before reporting,
-  and pastes real output. Review never runs against unverified code.
-- **Tests as specification** — the implementer may never weaken an assertion to reach green, and
-  the reviewer treats a weakened, skipped or deleted test as an automatic BLOCKER.
-- **Branch promotion** — the committing session (Antigravity, or `git-operator`) follows
+- **Quality gauntlet** — `implementer`/`test-writer` run the full local loop
+  (`modules:routes:check`, `lint`, `test`, `build`, `doctor`) on their own branch before reporting,
+  and paste real output. Review never runs against unverified code.
+- **Tests as specification** — neither agent may weaken an assertion to reach green; the
+  `traceability-reviewer` and the orchestrator treat a weakened, skipped or deleted test as an
+  automatic BLOCKER.
+- **Branch promotion** — the orchestrator (or whoever commits, on explicit instruction) follows
   `.agents/rules/testing_branch_workflow.md` exactly: integrate `main`, stage on `testing` by reset,
   run the gauntlet, promote by `--ff-only`, and `--force-with-lease` only on `testing`.
-- **Commit control** — the standing "never commit automatically" rule is unchanged and binds the
-  orchestrator too. The committing session acts only on operations named explicitly in its brief,
-  and a push is never implied by a commit.
+- **Commit control** — the standing "never commit automatically" rule is unchanged. A push is never
+  implied by a commit.
 
 ## 5. Severity taxonomy
 
 Review scope, focus and obligations are defined in `.agents/rules/code_review_standards.md`, which
 every review brief must point at. A green gauntlet admits a diff to review; it never concludes one —
 architecture, SOLID, God components and duplication are judged explicitly, in writing, on every pass.
-
-The reviewer ranks every finding, and the ranking decides whether another round happens.
 
 - **BLOCKER** — wrong behaviour, data loss, crash or security hole in normal use; or a test
   weakened, skipped or deleted to force green. Fix before commit.
@@ -131,11 +96,9 @@ resulting wrong output, crash or cost. A finding without one is a preference.
 - Delegate execution, never judgement. Architecture, layer boundaries, module contracts, data
   models and dependency choices are decided by the orchestrator.
 - **Never run the gauntlet, the dev server, or any build/test/lint command in the orchestrator
-  session itself** — including "just to verify." That is execution; delegate it to the implementer
-  or fold it into a subagent's brief, then read the real pasted output. The orchestrator's tools are
-  reading, planning, dispatching and adjudicating.
+  session itself** — including "just to verify." That is execution; delegate it to `implementer`/
+  `test-writer` or fold it into a subagent's brief, then read the real pasted output.
 - Never delegate a task not understood first, and never approve a diff not read.
-- Verify a finding in the code before rejecting it. Rejecting a real bug because you designed the
-  thing is precisely the bias this pipeline exists to defeat.
+- Verify a finding in the code before rejecting it.
 - Report faithfully. A subagent's failure, skipped gate or partial result reaches the user in plain
   terms — delegation must never launder an unverified claim into a confident summary.

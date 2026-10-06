@@ -16,7 +16,6 @@ Load files on-demand based on the task to conserve context tokens. Do not load a
 - `.agents/rules/testing_branch_workflow.md` — Gauntlet, promotion pipeline, branching standards.
 - `.agents/rules/testing_standards.md` — Test structure, AAA pattern, boundary coverage.
 - `.agents/rules/code_review_standards.md` — Review focus: correctness, architecture, SOLID, God components, duplication as a size signal.
-- `.agents/rules/handoff_commands.md` — Shared command vocabulary: `/plan` `/build` `/review` `/apply` `/drop` `/hold` `/commit` `/promote` `/push` `/where`.
 - `.agents/rules/architecture_navigation.md` — Consult the generated dependency graph (`npm run graph`, `docs/architecture/dependency-graph.html`) for "where is X" / architecture / module-connection questions before scanning source; use its file-level data to target exact files, then narrow to line-level with `Grep` instead of reading whole files.
 - `.agents/rules/coding_guidelines.md` — Code structure, types, modular CSS, no inline styles.
 - `.agents/rules/module_authoring.md` — Modular monolith, boundaries, JSON route manifests.
@@ -36,3 +35,9 @@ Load files on-demand based on the task to conserve context tokens. Do not load a
 ## Troubleshooting & Past Fixes
 - `docs/README.md` — Complete documentation map and issue directory.
 - `docs/issues/` — Root-cause analyses, diffs, and verification for past issues (001–027).
+
+## AI Toolkit
+- `.claude/ai-toolkit/context/` — discovery output: real commands, structure convention, git archaeology, glossary, AI-context audit, repo hygiene, discovery report. Load on-demand per task, same as the rest of this index.
+- `.claude/ai-toolkit/context/graph-summary.md` — one-screen module map. For anything deeper, query the graph directly rather than loading the full report: `graphify query "<question>"`, `graphify path`, `graphify explain` (full report at `graphify-out/GRAPH_REPORT.md`, local-only, gitignored).
+- `.claude/baseline.json` — the baseline contract (suites, measured coverage, exceptions). A feature is not done if it regresses this without a recorded exception.
+- `.claude/ai-toolkit-manifest.json` — what AI Toolkit generated here and how; rerun `/ai-toolkit-init` to check for updates.

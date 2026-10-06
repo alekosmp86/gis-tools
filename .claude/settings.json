@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/ai-toolkit/hooks/post-tool-use-lint.cjs"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/ai-toolkit/hooks/stop-related-tests.cjs"
+          }
+        ]
+      }
+    ]
+  }
+}

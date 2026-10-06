@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "toolkit_version": "0.1.0-bootstrap",
+  "design_doc_version": "0.7, September 2026",
+  "claude_code_version": "2.1.291",
+  "adapters": {
+    "ecosystem": ["js-ts"],
+    "platform": ["web"]
+  },
+  "capabilities": {
+    "ecosystem.detect_commands": "supported",
+    "ecosystem.related_tests": "supported",
+    "ecosystem.full_suite_coverage": "supported",
+    "ecosystem.static_analysis": "partial",
+    "ecosystem.syntactic_duplication": "unsupported",
+    "ecosystem.dependency_graph": "supported",
+    "ecosystem.dependency_audit": "unsupported",
+    "ecosystem.env_var_inventory": "unsupported",
+    "platform.route_map": "unsupported",
+    "platform.e2e": "unsupported",
+    "platform.perf_a11y_budgets": "unsupported",
+    "ci.level3": "not-applicable",
+    "output_conventions.layer1_settings_style": "untested",
+    "output_conventions.layer1_user_prompt_submit_hook": "unsupported",
+    "output_conventions.layer2_claude_md_rules": "supported",
+    "agent_scoped_permission_hooks": "unsupported",
+    "project_level_hooks": "supported",
+    "graphify": "supported"
+  },
+  "decisions": {
+    "generated_artifacts_destination": "repo",
+    "canonical_feature_structure": "none (both existing modules already consistent, no ADR required)",
+    "dual_session_pipeline_retirement_scope": "this repo only; global ~/.claude/ left untouched"
+  },
+  "files": [
+    { "path": "CLAUDE.md", "type": "shared", "destination": "repo", "content_hash": "05c205c96bb9c44f6ca541487bf244c19ba526ff1372c4946b8385eaeff4b7e2", "ownership": "shared" },
+    { "path": "AGENTS.md", "type": "shared", "destination": "repo", "content_hash": "aa2ba114949227dd75eafe4b85aa8cf603f9c875a0453e407094964dd38080a9", "ownership": "shared" },
+    { "path": ".agents/rules/model_delegation.md", "type": "generated", "destination": "repo", "content_hash": "c1bdf9d0f798df6a78f711f945ebd2d57b6fb38b6bd2481534c48219c8b9066e", "ownership": "toolkit" },
+    { "path": ".agents/rules/handoff_commands.md", "type": "deleted", "destination": "repo", "content_hash": null, "ownership": "toolkit" },
+    { "path": ".claude/commands/plan.md", "type": "deleted", "destination": "repo", "content_hash": null, "ownership": "toolkit" },
+    { "path": ".claude/commands/review.md", "type": "deleted", "destination": "repo", "content_hash": null, "ownership": "toolkit" },
+    { "path": ".claude/commands/apply.md", "type": "deleted", "destination": "repo", "content_hash": null, "ownership": "toolkit" },
+    { "path": ".claude/commands/drop.md", "type": "deleted", "destination": "repo", "content_hash": null, "ownership": "toolkit" },
+    { "path": ".claude/commands/hold.md", "type": "deleted", "destination": "repo", "content_hash": null, "ownership": "toolkit" },
+    { "path": ".claude/commands/where.md", "type": "deleted", "destination": "repo", "content_hash": null, "ownership": "toolkit" },
+    { "path": ".claude/agents/implementer.md", "type": "generated", "destination": "repo", "content_hash": "c28879554761b12b9249128c5b77eb78deaaf667b75128f7dc08064201b893b6", "ownership": "toolkit" },
+    { "path": ".claude/agents/test-writer.md", "type": "generated", "destination": "repo", "content_hash": "f96d557545dbd4fe7b9be648a1117e52e9423093c84e3177c109ceb429884281", "ownership": "toolkit" },
+    { "path": ".claude/agents/traceability-reviewer.md", "type": "generated", "destination": "repo", "content_hash": "ab5b1512e70c1c1d81372cecd1fe8aa29bbe8ebebc194ee9a05a66924fa12f9d", "ownership": "toolkit" },
+    { "path": ".claude/settings.json", "type": "generated", "destination": "repo", "content_hash": "9fdaded1224c8b08ea72c6aefbd016cfe6863d04a4f211aa53bbe233fabf9733", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/hooks/post-tool-use-lint.cjs", "type": "generated", "destination": "repo", "content_hash": "d40a88a712e02c971ae8816886ff02c8568f88bc4ec0bf7a2dfb6ba5cb3a3c98", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/hooks/stop-related-tests.cjs", "type": "generated", "destination": "repo", "content_hash": "3b25ca209bb56ae4c4be07147aa9f74504d2980513412333c9a106bb98a4c0ff", "ownership": "toolkit" },
+    { "path": ".claude/baseline.json", "type": "generated", "destination": "repo", "content_hash": "a471770e5a787ea84b1ab294f6d112cc4dfe831217923b2926fb1936b519fe3f", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/context/commands.md", "type": "generated", "destination": "repo", "content_hash": "bbd245093addbd9531df2df46120c6041a291b3dddd9b4d850854899cecadb15", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/context/structure.md", "type": "generated", "destination": "repo", "content_hash": "39ea73a14b565f36fa670c966cb919147793586535b319678ecc66b1ef74dc8e", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/context/git-archaeology.md", "type": "generated", "destination": "repo", "content_hash": "d611e60a6f78dd6b30e2a996d79531feb78968d009db48d54db7d87c828d2448", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/context/glossary.md", "type": "generated", "destination": "repo", "content_hash": "4afb060e21e0c2361457ee5d5df9dd39c2c5d57a012ffb26994fc23b1d8e3ae9", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/context/todo-inventory.md", "type": "generated", "destination": "repo", "content_hash": "ced9718912cbc1f4a0204c72efa4ceca332ebfc28720893da3e442dc0ed2db82", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/context/repo-hygiene.md", "type": "generated", "destination": "repo", "content_hash": "3aa61893f3d87b81361647531f511e5946b7592aadc2ae1fb886726e63f0e88b", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/context/ai-context-audit.md", "type": "generated", "destination": "repo", "content_hash": "73ee1e852a0ebf684f1e5b3c1ba0854ef1347b2029b29eaf0e431c423e01794f", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/context/graph-summary.md", "type": "generated", "destination": "repo", "content_hash": "231a833550424e943c6ed638724e09ef8aa7942b7b3137af02762cb4819027b4", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/context/discovery-report.md", "type": "generated", "destination": "repo", "content_hash": "b869fd0a249f9b4a58dffd63c9632bd76bf717bbee27f67777950901370e25eb", "ownership": "toolkit" },
+    { "path": ".claude/ai-toolkit/evidence/baseline-run-2026-10-06.md", "type": "generated", "destination": "machine", "content_hash": null, "ownership": "toolkit" },
+    { "path": ".gitignore", "type": "shared", "destination": "repo", "content_hash": null, "ownership": "shared" }
+  ],
+  "pinned_tool_versions": {
+    "graphify": "0.9.57"
+  },
+  "spikes": {
+    "agent_scoped_hooks": "failed"
+  },
+  "spike_evidence": {
+    "agent_scoped_hooks": "Hooks declared in .claude/agents/<name>.md frontmatter (hooks: key) do not fire for subagent tool calls in Claude Code 2.1.291 — documented but non-functional, per upstream issues #95650 and #18392. Project/user-level settings.json hooks do fire and receive agent_id/agent_type on the hook input, but there is no per-agent override at that level either. implementer/test-writer generated without the hook; isolation between them is convention-only until this is fixed or a settings.json hook keyed on agent_type is built and verified."
+  },
+  "runs": [
+    {
+      "date": "2026-10-06",
+      "toolkit_version": "0.1.0-bootstrap",
+      "mode": "apply",
+      "phases_completed": ["preflight", "discovery-1", "baseline", "generation", "manifest"],
+      "phases_skipped": [
+        { "phase": "as-is-skills", "reason": "graphify installed directly during preflight/discovery; handoff and superpowers skills already present in repo from prior work, not reinstalled" },
+        { "phase": "discovery-2", "reason": "ecosystem adapter pass 2 (static analysis depth, duplication, dependency audit, env var inventory) deferred — MVP scope" },
+        { "phase": "discovery-3", "reason": "platform adapter pass 3 not applicable — no Expo/Supabase detected" }
+      ]
+    }
+  ]
+}
