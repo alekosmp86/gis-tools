@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { X } from "lucide-react";
 import { REMOVAL_LABELS } from "../data/removalLabels";
 import { RemovalPhase } from "../removalConstants";
@@ -8,6 +8,7 @@ import { DedupRemovalForm } from "./DedupRemovalForm";
 import { DedupRemovalPlanView } from "./DedupRemovalPlanView";
 import { DedupRemovalResultView } from "./DedupRemovalResultView";
 import type { DedupRemovalFlow } from "./useDedupRemoval";
+import { useModalDialog } from "./useModalDialog";
 import styles from "./DedupRemovalDialog.module.css";
 
 interface DedupRemovalDialogProps {
@@ -18,16 +19,10 @@ const FORM_PHASES: ReadonlyArray<RemovalPhase> = [RemovalPhase.FORM, RemovalPhas
 const PLAN_PHASES: ReadonlyArray<RemovalPhase> = [RemovalPhase.REVIEW, RemovalPhase.EXECUTING];
 
 export const DedupRemovalDialog: React.FC<DedupRemovalDialogProps> = ({ flow }) => {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const { state } = flow;
   const isOpen = state.phase !== RemovalPhase.CLOSED;
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (isOpen && !dialog.open) dialog.showModal();
-    if (!isOpen && dialog.open) dialog.close();
-  }, [isOpen]);
+  const dialogRef = useModalDialog(isOpen);
 
   const handleCancel = (event: React.SyntheticEvent<HTMLDialogElement>) => {
     event.preventDefault();

@@ -11,7 +11,7 @@ import { groupRows } from "../domain/groups";
 import { DedupOrchestrator } from "../services/DedupOrchestrator";
 import { PgAddressRepository } from "../services/PgAddressRepository";
 import { PgRemovalRepository } from "../services/PgRemovalRepository";
-import type { DedupResult } from "../types";
+import type { DedupRequest, DedupResult } from "../types";
 import { failure, HTTP_STATUS, jsonResponse, toErrorResponse } from "./httpResponses";
 import { readConnection, readDedupRequest, readJsonBody, type ParsedBody, type ValidationResult } from "./requestReaders";
 import { createRemovalHandlers, type RemovalHandlers } from "./removalHandlers";
@@ -43,6 +43,26 @@ function readFormat(body: ParsedBody): ValidationResult<ExportFormat> {
     return { ok: false, error: 'El formato debe ser "csv", "geojson" o "links".' };
   }
   return { ok: true, value: body.format as ExportFormat };
+}
+
+function badRequest(message: string): Response {
+  return failure(message, HTTP_STATUS.BAD_REQUEST);
+}
+
+function invalidBodyResponse(): Response {
+  return badRequest("El cuerpo de la solicitud debe ser un JSON válido.");
+}
+
+async function readDedupInput(
+  request: Request
+): Promise<{ body: ParsedBody; dedupRequest: DedupRequest } | Response> {
+  const body = await readJsonBody(request);
+  if (!body) return invalidBodyResponse();
+
+  const dedupRequest = readDedupRequest(body);
+  if (!dedupRequest.ok) return badRequest(dedupRequest.error);
+
+  return { body, dedupRequest: dedupRequest.value };
 }
 
 function toAnalyzeResponse(result: DedupResult): Response {
@@ -93,10 +113,10 @@ export function createDedupHandlers(
 
     provinces: async (request) => {
       const body = await readJsonBody(request);
-      if (!body) return failure("El cuerpo de la solicitud debe ser un JSON válido.", HTTP_STATUS.BAD_REQUEST);
+      if (!body) return invalidBodyResponse();
 
       const connection = readConnection(body);
-      if (!connection.ok) return failure(connection.error, HTTP_STATUS.BAD_REQUEST);
+      if (!connection.ok) return badRequest(connection.error);
 
       try {
         return jsonResponse({ success: true, provinces: await orchestrator.listProvinces(connection.value) });
@@ -106,33 +126,29 @@ export function createDedupHandlers(
     },
 
     analyze: async (request) => {
-      const body = await readJsonBody(request);
-      if (!body) return failure("El cuerpo de la solicitud debe ser un JSON válido.", HTTP_STATUS.BAD_REQUEST);
-
-      const dedupRequest = readDedupRequest(body);
-      if (!dedupRequest.ok) return failure(dedupRequest.error, HTTP_STATUS.BAD_REQUEST);
+      const input = await readDedupInput(request);
+      if (input instanceof Response) return input;
+      const { dedupRequest } = input;
 
       try {
-        return toAnalyzeResponse(await orchestrator.analyze(dedupRequest.value));
+        return toAnalyzeResponse(await orchestrator.analyze(dedupRequest));
       } catch (error: unknown) {
-        return toErrorResponse(error, dedupRequest.value.connection.password, ANALYSIS_FAILURE_MESSAGE);
+        return toErrorResponse(error, dedupRequest.connection.password, ANALYSIS_FAILURE_MESSAGE);
       }
     },
 
     exportResult: async (request) => {
-      const body = await readJsonBody(request);
-      if (!body) return failure("El cuerpo de la solicitud debe ser un JSON válido.", HTTP_STATUS.BAD_REQUEST);
-
-      const dedupRequest = readDedupRequest(body);
-      if (!dedupRequest.ok) return failure(dedupRequest.error, HTTP_STATUS.BAD_REQUEST);
+      const input = await readDedupInput(request);
+      if (input instanceof Response) return input;
+      const { body, dedupRequest } = input;
       const format = readFormat(body);
-      if (!format.ok) return failure(format.error, HTTP_STATUS.BAD_REQUEST);
+      if (!format.ok) return badRequest(format.error);
 
       try {
-        const result = await orchestrator.analyze(dedupRequest.value);
-        return toExportResponse(format.value, dedupRequest.value.provinceId, result);
+        const result = await orchestrator.analyze(dedupRequest);
+        return toExportResponse(format.value, dedupRequest.provinceId, result);
       } catch (error: unknown) {
-        return toErrorResponse(error, dedupRequest.value.connection.password, ANALYSIS_FAILURE_MESSAGE);
+        return toErrorResponse(error, dedupRequest.connection.password, ANALYSIS_FAILURE_MESSAGE);
       }
     },
   };

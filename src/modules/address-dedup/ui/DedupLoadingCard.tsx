@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { Loader2 } from "lucide-react";
 import { LOADING_MESSAGE } from "../data/dedupLabels";
+import { useModalDialog } from "./useModalDialog";
 import styles from "./DedupLoadingCard.module.css";
 
 interface DedupLoadingCardProps {
@@ -10,14 +11,7 @@ interface DedupLoadingCardProps {
 }
 
 export const DedupLoadingCard: React.FC<DedupLoadingCardProps> = ({ isOpen }) => {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (isOpen && !dialog.open) dialog.showModal();
-    if (!isOpen && dialog.open) dialog.close();
-  }, [isOpen]);
+  const dialogRef = useModalDialog(isOpen);
 
   return (
     <dialog

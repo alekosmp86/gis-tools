@@ -1,5 +1,6 @@
 import React from "react";
 import { Zap, Key, Info } from "lucide-react";
+import { OptionToggleCard, OptionToggleNotice } from "./OptionToggleCard";
 import styles from "./PkOptimizationCard.module.css";
 
 export interface PkOptimizationCardProps {
@@ -22,55 +23,23 @@ export const PkOptimizationCard: React.FC<PkOptimizationCardProps> = ({
   const effectiveColumn = selectedPrimaryKey || detectedPrimaryKey || "";
 
   return (
-    <div
-      className={`${styles.cardContainer} ${
-        isEnabled && effectiveColumn ? styles.cardContainerActive : ""
-      }`}
-    >
-      <div className={styles.headerRow}>
-        <div className={styles.titleArea}>
-          <div className={styles.iconWrapper}>
-            <Zap size={18} />
-          </div>
-          <h4 className={styles.titleText}>
-            Optimización de Actualización (WHERE Clave Primaria)
-          </h4>
-          {isEnabled && effectiveColumn ? (
-            <span className={styles.activeBadge}>
-              <Key size={13} />
-              WHERE &quot;{effectiveColumn}&quot; = ...
-            </span>
-          ) : (
-            <span className={styles.inactiveBadge}>
-              WHERE Clave SUID Compuesta
-            </span>
-          )}
-        </div>
-
-        <label className={styles.toggleLabel}>
-          <input
-            type="checkbox"
-            className={styles.toggleInput}
-            checked={isEnabled}
-            onChange={(event) => onToggleEnabled(event.target.checked)}
-          />
-          <span
-            className={`${styles.toggleTrack} ${
-              isEnabled ? styles.toggleTrackActive : ""
-            }`}
-          >
-            <span
-              className={`${styles.toggleThumb} ${
-                isEnabled ? styles.toggleThumbActive : ""
-              }`}
-            />
-          </span>
-          <span>Habilitar búsqueda por PK</span>
-        </label>
-      </div>
-
-      <p className={styles.descriptionText}>
-        {detectedPrimaryKey ? (
+    <OptionToggleCard
+      tone="amber"
+      icon={<Zap size={18} />}
+      title="Optimización de Actualización (WHERE Clave Primaria)"
+      isEnabled={isEnabled}
+      isActive={Boolean(isEnabled && effectiveColumn)}
+      activeBadge={
+        <>
+          <Key size={13} />
+          WHERE &quot;{effectiveColumn}&quot; = ...
+        </>
+      }
+      inactiveBadge="WHERE Clave SUID Compuesta"
+      toggleLabel="Habilitar búsqueda por PK"
+      onToggleEnabled={onToggleEnabled}
+      description={
+        detectedPrimaryKey ? (
           <>
             Se detectó la clave primaria <code>{detectedPrimaryKey}</code> en PostgreSQL.
             Al habilitar esta opción, las sentencias SQL <code>UPDATE</code> utilizarán{" "}
@@ -84,9 +53,9 @@ export const PkOptimizationCard: React.FC<PkOptimizationCardProps> = ({
             <code>gid</code>, <code>ogc_fid</code>), selecciónela para que las sentencias{" "}
             <code>UPDATE</code> busquen directamente por esa columna única en lugar de la clave SUID compuesta.
           </>
-        )}
-      </p>
-
+        )
+      }
+    >
       {isEnabled && (
         <div className={styles.controlsRow}>
           <div className={styles.selectGroup}>
@@ -109,15 +78,15 @@ export const PkOptimizationCard: React.FC<PkOptimizationCardProps> = ({
             </select>
           </div>
 
-          <div className={styles.noticeBox}>
+          <OptionToggleNotice>
             <Info size={14} />
             <span>
               Nota: La clave primaria solo se utiliza en la cláusula WHERE de <code>UPDATE</code>.
               Las sentencias <code>INSERT</code> seguirán utilizando los valores de negocio del SUID.
             </span>
-          </div>
+          </OptionToggleNotice>
         </div>
       )}
-    </div>
+    </OptionToggleCard>
   );
 };

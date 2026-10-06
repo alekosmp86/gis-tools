@@ -1,12 +1,12 @@
 import React from "react";
 import dynamic from "next/dynamic";
-import { FileCheck, Trash2 } from "lucide-react";
-import { Button } from "@/ui-kit/components/ui/Button";
+import { FileCheck } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import { ColumnsList } from "@/ui-kit/components/ColumnsList";
 import type { ParsedFileDataset } from "@/core/types/parsers";
 import { formatNumber, formatFileSize } from "@/core/common/ValueFormatter";
+import { LoadedFileHeader } from "../db-sync-common/LoadedFileHeader";
 import styles from "./LoadedShapefileCard.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -31,23 +31,15 @@ export const LoadedShapefileCard: React.FC<LoadedShapefileCardProps> = ({
 
   return (
     <div className={styles.loadedCard}>
-      <div className={styles.loadedHeader}>
-        <div className={styles.fileMeta}>
-          <FileCheck size={28} className={styles.successIcon} />
-          <div>
-            <div className={styles.fileName}>{data.fileName}</div>
-            <div className={styles.fileSub}>
-              Tamaño: {formatFileSize(data.fileSize)} &bull; Tipo:{" "}
-              {data.geometryType || "Desconocido"}
-            </div>
-          </div>
-        </div>
-
-        <Button variant="ghost" onClick={onDiscard}>
-          <Trash2 size={16} color="var(--accent-rose, #f43f5e)" />
-          <span className={styles.discardText}>Descartar archivo</span>
-        </Button>
-      </div>
+      <LoadedFileHeader
+        variant="shapefile"
+        icon={FileCheck}
+        fileName={data.fileName}
+        onDiscard={onDiscard}
+      >
+        Tamaño: {formatFileSize(data.fileSize)} &bull; Tipo:{" "}
+        {data.geometryType || "Desconocido"}
+      </LoadedFileHeader>
 
       <div className={styles.metaRow}>
         <div className={styles.metaItem}>

@@ -3,7 +3,7 @@ import { Database, GitMerge, Sliders } from "lucide-react";
 import { SuidMappingStep } from "./SuidMappingStep";
 import { SyncParametersStep } from "./SyncParametersStep";
 import { ComparisonResultsView } from "./ComparisonResultsView";
-import type { DbColumnMetadata, DbConfig } from "@/core/types/db";
+import type { DbColumnMetadata, DbConfig, DbConnectionFormRef, DbConnectionStatusPayload } from "@/core/types/db";
 import type { ParsedFileDataset } from "@/core/types/parsers";
 import type { ParsedShapefileData } from "@/core/types/shp";
 import type {
@@ -13,6 +13,30 @@ import type {
   SyncParametersStepRef,
 } from "@/core/types/comparison";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
+import { DbConnectionForm } from "@/ui-kit/components/DbConnectionForm";
+
+export interface BuildDbConnectionStepParams {
+  formRef: RefObject<DbConnectionFormRef | null>;
+  onSuccess: (config: DbConfig, columns: string[], totalRows: number, details?: DbColumnMetadata[]) => void;
+  onStatusChange: (status: DbConnectionStatusPayload) => void;
+  canProceed: boolean;
+}
+
+export function buildDbConnectionStep(params: BuildDbConnectionStepParams): WizardStepDef {
+  return {
+    id: 1,
+    title: "Base de Datos",
+    subtitle: "Conexión y Tabla",
+    cardTitle: "Conectar a Base de Datos PostgreSQL",
+    cardSubtitle: "Ingrese las credenciales para conectar a la base de datos e inspeccionar la tabla seleccionada.",
+    icon: Database,
+    content: (
+      <DbConnectionForm ref={params.formRef} onSuccess={params.onSuccess} onStatusChange={params.onStatusChange} />
+    ),
+    canProceed: params.canProceed,
+    onNext: () => params.formRef.current?.proceed(),
+  };
+}
 
 export interface BuildSuidMappingStepParams {
   ref: RefObject<SuidMappingStepRef | null>;

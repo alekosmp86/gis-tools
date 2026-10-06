@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useRef } from "react";
 import { Database } from "lucide-react";
 import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLayout";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
@@ -10,70 +9,42 @@ import {
   buildSuidMappingStep,
   buildSyncParametersStep,
 } from "@/components/tools/db-sync-common/wizardSteps";
+import { useDbSourceConnection } from "@/components/tools/db-sync-common/useDbSourceConnection";
+import { useWizardMappingState } from "@/components/tools/db-sync-common/useWizardMappingState";
 import { DB_VS_DB_DESCRIPTOR } from "@/core/constants/comparisonDescriptors";
-import type { DbConfig, DbColumnMetadata, DbConnectionFormRef } from "@/core/types/db";
 import { FileSourceKind, type ParsedFileDataset } from "@/core/types/parsers";
-import type { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/core/types/comparison";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
 
 export default function DbDbSyncToolPage() {
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [dbConfig1, setDbConfig1] = useState<DbConfig | null>(null);
-  const [dbColumns1, setDbColumns1] = useState<string[]>([]);
-  const [isDb1Connected, setIsDb1Connected] = useState(false);
-
-  const [dbConfig2, setDbConfig2] = useState<DbConfig | null>(null);
-  const [dbColumns2, setDbColumns2] = useState<string[]>([]);
-  const [columnDetails2, setColumnDetails2] = useState<DbColumnMetadata[]>([]);
-  const [isDb2Connected, setIsDb2Connected] = useState(false);
-
-  const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
-  const [isMappingReady, setIsMappingReady] = useState(true);
-
-  const db1FormRef = useRef<DbConnectionFormRef | null>(null);
-  const db2FormRef = useRef<DbConnectionFormRef | null>(null);
-  const suidMappingRef = useRef<SuidMappingStepRef | null>(null);
-  const syncParametersRef = useRef<SyncParametersStepRef | null>(null);
-
-  const handleDb1Success = (
-    config: DbConfig,
-    columns: string[]
-  ) => {
-    setDbConfig1(config);
-    setDbColumns1(columns);
-    setCurrentStep(2);
-  };
-
-  const handleDb2Success = (
-    config: DbConfig,
-    columns: string[],
-    _totalRows: number,
-    details?: DbColumnMetadata[]
-  ) => {
-    setDbConfig2(config);
-    setDbColumns2(columns);
-    setColumnDetails2(details || []);
-    setCurrentStep(3);
-  };
-
-  const handleMappingSuccess = (config: ColumnMappingConfig) => {
-    setMappingConfig((previous) => ({
-      ...previous,
-      ...config,
-    }));
-    setCurrentStep(4);
-  };
-
-  const handleSyncParametersSuccess = (finalConfig: ColumnMappingConfig) => {
-    setMappingConfig(finalConfig);
-    setCurrentStep(5);
-  };
-
-  const handleStepClick = (stepId: number) => {
-    if (stepId < currentStep) {
-      setCurrentStep(stepId);
-    }
-  };
+  const {
+    currentStep,
+    setCurrentStep,
+    mappingConfig,
+    isMappingReady,
+    setIsMappingReady,
+    suidMappingRef,
+    syncParametersRef,
+    handleMappingSuccess,
+    handleSyncParametersSuccess,
+    handleStepClick,
+  } = useWizardMappingState();
+  const {
+    dbConfig: dbConfig1,
+    dbColumns: dbColumns1,
+    isDbConnected: isDb1Connected,
+    dbFormRef: db1FormRef,
+    handleDbSuccess: handleDb1Success,
+    handleDbStatusChange: handleDb1StatusChange,
+  } = useDbSourceConnection(() => setCurrentStep(2));
+  const {
+    dbConfig: dbConfig2,
+    dbColumns: dbColumns2,
+    columnDetails: columnDetails2,
+    isDbConnected: isDb2Connected,
+    dbFormRef: db2FormRef,
+    handleDbSuccess: handleDb2Success,
+    handleDbStatusChange: handleDb2StatusChange,
+  } = useDbSourceConnection(() => setCurrentStep(3));
 
   // Build a ParsedFileDataset wrapper for DB 1 to pass seamlessly into ComparisonResultsView & worker
   const sourceDataset: ParsedFileDataset | null = dbConfig1
@@ -100,7 +71,7 @@ export default function DbDbSyncToolPage() {
           key="db1-form"
           ref={db1FormRef}
           onSuccess={handleDb1Success}
-          onStatusChange={(status) => setIsDb1Connected(status.isConnected && status.columns.length > 0)}
+          onStatusChange={handleDb1StatusChange}
         />
       ),
       canProceed: isDb1Connected,
@@ -118,7 +89,7 @@ export default function DbDbSyncToolPage() {
           key="db2-form"
           ref={db2FormRef}
           onSuccess={handleDb2Success}
-          onStatusChange={(status) => setIsDb2Connected(status.isConnected && status.columns.length > 0)}
+          onStatusChange={handleDb2StatusChange}
         />
       ),
       canProceed: isDb2Connected,
@@ -126,7 +97,6 @@ export default function DbDbSyncToolPage() {
       onBack: () => setCurrentStep(1),
     },
     // react-doctor-disable-next-line react-hooks-js/refs
-    // eslint-disable-next-line react-hooks/refs
     buildSuidMappingStep({
       ref: suidMappingRef,
       isSourceReady: dbColumns1.length > 0,
@@ -143,7 +113,6 @@ export default function DbDbSyncToolPage() {
       isMappingReady,
     }),
     // react-doctor-disable-next-line react-hooks-js/refs
-    // eslint-disable-next-line react-hooks/refs
     buildSyncParametersStep({
       ref: syncParametersRef,
       dbColumns: dbColumns2,

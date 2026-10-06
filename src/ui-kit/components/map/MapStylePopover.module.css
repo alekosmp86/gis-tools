@@ -74,28 +74,19 @@
 }
 
 .controlSection {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  composes: controlSection from "./StyleSliderControl.module.css";
 }
 
 .labelRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.75rem;
+  composes: labelRow from "./StyleSliderControl.module.css";
 }
 
 .sectionLabel {
-  font-weight: 600;
-  color: var(--text-muted);
+  composes: sectionLabel from "./StyleSliderControl.module.css";
 }
 
 .valueBadge {
-  font-family: var(--font-mono);
-  font-size: 0.725rem;
-  font-weight: 600;
-  color: var(--accent-cyan);
+  composes: valueBadge from "./StyleSliderControl.module.css";
 }
 
 /* Color Swatches Grid */

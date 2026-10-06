@@ -6,6 +6,42 @@ import type {
   SerializableFileDataset,
 } from "@/core/types/workerMessages";
 
+function runWorkerRequest<TResult>(
+  message: WorkerRunComparisonInputMessage | WorkerGenerateSqlInputMessage,
+  onProgress: ProgressCallback | undefined,
+  fallbackErrorMessage: string
+): Promise<TResult> {
+  return new Promise<TResult>((resolve, reject) => {
+    const worker = new Worker(
+      new URL("../workers/comparisonWorker.ts", import.meta.url)
+    );
+
+    worker.onmessage = (event: MessageEvent<WorkerOutputMessage>) => {
+      const msg = event.data;
+      switch (msg.type) {
+        case "PROGRESS":
+          onProgress?.(msg.phase, msg.current, msg.total);
+          break;
+        case "DONE":
+          worker.terminate();
+          resolve(msg.payload as TResult);
+          break;
+        case "ERROR":
+          worker.terminate();
+          reject(new Error(msg.message));
+          break;
+      }
+    };
+
+    worker.onerror = (errorEvent) => {
+      worker.terminate();
+      reject(new Error(errorEvent.message ?? fallbackErrorMessage));
+    };
+
+    worker.postMessage(message);
+  });
+}
+
 /**
  * Runs the comparison inside a Web Worker.
  * Falls back to an inline synchronous import if Worker is unavailable (SSR / old browsers).
@@ -20,38 +56,11 @@ export async function runInWorker(
     return runComparisonSync(input, onProgress);
   }
 
-  return new Promise<ComparisonSummary>((resolve, reject) => {
-    const worker = new Worker(
-      new URL("../workers/comparisonWorker.ts", import.meta.url)
-    );
-
-    worker.onmessage = (event: MessageEvent<WorkerOutputMessage>) => {
-      const msg = event.data;
-      switch (msg.type) {
-        case "PROGRESS":
-          onProgress?.(msg.phase, msg.current, msg.total);
-          break;
-        case "DONE":
-          worker.terminate();
-          resolve(msg.payload as ComparisonSummary);
-          break;
-        case "ERROR":
-          worker.terminate();
-          reject(new Error(msg.message));
-          break;
-      }
-    };
-
-    worker.onerror = (errorEvent) => {
-      worker.terminate();
-      reject(new Error(errorEvent.message ?? "Error desconocido en el Web Worker."));
-    };
-
-    worker.postMessage({
-      type: "RUN_COMPARISON",
-      payload: input,
-    } satisfies WorkerRunComparisonInputMessage);
-  });
+  return runWorkerRequest<ComparisonSummary>(
+    { type: "RUN_COMPARISON", payload: input } satisfies WorkerRunComparisonInputMessage,
+    onProgress,
+    "Error desconocido en el Web Worker."
+  );
 }
 
 /**
@@ -90,38 +99,11 @@ export async function generateSqlPatchesInWorker(
     return generator.generatePatches(input.discrepancyItems, onProgress, true);
   }
 
-  return new Promise<SqlPatchSummary>((resolve, reject) => {
-    const worker = new Worker(
-      new URL("../workers/comparisonWorker.ts", import.meta.url)
-    );
-
-    worker.onmessage = (event: MessageEvent<WorkerOutputMessage>) => {
-      const msg = event.data;
-      switch (msg.type) {
-        case "PROGRESS":
-          onProgress?.(msg.phase, msg.current, msg.total);
-          break;
-        case "DONE":
-          worker.terminate();
-          resolve(msg.payload as SqlPatchSummary);
-          break;
-        case "ERROR":
-          worker.terminate();
-          reject(new Error(msg.message));
-          break;
-      }
-    };
-
-    worker.onerror = (errorEvent) => {
-      worker.terminate();
-      reject(new Error(errorEvent.message ?? "Error en el Web Worker al generar parches SQL."));
-    };
-
-    worker.postMessage({
-      type: "GENERATE_SQL",
-      payload: input,
-    } satisfies WorkerGenerateSqlInputMessage);
-  });
+  return runWorkerRequest<SqlPatchSummary>(
+    { type: "GENERATE_SQL", payload: input } satisfies WorkerGenerateSqlInputMessage,
+    onProgress,
+    "Error en el Web Worker al generar parches SQL."
+  );
 }
 
 /**

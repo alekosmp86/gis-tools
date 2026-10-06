@@ -1,0 +1,5 @@
+{
+  "duplicates": {
+    "ignore": ["src/app/tools/m/**", "src/app/api/m/**"]
+  }
+}

@@ -1,0 +1,29 @@
+.loadedCard {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.metaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metaLabel {
+  font-size: 0.775rem;
+  color: var(--text-dim);
+}
+
+.metaValue {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.mapSection {
+  display: flex;
+  flex-direction: column;
+}

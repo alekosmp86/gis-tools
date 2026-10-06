@@ -71,17 +71,7 @@ export class FeatureAttributeExtractor {
 
         if (fieldDescriptor) {
           const fileVal = dbfReader.readFieldValue(targetRecordIndex, fieldDescriptor);
-          const areEqual = this.suidResolver.areValuesEquivalent(dbVal, fileVal, {
-            ignoreEncodingArtifacts,
-          });
-
-          if (!areEqual) {
-            differences.push({
-              fieldName: field,
-              dbValue: dbVal as string | number | null,
-              shpValue: fileVal as string | number | null,
-            });
-          }
+          this.recordIfDifferent(differences, field, dbVal, fileVal, ignoreEncodingArtifacts);
         }
       });
 
@@ -112,20 +102,26 @@ export class FeatureAttributeExtractor {
           }
         }
 
-        const areEqual = this.suidResolver.areValuesEquivalent(dbVal, fileVal, {
-          ignoreEncodingArtifacts,
-        });
-
-        if (!areEqual) {
-          differences.push({
-            fieldName: field,
-            dbValue: dbVal as string | number | null,
-            shpValue: fileVal as string | number | null,
-          });
-        }
+        this.recordIfDifferent(differences, field, dbVal, fileVal, ignoreEncodingArtifacts);
       });
     }
 
     return { differences, fileFeatureRecord, fileGeometry, fileRecordIndex };
+  }
+
+  private recordIfDifferent(
+    differences: AttributeDifference[],
+    field: string,
+    dbVal: unknown,
+    fileVal: unknown,
+    ignoreEncodingArtifacts: boolean
+  ): void {
+    if (!this.suidResolver.areValuesEquivalent(dbVal, fileVal, { ignoreEncodingArtifacts })) {
+      differences.push({
+        fieldName: field,
+        dbValue: dbVal as string | number | null,
+        shpValue: fileVal as string | number | null,
+      });
+    }
   }
 }

@@ -36,10 +36,7 @@ export class WktGeometryParser implements IGeometryParser {
       const lineMatch = str.match(/^LINESTRING\s*\((.+)\)$/i);
       if (lineMatch) {
         const coordsStr = lineMatch[1];
-        const pts = coordsStr.split(",").map((pointPair) => {
-          const [xStr, yStr] = pointPair.trim().split(/\s+/);
-          return EwkbGeometryParser.normalizeCoordinate(parseFloat(xStr), parseFloat(yStr));
-        });
+        const pts = coordsStr.split(",").map(WktGeometryParser.parsePointPair);
         return {
           type: "LineString",
           coordinates: pts,
@@ -51,13 +48,7 @@ export class WktGeometryParser implements IGeometryParser {
       if (polyMatch) {
         const ringsRaw = str.replace(/^POLYGON\s*\(/i, "").replace(/\)$/, "").trim();
         const ringStrings = ringsRaw.split(/\)\s*,\s*\(/);
-        const rings = ringStrings.map((ringStr) => {
-          const cleanRing = ringStr.replace(/^\(/, "").replace(/\)$/, "").trim();
-          return cleanRing.split(",").map((pointPair) => {
-            const [xStr, yStr] = pointPair.trim().split(/\s+/);
-            return EwkbGeometryParser.normalizeCoordinate(parseFloat(xStr), parseFloat(yStr));
-          });
-        });
+        const rings = ringStrings.map(WktGeometryParser.parseRing);
         return {
           type: "Polygon",
           coordinates: rings,
@@ -71,13 +62,7 @@ export class WktGeometryParser implements IGeometryParser {
         const polyStrings = polysRaw.split(/\)\s*\)\s*,\s*\(\s*\(/);
         const polys = polyStrings.map((polyStr) => {
           const ringStrings = polyStr.split(/\)\s*,\s*\(/);
-          return ringStrings.map((ringStr) => {
-            const cleanRing = ringStr.replace(/^\(/, "").replace(/\)$/, "").trim();
-            return cleanRing.split(",").map((pointPair) => {
-              const [xStr, yStr] = pointPair.trim().split(/\s+/);
-              return EwkbGeometryParser.normalizeCoordinate(parseFloat(xStr), parseFloat(yStr));
-            });
-          });
+          return ringStrings.map(WktGeometryParser.parseRing);
         });
         return {
           type: "MultiPolygon",
@@ -89,6 +74,16 @@ export class WktGeometryParser implements IGeometryParser {
     }
 
     return null;
+  }
+
+  private static parsePointPair(pointPair: string): [number, number] {
+    const [xStr, yStr] = pointPair.trim().split(/\s+/);
+    return EwkbGeometryParser.normalizeCoordinate(parseFloat(xStr), parseFloat(yStr));
+  }
+
+  private static parseRing(ringStr: string): Array<[number, number]> {
+    const cleanRing = ringStr.replace(/^\(/, "").replace(/\)$/, "").trim();
+    return cleanRing.split(",").map(WktGeometryParser.parsePointPair);
   }
 
   /**

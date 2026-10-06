@@ -15,8 +15,13 @@
   align-items: center;
   justify-content: center;
   gap: 14px;
+  padding: 48px;
+  color: var(--accent-cyan);
+  font-size: 0.9rem;
+}
+
+.loadingAreaCompact {
   padding: 40px 24px;
-  color: var(--accent-cyan, #06b6d4);
   font-size: 0.95rem;
 }
 

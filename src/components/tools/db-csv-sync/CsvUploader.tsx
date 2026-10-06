@@ -1,19 +1,14 @@
-import React, { useState, useRef } from "react";
+import React from "react";
 import dynamic from "next/dynamic";
-import { useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, Trash2, Loader2 } from "lucide-react";
-import { Button } from "@/ui-kit/components/ui/Button";
-import { AlertMessage } from "@/ui-kit/components/AlertMessage";
+import { FileSpreadsheet } from "lucide-react";
 import { ColumnsList } from "@/ui-kit/components/ColumnsList";
-import { FileDropzone } from "@/ui-kit/components/FileDropzone";
-import { ProgressBar } from "@/ui-kit/components/ProgressBar";
-import { ModuleTabbedSlot } from "@/ui-kit/modules/ModuleTabbedSlot";
-import { FileSourceSlotProvider } from "@/ui-kit/modules/FileSourceSlotContext";
-import { UiSlot, FileSourceFormat } from "@/ui-kit/modules/contracts";
+import { FileSourceFormat } from "@/ui-kit/modules/contracts";
 import { CsvParser } from "@/core/services/parsers/CsvParser";
-import { AlertType } from "@/ui-kit/types/ui";
-import type { ISpatialFileParser, ParsedFileDataset, FileParseProgress } from "@/core/types/parsers";
+import type { ParsedFileDataset } from "@/core/types/parsers";
 import { formatNumber, formatFileSize } from "@/core/common/ValueFormatter";
+import { FileUploadArea } from "../db-sync-common/FileUploadArea";
+import { LoadedFileHeader } from "../db-sync-common/LoadedFileHeader";
+import { useSpatialFileUpload } from "../db-sync-common/useSpatialFileUpload";
 import styles from "./CsvUploader.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -32,165 +27,38 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
   onDiscard,
   loadedData = null,
 }) => {
-  const queryClient = useQueryClient();
-  const [data, setData] = useState<ParsedFileDataset | null>(loadedData);
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState<FileParseProgress | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const processFile = async (file: File) => {
-    setLoading(true);
-    setProgress(null);
-    setErrorMessage(null);
-    queryClient.removeQueries({ queryKey: ["datasetComparison"] });
-
-    try {
-      const parser: ISpatialFileParser = new CsvParser();
-      const parsed = await parser.parse(file, (phase: string, current: number, total: number) => {
-        const percentage = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
-        setProgress({
-          phase,
-          current,
-          total,
-          pct: percentage,
-        });
-      });
-      setData(parsed);
-      onSuccess(parsed);
-      setLoading(false);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Error al procesar el archivo CSV.";
-      setErrorMessage(message);
-      setLoading(false);
-    }
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      processFile(files[0]);
-    }
-  };
-
-  const handleDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(false);
-    const files = event.dataTransfer.files;
-    if (files && files.length > 0) {
-      processFile(files[0]);
-    }
-  };
-
-  const handleDropzoneKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      fileInputRef.current?.click();
-    }
-  };
-
-  const handleDiscard = () => {
-    queryClient.removeQueries({ queryKey: ["datasetComparison"] });
-    setData(null);
-    setProgress(null);
-    setErrorMessage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-    onDiscard();
-  };
+  const upload = useSpatialFileUpload({
+    createParser: () => new CsvParser(),
+    fallbackErrorMessage: "Error al procesar el archivo CSV.",
+    loadedData,
+    onSuccess,
+    onDiscard,
+  });
+  const { data } = upload;
 
   return (
-    <div className={styles.container}>
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".csv,.txt"
-        aria-label="Seleccionar archivo CSV"
-        className={styles.hiddenInput}
-      />
-
-      {/* Upload Zone */}
-      {!data && !loading && (
-        <FileSourceSlotProvider
-          value={{
-            toolId: "db-csv-sync",
-            format: FileSourceFormat.CSV,
-            onSelectFile: processFile,
-            isLoading: loading,
-          }}
-        >
-          <ModuleTabbedSlot slot={UiSlot.FILE_SOURCE_TABS} defaultLabel="Subir desde PC">
-            <FileDropzone
-              isDragOver={isDragOver}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              onKeyDown={handleDropzoneKeyDown}
-              title="Arrastre y suelte su archivo CSV (.csv) aquí"
-              subtitle="o haga clic para seleccionar un archivo desde su equipo"
-              formatBadges={[".CSV", "DELIMITADO POR COMAS"]}
-            />
-          </ModuleTabbedSlot>
-        </FileSourceSlotProvider>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className={styles.loadingArea}>
-          {progress && progress.total > 0 ? (
-            <div className={styles.progressWrapper}>
-              <ProgressBar
-                phase={progress.phase}
-                current={progress.current}
-                total={progress.total}
-                pct={progress.pct}
-              />
-            </div>
-          ) : (
-            <>
-              <Loader2 size={32} className={styles.spin} />
-              <span>Leyendo e inspeccionando columnas del archivo CSV en memoria...</span>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Error Alert */}
-      {errorMessage && <AlertMessage type={AlertType.ERROR} text={errorMessage} />}
-
+    <FileUploadArea
+      upload={upload}
+      accept=".csv,.txt"
+      inputAriaLabel="Seleccionar archivo CSV"
+      toolId="db-csv-sync"
+      format={FileSourceFormat.CSV}
+      dropzoneTitle="Arrastre y suelte su archivo CSV (.csv) aquí"
+      dropzoneSubtitle="o haga clic para seleccionar un archivo desde su equipo"
+      formatBadges={[".CSV", "DELIMITADO POR COMAS"]}
+      loadingMessage="Leyendo e inspeccionando columnas del archivo CSV en memoria..."
+    >
       {/* Loaded File Info Card */}
       {data && (
         <div className={styles.loadedCard}>
-          <div className={styles.loadedHeader}>
-            <div className={styles.fileMeta}>
-              <FileSpreadsheet size={28} className={styles.successIcon} />
-              <div>
-                <div className={styles.fileName}>{data.fileName}</div>
-                <div className={styles.fileSub}>
-                  Tamaño: {formatFileSize(data.fileSize)} &bull; {formatNumber(data.featureCount)} filas
-                </div>
-              </div>
-            </div>
-
-            <Button variant="ghost" onClick={handleDiscard}>
-              <Trash2 size={16} color="var(--accent-rose)" />
-              <span className={styles.discardText}>Descartar archivo</span>
-            </Button>
-          </div>
+          <LoadedFileHeader
+            variant="csv"
+            icon={FileSpreadsheet}
+            fileName={data.fileName}
+            onDiscard={upload.handleDiscard}
+          >
+            Tamaño: {formatFileSize(data.fileSize)} &bull; {formatNumber(data.featureCount)} filas
+          </LoadedFileHeader>
 
           <div className={styles.metaRow}>
             <div className={styles.metaItem}>
@@ -222,6 +90,6 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
 
         </div>
       )}
-    </div>
+    </FileUploadArea>
   );
 };

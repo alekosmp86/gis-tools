@@ -1,0 +1,52 @@
+.loadedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fileMeta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.fileName {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.discardText {
+  color: var(--accent-rose);
+}
+
+.csv .successIcon {
+  color: var(--accent-cyan);
+}
+
+.csv .fileName {
+  color: var(--text-main);
+}
+
+.csv .fileSub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.shapefile.loadedHeader {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 16px;
+}
+
+.shapefile .successIcon {
+  color: var(--accent-emerald);
+}
+
+.shapefile .fileName {
+  font-family: var(--font-mono, monospace);
+}
+
+.shapefile .fileSub {
+  font-size: 0.825rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}

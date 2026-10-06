@@ -1,48 +1,39 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Database, FileSpreadsheet } from "lucide-react";
+import { useState } from "react";
+import { FileSpreadsheet } from "lucide-react";
 import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLayout";
 import { CsvUploader } from "@/components/tools/db-csv-sync/CsvUploader";
 import {
+  buildDbConnectionStep,
   buildResultsStep,
   buildSuidMappingStep,
   buildSyncParametersStep,
 } from "@/components/tools/db-sync-common/wizardSteps";
-import { DbColumnMetadata, DbConfig, DbConnectionFormRef } from "@/core/types/db";
+import { useDbSourceConnection } from "@/components/tools/db-sync-common/useDbSourceConnection";
+import { useWizardMappingState } from "@/components/tools/db-sync-common/useWizardMappingState";
 import { ParsedFileDataset } from "@/core/types/parsers";
-import { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/core/types/comparison";
 import { WizardStepDef } from "@/ui-kit/types/ui";
-import { DbConnectionForm } from "@/ui-kit/components/DbConnectionForm";
 import { DB_VS_CSV_DESCRIPTOR } from "@/core/constants/comparisonDescriptors";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 
 export default function DbCsvSyncToolPage() {
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [dbConfig, setDbConfig] = useState<DbConfig | null>(null);
-  const [dbColumns, setDbColumns] = useState<string[]>([]);
-  const [columnDetails, setColumnDetails] = useState<DbColumnMetadata[]>([]);
-  const [isDbConnected, setIsDbConnected] = useState(false);
+  const {
+    currentStep,
+    setCurrentStep,
+    mappingConfig,
+    isMappingReady,
+    setIsMappingReady,
+    suidMappingRef,
+    syncParametersRef,
+    handleMappingSuccess,
+    handleSyncParametersSuccess,
+    handleStepClick,
+  } = useWizardMappingState();
+  const { dbConfig, dbColumns, columnDetails, isDbConnected, dbFormRef, handleDbSuccess, handleDbStatusChange } =
+    useDbSourceConnection(() => setCurrentStep(2));
 
   const [csvDataset, setCsvDataset] = useState<ParsedFileDataset | null>(null);
-  const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
-  const [isMappingReady, setIsMappingReady] = useState(true);
-
-  const dbFormRef = useRef<DbConnectionFormRef | null>(null);
-  const suidMappingRef = useRef<SuidMappingStepRef | null>(null);
-  const syncParametersRef = useRef<SyncParametersStepRef | null>(null);
-
-  const handleDbSuccess = (
-    config: DbConfig,
-    columns: string[],
-    _totalRows: number,
-    details?: DbColumnMetadata[]
-  ) => {
-    setDbConfig(config);
-    setDbColumns(columns);
-    setColumnDetails(details || []);
-    setCurrentStep(2);
-  };
 
   const handleCsvSuccess = (parsedData: ParsedFileDataset) => {
     setCsvDataset(parsedData);
@@ -52,43 +43,13 @@ export default function DbCsvSyncToolPage() {
     setCsvDataset(null);
   };
 
-  const handleMappingSuccess = (config: ColumnMappingConfig) => {
-    setMappingConfig((previous) => ({
-      ...previous,
-      ...config,
-    }));
-    setCurrentStep(4);
-  };
-
-  const handleSyncParametersSuccess = (finalConfig: ColumnMappingConfig) => {
-    setMappingConfig(finalConfig);
-    setCurrentStep(5);
-  };
-
-  const handleStepClick = (stepId: number) => {
-    if (stepId < currentStep) {
-      setCurrentStep(stepId);
-    }
-  };
-
   const steps: WizardStepDef[] = [
-    {
-      id: 1,
-      title: "Base de Datos",
-      subtitle: "Conexión y Tabla",
-      cardTitle: "Conectar a Base de Datos PostgreSQL",
-      cardSubtitle: "Ingrese las credenciales para conectar a la base de datos e inspeccionar la tabla seleccionada.",
-      icon: Database,
-      content: (
-        <DbConnectionForm
-          ref={dbFormRef}
-          onSuccess={handleDbSuccess}
-          onStatusChange={(status) => setIsDbConnected(status.isConnected && status.columns.length > 0)}
-        />
-      ),
+    buildDbConnectionStep({
+      formRef: dbFormRef,
+      onSuccess: handleDbSuccess,
+      onStatusChange: handleDbStatusChange,
       canProceed: isDbConnected,
-      onNext: () => dbFormRef.current?.proceed(),
-    },
+    }),
     {
       id: 2,
       title: "Capa Tabular",
@@ -108,7 +69,6 @@ export default function DbCsvSyncToolPage() {
       onBack: () => setCurrentStep(1),
     },
     // react-doctor-disable-next-line react-hooks-js/refs
-    // eslint-disable-next-line react-hooks/refs
     buildSuidMappingStep({
       ref: suidMappingRef,
       isSourceReady: Boolean(csvDataset),
@@ -125,7 +85,6 @@ export default function DbCsvSyncToolPage() {
       isMappingReady,
     }),
     // react-doctor-disable-next-line react-hooks-js/refs
-    // eslint-disable-next-line react-hooks/refs
     buildSyncParametersStep({
       ref: syncParametersRef,
       dbColumns,

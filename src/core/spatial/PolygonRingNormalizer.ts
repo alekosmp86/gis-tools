@@ -142,33 +142,8 @@ export class PolygonRingNormalizer {
       const diffY = Math.abs(ringA[0][1] - ringB[shift][1]);
 
       if (diffX <= epsilonDegrees && diffY <= epsilonDegrees) {
-        // 1. Check forward alignment
-        let forwardMatch = true;
-        for (let index = 1; index < ringLength; index++) {
-          const bIndex = (index + shift) % ringLength;
-          if (
-            Math.abs(ringA[index][0] - ringB[bIndex][0]) > epsilonDegrees ||
-            Math.abs(ringA[index][1] - ringB[bIndex][1]) > epsilonDegrees
-          ) {
-            forwardMatch = false;
-            break;
-          }
-        }
-        if (forwardMatch) return { isMatch: true };
-
-        // 2. Check reverse alignment (opposite winding direction)
-        let reverseMatch = true;
-        for (let index = 1; index < ringLength; index++) {
-          const bIndex = (ringLength + shift - index) % ringLength;
-          if (
-            Math.abs(ringA[index][0] - ringB[bIndex][0]) > epsilonDegrees ||
-            Math.abs(ringA[index][1] - ringB[bIndex][1]) > epsilonDegrees
-          ) {
-            reverseMatch = false;
-            break;
-          }
-        }
-        if (reverseMatch) return { isMatch: true };
+        if (this.isAlignedAt(ringA, ringB, shift, 1, epsilonDegrees)) return { isMatch: true };
+        if (this.isAlignedAt(ringA, ringB, shift, -1, epsilonDegrees)) return { isMatch: true };
       }
     }
 
@@ -176,5 +151,25 @@ export class PolygonRingNormalizer {
       isMatch: false,
       mismatchDetail: "Vértices / topología dispar entre DB y Archivo",
     };
+  }
+
+  private isAlignedAt(
+    ringA: Array<[number, number]>,
+    ringB: Array<[number, number]>,
+    shift: number,
+    direction: 1 | -1,
+    epsilonDegrees: number
+  ): boolean {
+    const ringLength = ringA.length;
+    for (let index = 1; index < ringLength; index++) {
+      const bIndex = (ringLength + shift + direction * index) % ringLength;
+      if (
+        Math.abs(ringA[index][0] - ringB[bIndex][0]) > epsilonDegrees ||
+        Math.abs(ringA[index][1] - ringB[bIndex][1]) > epsilonDegrees
+      ) {
+        return false;
+      }
+    }
+    return true;
   }
 }

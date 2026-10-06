@@ -6,6 +6,24 @@ import type { MapFeatureStyle } from "@/core/types/map";
 /** Cache key used for features that carry no discrepancy type. */
 const DEFAULT_DISCREPANCY_KEY = "__default__";
 
+function resolveStrokeColor(
+  useDiscrepancyColor: boolean,
+  discrepancyType: string,
+  style: MapFeatureStyle
+): string {
+  return useDiscrepancyColor ? getDiscrepancyColor(discrepancyType) : style.color;
+}
+
+function resolveFillColor(
+  useDiscrepancyColor: boolean,
+  discrepancyType: string,
+  style: MapFeatureStyle
+): string {
+  return useDiscrepancyColor
+    ? getDiscrepancyColor(discrepancyType)
+    : style.fillColor || style.color;
+}
+
 /**
  * Resolves symbology for a batch of features sharing one style and renderer, reusing the computed
  * path options across every feature of the same discrepancy type.
@@ -35,10 +53,8 @@ class MapSymbologyStyler {
   ): L.PathOptions {
     const discrepancyType = feature?.properties?._discrepancyType;
     const useDiscrepancyColor = Boolean(discrepancyType && !currentStyle.overrideDiscrepancyColors);
-    const strokeColor = useDiscrepancyColor ? getDiscrepancyColor(discrepancyType) : currentStyle.color;
-    const fillColor = useDiscrepancyColor
-      ? getDiscrepancyColor(discrepancyType)
-      : currentStyle.fillColor || currentStyle.color;
+    const strokeColor = resolveStrokeColor(useDiscrepancyColor, discrepancyType, currentStyle);
+    const fillColor = resolveFillColor(useDiscrepancyColor, discrepancyType, currentStyle);
 
     let featureDashArray = getDashArrayFromPattern(currentStyle.strokePattern);
     let featureFillOpacity = currentStyle.fillOpacity;
@@ -73,10 +89,8 @@ class MapSymbologyStyler {
   ): L.CircleMarker {
     const discrepancyType = feature?.properties?._discrepancyType;
     const useDiscrepancyColor = Boolean(discrepancyType && !currentStyle.overrideDiscrepancyColors);
-    const strokeColor = useDiscrepancyColor ? getDiscrepancyColor(discrepancyType) : currentStyle.color;
-    const fillColor = useDiscrepancyColor
-      ? getDiscrepancyColor(discrepancyType)
-      : currentStyle.fillColor || currentStyle.color;
+    const strokeColor = resolveStrokeColor(useDiscrepancyColor, discrepancyType, currentStyle);
+    const fillColor = resolveFillColor(useDiscrepancyColor, discrepancyType, currentStyle);
 
     return L.circleMarker(latlng, {
       renderer: canvasRenderer ?? undefined,
