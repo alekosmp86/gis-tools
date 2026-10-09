@@ -84,5 +84,72 @@ describe("FileDatasetIndexer", () => {
       expect(result.suidMap.has("dup_01")).toBe(true);
       expect(result.suidMap.get("dup_01")).toHaveLength(2);
     });
+
+    it("should keep all-placeholder SUID as a real key when option is omitted", () => {
+      // Arrange
+      const dataset: SerializableFileDataset = {
+        fileName: "t.csv",
+        fileSize: 1,
+        featureCount: 1,
+        attributes: ["id"],
+        recordsObject: { "0": { id: "N/A" } },
+      };
+
+      // Act
+      const result = indexer.indexObjectDataset(dataset, ["id"]);
+
+      // Assert
+      expect(result.nullRecords).toHaveLength(0);
+      expect(result.suidMap.has("n/a")).toBe(true);
+    });
+
+    it("should classify all-placeholder SUID as null record when option is true", () => {
+      // Arrange
+      const dataset: SerializableFileDataset = {
+        fileName: "t.csv",
+        fileSize: 1,
+        featureCount: 2,
+        attributes: ["id"],
+        recordsObject: { "0": { id: "N/A" }, "1": { id: "S/N" } },
+      };
+
+      // Act
+      const result = indexer.indexObjectDataset(dataset, ["id"], {
+        treatPlaceholdersAsEmpty: true,
+      });
+
+      // Assert
+      expect(result.nullRecords).toHaveLength(2);
+      expect(result.suidMap.size).toBe(0);
+    });
+  });
+
+  describe("indexBinaryDbf", () => {
+    const stubDbf = (values: string[]) =>
+      ({
+        header: { recordCount: values.length, fields: [{ name: "ID" }] },
+        readFieldValue: (index: number) => values[index],
+      }) as unknown as import("@/core/binary/BinaryDbfReader").BinaryDbfReader;
+
+    it("should keep placeholder as key when option is omitted", () => {
+      // Act
+      const result = indexer.indexBinaryDbf(stubDbf(["N/A", "X1"]), ["id"]);
+
+      // Assert
+      expect(result.nullRecordIndices).toEqual([]);
+      expect(result.suidMap.get("n/a")).toEqual([0]);
+    });
+
+    it("should send placeholder SUID rows to nullRecordIndices when option is true", () => {
+      // Act
+      const result = indexer.indexBinaryDbf(stubDbf(["N/A", "X1", "", "sn"]), ["id"], {
+        treatPlaceholdersAsEmpty: true,
+      });
+
+      // Assert
+      expect(result.nullRecordIndices).toEqual([0, 2, 3]);
+      expect(Array.from(result.suidMap.keys())).toEqual(["x1"]);
+      expect(result.totalRecords).toBe(4);
+    });
   });
 });

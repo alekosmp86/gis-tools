@@ -14,6 +14,7 @@ interface SuidMappingStepProps {
   onSuccess: (mappingConfig: ColumnMappingConfig) => void;
   initialConfig?: ColumnMappingConfig | null;
   showGeometryToggle?: boolean;
+  showPlaceholderOption?: boolean;
   onReadyChange?: (ready: boolean) => void;
 }
 
@@ -25,6 +26,7 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
       onSuccess,
       initialConfig = null,
       showGeometryToggle = true,
+      showPlaceholderOption = true,
       onReadyChange,
     },
     ref
@@ -37,6 +39,8 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
       selectedFields,
       attributeMap,
       compareGeometry,
+      treatPlaceholdersAsEmpty,
+      setTreatPlaceholdersAsEmpty,
       toggleSuidColumn,
       setCompareGeometry,
       toggleField,
@@ -64,6 +68,8 @@ export const SuidMappingStep = React.forwardRef<SuidMappingStepRef, SuidMappingS
           selectedSuids={selectedSuids}
           matchedFileSuids={matchedFileSuids}
           onToggleSuid={toggleSuidColumn}
+          treatPlaceholdersAsEmpty={showPlaceholderOption ? treatPlaceholdersAsEmpty : undefined}
+          onTreatPlaceholdersChange={showPlaceholderOption ? setTreatPlaceholdersAsEmpty : undefined}
         />
 
         {/* 2. Attributes Selection & 1-to-1 Mapping Card */}

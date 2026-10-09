@@ -70,6 +70,8 @@ export function useDatasetComparison({
       suidLabel,
       mappingConfig.fieldsToCompare,
       mappingConfig.compareGeometry,
+      mappingConfig.treatPlaceholdersAsEmpty,
+      mappingConfig.ignoreEncodingArtifacts,
     ],
     queryFn: () => {
       resetProgress();

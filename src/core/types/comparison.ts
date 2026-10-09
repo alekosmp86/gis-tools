@@ -19,6 +19,7 @@ export interface ColumnMappingConfig {
   insertDefaults?: Record<string, InsertFieldDefault>;
   primaryKeyColumn?: string | null;
   ignoreEncodingArtifacts?: boolean;
+  treatPlaceholdersAsEmpty?: boolean;
 }
 
 export interface SuidMappingStepRef {
@@ -105,6 +106,7 @@ export interface ComparisonSummary {
   onlyInShpCount: number;
   nullSuidCount: number;
   duplicateSuidCount: number;
+  duplicateFileRowsSkipped?: number;
   items: DiscrepancyItem[];
   sqlUpdateScript: string;
   sqlInsertScript: string;

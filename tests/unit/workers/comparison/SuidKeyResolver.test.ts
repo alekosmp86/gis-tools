@@ -50,6 +50,66 @@ describe("SuidKeyResolver", () => {
     });
   });
 
+  describe("buildCompositeKey placeholder handling", () => {
+    it.each(["", "N/A", "n/a", "S/N", "SN", "NULL", "null"])(
+      "should return empty key for all-placeholder value %j when option is on",
+      (placeholder) => {
+        // Act
+        const key = resolver.buildCompositeKey({ id: placeholder }, ["id"], {
+          treatPlaceholdersAsEmpty: true,
+        });
+
+        // Assert
+        expect(key).toBe("");
+      }
+    );
+
+    it("should keep N/A as a real value when option is omitted or false", () => {
+      // Act / Assert
+      expect(resolver.buildCompositeKey({ id: "N/A" }, ["id"])).toBe("n/a");
+      expect(
+        resolver.buildCompositeKey({ id: "N/A" }, ["id"], { treatPlaceholdersAsEmpty: false })
+      ).toBe("n/a");
+    });
+
+    it("should keep mixed-key positions and treat 'a|' equal to 'a|n/a' only when option is on", () => {
+      // Arrange
+      const cols = ["x", "y"];
+      const withEmpty = { x: "a", y: "" };
+      const withNa = { x: "a", y: "n/a" };
+      const on = { treatPlaceholdersAsEmpty: true };
+
+      // Act / Assert
+      expect(resolver.buildCompositeKey(withNa, cols, on)).toBe("a|");
+      expect(resolver.buildCompositeKey(withEmpty, cols, on)).toBe(
+        resolver.buildCompositeKey(withNa, cols, on)
+      );
+      expect(resolver.buildCompositeKey(withEmpty, cols)).not.toBe(
+        resolver.buildCompositeKey(withNa, cols)
+      );
+    });
+
+    it("should not strip placeholders that are only part of a longer value", () => {
+      // Act
+      const key = resolver.buildCompositeKey({ id: "N/A 5" }, ["id"], {
+        treatPlaceholdersAsEmpty: true,
+      });
+
+      // Assert
+      expect(key).toBe("n/a 5");
+    });
+
+    it("should return empty key when all parts of a composite are placeholders", () => {
+      // Act
+      const key = resolver.buildCompositeKey({ x: "S/N", y: "NULL" }, ["x", "y"], {
+        treatPlaceholdersAsEmpty: true,
+      });
+
+      // Assert
+      expect(key).toBe("");
+    });
+  });
+
   describe("buildCompositeRawSuid", () => {
     it("should build human-friendly display representation with spaced pipes", () => {
       // Arrange

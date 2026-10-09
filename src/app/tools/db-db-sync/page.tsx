@@ -105,6 +105,7 @@ export default function DbDbSyncToolPage() {
       fileAttributes: dbColumns1,
       initialConfig: mappingConfig,
       showGeometryToggle: false,
+      showPlaceholderOption: false,
       onReadyChange: setIsMappingReady,
       onSuccess: handleMappingSuccess,
       cardSubtitle:

@@ -7,6 +7,8 @@ export interface SuidSelectorCardProps {
   selectedSuids: string[];
   matchedFileSuids: string[];
   onToggleSuid: (suid: string) => void;
+  treatPlaceholdersAsEmpty?: boolean;
+  onTreatPlaceholdersChange?: (enabled: boolean) => void;
 }
 
 export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({
@@ -14,6 +16,8 @@ export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({
   selectedSuids,
   matchedFileSuids,
   onToggleSuid,
+  treatPlaceholdersAsEmpty = false,
+  onTreatPlaceholdersChange,
 }) => {
   const isComposite = selectedSuids.length > 1;
   const allMatched = matchedFileSuids.length > 0 && matchedFileSuids.every((match) => match !== "");
@@ -66,6 +70,22 @@ export const SuidSelectorCard: React.FC<SuidSelectorCardProps> = ({
           );
         })}
       </div>
+
+      {onTreatPlaceholdersChange && (
+        <label className={styles.optionRow}>
+          <input
+            type="checkbox"
+            checked={treatPlaceholdersAsEmpty}
+            onChange={(event) => onTreatPlaceholdersChange(event.target.checked)}
+          />
+          <span>
+            <strong>Tratar &apos;N/A&apos;, &apos;S/N&apos; y vacío como equivalentes en el SUID</strong>
+            <span className={styles.optionHint}>
+              Evita INSERTs duplicados cuando el archivo usa &apos;N/A&apos; para valores faltantes.
+            </span>
+          </span>
+        </label>
+      )}
 
       {/* Matched SUID Status Display */}
       <div className={styles.matchStatusBox}>

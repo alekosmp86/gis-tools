@@ -46,6 +46,7 @@ export interface BuildSuidMappingStepParams {
   fileAttributes: string[];
   initialConfig: ColumnMappingConfig | null;
   showGeometryToggle?: boolean;
+  showPlaceholderOption?: boolean;
   onReadyChange: (ready: boolean) => void;
   onSuccess: (config: ColumnMappingConfig) => void;
   cardSubtitle: string;
@@ -89,6 +90,7 @@ export function buildSuidMappingStep(params: BuildSuidMappingStepParams): Wizard
         onSuccess={params.onSuccess}
         initialConfig={params.initialConfig}
         showGeometryToggle={params.showGeometryToggle}
+        showPlaceholderOption={params.showPlaceholderOption}
         onReadyChange={params.onReadyChange}
       />
     ) : null,

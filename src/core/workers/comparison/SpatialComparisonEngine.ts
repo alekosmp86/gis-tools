@@ -9,7 +9,7 @@ import { BinaryDbfReader, type DbfFieldDescriptor } from "@/core/binary/BinaryDb
 import { BinaryShpReader } from "@/core/binary/BinaryShpReader";
 import { createProjectionConverter, ProjectionEngine } from "@/core/spatial/ProjectionEngine";
 import { FileDatasetIndexer } from "./FileDatasetIndexer";
-import { SuidKeyResolver } from "./SuidKeyResolver";
+import { SuidKeyResolver, type SuidKeyOptions } from "./SuidKeyResolver";
 import { NullRecordHandler } from "./NullRecordHandler";
 import { SqlPatchGenerator } from "./SqlPatchGenerator";
 import { FeatureAttributeExtractor } from "./FeatureAttributeExtractor";
@@ -50,17 +50,27 @@ export class SpatialComparisonEngine {
 
     const { dbSuidCols, targetFileSuidCols, fieldsToCompare, fieldToFileKey } =
       this.resolveMappingParameters(mappingConfig);
+    const keyOptions: SuidKeyOptions = {
+      treatPlaceholdersAsEmpty: Boolean(mappingConfig.treatPlaceholdersAsEmpty),
+    };
 
     const { dbfReader, shpReader, transformCoordinate, fileSrid } =
       this.initializeFileReaders(fileDataset);
 
     // 1. Index DB records
     emit("Indexando registros...", 0, dbRecords.length);
-    const dbSuidMap = this.indexDatabaseRecords(dbRecords, dbSuidCols);
+    const dbSuidMap = this.indexDatabaseRecords(dbRecords, dbSuidCols, keyOptions);
 
     // 2. Index File records
     const { binaryFileSuidMap, objectFileSuidMap, totalFileRecords, nullRecordItems } =
-      this.indexFileRecords(fileDataset, targetFileSuidCols, dbfReader, shpReader, transformCoordinate);
+      this.indexFileRecords(
+        fileDataset,
+        targetFileSuidCols,
+        dbfReader,
+        shpReader,
+        transformCoordinate,
+        keyOptions
+      );
 
     const dbfCompareFields = this.buildDbfFieldDescriptors(dbfReader, fieldsToCompare, fieldToFileKey);
 
@@ -83,20 +93,26 @@ export class SpatialComparisonEngine {
 
     // 4. Pass 2: Process features ONLY in file
     emit("Procesando registros solo en archivo...", dbRecords.length, dbRecords.length);
-    const unmatchedFileItems = this.unmatchedCollector.collectUnmatchedFileFeatures({
+    const unmatchedResult = this.unmatchedCollector.collectUnmatchedFileFeatures({
       processedSuids: pass1Result.processedSuids,
       binaryFileSuidMap,
       objectFileSuidMap,
       targetFileSuidCols,
+      signatureColumns: Array.from(fieldToFileKey.values()),
+      keyOptions,
       dbfReader,
       shpReader,
       transformCoordinate,
     });
+    const unmatchedFileItems = unmatchedResult.insertItems;
+    const fileDuplicateCount = unmatchedResult.duplicateItems.length;
+    const duplicateFileRowsSkipped = unmatchedResult.duplicateFileRowsSkipped;
 
     // 5. Aggregate All Discrepancy Items safely without array spread overhead
     const allDiscrepancyItems: DiscrepancyItem[] = nullRecordItems
       .concat(pass1Result.discrepancyItems)
-      .concat(unmatchedFileItems);
+      .concat(unmatchedFileItems)
+      .concat(unmatchedResult.duplicateItems);
 
     const totalAnalyzed =
       pass1Result.counts.exactMatchesCount +
@@ -104,8 +120,10 @@ export class SpatialComparisonEngine {
       pass1Result.counts.geometryMismatchCount +
       pass1Result.counts.onlyInDbCount +
       unmatchedFileItems.length +
+      duplicateFileRowsSkipped +
       nullRecordItems.length +
-      pass1Result.counts.duplicateSuidCount;
+      pass1Result.counts.duplicateSuidCount +
+      fileDuplicateCount;
 
     // 6. Generate SQL Patches (Ultra-fast preview mode: extracts first 25 updates and 25 inserts, < 1ms execution)
     const previewUpdateItems: DiscrepancyItem[] = [];
@@ -154,7 +172,8 @@ export class SpatialComparisonEngine {
       onlyInDbCount: pass1Result.counts.onlyInDbCount,
       onlyInShpCount: unmatchedFileItems.length,
       nullSuidCount: nullRecordItems.length,
-      duplicateSuidCount: pass1Result.counts.duplicateSuidCount,
+      duplicateSuidCount: pass1Result.counts.duplicateSuidCount + fileDuplicateCount,
+      duplicateFileRowsSkipped,
       items: allDiscrepancyItems,
       targetSrid: mappingConfig.targetSrid,
       dbColumnTypes,
@@ -203,11 +222,12 @@ export class SpatialComparisonEngine {
 
   private indexDatabaseRecords(
     dbRecords: Record<string, unknown>[],
-    dbSuidCols: string[]
+    dbSuidCols: string[],
+    keyOptions: SuidKeyOptions
   ): Map<string, Record<string, unknown>[]> {
     const dbSuidMap = new Map<string, Record<string, unknown>[]>();
     dbRecords.forEach((record) => {
-      const suidKey = this.suidResolver.buildCompositeKey(record, dbSuidCols);
+      const suidKey = this.suidResolver.buildCompositeKey(record, dbSuidCols, keyOptions);
       if (suidKey) {
         const existingList = dbSuidMap.get(suidKey);
         if (existingList) {
@@ -225,7 +245,8 @@ export class SpatialComparisonEngine {
     targetFileSuidCols: string[],
     dbfReader: BinaryDbfReader | null,
     shpReader: BinaryShpReader | null,
-    transformCoordinate: ((coordinate: [number, number]) => [number, number]) | null
+    transformCoordinate: ((coordinate: [number, number]) => [number, number]) | null,
+    keyOptions: SuidKeyOptions
   ) {
     let binaryFileSuidMap = new Map<string, number[]>();
     let objectFileSuidMap = new Map<string, Record<string, unknown>[]>();
@@ -233,7 +254,7 @@ export class SpatialComparisonEngine {
     let nullRecordItems: DiscrepancyItem[] = [];
 
     if (dbfReader) {
-      const indexResult = this.indexer.indexBinaryDbf(dbfReader, targetFileSuidCols);
+      const indexResult = this.indexer.indexBinaryDbf(dbfReader, targetFileSuidCols, keyOptions);
       binaryFileSuidMap = indexResult.suidMap;
       totalFileRecords = indexResult.totalRecords;
       nullRecordItems = this.nullHandler.processDbfNulls(
@@ -243,7 +264,7 @@ export class SpatialComparisonEngine {
         transformCoordinate
       );
     } else {
-      const indexResult = this.indexer.indexObjectDataset(fileDataset, targetFileSuidCols);
+      const indexResult = this.indexer.indexObjectDataset(fileDataset, targetFileSuidCols, keyOptions);
       objectFileSuidMap = indexResult.suidMap;
       totalFileRecords = indexResult.totalRecords;
       nullRecordItems = this.nullHandler.processObjectNulls(indexResult.nullRecords);

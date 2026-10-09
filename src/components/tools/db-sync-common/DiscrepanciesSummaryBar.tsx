@@ -110,7 +110,11 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
       <SummaryKpiCard
         title="SUIDs Duplicados"
         value={summary.duplicateSuidCount}
-        subtitle="Claves repetidas encontradas"
+        subtitle={
+          summary.duplicateFileRowsSkipped
+            ? `Claves repetidas (${summary.duplicateFileRowsSkipped} filas idénticas omitidas)`
+            : "Claves repetidas encontradas"
+        }
         icon={Copy}
         iconContainerClass={styles.iconDuplicate}
         valueClass={styles.valDuplicate}

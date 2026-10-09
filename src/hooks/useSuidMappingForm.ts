@@ -28,6 +28,10 @@ export function useSuidMappingForm(
     initialConfig?.compareGeometry ?? false
   );
 
+  const [treatPlaceholdersAsEmpty, setTreatPlaceholdersAsEmpty] = useState<boolean>(
+    initialConfig?.treatPlaceholdersAsEmpty ?? false
+  );
+
   // Pre-index source file attributes in a Map for fast O(1) lookups
   const fileAttrMap = new Map<string, string>();
   fileAttributes.forEach((attr) => {
@@ -139,6 +143,7 @@ export function useSuidMappingForm(
       fieldsToCompare: selectedFields,
       attributeMap,
       compareGeometry,
+      treatPlaceholdersAsEmpty,
     };
     onSuccess(config);
   };
@@ -151,6 +156,8 @@ export function useSuidMappingForm(
     selectedFields,
     attributeMap,
     compareGeometry,
+    treatPlaceholdersAsEmpty,
+    setTreatPlaceholdersAsEmpty,
     toggleSuidColumn,
     setCompareGeometry,
     toggleField,

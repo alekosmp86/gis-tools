@@ -137,6 +137,21 @@
   border: 1px solid rgba(245, 158, 11, 0.25);
 }
 
+.optionRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.optionHint {
+  display: block;
+  font-size: 0.775rem;
+  color: var(--text-muted);
+}
+
 @media (max-width: 768px) {
   .sectionCard {
     padding: 16px;

@@ -1,6 +1,6 @@
 import type { SerializableFileDataset } from "@/core/types/workerMessages";
 import type { BinaryDbfReader, DbfFieldDescriptor } from "@/core/binary/BinaryDbfReader";
-import { SuidKeyResolver } from "./SuidKeyResolver";
+import { SuidKeyResolver, type SuidKeyOptions } from "./SuidKeyResolver";
 
 export interface BinaryIndexResult {
   readonly suidMap: Map<string, number[]>;
@@ -27,7 +27,8 @@ export class FileDatasetIndexer {
 
   public indexBinaryDbf(
     dbfReader: BinaryDbfReader,
-    targetFileSuidCols: string[]
+    targetFileSuidCols: string[],
+    keyOptions?: SuidKeyOptions
   ): BinaryIndexResult {
     const suidMap = new Map<string, number[]>();
     const nullRecordIndices: number[] = [];
@@ -52,7 +53,7 @@ export class FileDatasetIndexer {
         }
 
         const rawFieldValue = dbfReader.readFieldValue(recordIndex, descriptor);
-        const cleanedKey = this.suidResolver.cleanKeyString(rawFieldValue);
+        const cleanedKey = this.suidResolver.cleanKeyPart(rawFieldValue, keyOptions);
 
         if (cleanedKey !== "") {
           hasAtLeastOneValidPart = true;
@@ -79,7 +80,8 @@ export class FileDatasetIndexer {
 
   public indexObjectDataset(
     fileDataset: SerializableFileDataset,
-    targetFileSuidCols: string[]
+    targetFileSuidCols: string[],
+    keyOptions?: SuidKeyOptions
   ): ObjectIndexResult {
     const suidMap = new Map<string, Record<string, unknown>[]>();
     const nullRecords: Record<string, unknown>[] = [];
@@ -98,7 +100,11 @@ export class FileDatasetIndexer {
         _geometry: featureGeom,
       };
 
-      const compositeKey = this.suidResolver.buildCompositeKey(fullRecord, targetFileSuidCols);
+      const compositeKey = this.suidResolver.buildCompositeKey(
+        fullRecord,
+        targetFileSuidCols,
+        keyOptions
+      );
 
       if (!compositeKey) {
         nullRecords.push(fullRecord);
