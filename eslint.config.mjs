@@ -107,6 +107,7 @@ const eslintConfig = defineConfig([
     "scripts/**",
     "public/**",
     "coverage/**",
+    ".claude/ai-toolkit/**",
   ]),
 ]);
 

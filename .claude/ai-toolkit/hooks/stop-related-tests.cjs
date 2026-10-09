@@ -5,6 +5,7 @@
 "use strict";
 
 const { spawnSync } = require("child_process");
+const fs = require("fs");
 
 const BUDGET_MS = 30000;
 
@@ -39,8 +40,17 @@ function main() {
     return;
   }
 
+  // Drive-letter case matters: a lowercase "c:" drive cwd makes vitest load two module instances
+  // ("Cannot read properties of undefined (reading 'config')", every file "0 test").
+  let cwd = process.cwd();
+  try {
+    cwd = fs.realpathSync.native(cwd);
+  } catch {
+    // keep process.cwd()
+  }
+
   const result = spawnSync("npx", ["vitest", "related", "--run", ...files], {
-    cwd: process.cwd(),
+    cwd,
     timeout: BUDGET_MS,
     encoding: "utf8",
     shell: true,
@@ -67,7 +77,7 @@ function main() {
   }
 
   if (result.status !== 0) {
-    const detail = (result.stdout || result.stderr || "").trim().slice(0, 4000);
+    const detail = `${result.stdout || ""}\n${result.stderr || ""}`.trim().slice(0, 4000);
     console.log(
       JSON.stringify({
         decision: "block",
