@@ -1,0 +1,11 @@
+{
+  "moduleId": "coverage-loads",
+  "endpoints": [
+    { "path": "indicators/plan", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "indicators/load", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "indicators/reports", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" }
+  ],
+  "pages": [
+    { "path": "", "title": "Cargas de Coberturas" }
+  ]
+}

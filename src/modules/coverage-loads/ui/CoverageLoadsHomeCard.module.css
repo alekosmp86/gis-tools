@@ -1,0 +1,28 @@
+.card {
+  composes: card from "../../../ui-kit/components/HomeCard.module.css";
+}
+
+.card:hover .cardTitle {
+  color: var(--accent-cyan);
+}
+
+.cardHeader {
+  composes: cardHeader from "../../../ui-kit/components/HomeCard.module.css";
+}
+
+.cardIcon {
+  composes: cardIcon from "../../../ui-kit/components/HomeCard.module.css";
+  color: var(--accent-cyan, #06b6d4);
+}
+
+.cardBody {
+  composes: cardBody from "../../../ui-kit/components/HomeCard.module.css";
+}
+
+.cardTitle {
+  composes: cardTitle from "../../../ui-kit/components/HomeCard.module.css";
+}
+
+.cardDesc {
+  composes: cardDesc from "../../../ui-kit/components/HomeCard.module.css";
+}

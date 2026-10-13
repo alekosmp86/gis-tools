@@ -1,0 +1,13 @@
+export const DEFAULT_DB_HOST = "localhost";
+export const DEFAULT_DB_PORT = 5432;
+
+export const CONNECTION_TIMEOUT_MS = 10000;
+
+/** Budget for any single statement of the module; the loads are small, this is a safety net. */
+export const STATEMENT_TIMEOUT_MS = 120000;
+
+/** How long a write waits for a table lock (TRUNCATE takes an exclusive one) before giving up. */
+export const WRITE_LOCK_TIMEOUT = "10s";
+
+/** Browser downloads: how long the object URL lives after the click, so the download can start. */
+export const DOWNLOAD_URL_REVOKE_DELAY_MS = 1000;
