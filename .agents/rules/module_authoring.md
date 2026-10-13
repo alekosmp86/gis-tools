@@ -148,6 +148,7 @@ export { FolderTree as CatalogTabIcon } from "lucide-react";
 |---|---|---|
 | `HOME_TOOL_GRID` | `src/app/page.tsx` | cards beside the core tools |
 | `FILE_SOURCE_TABS` | both sync uploaders | alternative file sources; see below |
+| `APP_STATUS` | `src/app/layout.tsx` | small status chips on every page; render `null` when idle |
 | `TOOL_SIDEBAR`, `MAP_TOOLBAR`, `NAV_PRIMARY` | *nothing* | declared but unrendered |
 
 A contribution sent to an unmounted slot renders nowhere and fails silently. Mounting one is a

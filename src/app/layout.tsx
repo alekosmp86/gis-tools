@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { AppStatusSlot } from "@/ui-kit/modules/AppStatusSlot";
 import { ModuleContributionsProvider } from "@/ui-kit/modules/ModuleContributionsContext";
 import { moduleRegistry } from "./modules.registry";
 import "./globals.css";
@@ -20,6 +21,7 @@ export default function RootLayout({
         <QueryProvider>
           <ModuleContributionsProvider contributions={moduleRegistry.uiContributions()}>
             {children}
+            <AppStatusSlot />
           </ModuleContributionsProvider>
         </QueryProvider>
       </body>

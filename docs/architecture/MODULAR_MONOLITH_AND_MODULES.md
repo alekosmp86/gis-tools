@@ -83,7 +83,13 @@ the provider. ui-kit therefore stays unaware of which modules exist, or whether 
 The error boundary is the load-bearing part: it makes **"module broken" and "module removed" behave
 identically**. A contribution that throws during render is dropped and the host page continues.
 
-**Currently mounted:** `HOME_TOOL_GRID` only, in `src/app/page.tsx`. `TOOL_SIDEBAR`, `MAP_TOOLBAR`
+**Currently mounted:** `HOME_TOOL_GRID` in `src/app/page.tsx`, `FILE_SOURCE_TABS` in both sync
+uploaders, and `APP_STATUS` in the root layout (`src/app/layout.tsx`, through `AppStatusSlot` in
+ui-kit). `APP_STATUS` is the one slot that appears on every page: a fixed corner stack of small
+status chips a module can publish (a running job, a pending sync). `AppStatusSlot` draws nothing
+when no module contributes to it, and a contribution that has nothing to show returns `null`, so
+removing the module leaves no trace; the core knows only the slot name, never what fills it.
+`TOOL_SIDEBAR`, `MAP_TOOLBAR`
 and `NAV_PRIMARY` are defined in the contract but not yet rendered by any host, and
 `registry.navigation()` has no consumer yet. A contribution aimed at an unmounted slot renders
 nowhere, silently. Mounting one is a deliberate core-side change.
@@ -183,7 +189,7 @@ The residual gap is a contributor running `next build` directly, bypassing the n
 Removing a module is: delete the folder, delete the registry line, run `npm run modules:routes`.
 
 Everything else follows on its own — generated routes vanish with their directories, slots render
-nothing, the registry answers every query with nothing. Nothing under `src/app/api/db/**` or in any
+nothing, the registry answers every query with nothing (the `APP_STATUS` host included: no contribution, no box). Nothing under `src/app/api/db/**` or in any
 tool is touched, because nothing there ever knew the module existed.
 
 This is the acceptance test for the whole architecture, and it is exercised as one: add → works,
@@ -340,6 +346,7 @@ does not — multiple endpoints, a dynamic segment, and every direction of drift
 | `src/core/modules/createModuleRouteHandler.ts` | per-request dispatch used by generated routes |
 | `src/core/modules/moduleRoutePaths.ts` | the path arithmetic registry, binder and generator all agree on |
 | `src/ui-kit/modules/contracts.ts` | `UiSlot`, `UiContribution`, `AppModuleManifest` |
+| `src/ui-kit/modules/AppStatusSlot.tsx` | hosts the `APP_STATUS` chips on every page; draws nothing when empty |
 | `src/ui-kit/modules/ModuleSlot.tsx` | renders a slot's contributions in order, nothing when empty |
 | `src/ui-kit/modules/ModuleErrorBoundary.tsx` | isolates a failing contribution from its host page |
 | `src/ui-kit/modules/ModuleContributionsContext.tsx` | carries contributions from the shell to the slots |

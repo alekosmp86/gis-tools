@@ -1,0 +1,15 @@
+.host {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Contributions that have nothing to show render null; do not leave an empty box on screen. */
+.host:empty {
+  display: none;
+}

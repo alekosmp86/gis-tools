@@ -31,6 +31,13 @@ export const UiSlot = {
    * and the callback that hands a chosen file back. Read that context with `useFileSourceSlot`.
    */
   FILE_SOURCE_TABS: "file.sourceTabs",
+  /**
+   * Small status chips shown on every page, fixed to a corner of the viewport.
+   *
+   * Hosted by `AppStatusSlot` in the root layout. A contribution renders nothing when it has no
+   * status to show, and the host draws nothing at all when nothing is contributed.
+   */
+  APP_STATUS: "app.status",
 } as const;
 
 export type UiSlot = (typeof UiSlot)[keyof typeof UiSlot];
