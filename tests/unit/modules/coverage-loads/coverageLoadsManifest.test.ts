@@ -37,14 +37,24 @@ vi.mock("@/modules/coverage-loads/indicators/services/PgIndicatorsRepository", (
 }));
 
 const { coverageLoadsModule } = await import("@/modules/coverage-loads/manifest");
-const { COVERAGE_SECTIONS, CoverageSectionId } = await import("@/modules/coverage-loads/ui/coverageSections");
+const { COVERAGE_STAGES, CoverageStageId } = await import("@/modules/coverage-loads/workflow/ui/coverageStages");
 const { moduleRegistry } = await import("@/app/modules.registry");
 const routeDeclarations = (await import("@/modules/coverage-loads/module.routes.json")).default;
 
 /** Slots a host actually renders today. Contributing anywhere else renders nowhere, silently. */
-const MOUNTED_SLOTS: ReadonlyArray<UiSlot> = [UiSlot.HOME_TOOL_GRID, UiSlot.FILE_SOURCE_TABS];
+const MOUNTED_SLOTS: ReadonlyArray<UiSlot> = [UiSlot.HOME_TOOL_GRID, UiSlot.FILE_SOURCE_TABS, UiSlot.APP_STATUS];
 
 const API = "coverage-loads/indicators";
+const SHP_ENDPOINTS = [
+  "POST shp/upload",
+  "POST shp/plan",
+  "POST shp/start",
+  "GET shp/status",
+  "GET shp/jobs",
+  "POST shp/cancel",
+  "GET shp/log",
+  "POST shp/discard",
+];
 const CONNECTION = { host: "h", port: "5432", db_name: "d", user: "u", password: "p" };
 
 function findHandler(path: string) {
@@ -75,12 +85,13 @@ describe("coverage loads manifest", () => {
       expect(coverageLoadsModule.id).toBe(routeDeclarations.moduleId);
     });
 
-    it("should declare exactly the three indicator endpoints, all POST", () => {
+    it("should declare the three indicator endpoints (POST) followed by the eight shp endpoints", () => {
       // Arrange, Act & Assert
       expect(routeDeclarations.endpoints.map((endpoint) => `${endpoint.method} ${endpoint.path}`)).toEqual([
         "POST indicators/plan",
         "POST indicators/load",
         "POST indicators/reports",
+        ...SHP_ENDPOINTS,
       ]);
     });
 
@@ -89,11 +100,60 @@ describe("coverage loads manifest", () => {
       const endpoints = coverageLoadsModule.endpoints ?? [];
 
       // Assert
-      expect(endpoints).toHaveLength(3);
+      expect(endpoints).toHaveLength(11);
       expect(endpoints.every((endpoint) => typeof endpoint.handler === "function")).toBe(true);
       expect(endpoints.every((endpoint) => endpoint.runtime === "nodejs")).toBe(true);
       expect(endpoints.every((endpoint) => endpoint.dynamic === "force-dynamic")).toBe(true);
-      expect(endpoints.every((endpoint) => endpoint.method === ModuleHttpMethod.POST)).toBe(true);
+      expect(endpoints.filter((endpoint) => endpoint.path.startsWith("indicators/")).every((endpoint) => endpoint.method === ModuleHttpMethod.POST)).toBe(true);
+    });
+
+    it("should declare nodejs and force-dynamic for each shp endpoint in the route declarations", () => {
+      // Arrange
+      const shp = routeDeclarations.endpoints.filter((endpoint) => endpoint.path.startsWith("shp/"));
+
+      // Act & Assert
+      expect(shp).toHaveLength(8);
+      expect(shp.every((endpoint) => endpoint.runtime === "nodejs" && endpoint.dynamic === "force-dynamic")).toBe(true);
+    });
+
+    it("should expose each shp endpoint with its declared method only (GET for status/jobs/log, POST otherwise)", () => {
+      // Arrange
+      const registry = createModuleRegistry([coverageLoadsModule]);
+
+      // Act & Assert
+      for (const entry of SHP_ENDPOINTS) {
+        const [method, path] = entry.split(" ");
+        const other = method === "GET" ? ModuleHttpMethod.POST : ModuleHttpMethod.GET;
+        expect(registry.findEndpoint(method as ModuleHttpMethod, `coverage-loads/${path}`)?.moduleId).toBe("coverage-loads");
+        expect(registry.findEndpoint(other, `coverage-loads/${path}`)).toBeNull();
+      }
+    });
+
+    it("should bind each shp endpoint to its own handler, which answers in the shp error envelope", async () => {
+      // Arrange
+      const registry = createModuleRegistry([coverageLoadsModule]);
+      const call = (method: ModuleHttpMethod, name: string) => {
+        const found = registry.findEndpoint(method, `coverage-loads/shp/${name}`);
+        if (!found) throw new Error(`no shp endpoint ${name}`);
+        const init = method === ModuleHttpMethod.GET ? undefined : { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" };
+        return found.endpoint.handler(new Request(`http://localhost/api/m/coverage-loads/shp/${name}`, init));
+      };
+
+      // Act
+      const statusResponse = await call(ModuleHttpMethod.GET, "status");
+      const logResponse = await call(ModuleHttpMethod.GET, "log");
+      const cancelResponse = await call(ModuleHttpMethod.POST, "cancel");
+      const discardResponse = await call(ModuleHttpMethod.POST, "discard");
+      const planResponse = await call(ModuleHttpMethod.POST, "plan");
+      const startResponse = await call(ModuleHttpMethod.POST, "start");
+
+      // Assert: no jobId given, so every one refuses with 400 and a Spanish error
+      for (const response of [statusResponse, logResponse, cancelResponse, discardResponse, planResponse, startResponse]) {
+        expect(response.status).toBe(400);
+        const body = await response.json();
+        expect(body.success).toBe(false);
+        expect(typeof body.error).toBe("string");
+      }
     });
 
     it("should expose the endpoints as POST only, so credentials never travel in a URL", () => {
@@ -177,11 +237,15 @@ describe("coverage loads manifest", () => {
       expect(navigation[0]).toMatchObject({ label: "Cargas de Coberturas", href: "/tools/m/coverage-loads" });
     });
 
-    it("should contribute one HOME_TOOL_GRID card after the existing ones, into a mounted slot", () => {
+    it("should contribute one HOME_TOOL_GRID card after the existing ones plus one APP_STATUS chip, into mounted slots", () => {
       // Arrange & Act
-      const contributions = coverageLoadsModule.ui ?? [];
+      const all = coverageLoadsModule.ui ?? [];
+      const contributions = all.filter((c) => c.slot === UiSlot.HOME_TOOL_GRID);
 
       // Assert
+      expect(all).toHaveLength(2);
+      expect(all.filter((c) => c.slot === UiSlot.APP_STATUS)).toHaveLength(1);
+      expect(all.every((c) => MOUNTED_SLOTS.includes(c.slot))).toBe(true);
       expect(contributions).toHaveLength(1);
       expect(contributions[0].slot).toBe(UiSlot.HOME_TOOL_GRID);
       expect(MOUNTED_SLOTS).toContain(contributions[0].slot);
@@ -189,12 +253,12 @@ describe("coverage loads manifest", () => {
       expect(typeof contributions[0].Component).toBe("function");
     });
 
-    it("should offer exactly one section, Indicadores LTE", () => {
+    it("should offer two stages in order: Indicadores LTE, then Cargas SHP", () => {
       // Arrange & Act & Assert
-      expect(COVERAGE_SECTIONS).toHaveLength(1);
-      expect(COVERAGE_SECTIONS[0].label).toBe("Indicadores LTE");
-      expect(COVERAGE_SECTIONS[0].id).toBe(CoverageSectionId.INDICATORS);
-      expect(typeof COVERAGE_SECTIONS[0].Component).toBe("function");
+      expect(COVERAGE_STAGES.map((stage) => stage.label)).toEqual(["Indicadores LTE", "Cargas SHP"]);
+      expect(COVERAGE_STAGES.map((stage) => stage.id)).toEqual([CoverageStageId.INDICATORS, CoverageStageId.SHP]);
+      expect(COVERAGE_STAGES.every((stage) => typeof stage.Panel === "function")).toBe(true);
+      expect(typeof COVERAGE_STAGES[0].ResultExtras).toBe("function");
     });
   });
 
@@ -212,9 +276,9 @@ describe("coverage loads manifest", () => {
 
       // Assert
       expect(registry.modules).toHaveLength(1);
-      expect(registry.endpoints()).toHaveLength(3);
+      expect(registry.endpoints()).toHaveLength(11);
       expect(registry.pages()).toHaveLength(1);
-      expect(registry.uiContributions()).toHaveLength(1);
+      expect(registry.uiContributions()).toHaveLength(2);
     });
 
     it("should leave an application that does not register it completely unaffected", () => {
@@ -244,33 +308,161 @@ describe("module structure (AC-29, AC-30)", () => {
   const sourceFiles = moduleFiles.filter((path) => /\.(ts|tsx|json|css)$/.test(path));
   const sources = new Map(sourceFiles.map((path) => [path, readFileSync(path, "utf8")]));
 
-  it("should contain no SHP file or folder anywhere in the module or its generated routes", () => {
+  const toName = (path: string) => relative(MODULE_DIR, path).replace(/\\/g, "/");
+  const SHP_ROUTE_NAMES = ["cancel", "discard", "jobs", "log", "plan", "start", "status", "upload"];
+
+  it("should keep SHP code only under shp/ (plus the allowed wiring files, the stage registry and the generated shp routes)", () => {
     // Arrange
-    const everyPath = [...moduleFiles, ...listFiles(API_DIR), ...listFiles(PAGE_DIR)].map((path) => relative(MODULE_DIR, path));
+    const ALLOWED_OUTSIDE_SHP = ["manifest.ts", "module.routes.json", "api/handlers.ts", "shared/httpResponses.ts", "workflow/ui/coverageStages.ts"];
+    const outsideShp = moduleFiles.map(toName).filter((name) => !name.startsWith("shp/"));
+    const pagePaths = listFiles(PAGE_DIR).map((path) => relative(PAGE_DIR, path));
 
     // Act
-    const offenders = everyPath.filter((path) => /shp|shape/i.test(path));
-
-    // Assert
-    expect(offenders).toEqual([]);
-  });
-
-  it("should mention no SHP route, tab or placeholder in any source file", () => {
-    // Arrange
-    const offenders = [...sources.entries()]
+    const namedOffenders = outsideShp.filter((name) => /shp|shape/i.test(name));
+    const mentionOffenders = [...sources.entries()]
+      .map(([path, text]) => [toName(path), text] as const)
+      .filter(([name]) => !name.startsWith("shp/") && !ALLOWED_OUTSIDE_SHP.includes(name))
       .filter(([, text]) => /\bshp\b|shapefile|\.shp\b|carga\s+shp/i.test(text))
-      .map(([path]) => relative(MODULE_DIR, path));
+      .map(([name]) => name);
+
+    // Assert
+    expect(namedOffenders).toEqual([]);
+    expect(mentionOffenders).toEqual([]);
+    expect(pagePaths.filter((path) => /shp|shape/i.test(path))).toEqual([]);
+  });
+
+  it("should host the SHP UI as a stage under shp/ui and add no extra page", () => {
+    // Arrange
+    const shpUiFiles = moduleFiles.map(toName).filter((name) => name.startsWith("shp/ui/") && /\.(tsx|css)$/.test(name));
+
+    // Assert
+    expect(shpUiFiles).toContain("shp/ui/ShpPanel.tsx");
+    expect(COVERAGE_STAGES.map((stage) => stage.id)).toEqual([CoverageStageId.INDICATORS, CoverageStageId.SHP]);
+    expect(routeDeclarations.pages).toHaveLength(1);
+  });
+
+  it("should not be referenced from outside the module (except the generated shp routes and the registry)", () => {
+    // Arrange
+    const SRC_DIR = fileURLToPath(new URL("../../../../src", import.meta.url));
+    const generatedShpRoutes = join(API_DIR, "shp");
+    const scanned = ["app", "core", "ui-kit"].flatMap((folder) => listFiles(join(SRC_DIR, folder)));
+
+    // Act
+    const offenders = scanned
+      .filter((path) => !path.startsWith(generatedShpRoutes))
+      .filter((path) => !/modules\.registry\.ts$/.test(path))
+      .filter((path) => /coverage-loads\/shp/.test(readFileSync(path, "utf8")))
+      .map((path) => relative(SRC_DIR, path));
 
     // Assert
     expect(offenders).toEqual([]);
   });
 
-  it("should serve nothing but the indicators endpoints from the generated route tree", () => {
+  it("should serve the indicators endpoints and the eight generated shp routes from the route tree", () => {
     // Arrange
     const routes = listFiles(API_DIR).map((path) => relative(API_DIR, path).replace(/\\/g, "/"));
 
     // Assert
-    expect(routes.sort()).toEqual(["indicators/load/route.ts", "indicators/plan/route.ts", "indicators/reports/route.ts"]);
+    expect(routes.sort()).toEqual(
+      [
+        "indicators/load/route.ts",
+        "indicators/plan/route.ts",
+        "indicators/reports/route.ts",
+        ...SHP_ROUTE_NAMES.map((name) => `shp/${name}/route.ts`),
+      ].sort()
+    );
+  });
+
+  it("should generate each shp route with the declared method, nodejs and force-dynamic", () => {
+    // Arrange & Act & Assert
+    for (const entry of SHP_ENDPOINTS) {
+      const [method, path] = entry.split(" ");
+      const text = readFileSync(join(API_DIR, path, "route.ts"), "utf8");
+      expect(text).toContain(`export const ${method} = createModuleRouteHandler(`);
+      expect(text).toContain(`ModuleHttpMethod.${method}`);
+      expect(text).toContain(`"coverage-loads/${path}"`);
+      expect(text).toContain('export const runtime = "nodejs"');
+      expect(text).toContain('export const dynamic = "force-dynamic"');
+    }
+  });
+
+  describe("shp boundaries", () => {
+    const shpEntries = () =>
+      [...sources.entries()].map(([path, text]) => ({ name: toName(path), path, text })).filter((entry) => entry.name.startsWith("shp/"));
+    const importSpecifiers = (text: string) => [...text.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)].map((match) => match[1]);
+
+    it("should keep shp/job imports to relative .ts files inside shp/job, node: built-ins and pg", () => {
+      // Arrange
+      const JOB_DIR = join(MODULE_DIR, "shp", "job");
+      const offenders: string[] = [];
+      const jobFiles = shpEntries().filter((entry) => entry.name.startsWith("shp/job/") && entry.name.endsWith(".ts"));
+
+      // Act
+      for (const entry of jobFiles) {
+        for (const specifier of importSpecifiers(entry.text)) {
+          if (specifier.startsWith("node:") || specifier === "pg" || specifier === "pg-copy-streams") continue;
+          const isRelative = specifier.startsWith("./") || specifier.startsWith("../");
+          const insideJob = isRelative && !relative(JOB_DIR, join(entry.path, "..", specifier)).startsWith("..");
+          if (!isRelative || !specifier.endsWith(".ts") || !insideJob) offenders.push(`${entry.name} -> ${specifier}`);
+        }
+      }
+
+      // Assert
+      expect(jobFiles.length).toBeGreaterThan(10);
+      expect(offenders).toEqual([]);
+    });
+
+    it("should keep shp/job free of enum, namespace and constructor parameter properties", () => {
+      // Arrange
+      const forbidden = /^\s*(export\s+)?(const\s+)?enum\s|^\s*(export\s+)?(declare\s+)?namespace\s|constructor\s*\((?:[^)]*,)?\s*(private|public|protected|readonly)\s+\w/m;
+      const offenders = shpEntries()
+        .filter((entry) => entry.name.startsWith("shp/job/") && entry.name.endsWith(".ts"))
+        .filter((entry) => forbidden.test(entry.text))
+        .map((entry) => entry.name);
+
+      // Assert
+      expect(offenders).toEqual([]);
+    });
+
+    it("should never import ui/ from shp/api or shp/services", () => {
+      // Arrange
+      const offenders = shpEntries()
+        .filter((entry) => /^shp\/(api|services)\//.test(entry.name))
+        .filter((entry) => importSpecifiers(entry.text).some((specifier) => /(^|\/)ui(\/|$)/.test(specifier)))
+        .map((entry) => entry.name);
+
+      // Assert
+      expect(offenders).toEqual([]);
+    });
+
+    it("should keep shp/, indicators/ and workflow/ independent of one another (except the registry importing shp/ui)", () => {
+      // Arrange
+      const all = [...sources.entries()].map(([path, text]) => ({ name: toName(path), text }));
+      const importsOf = (folder: string, target: string) =>
+        all
+          .filter((entry) => entry.name.startsWith(`${folder}/`))
+          .filter((entry) =>
+            importSpecifiers(entry.text).some(
+              (specifier) => new RegExp(`(^|/)${target}(/|$)`).test(specifier) && /coverage-loads|^\.\.?\//.test(specifier)
+            )
+          )
+          .map((entry) => entry.name);
+
+      // Act & Assert
+      expect(importsOf("indicators", "shp")).toEqual([]);
+      expect(importsOf("workflow", "shp")).toEqual(["workflow/ui/coverageStages.ts"]);
+      expect(importsOf("shp", "indicators")).toEqual([]);
+      expect(importsOf("shp", "workflow")).toEqual([]);
+    });
+
+    it("should let shp/job stay free of shared/ while shp/api may use it", () => {
+      // Arrange
+      const importsShared = (entry: { text: string }) => importSpecifiers(entry.text).some((specifier) => /(^|\/)shared(\/|$)/.test(specifier));
+
+      // Act & Assert
+      expect(shpEntries().filter((entry) => entry.name.startsWith("shp/job/")).filter(importsShared).map((entry) => entry.name)).toEqual([]);
+      expect(shpEntries().filter((entry) => entry.name.startsWith("shp/api/")).some(importsShared)).toBe(true);
+    });
   });
 
   it("should not import any other module", () => {
@@ -291,6 +483,72 @@ describe("module structure (AC-29, AC-30)", () => {
 
     // Assert
     expect(offenders).toEqual([]);
+  });
+
+  const inFolder = (folder: string) => ([path]: [string, string]) =>
+    relative(MODULE_DIR, path).replace(/\\/g, "/").startsWith(`${folder}/`);
+  const relativeName = ([path]: [string, string]) => relative(MODULE_DIR, path).replace(/\\/g, "/");
+
+  it("should scan the new workflow/ and shared/ folders", () => {
+    // Arrange
+    const entries = [...sources.entries()];
+
+    // Act & Assert
+    expect(entries.filter(inFolder("workflow")).length).toBeGreaterThan(0);
+    expect(entries.filter(inFolder("shared")).length).toBeGreaterThan(0);
+    expect(entries.filter(inFolder("indicators")).length).toBeGreaterThan(0);
+  });
+
+  it("should keep shared/ free of imports from workflow/", () => {
+    // Arrange
+    const offenders = [...sources.entries()]
+      .filter(inFolder("shared"))
+      .filter(([, text]) => /from\s+["'](\.\.\/)+workflow|@\/modules\/coverage-loads\/workflow/.test(text))
+      .map(relativeName);
+
+    // Assert
+    expect(offenders).toEqual([]);
+  });
+
+  it("should keep indicators/ free of imports from workflow/", () => {
+    // Arrange
+    const offenders = [...sources.entries()]
+      .filter(inFolder("indicators"))
+      .filter(([, text]) => /from\s+["'][^"']*\/workflow\b|@\/modules\/coverage-loads\/workflow/.test(text))
+      .map(relativeName);
+
+    // Assert
+    expect(offenders).toEqual([]);
+  });
+
+  it("should keep workflow/ unaware of the indicators part except in the one stage registry", () => {
+    // Arrange
+    const offenders = [...sources.entries()]
+      .filter(inFolder("workflow"))
+      .filter(([, text]) => /indicators\//.test(text))
+      .map(relativeName);
+
+    // Assert
+    expect(offenders).toEqual(["workflow/ui/coverageStages.ts"]);
+  });
+
+  it("should name indicators/ nowhere in shared/", () => {
+    // Arrange
+    const offenders = [...sources.entries()].filter(inFolder("shared")).filter(([, text]) => /indicators\//.test(text)).map(relativeName);
+
+    // Assert
+    expect(offenders).toEqual([]);
+  });
+
+  it("should have dropped the superseded section tabs and per-flow connection step", () => {
+    // Arrange
+    const names = moduleFiles.map((path) => relative(MODULE_DIR, path).replace(/\\/g, "/"));
+
+    // Act & Assert
+    expect(names).not.toContain("ui/coverageSections.ts");
+    expect(names).not.toContain("ui/CoverageSectionTabs.tsx");
+    expect(names).not.toContain("indicators/ui/IndicatorsConnectionStep.tsx");
+    expect(names).not.toContain("indicators/ui/indicatorsSteps.ts");
   });
 
   it("should keep the browser entry (client.ts) free of node and database imports", () => {

@@ -1,23 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
-  canContinue,
   canLoad,
   canReview,
-  currentStep,
   FlowPhase,
-  FlowStep,
-  INITIAL_CONNECTION,
   INITIAL_LOAD_FLOW,
   isBusy,
-  isConnectionComplete,
   LoadFlowActionType as Action,
   loadFlowReducer,
   type LoadFlowAction,
   type LoadFlowState,
 } from "@/modules/coverage-loads/indicators/domain/loadFlow";
 import type { IndicatorsPlan, LoadResult } from "@/modules/coverage-loads/indicators/client";
-
-const CONNECTION = { host: "db.example", port: "5432", db_name: "carto", user: "operator", password: "secret" };
 
 function plan(overrides: Partial<IndicatorsPlan> = {}): IndicatorsPlan {
   return {
@@ -39,7 +32,7 @@ function csv(name: string, size = 10, lastModified = 1): File {
 }
 
 function state(overrides: Partial<LoadFlowState> = {}): LoadFlowState {
-  return { ...INITIAL_LOAD_FLOW, connection: CONNECTION, ...overrides };
+  return { ...INITIAL_LOAD_FLOW, ...overrides };
 }
 
 function reduce(start: LoadFlowState, ...actions: LoadFlowAction[]): LoadFlowState {
@@ -52,137 +45,71 @@ const inReview = (overrides: Partial<LoadFlowState> = {}) =>
 
 describe("loadFlowReducer (AC-28)", () => {
   describe("initial state", () => {
-    it("should start on the connection step with no files, plan or result", () => {
+    it("should start on the files step with no files, plan or result", () => {
       // Arrange & Act & Assert
       expect(INITIAL_LOAD_FLOW).toMatchObject({
-        phase: FlowPhase.CONNECTION,
+        phase: FlowPhase.FILES,
         files: [],
         plan: null,
         acceptShrink: false,
         result: null,
         error: null,
       });
-      expect(INITIAL_CONNECTION).toEqual({ host: "localhost", port: "5432", db_name: "", user: "", password: "" });
     });
   });
 
-  describe("connection editing", () => {
-    it("should set a connection field in the connection step", () => {
-      // Arrange & Act
-      const next = reduce(INITIAL_LOAD_FLOW, { type: Action.SET_CONNECTION_FIELD, field: "db_name", value: "carto" });
-
-      // Assert
-      expect(next.connection.db_name).toBe("carto");
-      expect(next.phase).toBe(FlowPhase.CONNECTION);
-    });
-
-    it("should apply a profile and clear the password, keeping unrelated fields", () => {
-      // Arrange
-      const start = state({ connection: { ...CONNECTION, password: "typed" } });
-
-      // Act
-      const next = reduce(start, { type: Action.APPLY_PROFILE, values: { host: "other", db_name: "dev" } });
-
-      // Assert
-      expect(next.connection).toEqual({ host: "other", port: "5432", db_name: "dev", user: "operator", password: "" });
-    });
-
+  describe("CONNECTION_CHANGED", () => {
     it.each([FlowPhase.FILES, FlowPhase.REVIEW])(
-      "should drop the plan, reset acceptShrink and return to the connection step when the connection changes in %s",
+      "should drop the plan, reset acceptShrink and error and land on FILES when the connection changes in %s",
       (phase) => {
         // Arrange
         const start = state({ phase, files: [FILE], plan: plan({ requiresAcceptShrink: true }), acceptShrink: true, error: "x" });
 
         // Act
-        const next = reduce(start, { type: Action.SET_CONNECTION_FIELD, field: "host", value: "elsewhere" });
+        const next = reduce(start, { type: Action.CONNECTION_CHANGED });
 
         // Assert
-        expect(next.phase).toBe(FlowPhase.CONNECTION);
-        expect(next.plan).toBeNull();
-        expect(next.acceptShrink).toBe(false);
-        expect(next.error).toBeNull();
-        expect(next.connection.host).toBe("elsewhere");
+        expect(next).toMatchObject({ phase: FlowPhase.FILES, plan: null, acceptShrink: false, error: null });
         expect(next.files).toEqual([FILE]);
       }
     );
 
-    it("should drop the plan and the password-bound review when a profile is applied from REVIEW", () => {
+    it("should stay on FILES, keeping the files, when already there", () => {
       // Arrange
-      const start = inReview({ acceptShrink: true });
+      const start = state({ phase: FlowPhase.FILES, files: [FILE] });
 
       // Act
-      const next = reduce(start, { type: Action.APPLY_PROFILE, values: { db_name: "other" } });
+      const next = reduce(start, { type: Action.CONNECTION_CHANGED });
 
       // Assert
-      expect(next).toMatchObject({ phase: FlowPhase.CONNECTION, plan: null, acceptShrink: false });
-      expect(next.connection.password).toBe("");
+      expect(next).toMatchObject({ phase: FlowPhase.FILES, files: [FILE], plan: null });
     });
 
-    it.each([FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])("should ignore connection edits while %s", (phase) => {
+    it.each([FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])("should be ignored while %s", (phase) => {
       // Arrange
-      const start = state({ phase, files: [FILE], plan: plan() });
+      const start = state({ phase, files: [FILE], plan: plan(), result: RESULT, acceptShrink: true });
 
       // Act
-      const next = reduce(
-        start,
-        { type: Action.SET_CONNECTION_FIELD, field: "host", value: "elsewhere" },
-        { type: Action.APPLY_PROFILE, values: { host: "elsewhere" } }
-      );
+      const next = reduce(start, { type: Action.CONNECTION_CHANGED });
 
       // Assert
       expect(next).toBe(start);
+    });
+
+    it("should be idempotent", () => {
+      // Arrange
+      const start = inReview({ acceptShrink: true, error: "x" });
+
+      // Act
+      const once = reduce(start, { type: Action.CONNECTION_CHANGED });
+      const twice = reduce(once, { type: Action.CONNECTION_CHANGED });
+
+      // Assert
+      expect(twice).toEqual(once);
     });
   });
 
-  describe("CONTINUE and BACK", () => {
-    it("should move to FILES when the connection is complete", () => {
-      // Arrange & Act
-      const next = reduce(state({ error: "old" }), { type: Action.CONTINUE });
-
-      // Assert
-      expect(next.phase).toBe(FlowPhase.FILES);
-      expect(next.error).toBeNull();
-    });
-
-    it.each(["host", "port", "db_name", "user"] as const)("should stay put when %s is blank", (field) => {
-      // Arrange
-      const start = state({ connection: { ...CONNECTION, [field]: "   " } });
-
-      // Act
-      const next = reduce(start, { type: Action.CONTINUE });
-
-      // Assert
-      expect(next).toBe(start);
-    });
-
-    it("should not require the password to continue", () => {
-      // Arrange
-      const start = state({ connection: { ...CONNECTION, password: "" } });
-
-      // Act & Assert
-      expect(reduce(start, { type: Action.CONTINUE }).phase).toBe(FlowPhase.FILES);
-    });
-
-    it.each([FlowPhase.FILES, FlowPhase.REVIEW, FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])(
-      "should ignore CONTINUE outside the connection step (%s)",
-      (phase) => {
-        // Arrange
-        const start = state({ phase });
-
-        // Act & Assert
-        expect(reduce(start, { type: Action.CONTINUE })).toBe(start);
-      }
-    );
-
-    it("should go back from FILES to CONNECTION", () => {
-      // Arrange & Act
-      const next = reduce(state({ phase: FlowPhase.FILES, error: "x" }), { type: Action.BACK });
-
-      // Assert
-      expect(next.phase).toBe(FlowPhase.CONNECTION);
-      expect(next.error).toBeNull();
-    });
-
+  describe("BACK", () => {
     it("should go back from REVIEW to FILES and throw the plan away", () => {
       // Arrange & Act
       const next = reduce(inReview({ acceptShrink: true }), { type: Action.BACK });
@@ -191,7 +118,7 @@ describe("loadFlowReducer (AC-28)", () => {
       expect(next).toMatchObject({ phase: FlowPhase.FILES, plan: null, acceptShrink: false });
     });
 
-    it.each([FlowPhase.CONNECTION, FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])("should ignore BACK in %s", (phase) => {
+    it.each([FlowPhase.FILES, FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])("should ignore BACK in %s", (phase) => {
       // Arrange
       const start = state({ phase });
 
@@ -276,7 +203,7 @@ describe("loadFlowReducer (AC-28)", () => {
       expect(removed.files).toEqual([]);
     });
 
-    it.each([FlowPhase.CONNECTION, FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])(
+    it.each([FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])(
       "should ignore file edits while %s",
       (phase) => {
         // Arrange
@@ -309,7 +236,7 @@ describe("loadFlowReducer (AC-28)", () => {
       expect(reduce(start, { type: Action.PLAN_START })).toBe(start);
     });
 
-    it.each([FlowPhase.CONNECTION, FlowPhase.REVIEW, FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])(
+    it.each([FlowPhase.REVIEW, FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])(
       "should not start planning from %s",
       (phase) => {
         // Arrange
@@ -342,7 +269,7 @@ describe("loadFlowReducer (AC-28)", () => {
       expect(next).toMatchObject({ phase: FlowPhase.FILES, error: "sin red" });
     });
 
-    it.each([FlowPhase.CONNECTION, FlowPhase.FILES, FlowPhase.REVIEW, FlowPhase.LOADING, FlowPhase.DONE])(
+    it.each([FlowPhase.FILES, FlowPhase.REVIEW, FlowPhase.LOADING, FlowPhase.DONE])(
       "should ignore PLAN_SUCCESS and PLAN_FAILURE outside PLANNING (%s)",
       (phase) => {
         // Arrange
@@ -368,7 +295,7 @@ describe("loadFlowReducer (AC-28)", () => {
       expect(unticked.acceptShrink).toBe(false);
     });
 
-    it.each([FlowPhase.CONNECTION, FlowPhase.FILES, FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])(
+    it.each([FlowPhase.FILES, FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])(
       "should ignore the checkbox outside REVIEW (%s)",
       (phase) => {
         // Arrange
@@ -390,7 +317,7 @@ describe("loadFlowReducer (AC-28)", () => {
       expect(next.error).toBeNull();
     });
 
-    it.each([FlowPhase.CONNECTION, FlowPhase.FILES, FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])(
+    it.each([FlowPhase.FILES, FlowPhase.PLANNING, FlowPhase.LOADING, FlowPhase.DONE])(
       "should be a no-op outside REVIEW (%s), even with a loadable plan in the state",
       (phase) => {
         // Arrange
@@ -480,7 +407,7 @@ describe("loadFlowReducer (AC-28)", () => {
       expect(canLoad(next)).toBe(false);
     });
 
-    it.each([FlowPhase.CONNECTION, FlowPhase.FILES, FlowPhase.PLANNING, FlowPhase.REVIEW, FlowPhase.DONE])(
+    it.each([FlowPhase.FILES, FlowPhase.PLANNING, FlowPhase.REVIEW, FlowPhase.DONE])(
       "should ignore LOAD_SUCCESS and LOAD_FAILURE outside LOADING (%s)",
       (phase) => {
         // Arrange
@@ -496,7 +423,7 @@ describe("loadFlowReducer (AC-28)", () => {
   });
 
   describe("RESTART", () => {
-    it("should clear files, plan and result and go back to FILES, keeping the connection, only from DONE", () => {
+    it("should clear files, plan and result and go back to FILES, only from DONE", () => {
       // Arrange
       const start = state({ phase: FlowPhase.DONE, files: [FILE], plan: plan(), result: RESULT, acceptShrink: true });
 
@@ -505,10 +432,9 @@ describe("loadFlowReducer (AC-28)", () => {
 
       // Assert
       expect(next).toMatchObject({ phase: FlowPhase.FILES, files: [], plan: null, result: null, acceptShrink: false });
-      expect(next.connection).toEqual(CONNECTION);
     });
 
-    it.each([FlowPhase.CONNECTION, FlowPhase.FILES, FlowPhase.PLANNING, FlowPhase.REVIEW, FlowPhase.LOADING])(
+    it.each([FlowPhase.FILES, FlowPhase.PLANNING, FlowPhase.REVIEW, FlowPhase.LOADING])(
       "should be ignored outside DONE (%s)",
       (phase) => {
         // Arrange
@@ -521,35 +447,9 @@ describe("loadFlowReducer (AC-28)", () => {
   });
 
   describe("selectors", () => {
-    it.each([
-      [FlowPhase.CONNECTION, FlowStep.CONNECTION],
-      [FlowPhase.FILES, FlowStep.FILES],
-      [FlowPhase.PLANNING, FlowStep.REVIEW],
-      [FlowPhase.REVIEW, FlowStep.REVIEW],
-      [FlowPhase.LOADING, FlowStep.REVIEW],
-      [FlowPhase.DONE, FlowStep.RESULT],
-    ])("should map phase %s to step %i", (phase, step) => {
-      // Arrange, Act & Assert
-      expect(currentStep(state({ phase }))).toBe(step);
-    });
-
     it("should be busy only while planning or loading", () => {
       // Arrange, Act & Assert
       expect(Object.values(FlowPhase).filter((phase) => isBusy(state({ phase })))).toEqual([FlowPhase.PLANNING, FlowPhase.LOADING]);
-    });
-
-    it("should know when the connection is complete", () => {
-      // Arrange, Act & Assert
-      expect(isConnectionComplete(CONNECTION)).toBe(true);
-      expect(isConnectionComplete(INITIAL_CONNECTION)).toBe(false);
-      expect(isConnectionComplete({ ...CONNECTION, user: " " })).toBe(false);
-    });
-
-    it("should allow continuing only from a complete connection step", () => {
-      // Arrange, Act & Assert
-      expect(canContinue(state())).toBe(true);
-      expect(canContinue(INITIAL_LOAD_FLOW)).toBe(false);
-      expect(canContinue(state({ phase: FlowPhase.FILES }))).toBe(false);
     });
 
     it("should allow reviewing only from FILES with at least one file", () => {

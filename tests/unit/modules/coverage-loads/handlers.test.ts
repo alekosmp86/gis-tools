@@ -752,13 +752,17 @@ describe("indicators handlers", () => {
       for (const handler of Object.values(handlers)) expect(typeof handler).toBe("function");
     });
 
-    it("should expose the indicators handler set at module level", () => {
+    it("should expose the indicators and shp handler sets at module level", () => {
       // Arrange & Act
       const handlers = createCoverageLoadsHandlers({ repository: new FakeRepository() });
 
       // Assert
-      expect(Object.keys(handlers)).toEqual(["indicators"]);
+      expect(Object.keys(handlers)).toEqual(["indicators", "shp"]);
       expect(typeof handlers.indicators.plan).toBe("function");
+      expect(Object.keys(handlers.shp).sort()).toEqual(
+        ["cancel", "discard", "jobs", "log", "plan", "start", "status", "upload"]
+      );
+      for (const handler of Object.values(handlers.shp)) expect(typeof handler).toBe("function");
     });
   });
 });
