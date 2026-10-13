@@ -101,6 +101,7 @@ Detailed technical documentation is maintained inside the [`docs/`](file:///c:/A
 - 🔍 [**Spatial File Viewer Guide**](file:///c:/Alekos/Projects/gis-tools/docs/tools/FILE_VIEWER_TOOL.md)
 - 🗄️ [**DB vs DB Sync Guide**](file:///c:/Alekos/Projects/gis-tools/docs/tools/DB_DB_SYNC_TOOL.md)
 - 📊 [**PostGIS Table Viewer Guide**](file:///c:/Alekos/Projects/gis-tools/docs/tools/POSTGIS_TABLE_VIEWER_TOOL.md)
+- 📡 [**Coverage Loads Module (Indicadores LTE)**](file:///c:/Alekos/Projects/gis-tools/docs/tools/COVERAGE_LOADS_MODULE.md)
 
 ---
 
