@@ -2,7 +2,7 @@
 
 Source of truth for behaviour: `C:\Alekos\Tasks\CGEO-2200\IndicadoresLTE\gis-tools-module\PLAN.md` (sections 3-7) and the golden fixtures beside it. Where the legacy `.ktr` SQL differs from PLAN.md, the `.ktr` wins and the difference is reported.
 
-Scope: module `src/modules/coverage-loads/`, part 2 only (`indicators/`). No SHP code, route, tab or placeholder (AC-30).
+Scope: module `src/modules/coverage-loads/`, part 2 (`indicators/`). The SHP loader lives only under `shp/`; its UI exists only under `shp/ui/` (AC-30).
 
 ## Input files
 - AC-1: A file name is accepted only if it matches `IndicadoresLTE_aaaammdd.csv` (case-sensitive prefix, 8 digits forming a valid calendar date -> `fechaact`). Anything else rejects the file before touching the DB, with a Spanish message naming the file.
@@ -41,12 +41,13 @@ Scope: module `src/modules/coverage-loads/`, part 2 only (`indicators/`). No SHP
 ## UI and structure
 - AC-27: Module page `/tools/m/coverage-loads` titled "Cargas de Coberturas", HOME_TOOL_GRID card, section switch with only "Indicadores LTE"; adding a section is a one-component change.
 - AC-28: Steps Conexión -> Archivos -> Revisión -> Resultado; load only reachable from a reviewed plan (pure reducer); shrink checkbox; incomplete-cut banner; rejected-row list with download; three report downloads with sizes. UI text Spanish, Lucide icons only, no inline styles, CSS modules, atomic components.
-- AC-29: DB plumbing (connection, transaction helper, privilege check, request/response helpers) lives in `shared/`; CSV-indicator code under `indicators/`; no module imports another module.
-- AC-30: No SHP code, route, tab or placeholder exists.
-- AC-31: Module is deletable (folder + registry line + `tests/unit/modules/coverage-loads/`); deletion proof done.
+- AC-29: DB plumbing (connection, transaction helper, privilege check, request/response helpers) lives in `shared/`; CSV-indicator code under `indicators/`; SHP code under `shp/`; no module imports another module, and `indicators/` never imports `shp/` or the reverse.
+- AC-30: SHP code lives only under `shp/` (job-safe core under `shp/job/`, including the real pipeline in `shp/job/realPipeline.ts` and `shp/job/real/`, Next-side under `shp/api` and `shp/services`, pure UI logic under `shp/domain/`, the visible stage under `shp/ui/`); the only SHP touchpoint outside it is the stage entry in `workflow/ui/coverageStages.ts`. No separate SHP tab or page exists.
+- AC-31: Module is deletable (folder + registry line + `tests/unit/modules/coverage-loads/`); deletion set since the SHP backend also names `tsconfig.job.json`, the `allowImportingTsExtensions` line in root `tsconfig.json` and the `/data/coverage-loads/` line in `.gitignore` (harmless without the module, but `tsc -p tsconfig.job.json` fails once the folder is gone); deletion proof was done before the SHP backend and has NOT been redone since; the `/data/coverage-loads/` runtime folder is gitignored.
 
 ## Tests and docs
 - AC-32: Golden parity test: parse the real golden CSV, load into PGlite after synthetic earlier cuts, run the three reports, compare bytes with the golden report files.
 - AC-33: Partial-load, shrink-guard, rollback-on-failure, no-duplicate-reload, other-dates-untouched, two-cuts-in-one-run, privilege-check, and novedad (new locality / nothing new) tests, all on PGlite; never a real database.
 - AC-34: `docs/tools/COVERAGE_LOADS_MODULE.md` (behaviour, endpoints, SQL, replace-the-cut limits, privileges incl. DELETE, differences from the GeoKettle job, "unverified vs legacy" 2-decimal rendering) plus index lines in `docs/README.md`, `CLAUDE.md`, `README.md`.
 - AC-35: Gauntlet green with real output: `modules:routes:check`, `lint` (0/0), `test`, `build`, `doctor`; `modules` coverage in `.claude/baseline.json` not regressed.
+- AC-36: The real SHP pipeline (`COVERAGE_LOADS_SHP_PIPELINE` unset or not `fake`) stages the file through binary COPY into `shp_stage_<table>`, subdivides and repairs into `shp_work_<table>`, applies the gates (tolerance 1e-6), and in LOAD mode swaps into the target in one transaction under the advisory lock `(0x4C4F4144, tableId)`; TEST mode skips the swap and returns `testReport`; cancel, failure and success drop the work tables. Its SQL has never been executed against PostgreSQL/PostGIS (unverified, see the module doc section 10c).
