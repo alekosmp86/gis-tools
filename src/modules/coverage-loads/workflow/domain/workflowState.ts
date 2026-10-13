@@ -136,8 +136,21 @@ function setStageProgress(state: WorkflowState, stageId: string, progress: Stage
   return { ...state, stages: { ...state.stages, [stageId]: progress } };
 }
 
+/** The next stage in order that still has work to do, searching after `stageId` and then from the start. */
+function nextOpenStageId(state: WorkflowState, stageId: string): string | null {
+  const ids = Object.keys(state.stages);
+  const start = ids.indexOf(stageId);
+  const ordered = [...ids.slice(start + 1), ...ids.slice(0, start)];
+  return ordered.find((id) => state.stages[id].status === StageStatus.PENDING) ?? null;
+}
+
+/** Skipping the stage on screen moves straight to the next one that is still open. */
 function skipStage(state: WorkflowState, stageId: string): WorkflowState {
-  return canSkipStage(state, stageId) ? setStageProgress(state, stageId, { status: StageStatus.SKIPPED, outcome: null }) : state;
+  if (!canSkipStage(state, stageId)) return state;
+  const skipped = setStageProgress(state, stageId, { status: StageStatus.SKIPPED, outcome: null });
+  if (state.activeStageId !== stageId) return skipped;
+  const next = nextOpenStageId(skipped, stageId);
+  return next === null ? skipped : { ...skipped, activeStageId: next };
 }
 
 function unskipStage(state: WorkflowState, stageId: string): WorkflowState {
