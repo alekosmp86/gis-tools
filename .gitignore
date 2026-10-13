@@ -43,6 +43,7 @@ yarn-error.log*
 next-env.d.ts
 /data/vault/*
 !/data/vault/.gitkeep
+/data/coverage-loads/
 
 #graphify
 /graphify-out

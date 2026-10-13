@@ -3,6 +3,7 @@ import {
   type IndicatorsHandlerDependencies,
   type IndicatorsHandlers,
 } from "../indicators/api/handlers";
+import { createShpHandlers, type ShpHandlerDependencies, type ShpHandlers } from "../shp/api/handlers";
 
 /**
  * Module-level handler assembly. Each part of the module (today only the indicators) contributes
@@ -10,10 +11,15 @@ import {
  */
 interface CoverageLoadsHandlers {
   readonly indicators: IndicatorsHandlers;
+  readonly shp: ShpHandlers;
 }
 
 export function createCoverageLoadsHandlers(
-  indicatorsDependencies: IndicatorsHandlerDependencies = {}
+  indicatorsDependencies: IndicatorsHandlerDependencies = {},
+  shpDependencies: ShpHandlerDependencies = {}
 ): CoverageLoadsHandlers {
-  return { indicators: createIndicatorsHandlers(indicatorsDependencies) };
+  return {
+    indicators: createIndicatorsHandlers(indicatorsDependencies),
+    shp: createShpHandlers(shpDependencies),
+  };
 }

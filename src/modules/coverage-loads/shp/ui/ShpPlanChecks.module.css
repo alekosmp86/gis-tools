@@ -1,0 +1,45 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.detail {
+  color: var(--text-muted);
+}
+
+.ok {
+  color: var(--accent-emerald, #10b981);
+}
+
+.warning {
+  color: var(--accent-amber, #f59e0b);
+}
+
+.error {
+  color: var(--accent-rose);
+}
+
+.icon {
+  flex-shrink: 0;
+}

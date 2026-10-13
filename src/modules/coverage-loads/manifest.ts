@@ -6,6 +6,7 @@ import routeDeclarations from "./module.routes.json";
 import { createCoverageLoadsHandlers } from "./api/handlers";
 import { CoverageLoadsDashboard } from "./ui/CoverageLoadsDashboard";
 import { CoverageLoadsHomeCard } from "./ui/CoverageLoadsHomeCard";
+import { ShpStatusChip } from "./shp/ui/ShpStatusChip";
 
 /**
  * Cargas de Coberturas. Part 2 (Indicadores LTE) is the only part present: the backend loads
@@ -24,6 +25,14 @@ export const coverageLoadsModule: AppModuleManifest = {
     "POST indicators/plan": handlers.indicators.plan,
     "POST indicators/load": handlers.indicators.load,
     "POST indicators/reports": handlers.indicators.reports,
+    "POST shp/upload": handlers.shp.upload,
+    "POST shp/plan": handlers.shp.plan,
+    "POST shp/start": handlers.shp.start,
+    "GET shp/status": handlers.shp.status,
+    "GET shp/jobs": handlers.shp.jobs,
+    "POST shp/cancel": handlers.shp.cancel,
+    "GET shp/log": handlers.shp.log,
+    "POST shp/discard": handlers.shp.discard,
   }),
   pages: definePageContributions(routeDeclarations, {
     "": CoverageLoadsDashboard,
@@ -42,6 +51,12 @@ export const coverageLoadsModule: AppModuleManifest = {
       id: "coverage-loads.card",
       order: 120,
       Component: CoverageLoadsHomeCard,
+    },
+    {
+      slot: UiSlot.APP_STATUS,
+      id: "coverage-loads.shpStatus",
+      order: 120,
+      Component: ShpStatusChip,
     },
   ],
 };

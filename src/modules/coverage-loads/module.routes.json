@@ -3,7 +3,15 @@
   "endpoints": [
     { "path": "indicators/plan", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "indicators/load", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
-    { "path": "indicators/reports", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" }
+    { "path": "indicators/reports", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "shp/upload", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "shp/plan", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "shp/start", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "shp/status", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "shp/jobs", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "shp/cancel", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "shp/log", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "shp/discard", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" }
   ],
   "pages": [
     { "path": "", "title": "Cargas de Coberturas" }

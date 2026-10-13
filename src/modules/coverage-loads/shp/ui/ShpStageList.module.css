@@ -1,0 +1,38 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.done {
+  color: var(--accent-emerald, #10b981);
+}
+
+.running {
+  color: var(--accent-cyan);
+}
+
+.failed {
+  color: var(--accent-rose);
+}
+
+.state {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

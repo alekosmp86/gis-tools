@@ -1,0 +1,6 @@
+.detail {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}

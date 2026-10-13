@@ -28,7 +28,7 @@ export const IndicatorsReviewStep: React.FC<IndicatorsReviewStepProps> = ({ flow
   const fileErrorMessages = plan.fileErrors.map((error) => error.message);
 
   return (
-    <IndicatorsStepCard title="3. Revisión del plan de carga">
+    <IndicatorsStepCard title="Revisión del plan de carga">
       <div className={shared.stack}>
         <IndicatorsProblemList messages={fileErrorMessages} />
         <IndicatorsProblemList messages={listOtherBlockers(plan)} />

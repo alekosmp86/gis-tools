@@ -1,0 +1,33 @@
+.chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pending {
+  color: var(--text-muted);
+}
+
+.skipped {
+  color: var(--text-dim);
+  border-style: dashed;
+}
+
+.busy {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+
+.done {
+  color: var(--accent-emerald);
+  border-color: var(--accent-emerald);
+}
+
+.failed {
+  color: var(--accent-rose);
+  border-color: var(--accent-rose);
+}

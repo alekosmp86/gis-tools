@@ -1,0 +1,29 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.table caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 6px;
+}
+
+.table td {
+  padding: 5px 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ok {
+  color: var(--accent-emerald, #10b981);
+}
+
+.failed {
+  color: var(--accent-rose);
+}

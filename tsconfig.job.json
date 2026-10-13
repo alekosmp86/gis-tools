@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "incremental": false,
+    "paths": {},
+    "plugins": [],
+    "types": ["node"]
+  },
+  "include": ["src/modules/coverage-loads/shp/job/**/*.ts"]
+}

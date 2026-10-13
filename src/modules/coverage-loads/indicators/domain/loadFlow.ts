@@ -1,15 +1,13 @@
-import { DEFAULT_DB_HOST, DEFAULT_DB_PORT } from "../../constants";
-import type { ConnectionPayload } from "../../types";
 import type { IndicatorsPlan, LoadResult } from "../client";
 
 /**
- * State of the four-step Indicadores LTE workflow. Pure and free of React, so the two-step rule
- * (a load is only reachable from a reviewed plan, and any change of connection or files throws
- * that plan away) is testable without a browser.
+ * State of the Indicadores LTE stage: files, review of the plan, load, result. The connection is
+ * not part of it: the workflow shell owns it and announces a change with `CONNECTION_CHANGED`.
+ * Pure and free of React, so the two-step rule (a load is only reachable from a reviewed plan, and
+ * any change of connection or files throws that plan away) is testable without a browser.
  */
 
 export const FlowPhase = {
-  CONNECTION: "CONNECTION",
   FILES: "FILES",
   PLANNING: "PLANNING",
   REVIEW: "REVIEW",
@@ -19,22 +17,8 @@ export const FlowPhase = {
 
 export type FlowPhase = (typeof FlowPhase)[keyof typeof FlowPhase];
 
-export const FlowStep = {
-  CONNECTION: 1,
-  FILES: 2,
-  REVIEW: 3,
-  RESULT: 4,
-} as const;
-
-export type FlowStep = (typeof FlowStep)[keyof typeof FlowStep];
-
-export type ConnectionField = keyof ConnectionPayload;
-
-export type ProfileValues = Partial<Omit<ConnectionPayload, "password">>;
-
 export interface LoadFlowState {
   readonly phase: FlowPhase;
-  readonly connection: ConnectionPayload;
   readonly files: ReadonlyArray<File>;
   readonly plan: IndicatorsPlan | null;
   readonly acceptShrink: boolean;
@@ -42,17 +26,8 @@ export interface LoadFlowState {
   readonly error: string | null;
 }
 
-export const INITIAL_CONNECTION: ConnectionPayload = {
-  host: DEFAULT_DB_HOST,
-  port: String(DEFAULT_DB_PORT),
-  db_name: "",
-  user: "",
-  password: "",
-};
-
 export const INITIAL_LOAD_FLOW: LoadFlowState = {
-  phase: FlowPhase.CONNECTION,
-  connection: INITIAL_CONNECTION,
+  phase: FlowPhase.FILES,
   files: [],
   plan: null,
   acceptShrink: false,
@@ -61,11 +36,9 @@ export const INITIAL_LOAD_FLOW: LoadFlowState = {
 };
 
 export const LoadFlowActionType = {
-  SET_CONNECTION_FIELD: "SET_CONNECTION_FIELD",
-  APPLY_PROFILE: "APPLY_PROFILE",
   ADD_FILES: "ADD_FILES",
   REMOVE_FILE: "REMOVE_FILE",
-  CONTINUE: "CONTINUE",
+  CONNECTION_CHANGED: "CONNECTION_CHANGED",
   BACK: "BACK",
   PLAN_START: "PLAN_START",
   PLAN_SUCCESS: "PLAN_SUCCESS",
@@ -78,12 +51,6 @@ export const LoadFlowActionType = {
 } as const;
 
 export type LoadFlowAction =
-  | {
-      readonly type: typeof LoadFlowActionType.SET_CONNECTION_FIELD;
-      readonly field: ConnectionField;
-      readonly value: string;
-    }
-  | { readonly type: typeof LoadFlowActionType.APPLY_PROFILE; readonly values: ProfileValues }
   | { readonly type: typeof LoadFlowActionType.ADD_FILES; readonly files: ReadonlyArray<File> }
   | { readonly type: typeof LoadFlowActionType.REMOVE_FILE; readonly index: number }
   | { readonly type: typeof LoadFlowActionType.PLAN_SUCCESS; readonly plan: IndicatorsPlan }
@@ -95,7 +62,7 @@ export type LoadFlowAction =
       readonly message: string;
       readonly plan?: IndicatorsPlan;
     }
-  | { readonly type: typeof LoadFlowActionType.CONTINUE }
+  | { readonly type: typeof LoadFlowActionType.CONNECTION_CHANGED }
   | { readonly type: typeof LoadFlowActionType.BACK }
   | { readonly type: typeof LoadFlowActionType.PLAN_START }
   | { readonly type: typeof LoadFlowActionType.LOAD_START }
@@ -103,33 +70,8 @@ export type LoadFlowAction =
 
 const CSV_EXTENSION = ".csv";
 
-const REQUIRED_CONNECTION_FIELDS: ReadonlyArray<ConnectionField> = ["host", "port", "db_name", "user"];
-
-export function isConnectionComplete(connection: ConnectionPayload): boolean {
-  return REQUIRED_CONNECTION_FIELDS.every((field) => connection[field].trim() !== "");
-}
-
-export function isBusy(state: LoadFlowState): boolean {
+export function isBusy(state: Pick<LoadFlowState, "phase">): boolean {
   return state.phase === FlowPhase.PLANNING || state.phase === FlowPhase.LOADING;
-}
-
-export function currentStep(state: LoadFlowState): FlowStep {
-  switch (state.phase) {
-    case FlowPhase.CONNECTION:
-      return FlowStep.CONNECTION;
-    case FlowPhase.FILES:
-      return FlowStep.FILES;
-    case FlowPhase.DONE:
-      return FlowStep.RESULT;
-    case FlowPhase.PLANNING:
-    case FlowPhase.REVIEW:
-    case FlowPhase.LOADING:
-      return FlowStep.REVIEW;
-  }
-}
-
-export function canContinue(state: LoadFlowState): boolean {
-  return state.phase === FlowPhase.CONNECTION && isConnectionComplete(state.connection);
 }
 
 export function canReview(state: LoadFlowState): boolean {
@@ -163,11 +105,10 @@ function discardPlan(state: LoadFlowState): LoadFlowState {
   return { ...state, plan: null, acceptShrink: false, error: null };
 }
 
-/** A connection edit invalidates any review: the plan was computed against the previous database. */
-function withConnection(state: LoadFlowState, connection: ConnectionPayload): LoadFlowState {
-  if (state.phase === FlowPhase.CONNECTION) return { ...state, connection };
+/** A connection change invalidates any review: the plan was computed against the previous database. */
+function connectionChanged(state: LoadFlowState): LoadFlowState {
   if (state.phase === FlowPhase.FILES || state.phase === FlowPhase.REVIEW) {
-    return { ...discardPlan(state), phase: FlowPhase.CONNECTION, connection };
+    return { ...discardPlan(state), phase: FlowPhase.FILES };
   }
   return state;
 }
@@ -180,7 +121,6 @@ function withFiles(state: LoadFlowState, files: ReadonlyArray<File>): LoadFlowSt
 }
 
 function goBack(state: LoadFlowState): LoadFlowState {
-  if (state.phase === FlowPhase.FILES) return { ...state, phase: FlowPhase.CONNECTION, error: null };
   if (state.phase === FlowPhase.REVIEW) return { ...discardPlan(state), phase: FlowPhase.FILES };
   return state;
 }
@@ -203,10 +143,6 @@ function restart(state: LoadFlowState): LoadFlowState {
 
 export function loadFlowReducer(state: LoadFlowState, action: LoadFlowAction): LoadFlowState {
   switch (action.type) {
-    case LoadFlowActionType.SET_CONNECTION_FIELD:
-      return withConnection(state, { ...state.connection, [action.field]: action.value });
-    case LoadFlowActionType.APPLY_PROFILE:
-      return withConnection(state, { ...state.connection, ...action.values, password: "" });
     case LoadFlowActionType.ADD_FILES:
       return withFiles(state, mergeFiles(state.files, action.files));
     case LoadFlowActionType.REMOVE_FILE:
@@ -214,8 +150,8 @@ export function loadFlowReducer(state: LoadFlowState, action: LoadFlowAction): L
         state,
         state.files.filter((_, position) => position !== action.index)
       );
-    case LoadFlowActionType.CONTINUE:
-      return canContinue(state) ? { ...state, phase: FlowPhase.FILES, error: null } : state;
+    case LoadFlowActionType.CONNECTION_CHANGED:
+      return connectionChanged(state);
     case LoadFlowActionType.BACK:
       return goBack(state);
     case LoadFlowActionType.PLAN_START:
