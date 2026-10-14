@@ -45,7 +45,7 @@ export class GateFailedError extends JobStepError {
   }
 }
 
-export class CancelledError extends Error {
+class CancelledError extends Error {
   constructor() {
     super("Carga cancelada.");
     this.name = new.target.name;

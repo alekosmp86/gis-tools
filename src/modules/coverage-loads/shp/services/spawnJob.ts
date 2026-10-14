@@ -15,11 +15,13 @@ import type { ChildLike } from "./spawnTypes";
 
 export const SPAWN_FAILED_CODE = "SPAWN_FAILED";
 export const SPAWN_FAILED_MESSAGE = "No se pudo iniciar el proceso de carga.";
+const FAIL_RETRY_ATTEMPTS = 6;
+const FAIL_RETRY_BACKOFF_MS = 40;
 const EARLY_EXIT_MESSAGE = (code: number | null) =>
   `El proceso de carga terminó antes de iniciar (código ${code ?? "desconocido"}). Revise el registro de la carga.`;
 
 /** Only what node itself needs. No PG* variables, no credentials, no NODE_OPTIONS. */
-export function buildChildEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+function buildChildEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const env: Record<string, string> = {};
   for (const name of CHILD_ENV_ALLOW_LIST) {
     const value = source[name];
@@ -29,7 +31,7 @@ export function buildChildEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.P
   return env as NodeJS.ProcessEnv;
 }
 
-export function jobEntryPath(): string {
+function jobEntryPath(): string {
   return path.resolve(/*turbopackIgnore: true*/ process.cwd(), ...JOB_ENTRY_RELATIVE_PATH);
 }
 
@@ -47,15 +49,36 @@ export async function failIfStillReady(context: ShpContext, jobId: string, code:
   await releaseTableLock(context.rootDir, status.target.table, jobId);
 }
 
-function watchChild(context: ShpContext, child: ChildLike, jobId: string): void {
-  child.once("error", () => void failIfStillReady(context, jobId, SPAWN_FAILED_CODE, SPAWN_FAILED_MESSAGE).catch(() => undefined));
-  child.once(
-    "exit",
-    (code) => {
-      if (code === 0) return;
-      void failIfStillReady(context, jobId, SPAWN_FAILED_CODE, EARLY_EXIT_MESSAGE(code)).catch(() => undefined);
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Retries failIfStillReady: readStatus reports a transiently unreadable file as null and the atomic
+ * rename can exhaust its own retries under disk contention. When every attempt fails the lock is
+ * still freed (best effort) so the READY sweeper can expire the job.
+ */
+async function failIfStillReadyWithRetry(context: ShpContext, jobId: string, code: string, message: string): Promise<void> {
+  for (let attempt = 0; attempt < FAIL_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      await failIfStillReady(context, jobId, code, message);
+      const after = await readStatus(context.rootDir, jobId);
+      if (after === null || after.state !== JOB_STATE.READY) return;
+    } catch {
+      // transient fs error: fall through to the backoff
     }
-  );
+    await sleep(FAIL_RETRY_BACKOFF_MS * (attempt + 1));
+  }
+  const status = await readStatus(context.rootDir, jobId);
+  if (status !== null && status.state === JOB_STATE.READY) await releaseTableLock(context.rootDir, status.target.table, jobId).catch(() => undefined);
+}
+
+function watchChild(context: ShpContext, child: ChildLike, jobId: string): void {
+  child.once("error", () => void failIfStillReadyWithRetry(context, jobId, SPAWN_FAILED_CODE, SPAWN_FAILED_MESSAGE).catch(() => undefined));
+  child.once("exit", (code) => {
+    if (code === 0) return;
+    void failIfStillReadyWithRetry(context, jobId, SPAWN_FAILED_CODE, EARLY_EXIT_MESSAGE(code)).catch(() => undefined);
+  });
 }
 
 function sendConfig(child: ChildLike, config: JobSpawnConfig): void {

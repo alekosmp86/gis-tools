@@ -54,8 +54,8 @@ export const SHP_TABLES: readonly ShpTable[] = Object.values(SHP_PREFIX_TABLE);
  * Work tables of the new loader. Deliberately distinct from the legacy GeoKettle `stg_<table>`
  * tables so the two processes can never trample each other.
  */
-export const STAGE_TABLE_PREFIX = "shp_stage_";
-export const WORK_TABLE_PREFIX = "shp_work_";
+const STAGE_TABLE_PREFIX = "shp_stage_";
+const WORK_TABLE_PREFIX = "shp_work_";
 
 export function stageTableName(table: ShpTable): string {
   return `${STAGE_TABLE_PREFIX}${table}`;

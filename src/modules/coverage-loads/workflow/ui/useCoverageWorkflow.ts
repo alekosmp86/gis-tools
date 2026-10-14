@@ -40,4 +40,3 @@ export function useCoverageWorkflow(stageIds: ReadonlyArray<string>) {
   };
 }
 
-export type CoverageWorkflow = ReturnType<typeof useCoverageWorkflow>;

@@ -28,7 +28,7 @@ export interface GateVerdict {
   readonly reasons: readonly string[];
 }
 
-export function relativeDifference(value: number, reference: number): number {
+function relativeDifference(value: number, reference: number): number {
   if (reference === 0) return value === 0 ? 0 : Number.POSITIVE_INFINITY;
   return Math.abs(value - reference) / Math.abs(reference);
 }

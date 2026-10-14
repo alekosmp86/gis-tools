@@ -34,7 +34,7 @@ export function toNetworkError(failure: unknown): ShpRequestError {
   return new ShpRequestError(`${NETWORK_FAILURE_PREFIX}${detail}`);
 }
 
-export async function readFailure(response: Response, context: string): Promise<ShpRequestError> {
+async function readFailure(response: Response, context: string): Promise<ShpRequestError> {
   const fallback = `${context} (HTTP ${response.status}).`;
   try {
     const payload = (await response.json()) as ErrorPayload;

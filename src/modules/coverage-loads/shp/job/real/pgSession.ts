@@ -21,7 +21,7 @@ interface SubmittableClient {
 }
 
 /** `pg` accepts a `pg-copy-streams` object as a query and hands the same object back. */
-export function startCopyIn(client: JobPgClient, sql: string): Writable {
+function startCopyIn(client: JobPgClient, sql: string): Writable {
   return (client as unknown as SubmittableClient).query(copyStreams.from(sql));
 }
 

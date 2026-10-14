@@ -46,7 +46,7 @@ export type ShpTable = (typeof SHP_PREFIX_TABLE)[ShpPrefix];
 
 export const SCHEMA_VERSION = 1;
 
-export const TERMINAL_STATES: readonly JobState[] = [JOB_STATE.SUCCEEDED, JOB_STATE.FAILED, JOB_STATE.CANCELLED];
+const TERMINAL_STATES: readonly JobState[] = [JOB_STATE.SUCCEEDED, JOB_STATE.FAILED, JOB_STATE.CANCELLED];
 export const LIVE_STATES: readonly JobState[] = [JOB_STATE.RUNNING, JOB_STATE.CANCELLING];
 
 export function isTerminalState(state: JobState): boolean {

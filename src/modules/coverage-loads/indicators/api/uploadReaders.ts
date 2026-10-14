@@ -3,7 +3,7 @@ import { MAX_BODY_BYTES, MAX_FILE_BYTES, MAX_FILES_PER_RUN } from "../constants"
 import { buildFileError, FileRejection, parseIndicatorsFile } from "../domain/csvIndicators";
 import type { ParseOutcome } from "../types";
 
-export const FILES_FIELD = "files";
+const FILES_FIELD = "files";
 export const CONFIRM_FIELD = "confirm";
 export const ACCEPT_SHRINK_FIELD = "acceptShrink";
 export const CONNECTION_FIELD = "connection";

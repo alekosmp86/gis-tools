@@ -14,8 +14,8 @@ const LOG_FAILURE = "No se pudo leer el registro de la carga";
 const CANCEL_FAILURE = "No se pudo cancelar la carga";
 const DISCARD_FAILURE = "No se pudo descartar la carga";
 
-export const LOG_TAIL_LINES = 40;
-export const FULL_LOG_LINES = 5000;
+const LOG_TAIL_LINES = 40;
+const FULL_LOG_LINES = 5000;
 
 export interface StatusResult {
   readonly status: JobStatus;

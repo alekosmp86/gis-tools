@@ -36,7 +36,7 @@ export const ParseKind = {
   ERROR: "ERROR",
 } as const;
 
-export type ParseKind = (typeof ParseKind)[keyof typeof ParseKind];
+type ParseKind = (typeof ParseKind)[keyof typeof ParseKind];
 
 export type ParseOutcome =
   | { readonly kind: typeof ParseKind.CUT; readonly cut: ParsedCut }

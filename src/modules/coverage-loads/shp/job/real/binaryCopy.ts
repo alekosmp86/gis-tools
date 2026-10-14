@@ -9,7 +9,7 @@ const INT4_BYTES = 4;
 const STAGE_FIELDS = 3;
 const TRAILER_MARKER = -1;
 
-export const MAX_FIELD_BYTES = 0x3fffffff;
+const MAX_FIELD_BYTES = 0x3fffffff;
 
 export function binaryCopyHeader(): Buffer {
   const header = Buffer.alloc(SIGNATURE.length + 2 * LENGTH_BYTES);

@@ -16,7 +16,7 @@ export function isStale(context: ShpContext, status: JobStatus): boolean {
   return isJobDead(status, context.now(), { isPidAlive: safeIsPidAlive });
 }
 
-export function summarize(context: ShpContext, status: JobStatus): JobSummary {
+function summarize(context: ShpContext, status: JobStatus): JobSummary {
   return {
     jobId: status.jobId,
     target: status.target,

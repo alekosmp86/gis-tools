@@ -5,8 +5,8 @@ import type { ShpTable } from "./types.ts";
 
 const JOB_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export const JOBS_DIR_NAME = "jobs";
-export const LOCKS_DIR_NAME = "locks";
+const JOBS_DIR_NAME = "jobs";
+const LOCKS_DIR_NAME = "locks";
 
 export interface JobPaths {
   dir: string;
