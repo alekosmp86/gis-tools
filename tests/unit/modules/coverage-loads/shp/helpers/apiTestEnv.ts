@@ -19,7 +19,7 @@ export const CANARY_PASSWORD = "PASSWORD-CANARY-12345";
 
 export const CONNECTION_BODY = { host: "db.internal.example", port: 5432, db_name: "gisdb", user: "gisuser", password: CANARY_PASSWORD };
 
-export const TABLE_PREFIX: Record<ShpTable, ShpPrefix> = {
+const TABLE_PREFIX: Record<ShpTable, ShpPrefix> = {
   cobertura5g: "NRUruguay",
   wcdma: "WCDMAUruguay",
   nbiot: "NBIoTUruguay",
@@ -28,7 +28,7 @@ export const TABLE_PREFIX: Record<ShpTable, ShpPrefix> = {
 
 export const FIXED_NOW = Date.parse("2026-03-10T12:00:00.000Z");
 export const MISSING_JOB_ID = "00000000-0000-4000-8000-000000000000";
-export const API_URL = "http://localhost/api/m/coverage-loads/shp";
+const API_URL = "http://localhost/api/m/coverage-loads/shp";
 
 /** Tracks temp roots under os.tmpdir() and removes them all in `cleanup` (call from afterEach). */
 export function createTmpRoots() {
@@ -89,7 +89,7 @@ export interface SpawnCall {
   observed: { lockExists: boolean; statusMode: string | null };
 }
 
-export function createFakeChild(pid: number | undefined): FakeChild {
+function createFakeChild(pid: number | undefined): FakeChild {
   const listeners: Record<string, Array<(value?: unknown) => void>> = {};
   const child: FakeChild = {
     pid,

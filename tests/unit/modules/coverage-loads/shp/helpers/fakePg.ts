@@ -24,7 +24,7 @@ export interface FakePg {
 const ok = (rows: unknown[]): { rows: unknown[] } => ({ rows });
 
 /** Default answers of a healthy server for a 2-record, 2-piece load into `public.lte`. */
-export function defaultAnswer(text: string): { rows: unknown[] } {
+function defaultAnswer(text: string): { rows: unknown[] } {
   if (text.includes("pg_backend_pid")) return ok([{ pid: 4242 }]);
   if (text.includes("pg_try_advisory_lock")) return ok([{ locked: true }]);
   if (text.includes("FROM public.shp_stage_lte") && text.includes("AS area")) return ok([{ rows: "2", area: 200 }]);

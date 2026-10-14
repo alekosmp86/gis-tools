@@ -58,7 +58,7 @@ export function decodeEwkb(buf: Buffer, start = 0): { geom: Decoded; off: number
   throw new Error(`type ${type}`);
 }
 
-export const polyArea = (p: DecodedPolygon): number =>
+const polyArea = (p: DecodedPolygon): number =>
   ringArea(p.rings[0]!) - p.rings.slice(1).reduce((s, r) => s + ringArea(r), 0);
 
 export const multiArea = (g: DecodedMulti): number => g.polys.reduce((s, p) => s + polyArea(p), 0);
