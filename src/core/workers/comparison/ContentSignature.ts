@@ -14,6 +14,7 @@ export interface ContentSignatureOptions {
   suidColumns?: readonly string[];
   cleanSuidPart?: (value: unknown) => string;
   allProperties?: boolean;
+  fingerprintGeometry?: (geometry: unknown) => string;
 }
 
 const GEOMETRY_KEYS = new Set(["_geometry", "geometry"]);
@@ -55,6 +56,8 @@ export function buildContentSignature(
     const isSuid = options?.cleanSuidPart && suidLower.has(columnName.toLowerCase());
     parts.push(isSuid ? options!.cleanSuidPart!(value) : cleanValue(value));
   }
-  if (geometry !== undefined || options) parts.push(fingerprintGeometry(geometry));
+  if (geometry !== undefined || options) {
+    parts.push((options?.fingerprintGeometry ?? fingerprintGeometry)(geometry));
+  }
   return JSON.stringify(parts);
 }

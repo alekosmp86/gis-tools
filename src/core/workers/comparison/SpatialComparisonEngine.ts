@@ -11,7 +11,7 @@ import { createProjectionConverter, ProjectionEngine } from "@/core/spatial/Proj
 import { FileDatasetIndexer } from "./FileDatasetIndexer";
 import { SuidKeyResolver, type SuidKeyOptions } from "./SuidKeyResolver";
 import { NullRecordHandler } from "./NullRecordHandler";
-import { SqlPatchGenerator } from "./SqlPatchGenerator";
+import { SqlPatchGenerator, isUnkeyedPairedItem } from "./SqlPatchGenerator";
 import { FeatureAttributeExtractor } from "./FeatureAttributeExtractor";
 import { GeometryDifferenceEvaluator } from "./GeometryDifferenceEvaluator";
 import { MatchedRecordsComparator } from "./MatchedRecordsComparator";
@@ -79,6 +79,7 @@ export class SpatialComparisonEngine {
     const pass1Result = this.matchedComparator.compareMatchedRecords({
       dbSuidMap,
       dbSuidCols,
+      targetFileSuidCols,
       fieldsToCompare,
       fieldToFileKey,
       binaryFileSuidMap,
@@ -104,9 +105,14 @@ export class SpatialComparisonEngine {
       shpReader,
       transformCoordinate,
     });
-    const unmatchedFileItems = unmatchedResult.insertItems;
-    const fileDuplicateCount = unmatchedResult.duplicateItems.length;
-    const duplicateFileRowsSkipped = unmatchedResult.duplicateFileRowsSkipped;
+    const unmatchedFileItems = pass1Result.unmatchedFileItems.concat(unmatchedResult.insertItems);
+    const counts = pass1Result.counts;
+    const duplicateFileRowsSkipped =
+      counts.duplicateFileRowsSkipped + unmatchedResult.duplicateFileRowsSkipped;
+    const duplicateSuidCount =
+      counts.duplicateSuidCount +
+      counts.duplicateSuidFileCount +
+      unmatchedResult.duplicateItems.length;
 
     // 5. Aggregate All Discrepancy Items safely without array spread overhead
     const allDiscrepancyItems: DiscrepancyItem[] = nullRecordItems
@@ -115,35 +121,39 @@ export class SpatialComparisonEngine {
       .concat(unmatchedResult.duplicateItems);
 
     const totalAnalyzed =
-      pass1Result.counts.exactMatchesCount +
-      pass1Result.counts.attributeMismatchCount +
-      pass1Result.counts.geometryMismatchCount +
-      pass1Result.counts.onlyInDbCount +
+      counts.exactMatchesCount +
+      counts.attributeMismatchCount +
+      counts.geometryMismatchCount +
+      counts.onlyInDbCount +
       unmatchedFileItems.length +
       duplicateFileRowsSkipped +
       nullRecordItems.length +
-      pass1Result.counts.duplicateSuidCount +
-      fileDuplicateCount;
+      duplicateSuidCount;
 
     // 6. Generate SQL Patches (Ultra-fast preview mode: extracts first 25 updates and 25 inserts, < 1ms execution)
     const previewUpdateItems: DiscrepancyItem[] = [];
+    let unkeyedUpdatesSkippedCount = 0;
     const discrepancyItemsCount = pass1Result.discrepancyItems.length;
     for (let itemIndex = 0; itemIndex < discrepancyItemsCount; itemIndex++) {
       const item = pass1Result.discrepancyItems[itemIndex];
       if (
-        item.type === DiscrepancyType.ATTRIBUTE_MISMATCH ||
-        item.type === DiscrepancyType.GEOMETRY_MISMATCH
+        item.type !== DiscrepancyType.ATTRIBUTE_MISMATCH &&
+        item.type !== DiscrepancyType.GEOMETRY_MISMATCH
       ) {
+        continue;
+      }
+      if (isUnkeyedPairedItem(item, mappingConfig.primaryKeyColumn)) {
+        unkeyedUpdatesSkippedCount++;
+      } else if (previewUpdateItems.length < 25) {
         previewUpdateItems.push(item);
-        if (previewUpdateItems.length >= 25) {
-          break;
-        }
       }
     }
 
     const previewInsertItems = unmatchedFileItems.slice(0, 25);
     const totalUpdates =
-      pass1Result.counts.attributeMismatchCount + pass1Result.counts.geometryMismatchCount;
+      counts.attributeMismatchCount +
+      counts.geometryMismatchCount -
+      unkeyedUpdatesSkippedCount;
     const totalInserts = unmatchedFileItems.length;
 
     const sqlPatchGenerator = new SqlPatchGenerator({
@@ -166,14 +176,16 @@ export class SpatialComparisonEngine {
       totalDbRecords: dbRecords.length,
       totalFileRecords,
       totalAnalyzed,
-      exactMatchesCount: pass1Result.counts.exactMatchesCount,
-      attributeMismatchCount: pass1Result.counts.attributeMismatchCount,
-      geometryMismatchCount: pass1Result.counts.geometryMismatchCount,
-      onlyInDbCount: pass1Result.counts.onlyInDbCount,
+      exactMatchesCount: counts.exactMatchesCount,
+      attributeMismatchCount: counts.attributeMismatchCount,
+      geometryMismatchCount: counts.geometryMismatchCount,
+      onlyInDbCount: counts.onlyInDbCount,
       onlyInShpCount: unmatchedFileItems.length,
       nullSuidCount: nullRecordItems.length,
-      duplicateSuidCount: pass1Result.counts.duplicateSuidCount + fileDuplicateCount,
+      duplicateSuidCount,
       duplicateFileRowsSkipped,
+      pairingCappedGroups: pass1Result.pairingCappedGroups,
+      unkeyedUpdatesSkippedCount,
       items: allDiscrepancyItems,
       targetSrid: mappingConfig.targetSrid,
       dbColumnTypes,

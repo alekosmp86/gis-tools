@@ -10,6 +10,18 @@ import type { BinaryShpReader } from "@/core/binary/BinaryShpReader";
 
 export type { SqlPatchSummary };
 
+/**
+ * A row paired inside a non-unique key group has no safe WHERE clause without a primary key:
+ * the composite SUID would match every row of the group.
+ */
+export function isUnkeyedPairedItem(
+  item: DiscrepancyItem,
+  primaryKeyColumn?: string | null
+): boolean {
+  if (!item.pairing) return false;
+  return !(primaryKeyColumn && item.dbRecord && item.dbRecord[primaryKeyColumn] != null);
+}
+
 export interface SqlPatchGeneratorParams {
   dbSchemaName: string;
   dbTableName: string;
@@ -126,8 +138,9 @@ export class SqlPatchGenerator {
           this.processItemInsert(item, collector);
         }
       } else if (
-        item.type === DiscrepancyType.ATTRIBUTE_MISMATCH ||
-        item.type === DiscrepancyType.GEOMETRY_MISMATCH
+        (item.type === DiscrepancyType.ATTRIBUTE_MISMATCH ||
+          item.type === DiscrepancyType.GEOMETRY_MISMATCH) &&
+        !isUnkeyedPairedItem(item, this.mappingConfig.primaryKeyColumn)
       ) {
         totalUpdates++;
         if (!collector.isUpdatePreviewFull()) {
@@ -176,6 +189,7 @@ export class SqlPatchGenerator {
     }
 
     if (!item.dbRecord) return;
+    if (isUnkeyedPairedItem(item, this.mappingConfig.primaryKeyColumn)) return;
     const whereClause = this.buildWhereClause(item.dbRecord);
     if (!whereClause) return;
 

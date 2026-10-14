@@ -1,8 +1,8 @@
 import type { DiscrepancyItem } from "@/core/types/comparison";
-import { DiscrepancyType } from "@/core/types/comparison";
 import type { BinaryDbfReader } from "@/core/binary/BinaryDbfReader";
 import type { BinaryShpReader } from "@/core/binary/BinaryShpReader";
 import type { SuidKeyOptions, SuidKeyResolver } from "./SuidKeyResolver";
+import { buildDuplicateFileItem, buildOnlyInFileItem } from "./DiscrepancyItemBuilders";
 import { buildContentSignature, type ContentSignatureOptions } from "./ContentSignature";
 
 export interface CollectUnmatchedParams {
@@ -123,17 +123,21 @@ export class UnmatchedFileFeaturesCollector {
       );
       if (signatures.size > 1) {
         occurrences.forEach((occurrence, occurrenceIndex) => {
-          result.duplicateItems.push({
-            id: `filedup:${suidKey}:${occurrenceIndex}`,
-            suid: rawSuidOf(occurrence),
-            type: DiscrepancyType.DUPLICATE_SUID,
-            differences: [],
-            shpFeatureProps: occurrence.record,
-            shpGeometry: occurrence.geometry || undefined,
-            fileRecordIndex: occurrence.recordIndex,
-            duplicateDetails: { targetCount: 0, sourceCount: occurrences.length },
-            note: `SUID Duplicado (0 en DB / ${occurrences.length} en Archivo)`,
-          });
+          result.duplicateItems.push(
+            buildDuplicateFileItem(
+              {
+                id: `filedup:${suidKey}:${occurrenceIndex}`,
+                suid: rawSuidOf(occurrence),
+                dbCount: 0,
+                fileCount: occurrences.length,
+              },
+              {
+                record: occurrence.record,
+                geometry: occurrence.geometry,
+                recordIndex: occurrence.recordIndex,
+              }
+            )
+          );
         });
         return;
       }
@@ -141,14 +145,14 @@ export class UnmatchedFileFeaturesCollector {
     }
 
     const first = occurrences[0];
-    result.insertItems.push({
-      id: `file-${suidKey}-0`,
-      suid: rawSuidOf(first),
-      type: DiscrepancyType.ONLY_IN_SHP,
-      differences: [],
-      shpFeatureProps: first.record,
-      shpGeometry: first.geometry || undefined,
-      fileRecordIndex: first.recordIndex,
-    });
+    result.insertItems.push(
+      buildOnlyInFileItem({
+        id: `file-${suidKey}-0`,
+        suid: rawSuidOf(first),
+        record: first.record,
+        geometry: first.geometry,
+        recordIndex: first.recordIndex,
+      })
+    );
   }
 }

@@ -17,6 +17,8 @@ export interface ExtractFeatureParams {
   transformCoordinate: ((coordinate: [number, number]) => [number, number]) | null;
   dbfCompareFields: Map<string, DbfFieldDescriptor>;
   ignoreEncodingArtifacts?: boolean;
+  fileIndexOverride?: number;
+  objectFileRecordOverride?: Record<string, unknown>;
 }
 
 export interface ExtractedFeatureResult {
@@ -54,6 +56,8 @@ export class FeatureAttributeExtractor {
       transformCoordinate,
       dbfCompareFields,
       ignoreEncodingArtifacts = true,
+      fileIndexOverride,
+      objectFileRecordOverride,
     } = params;
 
     const differences: AttributeDifference[] = [];
@@ -62,7 +66,8 @@ export class FeatureAttributeExtractor {
     let fileRecordIndex: number | undefined;
 
     if (dbfReader) {
-      const targetRecordIndex = binaryFileIndices[dbIndex] ?? binaryFileIndices[0];
+      const targetRecordIndex =
+        fileIndexOverride ?? binaryFileIndices[dbIndex] ?? binaryFileIndices[0];
       fileRecordIndex = targetRecordIndex;
 
       fieldsToCompare.forEach((field) => {
@@ -79,9 +84,12 @@ export class FeatureAttributeExtractor {
         fileGeometry = shpReader.readGeometry(targetRecordIndex, transformCoordinate);
       }
     } else {
-      const objectFileRec = objectFileRecList[dbIndex] ?? objectFileRecList[0];
+      const objectFileRec =
+        objectFileRecordOverride ?? objectFileRecList[dbIndex] ?? objectFileRecList[0];
       fileFeatureRecord = objectFileRec;
-      fileGeometry = objectFileGeoms[dbIndex] ?? objectFileGeoms[0];
+      fileGeometry = objectFileRecordOverride
+        ? objectFileRecordOverride._geometry
+        : (objectFileGeoms[dbIndex] ?? objectFileGeoms[0]);
 
       fieldsToCompare.forEach((field) => {
         const dbVal = dbRecord[field] !== undefined ? dbRecord[field] : null;

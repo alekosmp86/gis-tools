@@ -78,6 +78,23 @@ export interface GeometryDifference {
   fileGeomRaw?: unknown;
 }
 
+export const PairingMethod = {
+  EXACT: "EXACT",
+  GEOMETRY: "GEOMETRY",
+  ELIMINATION: "ELIMINATION",
+  SKIPPED_CAP: "SKIPPED_CAP",
+  NO_GEOMETRY: "NO_GEOMETRY",
+} as const;
+
+export type PairingMethod = (typeof PairingMethod)[keyof typeof PairingMethod];
+
+export interface ItemPairing {
+  method: PairingMethod;
+  dbCount: number;
+  fileCount: number;
+  distance?: number;
+}
+
 export interface DiscrepancyItem {
   id: string;
   suid: string;
@@ -93,6 +110,7 @@ export interface DiscrepancyItem {
     targetCount: number;
     sourceCount: number;
   };
+  pairing?: ItemPairing;
 }
 
 export interface ComparisonSummary {
@@ -107,6 +125,8 @@ export interface ComparisonSummary {
   nullSuidCount: number;
   duplicateSuidCount: number;
   duplicateFileRowsSkipped?: number;
+  pairingCappedGroups?: number;
+  unkeyedUpdatesSkippedCount?: number;
   items: DiscrepancyItem[];
   sqlUpdateScript: string;
   sqlInsertScript: string;
