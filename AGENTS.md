@@ -27,7 +27,7 @@
 - **Diagnosis Is Never Delegated**: an unknown root cause is reasoning work. The orchestrator
   investigates, then delegates the fix.
 - **Gauntlet Before Review**: `implementer`/`test-writer` run the full local loop
-  (`modules:routes:check`, `lint`, `test`, `build`, `doctor`) on their branch and paste real output
+  (`modules:routes:check`, `lint`, `test`, `build`, `doctor`, `fallow`) on their branch and paste real output
   before reporting. Review never runs against unverified code.
 - **Severity Decides the Round**: **BLOCKER** (wrong behaviour, data loss, crash, security hole, or a
   test weakened/skipped to force green) and **MAJOR** (real defect, genuine performance problem,
@@ -43,7 +43,7 @@
 - **NEVER execute `git commit` automatically.** Only run `git commit` when the user explicitly instructs to commit changes.
 
 ## Verification & React Doctor Requirement
-- **Mandatory React Doctor Execution**: Always run `npm run doctor` (or `npx react-doctor`) along with `npm run lint` and `npm run build` after making any code changes.
+- **Mandatory React Doctor Execution**: Always run `npm run doctor` (or `npx react-doctor`) and `npm run fallow` along with `npm run lint` and `npm run build` after making any code changes.
 
 ## UI & Component Architecture
 - **Atomic & Reusable Components**: Never place entire pages or multi-section UIs inside a single monolithic file (like `page.tsx`).
@@ -136,7 +136,7 @@
 - **Principle — Tooling Lives on `main`**: Branch topology governs *promotion*, never *capability*. Test runners, linters and configuration are part of the codebase, so every branch cuts from `main` and inherits the full gauntlet. Never install tooling on `testing` alone.
 - **Principle — `testing` Is Disposable Staging**: Never fix, author, or accumulate work on it. Anything on it may be discarded at any moment.
 - **Principle — Tested Commit Is the Promoted Commit**: Promotion is a fast-forward of the exact object that passed the gauntlet, never a second unverified merge.
-- **Local Loop (every branch, before requesting promotion)**: The author runs `npm run lint`, `npm test`, `npm run build` and `npm run doctor` on their own branch. `testing` confirms integration; it is not where failures are discovered.
+- **Local Loop (every branch, before requesting promotion)**: The author runs `npm run lint`, `npm test`, `npm run build`, `npm run doctor` and `npm run fallow` on their own branch. `testing` confirms integration; it is not where failures are discovered.
 - **Step 1 — Integrate `main` into the Candidate**: `git fetch origin`, `git merge origin/main` on the candidate branch, so conflicts are resolved by the author where the context lives. Re-run the local loop afterwards.
 - **Step 2 — Stage the Candidate on `testing`**: `git checkout testing`, `git reset --hard <feature-or-fix-branch>`. No merge, so `testing` cannot hold a combination that differs from what will be promoted. Align a published `testing` with `git push --force-with-lease` — never plain `--force`.
 - **Step 3 — Run Quality Gauntlet** (cheapest and most frequently failing first):
@@ -145,6 +145,7 @@
   3. `npm test` (all suites green) — Vitest. Playwright end-to-end runs separately via `npm run test:e2e` and is not part of this gauntlet.
   4. `npm run build` (clean Turbopack production build).
   5. `npm run doctor` (**zero findings**; the score API is unreachable behind the local TLS interception, so `Score unavailable` is expected and is not a failure).
+  6. `npm run fallow` (**zero findings** or recorded exceptions in `.claude/baseline.json`; dead code, unused exports/dependencies, circular dependencies; config in `.fallowrc.json`).
 - **Never Weaken a Gate to Pass It**: When a test fails because the code produces an incorrect result, correct the code — never the assertion.
 - **Step 4A — Tactical Fork on Failure (RED)**:
   - Do NOT fix on `testing`; changes made there are discarded.

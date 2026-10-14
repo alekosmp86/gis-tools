@@ -11,10 +11,11 @@ Evidence: `package.json` scripts (root). No CI config found (`.github/workflows`
 | test (unit) | `npm test` / `npm run test:coverage` — Vitest | package.json:15,17 |
 | test (e2e) | `npm run test:e2e` — Playwright | package.json:18 |
 | static analysis | `npm run doctor` (`react-doctor`) | package.json:14 |
+| static analysis (dead code) | `npm run fallow` (`fallow dead-code --fail-on-issues`, config `.fallowrc.json`) | package.json:15 |
 | graph | `npm run graph` / `npm run graph:serve` — project already has its own `scripts/generate-dependency-graph.cjs`, separate from Graphify | package.json:21-22 |
 | generated routes check | `npm run modules:routes:check` | package.json:11 |
 
 ## Open questions
-- No dedicated `typecheck` script (e.g. `tsc --noEmit`) found in package.json. `AGENTS.md` and `.agents/rules/testing_branch_workflow.md` list the local gauntlet as lint → test → build → doctor; typecheck is presumably covered implicitly by `build` (Next.js type-checks during build). Confirm whether a standalone typecheck command is wanted for level-0 hooks.
+- No dedicated `typecheck` script (e.g. `tsc --noEmit`) found in package.json. `AGENTS.md` and `.agents/rules/testing_branch_workflow.md` list the local gauntlet as lint → test → build → doctor → fallow; typecheck is presumably covered implicitly by `build` (Next.js type-checks during build). Confirm whether a standalone typecheck command is wanted for level-0 hooks.
 - No CI workflow file exists under `.github/workflows`. All commands above are evidenced from scripts only; `testing_branch_workflow.md` describes a branch-based local+testing-branch gauntlet instead of CI. Level 3 (PR/CI) in the leveled-verification model (design doc section 6) has no CI to hook into yet — record as `not-applicable` for now.
 - Test suite duration not yet measured (requires running the suite — delegated to baseline phase, section 5 of design doc, since the orchestrator does not execute tests itself per project policy).

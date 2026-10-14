@@ -1,4 +1,18 @@
 {
+  "entry": ["src/modules/coverage-loads/shp/job/jobEntry.ts"],
+  "dynamicallyLoaded": [
+    "src/components/tools/db-sync-common/LoadedFileCard.module.css",
+    "src/components/tools/db-sync-common/SectionCard.module.css",
+    "src/modules/address-dedup/ui/DedupRemovalShared.module.css",
+    "src/ui-kit/components/HomeCard.module.css",
+    "src/ui-kit/components/IconTile.module.css"
+  ],
+  "ignoreExports": [
+    {
+      "file": "src/components/tools/db-sync-common/DiscrepancyTypeBadge.module.css",
+      "exports": ["badge"]
+    }
+  ],
   "duplicates": {
     "ignore": ["src/app/tools/m/**", "src/app/api/m/**"]
   }

@@ -4,7 +4,7 @@
    - Do NOT run `git commit` unless explicitly instructed by the user.
 
 2. **Mandatory Verification & React Doctor**:
-   - Always run `npm run doctor` (or `npx react-doctor`), `npm run lint`, and `npm run build` after making any code changes.
+   - Always run `npm run doctor` (or `npx react-doctor`), `npm run fallow`, `npm run lint`, and `npm run build` after making any code changes.
 
 3. **Mandatory Planning Requirement**:
    - Always plan before implementing: create or update the `implementation_plan.md` artifact before making code modifications for any complex task or feature.

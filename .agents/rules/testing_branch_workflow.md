@@ -26,6 +26,7 @@ npm run lint
 npm test
 npm run build
 npm run doctor
+npm run fallow
 ```
 
 ## 2. Step 1 — Integrate `main` into the candidate
@@ -63,6 +64,9 @@ Run on `testing`, in this order — cheapest and most frequently failing first:
 3. `npm test` — all unit and integration suites green.
 4. `npm run build` — clean Next.js Turbopack production build.
 5. `npm run doctor` — **zero findings**.
+6. `npm run fallow` — **zero findings** (dead code, unused exports/types/files/dependencies, circular
+   dependencies, architecture boundaries), or only findings recorded in `.claude/baseline.json`
+   `exceptions` with a reason.
 
 ### Gate notes
 
@@ -76,6 +80,11 @@ Run on `testing`, in this order — cheapest and most frequently failing first:
 - **The doctor gate is findings-based, not score-based.** React Doctor's score API is unreachable
   behind the local TLS interception, so `Score unavailable` is expected and is not a failure. The
   criterion is that the run reports no findings.
+- **The fallow gate is findings-based.** `npm run fallow` runs `fallow dead-code --fail-on-issues`,
+  configured by `.fallowrc.json`. Fix real findings; add an `entry`/`dynamicallyLoaded`/`ignoreExports`
+  rule only for a verified false positive (spawned child-process entry, CSS `composes` targets),
+  never to hide dead code. Duplication (`fallow dupes`) and complexity (`fallow health`) are advisory,
+  not part of the gate.
 - **Never weaken a gate to make it pass.** Tests are the specification: when a test fails because the
   code produces an incorrect result, the code is corrected — never the assertion.
 
