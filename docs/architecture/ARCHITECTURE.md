@@ -14,7 +14,7 @@ This document provides a comprehensive overview of the system architecture, desi
 3. **Zero-Allocation Binary Shapefile Engine**: Low-level binary dBase III/IV and ESRI Shapefile parsers with string interning, zero ArrayBuffer copies, and row-index hashing capable of handling **1,000,000+ records**.
 4. **Decoupled Component Architecture**: Strict separation between UI components, custom state hooks, domain models, worker sub-modules, and parsers.
 5. **Strategy Pattern**: Extensible `ISpatialFileParser` and `IComparisonEngine` interfaces allow adding new file parsers or comparison engines without modifying existing business logic.
-6. **Zero Data Loss Audit**: Explicit auditing and reporting for records with Null/Empty SUIDs and Duplicate SUIDs.
+6. **Zero Data Loss Audit**: Explicit auditing and reporting for records with Null/Empty SUIDs and Duplicate SUIDs. Rows inside non-unique keys are paired (content, then geometry) so their changes are still detected; only identical repeats and unpairable rows stay `DUPLICATE_SUID` (Issue 033).
 7. **Composite SUID Keys**: Supports composite primary keys formed by multiple database columns (e.g., `coddepto` + `codloccat` + `padron` + `numcarcat`).
 8. **Automatic PostGIS Geometry Synchronization**: Discovers geometry columns in PostgreSQL and automatically generates `ST_SetSRID` / `ST_Transform` expressions in both `UPDATE` and `INSERT` SQL scripts.
 9. **Decoupled Sub-Hook Map Architecture**: Leaflet map functionality is composed of 5 single-responsibility sub-hooks (`useMapInstance`, `useBasemapTileLayer`, `useVectorChunkStream`, `useFeatureHighlight`, `useLayerSymbology`).

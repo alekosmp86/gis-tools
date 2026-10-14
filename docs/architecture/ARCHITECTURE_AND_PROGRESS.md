@@ -76,6 +76,7 @@ This document documents major milestone updates, architectural decisions, and pr
 ### 9. 1M+ Heap Optimization & Omission of 30M+ Allocations
 - **Decision**: In [`MatchedRecordsComparator.ts`](src/workers/comparison/MatchedRecordsComparator.ts), omitted `computeOnlyInDbDifferences` for `ONLY_IN_DB` and `DUPLICATE_SUID` without file match, setting `differences: []` and omitting raw `dbRecord` references.
 - **Benefits**: Eliminated 30,000,000 to 50,000,000 temporary `AttributeDifference` objects from being allocated in the V8 heap, preventing worker out-of-memory crashes.
+- **Update (Issue 033)**: `DUPLICATE_SUID` no longer hides attribute/geometry changes on non-unique keys. Rows in colliding SUID groups are paired (identical content, then geometry distance, then elimination) in `KeyGroupPairing.ts`; `DUPLICATE_SUID` now only marks repeated identical DB rows and rows that cannot be paired (no geometry, or group over the 40,000-candidate cap).
 
 ### 10. CSV Geometry UPDATE SQL Generation & SOLID Refactoring (Issue 016)
 - **Decision**: Lifted binary DBF restrictions in `SqlPatchGenerator.ts` so that geometry differences in CSV and tabular sources generate PostGIS UPDATE queries with EWKB Hex or WKT geometries. Refactored the class to follow the Parameter Object pattern (`SqlPatchGeneratorParams`) with clean helper decomposition.

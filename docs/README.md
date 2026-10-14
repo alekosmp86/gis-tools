@@ -71,6 +71,4 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ISSUE_030_VIEWPORT_WINDOWED_MAP_RENDERING.md`](docs/issues/ISSUE_030_VIEWPORT_WINDOWED_MAP_RENDERING.md) — Viewport-windowed map rendering over uniform 2D grid spatial index, bounding concurrent Leaflet DOM/canvas layer allocations to screen density and enabling smooth 1M+ feature rendering.
 - [`ISSUE_031_CATALOG_DOWNLOAD_PROGRESS_AND_PARSE_FREEZE.md`](docs/issues/ISSUE_031_CATALOG_DOWNLOAD_PROGRESS_AND_PARSE_FREEZE.md) — Catalogue-file streaming download progress feedback, macrotask event-loop yielding (`PARSE_PROGRESS_CHUNK_SIZE`), and `<ProgressBar>` integration eliminating UI freezes during large file processing.
 - [`ISSUE_032_DISCREPANCY_MAP_HIDDEN_TAB_VIEWPORT_FIT.md`](docs/issues/ISSUE_032_DISCREPANCY_MAP_HIDDEN_TAB_VIEWPORT_FIT.md) — Discrepancy map viewport fit racing a hidden (zero-size) tab container, resolved by visibility-aware windowing (`isVisible`), Leaflet size invalidation before bounds queries, and tab-revisit camera position preservation.
-
-
-
+- [`ISSUE_033_NON_UNIQUE_KEY_ROW_PAIRING.md`](docs/issues/ISSUE_033_NON_UNIQUE_KEY_ROW_PAIRING.md) — Attribute and geometry changes hidden on non-unique SUID keys because every row of a colliding key was classified `DUPLICATE_SUID`, resolved by pairing rows inside key groups (identical content, geometry distance, elimination) with a safe UPDATE guard.
