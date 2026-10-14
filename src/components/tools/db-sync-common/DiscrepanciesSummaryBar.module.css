@@ -10,6 +10,19 @@
   filter: saturate(0.85);
 }
 
+.warningBanner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.08);
+  color: #fbbf24;
+  font-size: 0.8rem;
+}
+
 .kpiCard {
   background: rgba(9, 13, 22, 0.6);
   border: 1px solid var(--border-color);

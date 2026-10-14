@@ -112,8 +112,8 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         value={summary.duplicateSuidCount}
         subtitle={
           summary.duplicateFileRowsSkipped
-            ? `Claves repetidas (${summary.duplicateFileRowsSkipped} filas idénticas omitidas)`
-            : "Claves repetidas encontradas"
+            ? `Filas idénticas repetidas o no emparejables (${summary.duplicateFileRowsSkipped} idénticas omitidas)`
+            : "Filas idénticas repetidas o no emparejables"
         }
         icon={Copy}
         iconContainerClass={styles.iconDuplicate}
@@ -145,6 +145,24 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         isActive={activeFilter === DiscrepancyFilter.ONLY_IN_SHP}
         onClick={() => onSelectFilter(DiscrepancyFilter.ONLY_IN_SHP)}
       />
+      {summary.pairingCappedGroups ? (
+        <div className={styles.warningBanner}>
+          <AlertTriangle size={16} />
+          <span>
+            {summary.pairingCappedGroups} grupo(s) de claves repetidas demasiado grandes para
+            emparejar: sus filas se informan como duplicadas.
+          </span>
+        </div>
+      ) : null}
+      {summary.unkeyedUpdatesSkippedCount ? (
+        <div className={styles.warningBanner}>
+          <AlertTriangle size={16} />
+          <span>
+            {summary.unkeyedUpdatesSkippedCount} fila(s) emparejadas dentro de claves repetidas
+            no generan UPDATE porque no hay columna de clave primaria que las identifique.
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 };
