@@ -49,7 +49,7 @@ function main() {
     // keep process.cwd()
   }
 
-  const result = spawnSync("npx", ["vitest", "related", "--run", ...files], {
+  const result = spawnSync("npx", ["vitest", "related", "--run", "--maxWorkers=6", ...files], {
     cwd,
     timeout: BUDGET_MS,
     encoding: "utf8",
