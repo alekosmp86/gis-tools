@@ -81,15 +81,11 @@ export function useSqlBatchExecution({
     }
   };
 
-  const handleFinish = () => {
-    if (result && onExecutionCompleted) {
-      onExecutionCompleted(result);
-    }
-    handleClose();
-  };
-
   const handleClose = () => {
     if (isExecuting) return;
+    if (isCompleted && result && onExecutionCompleted) {
+      onExecutionCompleted(result);
+    }
     setIsExecuting(false);
     setIsCompleted(false);
     setProgress(null);
@@ -97,6 +93,8 @@ export function useSqlBatchExecution({
     setGeneralError(null);
     onClose();
   };
+
+  const handleFinish = handleClose;
 
   const toggleShowPassword = () => setShowPassword((prev) => !prev);
 
