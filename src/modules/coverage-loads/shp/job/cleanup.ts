@@ -53,7 +53,7 @@ async function lastGrowthMs(rootDir: string, status: JobStatus): Promise<number>
 /** READY (never started) -> CANCELLED. The source and the lock are released by the terminal pass. */
 export async function cancelReadyStatus(rootDir: string, status: JobStatus, now: number): Promise<void> {
   finalizeStatus(status, { kind: "CANCELLED" }, now);
-  await writeStatusAtomic(rootDir, status.jobId, JSON.stringify(status, null, 2));
+  await writeStatusAtomic(rootDir, status.jobId, JSON.stringify(status, null, 2), { durable: true });
 }
 
 async function isReadyAbandoned(rootDir: string, status: JobStatus, now: number): Promise<boolean> {
@@ -81,7 +81,7 @@ async function sweepOne(rootDir: string, jobId: string, now: number, deps: Sweep
 
   if (isJobDead(status, now, deps)) {
     markCrashed(status, now);
-    await writeStatusAtomic(rootDir, jobId, JSON.stringify(status, null, 2));
+    await writeStatusAtomic(rootDir, jobId, JSON.stringify(status, null, 2), { durable: true });
     summary.crashed.push(jobId);
   }
 

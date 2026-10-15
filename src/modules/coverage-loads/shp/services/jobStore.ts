@@ -37,5 +37,5 @@ export async function removeJobPayload(rootDir: string, jobId: string): Promise<
 }
 
 export function writeJobStatus(rootDir: string, status: JobStatus): Promise<void> {
-  return writeStatusAtomic(rootDir, status.jobId, JSON.stringify(status, null, 2));
+  return writeStatusAtomic(rootDir, status.jobId, JSON.stringify(status, null, 2), { durable: true });
 }
