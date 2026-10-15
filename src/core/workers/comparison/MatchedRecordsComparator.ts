@@ -136,7 +136,10 @@ export class MatchedRecordsComparator {
     const processedSuids = new Set<string>();
     let processedDbRecordCount = 0;
     let lastEmittedMilestone = 0;
-    const totalDbSuidEntries = params.dbSuidMap.size;
+    let totalDbRecords = 0;
+    params.dbSuidMap.forEach((dbRecList) => {
+      totalDbRecords += dbRecList.length;
+    });
 
     params.dbSuidMap.forEach((dbRecList, suidKey) => {
       processedSuids.add(suidKey);
@@ -146,7 +149,7 @@ export class MatchedRecordsComparator {
       const milestone = Math.floor(processedDbRecordCount / PROGRESS_EMIT_INTERVAL);
       if (milestone !== lastEmittedMilestone) {
         lastEmittedMilestone = milestone;
-        params.emit("Comparando registros...", processedDbRecordCount, totalDbSuidEntries);
+        params.emit("Comparando registros...", processedDbRecordCount, totalDbRecords);
       }
     });
 
