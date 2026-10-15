@@ -2,12 +2,13 @@ import { closeSync, openSync } from "node:fs";
 import path from "node:path";
 import type { DbConnection } from "../../types";
 import { CHILD_ENV_ALLOW_LIST, JOB_ENTRY_RELATIVE_PATH, JOB_NODE_ARGS } from "../constants";
+import { EXIT_CODE } from "../job/constants.ts";
 import type { JobSpawnConfig } from "../job/jobConfig.ts";
 import { jobPaths } from "../job/layout.ts";
 import { releaseTableLock } from "../job/lock.ts";
 import { readStatus } from "../job/statusFile.ts";
 import { finalizeStatus } from "../job/statusTransitions.ts";
-import { JOB_STATE } from "../job/types.ts";
+import { JOB_STATE, LIVE_STATES } from "../job/types.ts";
 import type { JobMode, JobStatus } from "../job/types.ts";
 import { writeJobStatus } from "./jobStore";
 import type { ShpContext } from "./shpContext";
@@ -17,6 +18,8 @@ export const SPAWN_FAILED_CODE = "SPAWN_FAILED";
 export const SPAWN_FAILED_MESSAGE = "No se pudo iniciar el proceso de carga.";
 const FAIL_RETRY_ATTEMPTS = 6;
 const FAIL_RETRY_BACKOFF_MS = 40;
+const STATUS_WRITE_FAILED_CODE = "STATUS_WRITE_FAILED";
+const STATUS_WRITE_FAILED_MESSAGE = "El proceso de carga no pudo escribir su estado final. Revise el registro de la carga.";
 const EARLY_EXIT_MESSAGE = (code: number | null) =>
   `El proceso de carga terminó antes de iniciar (código ${code ?? "desconocido"}). Revise el registro de la carga.`;
 
@@ -49,6 +52,15 @@ export async function failIfStillReady(context: ShpContext, jobId: string, code:
   await releaseTableLock(context.rootDir, status.target.table, jobId);
 }
 
+/** The job exited because it could not record its final state: a still-live status is closed as FAILED here. */
+async function failIfStillLive(context: ShpContext, jobId: string): Promise<void> {
+  const status = await readStatus(context.rootDir, jobId);
+  if (status === null || !LIVE_STATES.includes(status.state)) return;
+  finalizeStatus(status, { kind: "FAILED", error: { code: STATUS_WRITE_FAILED_CODE, message: STATUS_WRITE_FAILED_MESSAGE } }, context.now());
+  await writeJobStatus(context.rootDir, status);
+  await releaseTableLock(context.rootDir, status.target.table, jobId);
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -77,6 +89,7 @@ function watchChild(context: ShpContext, child: ChildLike, jobId: string): void 
   child.once("error", () => void failIfStillReadyWithRetry(context, jobId, SPAWN_FAILED_CODE, SPAWN_FAILED_MESSAGE).catch(() => undefined));
   child.once("exit", (code) => {
     if (code === 0) return;
+    if (code === EXIT_CODE.STATUS_WRITE_FAILED) void failIfStillLive(context, jobId).catch(() => undefined);
     void failIfStillReadyWithRetry(context, jobId, SPAWN_FAILED_CODE, EARLY_EXIT_MESSAGE(code)).catch(() => undefined);
   });
 }

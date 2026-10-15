@@ -30,6 +30,14 @@ export const HARD_KILL_GRACE_MS = 15 * MS_PER_SECOND;
 
 export const STATUS_RENAME_RETRIES = 3;
 export const STATUS_RENAME_BACKOFF_MS = 25;
+/** Terminal and state-changing writes are never superseded, so they keep retrying this long. */
+export const STATUS_DURABLE_BUDGET_MS = 10 * MS_PER_SECOND;
+export const STATUS_DURABLE_BACKOFF_START_MS = 25;
+export const STATUS_DURABLE_BACKOFF_CAP_MS = 500;
+/** How many times the runtime repeats a whole terminal write (each with the durable budget). */
+export const STATUS_FINAL_WRITE_ATTEMPTS = 2;
+export const STATUS_READ_RETRIES = 3;
+export const STATUS_READ_BACKOFF_MS = 20;
 
 export const PG_CONNECTION_TIMEOUT_MS = 15 * MS_PER_SECOND;
 export const PG_KEEPALIVE_INITIAL_DELAY_MS = 10 * MS_PER_SECOND;
@@ -65,7 +73,7 @@ export function workTableName(table: ShpTable): string {
   return `${WORK_TABLE_PREFIX}${table}`;
 }
 
-export const EXIT_CODE = { SUCCEEDED: 0, FAILED: 1, CANCELLED: 2, BAD_CONFIG: 3 } as const;
+export const EXIT_CODE = { SUCCEEDED: 0, FAILED: 1, CANCELLED: 2, BAD_CONFIG: 3, STATUS_WRITE_FAILED: 4 } as const;
 
 /**
  * Two-int advisory lock key `(namespace, table id)`, taken by the loader with `pg_try_advisory_lock`

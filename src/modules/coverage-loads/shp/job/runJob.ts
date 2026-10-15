@@ -8,7 +8,7 @@ import { acquireTableLock, releaseTableLock, TableLockHeldError } from "./lock.t
 import type { LockDeps } from "./lock.ts";
 import type { JobPipeline, PipelineOutcome } from "./pipeline.ts";
 import { createRealPipeline } from "./realPipeline.ts";
-import { createJobRuntime } from "./runtime.ts";
+import { createJobRuntime, FinalStatusWriteError } from "./runtime.ts";
 import type { JobRuntime, TimerApi } from "./runtime.ts";
 import { createScrubber, errorText } from "./scrub.ts";
 import type { Scrubber } from "./scrub.ts";
@@ -88,6 +88,9 @@ async function finish(runtime: JobRuntime, deps: RunJobDeps, status: JobStatus, 
   try {
     const final = await runtime.complete(outcome);
     return EXIT_BY_STATE[final.state] ?? EXIT_CODE.FAILED;
+  } catch (error) {
+    if (error instanceof FinalStatusWriteError) return EXIT_CODE.STATUS_WRITE_FAILED;
+    throw error;
   } finally {
     await releaseTableLock(deps.rootDir, status.target.table, status.jobId).catch(() => undefined);
   }

@@ -3,7 +3,7 @@
  *   node --disable-warning=ExperimentalWarning shp/job/jobEntry.ts [--root <dir>] < config.json
  *   node --disable-warning=ExperimentalWarning shp/job/jobEntry.ts --self-test
  * Reads ALL of stdin (one JSON config, secrets included) before doing anything else. Nothing from the
- * config is ever printed. Exit: 0 succeeded, 1 failed, 2 cancelled, 3 bad config.
+ * config is ever printed. Exit: 0 succeeded, 1 failed, 2 cancelled, 3 bad config, 4 final status.json could not be written.
  */
 import { EXIT_CODE } from "./constants.ts";
 import { parseJobConfig } from "./jobConfig.ts";
@@ -41,6 +41,7 @@ async function main(args: readonly string[]): Promise<number> {
   const rootDir = parsed.config.rootDir ?? rootFromArgs(args) ?? defaultRootDir();
   const code = await runJob(parsed.config, { rootDir });
   if (code === EXIT_CODE.BAD_CONFIG) process.stderr.write("La carga no pudo iniciarse: estado inexistente o no READY.\n");
+  if (code === EXIT_CODE.STATUS_WRITE_FAILED) process.stdout.write("No se pudo escribir el estado final de la carga (status.json). Revise el registro de la carga.\n");
   return code;
 }
 
