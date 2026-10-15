@@ -356,6 +356,27 @@ data/coverage-loads/
 `overallFraction`), `expectedMs, startedAt, updatedAt, heartbeatAt, pid, nodeVersion, gates, testReport,
 leftovers, cancelRequested, error {code,message,stage}`. Written atomically (`.tmp` + rename).
 
+### Status write retries
+
+On Windows the rename of `status.json.tmp` over `status.json` can fail (`EPERM`/`EBUSY`/`EACCES`) while a
+scanner or reader holds the file; under a stress loop (readers every 3 ms) about 1% of the writes with
+the short budget below ran out of retries. Two budgets (`shp/job/statusFile.ts`):
+
+- **Short** (heartbeat, progress, stage change; written through `createStatusWriter.write(status)`):
+  3 retries with 25/50/75 ms backoff, then the write is dropped (logged WARN, never thrown into the
+  pipeline) because the next write supersedes it.
+- **Durable** (`{ durable: true }`: the RUNNING write, the terminal write, and every parent-side
+  `writeJobStatus` / sweeper / cancel write): retries the whole tmp write + rename (`EPERM`, `EBUSY`,
+  `EACCES`, and `ENOENT` on the rename) for up to 10 s with capped exponential backoff (25 ms doubling
+  to 500 ms, 50-100% jitter). A durable write coalesced into a pending short one upgrades it.
+
+The runtime repeats a failed terminal write once more (2 x 10 s). If it still cannot be written, the
+job logs the scrubbed reason to `job.log`, prints a fixed message on stdout and exits with code **4**;
+the parent's `watchChild` then marks a still-live job FAILED (`STATUS_WRITE_FAILED`) and frees its lock
+(the sweeper's dead-job rule is the fallback). `readStatus` retries 3 x 20 ms on `EPERM`/`EBUSY`/`EACCES`
+before answering `null`; `ENOENT` is answered at once. Exit codes: 0 succeeded, 1 failed, 2 cancelled,
+3 bad config, 4 final status not written.
+
 ### Upload and spawn
 
 The upload streams the request body to `upload.part` with backpressure (`pipeline`) and bounded memory,
