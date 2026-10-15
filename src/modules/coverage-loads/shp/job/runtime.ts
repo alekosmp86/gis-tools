@@ -4,6 +4,7 @@ import {
   HARD_KILL_GRACE_MS,
   HEARTBEAT_INTERVAL_MS,
   PROGRESS_WRITE_THROTTLE_MS,
+  STATUS_FINAL_WRITE_ATTEMPTS,
 } from "./constants.ts";
 import { createJobLog } from "./jobLog.ts";
 import { jobPaths } from "./layout.ts";
@@ -66,6 +67,14 @@ export interface JobRuntime {
   close(): Promise<void>;
 }
 
+/** The terminal status could not be written even after every retry: the process must exit non-zero. */
+export class FinalStatusWriteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FinalStatusWriteError";
+  }
+}
+
 async function fileExists(file: string): Promise<boolean> {
   return access(file).then(
     () => true,
@@ -103,6 +112,22 @@ export function createJobRuntime(options: JobRuntimeOptions): JobRuntime {
   function persist(): Promise<void> {
     lastWriteAt = now();
     return writer.write(status);
+  }
+
+  function persistDurably(): Promise<void> {
+    lastWriteAt = now();
+    return writer.write(status, { durable: true });
+  }
+
+  async function persistFinal(attemptsLeft: number): Promise<void> {
+    try {
+      await persistDurably();
+    } catch (error) {
+      const reason = errorText(error, "error desconocido");
+      log(LOG_LEVEL.ERROR, `No se pudo escribir el estado final en status.json: ${reason}`);
+      if (attemptsLeft <= 1) throw new FinalStatusWriteError(reason);
+      await persistFinal(attemptsLeft - 1);
+    }
   }
 
   function persistQuietly(): void {
@@ -183,7 +208,7 @@ export function createJobRuntime(options: JobRuntimeOptions): JobRuntime {
       status.nodeVersion = nodeVersion;
       status.startedAt = new Date(now()).toISOString();
       touch();
-      await persist();
+      await persistDurably();
     },
     startTimers() {
       heartbeatHandle = timers.setInterval(beat, timing.heartbeatMs);
@@ -199,7 +224,7 @@ export function createJobRuntime(options: JobRuntimeOptions): JobRuntime {
         outcome.kind === "FAILED" ? { kind: "FAILED", error: { ...outcome.error, message: scrub(outcome.error.message) } } : outcome;
       finalizeStatus(status, settled, now());
       touch();
-      await persist();
+      await persistFinal(STATUS_FINAL_WRITE_ATTEMPTS);
       log(LOG_LEVEL.INFO, `Carga finalizada: ${status.state}.`);
       return status;
     },

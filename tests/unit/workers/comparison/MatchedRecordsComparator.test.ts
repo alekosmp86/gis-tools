@@ -926,7 +926,8 @@ describe("MatchedRecordsComparator", () => {
 
       // Assert
       expect(emitted.map(([, current]) => current)).toEqual([10_001, 35_001, 40_002]);
-      expect(emitted.every(([, , total]) => total === 5)).toBe(true);
+      expect(emitted.every(([, , total]) => total === 40_002)).toBe(true);
+      expect(emitted.every(([, current, total]) => current <= total)).toBe(true);
       expect(emitted.every(([phase]) => typeof phase === "string" && phase.length > 0)).toBe(true);
     });
 
