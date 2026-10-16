@@ -56,3 +56,14 @@ It natively supports PostGIS geometry representations encoded in tabular data, i
 - The 40,000-candidate cap applies to the geometry-row product (DB geometry rows x file geometry rows) after the exact pass, not to the raw group size.
 - Unkeyed paired rows never produce an UPDATE (counted in `unkeyedUpdatesSkippedCount`). INSERTs generated from collision groups may repeat an existing key; a unique constraint would reject them.
 - Counts reconcile: DB rows = match + attribute + geometry + onlyInDb + duplicate (DB side); file rows = match + attribute + geometry + onlyInShp + duplicate (file side) + skipped.
+
+## 5. Selección de registros
+La tabla de discrepancias incluye una casilla por registro (no por fila de campo). Solo los registros seleccionados alimentan el generador SQL, las vistas previas, los contadores y las acciones Copiar, Descargar y Ejecutar en BD.
+
+- Seleccionables: `ATTRIBUTE_MISMATCH`, `GEOMETRY_MISMATCH` y `ONLY_IN_SHP`. Sin casilla: `ONLY_IN_DB`, `DUPLICATE_SUID`, `NULL_SUID`, `MATCH`.
+- Registros emparejados sin clave primaria (`isUnkeyedPairedItem`): casilla deshabilitada ("Sin clave primaria: no se puede actualizar de forma segura").
+- Por defecto se seleccionan todos los registros seleccionables y habilitados (constante `DEFAULT_SELECT_ALL = true` en `src/core/selection/selectionDefaults.ts`); el usuario puede usar "Limpiar selección". Sin selección no se invoca al worker y las acciones quedan deshabilitadas.
+- La selección persiste entre paginación, filtros y pestañas; se reinicia al cambiar la comparación y se depura tras la re-analización posterior a una ejecución.
+- Tras ejecutar un script, el estado "ejecutado" se reinicia cuando cambia la selección. Si la selección cambia mientras se genera el script completo, se descarta el resultado y se muestra "La selección cambió durante la generación del script. Vuelva a intentarlo."
+- Barra de selección: "Seleccionar página", "Seleccionar todos (filtro actual)", "Deseleccionar página", "Limpiar selección".
+- Las tarjetas KPI y el aviso de actualizaciones omitidas conservan los valores completos del motor.
