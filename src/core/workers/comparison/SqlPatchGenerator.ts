@@ -4,23 +4,14 @@ import type {
   SqlPatchSummary,
 } from "@/core/types/comparison";
 import { DiscrepancyType } from "@/core/types/comparison";
+import { isUnkeyedPairedItem } from "@/core/selection/unkeyedPairing";
 import { SqlScriptBuilder } from "./SqlScriptBuilder";
 import { PatchCollector } from "./PatchCollector";
 import type { BinaryShpReader } from "@/core/binary/BinaryShpReader";
 
 export type { SqlPatchSummary };
 
-/**
- * A row paired inside a non-unique key group has no safe WHERE clause without a primary key:
- * the composite SUID would match every row of the group.
- */
-export function isUnkeyedPairedItem(
-  item: DiscrepancyItem,
-  primaryKeyColumn?: string | null
-): boolean {
-  if (!item.pairing) return false;
-  return !(primaryKeyColumn && item.dbRecord && item.dbRecord[primaryKeyColumn] != null);
-}
+export { isUnkeyedPairedItem };
 
 export interface SqlPatchGeneratorParams {
   dbSchemaName: string;
