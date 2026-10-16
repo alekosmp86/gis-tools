@@ -96,6 +96,8 @@ async function sweepOne(rootDir: string, jobId: string, now: number, deps: Sweep
 
 async function sweepOrphanLocks(rootDir: string, now: number, deps: SweepDeps, summary: SweepSummary): Promise<void> {
   for (const table of SHP_TABLES) {
+    // Sequential on purpose: one lock per table, swept in a fixed order while jobs may be running.
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
     const lock = await readLock(rootDir, table);
     if (lock === null || !(await isLockStale(rootDir, lock, table, { ...deps, now: () => now }))) continue;
     if (await releaseTableLock(rootDir, table, lock.jobId)) summary.locksRemoved.push(lock.jobId);
