@@ -5,6 +5,7 @@ import {
   hasRequiredConnectionParams,
   inspectRecordsTable,
   parseRecordsRequest,
+  RAW_TEXT_TYPES,
 } from "@/core/services/server/dbRecordsQuery";
 import { STREAMING_RECORD_THRESHOLD, STREAMING_CHUNK_BATCH_SIZE } from "@/core/constants/databaseConstants";
 
@@ -41,6 +42,8 @@ export async function POST(request: Request) {
 
     const dataQuery = buildRecordsDataQuery(info, params.limit, params.offset);
 
+    const queryData = (text: string) =>
+      params.raw_text_values ? client.query({ text, types: RAW_TEXT_TYPES }) : client.query(text);
     const encoder = new TextEncoder();
 
     // 4. Create Web ReadableStream for progressive NDJSON delivery
@@ -61,7 +64,7 @@ export async function POST(request: Request) {
 
           if (totalCount <= STREAMING_RECORD_THRESHOLD) {
             // Fast single-shot fetch for small datasets
-            const singleResult = await client.query(dataQuery);
+            const singleResult = await queryData(dataQuery);
             controller.enqueue(
               encoder.encode(
                 JSON.stringify({
@@ -81,7 +84,7 @@ export async function POST(request: Request) {
             let hasMore = true;
 
             while (hasMore) {
-              const fetchResult = await client.query(
+              const fetchResult = await queryData(
                 `FETCH ${STREAMING_CHUNK_BATCH_SIZE} FROM db_stream_cursor;`
               );
               const batchRows = fetchResult.rows;

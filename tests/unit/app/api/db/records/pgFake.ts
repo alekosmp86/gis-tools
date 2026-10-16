@@ -13,7 +13,10 @@ export class FakeClient {
   });
   end = vi.fn(async () => undefined);
   sqls: string[] = [];
-  query = vi.fn(async (sql: string, params?: unknown[]) => {
+  queryArgs: unknown[] = [];
+  query = vi.fn(async (arg: string | { text: string; types?: unknown }, params?: unknown[]) => {
+    const sql = typeof arg === "string" ? arg : arg.text;
+    this.queryArgs.push(arg);
     this.sqls.push(sql);
     return FakeClient.responder(sql, params);
   });

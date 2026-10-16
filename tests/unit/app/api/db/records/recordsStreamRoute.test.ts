@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/db/records/stream/route";
 import { STREAMING_CHUNK_BATCH_SIZE, STREAMING_RECORD_THRESHOLD } from "@/core/constants/databaseConstants";
+import { RAW_TEXT_TYPES } from "@/core/services/server/dbRecordsQuery";
 import { FakeClient, jsonReq, script, type DbScript } from "./pgFake";
 
 vi.mock("pg", async () => {
@@ -169,6 +170,71 @@ describe("POST /api/db/records/stream", () => {
       expect(countIdx).toBeGreaterThan(-1);
       expect(countIdx).toBeLessThan(beginIdx);
       expect(client.sqls.filter((s) => s.trim().startsWith("SELECT") && s.includes("FROM") && !s.includes("COUNT") && !s.includes("information_schema"))).toHaveLength(0);
+    });
+  });
+
+  describe("raw_text_values", () => {
+    const isDataSelect = (s: string) =>
+      s.trim().startsWith("SELECT") && !s.includes("COUNT") && !s.includes("information_schema");
+    const objectArgs = (client: FakeClient) =>
+      client.queryArgs.filter((a): a is { text: string; types: unknown } => typeof a === "object" && a !== null);
+
+    it("should pass { text, types: RAW_TEXT_TYPES } to the single-shot data query when the flag is true", async () => {
+      const { client } = await run({ count: 2, dataRows: rowsOf(2) }, { raw_text_values: true });
+
+      const objs = objectArgs(client);
+      expect(objs).toHaveLength(1);
+      expect(isDataSelect(objs[0].text)).toBe(true);
+      expect(objs[0].types).toBe(RAW_TEXT_TYPES);
+    });
+
+    it("should not pass types to COUNT or inspect queries when the flag is true", async () => {
+      const { client } = await run({ count: 2, dataRows: rowsOf(2) }, { raw_text_values: true });
+
+      const plain = client.queryArgs.filter((a) => typeof a === "string") as string[];
+      expect(plain.some((s) => s.includes("COUNT(*)"))).toBe(true);
+      expect(plain.some((s) => s.includes("information_schema.columns"))).toBe(true);
+      expect(objectArgs(client).some((o) => o.text.includes("COUNT(*)") || o.text.includes("information_schema"))).toBe(
+        false
+      );
+    });
+
+    it("should call plain client.query(text) for the data query when the flag is absent", async () => {
+      const { client } = await run({ count: 2, dataRows: rowsOf(2) });
+
+      expect(objectArgs(client)).toHaveLength(0);
+      expect(client.queryArgs.every((a) => typeof a === "string")).toBe(true);
+    });
+
+    it.each(["true", 1, false, null])("should call plain client.query when the flag is %j", async (flag) => {
+      const { client } = await run({ count: 2, dataRows: rowsOf(2) }, { raw_text_values: flag });
+
+      expect(objectArgs(client)).toHaveLength(0);
+    });
+
+    it("should apply raw types to every cursor FETCH but not BEGIN, DECLARE, CLOSE or COMMIT", async () => {
+      const { client } = await run(
+        { count: STREAMING_RECORD_THRESHOLD + 1, fetchBatches: [rowsOf(STREAMING_CHUNK_BATCH_SIZE), rowsOf(3)] },
+        { raw_text_values: true }
+      );
+
+      const objs = objectArgs(client);
+      expect(objs).toHaveLength(2);
+      objs.forEach((o) => {
+        expect(o.text).toBe(`FETCH ${STREAMING_CHUNK_BATCH_SIZE} FROM db_stream_cursor;`);
+        expect(o.types).toBe(RAW_TEXT_TYPES);
+      });
+      const plain = client.queryArgs.filter((a) => typeof a === "string") as string[];
+      expect(plain).toContain("BEGIN;");
+      expect(plain.some((s) => s.startsWith("DECLARE"))).toBe(true);
+      expect(plain).toContain("CLOSE db_stream_cursor;");
+      expect(plain).toContain("COMMIT;");
+    });
+
+    it("should use plain FETCH strings in cursor mode when the flag is absent", async () => {
+      const { client } = await run({ count: STREAMING_RECORD_THRESHOLD + 1, fetchBatches: [rowsOf(3)] });
+
+      expect(objectArgs(client)).toHaveLength(0);
     });
   });
 
