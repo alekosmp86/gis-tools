@@ -113,6 +113,48 @@ describe("useWizardMappingState", () => {
     expect(result.current.currentStep).toBe(3);
   });
 
+  describe("stepOffset", () => {
+    it("should navigate to steps 4 and 5 with an explicit offset of 0", () => {
+      const { result, act } = renderHook(() => useWizardMappingState(0));
+      act(() => result.current.handleMappingSuccess(cfg({ suid: "a" })));
+      expect(result.current.currentStep).toBe(4);
+      act(() => result.current.handleSyncParametersSuccess(cfg({ only: true })));
+      expect(result.current.currentStep).toBe(5);
+    });
+
+    it("should navigate to step 5 on mapping success with an offset of 1", () => {
+      const { result, act } = renderHook(() => useWizardMappingState(1));
+      act(() => result.current.handleMappingSuccess(cfg({ suid: "a" })));
+      expect(result.current.currentStep).toBe(5);
+      expect(result.current.mappingConfig).toEqual({ suid: "a" });
+    });
+
+    it("should navigate to step 6 on sync parameters success with an offset of 1", () => {
+      const { result, act } = renderHook(() => useWizardMappingState(1));
+      act(() => result.current.handleSyncParametersSuccess(cfg({ only: true })));
+      expect(result.current.currentStep).toBe(6);
+      expect(result.current.mappingConfig).toEqual({ only: true });
+    });
+
+    it.each([0, 1])("should only allow backwards step clicks with an offset of %i", (offset) => {
+      const { result, act } = renderHook(() => useWizardMappingState(offset));
+      act(() => result.current.setCurrentStep(4));
+      act(() => result.current.handleStepClick(2));
+      expect(result.current.currentStep).toBe(2);
+      act(() => result.current.handleStepClick(2));
+      expect(result.current.currentStep).toBe(2);
+      act(() => result.current.handleStepClick(6));
+      expect(result.current.currentStep).toBe(2);
+    });
+
+    it("should not shift step click targets by the offset", () => {
+      const { result, act } = renderHook(() => useWizardMappingState(1));
+      act(() => result.current.handleMappingSuccess(cfg({ suid: "a" })));
+      act(() => result.current.handleStepClick(4));
+      expect(result.current.currentStep).toBe(4);
+    });
+  });
+
   it("should update step and mapping readiness through their setters", () => {
     const { result, act } = renderHook(() => useWizardMappingState());
     act(() => result.current.setCurrentStep(2));
