@@ -156,6 +156,8 @@ async function sweepRound(
     for (let g = rs; g < re; g += slicePoints) {
       ctx.signal?.throwIfAborted();
       const cnt = Math.min(slicePoints, re - g);
+      // Sequential on purpose: every slice reuses the same buffer and the winding state carries over.
+      // react-doctor-disable-next-line react-doctor/async-await-in-loop
       await ctx.fileWindow.copy(ctx.slice.bytes, 0, rec.pointsOffset + 16 * g, cnt * 16);
       let k = 0;
       if (g === rs) {

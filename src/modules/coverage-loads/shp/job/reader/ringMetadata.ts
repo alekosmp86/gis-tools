@@ -96,6 +96,8 @@ export async function computeRingMetadata(
   for (let g = 0; g < rec.numPoints; g += slicePoints) {
     signal?.throwIfAborted();
     const cnt = Math.min(slicePoints, rec.numPoints - g);
+    // Sequential on purpose: every slice reuses the same buffer and the ring state carries over.
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await readExact(file.fh, slice.bytes, 0, cnt * 16, rec.pointsOffset + 16 * g);
     let i = 0;
     while (i < cnt) {
