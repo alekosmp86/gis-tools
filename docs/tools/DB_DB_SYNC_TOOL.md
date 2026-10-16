@@ -50,3 +50,55 @@ Unlike file-based tools, this tool directly queries both live database connectio
 - The 40,000-candidate cap applies to the geometry-row product (DB geometry rows x file geometry rows) after the exact pass, not to the raw group size.
 - Unkeyed paired rows never produce an UPDATE (counted in `unkeyedUpdatesSkippedCount`). INSERTs generated from collision groups may repeat an existing key; a unique constraint would reject them.
 - Counts reconcile: DB rows = match + attribute + geometry + onlyInDb + duplicate (DB side); file rows = match + attribute + geometry + onlyInShp + duplicate (file side) + skipped.
+
+## 5. Sync Mode and Full Replace (wipe + reload)
+
+> Spec: [`DB_DB_REPLACE_TARGET_SPEC.md`](../specifications/DB_DB_REPLACE_TARGET_SPEC.md) (AC-1..AC-15).
+
+After the target database (DB 2) connects, a **"Modo de sincronización"** step (step 3) asks how to sync:
+
+| Mode | Steps after the mode step |
+|---|---|
+| **Comparar** (default, the workflow above) | 4 SUID mapping, 5 Parameters, 6 Results |
+| **Reemplazo completo** | 4 Column mapping, 5 Full Replace |
+
+The other tools (`db-shapefile-sync`, `db-csv-sync`) are unchanged: `useWizardMappingState(stepOffset)` defaults to `0` and only db-db-sync passes `1`.
+
+### 5.1 Column mapping (Full Replace)
+
+Source and target tables usually differ in column names and schema. For every **target** column pick a **source** column or "no mapear"; same-name columns are prefilled. Target columns that are `NOT NULL` without a database default must be mapped or given a fixed value (raw SQL expression supported) before continuing. Source columns left unmapped are listed as ignored. Obvious type conflicts (for example text into integer) are flagged, not converted.
+
+### 5.2 Run order and safety
+
+1. The user types the exact target `schema.table` (an empty schema is treated as `public`) and the target password. The screen is red and shows both endpoints.
+2. **All source rows are fetched first** (only the mapped columns, as Postgres text, see 5.3). A failed or incomplete read, an empty source, or no mapped source column aborts with the target untouched.
+3. INSERT statements are built in the browser (batched, yielding to the UI).
+4. Execution: `TRUNCATE TABLE "schema"."table";` (no `CASCADE`) is the **first statement of batch 1**, together with the first 499 INSERTs, in one transaction: if batch 1 fails, the TRUNCATE rolls back and the target is intact. Batch 1 is sent alone; later batches (500 statements each, one request and one transaction per batch) run only if it succeeded.
+5. A failure after batch 1 leaves the target partially loaded. The error text says so. **Re-running Full Replace is safe** (it truncates and reloads again).
+
+Closing or reloading the tab, or losing the connection, interrupts the run at a batch boundary (no batch is ever half-applied) and can leave the target partially loaded; the confirmation text says so.
+
+### 5.3 Value fidelity
+
+Full Replace does not reuse the comparison value cleaner. The source stream is requested with `raw_text_values: true`: the data queries (single-shot and cursor `FETCH`) run with a per-query pg type parser that returns raw Postgres text for every type, so timestamps, numerics, booleans, json, arrays and bytea keep their exact value and no JavaScript `Date` timezone shift happens. The row-count and SRID queries are unaffected, and the compare flow is unchanged when the flag is absent.
+
+`formatReplaceLiteral` always quotes values (Postgres casts the literal to the column type), doubles `'`, keeps empty strings, and uses the `E'...'` form for backslashes and line breaks so every statement stays on a single line (the executor splits scripts on newlines). Exceptions: `NULL` stays `NULL`; an empty string mapped to a numeric, temporal, boolean or geometry target becomes `NULL`; geometry goes through `SqlScriptBuilder.buildPostgisGeomExpr` with the target column type and SRID (source GeoJSON is always EPSG:4326). Byte-identical duplicate source rows are copied (no pairing happens).
+
+### 5.4 The run survives navigation
+
+The run lives in a module-level store (`src/core/services/fullReplaceRunStore.ts`, bound with `useFullReplaceRun`), not in React state:
+
+- Leaving the page does not stop the run. Coming back shows `FullReplaceRunPanel` (live progress, then the summary or error) instead of the wizard, until the user presses **Cerrar** (only offered when the run is done or failed).
+- A second run cannot start while one is running, from anywhere.
+- The `beforeunload` confirmation is registered by the store while running, so closing the tab warns even when the page is not mounted.
+- The password is passed into the run and never stored in the store state.
+- A run token ignores late progress callbacks from a finished run.
+
+### 5.5 Known limits
+
+- No cancel and no timeout: a request that never answers keeps the panel in "running" until the tab is reloaded.
+- Only a server-side job could survive closing the browser; not implemented.
+- `uuid`, `json(b)` and `bytea` targets are treated as text for the empty-string rule (an empty string there still fails its batch).
+- The records query still ships an unmapped geometry column.
+- Id sequences are not reset (they are not owned by the table columns, so `TRUNCATE ... RESTART IDENTITY` would not touch them), and no `ANALYZE` runs after loading: on servers with autovacuum off, run it manually.
+- Batch error labels ("Lote N (a-b)") count statements, and statement 1 is the TRUNCATE.
