@@ -49,7 +49,7 @@ export function parseRecordsRequest(body: Record<string, unknown>): RecordsReque
     db_name,
     user,
     password,
-    schema_name,
+    schema_name: schema_name || "public",
     table_name,
     suid_column,
     suid_columns,
