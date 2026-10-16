@@ -1,6 +1,14 @@
 import { DatabaseStreamReader } from "@/core/services/streaming/DatabaseStreamReader";
 import { executeSqlInChunks } from "@/core/services/dbExecutionService";
-import { buildTruncateStatement, formatReplaceLiteral, quoteIdentifier, resolveSchemaName } from "@/core/services/sqlStatements";
+import {
+  buildAnalyzeStatement,
+  buildResetSequenceStatement,
+  buildTruncateStatement,
+  formatReplaceLiteral,
+  quoteIdentifier,
+  resolveSchemaName,
+} from "@/core/services/sqlStatements";
+import type { SequenceRef } from "@/core/services/replaceSequences";
 import { SqlScriptBuilder } from "@/core/workers/comparison/SqlScriptBuilder";
 import {
   getIgnoredSourceColumns,
@@ -30,6 +38,19 @@ export interface FullReplaceProgress {
   total: number;
 }
 
+export const AnalyzeStatus = {
+  OK: "ok",
+  FAILED: "failed",
+  SKIPPED: "skipped",
+} as const;
+
+type AnalyzeStatus = (typeof AnalyzeStatus)[keyof typeof AnalyzeStatus];
+
+export interface AnalyzeOutcome {
+  status: AnalyzeStatus;
+  message?: string;
+}
+
 export interface FullReplaceResult {
   sourceRows: number;
   insertedRows: number;
@@ -37,6 +58,8 @@ export interface FullReplaceResult {
   errors: string[];
   ignoredSourceColumns: string[];
   targetModified: boolean;
+  sequencesReset: string[];
+  analyze: AnalyzeOutcome;
 }
 
 export interface FullReplaceParams {
@@ -46,6 +69,7 @@ export interface FullReplaceParams {
   sourceColumns: string[];
   targetColumns: string[];
   mapping: ReplaceColumnMapping;
+  sequencesToReset: SequenceRef[];
   onProgress?: (progress: FullReplaceProgress) => void;
 }
 
@@ -55,6 +79,7 @@ interface BuildReplaceStatementsParams {
   insertColumns: ReplaceInsertColumn[];
   targetColumnTypes: Record<string, string>;
   targetSrid: number;
+  sequences?: SequenceRef[];
   onProgress?: (current: number, total: number) => void;
 }
 
@@ -81,12 +106,15 @@ function parseGeoJsonValue(value: unknown): object | null {
 }
 
 export async function buildReplaceStatements(params: BuildReplaceStatementsParams): Promise<string[]> {
-  const { targetConfig, records, insertColumns, targetColumnTypes, targetSrid, onProgress } = params;
+  const { targetConfig, records, insertColumns, targetColumnTypes, targetSrid, sequences = [], onProgress } = params;
   const schemaName = resolveSchemaName(targetConfig.schema_name);
   const builder = new SqlScriptBuilder(schemaName, targetConfig.table_name, targetColumnTypes, targetSrid);
   const quotedColumns = insertColumns.map((column) => quoteIdentifier(column.targetColumn));
 
-  const statements: string[] = [buildTruncateStatement(targetConfig.schema_name, targetConfig.table_name)];
+  const statements: string[] = [
+    buildTruncateStatement(targetConfig.schema_name, targetConfig.table_name),
+    ...sequences.map(({ schema, name }) => buildResetSequenceStatement(schema, name)),
+  ];
   const totalRows = records.length;
 
   for (let rowIndex = 0; rowIndex < totalRows; rowIndex++) {
@@ -130,6 +158,7 @@ async function executeReplaceScript(
   targetConfig: DbConfig,
   password: string,
   statements: string[],
+  headerStatementCount: number,
   onProgress?: (progress: ExecuteChunkProgress) => void
 ): Promise<Pick<FullReplaceResult, "insertedRows" | "errorCount" | "errors" | "targetModified">> {
   const firstBatchStatements = statements.slice(0, FULL_REPLACE_BATCH_SIZE);
@@ -146,7 +175,7 @@ async function executeReplaceScript(
   }
 
   const totalStatements = statements.length;
-  const insertedFirst = firstBatchStatements.length - 1;
+  const insertedFirst = firstBatchStatements.length - headerStatementCount;
   onProgress?.({
     currentBatch: 1,
     totalBatches: Math.ceil(totalStatements / FULL_REPLACE_BATCH_SIZE),
@@ -195,8 +224,29 @@ async function executeReplaceScript(
   return { insertedRows, errorCount, errors, targetModified: true };
 }
 
+async function analyzeTarget(
+  targetConfig: DbConfig,
+  password: string,
+  execution: Pick<FullReplaceResult, "errorCount" | "targetModified">
+): Promise<AnalyzeOutcome> {
+  if (execution.errorCount > 0 || !execution.targetModified) return { status: AnalyzeStatus.SKIPPED };
+  try {
+    const result = await executeSqlInChunks(
+      targetConfig,
+      password,
+      buildAnalyzeStatement(targetConfig.schema_name, targetConfig.table_name),
+      undefined,
+      1
+    );
+    if (result.errorCount > 0) return { status: AnalyzeStatus.FAILED, message: result.errors.join(" ") };
+    return { status: AnalyzeStatus.OK };
+  } catch (error: unknown) {
+    return { status: AnalyzeStatus.FAILED, message: error instanceof Error ? error.message : "Error desconocido" };
+  }
+}
+
 export async function runFullReplace(params: FullReplaceParams): Promise<FullReplaceResult> {
-  const { sourceConfig, targetConfig, password, sourceColumns, targetColumns, mapping, onProgress } = params;
+  const { sourceConfig, targetConfig, password, sourceColumns, targetColumns, mapping, sequencesToReset, onProgress } = params;
   const emit = (phase: FullReplacePhase, label: string, current: number, total: number) =>
     onProgress?.({ phase, label, current, total });
 
@@ -235,17 +285,25 @@ export async function runFullReplace(params: FullReplaceParams): Promise<FullRep
     insertColumns,
     targetColumnTypes: targetMeta.columnTypes,
     targetSrid: targetMeta.detectedSrid,
+    sequences: sequencesToReset,
     onProgress: (current, total) => emit(FullReplacePhase.BUILD, "Generando sentencias INSERT...", current, total),
   });
 
   emit(FullReplacePhase.EXECUTE, "Ejecutando reemplazo en la tabla destino...", 0, statements.length);
-  const execution = await executeReplaceScript(targetConfig, password, statements, (progress) =>
+  const execution = await executeReplaceScript(targetConfig, password, statements, 1 + sequencesToReset.length, (progress) =>
     emit(FullReplacePhase.EXECUTE, "Ejecutando reemplazo en la tabla destino...", progress.processedStatements, progress.totalStatements)
   );
+
+  if (execution.errorCount === 0 && execution.targetModified) {
+    emit(FullReplacePhase.EXECUTE, "Actualizando estadísticas (ANALYZE)...", statements.length, statements.length);
+  }
+  const analyze = await analyzeTarget(targetConfig, password, execution);
 
   return {
     sourceRows: source.records.length,
     ignoredSourceColumns: getIgnoredSourceColumns(insertColumns, sourceColumns),
+    sequencesReset: execution.targetModified ? sequencesToReset.map((sequence) => sequence.qualifiedLabel) : [],
+    analyze,
     ...execution,
   };
 }

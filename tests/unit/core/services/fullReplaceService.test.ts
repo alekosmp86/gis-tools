@@ -19,6 +19,7 @@ import {
   FULL_REPLACE_BATCH_SIZE,
 } from "@/core/services/fullReplaceService";
 import { resolveInsertColumns, type ReplaceColumnMapping } from "@/core/services/replaceColumnMapping";
+import type { SequenceRef } from "@/core/services/replaceSequences";
 
 const sourceConfig = { table_name: "src", schema_name: "public" } as unknown as DbConfig;
 const targetConfig = { table_name: "dst", schema_name: "geo" } as unknown as DbConfig;
@@ -39,6 +40,12 @@ const fetchResult = (records: Array<Record<string, unknown>>, totalCount = recor
 
 const mapping: ReplaceColumnMapping = { sourceByTarget: { id: "id", name: "name" }, defaults: {} };
 
+const seqA: SequenceRef = { qualifiedLabel: "geo.a_seq", schema: "geo", name: "a_seq" };
+const seqB: SequenceRef = { qualifiedLabel: "geo.b_seq", schema: "geo", name: "b_seq" };
+const ANALYZE_SCRIPT = 'ANALYZE "geo"."dst";';
+const RESET_A = 'ALTER SEQUENCE "geo"."a_seq" RESTART WITH 1;';
+const RESET_B = 'ALTER SEQUENCE "geo"."b_seq" RESTART WITH 1;';
+
 const params = (overrides: Record<string, unknown> = {}) => ({
   sourceConfig,
   targetConfig,
@@ -46,6 +53,7 @@ const params = (overrides: Record<string, unknown> = {}) => ({
   sourceColumns: ["id", "name"],
   targetColumns: ["id", "name"],
   mapping,
+  sequencesToReset: [] as SequenceRef[],
   ...overrides,
 });
 
@@ -82,6 +90,46 @@ describe("buildReplaceStatements", () => {
     expect(statements).toHaveLength(4);
     expect(statements[0]).toBe('TRUNCATE TABLE "geo"."dst";');
     expect(statements[1]).toBe('INSERT INTO "geo"."dst" ("id", "name") VALUES (0, \'n0\');');
+  });
+
+  describe("sequence resets", () => {
+    const buildWith = (sequences: SequenceRef[] | undefined, rows = 2) =>
+      buildReplaceStatements({
+        targetConfig,
+        records: makeRows(rows),
+        insertColumns: resolveInsertColumns(mapping, ["id", "name"]),
+        targetColumnTypes: { id: "integer", name: "text" },
+        targetSrid: 4326,
+        sequences,
+      });
+
+    it("should emit output identical to the no-sequence output when given zero sequences", async () => {
+      const without = await buildWith(undefined);
+      const empty = await buildWith([]);
+      expect(empty).toEqual(without);
+      expect(empty).toHaveLength(3);
+      expect(empty[0]).toBe('TRUNCATE TABLE "geo"."dst";');
+    });
+
+    it("should emit TRUNCATE, then one reset, then the INSERTs for one sequence", async () => {
+      const statements = await buildWith([seqA]);
+      expect(statements).toHaveLength(4);
+      expect(statements[0]).toBe('TRUNCATE TABLE "geo"."dst";');
+      expect(statements[1]).toBe(RESET_A);
+      expect(statements[2]).toMatch(/^INSERT INTO "geo"\."dst"/);
+      expect(statements[3]).toMatch(/^INSERT INTO/);
+    });
+
+    it("should emit TRUNCATE, then both resets in order, then the INSERTs for two sequences", async () => {
+      const statements = await buildWith([seqA, seqB]);
+      expect(statements).toHaveLength(5);
+      expect(statements.slice(0, 3)).toEqual(['TRUNCATE TABLE "geo"."dst";', RESET_A, RESET_B]);
+      expect(statements.slice(3).every((st) => st.startsWith("INSERT INTO"))).toBe(true);
+    });
+
+    it("should emit TRUNCATE and the resets even when the source is empty", async () => {
+      expect(await buildWith([seqA, seqB], 0)).toEqual(['TRUNCATE TABLE "geo"."dst";', RESET_A, RESET_B]);
+    });
   });
 
   it("should emit only TRUNCATE when source is empty", async () => {
@@ -420,7 +468,7 @@ describe("runFullReplace", () => {
   it("should send TRUNCATE first in the first call and split at the batch size", async () => {
     arrangeFetch(makeRows(FULL_REPLACE_BATCH_SIZE + 10));
     await runFullReplace(params());
-    expect(mocks.executeSqlInChunks).toHaveBeenCalledTimes(2);
+    expect(mocks.executeSqlInChunks).toHaveBeenCalledTimes(3);
     const first = mocks.executeSqlInChunks.mock.calls[0][2] as string;
     const second = mocks.executeSqlInChunks.mock.calls[1][2] as string;
     expect(first.startsWith('TRUNCATE TABLE "geo"."dst";')).toBe(true);
@@ -429,10 +477,11 @@ describe("runFullReplace", () => {
     expect(second).not.toContain("TRUNCATE");
   });
 
-  it("should use a single call when statements fit exactly in one batch", async () => {
+  it("should use a single insert call plus the ANALYZE call when statements fit exactly in one batch", async () => {
     arrangeFetch(makeRows(FULL_REPLACE_BATCH_SIZE - 1));
     await runFullReplace(params());
-    expect(mocks.executeSqlInChunks).toHaveBeenCalledTimes(1);
+    expect(mocks.executeSqlInChunks).toHaveBeenCalledTimes(2);
+    expect(mocks.executeSqlInChunks.mock.calls[1][2]).toBe(ANALYZE_SCRIPT);
   });
 
   it("should pass the password and target config to execution", async () => {
@@ -446,11 +495,12 @@ describe("runFullReplace", () => {
     arrangeFetch(makeRows(1200));
     await runFullReplace(params());
     const scripts = mocks.executeSqlInChunks.mock.calls.map((c) => c[2] as string);
-    expect(scripts.map((s) => s.split("\n").length)).toEqual([500, 500, 201]);
+    expect(scripts.map((s) => s.split("\n").length)).toEqual([500, 500, 201, 1]);
+    expect(scripts[3]).toBe(ANALYZE_SCRIPT);
     expect(scripts[0].startsWith("TRUNCATE")).toBe(true);
     expect(scripts[1]).not.toContain("TRUNCATE");
     expect(scripts[2]).not.toContain("TRUNCATE");
-    expect(mocks.executeSqlInChunks.mock.calls.every((c) => c[4] === FULL_REPLACE_BATCH_SIZE)).toBe(true);
+    expect(mocks.executeSqlInChunks.mock.calls.slice(0, 3).every((c) => c[4] === FULL_REPLACE_BATCH_SIZE)).toBe(true);
   });
 
   it("should report later-slice errors with real batch/statement offset labels and targetModified true", async () => {
@@ -536,5 +586,277 @@ describe("runFullReplace", () => {
     const phases = onProgress.mock.calls.map((c) => c[0].phase);
     expect(phases).toContain("build");
     expect(phases).toContain("execute");
+  });
+});
+
+describe("runFullReplace with sequence resets", () => {
+  const scriptsOf = () => mocks.executeSqlInChunks.mock.calls.map((c) => c[2] as string);
+
+  it("should put TRUNCATE, every reset and the first inserts in the first call", async () => {
+    arrangeFetch(makeRows(3));
+    await runFullReplace(params({ sequencesToReset: [seqA, seqB] }));
+    const lines = scriptsOf()[0].split("\n");
+    expect(lines.slice(0, 3)).toEqual(['TRUNCATE TABLE "geo"."dst";', RESET_A, RESET_B]);
+    expect(lines).toHaveLength(6);
+    expect(lines.slice(3).every((l) => l.startsWith("INSERT INTO"))).toBe(true);
+  });
+
+  it.each([
+    ["small", 3, 1],
+    ["small", 3, 2],
+    ["exactly one full batch", FULL_REPLACE_BATCH_SIZE - 3, 2],
+    ["exactly one full batch", FULL_REPLACE_BATCH_SIZE - 2, 1],
+    ["multi-batch", 1200, 2],
+    ["multi-batch", 1200, 1],
+  ])("should report insertedRows as statements minus header for a %s run (%i rows, %i sequences)", async (_label, rows, n) => {
+    arrangeFetch(makeRows(rows));
+    const result = await runFullReplace(params({ sequencesToReset: [seqA, seqB].slice(0, n) }));
+    expect(result.sourceRows).toBe(rows);
+    expect(result.insertedRows).toBe(rows);
+    expect(result.errorCount).toBe(0);
+    const insertCalls = scriptsOf().filter((s) => s !== ANALYZE_SCRIPT);
+    expect(insertCalls[0].split("\n").length).toBeLessThanOrEqual(FULL_REPLACE_BATCH_SIZE);
+    expect(insertCalls.reduce((sum, s) => sum + s.split("\n").length, 0)).toBe(rows + 1 + n);
+  });
+
+  it("should use exactly one insert call when TRUNCATE, resets and inserts total 500 statements", async () => {
+    arrangeFetch(makeRows(FULL_REPLACE_BATCH_SIZE - 3));
+    await runFullReplace(params({ sequencesToReset: [seqA, seqB] }));
+    expect(scriptsOf()).toHaveLength(2);
+    expect(scriptsOf()[0].split("\n")).toHaveLength(FULL_REPLACE_BATCH_SIZE);
+  });
+
+  it("should never repeat TRUNCATE or resets in later slices", async () => {
+    arrangeFetch(makeRows(1200));
+    await runFullReplace(params({ sequencesToReset: [seqA, seqB] }));
+    const [first, ...later] = scriptsOf().filter((s) => s !== ANALYZE_SCRIPT);
+    expect(first.split("\n")).toHaveLength(FULL_REPLACE_BATCH_SIZE);
+    expect(first).toContain(RESET_A);
+    expect(later.length).toBeGreaterThan(0);
+    later.forEach((slice) => {
+      expect(slice).not.toContain("TRUNCATE");
+      expect(slice).not.toContain("ALTER SEQUENCE");
+    });
+  });
+
+  it("should list the qualified labels in sequencesReset when the run finishes", async () => {
+    arrangeFetch(makeRows(3));
+    const result = await runFullReplace(params({ sequencesToReset: [seqA, seqB] }));
+    expect(result.sequencesReset).toEqual(["geo.a_seq", "geo.b_seq"]);
+  });
+
+  it("should list the labels in sequencesReset when a later batch fails (run reached batch 2+)", async () => {
+    arrangeFetch(makeRows(1200));
+    mocks.executeSqlInChunks
+      .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script))
+      .mockRejectedValueOnce(new Error("connection lost"));
+    const result = await runFullReplace(params({ sequencesToReset: [seqA] }));
+    expect(result.targetModified).toBe(true);
+    expect(result.sequencesReset).toEqual(["geo.a_seq"]);
+  });
+
+  it("should return an empty sequencesReset when no sequences were requested", async () => {
+    arrangeFetch(makeRows(3));
+    const result = await runFullReplace(params());
+    expect(result.sequencesReset).toEqual([]);
+  });
+
+  it("should report no sequences reset, skip ANALYZE and send nothing further when batch 1 fails", async () => {
+    arrangeFetch(makeRows(1200));
+    mocks.executeSqlInChunks.mockResolvedValueOnce({
+      success: false,
+      totalProcessed: 500,
+      affectedRows: 0,
+      errorCount: 1,
+      errors: ["Lote 1 (1-500): fail"],
+      message: "x",
+    });
+    const result = await runFullReplace(params({ sequencesToReset: [seqA, seqB] }));
+    expect(mocks.executeSqlInChunks).toHaveBeenCalledTimes(1);
+    expect(result.targetModified).toBe(false);
+    expect(result.sequencesReset).toEqual([]);
+    expect(result.analyze).toEqual({ status: "skipped" });
+    expect(result.insertedRows).toBe(0);
+  });
+});
+
+const scriptsContainAnalyze = (): boolean =>
+  mocks.executeSqlInChunks.mock.calls.some((c) => (c[2] as string).includes("ANALYZE"));
+
+describe("runFullReplace ANALYZE", () => {
+  it("should run ANALYZE as its own call, exactly the analyze statement, after the last insert call", async () => {
+    arrangeFetch(makeRows(1200));
+    const result = await runFullReplace(params());
+    const calls = mocks.executeSqlInChunks.mock.calls;
+    expect(calls).toHaveLength(4);
+    expect(calls[3][2]).toBe(ANALYZE_SCRIPT);
+    expect(calls[3][0]).toBe(targetConfig);
+    expect(calls[3][1]).toBe("pw");
+    expect(calls.slice(0, 3).every((c) => !(c[2] as string).includes("ANALYZE"))).toBe(true);
+    expect(result.analyze).toEqual({ status: "ok" });
+  });
+
+  it("should use the public schema for ANALYZE when the target schema is empty", async () => {
+    arrangeFetch(makeRows(1));
+    const publicTarget = { table_name: "dst", schema_name: "" } as unknown as DbConfig;
+    await runFullReplace(params({ targetConfig: publicTarget }));
+    expect(mocks.executeSqlInChunks.mock.calls[1][2]).toBe('ANALYZE "public"."dst";');
+  });
+
+  it("should report FAILED with the joined messages when ANALYZE returns errors, keeping inserted counts", async () => {
+    arrangeFetch(makeRows(3));
+    mocks.executeSqlInChunks.mockImplementation(async (_c: DbConfig, _p: string, script: string) =>
+      script === ANALYZE_SCRIPT
+        ? { success: false, totalProcessed: 1, affectedRows: 0, errorCount: 2, errors: ["boom 1", "boom 2"], message: "x" }
+        : okBatch(script)
+    );
+    const result = await runFullReplace(params());
+    expect(result.analyze).toEqual({ status: "failed", message: "boom 1 boom 2" });
+    expect(result.insertedRows).toBe(3);
+    expect(result.sourceRows).toBe(3);
+    expect(result.errorCount).toBe(0);
+    expect(result.targetModified).toBe(true);
+  });
+
+  it("should report FAILED with the Error message when ANALYZE throws", async () => {
+    arrangeFetch(makeRows(3));
+    mocks.executeSqlInChunks.mockImplementation(async (_c: DbConfig, _p: string, script: string) => {
+      if (script === ANALYZE_SCRIPT) throw new Error("analyze denied");
+      return okBatch(script);
+    });
+    const result = await runFullReplace(params());
+    expect(result.analyze).toEqual({ status: "failed", message: "analyze denied" });
+    expect(result.insertedRows).toBe(3);
+    expect(result.errorCount).toBe(0);
+  });
+
+  it("should report FAILED with 'Error desconocido' when ANALYZE throws a non-Error", async () => {
+    arrangeFetch(makeRows(3));
+    mocks.executeSqlInChunks.mockImplementation(async (_c: DbConfig, _p: string, script: string) => {
+      if (script === ANALYZE_SCRIPT) throw "weird";
+      return okBatch(script);
+    });
+    const result = await runFullReplace(params());
+    expect(result.analyze).toEqual({ status: "failed", message: "Error desconocido" });
+  });
+
+  it("should skip ANALYZE when a later batch returned errors", async () => {
+    arrangeFetch(makeRows(1200));
+    mocks.executeSqlInChunks
+      .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script))
+      .mockResolvedValueOnce({
+        success: false,
+        totalProcessed: 500,
+        affectedRows: 499,
+        errorCount: 1,
+        errors: ["Lote 1 (1-500): violation"],
+        message: "x",
+      })
+      .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script));
+    const result = await runFullReplace(params());
+    expect(result.errorCount).toBe(1);
+    expect(result.analyze).toEqual({ status: "skipped" });
+    expect(mocks.executeSqlInChunks).toHaveBeenCalledTimes(3);
+    expect(scriptsContainAnalyze()).toBe(false);
+  });
+
+  it("should skip ANALYZE when a later batch call rejects", async () => {
+    arrangeFetch(makeRows(1200));
+    mocks.executeSqlInChunks
+      .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script))
+      .mockRejectedValueOnce(new Error("connection lost"));
+    const result = await runFullReplace(params());
+    expect(result.analyze).toEqual({ status: "skipped" });
+    expect(scriptsContainAnalyze()).toBe(false);
+  });
+
+  it("should skip ANALYZE when the first batch fails", async () => {
+    arrangeFetch(makeRows(3));
+    mocks.executeSqlInChunks.mockResolvedValueOnce({
+      success: false,
+      totalProcessed: 4,
+      affectedRows: 0,
+      errorCount: 1,
+      errors: ["Lote 1 (1-4): fail"],
+      message: "x",
+    });
+    const result = await runFullReplace(params());
+    expect(result.analyze).toEqual({ status: "skipped" });
+    expect(scriptsContainAnalyze()).toBe(false);
+  });
+
+  describe("ANALYZE progress event", () => {
+    const LABEL = "Actualizando estadísticas (ANALYZE)...";
+    type Event = { phase: string; label: string; current: number; total: number };
+    const analyzeEvents = (events: Event[]) => events.filter((e) => e.label === LABEL);
+
+    it("should emit one execute event with current === total === statements count right before the ANALYZE call", async () => {
+      arrangeFetch(makeRows(3));
+      const log: string[] = [];
+      const events: Event[] = [];
+      mocks.executeSqlInChunks.mockImplementation(async (_c: DbConfig, _p: string, script: string) => {
+        log.push(script === ANALYZE_SCRIPT ? "analyze-call" : "insert-call");
+        return okBatch(script);
+      });
+      await runFullReplace(
+        params({
+          onProgress: (e: Event) => {
+            events.push(e);
+            if (e.label === LABEL) log.push("analyze-event");
+          },
+        })
+      );
+      const found = analyzeEvents(events);
+      const statementsCount = events.find((e) => e.label === "Ejecutando reemplazo en la tabla destino...")!.total;
+      expect(found).toHaveLength(1);
+      expect(found[0].phase).toBe("execute");
+      expect(found[0].current).toBe(statementsCount);
+      expect(found[0].total).toBe(statementsCount);
+      expect(statementsCount).toBeGreaterThan(0);
+      expect(log.slice(-2)).toEqual(["analyze-event", "analyze-call"]);
+    });
+
+    it("should not emit the ANALYZE event when a later batch returned errors", async () => {
+      arrangeFetch(makeRows(1200));
+      const events: Event[] = [];
+      mocks.executeSqlInChunks
+        .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script))
+        .mockResolvedValueOnce({
+          success: false,
+          totalProcessed: 500,
+          affectedRows: 499,
+          errorCount: 1,
+          errors: ["Lote 1 (1-500): violation"],
+          message: "x",
+        })
+        .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script));
+      await runFullReplace(params({ onProgress: (e: Event) => events.push(e) }));
+      expect(analyzeEvents(events)).toHaveLength(0);
+    });
+
+    it("should not emit the ANALYZE event when a later batch call rejects", async () => {
+      arrangeFetch(makeRows(1200));
+      const events: Event[] = [];
+      mocks.executeSqlInChunks
+        .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script))
+        .mockRejectedValueOnce(new Error("connection lost"));
+      await runFullReplace(params({ onProgress: (e: Event) => events.push(e) }));
+      expect(analyzeEvents(events)).toHaveLength(0);
+    });
+
+    it("should not emit the ANALYZE event when the first batch fails", async () => {
+      arrangeFetch(makeRows(3));
+      const events: Event[] = [];
+      mocks.executeSqlInChunks.mockResolvedValueOnce({
+        success: false,
+        totalProcessed: 4,
+        affectedRows: 0,
+        errorCount: 1,
+        errors: ["Lote 1 (1-4): fail"],
+        message: "x",
+      });
+      await runFullReplace(params({ onProgress: (e: Event) => events.push(e) }));
+      expect(analyzeEvents(events)).toHaveLength(0);
+    });
   });
 });

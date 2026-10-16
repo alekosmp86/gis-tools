@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { FullReplaceRunStatus, start } from "@/core/services/fullReplaceRunStore";
 import { buildQualifiedTableLabel } from "@/core/services/sqlStatements";
-import type { ReplaceColumnMapping } from "@/core/services/replaceColumnMapping";
-import type { DbConfig } from "@/core/types/db";
+import { resolveInsertColumns, type ReplaceColumnMapping } from "@/core/services/replaceColumnMapping";
+import { discoverTargetSequences } from "@/core/services/replaceSequences";
+import type { DbColumnMetadata, DbConfig } from "@/core/types/db";
 import { useFullReplaceRun } from "./useFullReplaceRun";
 
 export interface UseFullReplaceWorkflowParams {
@@ -10,6 +11,7 @@ export interface UseFullReplaceWorkflowParams {
   targetConfig: DbConfig | null;
   sourceColumns: string[];
   targetColumns: string[];
+  targetDetails: DbColumnMetadata[];
   mapping: ReplaceColumnMapping;
 }
 
@@ -18,12 +20,19 @@ export function useFullReplaceWorkflow({
   targetConfig,
   sourceColumns,
   targetColumns,
+  targetDetails,
   mapping,
 }: UseFullReplaceWorkflowParams) {
   const [confirmValue, setConfirmValue] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [resetSequences, setResetSequences] = useState(true);
   const { status } = useFullReplaceRun();
+  const sequenceDiscovery = discoverTargetSequences(
+    targetDetails,
+    resolveInsertColumns(mapping, targetColumns),
+    targetConfig?.schema_name
+  );
 
   const confirmText = targetConfig ? buildQualifiedTableLabel(targetConfig.schema_name, targetConfig.table_name) : "";
   const isRunning = status === FullReplaceRunStatus.RUNNING;
@@ -37,7 +46,15 @@ export function useFullReplaceWorkflow({
     if (!sourceConfig || !targetConfig || !canRun) return;
     const runPassword = password;
     setPassword("");
-    void start({ sourceConfig, targetConfig, password: runPassword, sourceColumns, targetColumns, mapping });
+    void start({
+      sourceConfig,
+      targetConfig,
+      password: runPassword,
+      sourceColumns,
+      targetColumns,
+      mapping,
+      sequencesToReset: resetSequences ? sequenceDiscovery.sequences : [],
+    });
   };
 
   return {
@@ -48,6 +65,9 @@ export function useFullReplaceWorkflow({
     setPassword,
     showPassword,
     toggleShowPassword: () => setShowPassword((previous) => !previous),
+    sequenceDiscovery,
+    resetSequences,
+    setResetSequences,
     isRunning,
     canRun,
     run,

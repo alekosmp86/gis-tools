@@ -25,3 +25,9 @@ export const formatReplaceLiteral = (value: unknown): string => {
 
 export const buildTruncateStatement = (schema: string | undefined | null, table: string): string =>
   `TRUNCATE TABLE ${quoteIdentifier(resolveSchemaName(schema))}.${quoteIdentifier(table)};`;
+
+export const buildResetSequenceStatement = (schema: string, name: string): string =>
+  `ALTER SEQUENCE ${quoteIdentifier(schema)}.${quoteIdentifier(name)} RESTART WITH 1;`;
+
+export const buildAnalyzeStatement = (schema: string | undefined | null, table: string): string =>
+  `ANALYZE ${quoteIdentifier(resolveSchemaName(schema))}.${quoteIdentifier(table)};`;

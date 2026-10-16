@@ -11,7 +11,7 @@ import {
   resolveInsertColumns,
   type ReplaceColumnMapping,
 } from "@/core/services/replaceColumnMapping";
-import type { DbConfig } from "@/core/types/db";
+import type { DbColumnMetadata, DbConfig } from "@/core/types/db";
 import { useFullReplaceWorkflow } from "./useFullReplaceWorkflow";
 import styles from "./FullReplaceStep.module.css";
 
@@ -20,6 +20,7 @@ export interface FullReplaceStepProps {
   targetConfig: DbConfig | null;
   sourceColumns: string[];
   targetColumns: string[];
+  targetDetails: DbColumnMetadata[];
   mapping: ReplaceColumnMapping;
 }
 
@@ -28,9 +29,10 @@ export const FullReplaceStep: React.FC<FullReplaceStepProps> = ({
   targetConfig,
   sourceColumns,
   targetColumns,
+  targetDetails,
   mapping,
 }) => {
-  const workflow = useFullReplaceWorkflow({ sourceConfig, targetConfig, sourceColumns, targetColumns, mapping });
+  const workflow = useFullReplaceWorkflow({ sourceConfig, targetConfig, sourceColumns, targetColumns, targetDetails, mapping });
 
   if (!sourceConfig || !targetConfig) return null;
 
@@ -68,6 +70,37 @@ export const FullReplaceStep: React.FC<FullReplaceStepProps> = ({
         <AlertMessage
           type={AlertType.WARNING}
           text={`Columnas del origen sin mapear que se ignorarán: ${ignored.join(", ")}.`}
+        />
+      )}
+
+      {workflow.sequenceDiscovery.sequences.length > 0 && (
+        <div className={styles.formGroup}>
+          <label className={styles.checkboxRow}>
+            <input
+              type="checkbox"
+              checked={workflow.resetSequences}
+              onChange={(event) => workflow.setResetSequences(event.target.checked)}
+              disabled={workflow.isRunning}
+            />
+            <span>Reiniciar secuencias del destino</span>
+          </label>
+          <span className={styles.endpointLabel}>
+            {workflow.resetSequences
+              ? `Se reiniciarán en 1: ${workflow.sequenceDiscovery.sequences.map((sequence) => sequence.qualifiedLabel).join(", ")}.`
+              : "Las secuencias del destino no se reiniciarán."}
+          </span>
+          <span className={styles.endpointLabel}>
+            Si otra tabla usa la misma secuencia, sus próximos ids colisionarán. El rol debe ser propietario de la
+            secuencia; si el reinicio falla, se revierte todo el primer lote (la tabla queda intacta) y conviene
+            desmarcar esta opción.
+          </span>
+        </div>
+      )}
+
+      {workflow.sequenceDiscovery.unparsedDefaults.length > 0 && (
+        <AlertMessage
+          type={AlertType.WARNING}
+          text={`No se pudo interpretar el valor por defecto de estas columnas; sus secuencias no se reiniciarán: ${workflow.sequenceDiscovery.unparsedDefaults.join("; ")}.`}
         />
       )}
 

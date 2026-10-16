@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildAnalyzeStatement,
   buildQualifiedTableLabel,
+  buildResetSequenceStatement,
   buildTruncateStatement,
   formatReplaceLiteral,
   quoteIdentifier,
@@ -140,6 +142,33 @@ describe("sqlStatements", () => {
 
     it("should never contain CASCADE", () => {
       expect(buildTruncateStatement("geo", "parcels").toUpperCase()).not.toContain("CASCADE");
+    });
+  });
+  describe("buildResetSequenceStatement", () => {
+    it("should build a quoted ALTER SEQUENCE RESTART WITH 1", () => {
+      expect(buildResetSequenceStatement("s", "q")).toBe('ALTER SEQUENCE "s"."q" RESTART WITH 1;');
+    });
+
+    it("should double double-quotes in schema and sequence names", () => {
+      expect(buildResetSequenceStatement('My"Schema', 'Q"x')).toBe('ALTER SEQUENCE "My""Schema"."Q""x" RESTART WITH 1;');
+    });
+
+    it("should preserve case and spaces inside quotes", () => {
+      expect(buildResetSequenceStatement("My Schema", "Seq")).toBe('ALTER SEQUENCE "My Schema"."Seq" RESTART WITH 1;');
+    });
+  });
+
+  describe("buildAnalyzeStatement", () => {
+    it("should build a quoted ANALYZE for schema and table", () => {
+      expect(buildAnalyzeStatement("s", "t")).toBe('ANALYZE "s"."t";');
+    });
+
+    it.each([undefined, null, "", "  "])("should use public when schema is %j", (schema) => {
+      expect(buildAnalyzeStatement(schema as string | undefined | null, "t")).toBe('ANALYZE "public"."t";');
+    });
+
+    it("should double double-quotes in schema and table", () => {
+      expect(buildAnalyzeStatement('s"x', 't"y')).toBe('ANALYZE "s""x"."t""y";');
     });
   });
 });

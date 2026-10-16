@@ -2,7 +2,7 @@ import React from "react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import { formatNumber } from "@/core/common/ValueFormatter";
-import type { FullReplaceResult } from "@/core/services/fullReplaceService";
+import { AnalyzeStatus, type FullReplaceResult } from "@/core/services/fullReplaceService";
 import styles from "./FullReplaceStep.module.css";
 
 export interface FullReplaceSummaryProps {
@@ -54,6 +54,26 @@ export const FullReplaceSummary: React.FC<FullReplaceSummaryProps> = ({ result }
           type={AlertType.INFO}
           text={`Columnas del origen sin mapear (ignoradas): ${result.ignoredSourceColumns.join(", ")}.`}
         />
+      )}
+
+      {result.sequencesReset.length > 0 && (
+        <AlertMessage
+          type={AlertType.INFO}
+          text={`Secuencias reiniciadas en 1: ${result.sequencesReset.join(", ")}.`}
+        />
+      )}
+
+      {result.analyze.status === AnalyzeStatus.OK && (
+        <AlertMessage type={AlertType.INFO} text="ANALYZE enviado a la tabla destino." />
+      )}
+      {result.analyze.status === AnalyzeStatus.FAILED && (
+        <AlertMessage
+          type={AlertType.WARNING}
+          text={`ANALYZE falló: las estadísticas de la tabla destino no se actualizaron. ${result.analyze.message ?? ""}`.trim()}
+        />
+      )}
+      {result.analyze.status === AnalyzeStatus.SKIPPED && (
+        <AlertMessage type={AlertType.INFO} text="ANALYZE no ejecutado: el reemplazo no terminó sin errores." />
       )}
 
       {result.errors.length > 0 && (

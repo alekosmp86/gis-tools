@@ -221,6 +221,7 @@ export default function DbDbSyncToolPage() {
                 targetConfig={dbConfig2}
                 sourceColumns={dbColumns1}
                 targetColumns={dbColumns2}
+                targetDetails={columnDetails2}
                 mapping={replaceMapping}
               />
             ),
