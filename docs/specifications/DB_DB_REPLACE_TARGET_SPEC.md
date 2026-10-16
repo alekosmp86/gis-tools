@@ -85,6 +85,34 @@ Once source (DB 1) and target (DB 2) tables are set, the user picks how to sync:
   (`onRunningChange`, `isReplaceRunning`) is removed.
 - **AC-15** The confirmation text mentions that closing the tab or losing the connection interrupts the
   run and can leave the target partially loaded (re-running is safe).
+- **AC-16** (v2.3) Sequence reset. The confirmation screen has a checkbox "Reiniciar secuencias del
+  destino", CHECKED by default. The sequences are those feeding TARGET columns that are NOT mapped from the
+  source (their column default is `nextval('<seq>'::regclass)`, taken from the already-loaded column
+  metadata: no new API). When checked, one `ALTER SEQUENCE "<schema>"."<seq>" RESTART WITH 1;` per
+  sequence (identifiers quoted/doubled; an unqualified name is qualified with the target schema) is
+  emitted immediately after the TRUNCATE, so TRUNCATE and the resets are the first statements of batch 1
+  (same transaction; if batch 1 fails they roll back together). The screen lists the sequences that will
+  be reset. A default that cannot be parsed is skipped and listed as a warning. Mapped columns are never
+  touched.
+- **AC-17** After a run with zero errors, `ANALYZE "<schema>"."<table>";` is sent as its own request. If it
+  fails (e.g. the user is not the table owner) the run stays DONE and the summary shows a warning that
+  statistics were not refreshed. It is not attempted after a failed/partial run.
+- **AC-18** The final summary lists the sequences that were reset and the ANALYZE outcome
+  (ok / not executed / failed with message). Inserted-row accounting stays correct with the extra
+  header statements (statements before the first INSERT are TRUNCATE + N resets, not just 1).
+  Known limits (documented, review round 1): (a) a sequence that ALSO feeds another table is reset too, so
+  that table's next ids can collide: the checkbox text warns about it (detecting it needs ownership info
+  from a new API, deferred); (b) an unqualified default (`nextval('seq'::regclass)`) is assumed to live in
+  the TARGET table's schema, a wrong guess fails loudly and rolls back batch 1; (c) `GENERATED ... AS
+  IDENTITY` columns have no `column_default` and are not reset; (d) `ALTER SEQUENCE` needs ownership of the
+  sequence: if it fails, batch 1 rolls back (target intact) and the user unticks the checkbox (the label says
+  so).
+- **AC-17 note** (PostgreSQL 11): `ANALYZE` run by a role that is neither the table owner nor a superuser
+  only emits a WARNING and still returns success, and the execute route does not surface notices. The summary
+  therefore says "ANALYZE enviado" and never claims the statistics were refreshed.
+- **AC-19** (decision) No client-side timeout/abort is added: aborting a fetch does not cancel the server
+  transaction, so a re-run could interleave with the still-running batch (duplicates). The hung-run
+  limit stays documented.
 
 ## 4. Expected files
 

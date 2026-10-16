@@ -100,5 +100,11 @@ The run lives in a module-level store (`src/core/services/fullReplaceRunStore.ts
 - Only a server-side job could survive closing the browser; not implemented.
 - `uuid`, `json(b)` and `bytea` targets are treated as text for the empty-string rule (an empty string there still fails its batch).
 - The records query still ships an unmapped geometry column.
-- Id sequences are not reset (they are not owned by the table columns, so `TRUNCATE ... RESTART IDENTITY` would not touch them), and no `ANALYZE` runs after loading: on servers with autovacuum off, run it manually.
+- Batch error labels ("Lote N (a-b)") count statements, and statement 1 is the TRUNCATE (plus one statement per reset sequence).
+- No client-side timeout or abort (aborting a request does not cancel the server transaction, so a re-run could interleave with it).
+
+### 5.6 Sequence reset and ANALYZE
+
+- **Sequence reset** (checkbox "Reiniciar secuencias del destino", on by default). Sequences behind target columns that are NOT mapped from the source (default `nextval('<seq>'::regclass)`, read from the column metadata already loaded) get `ALTER SEQUENCE "schema"."seq" RESTART WITH 1;` right after the TRUNCATE, inside batch 1, so a failed first batch rolls everything back. (`TRUNCATE ... RESTART IDENTITY` is not enough: the sequences are normally not owned by the columns.) Limits: a sequence shared with another table is reset too and that table's next ids can collide; an unqualified default is assumed to live in the target schema; `GENERATED ... AS IDENTITY` columns are not reset; the role must own the sequence (otherwise untick the checkbox).
+- **ANALYZE.** After a run with zero errors, `ANALYZE "schema"."table";` is sent as its own request so the planner has fresh statistics (autovacuum may be off, and TRUNCATE zeroes them). A failure only produces a warning. On PostgreSQL 11 a non-owner gets a silent warning and a success, so the summary says "ANALYZE enviado", not "statistics updated".
 - Batch error labels ("Lote N (a-b)") count statements, and statement 1 is the TRUNCATE.
