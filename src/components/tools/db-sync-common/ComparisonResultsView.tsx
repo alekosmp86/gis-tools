@@ -7,17 +7,17 @@ import { AlertType } from "@/ui-kit/types/ui";
 import { ProgressBar } from "@/ui-kit/components/ProgressBar";
 import { DiscrepanciesSummaryBar } from "./DiscrepanciesSummaryBar";
 import { DiscrepanciesTable } from "./discrepancies-table/DiscrepanciesTable";
-import { SqlPatchDrawer } from "./sql-patch-drawer/SqlPatchDrawer";
+import { SelectionSqlPatchDrawer } from "./sql-patch-drawer/SelectionSqlPatchDrawer";
+import { useDiscrepancySelection } from "./discrepancies-table/useDiscrepancySelection";
 import { ResultsControlsBar } from "./ResultsControlsBar";
 import { useDiscrepancyGeojson } from "@/hooks/useDiscrepancyGeojson";
 import { useDatasetComparison } from "@/hooks/useDatasetComparison";
-import { DiscrepancyFilter, DiscrepancyType, ResultsViewTab } from "@/core/types/comparison";
+import { DiscrepancyFilter, ResultsViewTab } from "@/core/types/comparison";
 import type { ParsedFileDataset } from "@/core/types/parsers";
 import type { DbConfig } from "@/core/types/db";
 import type { ParsedShapefileData } from "@/core/types/shp";
 import type { ColumnMappingConfig, ComparisonSourceDescriptor } from "@/core/types/comparison";
 import { resolveComparisonDescriptor } from "@/core/constants/comparisonDescriptors";
-import { generateSqlPatchesInWorker, serializeFileDataset } from "@/core/services/workerBridge";
 import { ResyncBanner } from "./ResyncBanner";
 import styles from "./ComparisonResultsView.module.css";
 
@@ -32,6 +32,28 @@ export interface ComparisonResultsViewProps {
   mappingConfig: ColumnMappingConfig;
   sourceDbConfig?: DbConfig;
   descriptor?: ComparisonSourceDescriptor;
+}
+
+function buildComparisonKey({
+  dbConfig,
+  fileDataset,
+  mappingConfig,
+  sourceDbConfig,
+}: Pick<ComparisonResultsViewProps, "dbConfig" | "fileDataset" | "mappingConfig" | "sourceDbConfig">): string {
+  return JSON.stringify([
+    sourceDbConfig?.db_name ?? "",
+    sourceDbConfig?.schema_name ?? "",
+    sourceDbConfig?.table_name ?? "",
+    dbConfig.db_name,
+    dbConfig.schema_name,
+    dbConfig.table_name,
+    fileDataset.fileName,
+    mappingConfig.suidColumns,
+    mappingConfig.fieldsToCompare,
+    mappingConfig.compareGeometry,
+    mappingConfig.treatPlaceholdersAsEmpty,
+    mappingConfig.ignoreEncodingArtifacts,
+  ]);
 }
 
 export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
@@ -50,6 +72,12 @@ export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
   const [activeFilter, setActiveFilter] = useState<DiscrepancyFilter>(DiscrepancyFilter.ALL);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeViewTab, setActiveViewTab] = useState<ResultsViewTab>(ResultsViewTab.TABLE);
+
+  const selection = useDiscrepancySelection({
+    items: summary?.items,
+    comparisonKey: buildComparisonKey({ dbConfig, fileDataset, mappingConfig, sourceDbConfig }),
+    primaryKeyColumn: mappingConfig.primaryKeyColumn,
+  });
 
   const errorMessage = error ? error.message : null;
 
@@ -148,6 +176,8 @@ export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               descriptor={descriptor}
+              selection={selection}
+              primaryKeyColumn={mappingConfig.primaryKeyColumn}
             />
           </div>
 
@@ -174,44 +204,15 @@ export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
             </div>
           )}
 
-          {/* SQL Patch Script Drawer */}
+          {/* SQL Patch Script Drawer (selected records only) */}
           <div className={activeViewTab === ResultsViewTab.SQL ? undefined : styles.tabHidden}>
-            <SqlPatchDrawer
-              sqlUpdateScript={summary.sqlUpdateScript}
-              sqlInsertScript={summary.sqlInsertScript}
-              sqlUpdatePreview={summary.sqlUpdatePreview}
-              sqlInsertPreview={summary.sqlInsertPreview}
-              sqlUpdateCount={summary.sqlUpdateCount}
-              sqlInsertCount={summary.sqlInsertCount}
-              tableName={dbConfig.table_name}
+            <SelectionSqlPatchDrawer
+              summary={summary}
+              selectedIds={selection.selectedIds}
+              selectionVersion={selection.selectionVersion}
+              fileDataset={fileDataset}
+              mappingConfig={mappingConfig}
               dbConfig={dbConfig}
-              onGenerateFullScript={async () => {
-                const actionableItems = summary.items.filter(
-                  (item) =>
-                    item.type === DiscrepancyType.ATTRIBUTE_MISMATCH ||
-                    item.type === DiscrepancyType.GEOMETRY_MISMATCH ||
-                    item.type === DiscrepancyType.ONLY_IN_SHP
-                );
-                const serializedDataset = serializeFileDataset(
-                  "recordsMap" in fileDataset
-                    ? fileDataset
-                    : {
-                        ...fileDataset,
-                        recordsMap: new Map(),
-                      }
-                );
-                return generateSqlPatchesInWorker({
-                  discrepancyItems: actionableItems,
-                  fileDataset: serializedDataset,
-                  mappingConfig: {
-                    ...mappingConfig,
-                    targetSrid: summary.targetSrid ?? mappingConfig.targetSrid,
-                  },
-                  dbSchemaName: dbConfig.schema_name,
-                  dbTableName: dbConfig.table_name,
-                  dbColumnTypes: summary.dbColumnTypes,
-                });
-              }}
             />
           </div>
         </div>

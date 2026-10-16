@@ -96,6 +96,12 @@
   white-space: nowrap;
 }
 
+.thSelect {
+  width: 44px;
+  min-width: 44px;
+  text-align: center;
+}
+
 .thSuid {
   min-width: 140px;
 }

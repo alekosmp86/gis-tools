@@ -1,10 +1,16 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { SqlScriptType } from "@/core/types/comparison";
 import type { ExecuteBatchResult } from "@/core/types/db";
 import { AlertType } from "@/ui-kit/types/ui";
+import { formatNumber } from "@/core/common/ValueFormatter";
 
 const MAX_PREVIEW_LINES = 25;
+
+const NONE_EXECUTED: Record<SqlScriptType, boolean> = {
+  [SqlScriptType.UPDATE]: false,
+  [SqlScriptType.INSERT]: false,
+};
 
 interface ScriptPreviewStats {
   readonly previewScript: string;
@@ -20,6 +26,8 @@ export interface UseSqlPatchDrawerStateParams {
   sqlUpdateCount?: number;
   sqlInsertCount?: number;
   tableName: string;
+  selectedCount: number;
+  selectionVersion: number;
   onGenerateFullScript?: () => Promise<{ sqlUpdateScript: string; sqlInsertScript: string }>;
 }
 
@@ -65,6 +73,8 @@ export function useSqlPatchDrawerState({
   sqlUpdateCount,
   sqlInsertCount,
   tableName,
+  selectedCount,
+  selectionVersion,
   onGenerateFullScript,
 }: UseSqlPatchDrawerStateParams) {
   const queryClient = useQueryClient();
@@ -72,22 +82,29 @@ export function useSqlPatchDrawerState({
   const [copied, setCopied] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [lazyScripts, setLazyScripts] = useState<{
+  const [lazyCache, setLazyCache] = useState<{
+    version: number;
     sqlUpdateScript?: string;
     sqlInsertScript?: string;
-  }>({});
-  const [executedTabs, setExecutedTabs] = useState<Record<SqlScriptType, boolean>>({
-    [SqlScriptType.UPDATE]: false,
-    [SqlScriptType.INSERT]: false,
-  });
+  } | null>(null);
+  const latestVersionRef = useRef(selectionVersion);
+  useEffect(() => {
+    latestVersionRef.current = selectionVersion;
+  }, [selectionVersion]);
+  const lazyScripts = lazyCache?.version === selectionVersion ? lazyCache : null;
+  const [executedCache, setExecutedCache] = useState<{
+    version: number;
+    tabs: Record<SqlScriptType, boolean>;
+  }>({ version: selectionVersion, tabs: NONE_EXECUTED });
+  const executedTabs = executedCache.version === selectionVersion ? executedCache.tabs : NONE_EXECUTED;
   const [executionResult, setExecutionResult] = useState<{
     type: AlertType;
     text: string;
   } | null>(null);
 
   const isUpdateTab = activeTab === SqlScriptType.UPDATE;
-  const resolvedUpdateScript = lazyScripts.sqlUpdateScript ?? sqlUpdateScript ?? "";
-  const resolvedInsertScript = lazyScripts.sqlInsertScript ?? sqlInsertScript ?? "";
+  const resolvedUpdateScript = lazyScripts?.sqlUpdateScript ?? sqlUpdateScript ?? "";
+  const resolvedInsertScript = lazyScripts?.sqlInsertScript ?? sqlInsertScript ?? "";
   const activeScript = isUpdateTab ? resolvedUpdateScript : resolvedInsertScript;
 
   // Resolve precomputed values for UPDATE tab
@@ -121,6 +138,8 @@ export function useSqlPatchDrawerState({
   };
 
   const ensureScriptAvailable = async (): Promise<string | null> => {
+    if (selectedCount === 0) return null;
+
     if (activeScript && activeScript.trim() !== "") {
       return activeScript;
     }
@@ -129,13 +148,23 @@ export function useSqlPatchDrawerState({
       return activeScript;
     }
 
+    const requestedVersion = selectionVersion;
     setIsGenerating(true);
 
     try {
       const generated = await onGenerateFullScript();
-      setLazyScripts(generated);
       setIsGenerating(false);
-      return isUpdateTab ? generated.sqlUpdateScript : generated.sqlInsertScript;
+      if (latestVersionRef.current !== requestedVersion) {
+        setExecutionResult({
+          type: AlertType.INFO,
+          text: "La selección cambió durante la generación del script. Vuelva a intentarlo.",
+        });
+        return null;
+      }
+      setLazyCache({ version: requestedVersion, ...generated });
+      const script = isUpdateTab ? generated.sqlUpdateScript : generated.sqlInsertScript;
+      warnOnStatementMismatch(script);
+      return script;
     } catch {
       setIsGenerating(false);
       setExecutionResult({
@@ -144,6 +173,15 @@ export function useSqlPatchDrawerState({
       });
       return null;
     }
+  };
+
+  const warnOnStatementMismatch = (script: string) => {
+    const generatedCount = computeFallbackStats(script, 0).statementCount;
+    if (generatedCount === currentStats.statementCount) return;
+    setExecutionResult({
+      type: AlertType.WARNING,
+      text: `El script generado contiene ${formatNumber(generatedCount)} sentencias, pero se esperaban ${formatNumber(currentStats.statementCount)} según la selección. Revise el script antes de ejecutarlo.`,
+    });
   };
 
   const handleCopy = async () => {
@@ -184,10 +222,10 @@ export function useSqlPatchDrawerState({
   };
 
   const handleExecutionCompleted = (res: ExecuteBatchResult) => {
-    setExecutedTabs((prev) => ({
-      ...prev,
-      [activeTab]: true,
-    }));
+    setExecutedCache({
+      version: selectionVersion,
+      tabs: { ...executedTabs, [activeTab]: true },
+    });
 
     setExecutionResult({
       type: res.success ? AlertType.SUCCESS : AlertType.WARNING,

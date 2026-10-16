@@ -8,8 +8,12 @@ import { SqlPatchTabs } from "./SqlPatchTabs";
 import { SqlPatchPreviewBox } from "./SqlPatchPreviewBox";
 import { SqlExecutionModal } from "../SqlExecutionModal";
 import { useSqlPatchDrawerState } from "./useSqlPatchDrawerState";
+import { AlertType } from "@/ui-kit/types/ui";
 import type { DbConfig } from "@/core/types/db";
 import styles from "./SqlPatchDrawer.module.css";
+
+const EMPTY_SELECTION_MESSAGE =
+  "No hay registros seleccionados. Seleccione registros en la tabla de discrepancias para generar el script.";
 
 export interface SqlPatchDrawerProps {
   sqlUpdateScript?: string;
@@ -20,6 +24,8 @@ export interface SqlPatchDrawerProps {
   sqlInsertCount?: number;
   tableName: string;
   dbConfig: DbConfig;
+  selectedCount: number;
+  selectionVersion: number;
   onExecutingChange?: (executing: boolean) => void;
   onGenerateFullScript?: () => Promise<{ sqlUpdateScript: string; sqlInsertScript: string }>;
 }
@@ -33,6 +39,8 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
   sqlInsertCount,
   tableName,
   dbConfig,
+  selectedCount,
+  selectionVersion,
   onGenerateFullScript,
 }) => {
   const {
@@ -64,8 +72,11 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
     sqlUpdateCount,
     sqlInsertCount,
     tableName,
+    selectedCount,
+    selectionVersion,
     onGenerateFullScript,
   });
+  const hasSelection = selectedCount > 0;
 
   return (
     <div className={styles.container}>
@@ -73,12 +84,12 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
       <SqlPatchHeader>
         <SqlPatchCopyButton
           copied={copied}
-          disabled={false}
+          disabled={!hasSelection}
           isLoading={isGenerating}
           onClick={handleCopy}
         />
         <SqlPatchDownloadButton
-          disabled={false}
+          disabled={!hasSelection}
           isLoading={isGenerating}
           onClick={handleDownload}
         />
@@ -92,6 +103,12 @@ export const SqlPatchDrawer: React.FC<SqlPatchDrawerProps> = ({
           />
         )}
       </SqlPatchHeader>
+
+      {!hasSelection && (
+        <div className={styles.alertWrapper}>
+          <AlertMessage type={AlertType.INFO} text={EMPTY_SELECTION_MESSAGE} />
+        </div>
+      )}
 
       {/* Execution Feedback Alert */}
       {executionResult && (

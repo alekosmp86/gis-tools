@@ -3,12 +3,16 @@ import type { DiscrepancyItem, ComparisonSourceDescriptor, DiscrepancyFilter } f
 import { DiscrepancyType } from "@/core/types/comparison";
 import { DiscrepancySuidCell } from "../DiscrepancySuidCell";
 import { DiscrepancyTypeBadge } from "../DiscrepancyTypeBadge";
+import { DiscrepancySelectCell } from "./DiscrepancySelectCell";
 import styles from "./DiscrepanciesTable.module.css";
 
 export interface DiscrepancyItemRowsProps {
   item: DiscrepancyItem;
   descriptor: ComparisonSourceDescriptor;
   activeFilter?: DiscrepancyFilter;
+  isSelected: boolean;
+  isSelectionBlocked: boolean;
+  onToggleSelect: (id: string) => void;
 }
 
 interface TableDiffRow {
@@ -22,6 +26,9 @@ interface TableDiffRow {
 export const DiscrepancyItemRows: React.FC<DiscrepancyItemRowsProps> = ({
   item,
   descriptor,
+  isSelected,
+  isSelectionBlocked,
+  onToggleSelect,
 }) => {
   const diffRows: TableDiffRow[] = [];
 
@@ -73,6 +80,15 @@ export const DiscrepancyItemRows: React.FC<DiscrepancyItemRowsProps> = ({
     <>
       {diffRows.map((row, rowIndex) => (
         <tr key={`${item.id}-${row.fieldName}-${rowIndex}`} className={styles.tableRow}>
+          {rowIndex === 0 && (
+            <DiscrepancySelectCell
+              item={item}
+              rowSpan={totalRows}
+              checked={isSelected}
+              blocked={isSelectionBlocked}
+              onToggle={onToggleSelect}
+            />
+          )}
           {rowIndex === 0 && (
             <DiscrepancySuidCell
               item={item}
