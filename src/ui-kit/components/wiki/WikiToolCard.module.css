@@ -1,0 +1,29 @@
+.card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-main);
+  text-decoration: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.card:hover {
+  border-color: var(--border-glow);
+  background: var(--bg-card-hover);
+}
+
+.icon {
+  color: var(--accent-cyan);
+}
+
+.title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.meta {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}

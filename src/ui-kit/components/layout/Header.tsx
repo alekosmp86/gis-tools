@@ -1,5 +1,6 @@
 import React from "react";
-import { Layers, Terminal } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, Layers, Terminal } from "lucide-react";
 import styles from "./Header.module.css";
 
 export const Header: React.FC = () => {
@@ -17,6 +18,10 @@ export const Header: React.FC = () => {
         </div>
 
         <div className={styles.headerActions}>
+          <Link href="/wiki" className={styles.envTag}>
+            <BookOpen size={14} />
+            <span>Wiki</span>
+          </Link>
           <div className={styles.envTag}>
             <Terminal size={14} />
             <span>Node 24 Portable</span>

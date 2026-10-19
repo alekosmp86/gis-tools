@@ -1,0 +1,37 @@
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-left: 4px solid var(--callout-color);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.note {
+  --callout-color: var(--accent-cyan);
+}
+
+.tip {
+  --callout-color: var(--accent-emerald);
+}
+
+.warning {
+  --callout-color: var(--accent-amber);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--callout-color);
+}
+
+.body > :first-child {
+  margin-top: 0;
+}
+
+.body > :last-child {
+  margin-bottom: 0;
+}

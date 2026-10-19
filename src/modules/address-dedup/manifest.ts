@@ -22,6 +22,7 @@ export const addressDedupModule: AppModuleManifest = {
   name: "Duplicados de Direcciones",
   description:
     "Detecta direcciones duplicadas entre ANTEL, TLK e IDE directamente en PostgreSQL y exporta el resultado para QGIS. Puede eliminar los duplicados confirmados, tras simular y confirmar.",
+  wiki: { contentDir: "src/modules/address-dedup/wiki" },
   endpoints: defineModuleEndpoints(routeDeclarations, {
     "POST provinces": handlers.provinces,
     "POST analyze": handlers.analyze,

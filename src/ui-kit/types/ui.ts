@@ -41,6 +41,8 @@ export interface BaseToolCardData {
   readonly icon: LucideIcon;
   readonly description: string;
   readonly tags: readonly string[];
+  /** Tool slug under which this tool's wiki pages are served, e.g. "db-csv-sync". */
+  readonly wikiSlug: string;
 }
 
 export interface EnabledToolCardData extends BaseToolCardData {

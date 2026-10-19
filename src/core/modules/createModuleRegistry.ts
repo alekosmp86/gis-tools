@@ -6,6 +6,7 @@ import type {
   RegisteredEndpoint,
   RegisteredPage,
 } from "./contracts";
+import type { WikiSource } from "../wiki/types";
 import { resolveModuleRoutePath } from "./moduleRoutePaths";
 
 /** Module ids become URL segments and directory names, so they are constrained. */
@@ -115,6 +116,16 @@ function collectPages<TUiContribution, TPageComponent>(
   return collected;
 }
 
+function collectWikiSources<TUiContribution, TPageComponent>(
+  manifests: ReadonlyArray<ModuleManifest<TUiContribution, TPageComponent>>
+): ReadonlyArray<WikiSource> {
+  return manifests.flatMap((manifest) =>
+    manifest.wiki
+      ? [{ toolSlug: manifest.id, title: manifest.name, contentDir: manifest.wiki.contentDir }]
+      : []
+  );
+}
+
 function collectNavigation<TUiContribution, TPageComponent>(
   manifests: ReadonlyArray<ModuleManifest<TUiContribution, TPageComponent>>
 ): ReadonlyArray<ModuleNavigationEntry> {
@@ -146,6 +157,7 @@ export function createModuleRegistry<TUiContribution = never, TPageComponent = n
   const pages = collectPages(manifests);
   assertUniquePageRoutes(pages);
 
+  const wikiSources = collectWikiSources(manifests);
   const navigation = collectNavigation(manifests);
   const uiContributions = manifests.flatMap((manifest) => [...(manifest.ui ?? [])]);
   const modulesById = new Map(manifests.map((manifest) => [manifest.id, manifest]));
@@ -167,5 +179,6 @@ export function createModuleRegistry<TUiContribution = never, TPageComponent = n
     uiContributions: () => uiContributions,
     pages: () => pages,
     findPage: (routePath) => pagesByRoute.get(routePath) ?? null,
+    wikiSources: () => wikiSources,
   };
 }
