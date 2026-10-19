@@ -1,5 +1,8 @@
 {
-  "entry": ["src/modules/coverage-loads/shp/job/jobEntry.ts"],
+  "entry": [
+    "src/modules/coverage-loads/shp/job/jobEntry.ts",
+    "tests/e2e/wiki-screenshots/*.shots.ts"
+  ],
   "dynamicallyLoaded": [
     "src/components/tools/db-sync-common/LoadedFileCard.module.css",
     "src/components/tools/db-sync-common/SectionCard.module.css",

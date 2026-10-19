@@ -7,10 +7,9 @@ import { nodeWikiFileSystem } from "@/core/wiki/nodeWikiFileSystem";
 import type { WikiIndex } from "@/core/wiki/types";
 import { MarkdownRenderer } from "@/ui-kit/components/wiki/MarkdownRenderer";
 
-const SLUGS = [
+const PLACEHOLDER_SLUGS = [
   "db-shapefile-sync",
   "db-csv-sync",
-  "db-db-sync",
   "file-viewer",
   "db-table-viewer",
   "address-dedup",
@@ -18,14 +17,14 @@ const SLUGS = [
   "coverage-loads",
 ];
 
-describe("placeholder wiki pages", () => {
+describe("placeholder wiki pages (tools without real content yet; remove a slug here once it gets real pages)", () => {
   let index: WikiIndex;
 
   beforeAll(async () => {
     index = await buildWikiIndex(getWikiSources(), nodeWikiFileSystem);
   });
 
-  it.each(SLUGS)("should render %s/index as a Nota callout saying En construcción", (slug) => {
+  it.each(PLACEHOLDER_SLUGS)("should render %s/index as a Nota callout saying En construcción", (slug) => {
     const page = index.findPage(slug, "index");
 
     expect(page, slug).not.toBeNull();

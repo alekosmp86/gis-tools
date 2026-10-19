@@ -12,7 +12,8 @@ export async function generateMetadata({ params }: WikiContentPageProps): Promis
   const [{ tool: toolSlug, page: pageSlug }, wikiIndex] = await Promise.all([params, getWikiIndex()]);
   const tool = wikiIndex.findTool(toolSlug);
   const page = wikiIndex.findPage(toolSlug, pageSlug);
-  return { title: tool && page ? `${page.title} | ${tool.title} | Wiki` : "Wiki" };
+  if (!tool || !page) return { title: "Wiki" };
+  return { title: page.title === tool.title ? `${tool.title} | Wiki` : `${page.title} | ${tool.title} | Wiki` };
 }
 
 export default async function WikiContentPage({ params }: WikiContentPageProps) {

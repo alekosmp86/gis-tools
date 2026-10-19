@@ -36,6 +36,7 @@ function buildComponents(toolSlug: string): Components {
           width={0}
           height={0}
           sizes="100vw"
+          loading="eager"
           unoptimized
           className={styles.image}
         />

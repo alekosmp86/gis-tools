@@ -1,7 +1,7 @@
 .markdown {
   line-height: 1.7;
   color: var(--text-main);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .markdown h1,
@@ -88,6 +88,8 @@
   padding: 8px 12px;
   border: 1px solid var(--border-color);
   text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
 }
 
 .tableScroll th {
