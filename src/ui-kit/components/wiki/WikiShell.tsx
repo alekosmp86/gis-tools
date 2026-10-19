@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Header } from "@/ui-kit/components/layout/Header";
 import { Footer } from "@/ui-kit/components/layout/Footer";
+import { BackToTopButton } from "@/ui-kit/components/BackToTopButton";
 import styles from "./WikiShell.module.css";
 
 export interface WikiShellProps {
@@ -24,5 +25,6 @@ export const WikiShell: React.FC<WikiShellProps> = ({ children }) => (
     </main>
 
     <Footer />
+    <BackToTopButton />
   </div>
 );

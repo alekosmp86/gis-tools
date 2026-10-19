@@ -19,6 +19,8 @@ Each tool owns one directory. The directory name is the tool slug and each file 
 
 The "?" link is rendered by `src/ui-kit/components/HomeCardFrame.tsx`, a wrapper that places the link beside the card (never inside the card's own link) so the two anchors do not nest.
 
+Every wiki page shows a floating back-to-top button once the page is scrolled down; it is provided by `WikiShell`, so there is nothing to configure per tool.
+
 ---
 
 ## 2. Adding a Page to a Tool
