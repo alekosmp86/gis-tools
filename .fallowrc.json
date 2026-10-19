@@ -1,5 +1,8 @@
 {
-  "entry": ["src/modules/coverage-loads/shp/job/jobEntry.ts"],
+  "entry": [
+    "src/modules/coverage-loads/shp/job/jobEntry.ts",
+    "tests/e2e/wiki-screenshots/*.shots.ts"
+  ],
   "dynamicallyLoaded": [
     "src/components/tools/db-sync-common/LoadedFileCard.module.css",
     "src/components/tools/db-sync-common/SectionCard.module.css",
@@ -15,5 +18,12 @@
   ],
   "duplicates": {
     "ignore": ["src/app/tools/m/**", "src/app/api/m/**"]
-  }
+  },
+  "ignoreDependencies": ["react-dom"],
+  "overrides": [
+    {
+      "files": ["tests/unit/app/api/db/records/pgFake.ts"],
+      "rules": { "unused-class-members": "off" }
+    }
+  ]
 }

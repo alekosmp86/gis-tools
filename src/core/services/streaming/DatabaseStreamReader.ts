@@ -39,7 +39,7 @@ export class DatabaseStreamReader {
     dbConfig: DbConfig,
     mappingConfig?: Partial<ColumnMappingConfig>,
     onProgress?: ProgressCallback,
-    options?: { limit?: number; offset?: number }
+    options?: { limit?: number; offset?: number; rawValues?: boolean }
   ): Promise<DatabaseFetchResult> {
     onProgress?.("Conectando a base de datos PostgreSQL...", 0, 0);
 
@@ -55,6 +55,10 @@ export class DatabaseStreamReader {
     }
     if (typeof options?.offset === "number" && options.offset > 0) {
       requestBody.offset = options.offset;
+    }
+
+    if (options?.rawValues) {
+      requestBody.raw_text_values = true;
     }
 
     const response = await fetch("/api/db/records/stream", {

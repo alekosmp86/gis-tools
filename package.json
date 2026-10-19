@@ -19,6 +19,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
+    "wiki:screenshots": "playwright test -c playwright.wiki.config.ts",
     "graph": "node scripts/generate-dependency-graph.cjs",
     "graph:serve": "node scripts/serve-dependency-graph.cjs"
   },
@@ -33,6 +34,8 @@
     "proj4": "^2.22.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
     "shpjs": "^6.2.0"
   },
   "devDependencies": {

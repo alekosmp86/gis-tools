@@ -21,6 +21,7 @@ export const toolsList: ToolCardData[] = [
     tags: ["Shapefile", "PostGIS", "GeoJSON", "Topología"],
     enabled: true,
     route: "/tools/db-shapefile-sync",
+    wikiSlug: "db-shapefile-sync",
   },
   {
     id: "db-csv-sync",
@@ -33,6 +34,7 @@ export const toolsList: ToolCardData[] = [
     tags: ["CSV", "PostGIS", "Atributos", "SQL"],
     enabled: true,
     route: "/tools/db-csv-sync",
+    wikiSlug: "db-csv-sync",
   },
   {
     id: "db-db-sync",
@@ -45,6 +47,7 @@ export const toolsList: ToolCardData[] = [
     tags: ["PostgreSQL", "PostGIS", "Réplicas", "SQL"],
     enabled: true,
     route: "/tools/db-db-sync",
+    wikiSlug: "db-db-sync",
   },
   {
     id: "file-viewer",
@@ -57,6 +60,7 @@ export const toolsList: ToolCardData[] = [
     tags: ["Shapefile", "GeoJSON", "CSV", "Visor Mapa"],
     enabled: true,
     route: "/tools/file-viewer",
+    wikiSlug: "file-viewer",
   },
   {
     id: "db-table-viewer",
@@ -69,5 +73,6 @@ export const toolsList: ToolCardData[] = [
     tags: ["PostgreSQL", "PostGIS", "Visor Mapa", "Atributos"],
     enabled: true,
     route: "/tools/db-table-viewer",
+    wikiSlug: "db-table-viewer",
   },
 ];

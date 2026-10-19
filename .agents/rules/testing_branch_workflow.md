@@ -15,6 +15,14 @@ pipeline below.
   on it can be discarded at any moment.
 - **The tested commit is the promoted commit.** Promotion is a fast-forward of the exact object that
   passed the gauntlet — never a second, separate merge that was never verified.
+- **One branch per topic.** At the start of every request that is a different topic, run
+  `git status`. If the tree holds work from another topic, commit it by topic on its own branch first
+  (through the git operator). Then `git switch main && git switch -c <type>/<topic>` **before**
+  delegating any implementer work. Never mix topics in one working tree: it forces a later untangling
+  and makes each branch's gauntlet meaningless. Commits are also split by topic (fix, test and docs
+  commits stay separate).
+- **Merge and push only on the user's word.** Committing, merging, pushing and force-pushing
+  `testing` happen only on the user's explicit instruction, via fast-forward after integrating `main`.
 
 ## 1. Local Loop — every branch, before requesting promotion
 

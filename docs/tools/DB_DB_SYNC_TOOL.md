@@ -51,13 +51,72 @@ Unlike file-based tools, this tool directly queries both live database connectio
 - Unkeyed paired rows never produce an UPDATE (counted in `unkeyedUpdatesSkippedCount`). INSERTs generated from collision groups may repeat an existing key; a unique constraint would reject them.
 - Counts reconcile: DB rows = match + attribute + geometry + onlyInDb + duplicate (DB side); file rows = match + attribute + geometry + onlyInShp + duplicate (file side) + skipped.
 
-## 5. Selección de registros
-La tabla de discrepancias incluye una casilla por registro (no por fila de campo). Solo los registros seleccionados alimentan el generador SQL, las vistas previas, los contadores y las acciones Copiar, Descargar y Ejecutar en BD.
+## 5. Sync Mode and Full Replace (wipe + reload)
 
-- Seleccionables: `ATTRIBUTE_MISMATCH`, `GEOMETRY_MISMATCH` y `ONLY_IN_SHP`. Sin casilla: `ONLY_IN_DB`, `DUPLICATE_SUID`, `NULL_SUID`, `MATCH`.
-- Registros emparejados sin clave primaria (`isUnkeyedPairedItem`): casilla deshabilitada ("Sin clave primaria: no se puede actualizar de forma segura").
-- Por defecto se seleccionan todos los registros seleccionables y habilitados (constante `DEFAULT_SELECT_ALL = true` en `src/core/selection/selectionDefaults.ts`); el usuario puede usar "Limpiar selección". Sin selección no se invoca al worker y las acciones quedan deshabilitadas.
-- La selección persiste entre paginación, filtros y pestañas; se reinicia al cambiar la comparación y se depura tras la re-analización posterior a una ejecución.
-- Tras ejecutar un script, el estado "ejecutado" se reinicia cuando cambia la selección. Si la selección cambia mientras se genera el script completo, se descarta el resultado y se muestra "La selección cambió durante la generación del script. Vuelva a intentarlo."
-- Barra de selección: "Seleccionar página", "Seleccionar todos (filtro actual)", "Deseleccionar página", "Limpiar selección".
-- Las tarjetas KPI y el aviso de actualizaciones omitidas conservan los valores completos del motor.
+> Spec: [`DB_DB_REPLACE_TARGET_SPEC.md`](../specifications/DB_DB_REPLACE_TARGET_SPEC.md) (AC-1..AC-15).
+
+After the target database (DB 2) connects, a **"Modo de sincronización"** step (step 3) asks how to sync:
+
+| Mode | Steps after the mode step |
+|---|---|
+| **Comparar** (default, the workflow above) | 4 SUID mapping, 5 Parameters, 6 Results |
+| **Reemplazo completo** | 4 Column mapping, 5 Full Replace |
+
+The other tools (`db-shapefile-sync`, `db-csv-sync`) are unchanged: `useWizardMappingState(stepOffset)` defaults to `0` and only db-db-sync passes `1`.
+
+### 5.1 Column mapping (Full Replace)
+
+Source and target tables usually differ in column names and schema. For every **target** column pick a **source** column or "no mapear"; same-name columns are prefilled. Target columns that are `NOT NULL` without a database default must be mapped or given a fixed value (raw SQL expression supported) before continuing. Source columns left unmapped are listed as ignored. Obvious type conflicts (for example text into integer) are flagged, not converted.
+
+### 5.2 Run order and safety
+
+1. The user types the exact target `schema.table` (an empty schema is treated as `public`) and the target password. The screen is red and shows both endpoints.
+2. **All source rows are fetched first** (only the mapped columns, as Postgres text, see 5.3). A failed or incomplete read, an empty source, or no mapped source column aborts with the target untouched.
+3. INSERT statements are built in the browser (batched, yielding to the UI).
+4. Execution: `TRUNCATE TABLE "schema"."table";` (no `CASCADE`) is the **first statement of batch 1**, together with the first 499 INSERTs, in one transaction: if batch 1 fails, the TRUNCATE rolls back and the target is intact. Batch 1 is sent alone; later batches (500 statements each, one request and one transaction per batch) run only if it succeeded.
+5. A failure after batch 1 leaves the target partially loaded. The error text says so. **Re-running Full Replace is safe** (it truncates and reloads again).
+
+Closing or reloading the tab, or losing the connection, interrupts the run at a batch boundary (no batch is ever half-applied) and can leave the target partially loaded; the confirmation text says so.
+
+### 5.3 Value fidelity
+
+Full Replace does not reuse the comparison value cleaner. The source stream is requested with `raw_text_values: true`: the data queries (single-shot and cursor `FETCH`) run with a per-query pg type parser that returns raw Postgres text for every type, so timestamps, numerics, booleans, json, arrays and bytea keep their exact value and no JavaScript `Date` timezone shift happens. The row-count and SRID queries are unaffected, and the compare flow is unchanged when the flag is absent.
+
+`formatReplaceLiteral` always quotes values (Postgres casts the literal to the column type), doubles `'`, keeps empty strings, and uses the `E'...'` form for backslashes and line breaks so every statement stays on a single line (the executor splits scripts on newlines). Exceptions: `NULL` stays `NULL`; an empty string mapped to a numeric, temporal, boolean or geometry target becomes `NULL`; geometry goes through `SqlScriptBuilder.buildPostgisGeomExpr` with the target column type and SRID (source GeoJSON is always EPSG:4326). Byte-identical duplicate source rows are copied (no pairing happens).
+
+### 5.4 The run survives navigation
+
+The run lives in a module-level store (`src/core/services/fullReplaceRunStore.ts`, bound with `useFullReplaceRun`), not in React state:
+
+- Leaving the page does not stop the run. Coming back shows `FullReplaceRunPanel` (live progress, then the summary or error) instead of the wizard, until the user presses **Cerrar** (only offered when the run is done or failed).
+- A second run cannot start while one is running, from anywhere.
+- The `beforeunload` confirmation is registered by the store while running, so closing the tab warns even when the page is not mounted.
+- The password is passed into the run and never stored in the store state.
+- A run token ignores late progress callbacks from a finished run.
+
+### 5.5 Known limits
+
+- No cancel and no timeout: a request that never answers keeps the panel in "running" until the tab is reloaded.
+- Only a server-side job could survive closing the browser; not implemented.
+- `uuid`, `json(b)` and `bytea` targets are treated as text for the empty-string rule (an empty string there still fails its batch).
+- The records query still ships an unmapped geometry column.
+- Batch error labels ("Lote N (a-b)") count statements, and statement 1 is the TRUNCATE (plus one statement per reset sequence).
+- No client-side timeout or abort (aborting a request does not cancel the server transaction, so a re-run could interleave with it).
+
+### 5.6 Sequence reset and ANALYZE
+
+- **Sequence reset** (checkbox "Reiniciar secuencias del destino", on by default). Sequences behind target columns that are NOT mapped from the source (default `nextval('<seq>'::regclass)`, read from the column metadata already loaded) get `ALTER SEQUENCE "schema"."seq" RESTART WITH 1;` right after the TRUNCATE, inside batch 1, so a failed first batch rolls everything back. (`TRUNCATE ... RESTART IDENTITY` is not enough: the sequences are normally not owned by the columns.) Limits: a sequence shared with another table is reset too and that table's next ids can collide; an unqualified default is assumed to live in the target schema; `GENERATED ... AS IDENTITY` columns are not reset; the role must own the sequence (otherwise untick the checkbox).
+- **ANALYZE.** After a run with zero errors, `ANALYZE "schema"."table";` is sent as its own request so the planner has fresh statistics (autovacuum may be off, and TRUNCATE zeroes them). A failure only produces a warning. On PostgreSQL 11 a non-owner gets a silent warning and a success, so the summary says "ANALYZE enviado", not "statistics updated".
+- Batch error labels ("Lote N (a-b)") count statements, and statement 1 is the TRUNCATE.
+
+## 6. Record Selection
+
+The discrepancies table has one checkbox per record (not per field row). Only the selected records feed the SQL generator, the previews, the counters and the Copy, Download and Execute actions.
+
+- Selectable: `ATTRIBUTE_MISMATCH`, `GEOMETRY_MISMATCH` and `ONLY_IN_SHP`. No checkbox: `ONLY_IN_DB`, `DUPLICATE_SUID`, `NULL_SUID`, `MATCH`.
+- Paired records without a primary key (`isUnkeyedPairedItem`): the checkbox is disabled ("Sin clave primaria: no se puede actualizar de forma segura").
+- By default every selectable, enabled record is selected (constant `DEFAULT_SELECT_ALL = true` in `src/core/selection/selectionDefaults.ts`); the user can use "Limpiar selección". With nothing selected the worker is not invoked and the actions are disabled.
+- The selection persists across pagination, filters and tabs; it resets when the comparison changes and is pruned after the re-analysis that follows an execution.
+- After a script is executed, its "executed" state resets when the selection changes. If the selection changes while the full script is being generated, the result is discarded and "La selección cambió durante la generación del script. Vuelva a intentarlo." is shown.
+- Selection bar: "Seleccionar página", "Seleccionar todos (filtro actual)", "Deseleccionar página", "Limpiar selección".
+- The KPI cards and the skipped-updates warning keep the engine's full values.

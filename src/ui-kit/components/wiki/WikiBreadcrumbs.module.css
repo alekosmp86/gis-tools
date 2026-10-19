@@ -1,0 +1,26 @@
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.link {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.link:hover {
+  color: var(--accent-cyan);
+}
+
+.separator {
+  color: var(--text-dim);
+}
+
+.current {
+  color: var(--text-main);
+  font-weight: 600;
+}

@@ -10,6 +10,8 @@
  * manifest for module authors.
  */
 
+import type { WikiSource } from "../wiki/types";
+
 /** HTTP methods a module endpoint may declare. */
 export const ModuleHttpMethod = {
   GET: "GET",
@@ -119,6 +121,12 @@ export interface ModuleNavigationEntry {
   readonly order?: number;
 }
 
+/** Where a module keeps its end-user wiki pages. */
+export interface ModuleWikiDeclaration {
+  /** Repo-relative directory of `.md` pages and images, resolved against `process.cwd()`. */
+  readonly contentDir: string;
+}
+
 /**
  * What a module declares about itself.
  *
@@ -132,6 +140,8 @@ export interface ModuleManifest<TUiContribution = never, TPageComponent = never>
   readonly navigation?: ReadonlyArray<ModuleNavigationEntry>;
   readonly ui?: ReadonlyArray<TUiContribution>;
   readonly pages?: ReadonlyArray<ModulePage<TPageComponent>>;
+  /** Omitted by modules without end-user help pages. */
+  readonly wiki?: ModuleWikiDeclaration;
 }
 
 /**
@@ -180,4 +190,6 @@ export interface ModuleRegistry<TUiContribution = never, TPageComponent = never>
    * what a route file left behind by a deleted module looks like.
    */
   findPage(routePath: string): RegisteredPage<TPageComponent> | null;
+  /** Wiki sources of the modules that declared one: tool slug = module id, title = module name. */
+  wikiSources(): ReadonlyArray<WikiSource>;
 }

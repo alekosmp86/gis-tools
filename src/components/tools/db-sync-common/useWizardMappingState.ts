@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { ColumnMappingConfig, SuidMappingStepRef, SyncParametersStepRef } from "@/core/types/comparison";
 
-export function useWizardMappingState() {
+export function useWizardMappingState(stepOffset: number = 0) {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [mappingConfig, setMappingConfig] = useState<ColumnMappingConfig | null>(null);
   const [isMappingReady, setIsMappingReady] = useState(true);
@@ -14,12 +14,12 @@ export function useWizardMappingState() {
       ...previous,
       ...config,
     }));
-    setCurrentStep(4);
+    setCurrentStep(4 + stepOffset);
   };
 
   const handleSyncParametersSuccess = (finalConfig: ColumnMappingConfig) => {
     setMappingConfig(finalConfig);
-    setCurrentStep(5);
+    setCurrentStep(5 + stepOffset);
   };
 
   const handleStepClick = (stepId: number) => {

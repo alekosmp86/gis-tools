@@ -1,5 +1,5 @@
 import type React from "react";
-import type { ModuleManifest, RegisteredPage } from "@/core/modules/contracts";
+import type { ModuleManifest } from "@/core/modules/contracts";
 
 /**
  * Presentation half of the module contracts.
@@ -84,9 +84,6 @@ export interface FileSourceSlotValue {
 
 /** A page component contributed by a module; it renders as a route of its own. */
 export type ModulePageComponent = React.ComponentType;
-
-/** What a generated page route resolves out of the registry. */
-export type RegisteredModulePage = RegisteredPage<ModulePageComponent>;
 
 /** The manifest shape module authors implement. */
 export type AppModuleManifest = ModuleManifest<UiContribution, ModulePageComponent>;

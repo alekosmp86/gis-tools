@@ -33,6 +33,7 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`ADDRESS_DEDUP_MODULE.md`](docs/tools/ADDRESS_DEDUP_MODULE.md) — Duplicados de Direcciones as an extension module: the CGEO-2192 v3 SQL as a read-only engine, the decision table with `decision_reason`, the `protectedSiblingRemovesLone` toggle, output scope, CSV/GeoJSON exports for QGIS, and its own generated page at `/tools/m/address-dedup`.
 - [`COVERAGE_LOADS_MODULE.md`](docs/tools/COVERAGE_LOADS_MODULE.md) — Cargas de Coberturas as an extension module (part 2, Indicadores LTE): `IndicadoresLTE_aaaammdd.csv` cuts loaded into the history with replace-the-cut, shrink guard, row-level rejection list, the three report CSVs as downloads, required privileges (DELETE on the history), and its own generated page at `/tools/m/coverage-loads`.
 - [`POSTGIS_TABLE_VIEWER_TOOL.md`](docs/tools/POSTGIS_TABLE_VIEWER_TOOL.md) — PostGIS / PostgreSQL Table Viewer tool, direct table introspection, and vector map preview.
+- [`WIKI.md`](docs/tools/WIKI.md) — End-user wiki: Markdown pages owned by each tool or module, the "?" link on home cards, frontmatter, callouts, relative links and images, and the link/image/title validation in the test suite.
 
 ### 📋 5. Specifications (`docs/specifications/`)
 - [`REQUERIMIENTOS_Y_ESPECIFICACION.md`](docs/specifications/REQUERIMIENTOS_Y_ESPECIFICACION.md) — System requirements and specifications.

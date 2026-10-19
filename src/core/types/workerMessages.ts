@@ -13,9 +13,6 @@ export const ComparisonWorkerMessageType = {
   ERROR: "ERROR",
 } as const;
 
-export type ComparisonWorkerMessageType =
-  (typeof ComparisonWorkerMessageType)[keyof typeof ComparisonWorkerMessageType];
-
 export interface SerializableFileDataset {
   fileName: string;
   fileSize: number;

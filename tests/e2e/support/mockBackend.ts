@@ -19,7 +19,6 @@ import {
 
 export type DbColumnsResponse = typeof DEFAULT_DB_COLUMNS_RESPONSE;
 export type DbExecuteResponse = typeof DEFAULT_EXECUTE_RESPONSE;
-export type DbTestResponse = typeof DEFAULT_TEST_RESPONSE;
 
 export interface MockBackendOptions {
   columns?: DbColumnsResponse | ((body: Record<string, unknown>) => DbColumnsResponse);

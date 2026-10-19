@@ -21,6 +21,7 @@ export const coverageLoadsModule: AppModuleManifest = {
   name: "Cargas de Coberturas",
   description:
     "Carga los indicadores de cobertura LTE (IndicadoresLTE_aaaammdd.csv) al histórico reemplazando el corte, y genera los tres reportes CSV.",
+  wiki: { contentDir: "src/modules/coverage-loads/wiki" },
   endpoints: defineModuleEndpoints(routeDeclarations, {
     "POST indicators/plan": handlers.indicators.plan,
     "POST indicators/load": handlers.indicators.load,

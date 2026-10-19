@@ -17,6 +17,7 @@ import {
   hasRequiredConnectionParams,
   inspectRecordsTable,
   parseRecordsRequest,
+  RAW_TEXT_TYPES,
   type RecordsRequestParams,
 } from "@/core/services/server/dbRecordsQuery";
 import type { Client } from "pg";
@@ -85,10 +86,38 @@ describe("parseRecordsRequest", () => {
     expect(parseRecordsRequest(body)).toEqual(body);
   });
 
+  it("should keep raw_text_values only when it is exactly true", () => {
+    expect(parseRecordsRequest({ raw_text_values: true }).raw_text_values).toBe(true);
+  });
+
+  it.each([["true"], [1], [false], [null], [undefined], [{}]])(
+    "should drop raw_text_values when it is %j",
+    (value) => {
+      expect(parseRecordsRequest({ raw_text_values: value }).raw_text_values).toBeUndefined();
+    }
+  );
+
+  it("should leave raw_text_values undefined when absent", () => {
+    expect(parseRecordsRequest({}).raw_text_values).toBeUndefined();
+  });
+
   it("should preserve suid_column and suid_columns independently", () => {
     expect(parseRecordsRequest({ suid_column: "a" })).toMatchObject({ suid_column: "a", suid_columns: undefined });
     expect(parseRecordsRequest({ suid_columns: ["b"] })).toMatchObject({ suid_column: undefined, suid_columns: ["b"] });
   });
+});
+
+describe("RAW_TEXT_TYPES", () => {
+  it.each([16, 20, 23, 25, 1082, 1114, 1184, 1700, 3802, 99999])(
+    "should return an identity parser for type oid %i",
+    (oid) => {
+      const getTypeParser = RAW_TEXT_TYPES.getTypeParser as (typeOid: number) => (value: string) => string;
+      const parser = getTypeParser(oid);
+      expect(parser("1.0")).toBe("1.0");
+      expect(parser("")).toBe("");
+      expect(parser("  x\n")).toBe("  x\n");
+    }
+  );
 });
 
 describe("hasRequiredConnectionParams", () => {

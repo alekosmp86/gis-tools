@@ -15,10 +15,6 @@ export class SuidKeyResolver {
     return cleanValue(value);
   }
 
-  public cleanKeyString(value: unknown): string {
-    return cleanSuid(value);
-  }
-
   public cleanKeyPart(value: unknown, options?: SuidKeyOptions): string {
     const cleaned = cleanSuid(value);
     if (options?.treatPlaceholdersAsEmpty && PLACEHOLDER_VALUES.has(cleaned)) {

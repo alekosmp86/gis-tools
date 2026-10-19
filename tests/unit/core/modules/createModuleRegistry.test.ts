@@ -295,4 +295,25 @@ describe("createModuleRegistry: module pages", () => {
     expect(registry.findEndpoint(ModuleHttpMethod.GET, "reports")?.moduleId).toBe("reports");
     expect(registry.findPage("reports")?.moduleId).toBe("reports");
   });
+
+  it("should return no wiki sources when no manifest declares a wiki", () => {
+    const registry = createModuleRegistry([buildManifest()]);
+
+    expect(registry.wikiSources()).toEqual([]);
+  });
+
+  it("should expose one wiki source per declaring module in manifest order", () => {
+    // Arrange
+    const registry = createModuleRegistry([
+      buildManifest({ id: "beta", name: "Beta", wiki: { contentDir: "src/modules/beta/wiki" } }),
+      buildManifest({ id: "plain", name: "Plain" }),
+      buildManifest({ id: "alpha", name: "Alpha", wiki: { contentDir: "src/modules/alpha/wiki" } }),
+    ]);
+
+    // Act & Assert
+    expect(registry.wikiSources()).toEqual([
+      { toolSlug: "beta", title: "Beta", contentDir: "src/modules/beta/wiki" },
+      { toolSlug: "alpha", title: "Alpha", contentDir: "src/modules/alpha/wiki" },
+    ]);
+  });
 });

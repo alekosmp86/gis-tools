@@ -1,0 +1,56 @@
+.button {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 60;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  outline: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(12px);
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s linear 0.25s,
+    color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s,
+    color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.button:hover,
+.button:focus-visible {
+  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.18);
+  border-color: var(--accent-cyan);
+}
+
+.button:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-cyan-glow);
+}
+
+@media (max-width: 767px) {
+  .button {
+    right: 16px;
+    bottom: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .visible {
+    transition: none;
+  }
+}

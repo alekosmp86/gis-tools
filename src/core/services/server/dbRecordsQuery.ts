@@ -17,6 +17,7 @@ export interface RecordsRequestParams {
   primary_key_column?: string;
   limit?: unknown;
   offset?: unknown;
+  raw_text_values?: boolean;
 }
 
 export interface RecordsTableInfo {
@@ -41,6 +42,7 @@ export function parseRecordsRequest(body: Record<string, unknown>): RecordsReque
     primary_key_column,
     limit,
     offset,
+    raw_text_values,
   } = body as Partial<RecordsRequestParams>;
 
   return {
@@ -49,7 +51,7 @@ export function parseRecordsRequest(body: Record<string, unknown>): RecordsReque
     db_name,
     user,
     password,
-    schema_name,
+    schema_name: schema_name || "public",
     table_name,
     suid_column,
     suid_columns,
@@ -57,8 +59,11 @@ export function parseRecordsRequest(body: Record<string, unknown>): RecordsReque
     primary_key_column,
     limit,
     offset,
+    raw_text_values: raw_text_values === true ? true : undefined,
   };
 }
+
+export const RAW_TEXT_TYPES = { getTypeParser: () => (value: string) => value };
 
 export function hasRequiredConnectionParams(params: RecordsRequestParams): boolean {
   return Boolean(params.db_name && params.user && params.table_name);

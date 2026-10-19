@@ -28,7 +28,16 @@
   investigates, then delegates the fix.
 - **Gauntlet Before Review**: `implementer`/`test-writer` run the full local loop
   (`modules:routes:check`, `lint`, `test`, `build`, `doctor`, `fallow`) on their branch and paste real output
-  before reporting. Review never runs against unverified code.
+  before reporting. Review never runs against unverified code. Every gauntlet or verification brief
+  lists `doctor` and `fallow` as well as the tests, and the report pastes their real output.
+- **Plan With the AI Toolkit**: for every new feature, read `.claude/ai-toolkit/context/` (`structure.md`,
+  `commands.md`, `glossary.md`, `graph-summary.md`; `graphify query` for more) and `.claude/baseline.json`
+  before planning, then run the loop with the project agents plus the global `code-reviewer` and
+  `git-operator`. Not the global `dev-cycle` skill. Details: `.agents/rules/model_delegation.md` section 7.
+- **Verification Is Delegated Too**: the orchestrator never runs the gauntlet, the dev server or any
+  build/test/lint command. Independent verification is folded into the `code-reviewer` brief.
+- **Unrequested Behaviour Is a Question**: the user may have instructed an implementing agent directly.
+  Ask before calling a deviation "unauthorized".
 - **Severity Decides the Round**: **BLOCKER** (wrong behaviour, data loss, crash, security hole, or a
   test weakened/skipped to force green) and **MAJOR** (real defect, genuine performance problem,
   violated project rule, meaningful coverage gap) must be fixed before commit. **MINOR**/**NIT** never
@@ -136,6 +145,7 @@
 - **Principle — Tooling Lives on `main`**: Branch topology governs *promotion*, never *capability*. Test runners, linters and configuration are part of the codebase, so every branch cuts from `main` and inherits the full gauntlet. Never install tooling on `testing` alone.
 - **Principle — `testing` Is Disposable Staging**: Never fix, author, or accumulate work on it. Anything on it may be discarded at any moment.
 - **Principle — Tested Commit Is the Promoted Commit**: Promotion is a fast-forward of the exact object that passed the gauntlet, never a second unverified merge.
+- **Principle — One Branch per Topic**: At the start of every different topic, run `git status`; commit any other topic's work on its own branch first, then `git switch main && git switch -c <type>/<topic>` before delegating any implementer work. Never mix topics in one working tree; commit by topic too. Merge and push only on the user's explicit word.
 - **Local Loop (every branch, before requesting promotion)**: The author runs `npm run lint`, `npm test`, `npm run build`, `npm run doctor` and `npm run fallow` on their own branch. `testing` confirms integration; it is not where failures are discovered.
 - **Step 1 — Integrate `main` into the Candidate**: `git fetch origin`, `git merge origin/main` on the candidate branch, so conflicts are resolved by the author where the context lives. Re-run the local loop afterwards.
 - **Step 2 — Stage the Candidate on `testing`**: `git checkout testing`, `git reset --hard <feature-or-fix-branch>`. No merge, so `testing` cannot hold a combination that differs from what will be promoted. Align a published `testing` with `git push --force-with-lease` — never plain `--force`.

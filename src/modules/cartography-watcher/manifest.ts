@@ -23,6 +23,7 @@ export const cartographyWatcherModule: AppModuleManifest = {
   name: "Observador de Actualizaciones Cartográficas",
   description:
     "Vigila catálogos CKAN abiertos, detecta publicaciones nuevas y mantiene un vault local de archivos cartográficos.",
+  wiki: { contentDir: "src/modules/cartography-watcher/wiki" },
   endpoints: defineModuleEndpoints(routeDeclarations, {
     "GET sources": handlers.listSources,
     "POST sources": handlers.addSource,
