@@ -60,14 +60,7 @@
     "routes_budgets": [],
     "characterization_tests": []
   },
-  "exceptions": [
-    {
-      "suite": "fallow",
-      "scope": "src/core, src/ui-kit, tests/e2e, tests/unit/app",
-      "findings": "5 unused type exports, 4 unused class members, 1 test-only dependency (react-dom)",
-      "reason": "pre-existing at fallow introduction (2026-10-13), not fixed in the wiring change; clear or justify in a follow-up and remove this exception"
-    }
-  ],
+  "exceptions": [],
   "evidence_ref": ".claude/ai-toolkit/evidence/baseline-run-2026-10-06.md",
   "captured_at": "2026-10-06"
 }

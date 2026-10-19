@@ -15,5 +15,12 @@
   ],
   "duplicates": {
     "ignore": ["src/app/tools/m/**", "src/app/api/m/**"]
-  }
+  },
+  "ignoreDependencies": ["react-dom"],
+  "overrides": [
+    {
+      "files": ["tests/unit/app/api/db/records/pgFake.ts"],
+      "rules": { "unused-class-members": "off" }
+    }
+  ]
 }

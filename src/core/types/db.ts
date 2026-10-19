@@ -51,12 +51,6 @@ export interface DbConnectionStatusPayload {
   config: DbConfig;
 }
 
-export interface TestConnectionResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
 export interface ExecuteSqlResponse {
   success: boolean;
   affectedRows?: number;

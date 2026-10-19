@@ -86,5 +86,3 @@ export const KeyboardKey = {
   ENTER: "Enter",
   SPACE: " ",
 } as const;
-
-export type KeyboardKey = (typeof KeyboardKey)[keyof typeof KeyboardKey];
