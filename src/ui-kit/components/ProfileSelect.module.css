@@ -71,6 +71,27 @@
   backdrop-filter: blur(12px);
 }
 
+.searchRow {
+  position: sticky;
+  top: -6px;
+  z-index: 1;
+  margin: -6px -6px 0;
+  padding: 6px;
+  background: #0d1117;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.emptyMessage {
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 .option {
   display: flex;
   align-items: center;
@@ -92,6 +113,10 @@
 .option:focus-visible {
   background: rgba(6, 182, 212, 0.12);
   outline: none;
+}
+
+.optionHighlighted {
+  background: rgba(6, 182, 212, 0.12);
 }
 
 .optionSelected {
