@@ -3,6 +3,10 @@ import type { Locator, Page } from "@playwright/test";
 
 const WIKI_OUTPUT_ROOT = path.join(process.cwd(), "src", "wiki");
 
+const MODULE_WIKI_DIRS: Readonly<Record<string, string>> = {
+  "coverage-loads": path.join(process.cwd(), "src", "modules", "coverage-loads", "wiki"),
+};
+
 const CLEAN_STYLE_ID = "wiki-shot-clean-style";
 const CLEAN_STYLE = `
   nextjs-portal { display: none !important; }
@@ -30,7 +34,8 @@ async function applyCleanStyle(page: Page): Promise<void> {
 }
 
 function shotPath(tool: string, name: string): string {
-  return path.join(WIKI_OUTPUT_ROOT, tool, "images", `${name}.png`);
+  const contentDir = MODULE_WIKI_DIRS[tool] ?? path.join(WIKI_OUTPUT_ROOT, tool);
+  return path.join(contentDir, "images", `${name}.png`);
 }
 
 export async function takeShot(page: Page, { tool, name, target }: ShotOptions): Promise<void> {

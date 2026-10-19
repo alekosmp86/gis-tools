@@ -13,7 +13,6 @@ const PLACEHOLDER_SLUGS = [
   "db-table-viewer",
   "address-dedup",
   "cartography-watcher",
-  "coverage-loads",
 ];
 
 describe("placeholder wiki pages (tools without real content yet; remove a slug here once it gets real pages)", () => {

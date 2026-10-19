@@ -35,7 +35,7 @@ const SAVED_PROFILES = [
   },
 ];
 
-const PROFILES_STORAGE_KEY = "gis_tools_saved_db_profiles_v1";
+export const PROFILES_STORAGE_KEY = "gis_tools_saved_db_profiles_v1";
 
 export function buildProfilesSeedScript(): { key: string; value: string } {
   const now = Date.now();
