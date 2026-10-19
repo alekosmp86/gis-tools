@@ -71,6 +71,13 @@ diff specifically; an assertion loosened to reach green is worse than a failing 
   real types before passing it to an implementer.
 - **Challenge the premise.** If the plan or the requirement is what produced a bad structure, say so
   and name the decision. Reviewing only what the implementer controlled hides the real cause.
+- **Scope findings are questions.** When a diff does something the brief did not ask for, separate two
+  things before writing the finding: (1) was the *goal* legitimate — the user may have instructed the
+  implementing agent directly, outside the brief the orchestrator wrote — and (2) was the *mechanism*
+  sound regardless of who asked for it (scoped to the right files, not leaking into out-of-scope
+  tools, keeping configurability instead of deleting it). Findings about (2) stand on their own merits.
+  A finding framed as "this was not asked for" (1) is phrased as a question to confirm with the user,
+  never asserted as fact, and is revised promptly when the user says otherwise.
 - **Report faithfully.** Never launder an unverified claim. Have the gates independently re-run —
   folded into the `code-reviewer` subagent's brief, never executed by the orchestrator itself —
   rather than trusting a report that says they passed.

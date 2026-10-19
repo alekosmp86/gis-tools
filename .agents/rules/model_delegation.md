@@ -63,8 +63,11 @@ project's binding constraints on layering, naming, styling, UI language and test
 ## 4. Interaction with the existing workflow
 
 - **Quality gauntlet** — `implementer`/`test-writer` run the full local loop
-  (`modules:routes:check`, `lint`, `test`, `build`, `doctor`) on their own branch before reporting,
-  and paste real output. Review never runs against unverified code.
+  (`modules:routes:check`, `lint`, `test`, `build`, `doctor`, `fallow`) on their own branch before
+  reporting, and paste real output. Review never runs against unverified code.
+  **Every** gauntlet or verification brief — implementer, test-writer, code-reviewer — lists `doctor`
+  and `fallow` alongside lint, tests, build and the routes check, and the report pastes their real
+  output. Tests alone are not enough before a commit.
 - **Tests as specification** — neither agent may weaken an assertion to reach green; the
   `traceability-reviewer` and the orchestrator treat a weakened, skipped or deleted test as an
   automatic BLOCKER.
@@ -102,3 +105,34 @@ resulting wrong output, crash or cost. A finding without one is a preference.
 - Verify a finding in the code before rejecting it.
 - Report faithfully. A subagent's failure, skipped gate or partial result reaches the user in plain
   terms — delegation must never launder an unverified claim into a confident summary.
+- **Independent verification is delegated too.** To avoid trusting an implementer's pasted claim, fold
+  the gauntlet re-run into the `code-reviewer` subagent's brief (it carries shell access for exactly
+  this) and read the real output it pastes back. The orchestrator's role is: read the diff and the
+  reports, dispatch subagents, adjudicate findings. It never runs the commands itself.
+- **Unrequested behaviour is a question, not a verdict.** The user may have instructed an implementing
+  agent directly, outside the brief the orchestrator wrote. Before calling a deviation "unauthorized",
+  ask the user, and revise promptly if they say otherwise. See `code_review_standards.md` section 6.
+
+## 7. Planning a new feature: use the AI Toolkit
+
+Every new feature in this repository follows the AI Toolkit approach of this file, **not** the global
+`dev-cycle` skill and its Antigravity dual-session flow (retired here: see
+`.claude/ai-toolkit-manifest.json`, `dual_session_pipeline_retirement_scope`).
+
+Before planning, read the toolkit artefacts instead of scanning source file by file:
+
+- `.claude/ai-toolkit/context/` — `structure.md` (the real layout and the modular-monolith
+  convention), `commands.md`, `glossary.md`, `graph-summary.md`. For anything deeper, query the graph:
+  `graphify query "<question>"`, `graphify path`, `graphify explain` (refresh it with
+  `graphify update .` when the code has changed).
+- `.claude/baseline.json` — the baseline contract. A feature must not regress it without a recorded
+  exception.
+- `.claude/ai-toolkit-design.en.md` — the design the pipeline implements.
+
+Then run the loop of section 1 with the project agents in `.claude/agents/` (`implementer`,
+`test-writer`, `traceability-reviewer`) plus the `code-reviewer` agent for review and gauntlet runs
+and the `git-operator` agent for every git operation. `code-reviewer` and `git-operator` are global
+agents (`~/.claude/agents/`), so they must exist on every machine that works on this repo. Start from a
+short spec with numbered acceptance criteria (`docs/specifications/`) so the traceability review has
+something to check. The `create-feature` skill scaffolds a folder, but this repository's convention is
+the modular monolith in `structure.md`, not `src/features`.
