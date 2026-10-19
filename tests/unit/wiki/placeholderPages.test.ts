@@ -9,7 +9,6 @@ import { MarkdownRenderer } from "@/ui-kit/components/wiki/MarkdownRenderer";
 
 const PLACEHOLDER_SLUGS = [
   "db-shapefile-sync",
-  "db-csv-sync",
   "file-viewer",
   "db-table-viewer",
   "address-dedup",

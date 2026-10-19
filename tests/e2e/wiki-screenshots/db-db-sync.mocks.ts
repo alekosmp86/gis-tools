@@ -48,7 +48,7 @@ export function buildProfilesSeedScript(): { key: string; value: string } {
   return { key: PROFILES_STORAGE_KEY, value: JSON.stringify(profiles) };
 }
 
-interface ColumnSpec {
+export interface ColumnSpec {
   name: string;
   type: string;
   nullable?: boolean;
@@ -56,7 +56,7 @@ interface ColumnSpec {
   primaryKey?: boolean;
 }
 
-function buildColumnsResponse(table: string, totalRows: number, specs: ColumnSpec[]): DbColumnsResponse {
+export function buildColumnsResponse(table: string, totalRows: number, specs: ColumnSpec[]): DbColumnsResponse {
   return {
     success: true,
     schema: "public",
@@ -127,11 +127,11 @@ function buildMeta(totalCount: number) {
   return { type: "META", totalCount, columnTypes: COLUMN_TYPES, detectedSrid: 4326 };
 }
 
-function buildChunk(rows: Array<Record<string, unknown>>) {
+export function buildChunk(rows: Array<Record<string, unknown>>) {
   return { type: "CHUNK", current: rows.length, total: rows.length, rows };
 }
 
-function buildNdjsonStream(meta: object, chunk: object): string {
+export function buildNdjsonStream(meta: object, chunk: object): string {
   return [meta, chunk, { type: "DONE" }].map((message) => JSON.stringify(message)).join("\n") + "\n";
 }
 

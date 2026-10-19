@@ -51,7 +51,8 @@ function findWikiContentProblems(
         const rewritten = rewriteWikiHref(tool.toolSlug, link);
         if (rewritten.startsWith(WIKI_ROUTE_PREFIX)) {
           const [toolSlug, pageSlug] = rewritten.slice(WIKI_ROUTE_PREFIX.length).split("#")[0].split("/");
-          if (!index.findPage(toolSlug, pageSlug)) problems.push(`${where}: broken link "${link}"`);
+          const resolves = pageSlug ? index.findPage(toolSlug, pageSlug) : index.findTool(toolSlug);
+          if (!resolves) problems.push(`${where}: broken link "${link}"`);
         } else if (!SCHEME_OR_ROOTED.test(link)) {
           const target = path.resolve(source.contentDir, link.split("#")[0]);
           if (!fileExists(target)) problems.push(`${where}: broken file link "${link}"`);
@@ -162,6 +163,14 @@ describe("findWikiContentProblems", () => {
 
     expect(findWikiContentProblems([source], index, titles("a"), nothingExists)).toEqual([
       't/a: broken link "/wiki/other/p"',
+    ]);
+  });
+
+  it("should accept a tool-root link to a known tool and report one to an unknown tool", () => {
+    const index = indexWith([{ slug: "a", body: "[ok](/wiki/t) [bad](/wiki/ghost)" }]);
+
+    expect(findWikiContentProblems([source], index, titles("a"), nothingExists)).toEqual([
+      't/a: broken link "/wiki/ghost"',
     ]);
   });
 

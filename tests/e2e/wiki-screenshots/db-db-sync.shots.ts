@@ -7,6 +7,7 @@ import {
   TARGET_DB,
   buildProfilesSeedScript,
 } from "./db-db-sync.mocks";
+import { connectDatabase, expectHeading, shotMain } from "./wizardShotHelpers";
 
 const TOOL = "db-db-sync";
 const TOOL_URL = "/tools/db-db-sync";
@@ -25,7 +26,6 @@ const HEADINGS = {
 const COMPARED_ATTRIBUTES = ["departamento", "localidad", "area_m2", "uso_suelo"];
 
 const BUTTONS = {
-  connect: "Conectar y Obtener Columnas",
   toTarget: "Continuar al Paso 2",
   toMode: "Continuar al Paso 3",
   toSuid: "Continuar a Mapeo SUID",
@@ -36,37 +36,14 @@ const BUTTONS = {
   runReplace: "Vaciar destino y recargar desde origen",
 };
 
-interface ConnectionData {
-  host: string;
-  database: string;
-  user: string;
-  password: string;
-  table: string;
-}
-
 async function shot(page: Page, name: string): Promise<void> {
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await takeShot(page, { tool: TOOL, name, target: page.locator("main") });
-}
-
-async function expectHeading(page: Page, name: string | RegExp): Promise<void> {
-  await expect(page.getByRole("heading", { name })).toBeVisible();
-}
-
-async function connect(page: Page, connection: ConnectionData): Promise<void> {
-  await page.getByLabel("Host / Servidor").fill(connection.host);
-  await page.getByLabel("Nombre de Base de Datos").fill(connection.database);
-  await page.getByLabel("Usuario").fill(connection.user);
-  await page.getByLabel("Contraseña (no se guarda)").fill(connection.password);
-  await page.getByLabel("Nombre de la Tabla").fill(connection.table);
-  await page.getByRole("button", { name: BUTTONS.connect }).click();
-  await expect(page.getByText("Conexión establecida con éxito")).toBeVisible();
+  await shotMain(page, TOOL, name);
 }
 
 async function connectSource(page: Page): Promise<void> {
   await page.goto(TOOL_URL);
   await expectHeading(page, HEADINGS.source);
-  await connect(page, SOURCE_DB);
+  await connectDatabase(page, SOURCE_DB);
 }
 
 async function goToTarget(page: Page): Promise<void> {
@@ -77,7 +54,7 @@ async function goToTarget(page: Page): Promise<void> {
 
 async function connectTarget(page: Page): Promise<void> {
   await goToTarget(page);
-  await connect(page, TARGET_DB);
+  await connectDatabase(page, TARGET_DB);
 }
 
 async function goToModeStep(page: Page): Promise<void> {
