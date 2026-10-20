@@ -12,6 +12,7 @@ import {
   connectDatabase,
   expectHeading,
   shotMain,
+  shotRecordSelection,
   useNeutralMapTiles,
   waitForMapTiles,
 } from "./wizardShotHelpers";
@@ -163,10 +164,7 @@ test.describe("Wiki screenshots: db-shapefile-sync", () => {
 
   test("10-seleccion-registros", async ({ page }) => {
     await goToResults(page);
-    await page.getByRole("checkbox", { name: `Seleccionar registro ${UNCHECKED_RECORD}` }).uncheck();
-    const table = page.locator("[class*='tableContainer']").first();
-    await expect(table.getByText("seleccionados")).toBeVisible();
-    await takeShot(page, { tool: TOOL, name: "10-seleccion-registros", target: table });
+    await shotRecordSelection(page, TOOL, "10-seleccion-registros", UNCHECKED_RECORD);
   });
 
   test("11-mapa-discrepancias", async ({ page }) => {

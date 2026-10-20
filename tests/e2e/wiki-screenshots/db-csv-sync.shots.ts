@@ -3,7 +3,7 @@ import { test, expect } from "../support/testFixture";
 import { takeShot } from "./shot";
 import { SOURCE_DB } from "./db-db-sync.mocks";
 import { CSV_CONNECTED_MOCKS, CSV_CONTENT, CSV_FILE_NAME } from "./db-csv-sync.mocks";
-import { connectDatabase, expectHeading, shotMain, useNeutralMapTiles, waitForMapTiles } from "./wizardShotHelpers";
+import { connectDatabase, expectHeading, shotMain, shotRecordSelection, useNeutralMapTiles, waitForMapTiles } from "./wizardShotHelpers";
 
 const TOOL = "db-csv-sync";
 const TOOL_URL = "/tools/db-csv-sync";
@@ -132,6 +132,11 @@ test.describe("Wiki screenshots: db-csv-sync", () => {
   test("08-resultados-resumen", async ({ page }) => {
     await goToResults(page);
     await shot(page, "08-resultados-resumen");
+  });
+
+  test("13-seleccion-registros", async ({ page }) => {
+    await goToResults(page);
+    await shotRecordSelection(page, TOOL, "13-seleccion-registros", "10237");
   });
 
   test("09-mapa-discrepancias", async ({ page }) => {

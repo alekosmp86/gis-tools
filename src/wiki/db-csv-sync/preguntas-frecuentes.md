@@ -63,6 +63,14 @@ Si la tabla tiene columnas `NOT NULL` sin valor por defecto que no vienen en el 
 
 Las sentencias se confirman en lotes de 500 y un lote con error **no anula** los anteriores ni detiene los siguientes. Revise el resumen de la ejecución, corrija la causa y vuelva a comparar para obtener los parches que quedaron pendientes.
 
+### Los botones de SQL están deshabilitados
+
+No hay ningún registro marcado en la tabla de discrepancias. Marque los registros que quiera corregir o use **Seleccionar todos (filtro actual)**.
+
+### Un registro no tiene casilla o está deshabilitada
+
+Solo se pueden marcar los registros con *Diferencia de Atributos*, *Diferencia Geométrica* y los que existen únicamente en el origen (se insertan). Los que existen solo en el destino no tienen casilla porque la herramienta no genera sentencias para ellos. Si la casilla está deshabilitada con el aviso *Sin clave primaria*, el registro es parte de un grupo con SUID repetido y no hay una clave primaria que permita actualizarlo con seguridad.
+
 ### ¿Puedo deshacer un parche?
 
 No desde la herramienta. Antes de ejecutar, revise el script (**Copiar SQL** o **Descargar .sql**) y tenga una copia de seguridad.

@@ -40,7 +40,7 @@ describe("db-csv-sync wiki content", () => {
     const files = readdirSync(IMAGES_DIR).filter((f) => f.endsWith(".png"));
     const allBodies = pages.map((p) => p.body).join("\n");
 
-    expect(files).toHaveLength(12);
+    expect(files).toHaveLength(13);
     const orphans = files.filter((f) => !allBodies.includes(f));
     expect(orphans).toEqual([]);
   });

@@ -64,6 +64,21 @@ Haga clic en una tarjeta para filtrar la tabla por ese tipo.
 
 Cada fila muestra el **SUID**, el **tipo de discrepancia**, el campo afectado y el **valor en la base** y **en el archivo**. Para las diferencias de forma se indica *Diferencia Geométrica* y el tipo de geometría del archivo. Use **Filtrar por SUID o atributo...** para buscar un registro concreto.
 
+### Elegir qué registros corregir
+
+Cada registro corregible tiene una **casilla** a la izquierda. **Solo los registros marcados** generan sentencias SQL: alimentan las vistas previas, los contadores y las acciones *Copiar SQL*, *Descargar .sql* y *Ejecutar en BD*.
+
+![Barra de selección y casillas por registro en la tabla de discrepancias](images/13-seleccion-registros.png)
+
+- Pueden marcarse los registros con **Diferencia de Atributos**, **Diferencia Geométrica** y **Solo en Archivo CSV**. Los demás (por ejemplo *Solo en Base de Datos*) no tienen casilla, porque la herramienta no genera sentencias para ellos.
+- **Por defecto están todos marcados.** Desmarque los que no quiera corregir.
+- La barra superior muestra el contador (*N de M seleccionados*) y los botones **Seleccionar página**, **Seleccionar todos (filtro actual)**, **Deseleccionar página** y **Limpiar selección**.
+- La casilla de la cabecera marca o desmarca todos los registros de la página; queda en estado intermedio cuando solo algunos están marcados.
+- La selección **se conserva** al cambiar de página, de filtro o de pestaña. Se reinicia solo cuando cambia la comparación.
+- Con **ninguno** marcado no se genera ningún script y los botones de SQL quedan deshabilitados.
+- Los registros emparejados que **no tienen clave primaria** aparecen con la casilla **deshabilitada** (*Sin clave primaria: no se puede actualizar de forma segura*): corregirlos con el SUID podría modificar varias filas por error.
+- Las tarjetas de resumen siempre muestran el total de la comparación, sin importar qué registros estén marcados.
+
 ### Mapa de discrepancias espaciales
 
 Si hay geometrías, la pestaña **Mapa de Discrepancias Espaciales** dibuja **todas** las entidades, sin recortes.
@@ -79,7 +94,7 @@ Si hay geometrías, la pestaña **Mapa de Discrepancias Espaciales** dibuja **to
 
 ## Script SQL y parches
 
-La pestaña **Script SQL PostGIS** reúne los parches que dejarían la tabla igual que el archivo.
+La pestaña **Script SQL PostGIS** reúne los parches **de los registros marcados** (por defecto, todos), que dejarían esos registros de la tabla iguales al archivo.
 
 ![Pestaña Script SQL PostGIS con el script UPDATE](images/10-parches-sql.png)
 

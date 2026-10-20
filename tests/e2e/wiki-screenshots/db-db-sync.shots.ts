@@ -7,7 +7,7 @@ import {
   TARGET_DB,
   buildProfilesSeedScript,
 } from "./db-db-sync.mocks";
-import { connectDatabase, expectHeading, shotMain } from "./wizardShotHelpers";
+import { connectDatabase, expectHeading, shotMain, shotRecordSelection } from "./wizardShotHelpers";
 
 const TOOL = "db-db-sync";
 const TOOL_URL = "/tools/db-db-sync";
@@ -161,7 +161,13 @@ test.describe("Wiki screenshots: db-db-sync", () => {
     await goToResults(page);
     await page.getByRole("button", { name: /Script SQL PostGIS/ }).click();
     await expect(page.getByRole("heading", { name: "Scripts SQL PostGIS" })).toBeVisible();
+    await expect(page.locator("pre").filter({ hasText: "UPDATE" })).toBeVisible();
     await shot(page, "09-parches-sql");
+  });
+
+  test("14-seleccion-registros", async ({ page }) => {
+    await goToResults(page);
+    await shotRecordSelection(page, TOOL, "14-seleccion-registros", "31561");
   });
 
   test("10-reemplazo-mapeo-columnas", async ({ page }) => {

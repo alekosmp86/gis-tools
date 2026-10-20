@@ -73,9 +73,24 @@ Cada fila muestra el **SUID**, el **tipo de discrepancia**, el campo afectado y 
 > [!NOTE]
 > Si la tabla no tiene columna de geometría, la pestaña del mapa no aparece.
 
+### Elegir qué registros corregir
+
+Cada registro corregible tiene una **casilla** a la izquierda. **Solo los registros marcados** generan sentencias SQL: alimentan las vistas previas, los contadores y las acciones *Copiar SQL*, *Descargar .sql* y *Ejecutar en BD*.
+
+![Barra de selección y casillas por registro en la tabla de discrepancias](images/14-seleccion-registros.png)
+
+- Pueden marcarse los registros con **Diferencia de Atributos**, **Diferencia Geométrica** y **Solo en DB Origen**. Los demás (por ejemplo *Solo en DB Destino*) no tienen casilla, porque la herramienta no genera sentencias para ellos.
+- **Por defecto están todos marcados.** Desmarque los que no quiera corregir.
+- La barra superior muestra el contador (*N de M seleccionados*) y los botones **Seleccionar página**, **Seleccionar todos (filtro actual)**, **Deseleccionar página** y **Limpiar selección**.
+- La casilla de la cabecera marca o desmarca todos los registros de la página; queda en estado intermedio cuando solo algunos están marcados.
+- La selección **se conserva** al cambiar de página, de filtro o de pestaña. Se reinicia solo cuando cambia la comparación.
+- Con **ninguno** marcado no se genera ningún script y los botones de SQL quedan deshabilitados.
+- Los registros emparejados que **no tienen clave primaria** aparecen con la casilla **deshabilitada** (*Sin clave primaria: no se puede actualizar de forma segura*): corregirlos con el SUID podría modificar varias filas por error.
+- Las tarjetas de resumen siempre muestran el total de la comparación, sin importar qué registros estén marcados.
+
 ## Script SQL y parches
 
-La pestaña **Script SQL PostGIS** reúne los parches que dejarían la tabla destino igual que el origen.
+La pestaña **Script SQL PostGIS** reúne los parches **de los registros marcados** (por defecto, todos), que dejarían esos registros de la tabla destino iguales al origen.
 
 ![Pestaña Script SQL PostGIS con el script UPDATE](images/09-parches-sql.png)
 

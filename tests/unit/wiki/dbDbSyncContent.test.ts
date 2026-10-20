@@ -40,7 +40,7 @@ describe("db-db-sync wiki content", () => {
     const files = readdirSync(IMAGES_DIR).filter((f) => f.endsWith(".png"));
     const allBodies = pages.map((p) => p.body).join("\n");
 
-    expect(files).toHaveLength(13);
+    expect(files).toHaveLength(14);
     const orphans = files.filter((f) => !allBodies.includes(f));
     expect(orphans).toEqual([]);
   });

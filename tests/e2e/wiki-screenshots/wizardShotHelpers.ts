@@ -18,6 +18,13 @@ export async function shotMain(page: Page, tool: string, name: string): Promise<
   await takeShot(page, { tool, name, target: page.locator("main") });
 }
 
+export async function shotRecordSelection(page: Page, tool: string, name: string, recordId: string): Promise<void> {
+  await page.getByRole("checkbox", { name: `Seleccionar registro ${recordId}` }).uncheck();
+  const table = page.locator("[class*='tableContainer']").first();
+  await expect(table.getByText("seleccionados")).toBeVisible();
+  await takeShot(page, { tool, name, target: table });
+}
+
 export async function expectHeading(page: Page, name: string | RegExp): Promise<void> {
   await expect(page.getByRole("heading", { name })).toBeVisible();
 }
