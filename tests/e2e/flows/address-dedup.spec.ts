@@ -404,7 +404,8 @@ test.describe("Módulo: Duplicados de Direcciones (/tools/m/address-dedup)", () 
     await expect(page.getByLabel("Departamento")).toHaveValue("");
   });
 
-  test("debe limpiar la selección cuando falla una recarga de departamentos", async ({ page }) => {
+  test("debe limpiar la selección cuando falla una recarga de departamentos", async ({ page, allowConsoleErrors }) => {
+    allowConsoleErrors(/Failed to load resource/);
     await fillConnection(page);
     await expect(page.getByLabel("Departamento")).toHaveValue("7");
     await page.route("**/api/m/address-dedup/provinces", (route) =>
@@ -417,7 +418,8 @@ test.describe("Módulo: Duplicados de Direcciones (/tools/m/address-dedup)", () 
     await expect(page.getByLabel("Departamento")).toHaveValue("");
   });
 
-  test("debe mostrar el error de carga de departamentos sin romper el formulario", async ({ page }) => {
+  test("debe mostrar el error de carga de departamentos sin romper el formulario", async ({ page, allowConsoleErrors }) => {
+    allowConsoleErrors(/Failed to load resource/);
     await page.route("**/api/m/address-dedup/provinces", (route) =>
       route.fulfill({ status: 500, json: { success: false, error: "No se pudieron cargar los departamentos." } })
     );

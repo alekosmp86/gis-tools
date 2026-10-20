@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { test, expect } from "../support/testFixture";
 import {
   DEFAULT_DB2_COLUMNS_RESPONSE,
@@ -5,6 +6,8 @@ import {
   buildNdjsonStream,
 } from "../fixtures/dbFixtures";
 import { connectDb, assertStep1RemountQuirk } from "../support/wizardSteps";
+import { CONNECTED_MOCKS, SOURCE_DB, TARGET_DB } from "../wiki-screenshots/db-db-sync.mocks";
+import { connectDatabase } from "../wiki-screenshots/wizardShotHelpers";
 
 test.describe("Herramienta: Sincronización DB vs. DB (/tools/db-db-sync)", () => {
   test.beforeEach(async ({ mockBackend }) => {
@@ -74,7 +77,7 @@ test.describe("Herramienta: Sincronización DB vs. DB (/tools/db-db-sync)", () =
     await expect(page.getByRole("button", { name: "Continuar al Paso 2" })).toBeDisabled();
   });
 
-  test("debe permitir navegar el flujo completo entre DB Origen y DB Destino (Pasos 1 al 5) y retroceder", async ({ page }) => {
+  test("debe permitir navegar el flujo completo en modo Comparar (Pasos 1 al 6) y retroceder", async ({ page }) => {
     await page.goto("/tools/db-db-sync");
 
     // --- PASO 1: Conexión DB 1 (Origen) ---
@@ -124,13 +127,12 @@ test.describe("Herramienta: Sincronización DB vs. DB (/tools/db-db-sync)", () =
     await expect(nextToStep3).toBeEnabled();
     await nextToStep3.click();
 
-    // --- PASO 3: Mapeo SUID ---
-    await expect(
-      page.getByRole("heading", { name: "3. Configuración de SUID y Campos a Comparar" })
-    ).toBeVisible();
+    // --- PASO 3: Modo de Sincronización ---
+    await expect(page.getByRole("heading", { name: "3. Modo de Sincronización" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /^Comparar/ })).toBeChecked();
 
     // Probar retroceso al paso 2
-    await page.getByRole("button", { name: "Volver al Paso 2" }).click();
+    await page.getByRole("button", { name: "Volver al Paso 2: DB Destino" }).click();
     await expect(
       page.getByRole("heading", { name: "2. Configurar Base de Datos Destino (DB 2)" })
     ).toBeVisible();
@@ -142,36 +144,46 @@ test.describe("Herramienta: Sincronización DB vs. DB (/tools/db-db-sync)", () =
       table: "parcelas_replica",
     });
     await page.getByRole("button", { name: "Continuar al Paso 3" }).click();
+    await expect(page.getByRole("heading", { name: "3. Modo de Sincronización" })).toBeVisible();
 
-    // Avanzar al paso 4
-    const nextToStep4 = page.getByRole("button", {
-      name: "Continuar a Parámetros de Sincronización",
-    });
-    await expect(nextToStep4).toBeEnabled();
-    await nextToStep4.click();
-
-    // --- PASO 4: Parámetros ---
+    // --- PASO 4: Mapeo SUID ---
+    await page.getByRole("button", { name: "Continuar a Mapeo SUID" }).click();
     await expect(
-      page.getByRole("heading", { name: "4. Parámetros Avanzados de Sincronización" })
+      page.getByRole("heading", { name: "4. Configuración de SUID y Campos a Comparar" })
     ).toBeVisible();
 
     // Retroceso al paso 3
-    await page.getByRole("button", { name: "Volver al Paso 3: Mapeo SUID" }).click();
+    await page.getByRole("button", { name: "Volver al Paso 3: Modo" }).click();
+    await expect(page.getByRole("heading", { name: "3. Modo de Sincronización" })).toBeVisible();
+    await page.getByRole("button", { name: "Continuar a Mapeo SUID" }).click();
+
+    // Avanzar al paso 5
+    const nextToParameters = page.getByRole("button", {
+      name: "Continuar a Parámetros de Sincronización",
+    });
+    await expect(nextToParameters).toBeEnabled();
+    await nextToParameters.click();
+
+    // --- PASO 5: Parámetros ---
     await expect(
-      page.getByRole("heading", { name: "3. Configuración de SUID y Campos a Comparar" })
+      page.getByRole("heading", { name: "5. Parámetros Avanzados de Sincronización" })
+    ).toBeVisible();
+
+    // Retroceso al paso 4
+    await page.getByRole("button", { name: "Volver al Paso 4: Mapeo SUID" }).click();
+    await expect(
+      page.getByRole("heading", { name: "4. Configuración de SUID y Campos a Comparar" })
     ).toBeVisible();
     await page.getByRole("button", { name: "Continuar a Parámetros de Sincronización" }).click();
 
-    // Avanzar al paso 5
-    const nextToStep5 = page.getByRole("button", {
-      name: "Iniciar Análisis y Comparación",
-    });
-    await expect(nextToStep5).toBeEnabled();
-    await nextToStep5.click();
+    // Avanzar al paso 6
+    const analyze = page.getByRole("button", { name: "Iniciar Análisis y Comparación" });
+    await expect(analyze).toBeEnabled();
+    await analyze.click();
 
-    // --- PASO 5: Resultados ---
+    // --- PASO 6: Resultados ---
     await expect(
-      page.getByRole("heading", { name: "5. Resultados de Análisis y Discrepancias" })
+      page.getByRole("heading", { name: "6. Resultados de Análisis y Discrepancias" })
     ).toBeVisible();
     // G1: Verificar que ComparisonResultsView montó su contenido real
     await expect(page.getByRole("button", { name: /Total Evaluados/i })).toBeVisible();
@@ -186,14 +198,139 @@ test.describe("Herramienta: Sincronización DB vs. DB (/tools/db-db-sync)", () =
       page.getByRole("button", { name: /Mapa de Discrepancias Espaciales/i })
     ).toHaveCount(0);
 
-    // Retroceso al paso 4
-    const backToStep4 = page.getByRole("button", {
-      name: "Volver al Paso 4: Parámetros de Sincronización",
+    // Retroceso al paso 5
+    const backToParameters = page.getByRole("button", {
+      name: "Volver al Paso 5: Parámetros de Sincronización",
     });
-    await expect(backToStep4).toBeVisible();
-    await backToStep4.click();
+    await expect(backToParameters).toBeVisible();
+    await backToParameters.click();
     await expect(
-      page.getByRole("heading", { name: "4. Parámetros Avanzados de Sincronización" })
+      page.getByRole("heading", { name: "5. Parámetros Avanzados de Sincronización" })
     ).toBeVisible();
+  });
+});
+
+test.describe("Herramienta: Sincronización DB vs. DB - modo de sincronización y reemplazo completo", () => {
+  let executeRequests: string[];
+
+  test.beforeEach(async ({ page, mockBackend }) => {
+    executeRequests = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/db/execute")) executeRequests.push(request.url());
+    });
+    await mockBackend(CONNECTED_MOCKS);
+  });
+
+  test.afterEach(() => {
+    expect(executeRequests).toEqual([]);
+  });
+
+  async function goToModeStep(page: Page): Promise<void> {
+    await page.goto("/tools/db-db-sync");
+    await connectDatabase(page, SOURCE_DB);
+    await page.getByRole("button", { name: "Continuar al Paso 2" }).click();
+    await expect(
+      page.getByRole("heading", { name: "2. Configurar Base de Datos Destino (DB 2)" })
+    ).toBeVisible();
+    await connectDatabase(page, TARGET_DB);
+    await page.getByRole("button", { name: "Continuar al Paso 3" }).click();
+    await expect(page.getByRole("heading", { name: "3. Modo de Sincronización" })).toBeVisible();
+  }
+
+  test("debe mostrar ambos modos con su descripción y Comparar preseleccionado", async ({ page }) => {
+    await goToModeStep(page);
+
+    await expect(page.getByRole("radio", { name: /^Comparar/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /^Reemplazo completo/ })).not.toBeChecked();
+    await expect(page.getByText(/Correlaciona ambas tablas por SUID/)).toBeVisible();
+    await expect(page.getByText(/Vacía la tabla destino y la recarga/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continuar a Mapeo SUID" })).toBeEnabled();
+  });
+
+  test("debe cambiar los pasos al elegir Reemplazo completo y restaurarlos al volver a Comparar", async ({ page }) => {
+    await goToModeStep(page);
+    const main = page.locator("main");
+
+    // AC-1: modo Comparar -> 6 pasos
+    await expect(main.getByText("Mapeo SUID", { exact: true })).toBeVisible();
+    await expect(main.getByText("Parámetros", { exact: true })).toBeVisible();
+    await expect(main.getByText("Resultados", { exact: true })).toBeVisible();
+    await expect(main.getByText("PASO 6", { exact: true })).toBeVisible();
+
+    // AC-2: modo Reemplazo -> 5 pasos
+    await page.getByText("Reemplazo completo", { exact: true }).click();
+    await expect(page.getByRole("radio", { name: /^Reemplazo completo/ })).toBeChecked();
+    await expect(main.getByText("Mapeo de Columnas", { exact: true })).toBeVisible();
+    await expect(main.getByText("Reemplazo Completo", { exact: true })).toBeVisible();
+    await expect(main.getByText("PASO 5", { exact: true })).toBeVisible();
+    await expect(main.getByText("PASO 6", { exact: true })).toHaveCount(0);
+    await expect(main.getByText("Mapeo SUID", { exact: true })).toHaveCount(0);
+    await expect(main.getByText("Resultados", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Continuar a Mapeo de Columnas" })).toBeVisible();
+
+    // Volver a Comparar restaura el flujo de comparación
+    await page.getByText("Comparar", { exact: true }).click();
+    await expect(page.getByRole("radio", { name: /^Comparar/ })).toBeChecked();
+    await expect(main.getByText("Mapeo SUID", { exact: true })).toBeVisible();
+    await expect(main.getByText("Parámetros", { exact: true })).toBeVisible();
+    await expect(main.getByText("Resultados", { exact: true })).toBeVisible();
+    await expect(main.getByText("PASO 6", { exact: true })).toBeVisible();
+    await expect(main.getByText("Mapeo de Columnas", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Continuar a Mapeo SUID" })).toBeVisible();
+  });
+
+  test("debe llegar a la confirmación del reemplazo y mantener bloqueado el botón hasta confirmar tabla y contraseña", async ({ page }) => {
+    await goToModeStep(page);
+    await page.getByText("Reemplazo completo", { exact: true }).click();
+    await page.getByRole("button", { name: "Continuar a Mapeo de Columnas" }).click();
+
+    // --- PASO 4: Mapeo de columnas ---
+    await expect(
+      page.getByRole("heading", { name: "4. Mapeo de Columnas Origen a Destino" })
+    ).toBeVisible();
+    await expect(page.getByLabel("Columna origen para padron")).toHaveValue("padron");
+    await expect(page.getByLabel("Columna origen para departamento")).toHaveValue("departamento");
+    await expect(page.getByLabel("Columna origen para gid")).toHaveValue("gid");
+    await expect(page.getByLabel("Columna origen para id_carga")).toHaveValue("");
+    await expect(page.getByText("NOT NULL (requerido)").first()).toBeVisible();
+
+    // --- PASO 5: Reemplazo completo ---
+    await page.getByRole("button", { name: "Continuar a Reemplazo Completo" }).click();
+    await expect(
+      page.getByRole("heading", { name: "5. Reemplazo Completo de la Tabla Destino" })
+    ).toBeVisible();
+    await expect(page.getByText(/Acción destructiva: se eliminarán TODOS los registros/)).toBeVisible();
+    await expect(page.getByText(TARGET_DB.host).first()).toBeVisible();
+    await expect(page.getByText(SOURCE_DB.host).first()).toBeVisible();
+
+    const run = page.getByRole("button", { name: "Vaciar destino y recargar desde origen" });
+    const confirm = page.getByLabel(/Para confirmar, escriba/);
+    const password = page.getByLabel(/Contraseña de PostgreSQL del destino/);
+    await expect(run).toBeDisabled();
+
+    // Solo la contraseña: sigue bloqueado
+    await password.fill(TARGET_DB.password);
+    await expect(run).toBeDisabled();
+
+    // Tabla incorrecta + contraseña: sigue bloqueado
+    await confirm.fill("public.otra_tabla");
+    await expect(run).toBeDisabled();
+
+    // Tabla exacta sin contraseña: sigue bloqueado
+    await password.fill("");
+    await confirm.fill("public.parcelas");
+    await expect(run).toBeDisabled();
+
+    // Ambos: habilitado (NUNCA se hace clic)
+    await password.fill(TARGET_DB.password);
+    await expect(run).toBeEnabled();
+
+    // Retroceso con las etiquetas del modo Reemplazo
+    await page.getByRole("button", { name: "Volver al Paso 4: Mapeo de Columnas" }).click();
+    await expect(
+      page.getByRole("heading", { name: "4. Mapeo de Columnas Origen a Destino" })
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Volver al Paso 3: Modo" }).click();
+    await expect(page.getByRole("heading", { name: "3. Modo de Sincronización" })).toBeVisible();
   });
 });
