@@ -1,8 +1,24 @@
 import { crc32 } from "node:zlib";
 import proj4 from "proj4";
-import type { CatalogSourceGroup } from "@/modules/cartography-watcher/types";
 import type { MockBackendOptions } from "../support/mockBackend";
 import { CSV_CONNECTED_MOCKS, CSV_PARCELS, type ParcelRow } from "./db-csv-sync.mocks";
+
+interface CatalogResourceMock {
+  readonly id: string;
+  readonly name: string;
+  readonly format: string;
+  readonly sizeBytes: number | null;
+  readonly lastModified: string | null;
+  readonly isCached: boolean;
+}
+
+interface CatalogSourceGroupMock {
+  readonly sourceId: string;
+  readonly datasetSlug: string;
+  readonly title: string;
+  readonly description?: string;
+  readonly resources: ReadonlyArray<CatalogResourceMock>;
+}
 
 export const SHAPEFILE_DEPARTMENT_COLUMN = "departamen";
 export const SHAPEFILE_ZIP_NAME = "parcelas_actualizadas.zip";
@@ -174,7 +190,7 @@ export function buildShapefileZip(): Buffer {
   ]);
 }
 
-const CATALOG_GROUPS: CatalogSourceGroup[] = [
+const CATALOG_GROUPS: CatalogSourceGroupMock[] = [
   {
     sourceId: "src-catastro-default",
     datasetSlug: "catastro-nacional",

@@ -130,6 +130,6 @@ npm run wiki:screenshots
 ```
 
 - Config: `playwright.wiki.config.ts` (fixed 1280x900 viewport, Chromium only). Specs match `tests/e2e/wiki-screenshots/**/*.shots.ts`, so `npm run test:e2e` never runs them.
-- Output: `src/wiki/<tool>/images/<name>.png`. Reference them from a page as `![alt](images/<name>.png)`. Module tools write inside their own folder (`src/modules/<tool>/wiki/images/`): register the slug in `MODULE_WIKI_DIRS` in `tests/e2e/wiki-screenshots/shot.ts`. The images are committed to git, so regenerate and commit them whenever the UI changes.
+- Output: `src/wiki/<tool>/images/<name>.png`. Reference them from a page as `![alt](images/<name>.png)`. Module tools write inside their own folder (`src/modules/<tool>/wiki/images/`): `shot.ts` picks that folder automatically when `src/modules/<tool>/wiki` exists. The images are committed to git, so regenerate and commit them whenever the UI changes.
 - Data is fully mocked (`mockBackend`, fictitious databases, tables and profiles): no database is needed. The command reuses a dev server already running on port 3000 or starts `npm run dev` itself.
 - Adding a tool: copy `tests/e2e/wiki-screenshots/db-db-sync.shots.ts` (and its `.mocks.ts`) to `<tool>.shots.ts`, change the `TOOL` slug, URL and steps, and take every image with `takeShot` from `tests/e2e/wiki-screenshots/shot.ts`. Never put real hosts, users, tables or credentials in the mocks.
