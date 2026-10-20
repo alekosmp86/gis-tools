@@ -72,3 +72,15 @@ export async function useNeutralMapTiles(page: Page): Promise<void> {
     );
   }
 }
+
+export async function waitForMapTiles(page: Page): Promise<void> {
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const tiles = Array.from(document.querySelectorAll<HTMLImageElement>(".leaflet-tile"));
+        return tiles.length > 0 && tiles.every((tile) => tile.complete && tile.classList.contains("leaflet-tile-loaded") && getComputedStyle(tile).opacity === "1");
+      })
+    )
+    .toBe(true);
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 600)));
+}

@@ -7,13 +7,7 @@ import { nodeWikiFileSystem } from "@/core/wiki/nodeWikiFileSystem";
 import type { WikiIndex } from "@/core/wiki/types";
 import { MarkdownRenderer } from "@/ui-kit/components/wiki/MarkdownRenderer";
 
-const PLACEHOLDER_SLUGS = [
-  "db-shapefile-sync",
-  "file-viewer",
-  "db-table-viewer",
-  "address-dedup",
-  "cartography-watcher",
-];
+const PLACEHOLDER_SLUGS = ["file-viewer", "db-table-viewer", "address-dedup", "cartography-watcher"];
 
 describe("placeholder wiki pages (tools without real content yet; remove a slug here once it gets real pages)", () => {
   let index: WikiIndex;

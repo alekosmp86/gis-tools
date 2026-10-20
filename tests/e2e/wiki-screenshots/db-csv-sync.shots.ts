@@ -3,7 +3,7 @@ import { test, expect } from "../support/testFixture";
 import { takeShot } from "./shot";
 import { SOURCE_DB } from "./db-db-sync.mocks";
 import { CSV_CONNECTED_MOCKS, CSV_CONTENT, CSV_FILE_NAME } from "./db-csv-sync.mocks";
-import { connectDatabase, expectHeading, shotMain, useNeutralMapTiles } from "./wizardShotHelpers";
+import { connectDatabase, expectHeading, shotMain, useNeutralMapTiles, waitForMapTiles } from "./wizardShotHelpers";
 
 const TOOL = "db-csv-sync";
 const TOOL_URL = "/tools/db-csv-sync";
@@ -37,18 +37,6 @@ async function uploadCsv(page: Page, content: string): Promise<void> {
     mimeType: "text/csv",
     buffer: Buffer.from(content),
   });
-}
-
-async function waitForMapTiles(page: Page): Promise<void> {
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const tiles = Array.from(document.querySelectorAll<HTMLImageElement>(".leaflet-tile"));
-        return tiles.length > 0 && tiles.every((tile) => tile.complete && tile.classList.contains("leaflet-tile-loaded") && getComputedStyle(tile).opacity === "1");
-      })
-    )
-    .toBe(true);
-  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 600)));
 }
 
 async function connectSource(page: Page): Promise<void> {

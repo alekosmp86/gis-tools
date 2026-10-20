@@ -21,7 +21,7 @@ interface ParcelSeed {
   side?: number;
 }
 
-interface ParcelRow {
+export interface ParcelRow {
   padron: string;
   departamento: string;
   localidad: string;
@@ -63,7 +63,7 @@ const DB_PARCELS: ParcelRow[] = [
   { padron: "10240", localidad: "Centro", area_m2: "610.00", uso_suelo: "Comercial", west: -56.154, south: -34.9 },
 ].map(buildParcel);
 
-const CSV_PARCELS: ParcelRow[] = [
+export const CSV_PARCELS: ParcelRow[] = [
   { padron: "10234", localidad: "Pocitos", area_m2: "412.50", uso_suelo: "Residencial", west: -56.17, south: -34.91 },
   { padron: "10235", localidad: "Pocitos", area_m2: "380.00", uso_suelo: "Mixto", west: -56.165, south: -34.91 },
   { padron: "10236", localidad: "Cordón", area_m2: "298.40", uso_suelo: "Residencial", west: -56.16, south: -34.91 },
