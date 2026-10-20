@@ -59,19 +59,38 @@ import type { DbConfig } from "@/core/types/db";
 const db = (over: Partial<DbConfig> = {}) =>
   ({ db_name: "d", schema_name: "s", table_name: "t", ...over }) as unknown as DbConfig;
 
-const fileDataset = { fileName: "f.csv" } as never;
-const mappingConfig = {
+interface KeyInputs {
+  dbConfig: DbConfig;
+  sourceDbConfig?: DbConfig;
+  fileName: string;
+  mapping: Record<string, unknown>;
+}
+
+const baseMapping = () => ({
   suidColumns: ["a"],
   fieldsToCompare: ["b"],
   compareGeometry: false,
   treatPlaceholdersAsEmpty: false,
   ignoreEncodingArtifacts: false,
-} as never;
+});
 
-function keyFor(dbConfig: DbConfig, sourceDbConfig?: DbConfig): string {
+const baseInputs = (): KeyInputs => ({
+  dbConfig: db(),
+  sourceDbConfig: db(),
+  fileName: "f.csv",
+  mapping: baseMapping(),
+});
+
+function keyOf(over: Partial<KeyInputs> = {}, mappingOver: Record<string, unknown> = {}): string {
+  const inputs = { ...baseInputs(), ...over };
   h.reset();
   h.begin();
-  ComparisonResultsView({ dbConfig, fileDataset, mappingConfig, sourceDbConfig });
+  ComparisonResultsView({
+    dbConfig: inputs.dbConfig,
+    sourceDbConfig: inputs.sourceDbConfig,
+    fileDataset: { fileName: inputs.fileName } as never,
+    mappingConfig: { ...inputs.mapping, ...mappingOver } as never,
+  });
   return h.keys[0];
 }
 
@@ -79,18 +98,41 @@ beforeEach(() => h.reset());
 
 describe("ComparisonResultsView comparison key", () => {
   it("should produce an identical key for identical inputs", () => {
-    expect(keyFor(db(), db())).toBe(keyFor(db(), db()));
+    expect(keyOf()).toBe(keyOf());
   });
 
-  it("should change the key when dbConfig.schema_name changes", () => {
-    expect(keyFor(db({ schema_name: "s1" }))).not.toBe(keyFor(db({ schema_name: "s2" })));
+  const changing: Array<[string, () => string]> = [
+    ["dbConfig.db_name", () => keyOf({ dbConfig: db({ db_name: "other" }) })],
+    ["dbConfig.schema_name", () => keyOf({ dbConfig: db({ schema_name: "other" }) })],
+    ["dbConfig.table_name", () => keyOf({ dbConfig: db({ table_name: "other" }) })],
+    ["sourceDbConfig.db_name", () => keyOf({ sourceDbConfig: db({ db_name: "other" }) })],
+    ["sourceDbConfig.schema_name", () => keyOf({ sourceDbConfig: db({ schema_name: "other" }) })],
+    ["sourceDbConfig.table_name", () => keyOf({ sourceDbConfig: db({ table_name: "other" }) })],
+    ["sourceDbConfig presence", () => keyOf({ sourceDbConfig: undefined })],
+    ["fileDataset.fileName", () => keyOf({ fileName: "other.csv" })],
+    ["mappingConfig.suidColumns", () => keyOf({}, { suidColumns: ["a", "c"] })],
+    ["mappingConfig.fieldsToCompare", () => keyOf({}, { fieldsToCompare: ["b", "c"] })],
+    ["mappingConfig.compareGeometry", () => keyOf({}, { compareGeometry: true })],
+    ["mappingConfig.treatPlaceholdersAsEmpty", () => keyOf({}, { treatPlaceholdersAsEmpty: true })],
+    ["mappingConfig.ignoreEncodingArtifacts", () => keyOf({}, { ignoreEncodingArtifacts: true })],
+  ];
+
+  it.each(changing)("should change the key when %s changes", (_field, changedKey) => {
+    expect(changedKey()).not.toBe(keyOf());
   });
 
-  it("should change the key when sourceDbConfig.schema_name changes", () => {
-    expect(keyFor(db(), db({ schema_name: "s1" }))).not.toBe(keyFor(db(), db({ schema_name: "s2" })));
+  it("should distinguish suidColumns order and content", () => {
+    expect(keyOf({}, { suidColumns: ["a", "b"] })).not.toBe(keyOf({}, { suidColumns: ["b", "a"] }));
   });
 
-  it("should change the key when dbConfig.table_name changes", () => {
-    expect(keyFor(db({ table_name: "t1" }))).not.toBe(keyFor(db({ table_name: "t2" })));
+  const ignored: Array<[string, () => string]> = [
+    ["mappingConfig.primaryKeyColumn", () => keyOf({}, { primaryKeyColumn: "gid" })],
+    ["dbConfig.host", () => keyOf({ dbConfig: db({ host: "elsewhere" } as Partial<DbConfig>) })],
+    ["dbConfig.password", () => keyOf({ dbConfig: db({ password: "secret" } as Partial<DbConfig>) })],
+    ["sourceDbConfig.user", () => keyOf({ sourceDbConfig: db({ user: "someone" } as Partial<DbConfig>) })],
+  ];
+
+  it.each(ignored)("should keep the same key when %s changes", (_field, sameKey) => {
+    expect(sameKey()).toBe(keyOf());
   });
 });

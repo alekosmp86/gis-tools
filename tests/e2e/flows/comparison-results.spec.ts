@@ -100,35 +100,35 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
 
     // Inicialmente deben verse los registros discrepantes de la prueba
     // PAD-002 (ATTRIBUTE_MISMATCH), PAD-003 (ONLY_IN_DB), PAD-004 (ONLY_IN_FILE)
-    await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-003" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-002/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-003/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-004/ })).toBeVisible();
 
     // Filtrar solo por "Solo en Base de Datos"
     await page.getByRole("button", { name: /Solo en Base de Datos/i }).click();
 
     // Debe mostrar PAD-003 y ocultar los demás
-    await expect(page.getByRole("cell", { name: "PAD-003" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-002" })).toHaveCount(0);
-    await expect(page.getByRole("cell", { name: "PAD-004" })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: /^PAD-003/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-002/ })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: /^PAD-004/ })).toHaveCount(0);
 
     // Filtrar por "Discrepancias Atributos"
     await page.getByRole("button", { name: /Discrepancias Atributos/i }).click();
-    await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-003" })).toHaveCount(0);
-    await expect(page.getByRole("cell", { name: "PAD-004" })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: /^PAD-002/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-003/ })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: /^PAD-004/ })).toHaveCount(0);
 
     // Filtrar por "Solo en Archivo Shapefile"
     await page.getByRole("button", { name: "Solo en Archivo Shapefile" }).click();
-    await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-002" })).toHaveCount(0);
-    await expect(page.getByRole("cell", { name: "PAD-003" })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: /^PAD-004/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-002/ })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: /^PAD-003/ })).toHaveCount(0);
 
     // Volver a mostrar todos haciendo clic en Total Evaluados
     await page.getByRole("button", { name: /Total Evaluados/i }).click();
-    await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-003" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-002/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-003/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-004/ })).toBeVisible();
   });
 
   // H4 (ronda 3): la búsqueda de texto libre nunca se había ejercitado. Su estado
@@ -139,19 +139,19 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     await navigateToResultsStep(page);
 
     const searchInput = page.getByPlaceholder("Filtrar por SUID o atributo...");
-    await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-003" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-002/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-003/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-004/ })).toBeVisible();
 
     await searchInput.fill("PAD-004");
-    await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-002" })).toHaveCount(0);
-    await expect(page.getByRole("cell", { name: "PAD-003" })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: /^PAD-004/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-002/ })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: /^PAD-003/ })).toHaveCount(0);
 
     await searchInput.fill("");
-    await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-003" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-004" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-002/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-003/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-004/ })).toBeVisible();
   });
 
   test("debe alternar pestañas entre Tabla y Script SQL, mostrando el parche generado con exclusión mutua", async ({
@@ -191,7 +191,7 @@ test.describe("Vista Común: ComparisonResultsView (Resultados y Discrepancias)"
     await expect(page.getByRole("table")).toBeVisible();
     await expect(updatePre).toBeHidden();
     await expect(insertPre).toBeHidden();
-    await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-002/ })).toBeVisible();
   });
 
   test("debe alternar a la pestaña de Mapa, visualizar el contenedor y mostrar estado vacío con filtro sin geometrías", async ({

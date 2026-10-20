@@ -157,7 +157,7 @@ test.describe("Herramienta: Sincronización DB vs. Archivo CSV (/tools/db-csv-sy
 
     // H4: Verificar título KPI derivado del descriptor específico y fila concreta de discrepancia
     await expect(page.getByRole("button", { name: /Solo en Archivo CSV/i })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "PAD-002" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /^PAD-002/ })).toBeVisible();
 
     // H5: un CSV no tiene geometría, así que la pestaña de mapa nunca debe aparecer aquí — si lo
     // hiciera, el usuario vería un lienzo de Leaflet vacío en una comparación que no tiene mapa.
