@@ -1,9 +1,4 @@
 import type { Page, Request as PlaywrightRequest, Route } from "@playwright/test";
-import type {
-  WatchedSource,
-  SourceSummary,
-  CatalogSourceGroup,
-} from "@/modules/cartography-watcher/types";
 import {
   DEFAULT_DB_COLUMNS_RESPONSE,
   DEFAULT_EXECUTE_RESPONSE,
@@ -16,6 +11,10 @@ import {
   DEFAULT_CATALOG_GROUPS,
   SAMPLE_CATALOG_FILE_CSV,
 } from "../fixtures/watcherFixtures";
+
+type WatchedSource = (typeof DEFAULT_WATCHED_SOURCES)[number];
+type SourceSummary = (typeof DEFAULT_SOURCE_SUMMARIES)[number];
+type CatalogSourceGroup = (typeof DEFAULT_CATALOG_GROUPS)[number];
 
 export type DbColumnsResponse = typeof DEFAULT_DB_COLUMNS_RESPONSE;
 export type DbExecuteResponse = typeof DEFAULT_EXECUTE_RESPONSE;
