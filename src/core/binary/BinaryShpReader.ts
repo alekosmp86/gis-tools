@@ -1,4 +1,5 @@
 import type { Geometry } from "geojson";
+import { assemblePolygons } from "@/core/spatial/PolygonRingAssembler";
 
 export enum ShapeType {
   NULL = 0,
@@ -208,6 +209,8 @@ export class BinaryShpReader {
         const partsOffset = recordOffset + 44;
         const pointsOffset = partsOffset + numParts * 4;
 
+        if (numParts === 0) return null;
+
         const partIndices: number[] = [];
         for (let partIndex = 0; partIndex < numParts; partIndex++) {
           partIndices.push(this.dataView.getInt32(partsOffset + partIndex * 4, true));
@@ -222,23 +225,26 @@ export class BinaryShpReader {
           for (let pointIndex = startIndex; pointIndex < endIndex; pointIndex++) {
             const rawCoordinateX = this.dataView.getFloat64(pointsOffset + pointIndex * 16, true);
             const rawCoordinateY = this.dataView.getFloat64(pointsOffset + pointIndex * 16 + 8, true);
-            const [coordinateX, coordinateY] = transformCoordinate
-              ? transformCoordinate([rawCoordinateX, rawCoordinateY])
-              : [rawCoordinateX, rawCoordinateY];
-            ringCoordinates.push([coordinateX, coordinateY]);
+            ringCoordinates.push([rawCoordinateX, rawCoordinateY]);
           }
           rings.push(ringCoordinates);
         }
 
+        const transformRing = (ring: number[][]): number[][] =>
+          transformCoordinate
+            ? ring.map(([rawX, rawY]) => transformCoordinate([rawX, rawY]))
+            : ring;
+
         if (numParts === 1) {
           return {
             type: "Polygon",
-            coordinates: rings,
+            coordinates: rings.map(transformRing),
           };
         }
+        // Ring orientation is read on raw coordinates, so assembly runs before the transform.
         return {
           type: "MultiPolygon",
-          coordinates: [rings],
+          coordinates: assemblePolygons(rings).map((polygon) => polygon.map(transformRing)),
         };
       }
 
