@@ -54,6 +54,7 @@ export interface DbConnectionStatusPayload {
 export interface ExecuteSqlResponse {
   success: boolean;
   affectedRows?: number;
+  selectResults?: unknown[];
   message?: string;
   error?: string;
 }
@@ -76,6 +77,7 @@ export interface ExecuteBatchResult {
   errorCount: number;
   errors: string[];
   message: string;
+  selectResults?: unknown[];
 }
 export interface DatabaseFetchResult {
   records: Array<Record<string, unknown>>;

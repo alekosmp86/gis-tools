@@ -53,7 +53,8 @@ export function useFullReplaceWorkflow({
       sourceColumns,
       targetColumns,
       mapping,
-      sequencesToReset: resetSequences ? sequenceDiscovery.sequences : [],
+      sequences: sequenceDiscovery.sequences,
+      resetSequences,
     });
   };
 

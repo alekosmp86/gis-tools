@@ -23,11 +23,24 @@ export const formatReplaceLiteral = (value: unknown): string => {
   return quoteTextLiteral(JSON.stringify(value));
 };
 
-export const buildTruncateStatement = (schema: string | undefined | null, table: string): string =>
-  `TRUNCATE TABLE ${quoteIdentifier(resolveSchemaName(schema))}.${quoteIdentifier(table)};`;
+export const buildDeleteStatement = (schema: string | undefined | null, table: string): string =>
+  `DELETE FROM ${quoteIdentifier(resolveSchemaName(schema))}.${quoteIdentifier(table)};`;
 
 export const buildResetSequenceStatement = (schema: string, name: string): string =>
-  `ALTER SEQUENCE ${quoteIdentifier(schema)}.${quoteIdentifier(name)} RESTART WITH 1;`;
+  `SELECT setval('${`${quoteIdentifier(schema)}.${quoteIdentifier(name)}`.replace(/'/g, "''")}'::regclass, 1, false);`;
+
+export const buildRepairSequenceStatement = (
+  sequenceSchema: string,
+  sequenceName: string,
+  tableSchema: string | undefined | null,
+  tableName: string,
+  columns: string[]
+): string => {
+  const sequenceLiteral = `'${`${quoteIdentifier(sequenceSchema)}.${quoteIdentifier(sequenceName)}`.replace(/'/g, "''")}'::regclass`;
+  const table = `${quoteIdentifier(resolveSchemaName(tableSchema))}.${quoteIdentifier(tableName)}`;
+  const maxima = columns.map((column) => `(SELECT max(${quoteIdentifier(column)}) FROM ${table})`).join(", ");
+  return `SELECT setval(${sequenceLiteral}, GREATEST(COALESCE(GREATEST(${maxima}), 0) + 1, COALESCE(pg_sequence_last_value(${sequenceLiteral}) + 1, 1)), false);`;
+};
 
 export const buildAnalyzeStatement = (schema: string | undefined | null, table: string): string =>
   `ANALYZE ${quoteIdentifier(resolveSchemaName(schema))}.${quoteIdentifier(table)};`;

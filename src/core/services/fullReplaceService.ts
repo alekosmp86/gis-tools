@@ -2,8 +2,9 @@ import { DatabaseStreamReader } from "@/core/services/streaming/DatabaseStreamRe
 import { executeSqlInChunks } from "@/core/services/dbExecutionService";
 import {
   buildAnalyzeStatement,
+  buildRepairSequenceStatement,
   buildResetSequenceStatement,
-  buildTruncateStatement,
+  buildDeleteStatement,
   formatReplaceLiteral,
   quoteIdentifier,
   resolveSchemaName,
@@ -51,6 +52,12 @@ export interface AnalyzeOutcome {
   message?: string;
 }
 
+export interface SequenceAdjustment {
+  qualifiedLabel: string;
+  nextValue: number;
+  resetToStart: boolean;
+}
+
 export interface FullReplaceResult {
   sourceRows: number;
   insertedRows: number;
@@ -58,7 +65,7 @@ export interface FullReplaceResult {
   errors: string[];
   ignoredSourceColumns: string[];
   targetModified: boolean;
-  sequencesReset: string[];
+  sequencesAdjusted: SequenceAdjustment[];
   analyze: AnalyzeOutcome;
 }
 
@@ -69,7 +76,8 @@ export interface FullReplaceParams {
   sourceColumns: string[];
   targetColumns: string[];
   mapping: ReplaceColumnMapping;
-  sequencesToReset: SequenceRef[];
+  sequences: SequenceRef[];
+  resetSequences: boolean;
   onProgress?: (progress: FullReplaceProgress) => void;
 }
 
@@ -112,8 +120,8 @@ export async function buildReplaceStatements(params: BuildReplaceStatementsParam
   const quotedColumns = insertColumns.map((column) => quoteIdentifier(column.targetColumn));
 
   const statements: string[] = [
-    buildTruncateStatement(targetConfig.schema_name, targetConfig.table_name),
-    ...sequences.map(({ schema, name }) => buildResetSequenceStatement(schema, name)),
+    buildDeleteStatement(targetConfig.schema_name, targetConfig.table_name),
+    ...sequences.flatMap(({ schema, name, mapped }) => (mapped ? [] : [buildResetSequenceStatement(schema, name)])),
   ];
   const totalRows = records.length;
 
@@ -217,7 +225,7 @@ async function executeReplaceScript(
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error desconocido";
-    errors.push(`La tabla destino ya fue modificada (TRUNCATE aplicado) y el reemplazo quedó incompleto: ${message}`);
+    errors.push(`La tabla destino ya fue modificada (DELETE aplicado) y el reemplazo quedó incompleto: ${message}`);
     errorCount += 1;
   }
 
@@ -245,8 +253,49 @@ async function analyzeTarget(
   }
 }
 
+const REPAIR_FAILURE_PREFIX = "No se pudieron ajustar las secuencias";
+
+interface RepairOutcome {
+  adjusted: SequenceAdjustment[];
+  error?: string;
+}
+
+async function repairSequences(
+  targetConfig: DbConfig,
+  password: string,
+  sequences: SequenceRef[],
+  isResetToStart: (sequence: SequenceRef) => boolean
+): Promise<RepairOutcome> {
+  const script = sequences
+    .map(({ schema, name, columns }) =>
+      buildRepairSequenceStatement(schema, name, targetConfig.schema_name, targetConfig.table_name, columns)
+    )
+    .join("\n");
+  try {
+    const result = await executeSqlInChunks(targetConfig, password, script, undefined, sequences.length);
+    if (result.errorCount > 0) return { adjusted: [], error: `${REPAIR_FAILURE_PREFIX}: ${result.errors.join(" ")}` };
+    const values = sequences.map((_sequence, index) => Number(result.selectResults?.[index]));
+    const badIndex = values.findIndex((value, index) => result.selectResults?.[index] == null || !Number.isFinite(value));
+    if (badIndex !== -1) {
+      return {
+        adjusted: [],
+        error: `${REPAIR_FAILURE_PREFIX}: el servidor no devolvió el próximo id de ${sequences[badIndex].qualifiedLabel}.`,
+      };
+    }
+    return {
+      adjusted: sequences.map((sequence, index) => ({
+        qualifiedLabel: sequence.qualifiedLabel,
+        nextValue: values[index],
+        resetToStart: isResetToStart(sequence),
+      })),
+    };
+  } catch (error: unknown) {
+    return { adjusted: [], error: `${REPAIR_FAILURE_PREFIX}: ${error instanceof Error ? error.message : "Error desconocido"}` };
+  }
+}
+
 export async function runFullReplace(params: FullReplaceParams): Promise<FullReplaceResult> {
-  const { sourceConfig, targetConfig, password, sourceColumns, targetColumns, mapping, sequencesToReset, onProgress } = params;
+  const { sourceConfig, targetConfig, password, sourceColumns, targetColumns, mapping, sequences, resetSequences, onProgress } = params;
   const emit = (phase: FullReplacePhase, label: string, current: number, total: number) =>
     onProgress?.({ phase, label, current, total });
 
@@ -279,20 +328,38 @@ export async function runFullReplace(params: FullReplaceParams): Promise<FullRep
     throw new Error("El origen no tiene registros: la tabla destino no fue modificada.");
   }
 
+  const headerSequences = resetSequences ? sequences : [];
   const statements = await buildReplaceStatements({
     targetConfig,
     records: source.records,
     insertColumns,
     targetColumnTypes: targetMeta.columnTypes,
     targetSrid: targetMeta.detectedSrid,
-    sequences: sequencesToReset,
+    sequences: headerSequences,
     onProgress: (current, total) => emit(FullReplacePhase.BUILD, "Generando sentencias INSERT...", current, total),
   });
 
+  const headerResetCount = headerSequences.filter(({ mapped }) => !mapped).length;
   emit(FullReplacePhase.EXECUTE, "Ejecutando reemplazo en la tabla destino...", 0, statements.length);
-  const execution = await executeReplaceScript(targetConfig, password, statements, 1 + sequencesToReset.length, (progress) =>
-    emit(FullReplacePhase.EXECUTE, "Ejecutando reemplazo en la tabla destino...", progress.processedStatements, progress.totalStatements)
-  );
+  let execution: Awaited<ReturnType<typeof executeReplaceScript>>;
+  try {
+    execution = await executeReplaceScript(targetConfig, password, statements, 1 + headerResetCount, (progress) =>
+      emit(FullReplacePhase.EXECUTE, "Ejecutando reemplazo en la tabla destino...", progress.processedStatements, progress.totalStatements)
+    );
+  } catch (error: unknown) {
+    if (sequences.length > 0) await repairSequences(targetConfig, password, sequences, () => false);
+    throw error;
+  }
+
+  const repair: RepairOutcome =
+    sequences.length > 0
+      ? await repairSequences(
+          targetConfig,
+          password,
+          sequences,
+          (sequence) => resetSequences && !sequence.mapped && execution.targetModified
+        )
+      : { adjusted: [] };
 
   if (execution.errorCount === 0 && execution.targetModified) {
     emit(FullReplacePhase.EXECUTE, "Actualizando estadísticas (ANALYZE)...", statements.length, statements.length);
@@ -302,8 +369,10 @@ export async function runFullReplace(params: FullReplaceParams): Promise<FullRep
   return {
     sourceRows: source.records.length,
     ignoredSourceColumns: getIgnoredSourceColumns(insertColumns, sourceColumns),
-    sequencesReset: execution.targetModified ? sequencesToReset.map((sequence) => sequence.qualifiedLabel) : [],
+    sequencesAdjusted: repair.adjusted,
     analyze,
     ...execution,
+    errors: repair.error ? [...execution.errors, repair.error] : execution.errors,
+    errorCount: repair.error ? execution.errorCount + 1 : execution.errorCount,
   };
 }

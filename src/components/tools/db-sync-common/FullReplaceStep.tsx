@@ -36,6 +36,8 @@ export const FullReplaceStep: React.FC<FullReplaceStepProps> = ({
 
   if (!sourceConfig || !targetConfig) return null;
 
+  const allSequences = workflow.sequenceDiscovery.sequences;
+  const unmappedSequences = allSequences.filter((sequence) => !sequence.mapped);
   const ignored = getIgnoredSourceColumns(resolveInsertColumns(mapping, targetColumns), sourceColumns);
 
   return (
@@ -73,26 +75,36 @@ export const FullReplaceStep: React.FC<FullReplaceStepProps> = ({
         />
       )}
 
-      {workflow.sequenceDiscovery.sequences.length > 0 && (
+      {allSequences.length > 0 && (
         <div className={styles.formGroup}>
-          <label className={styles.checkboxRow}>
-            <input
-              type="checkbox"
-              checked={workflow.resetSequences}
-              onChange={(event) => workflow.setResetSequences(event.target.checked)}
-              disabled={workflow.isRunning}
-            />
-            <span>Reiniciar secuencias del destino</span>
-          </label>
+          {unmappedSequences.length > 0 && (
+            <>
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={workflow.resetSequences}
+                  onChange={(event) => workflow.setResetSequences(event.target.checked)}
+                  disabled={workflow.isRunning}
+                />
+                <span>Reiniciar secuencias del destino</span>
+              </label>
+              <span className={styles.endpointLabel}>
+                {workflow.resetSequences
+                  ? `Se reiniciarán en 1: ${unmappedSequences.map((sequence) => sequence.qualifiedLabel).join(", ")}.`
+                  : "Las secuencias del destino no se reiniciarán."}
+              </span>
+            </>
+          )}
           <span className={styles.endpointLabel}>
-            {workflow.resetSequences
-              ? `Se reiniciarán en 1: ${workflow.sequenceDiscovery.sequences.map((sequence) => sequence.qualifiedLabel).join(", ")}.`
-              : "Las secuencias del destino no se reiniciarán."}
+            {`Se ajustarán tras el reemplazo: ${allSequences.map((sequence) => sequence.qualifiedLabel).join(", ")}.`}
           </span>
           <span className={styles.endpointLabel}>
-            Si otra tabla usa la misma secuencia, sus próximos ids colisionarán. El rol debe ser propietario de la
-            secuencia; si el reinicio falla, se revierte todo el primer lote (la tabla queda intacta) y conviene
-            desmarcar esta opción.
+            El reinicio en 1 solo aplica a ids generados por defecto (sin columna de origen). Las secuencias siempre se
+            ajustan al terminar: el próximo id queda por encima del id más alto de la tabla y nunca por debajo de lo que
+            la secuencia ya entregó, en cualquier fallo del reemplazo. Si otra tabla usa la misma secuencia, sus próximos
+            ids colisionarán. El rol necesita permiso UPDATE sobre la secuencia (o ser propietario) y SELECT sobre la
+            tabla destino (para calcular el id más alto); si el ajuste falla se informa como error. Para no reiniciar,
+            conviene desmarcar esta opción.
           </span>
         </div>
       )}
@@ -100,7 +112,7 @@ export const FullReplaceStep: React.FC<FullReplaceStepProps> = ({
       {workflow.sequenceDiscovery.unparsedDefaults.length > 0 && (
         <AlertMessage
           type={AlertType.WARNING}
-          text={`No se pudo interpretar el valor por defecto de estas columnas; sus secuencias no se reiniciarán: ${workflow.sequenceDiscovery.unparsedDefaults.join("; ")}.`}
+          text={`No se pudo interpretar el valor por defecto de estas columnas; sus secuencias no se ajustarán: ${workflow.sequenceDiscovery.unparsedDefaults.join("; ")}.`}
         />
       )}
 

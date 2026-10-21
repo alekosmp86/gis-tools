@@ -39,13 +39,20 @@ export async function POST(request: Request) {
     await client.connect();
 
     let totalAffectedRows = 0;
+    const selectResults: unknown[] = [];
     try {
       // Execute within an isolated transaction for safety
       await client.query("BEGIN;");
 
       const result = await client.query(sqlScript);
 
-      // Extract affected row count if available
+      const results = Array.isArray(result) ? result : [result];
+      results.forEach((res) => {
+        if (res && Array.isArray(res.fields) && res.fields.length > 0 && Array.isArray(res.rows) && res.rows.length > 0) {
+          selectResults.push(Object.values(res.rows[0])[0]);
+        }
+      });
+
       if (Array.isArray(result)) {
         totalAffectedRows = result.reduce((sum, res) => sum + (res.rowCount || 0), 0);
       } else if (result && typeof result.rowCount === "number") {
@@ -64,6 +71,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       affectedRows: totalAffectedRows,
+      selectResults,
       message: `Ejecución exitosa en la base de datos ${db_name}. Registros modificados/insertados: ${totalAffectedRows}.`,
     });
   } catch (error: unknown) {
