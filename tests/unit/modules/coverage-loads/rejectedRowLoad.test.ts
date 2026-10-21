@@ -20,6 +20,7 @@ const BASE_URL = "http://localhost/api/m/coverage-loads/indicators";
 const CONNECTION_FIELDS = { host: "db.example", port: "5433", db_name: "carto", user: "operator", password: "pw" };
 const CONNECTION: DbConnection = { host: "db.example", port: 5432, db_name: "carto", user: "operator", password: "pw" };
 const FILE_NAME = "IndicadoresLTE_20260901.csv";
+const DECLARED_UPLOAD_BYTES = "2048";
 const NUL = "\u0000";
 const NUL_REASON = "contiene un carácter nulo (NUL).";
 
@@ -41,7 +42,7 @@ function uploadRequest(path: string, bytes: Uint8Array, confirm = false): Reques
   form.append("connection", JSON.stringify(CONNECTION_FIELDS));
   form.append("files", new File([bytes as BlobPart], FILE_NAME, { type: "text/csv" }));
   if (confirm) form.append("confirm", "true");
-  return new Request(`${BASE_URL}/${path}`, { method: "POST", body: form });
+  return new Request(`${BASE_URL}/${path}`, { method: "POST", headers: { "content-length": DECLARED_UPLOAD_BYTES }, body: form });
 }
 
 describe("response size with huge rejected rows", () => {

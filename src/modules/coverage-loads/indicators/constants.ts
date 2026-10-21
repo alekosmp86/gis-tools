@@ -1,3 +1,5 @@
+import { MAX_FILE_BYTES, MULTIPART_OVERHEAD_BYTES } from "../constants";
+
 /** Value stored in `usuario` (history) and `fuente` (staging) for every row this tool loads. */
 export const FUENTE = "EXTERNO/F.Maresca";
 
@@ -16,8 +18,6 @@ export const FILE_NAME_PATTERN = /^IndicadoresLTE_(\d{4})(\d{2})(\d{2})\.csv$/;
 
 export const FILE_NAME_FORMAT_HINT = "IndicadoresLTE_aaaammdd.csv";
 
-export const CSV_SEPARATOR = ";";
-export const CSV_ENCLOSURE = '"';
 export const NULL_MARKER = "-";
 
 export const CsvColumn = {
@@ -39,8 +39,6 @@ export const Cobertura = {
 } as const;
 
 export const MAX_FILES_PER_RUN = 24;
-export const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const MULTIPART_OVERHEAD_BYTES = 1024 * 1024;
 export const MAX_BODY_BYTES = MAX_FILES_PER_RUN * MAX_FILE_BYTES + MULTIPART_OVERHEAD_BYTES;
 
 export const ReportKind = {
@@ -66,10 +64,6 @@ export const REPORT_FILE_PREFIX: Readonly<Record<ReportKind, string>> = {
 /** The two underscores before the date are intentional: they are what the legacy files carry. */
 export const REPORT_FILE_DATE_SEPARATOR = "__";
 export const REPORT_FILE_EXTENSION = ".csv";
-
-export const REJECTED_FILE_PREFIX = "filas_rechazadas";
-
-export const REJECTED_CSV_HEADER: ReadonlyArray<string> = ["archivo", "linea", "texto", "motivo"];
 
 export const ReportColumn = {
   DEPARTAMENTO: "departamento",

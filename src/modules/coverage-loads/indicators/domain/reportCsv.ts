@@ -7,9 +7,9 @@ import {
 } from "../constants";
 import type { ReportKind } from "../constants";
 import type { ReportRow } from "../types";
-import { formatCompactDate } from "./compactDate";
+import { formatCompactDate } from "../../shared/domain/compactDate";
 import { formatCsvLine } from "./csvFormat";
-import { encodeLatin1 } from "./latin1";
+import { encodeLatin1 } from "../../shared/domain/latin1";
 
 const TRAILING_ZEROS = /0+$/;
 const TRAILING_POINT = /\.$/;

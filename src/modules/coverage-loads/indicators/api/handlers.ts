@@ -8,7 +8,7 @@ import {
   type ValidationResult,
 } from "../../shared/requestReaders";
 import type { DbConnection } from "../../types";
-import { REPORT_CONTENT_TYPE, ReportKind } from "../constants";
+import { MAX_BODY_BYTES, REPORT_CONTENT_TYPE, ReportKind } from "../constants";
 import {
   buildPlan,
   listLoadBlockers,
@@ -24,11 +24,9 @@ import {
   ACCEPT_SHRINK_FIELD,
   CONFIRM_FIELD,
   CONNECTION_FIELD,
-  readFlag,
-  checkDeclaredBodySize,
-  readForm,
   readUploads,
 } from "./uploadReaders";
+import { checkDeclaredBodySize, readFlag, readForm } from "../../shared/uploadReaders";
 
 /**
  * HTTP surface of the Indicadores LTE tool. Handlers stay thin: parse and validate, call the
@@ -91,8 +89,8 @@ async function handleUpload(
   failureMessage: string,
   respond: UploadResponder
 ): Promise<Response> {
-  const oversize = checkDeclaredBodySize(request);
-  if (oversize !== null) return failure(oversize, HTTP_STATUS.PAYLOAD_TOO_LARGE);
+  const refusal = checkDeclaredBodySize(request, MAX_BODY_BYTES);
+  if (refusal !== null) return failure(refusal.message, refusal.status);
   const form = await readForm(request);
   if (!form.ok) return failure(form.error, HTTP_STATUS.BAD_REQUEST);
   const connection = readConnectionFromForm(form.value, CONNECTION_FIELD);

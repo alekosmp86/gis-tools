@@ -68,7 +68,7 @@ function uploadRequest(confirm: boolean): Request {
   form.append("connection", JSON.stringify(CONNECTION));
   form.append("files", new File([csvBytes(validDataLines(3)) as BlobPart], "IndicadoresLTE_20260901.csv"));
   if (confirm) form.append("confirm", "true");
-  return new Request(`http://localhost/api/m/${API}`, { method: "POST", body: form });
+  return new Request(`http://localhost/api/m/${API}`, { method: "POST", headers: { "content-length": "2048" }, body: form });
 }
 
 beforeEach(() => {

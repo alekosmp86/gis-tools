@@ -35,7 +35,10 @@ no leaks; only docs remain as differences from HEAD.
 src/modules/coverage-loads/
   module.routes.json, manifest.ts, constants.ts, types.ts
   shared/        pg connection + runInTransaction, privilege check, request readers, http responses,
-                 the Spanish connection form (reusable by part 1)
+                 uploadReaders (readForm, readFlag, checkDeclaredBodySize), domain/{compactDate,
+                 contentDisposition,latin1}, the Spanish connection form. Generic constants (MAX_FILE_BYTES,
+                 CSV_SEPARATOR, REJECTED_CSV_HEADER, ...) live in the module constants.ts. csvFormat/rejectedCsv
+                 stay per part: indicators right-trims fields, avance-ftth does not.
   indicators/    PART 2 (this document)
     constants.ts, types.ts
     domain/      pure: fileName, csvIndicators, plan, reportCsv, rejectedCsv, loadFlow (reducer), ...
@@ -110,10 +113,10 @@ Status codes:
 - 409 (nothing written, body carries `plan`): any file-level error, a missing privilege or table, no valid
   cut at all, or a shrinking cut without `acceptShrink`. The handler checks its own plan first; `load` then
   re-checks inside the write transaction (see section 4 for the exact order).
-- 413 (`{ success: false, error }`, `plan` and `load` only): `Content-Length` greater than `MAX_BODY_BYTES`,
-  answered before the form is read. `MAX_BODY_BYTES` = 24 files x 10 MiB + 1 MiB multipart overhead =
-  252,706,816 bytes (`indicators/constants.ts`). Only a numeric `Content-Length` is checked: a chunked or
-  absent header is **not** capped (documented limit, internal tool). `reports` has no cap.
+- 411 (`plan` and `load` only): no `Content-Length` header, answered before the form is read. 413: `Content-Length`
+  greater than `MAX_BODY_BYTES`, also before the form is read. Both from `shared/uploadReaders.ts`
+  `checkDeclaredBodySize`, shared with avance-ftth. A malformed header is left to the form reader. `MAX_BODY_BYTES` = 24 files x 10 MiB + 1 MiB multipart overhead =
+  252,706,816 bytes (`indicators/constants.ts`). `reports` has no cap.
 - 409 (also): Postgres SQLSTATE `55P03` (`lock_timeout`, after 10 s) -> `Otra carga está en curso, intente de
   nuevo en unos segundos.`
 - 504: SQLSTATE `57014` (`statement_timeout`, 120 s) -> `La operación excedió el tiempo máximo.`

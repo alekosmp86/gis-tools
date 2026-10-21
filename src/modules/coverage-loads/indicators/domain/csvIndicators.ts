@@ -1,7 +1,5 @@
 import {
   Cobertura,
-  CSV_ENCLOSURE,
-  CSV_SEPARATOR,
   CsvColumn,
   EXPECTED_COLUMN_COUNT,
   NOMBDEPTO_MAX_LENGTH,
@@ -9,10 +7,11 @@ import {
   NULL_MARKER,
   PORCENTAJE_MAX,
 } from "../constants";
+import { CSV_ENCLOSURE, CSV_SEPARATOR } from "../../constants";
 import { ParseKind } from "../types";
 import type { FileError, IndicatorRow, ParseOutcome, RejectedRow } from "../types";
 import { parseIndicatorsFileName } from "./fileName";
-import { decodeLatin1 } from "./latin1";
+import { decodeLatin1 } from "../../shared/domain/latin1";
 
 const LINE_FEED = "\n";
 const CARRIAGE_RETURN = "\r";

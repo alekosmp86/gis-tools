@@ -60,6 +60,9 @@ class FakeRepository implements IndicatorsRepository {
   }
 }
 
+/** Upload endpoints require a declared Content-Length (AC-26, shared reader); a browser always sends one. */
+const DECLARED_UPLOAD_BYTES = "2048";
+
 interface UploadSpec {
   readonly name: string;
   readonly bytes: Uint8Array;
@@ -85,14 +88,15 @@ function uploadRequest(path: string, spec: FormSpec = {}): Request {
   for (const entry of spec.rawFileEntries ?? []) form.append("files", entry);
   if (spec.confirm !== undefined) form.append("confirm", spec.confirm);
   if (spec.acceptShrink !== undefined) form.append("acceptShrink", spec.acceptShrink);
-  return new Request(`${BASE_URL}/${path}`, { method: "POST", body: form });
+  return new Request(`${BASE_URL}/${path}`, { method: "POST", headers: { "content-length": DECLARED_UPLOAD_BYTES }, body: form });
 }
 
 function jsonRequest(path: string, body: unknown): Request {
+  const text = typeof body === "string" ? body : JSON.stringify(body);
   return new Request(`${BASE_URL}/${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: typeof body === "string" ? body : JSON.stringify(body),
+    headers: { "Content-Type": "application/json", "content-length": String(new TextEncoder().encode(text).length) },
+    body: text,
   });
 }
 

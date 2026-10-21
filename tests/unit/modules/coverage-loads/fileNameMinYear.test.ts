@@ -9,6 +9,7 @@ const BASE_URL = "http://localhost/api/m/coverage-loads/indicators";
 const CONNECTION_FIELDS = { host: "db.example", port: "5433", db_name: "carto", user: "operator", password: "pw" };
 const ZERO_YEAR_FILE = "IndicadoresLTE_00000101.csv";
 const GOOD_FILE = "IndicadoresLTE_20260901.csv";
+const DECLARED_UPLOAD_BYTES = "2048";
 
 function invalidNameMessage(fileName: string): string {
   return `El archivo "${fileName}" no tiene un nombre válido: debe ser IndicadoresLTE_aaaammdd.csv con una fecha real.`;
@@ -29,7 +30,7 @@ function uploadRequest(path: string, names: ReadonlyArray<string>, confirm = fal
     form.append("files", new File([csvBytes(validDataLines(3)) as BlobPart], name, { type: "text/csv" }));
   }
   if (confirm) form.append("confirm", "true");
-  return new Request(`${BASE_URL}/${path}`, { method: "POST", body: form });
+  return new Request(`${BASE_URL}/${path}`, { method: "POST", headers: { "content-length": DECLARED_UPLOAD_BYTES }, body: form });
 }
 
 describe("parseIndicatorsFileName minimum year", () => {

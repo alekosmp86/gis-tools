@@ -1,4 +1,4 @@
-import { CSV_ENCLOSURE, CSV_SEPARATOR } from "../constants";
+import { CSV_ENCLOSURE, CSV_SEPARATOR } from "../../constants";
 
 const LINE_FEED = "\n";
 const CARRIAGE_RETURN = "\r";

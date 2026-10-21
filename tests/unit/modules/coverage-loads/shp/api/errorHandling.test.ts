@@ -26,6 +26,7 @@ describe("shared HTTP status constants", () => {
       BAD_REQUEST: 400,
       NOT_FOUND: 404,
       CONFLICT: 409,
+      LENGTH_REQUIRED: 411,
       PAYLOAD_TOO_LARGE: 413,
       SERVER_ERROR: 500,
       INSUFFICIENT_STORAGE: 507,

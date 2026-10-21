@@ -208,7 +208,11 @@ describe("plan response with a 5 MB porcentaje", () => {
       JSON.stringify({ host: "db.example", port: "5433", db_name: "carto", user: "operator", password: "pw" })
     );
     form.append("files", new File([bytes as BlobPart], FILE_NAME, { type: "text/csv" }));
-    const request = new Request("http://localhost/api/m/coverage-loads/indicators/plan", { method: "POST", body: form });
+    const request = new Request("http://localhost/api/m/coverage-loads/indicators/plan", {
+      method: "POST",
+      headers: { "content-length": "2048" },
+      body: form,
+    });
 
     // Act
     const response = await handlers.plan(request);

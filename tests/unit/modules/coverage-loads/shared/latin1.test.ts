@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeLatin1, encodeLatin1 } from "@/modules/coverage-loads/indicators/domain/latin1";
+import { decodeLatin1, encodeLatin1 } from "@/modules/coverage-loads/shared/domain/latin1";
 
 describe("latin1 (AC-2, AC-17)", () => {
   describe("decodeLatin1", () => {

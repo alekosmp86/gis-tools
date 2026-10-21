@@ -9,7 +9,7 @@ import type {
   ReportKind,
   ReportRequestPayload,
 } from "../client";
-import { parseContentDispositionFileName } from "../domain/contentDisposition";
+import { parseContentDispositionFileName } from "../../shared/domain/contentDisposition";
 
 /**
  * Browser-side access to the Indicadores LTE endpoints. Credentials travel in the request body
