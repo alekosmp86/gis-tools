@@ -9,10 +9,9 @@ import { CoverageLoadsHomeCard } from "./ui/CoverageLoadsHomeCard";
 import { ShpStatusChip } from "./shp/ui/ShpStatusChip";
 
 /**
- * Cargas de Coberturas. Part 2 (Indicadores LTE) is the only part present: the backend loads
- * `IndicadoresLTE_aaaammdd.csv` cuts into the history (replace-the-cut) and produces the three
- * report CSVs. The page (a section switch with "Indicadores LTE") and the home card are optional
- * contributions and leave with the module.
+ * Cargas de Coberturas. Three parts: Indicadores LTE (`indicators/`), Cargas SHP (`shp/`) and
+ * Avance FTTH (`avance-ftth/`, the two CSV planillas that rebuild the Avance table). The page (a
+ * stage workflow) and the home card are optional contributions and leave with the module.
  */
 const handlers = createCoverageLoadsHandlers();
 
@@ -26,6 +25,9 @@ export const coverageLoadsModule: AppModuleManifest = {
     "POST indicators/plan": handlers.indicators.plan,
     "POST indicators/load": handlers.indicators.load,
     "POST indicators/reports": handlers.indicators.reports,
+    "POST avance-ftth/plan": handlers.avanceFtth.plan,
+    "POST avance-ftth/load": handlers.avanceFtth.load,
+    "POST avance-ftth/reports": handlers.avanceFtth.reports,
     "POST shp/upload": handlers.shp.upload,
     "POST shp/plan": handlers.shp.plan,
     "POST shp/start": handlers.shp.start,

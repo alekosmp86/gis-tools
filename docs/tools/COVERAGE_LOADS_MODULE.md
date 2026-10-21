@@ -585,3 +585,118 @@ reader (strategy (a) of the S1 spike), not by GeoKettle.
 - Spoon/GeoKettle integration, a unique index on the history, saving credentials, scheduling, reading the
   legacy `recibir/recibidos` folders, mail notifications.
 - UI to change `FUENTE` or switch the staging refresh off.
+
+## 12. Avance FTTH (CSV planillas)
+
+Migration of the GeoKettle job `Jobs_AvanceFTTH_Maestro_Desarrollo.kjb`: two uploaded CSVs replace two
+staging tables, the Avance FTTH table is rebuilt from them joined to the SIGRA zones layer, the old Avance
+goes to the history table, and the five validation reports are produced. Acceptance criteria:
+[`docs/specifications/COVERAGE_LOADS_AVANCE_FTTH_SPEC.md`](../specifications/COVERAGE_LOADS_AVANCE_FTTH_SPEC.md).
+It is a part of this module (`avance-ftth/`, sibling of `indicators/` and `shp/`; the three parts never
+import each other) and the stage "Avance FTTH" of the workflow shell.
+
+```
+avance-ftth/
+  constants.ts   the ONLY file that names a table (STAGING_INT, STAGING_UDPEM, AVANCE, HISTORY, ZONES,
+                 CENTRAL_LIMITS), plus fuente values, limits, timeouts, decision O1 constants, report definitions
+  types.ts, client.ts (client-safe surface)
+  domain/        pure: file name, CSV tokenizer and parser, plan and blockers, load result and consistency check,
+                 report text, stored-method zip writer (node:zlib crc32), flow reducer, stage report
+  services/      AvanceFtthRepository + PgAvanceFtthRepository; queries/ = every SQL statement as a named constant
+  api/           plan / load / reports handlers, upload readers
+  ui/            panel, flow hook, steps, rejected rows, report downloads
+```
+
+### Endpoints
+
+All `POST`, `nodejs`, `force-dynamic`, declared in `module.routes.json`, bound in `manifest.ts`.
+
+| Path | Body | Does |
+|---|---|---|
+| `avance-ftth/plan` | multipart: `connection` + exactly two `files` | Parses both CSVs and, in `BEGIN READ ONLY`, reads the staging/Avance/history/zones state, privilege shortfalls (tables and sequence USAGE) and the district-status distribution. Writes nothing. Returns `{ success, plan }`. |
+| `avance-ftth/load` | multipart as above + `confirm: "true"` (not needed with `dryRun: "true"`) | Recomputes the plan (400 without confirm, 409 with blockers and the plan), then the write path. `dryRun` runs the same path plus the reports and ends in ROLLBACK. Returns `{ success, result }`. |
+| `avance-ftth/reports` | JSON `{ connection, kind? }` | Read-only. With `kind` the report `.txt`, without it `AvanceFTTH_Reportes<yyyymmdd>.zip` with all five. Independent of any load. |
+
+Upload caps: 2 files, 10 MiB each, body capped from `Content-Length` before the form is read. Next.js route
+handlers have no body limit of their own; the only built-in limit (`experimental.proxyClientMaxBodySize`,
+10 MB) applies when a `proxy` is used, and this repo has none.
+
+### Input files
+
+`SituacionFTTH_INT_ddMMyyyy.csv` and `SituacionFTTH_UDPEM_ddMMyyyy.csv` (real calendar date), ISO-8859-1, `;`,
+CRLF or LF, `"` enclosure accepted, header skipped, blank lines skipped, 10 columns (an empty 11th column from a
+trailing `;` is accepted; quoted fields never span lines: a quote that does not close on its own line rejects that line (`comilla sin cerrar.`) and parsing resumes on the next)
+`central;cable;zona;empresa;plano_al_com;ejecutor;director_obra;etiqueta;conca;edificio`. Every field is trimmed
+(U+00A0 included); empty is NULL; in the INT file `-` is NULL too, except in `plano_al_com`. Rows over a column length are rejected and
+listed (cap 200, real total shown); valid rows still load. `conca LIKE 'CZONA%'` rows are loaded and deleted by
+the rebuild (counted, not rejections); empty/`#N/A` `edificio` rows load and are a warning count.
+`fechaact` of every staging row is the file's 8 digits as text; `fuente` is `EXTERNO/J.Pierri`.
+
+### SQL order (one connection, one transaction)
+
+`BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE`, `SET LOCAL lock_timeout`, `SET LOCAL statement_timeout`; privileges
+checked once, after `LOCK`ing both staging tables (the locks come first, before any read; the plan is verified under them); then
+
+1. `TRUNCATE` staging INT, insert its rows in batches of 1000 (`INSERT ... SELECT FROM unnest(...)`), same for UDPEM.
+2. `DELETE ... WHERE conca LIKE 'CZONA%'` on both.
+3. Copy `AVANCE` into `HISTORY` (legacy statement, old `fechacarga` kept). Skipped iff the Avance has rows and
+   every one has `fechacarga = current_date` (DB clock): decision O2, a same-day re-load must not archive twice.
+4. `TRUNCATE AVANCE`.
+5. For INT then UDPEM: the breakdown by `situacion_distrito` and the unmatched-key count (SELECTs), then the
+   legacy `INSERT ... SELECT ... INNER JOIN zones ... GROUP BY ...` with `ST_Multi(geom)`.
+6. `UPDATE AVANCE SET fuente = 'Externo/J.Pierri + WFS/SIGRA'`.
+7. Consistency check (each staging table = loaded - junk; `AVANCE` = sum of the two INSERT counts), then COMMIT.
+
+Counts come out of the statements themselves (`WITH ... RETURNING 1`) because `shared/` exposes no `rowCount`.
+Any failure rolls back all four tables. Then the five reports run after COMMIT, each group in its own
+`BEGIN READ ONLY` transaction and each report in its own SAVEPOINT; a failed report is a warning and the others
+still run. In `dryRun` they run inside the write transaction (each in a SAVEPOINT) before the ROLLBACK.
+
+### Decisions
+
+- **O1 (parity)**: `EXCLUDED_DISTRICT_STATUSES = []`. The legacy filter `situacion_distrito <> 'Proyectado/Eliminación'`
+  spelled the status with an accent HGDesa does not store, so it excluded nothing. The list is bound as a
+  parameter (`<> ALL($1::text[])`) in the rebuild and in the two zone-matching reports; `['Proyectado/Eliminacion']`
+  would be the "intent". `ELIMINATED_STATUS` is a separate constant used only for the review warning and the
+  by-status breakdown. The `LEFT JOIN ... WHERE zu.situacion_distrito <> x` of `zonas_en_planilla_no_en_SIGRA` is
+  written as the inner join it always behaved as, so an empty list keeps its meaning.
+- **O2 (guard)**: see step 3. **O3**: no emails.
+- Dry runs burn serial values: sequences are not rolled back, so each dry run or failed load advances the staging
+  and Avance `gid` and the history `id`.
+
+### Privileges
+
+Staging x2: SELECT, INSERT, DELETE, TRUNCATE. `AVANCE`: SELECT, INSERT, UPDATE, TRUNCATE. `HISTORY`: SELECT, INSERT.
+`ZONES` and `CENTRAL_LIMITS`: SELECT. Plus USAGE on the sequences behind the staging `gid`, the Avance `gid` and
+the history `id`, checked with `has_sequence_privilege(pg_get_serial_sequence(...), 'USAGE')` (undetermined, e.g.
+no serial sequence, is not a blocker; the dry run catches it). TRUNCATE and DELETE are the ones that usually need a
+DBA `GRANT`. Both the plan and the dry run take locks on the Avance table: readers (QGIS) wait for the duration.
+In a dry run each report gets `SET LOCAL statement_timeout = 60000` (`DRY_RUN_REPORT_STATEMENT_TIMEOUT_MS`) inside its
+SAVEPOINT, so the locks are held at most about a minute per report; a cancelled report (SQLSTATE `57014`) is an
+ordinary failed report (warning, rollback to the savepoint, the rest continue). Post-COMMIT reports keep the 15 min
+`REPORT_STATEMENT_TIMEOUT_MS`.
+
+`zonas_en_planilla_no_en_SIGRA` and `zonas_en_SIGRA_no_en_planilla` are anti-joins (`WITH matched AS (...)` plus
+`NOT EXISTS`), not `key NOT IN (subquery)`: Postgres planned the `NOT IN` as a non-hashed SubPlan and took minutes on
+HGDesa. The NULL semantics of `NOT IN` are kept exactly: a NULL key is returned only when the matched set is empty,
+and a NULL in the matched set (unreachable with real data) returns nothing. No `MATERIALIZED` (Postgres 11 target).
+
+### Reports
+
+`.txt`, `;`, `"` only when needed, header always (an empty report is header-only), LF, ISO-8859-1, dates
+`yyyy-MM-dd`, columns as the legacy field lists, names `<prefix><yyyymmdd>.txt` with the `configArch.ini` prefixes
+(`yyyymmdd` is the server's run day), all five in `AvanceFTTH_Reportes<yyyymmdd>.zip` (stored entries, `zlib.crc32`).
+
+### Differences from the GeoKettle job
+
+One transaction for the whole rebuild (legacy: staging committed first); files are uploaded (no folders); no
+emails; a plan and a row-level rejection list before writing; NBSP trimmed (so a `CZONA` junk row with a leading
+space is now also deleted: 900 junk rows in the INT sample, 899 by the legacy untrimmed `LIKE`); privileges
+checked first; the O2 guard; a request without `Content-Length` is refused (411).
+
+### Unverified until a real run
+
+All SQL against PostgreSQL/PostGIS (no PostGIS in the test setup): the first verification is "Probar sin guardar" on
+HGDesa with the two sample CSVs. Duration of the rebuild and of `fuera_central` on HGDesa (statement timeouts
+`WRITE_STATEMENT_TIMEOUT_MS` and `REPORT_STATEMENT_TIMEOUT_MS` are guesses). Whether `NULL situacion_distrito`
+zones matter: the legacy `<>` excluded them, `<> ALL('{}')` includes them (HGDesa has 0 such zones today).

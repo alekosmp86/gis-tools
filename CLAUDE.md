@@ -31,6 +31,7 @@ Load files on-demand based on the task to conserve context tokens. Do not load a
 ## Tools & Domain Documentation
 - `docs/tools/` — Specific tool documentation (`DB_CSV_SYNC_TOOL.md`, `DB_SHAPEFILE_SYNC_TOOL.md`, `DB_DB_SYNC_TOOL.md`, `FILE_VIEWER_TOOL.md`, `POSTGIS_TABLE_VIEWER_TOOL.md`, `CARTOGRAPHY_WATCHER_MODULE.md`, `ADDRESS_DEDUP_MODULE.md`, `COVERAGE_LOADS_MODULE.md`, `WIKI.md`).
 - `docs/specifications/` — Functional requirements and specifications.
+- `docs/specifications/COVERAGE_LOADS_AVANCE_FTTH_SPEC.md` — Acceptance criteria of the Avance FTTH stage of coverage-loads (section 12 of `COVERAGE_LOADS_MODULE.md`).
 
 ## Troubleshooting & Past Fixes
 - `docs/README.md` — Complete documentation map and issue directory.

@@ -15,6 +15,9 @@ const repositoryCalls = vi.hoisted(() => ({
   inspected: 0,
   loaded: 0,
   reports: [] as string[],
+  avanceInspected: 0,
+  avanceLoads: [] as boolean[],
+  avanceReports: [] as string[][],
 }));
 
 vi.mock("@/modules/coverage-loads/indicators/services/PgIndicatorsRepository", () => ({
@@ -36,6 +39,43 @@ vi.mock("@/modules/coverage-loads/indicators/services/PgIndicatorsRepository", (
   },
 }));
 
+vi.mock("@/modules/coverage-loads/avance-ftth/services/PgAvanceFtthRepository", () => ({
+  PgAvanceFtthRepository: class {
+    async inspect() {
+      repositoryCalls.avanceInspected += 1;
+      return {
+        staging: { INT: { rows: 0, fechaact: null }, UDPEM: { rows: 0, fechaact: null } },
+        avance: { rows: 0, oldestLoad: null, newestLoad: null, loadedToday: false },
+        historyRows: 0,
+        zoneRows: 10,
+        zoneStatuses: [],
+        avanceByStatus: [],
+        shortfalls: [],
+      };
+    }
+
+    async load(_connection: unknown, request: { dryRun: boolean }) {
+      repositoryCalls.avanceLoads.push(request.dryRun);
+      return {
+        dryRun: request.dryRun,
+        files: [],
+        history: { copied: 0, skipped: false, reason: null },
+        avanceInserted: 0,
+        byStatus: [],
+        reports: [],
+        elapsedMs: 1,
+        warnings: [],
+        rejectedRows: [],
+      };
+    }
+
+    async readReports(_connection: unknown, kinds: string[]) {
+      repositoryCalls.avanceReports.push([...kinds]);
+      return kinds.map((kind) => ({ kind, rows: [], error: null }));
+    }
+  },
+}));
+
 const { coverageLoadsModule } = await import("@/modules/coverage-loads/manifest");
 const { COVERAGE_STAGES, CoverageStageId } = await import("@/modules/coverage-loads/workflow/ui/coverageStages");
 const { moduleRegistry } = await import("@/app/modules.registry");
@@ -45,6 +85,10 @@ const routeDeclarations = (await import("@/modules/coverage-loads/module.routes.
 const MOUNTED_SLOTS: ReadonlyArray<UiSlot> = [UiSlot.HOME_TOOL_GRID, UiSlot.FILE_SOURCE_TABS, UiSlot.APP_STATUS];
 
 const API = "coverage-loads/indicators";
+const AVANCE_API = "coverage-loads/avance-ftth";
+const AVANCE_ENDPOINTS = ["POST avance-ftth/plan", "POST avance-ftth/load", "POST avance-ftth/reports"];
+const AVANCE_ROUTE_NAMES = ["load", "plan", "reports"];
+const AVANCE_CSV = "central;cable;zona;empresa;plano_al_com;ejecutor;director_obra;etiqueta;conca;edificio\nC;01;01;E;;;;X;K;ED1\n";
 const SHP_ENDPOINTS = [
   "POST shp/upload",
   "POST shp/plan",
@@ -71,10 +115,29 @@ function uploadRequest(confirm: boolean): Request {
   return new Request(`http://localhost/api/m/${API}`, { method: "POST", headers: { "content-length": "2048" }, body: form });
 }
 
+/** The upload endpoints require a declared Content-Length (AC-26); a browser always sends one. */
+const AVANCE_DECLARED_UPLOAD_BYTES = "2048";
+
+function avanceUploadRequest(path: string, fields: Record<string, string> = {}): Request {
+  const form = new FormData();
+  form.append("connection", JSON.stringify(CONNECTION));
+  form.append("files", new File([AVANCE_CSV], "SituacionFTTH_INT_21092026.csv"));
+  form.append("files", new File([AVANCE_CSV], "SituacionFTTH_UDPEM_21092026.csv"));
+  for (const [name, value] of Object.entries(fields)) form.append(name, value);
+  return new Request(`http://localhost/api/m/${AVANCE_API}/${path}`, {
+    method: "POST",
+    headers: { "content-length": AVANCE_DECLARED_UPLOAD_BYTES },
+    body: form,
+  });
+}
+
 beforeEach(() => {
   repositoryCalls.inspected = 0;
   repositoryCalls.loaded = 0;
   repositoryCalls.reports.length = 0;
+  repositoryCalls.avanceInspected = 0;
+  repositoryCalls.avanceLoads.length = 0;
+  repositoryCalls.avanceReports.length = 0;
 });
 
 describe("coverage loads manifest", () => {
@@ -85,14 +148,27 @@ describe("coverage loads manifest", () => {
       expect(coverageLoadsModule.id).toBe(routeDeclarations.moduleId);
     });
 
-    it("should declare the three indicator endpoints (POST) followed by the eight shp endpoints", () => {
+    it("should declare the three indicator endpoints, the three avance-ftth endpoints (all POST) and then the eight shp endpoints", () => {
       // Arrange, Act & Assert
       expect(routeDeclarations.endpoints.map((endpoint) => `${endpoint.method} ${endpoint.path}`)).toEqual([
         "POST indicators/plan",
         "POST indicators/load",
         "POST indicators/reports",
+        ...AVANCE_ENDPOINTS,
         ...SHP_ENDPOINTS,
       ]);
+    });
+
+    it("should declare nodejs and force-dynamic for each avance-ftth endpoint and bind every declared endpoint to a handler", () => {
+      // Arrange
+      const declared = routeDeclarations.endpoints.filter((endpoint) => endpoint.path.startsWith("avance-ftth/"));
+      const bound = (coverageLoadsModule.endpoints ?? []).filter((endpoint) => endpoint.path.startsWith("avance-ftth/"));
+
+      // Act & Assert
+      expect(declared).toHaveLength(3);
+      expect(declared.every((endpoint) => endpoint.method === "POST" && endpoint.runtime === "nodejs" && endpoint.dynamic === "force-dynamic")).toBe(true);
+      expect(bound.map((endpoint) => endpoint.path).sort()).toEqual(declared.map((endpoint) => endpoint.path).sort());
+      expect(bound.every((endpoint) => typeof endpoint.handler === "function")).toBe(true);
     });
 
     it("should bind a handler to every declared endpoint and keep nodejs / force-dynamic", () => {
@@ -100,7 +176,7 @@ describe("coverage loads manifest", () => {
       const endpoints = coverageLoadsModule.endpoints ?? [];
 
       // Assert
-      expect(endpoints).toHaveLength(11);
+      expect(endpoints).toHaveLength(14);
       expect(endpoints.every((endpoint) => typeof endpoint.handler === "function")).toBe(true);
       expect(endpoints.every((endpoint) => endpoint.runtime === "nodejs")).toBe(true);
       expect(endpoints.every((endpoint) => endpoint.dynamic === "force-dynamic")).toBe(true);
@@ -213,6 +289,66 @@ describe("coverage loads manifest", () => {
     });
   });
 
+  describe("avance-ftth endpoint binding (AC-24)", () => {
+    it("should expose the avance-ftth endpoints as POST only", () => {
+      // Arrange
+      const registry = createModuleRegistry([coverageLoadsModule]);
+
+      // Act & Assert
+      for (const name of AVANCE_ROUTE_NAMES) {
+        expect(registry.findEndpoint(ModuleHttpMethod.POST, `${AVANCE_API}/${name}`)?.moduleId).toBe("coverage-loads");
+        expect(registry.findEndpoint(ModuleHttpMethod.GET, `${AVANCE_API}/${name}`)).toBeNull();
+      }
+    });
+
+    it("should bind avance-ftth/plan to the plan handler: it inspects and never writes", async () => {
+      // Arrange
+      const handler = findHandler(`${AVANCE_API}/plan`);
+
+      // Act
+      const response = await handler(avanceUploadRequest("plan"));
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect((await response.json()).plan.files).toHaveLength(2);
+      expect(repositoryCalls.avanceInspected).toBe(1);
+      expect(repositoryCalls.avanceLoads).toEqual([]);
+    });
+
+    it("should bind avance-ftth/load to the load handler: unconfirmed is refused, a dry run reaches the write path", async () => {
+      // Arrange
+      const handler = findHandler(`${AVANCE_API}/load`);
+
+      // Act
+      const unconfirmed = await handler(avanceUploadRequest("load"));
+      const dryRun = await handler(avanceUploadRequest("load", { dryRun: "true" }));
+      const confirmed = await handler(avanceUploadRequest("load", { confirm: "true" }));
+
+      // Assert
+      expect(unconfirmed.status).toBe(400);
+      expect(dryRun.status).toBe(200);
+      expect(confirmed.status).toBe(200);
+      expect(repositoryCalls.avanceLoads).toEqual([true, false]);
+    });
+
+    it("should bind avance-ftth/reports to the reports handler: it reads the asked report", async () => {
+      // Arrange
+      const handler = findHandler(`${AVANCE_API}/reports`);
+      const request = new Request(`http://localhost/api/m/${AVANCE_API}/reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connection: CONNECTION, kind: "duplicado_planilla_obras" }),
+      });
+
+      // Act
+      const response = await handler(request);
+
+      // Assert
+      expect(response.headers.get("Content-Disposition")).toContain("reporte_avance_duplicado_planilla_obras_");
+      expect(repositoryCalls.avanceReports).toEqual([["duplicado_planilla_obras"]]);
+    });
+  });
+
   describe("page and navigation (AC-27)", () => {
     it("should own the page at the module root, titled Cargas de Coberturas", () => {
       // Arrange
@@ -253,12 +389,17 @@ describe("coverage loads manifest", () => {
       expect(typeof contributions[0].Component).toBe("function");
     });
 
-    it("should offer two stages in order: Indicadores LTE, then Cargas SHP", () => {
+    it("should offer three stages in order: Indicadores LTE, Cargas SHP, then Avance FTTH", () => {
       // Arrange & Act & Assert
-      expect(COVERAGE_STAGES.map((stage) => stage.label)).toEqual(["Indicadores LTE", "Cargas SHP"]);
-      expect(COVERAGE_STAGES.map((stage) => stage.id)).toEqual([CoverageStageId.INDICATORS, CoverageStageId.SHP]);
+      expect(COVERAGE_STAGES.map((stage) => stage.label)).toEqual(["Indicadores LTE", "Cargas SHP", "Avance FTTH"]);
+      expect(COVERAGE_STAGES.map((stage) => stage.id)).toEqual([
+        CoverageStageId.INDICATORS,
+        CoverageStageId.SHP,
+        CoverageStageId.AVANCE_FTTH,
+      ]);
       expect(COVERAGE_STAGES.every((stage) => typeof stage.Panel === "function")).toBe(true);
       expect(typeof COVERAGE_STAGES[0].ResultExtras).toBe("function");
+      expect(typeof COVERAGE_STAGES[2].ResultExtras).toBe("function");
     });
   });
 
@@ -276,7 +417,7 @@ describe("coverage loads manifest", () => {
 
       // Assert
       expect(registry.modules).toHaveLength(1);
-      expect(registry.endpoints()).toHaveLength(11);
+      expect(registry.endpoints()).toHaveLength(14);
       expect(registry.pages()).toHaveLength(1);
       expect(registry.uiContributions()).toHaveLength(2);
     });
@@ -337,7 +478,11 @@ describe("module structure (AC-29, AC-30)", () => {
 
     // Assert
     expect(shpUiFiles).toContain("shp/ui/ShpPanel.tsx");
-    expect(COVERAGE_STAGES.map((stage) => stage.id)).toEqual([CoverageStageId.INDICATORS, CoverageStageId.SHP]);
+    expect(COVERAGE_STAGES.map((stage) => stage.id)).toEqual([
+      CoverageStageId.INDICATORS,
+      CoverageStageId.SHP,
+      CoverageStageId.AVANCE_FTTH,
+    ]);
     expect(routeDeclarations.pages).toHaveLength(1);
   });
 
@@ -358,7 +503,7 @@ describe("module structure (AC-29, AC-30)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("should serve the indicators endpoints and the eight generated shp routes from the route tree", () => {
+  it("should serve the indicators endpoints, the three avance-ftth endpoints and the eight generated shp routes from the route tree", () => {
     // Arrange
     const routes = listFiles(API_DIR).map((path) => relative(API_DIR, path).replace(/\\/g, "/"));
 
@@ -368,9 +513,22 @@ describe("module structure (AC-29, AC-30)", () => {
         "indicators/load/route.ts",
         "indicators/plan/route.ts",
         "indicators/reports/route.ts",
+        ...AVANCE_ROUTE_NAMES.map((name) => `avance-ftth/${name}/route.ts`),
         ...SHP_ROUTE_NAMES.map((name) => `shp/${name}/route.ts`),
       ].sort()
     );
+  });
+
+  it("should generate each avance-ftth route as POST, nodejs and force-dynamic bound to its declared path", () => {
+    // Arrange & Act & Assert
+    for (const name of AVANCE_ROUTE_NAMES) {
+      const text = readFileSync(join(API_DIR, "avance-ftth", name, "route.ts"), "utf8");
+      expect(text).toContain("export const POST = createModuleRouteHandler(");
+      expect(text).toContain("ModuleHttpMethod.POST");
+      expect(text).toContain(`"coverage-loads/avance-ftth/${name}"`);
+      expect(text).toContain('export const runtime = "nodejs"');
+      expect(text).toContain('export const dynamic = "force-dynamic"');
+    }
   });
 
   it("should generate each shp route with the declared method, nodejs and force-dynamic", () => {

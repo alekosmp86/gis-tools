@@ -31,13 +31,14 @@ Welcome to the **GIS Tools** technical documentation directory. All documentatio
 - [`FILE_VIEWER_TOOL.md`](docs/tools/FILE_VIEWER_TOOL.md) — Spatial File Viewer architecture, bidirectional map-table selection, and attribute table pagination.
 - [`CARTOGRAPHY_WATCHER_MODULE.md`](docs/tools/CARTOGRAPHY_WATCHER_MODULE.md) — Observador de Actualizaciones Cartográficas as an extension module: CKAN delta detection (checksum, publication date, size), the server-side vault with read-through caching, the catalogue tab inside the DB-CSV and DB-Shapefile uploaders, and its own generated page at `/tools/m/cartography-watcher`.
 - [`ADDRESS_DEDUP_MODULE.md`](docs/tools/ADDRESS_DEDUP_MODULE.md) — Duplicados de Direcciones as an extension module: the CGEO-2192 v3 SQL as a read-only engine, the decision table with `decision_reason`, the `protectedSiblingRemovesLone` toggle, output scope, CSV/GeoJSON exports for QGIS, and its own generated page at `/tools/m/address-dedup`.
-- [`COVERAGE_LOADS_MODULE.md`](docs/tools/COVERAGE_LOADS_MODULE.md) — Cargas de Coberturas as an extension module (part 2, Indicadores LTE): `IndicadoresLTE_aaaammdd.csv` cuts loaded into the history with replace-the-cut, shrink guard, row-level rejection list, the three report CSVs as downloads, required privileges (DELETE on the history), and its own generated page at `/tools/m/coverage-loads`.
+- [`COVERAGE_LOADS_MODULE.md`](docs/tools/COVERAGE_LOADS_MODULE.md) — Cargas de Coberturas as an extension module (Indicadores LTE, Cargas SHP and, in section 12, Avance FTTH): `IndicadoresLTE_aaaammdd.csv` cuts loaded into the history with replace-the-cut, shrink guard, row-level rejection list, the three report CSVs as downloads, required privileges (DELETE on the history), and its own generated page at `/tools/m/coverage-loads`.
 - [`POSTGIS_TABLE_VIEWER_TOOL.md`](docs/tools/POSTGIS_TABLE_VIEWER_TOOL.md) — PostGIS / PostgreSQL Table Viewer tool, direct table introspection, and vector map preview.
 - [`WIKI.md`](docs/tools/WIKI.md) — End-user wiki: Markdown pages owned by each tool or module, the "?" link on home cards, frontmatter, callouts, relative links and images, and the link/image/title validation in the test suite.
 
 ### 📋 5. Specifications (`docs/specifications/`)
 - [`REQUERIMIENTOS_Y_ESPECIFICACION.md`](docs/specifications/REQUERIMIENTOS_Y_ESPECIFICACION.md) — System requirements and specifications.
 - [`TASKS.md`](docs/specifications/TASKS.md) — Development task tracking and checklist.
+- [`COVERAGE_LOADS_AVANCE_FTTH_SPEC.md`](docs/specifications/COVERAGE_LOADS_AVANCE_FTTH_SPEC.md) — Acceptance criteria of the Avance FTTH stage of Cargas de Coberturas (two CSV planillas rebuild the Avance table, history copy, five validation reports).
 
 ### 🐛 6. Issues & Troubleshooting Log (`docs/issues/`)
 - [`ISSUE_001_SHAPEFILE_PROJECTED_COORDINATES_MAP_BLANK.md`](docs/issues/ISSUE_001_SHAPEFILE_PROJECTED_COORDINATES_MAP_BLANK.md) — Projected coordinates (UTM/EPSG) resulting in blank/world map preview due to missing WGS84 reprojection.
