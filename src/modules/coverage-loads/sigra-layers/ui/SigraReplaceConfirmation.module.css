@@ -1,0 +1,21 @@
+.box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent-rose);
+  border-radius: 8px;
+}
+
+.text {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.icon {
+  flex-shrink: 0;
+  color: var(--accent-rose);
+}

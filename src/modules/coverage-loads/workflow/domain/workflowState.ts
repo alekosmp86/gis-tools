@@ -10,6 +10,7 @@ import {
 } from "../../shared/domain/connectionState";
 import { StageStatus, type StageOutcome } from "../../shared/domain/stageContract";
 import type { LoadType, StageIdsByLoadType } from "./loadType";
+import { MANDATORY_STAGE_IDS, STAGE_PREREQUISITES } from "./stagePrerequisites";
 
 /**
  * State of the multi-stage workflow: a load type, one shared connection, then the independent
@@ -123,8 +124,23 @@ export function isAnyStageBusy(state: WorkflowState): boolean {
   return Object.values(state.stages).some((progress) => progress.status === StageStatus.BUSY);
 }
 
+/** The prerequisites of a stage of the chosen type that are not DONE yet, in declaration order. */
+export function unmetPrerequisites(state: WorkflowState, stageId: string): ReadonlyArray<string> {
+  const chosen = new Set(chosenStageIds(state));
+  if (!chosen.has(stageId)) return [];
+  return (STAGE_PREREQUISITES[stageId] ?? []).filter(
+    (prerequisiteId) => chosen.has(prerequisiteId) && state.stages[prerequisiteId]?.status !== StageStatus.DONE
+  );
+}
+
+/** A locked stage can still be opened, to read why, but its panel is not usable. */
+export function isStageLocked(state: WorkflowState, stageId: string): boolean {
+  return unmetPrerequisites(state, stageId).length > 0;
+}
+
 export function canSkipStage(state: WorkflowState, stageId: string): boolean {
   const status = state.stages[stageId]?.status;
+  if (MANDATORY_STAGE_IDS.includes(stageId)) return false;
   return status !== undefined && status !== StageStatus.BUSY && status !== StageStatus.DONE && status !== StageStatus.SKIPPED;
 }
 
@@ -162,12 +178,25 @@ function confirmConnection(state: WorkflowState): WorkflowState {
   if (!canContinue(state)) return state;
   const changed =
     state.confirmedConnection !== null && !isSameConnection(state.confirmedConnection, state.connection);
-  return {
+  const confirmed = {
     ...state,
     phase: WorkflowPhase.STAGES,
     confirmedConnection: state.connection,
     connectionRevision: changed ? state.connectionRevision + 1 : state.connectionRevision,
   };
+  return changed ? relockPrerequisites(confirmed) : confirmed;
+}
+
+/** What a prerequisite stage did was done on the old database, so the stages behind it lock again. */
+function relockPrerequisites(state: WorkflowState): WorkflowState {
+  const prerequisiteIds = new Set(Object.values(STAGE_PREREQUISITES).flat());
+  const stages = Object.fromEntries(
+    Object.entries(state.stages).map(([stageId, progress]) => [
+      stageId,
+      prerequisiteIds.has(stageId) && progress.status !== StageStatus.BUSY ? PENDING_PROGRESS : progress,
+    ])
+  );
+  return { ...state, stages };
 }
 
 function reopenConnection(state: WorkflowState): WorkflowState {

@@ -22,7 +22,7 @@ export const LOAD_TYPE_LABELS: Readonly<Record<LoadType, string>> = {
 /** Stage ids as declared in `coverageStages.ts`; each stage belongs to exactly one type. */
 export const LOAD_TYPE_STAGE_IDS: StageIdsByLoadType = {
   [LoadType.COVERAGE]: [CoverageStageId.INDICATORS, CoverageStageId.SHP],
-  [LoadType.FTTH]: [CoverageStageId.AVANCE_FTTH],
+  [LoadType.FTTH]: [CoverageStageId.SIGRA_LAYERS, CoverageStageId.AVANCE_FTTH],
 };
 
 /** The stages of the chosen type, in the order of the map; none while no type is chosen. */

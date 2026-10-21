@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Cable, MapPinned, Signal, type LucideIcon } from "lucide-react";
+import { Cable, Layers, MapPinned, Signal, type LucideIcon } from "lucide-react";
 import type { ConnectionPayload } from "../../types";
 import type { StagePanelProps } from "../../shared/domain/stageContract";
 import { AvanceFtthPanel } from "../../avance-ftth/ui/AvanceFtthPanel";
@@ -7,6 +7,7 @@ import { AvanceReportDownloads } from "../../avance-ftth/ui/ReportDownloads";
 import { IndicatorsPanel } from "../../indicators/ui/IndicatorsPanel";
 import { ReportDownloads } from "../../indicators/ui/ReportDownloads";
 import { ShpPanel } from "../../shp/ui/ShpPanel";
+import { SigraLayersPanel } from "../../sigra-layers/ui/SigraLayersPanel";
 
 import { CoverageStageId } from "../domain/coverageStageId";
 
@@ -31,6 +32,7 @@ export const COVERAGE_STAGES: ReadonlyArray<CoverageStage> = [
     ResultExtras: ReportDownloads,
   },
   { id: CoverageStageId.SHP, label: "Cargas SHP", Icon: MapPinned, Panel: ShpPanel },
+  { id: CoverageStageId.SIGRA_LAYERS, label: "Capas SIGRA", Icon: Layers, Panel: SigraLayersPanel },
   {
     id: CoverageStageId.AVANCE_FTTH,
     label: "Avance FTTH",

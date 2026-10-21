@@ -16,6 +16,7 @@ interface StageViewProps {
   isActive: boolean;
   canSkip: boolean;
   canUnskip: boolean;
+  lockedNotice: string | null;
   connection: ConnectionPayload;
   connectionRevision: number;
   onStatusChange: (stageId: string, status: StageStatus, outcome?: StageOutcome) => void;
@@ -27,7 +28,7 @@ const SKIPPED_NOTICE = "Este paso se omitió. Puede retomarlo cuando quiera; lo 
 
 /**
  * One stage of the workflow. Its panel stays mounted, only hidden, so progress survives while
- * the user looks at another stage or skips this one.
+ * the user looks at another stage, skips this one or it is locked behind an unfinished stage.
  */
 export const StageView: React.FC<StageViewProps> = ({
   stage,
@@ -35,6 +36,7 @@ export const StageView: React.FC<StageViewProps> = ({
   isActive,
   canSkip,
   canUnskip,
+  lockedNotice,
   connection,
   connectionRevision,
   onStatusChange,
@@ -65,7 +67,8 @@ export const StageView: React.FC<StageViewProps> = ({
         )}
       </header>
       {isSkipped && <p className={styles.notice}>{SKIPPED_NOTICE}</p>}
-      <div className={styles.panel} hidden={isSkipped}>
+      {lockedNotice !== null && <p className={styles.notice}>{lockedNotice}</p>}
+      <div className={styles.panel} hidden={isSkipped || lockedNotice !== null}>
         <Panel connection={connection} connectionRevision={connectionRevision} onStatusChange={handleStatusChange} />
       </div>
     </div>

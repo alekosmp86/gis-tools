@@ -9,8 +9,9 @@ import { CoverageLoadsHomeCard } from "./ui/CoverageLoadsHomeCard";
 import { ShpStatusChip } from "./shp/ui/ShpStatusChip";
 
 /**
- * Cargas de Coberturas. Three parts: Indicadores LTE (`indicators/`), Cargas SHP (`shp/`) and
- * Avance FTTH (`avance-ftth/`, the two CSV planillas that rebuild the Avance table). The page (a
+ * Cargas de Coberturas. Four parts: Indicadores LTE (`indicators/`), Cargas SHP (`shp/`),
+ * Avance FTTH (`avance-ftth/`, the two CSV planillas that rebuild the Avance table) and Capas
+ * SIGRA (`sigra-layers/`, the WFS layers that replace their final tables). The page (a
  * stage workflow) and the home card are optional contributions and leave with the module.
  */
 const handlers = createCoverageLoadsHandlers();
@@ -28,6 +29,8 @@ export const coverageLoadsModule: AppModuleManifest = {
     "POST avance-ftth/plan": handlers.avanceFtth.plan,
     "POST avance-ftth/load": handlers.avanceFtth.load,
     "POST avance-ftth/reports": handlers.avanceFtth.reports,
+    "POST sigra-layers/plan": handlers.sigraLayers.plan,
+    "POST sigra-layers/load": handlers.sigraLayers.load,
     "POST shp/upload": handlers.shp.upload,
     "POST shp/plan": handlers.shp.plan,
     "POST shp/start": handlers.shp.start,

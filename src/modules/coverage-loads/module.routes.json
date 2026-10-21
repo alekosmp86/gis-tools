@@ -7,6 +7,8 @@
     { "path": "avance-ftth/plan", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "avance-ftth/load", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "avance-ftth/reports", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "sigra-layers/plan", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "sigra-layers/load", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "shp/upload", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "shp/plan", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "shp/start", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },

@@ -1,0 +1,51 @@
+.title {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ok {
+  color: var(--accent-emerald);
+  border-color: var(--accent-emerald);
+}
+
+.dryRun {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+
+.failed {
+  color: var(--accent-rose);
+  border-color: var(--accent-rose);
+}
+
+.positive {
+  color: var(--accent-emerald);
+}
+
+.negative {
+  color: var(--accent-rose);
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.auditWarning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}

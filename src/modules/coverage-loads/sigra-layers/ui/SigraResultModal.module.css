@@ -1,0 +1,29 @@
+.dialog {
+  width: min(960px, 94vw);
+  max-height: 86vh;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg, #0f1626);
+  color: inherit;
+  overflow: hidden;
+}
+
+.dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 86vh;
+  padding: 22px 26px;
+  overflow: auto;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+}

@@ -6,6 +6,7 @@ import { LOAD_TYPE_STAGE_IDS, stagesForLoadType } from "../domain/loadType";
 import { WorkflowPhase } from "../domain/workflowState";
 import { COVERAGE_STAGES } from "./coverageStages";
 import { LoadTypeStep } from "./LoadTypeStep";
+import { describeStageLock } from "./stageLocks";
 import { buildStepperEntries } from "./stepperEntries";
 import { StageView } from "./StageView";
 import { useCoverageWorkflow } from "./useCoverageWorkflow";
@@ -57,6 +58,7 @@ export const CoverageWorkflow: React.FC = () => {
             isActive={state.phase === WorkflowPhase.STAGES && state.activeStageId === stage.id}
             canSkip={workflow.canSkip(stage.id)}
             canUnskip={workflow.canUnskip(stage.id)}
+            lockedNotice={describeStageLock(state, stage.id, COVERAGE_STAGES)}
             connection={confirmedConnection}
             connectionRevision={state.connectionRevision}
             onStatusChange={workflow.publishStageStatus}

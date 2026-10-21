@@ -1,7 +1,7 @@
 import { ClipboardList, ListChecks, PlugZap, type LucideIcon } from "lucide-react";
 import { StageStatus } from "../../shared/domain/stageContract";
 import { LOAD_TYPE_LABELS, stagesForLoadType } from "../domain/loadType";
-import { isAnyStageBusy, WorkflowPhase, type WorkflowState } from "../domain/workflowState";
+import { isAnyStageBusy, isStageLocked, WorkflowPhase, type WorkflowState } from "../domain/workflowState";
 import type { CoverageStage } from "./coverageStages";
 import { STAGE_STATUS_LABELS } from "./stageStatusLabels";
 
@@ -35,6 +35,7 @@ export interface StepperActions {
 const LOAD_TYPE_KEY = "load-type";
 const CONNECTION_KEY = "connection";
 const RESULT_KEY = "result";
+const LOCKED_CAPTION = "Bloqueado";
 
 function toneOf(status: StageStatus): StepperTone {
   switch (status) {
@@ -81,10 +82,11 @@ function buildConnectionEntry(state: WorkflowState, actions: StepperActions): St
 function buildStageEntry(state: WorkflowState, stage: CoverageStage, actions: StepperActions): StepperEntry {
   const { status } = state.stages[stage.id];
   const isOpenable = state.phase === WorkflowPhase.STAGES || state.phase === WorkflowPhase.RESULT;
+  const isBlocked = status === StageStatus.PENDING && isStageLocked(state, stage.id);
   return {
     key: stage.id,
     title: stage.label,
-    caption: STAGE_STATUS_LABELS[status],
+    caption: isBlocked ? LOCKED_CAPTION : STAGE_STATUS_LABELS[status],
     Icon: stage.Icon,
     isActive: state.phase === WorkflowPhase.STAGES && state.activeStageId === stage.id,
     tone: toneOf(status),
