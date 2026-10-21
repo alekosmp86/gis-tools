@@ -756,12 +756,12 @@ describe("indicators handlers", () => {
       for (const handler of Object.values(handlers)) expect(typeof handler).toBe("function");
     });
 
-    it("should expose the indicators, shp and avance-ftth handler sets at module level", () => {
+    it("should expose the indicators, shp, avance-ftth and sigra-layers handler sets at module level", () => {
       // Arrange & Act
       const handlers = createCoverageLoadsHandlers({ repository: new FakeRepository() });
 
       // Assert
-      expect(Object.keys(handlers)).toEqual(["indicators", "shp", "avanceFtth"]);
+      expect(Object.keys(handlers).sort()).toEqual(["avanceFtth", "indicators", "shp", "sigraLayers"]);
       expect(typeof handlers.indicators.plan).toBe("function");
       expect(Object.keys(handlers.shp).sort()).toEqual(
         ["cancel", "discard", "jobs", "log", "plan", "start", "status", "upload"]
@@ -769,6 +769,8 @@ describe("indicators handlers", () => {
       for (const handler of Object.values(handlers.shp)) expect(typeof handler).toBe("function");
       expect(Object.keys(handlers.avanceFtth).sort()).toEqual(["load", "plan", "reports"]);
       for (const handler of Object.values(handlers.avanceFtth)) expect(typeof handler).toBe("function");
+      expect(Object.keys(handlers.sigraLayers).sort()).toEqual(["load", "plan"]);
+      for (const handler of Object.values(handlers.sigraLayers)) expect(typeof handler).toBe("function");
     });
   });
 });

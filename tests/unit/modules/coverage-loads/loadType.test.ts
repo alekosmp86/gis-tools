@@ -28,11 +28,11 @@ describe("LOAD_TYPE_LABELS", () => {
 });
 
 describe("LOAD_TYPE_STAGE_IDS", () => {
-  it("should map coverage to indicators then shp, and FTTH to avance-ftth", () => {
+  it("should map coverage to indicators then shp, and FTTH to sigra-layers then avance-ftth", () => {
     // Arrange & Act & Assert
     expect(LOAD_TYPE_STAGE_IDS).toEqual({
       [LoadType.COVERAGE]: ["indicators", "shp"],
-      [LoadType.FTTH]: ["avance-ftth"],
+      [LoadType.FTTH]: ["sigra-layers", "avance-ftth"],
     });
   });
 

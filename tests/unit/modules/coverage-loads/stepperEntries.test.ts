@@ -329,6 +329,106 @@ describe("buildStepperEntries", () => {
   });
 });
 
+describe("buildStepperEntries with the SIGRA prerequisite", () => {
+  const FTTH_IDS = { [LoadType.COVERAGE]: ["indicators", "shp"], [LoadType.FTTH]: ["sigra-layers", "avance-ftth"] };
+  const FTTH_STAGES: ReadonlyArray<CoverageStage> = [
+    { id: "indicators", label: "Indicadores", Icon: Signal, Panel: () => null },
+    { id: "shp", label: "SHP", Icon: Signal, Panel: () => null },
+    { id: "avance-ftth", label: "Avance FTTH", Icon: Signal, Panel: () => null },
+    { id: "sigra-layers", label: "Capas SIGRA", Icon: Signal, Panel: () => null },
+  ];
+
+  function ftthState(sigra: StageStatus, avance: StageStatus = StageStatus.PENDING): WorkflowState {
+    const base: WorkflowState = {
+      ...createInitialWorkflow(FTTH_IDS),
+      phase: WorkflowPhase.STAGES,
+      loadType: LoadType.FTTH,
+      confirmedConnection: CONNECTION,
+      activeStageId: "sigra-layers",
+    };
+    return {
+      ...base,
+      stages: {
+        ...base.stages,
+        "sigra-layers": { status: sigra, outcome: null },
+        "avance-ftth": { status: avance, outcome: null },
+      },
+    };
+  }
+
+  it("should list the SIGRA stage before the Avance stage for FTTH", () => {
+    // Arrange & Act
+    const entries = buildStepperEntries(ftthState(StageStatus.PENDING), FTTH_STAGES, actions());
+
+    // Assert
+    expect(keysOf(entries)).toEqual(["load-type", "connection", "sigra-layers", "avance-ftth", "result"]);
+    expect(entries.map((entry) => entry.title)).toEqual(["Tipo de carga", "Conexión", "Capas SIGRA", "Avance FTTH", "Resultado"]);
+  });
+
+  it.each([StageStatus.PENDING, StageStatus.BUSY, StageStatus.FAILED, StageStatus.SKIPPED])(
+    "should caption the Avance stage Bloqueado with an idle tone while SIGRA is %s",
+    (sigra) => {
+      // Arrange
+      const state = ftthState(sigra);
+
+      // Act
+      const [, , , avance] = buildStepperEntries(state, FTTH_STAGES, actions());
+
+      // Assert
+      expect(avance).toMatchObject({ key: "avance-ftth", caption: "Bloqueado", tone: StepperTone.IDLE });
+    }
+  );
+
+  it("should keep a locked stage selectable so the user can read why it is locked", () => {
+    // Arrange
+    const wired = actions();
+
+    // Act
+    const entries = buildStepperEntries(ftthState(StageStatus.PENDING), FTTH_STAGES, wired);
+    entries[3].select?.();
+
+    // Assert
+    expect(wired.selectStage).toHaveBeenCalledWith("avance-ftth");
+  });
+
+  it.each([StageStatus.PENDING, StageStatus.BUSY, StageStatus.DONE])(
+    "should caption the Avance stage with its status label once SIGRA is DONE (avance %s)",
+    (avanceStatus) => {
+      // Arrange
+      const state = ftthState(StageStatus.DONE, avanceStatus);
+
+      // Act
+      const [, , sigra, avance] = buildStepperEntries(state, FTTH_STAGES, actions());
+
+      // Assert
+      expect(avance.caption).toBe(STAGE_STATUS_LABELS[avanceStatus]);
+      expect(sigra).toMatchObject({ caption: STAGE_STATUS_LABELS[StageStatus.DONE], tone: StepperTone.DONE });
+    }
+  );
+
+  it("should never caption the SIGRA stage Bloqueado, whatever its status", () => {
+    // Arrange & Act
+    const captions = Object.values(StageStatus).map(
+      (status) => buildStepperEntries(ftthState(status), FTTH_STAGES, actions())[2].caption
+    );
+
+    // Assert
+    expect(captions).not.toContain("Bloqueado");
+  });
+
+  it("should show no Bloqueado caption when the coverage type is chosen", () => {
+    // Arrange
+    const state: WorkflowState = { ...ftthState(StageStatus.PENDING), loadType: LoadType.COVERAGE, activeStageId: "indicators" };
+
+    // Act
+    const entries = buildStepperEntries(state, FTTH_STAGES, actions());
+
+    // Assert
+    expect(keysOf(entries)).toEqual(["load-type", "connection", "indicators", "shp", "result"]);
+    expect(entries.map((entry) => entry.caption)).not.toContain("Bloqueado");
+  });
+});
+
 describe("STAGE_STATUS_LABELS", () => {
   it("should label every stage status with a distinct non-empty text", () => {
     // Arrange

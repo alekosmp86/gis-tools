@@ -18,6 +18,40 @@ const repositoryCalls = vi.hoisted(() => ({
   avanceInspected: 0,
   avanceLoads: [] as boolean[],
   avanceReports: [] as string[][],
+  sigraInspected: [] as string[][],
+  sigraLoads: [] as Array<[string, boolean]>,
+  sigraProbes: 0,
+}));
+
+vi.mock("@/modules/coverage-loads/sigra-layers/services/PgSigraLayersRepository", () => ({
+  PgSigraLayersRepository: class {
+    async inspect(_connection: unknown, layerIds: string[]) {
+      repositoryCalls.sigraInspected.push([...layerIds]);
+      return {
+        layers: layerIds.map((layerId) => ({ layerId, tableExists: true, rowCount: 10, lastUpdated: null, missingPrivileges: [] })),
+        canCreateTemp: true,
+        auditAvailable: true,
+      };
+    }
+
+    async loadLayer(_connection: unknown, layerId: string, options: { dryRun: boolean }) {
+      repositoryCalls.sigraLoads.push([layerId, options.dryRun]);
+      return {
+        layerId, status: options.dryRun ? "dry-run-ok" : "loaded", downloaded: 10, staged: 10, duplicatesIgnored: 0,
+        previousCount: 10, finalCount: options.dryRun ? null : 10, elapsedMs: 1, step: null, message: "ok", auditWarning: null,
+      };
+    }
+  },
+}));
+
+vi.mock("@/modules/coverage-loads/sigra-layers/services/WfsClient", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  createWfsPageFetcher: () => ({
+    fetchPage: async () => {
+      repositoryCalls.sigraProbes += 1;
+      return { features: [], numberMatched: 10 };
+    },
+  }),
 }));
 
 vi.mock("@/modules/coverage-loads/indicators/services/PgIndicatorsRepository", () => ({
@@ -88,6 +122,9 @@ const API = "coverage-loads/indicators";
 const AVANCE_API = "coverage-loads/avance-ftth";
 const AVANCE_ENDPOINTS = ["POST avance-ftth/plan", "POST avance-ftth/load", "POST avance-ftth/reports"];
 const AVANCE_ROUTE_NAMES = ["load", "plan", "reports"];
+const SIGRA_API = "coverage-loads/sigra-layers";
+const SIGRA_ENDPOINTS = ["POST sigra-layers/plan", "POST sigra-layers/load"];
+const SIGRA_ROUTE_NAMES = ["load", "plan"];
 const AVANCE_CSV = "central;cable;zona;empresa;plano_al_com;ejecutor;director_obra;etiqueta;conca;edificio\nC;01;01;E;;;;X;K;ED1\n";
 const SHP_ENDPOINTS = [
   "POST shp/upload",
@@ -138,6 +175,9 @@ beforeEach(() => {
   repositoryCalls.avanceInspected = 0;
   repositoryCalls.avanceLoads.length = 0;
   repositoryCalls.avanceReports.length = 0;
+  repositoryCalls.sigraInspected.length = 0;
+  repositoryCalls.sigraLoads.length = 0;
+  repositoryCalls.sigraProbes = 0;
 });
 
 describe("coverage loads manifest", () => {
@@ -148,15 +188,30 @@ describe("coverage loads manifest", () => {
       expect(coverageLoadsModule.id).toBe(routeDeclarations.moduleId);
     });
 
-    it("should declare the three indicator endpoints, the three avance-ftth endpoints (all POST) and then the eight shp endpoints", () => {
+    it("should declare the three indicator endpoints, the three avance-ftth endpoints, the two sigra-layers endpoints and the eight shp endpoints", () => {
       // Arrange, Act & Assert
-      expect(routeDeclarations.endpoints.map((endpoint) => `${endpoint.method} ${endpoint.path}`)).toEqual([
-        "POST indicators/plan",
-        "POST indicators/load",
-        "POST indicators/reports",
-        ...AVANCE_ENDPOINTS,
-        ...SHP_ENDPOINTS,
-      ]);
+      expect(routeDeclarations.endpoints.map((endpoint) => `${endpoint.method} ${endpoint.path}`).sort()).toEqual(
+        [
+          "POST indicators/plan",
+          "POST indicators/load",
+          "POST indicators/reports",
+          ...AVANCE_ENDPOINTS,
+          ...SIGRA_ENDPOINTS,
+          ...SHP_ENDPOINTS,
+        ].sort()
+      );
+    });
+
+    it("should declare nodejs and force-dynamic for each sigra-layers endpoint and bind every declared one to a handler", () => {
+      // Arrange
+      const declared = routeDeclarations.endpoints.filter((endpoint) => endpoint.path.startsWith("sigra-layers/"));
+      const bound = (coverageLoadsModule.endpoints ?? []).filter((endpoint) => endpoint.path.startsWith("sigra-layers/"));
+
+      // Act & Assert
+      expect(declared).toHaveLength(2);
+      expect(declared.every((endpoint) => endpoint.method === "POST" && endpoint.runtime === "nodejs" && endpoint.dynamic === "force-dynamic")).toBe(true);
+      expect(bound.map((endpoint) => endpoint.path).sort()).toEqual(declared.map((endpoint) => endpoint.path).sort());
+      expect(bound.every((endpoint) => typeof endpoint.handler === "function")).toBe(true);
     });
 
     it("should declare nodejs and force-dynamic for each avance-ftth endpoint and bind every declared endpoint to a handler", () => {
@@ -176,7 +231,7 @@ describe("coverage loads manifest", () => {
       const endpoints = coverageLoadsModule.endpoints ?? [];
 
       // Assert
-      expect(endpoints).toHaveLength(14);
+      expect(endpoints).toHaveLength(16);
       expect(endpoints.every((endpoint) => typeof endpoint.handler === "function")).toBe(true);
       expect(endpoints.every((endpoint) => endpoint.runtime === "nodejs")).toBe(true);
       expect(endpoints.every((endpoint) => endpoint.dynamic === "force-dynamic")).toBe(true);
@@ -289,6 +344,57 @@ describe("coverage loads manifest", () => {
     });
   });
 
+  describe("sigra-layers endpoint binding (AC-14)", () => {
+    const sigraRequest = (path: string, body: Record<string, unknown>) =>
+      new Request(`http://localhost/api/m/${SIGRA_API}/${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connection: CONNECTION, ...body }),
+      });
+
+    it("should expose the sigra-layers endpoints as POST only", () => {
+      // Arrange
+      const registry = createModuleRegistry([coverageLoadsModule]);
+
+      // Act & Assert
+      for (const name of SIGRA_ROUTE_NAMES) {
+        expect(registry.findEndpoint(ModuleHttpMethod.POST, `${SIGRA_API}/${name}`)?.moduleId).toBe("coverage-loads");
+        expect(registry.findEndpoint(ModuleHttpMethod.GET, `${SIGRA_API}/${name}`)).toBeNull();
+      }
+    });
+
+    it("should bind sigra-layers/plan to the plan handler: it inspects, probes and never loads", async () => {
+      // Arrange
+      const handler = findHandler(`${SIGRA_API}/plan`);
+
+      // Act
+      const response = await handler(sigraRequest("plan", { layerIds: ["zonas-ftth", "postes"] }));
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect((await response.json()).plan.layers).toHaveLength(2);
+      expect(repositoryCalls.sigraInspected).toEqual([["zonas-ftth", "postes"]]);
+      expect(repositoryCalls.sigraProbes).toBe(2);
+      expect(repositoryCalls.sigraLoads).toEqual([]);
+    });
+
+    it("should bind sigra-layers/load to the load handler: unconfirmed is refused, a dry run and a confirmed run reach loadLayer", async () => {
+      // Arrange
+      const handler = findHandler(`${SIGRA_API}/load`);
+
+      // Act
+      const unconfirmed = await handler(sigraRequest("load", { layerIds: ["zonas-ftth"] }));
+      const dryRun = await handler(sigraRequest("load", { layerIds: ["zonas-ftth"], dryRun: true }));
+      const confirmed = await handler(sigraRequest("load", { layerIds: ["postes"], confirm: true }));
+
+      // Assert
+      expect(unconfirmed.status).toBe(400);
+      expect(dryRun.status).toBe(200);
+      expect(confirmed.status).toBe(200);
+      expect(repositoryCalls.sigraLoads).toEqual([["zonas-ftth", true], ["postes", false]]);
+    });
+  });
+
   describe("avance-ftth endpoint binding (AC-24)", () => {
     it("should expose the avance-ftth endpoints as POST only", () => {
       // Arrange
@@ -389,17 +495,19 @@ describe("coverage loads manifest", () => {
       expect(typeof contributions[0].Component).toBe("function");
     });
 
-    it("should offer three stages in order: Indicadores LTE, Cargas SHP, then Avance FTTH", () => {
+    it("should offer four stages in order: Indicadores LTE, Cargas SHP, Capas SIGRA, then Avance FTTH", () => {
       // Arrange & Act & Assert
-      expect(COVERAGE_STAGES.map((stage) => stage.label)).toEqual(["Indicadores LTE", "Cargas SHP", "Avance FTTH"]);
+      expect(COVERAGE_STAGES.map((stage) => stage.label)).toEqual(["Indicadores LTE", "Cargas SHP", "Capas SIGRA", "Avance FTTH"]);
       expect(COVERAGE_STAGES.map((stage) => stage.id)).toEqual([
         CoverageStageId.INDICATORS,
         CoverageStageId.SHP,
+        CoverageStageId.SIGRA_LAYERS,
         CoverageStageId.AVANCE_FTTH,
       ]);
       expect(COVERAGE_STAGES.every((stage) => typeof stage.Panel === "function")).toBe(true);
       expect(typeof COVERAGE_STAGES[0].ResultExtras).toBe("function");
-      expect(typeof COVERAGE_STAGES[2].ResultExtras).toBe("function");
+      expect(COVERAGE_STAGES[2].ResultExtras).toBeUndefined();
+      expect(typeof COVERAGE_STAGES[3].ResultExtras).toBe("function");
     });
   });
 
@@ -417,7 +525,7 @@ describe("coverage loads manifest", () => {
 
       // Assert
       expect(registry.modules).toHaveLength(1);
-      expect(registry.endpoints()).toHaveLength(14);
+      expect(registry.endpoints()).toHaveLength(16);
       expect(registry.pages()).toHaveLength(1);
       expect(registry.uiContributions()).toHaveLength(2);
     });
@@ -481,6 +589,7 @@ describe("module structure (AC-29, AC-30)", () => {
     expect(COVERAGE_STAGES.map((stage) => stage.id)).toEqual([
       CoverageStageId.INDICATORS,
       CoverageStageId.SHP,
+      CoverageStageId.SIGRA_LAYERS,
       CoverageStageId.AVANCE_FTTH,
     ]);
     expect(routeDeclarations.pages).toHaveLength(1);
@@ -503,7 +612,7 @@ describe("module structure (AC-29, AC-30)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("should serve the indicators endpoints, the three avance-ftth endpoints and the eight generated shp routes from the route tree", () => {
+  it("should serve the indicators endpoints, the avance-ftth endpoints, the two sigra-layers endpoints and the eight generated shp routes from the route tree", () => {
     // Arrange
     const routes = listFiles(API_DIR).map((path) => relative(API_DIR, path).replace(/\\/g, "/"));
 
@@ -514,6 +623,7 @@ describe("module structure (AC-29, AC-30)", () => {
         "indicators/plan/route.ts",
         "indicators/reports/route.ts",
         ...AVANCE_ROUTE_NAMES.map((name) => `avance-ftth/${name}/route.ts`),
+        ...SIGRA_ROUTE_NAMES.map((name) => `sigra-layers/${name}/route.ts`),
         ...SHP_ROUTE_NAMES.map((name) => `shp/${name}/route.ts`),
       ].sort()
     );
@@ -526,6 +636,18 @@ describe("module structure (AC-29, AC-30)", () => {
       expect(text).toContain("export const POST = createModuleRouteHandler(");
       expect(text).toContain("ModuleHttpMethod.POST");
       expect(text).toContain(`"coverage-loads/avance-ftth/${name}"`);
+      expect(text).toContain('export const runtime = "nodejs"');
+      expect(text).toContain('export const dynamic = "force-dynamic"');
+    }
+  });
+
+  it("should generate each sigra-layers route as POST, nodejs and force-dynamic bound to its declared path", () => {
+    // Arrange & Act & Assert
+    for (const name of SIGRA_ROUTE_NAMES) {
+      const text = readFileSync(join(API_DIR, "sigra-layers", name, "route.ts"), "utf8");
+      expect(text).toContain("export const POST = createModuleRouteHandler(");
+      expect(text).toContain("ModuleHttpMethod.POST");
+      expect(text).toContain(`"coverage-loads/sigra-layers/${name}"`);
       expect(text).toContain('export const runtime = "nodejs"');
       expect(text).toContain('export const dynamic = "force-dynamic"');
     }

@@ -7,7 +7,7 @@ const ALL_STAGE_IDS = Object.values(CoverageStageId);
 describe("LOAD_TYPE_STAGE_IDS", () => {
   it("should define the stage ids as the known CoverageStageId values", () => {
     // Arrange & Act & Assert
-    expect(CoverageStageId).toEqual({ INDICATORS: "indicators", SHP: "shp", AVANCE_FTTH: "avance-ftth" });
+    expect(CoverageStageId).toEqual({ INDICATORS: "indicators", SHP: "shp", AVANCE_FTTH: "avance-ftth", SIGRA_LAYERS: "sigra-layers" });
   });
 
   it("should cover, as a set, exactly the ids of CoverageStageId", () => {
@@ -30,9 +30,9 @@ describe("LOAD_TYPE_STAGE_IDS", () => {
     }
   });
 
-  it("should group the ids by type as coverage -> indicators, shp and FTTH -> avance-ftth", () => {
+  it("should group the ids by type as coverage -> indicators, shp and FTTH -> sigra-layers, avance-ftth", () => {
     // Arrange & Act & Assert
     expect(LOAD_TYPE_STAGE_IDS[LoadType.COVERAGE]).toEqual([CoverageStageId.INDICATORS, CoverageStageId.SHP]);
-    expect(LOAD_TYPE_STAGE_IDS[LoadType.FTTH]).toEqual([CoverageStageId.AVANCE_FTTH]);
+    expect(LOAD_TYPE_STAGE_IDS[LoadType.FTTH]).toEqual([CoverageStageId.SIGRA_LAYERS, CoverageStageId.AVANCE_FTTH]);
   });
 });
