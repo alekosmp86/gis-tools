@@ -250,7 +250,7 @@ describe("plan (AC-6..9)", () => {
         existingRowsByDate: {},
         shortfalls: [
           { table: "historico.h_cobertura_lte_localidad", tableExists: true, missing: ["SELECT"] },
-          { table: "public.indicadores_lte", tableExists: true, missing: ["TRUNCATE", "DELETE"] },
+          { table: "public.indicadores_lte", tableExists: true, missing: ["INSERT", "DELETE"] },
         ],
       };
 
@@ -260,7 +260,7 @@ describe("plan (AC-6..9)", () => {
       // Assert
       expect(plan.privilegeShortfalls.map((item) => item.message)).toEqual([
         "Faltan privilegios sobre historico.h_cobertura_lte_localidad: SELECT.",
-        "Faltan privilegios sobre public.indicadores_lte: TRUNCATE, DELETE.",
+        "Faltan privilegios sobre public.indicadores_lte: INSERT, DELETE.",
       ]);
     });
   });

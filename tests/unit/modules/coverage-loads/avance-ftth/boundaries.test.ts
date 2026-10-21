@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { TablePrivilege } from "@/modules/coverage-loads/avance-ftth/constants";
 
 const SRC_DIR = fileURLToPath(new URL("../../../../../src", import.meta.url));
 const MODULE_DIR = join(SRC_DIR, "modules", "coverage-loads");
@@ -168,6 +169,78 @@ describe("avance-ftth boundaries (AC-30, AC-31)", () => {
 
       // Assert
       expect(offenders).toEqual([]);
+    });
+  });
+
+  describe("no TRUNCATE and no ACCESS EXCLUSIVE (the load role has no TRUNCATE privilege)", () => {
+    const services = avanceSources.filter(namesPart("services"));
+
+    it("should scan the services files that hold the SQL", () => {
+      // Arrange & Act & Assert
+      expect(services.filter((source) => source.name.startsWith("services/queries/")).length).toBeGreaterThan(3);
+    });
+
+    it("should not contain the word TRUNCATE in any SQL of avance-ftth/services", () => {
+      // Arrange
+      const offenders = services
+        .filter((source) => /TRUNCATE/i.test(stripComments(source.text)))
+        .map((source) => source.name);
+
+      // Assert
+      expect(offenders).toEqual([]);
+    });
+
+    it("should not contain ACCESS EXCLUSIVE anywhere in avance-ftth/services", () => {
+      // Arrange
+      const offenders = services.filter((source) => /ACCESS\s+EXCLUSIVE/i.test(source.text)).map((source) => source.name);
+
+      // Assert
+      expect(offenders).toEqual([]);
+    });
+
+    it("should not offer a TRUNCATE table privilege constant", () => {
+      // Arrange & Act & Assert
+      expect(Object.keys(TablePrivilege).sort()).toEqual(["DELETE", "INSERT", "SELECT", "UPDATE"]);
+      expect(avanceAllFiles.find((source) => source.name === "constants.ts")?.text).not.toMatch(/TRUNCATE/);
+    });
+
+    it("should lock in SHARE ROW EXCLUSIVE mode", () => {
+      // Arrange
+      const rebuild = services.find((source) => source.name === "services/queries/rebuildQueries.ts");
+
+      // Assert
+      expect(rebuild?.text).toContain("SHARE ROW EXCLUSIVE MODE");
+    });
+  });
+
+  describe("review-step lock warning", () => {
+    const review = avanceSources.find((source) => source.name === "ui/AvanceReviewStep.tsx");
+    const warning = review?.text.match(/const LOCK_WARNING =\s*"([^"]*)"/)?.[1] ?? "";
+
+    it("should find the LOCK_WARNING constant in the review step", () => {
+      // Arrange & Act & Assert
+      expect(warning.length).toBeGreaterThan(20);
+    });
+
+    it("should not claim that readers are blocked, anywhere in the ui", () => {
+      // Arrange
+      const offenders = avanceSources
+        .filter(namesPart("ui"))
+        .filter((source) => /bloquea(n)? la lectura/i.test(source.text))
+        .map((source) => source.name);
+
+      // Assert
+      expect(warning).not.toContain("bloquean la lectura");
+      expect(warning).not.toContain("bloquea la lectura");
+      expect(offenders).toEqual([]);
+    });
+
+    it("should say that other loads wait while it runs and that the published Avance stays readable until the commit", () => {
+      // Arrange & Act & Assert
+      expect(warning).toMatch(/otras cargas/i);
+      expect(warning).toMatch(/esper/i);
+      expect(warning).toMatch(/legible|consultar|leer/i);
+      expect(warning).toMatch(/confirm|commit/i);
     });
   });
 

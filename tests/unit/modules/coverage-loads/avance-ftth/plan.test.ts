@@ -186,16 +186,16 @@ describe("avance-ftth plan (AC-7 .. AC-10)", () => {
 
     it("should block on a privilege shortfall with the shared message", () => {
       // Arrange
-      const state = healthyState({ shortfalls: [{ table: STAGING_UDPEM, tableExists: true, missing: ["TRUNCATE", "DELETE"] }] });
+      const state = healthyState({ shortfalls: [{ table: STAGING_UDPEM, tableExists: true, missing: ["UPDATE", "DELETE"] }] });
 
       // Act
       const plan = buildPlan([interior(), montevideo()], [], state);
 
       // Assert
       expect(plan.canLoad).toBe(false);
-      expect(plan.blockers).toEqual([`Faltan privilegios sobre ${STAGING_UDPEM}: TRUNCATE, DELETE.`]);
+      expect(plan.blockers).toEqual([`Faltan privilegios sobre ${STAGING_UDPEM}: UPDATE, DELETE.`]);
       expect(plan.privilegeShortfalls).toEqual([
-        { table: STAGING_UDPEM, tableExists: true, missing: ["TRUNCATE", "DELETE"], message: plan.blockers[0] },
+        { table: STAGING_UDPEM, tableExists: true, missing: ["UPDATE", "DELETE"], message: plan.blockers[0] },
       ]);
     });
 

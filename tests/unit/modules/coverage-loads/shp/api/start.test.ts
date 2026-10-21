@@ -151,7 +151,7 @@ describe("POST shp/start refusals", () => {
   it("should answer 409 with the plan when privileges are missing", async () => {
     // Arrange
     const harness = createHarness(await roots.create());
-    harness.repository.inspection = { ...harness.repository.inspection, missingTablePrivileges: ["TRUNCATE"], schemaCreateGranted: false };
+    harness.repository.inspection = { ...harness.repository.inspection, missingTablePrivileges: ["DELETE"], schemaCreateGranted: false };
     const { jobId } = await makeJob(harness.root);
 
     // Act

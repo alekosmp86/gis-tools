@@ -95,7 +95,7 @@ describe("avance-ftth repository transaction (AC-12, AC-13, AC-19, AC-21)", () =
     it.each([
       ["a real load", false],
       ["a dry run", true],
-    ])("should take both staging locks before reading any plan state in %s, then verify the plan under the locks", async (_label, dryRun) => {
+    ])("should take the two staging locks and the Avance lock before reading any plan state in %s, then verify the plan under the locks", async (_label, dryRun) => {
       // Arrange
       await seedPreviousLoad(database);
       const repository = serializedRepository();
@@ -103,17 +103,19 @@ describe("avance-ftth repository transaction (AC-12, AC-13, AC-19, AC-21)", () =
       // Act
       await repository.load(CONNECTION, { files: standardFiles(), dryRun });
 
-      // Assert: nothing but BEGIN and the two SET LOCAL precede the locks (a read first would take ACCESS SHARE and deadlock on the upgrade)
+      // Assert: nothing but BEGIN and the two SET LOCAL precede the locks (a read first would take ACCESS SHARE and could deadlock on the upgrade)
       const statements = clients[0].statements;
       const locks = statements.flatMap((statement, index) => (/^LOCK TABLE/.test(statement) ? [index] : []));
-      const firstTruncate = statements.findIndex((statement) => /^TRUNCATE public\.avance_planilla_int/.test(statement));
+      const firstDelete = statements.findIndex((statement) => /^DELETE FROM public\.avance_planilla_int/.test(statement));
       const stateReads = statements.flatMap((statement, index) => (/FROM public\.area_zonas_ftth_f$/.test(statement) ? [index] : []));
-      expect(locks).toEqual([3, 4]);
-      expect(statements[3]).toMatch(/^LOCK TABLE public\.avance_planilla_int/);
-      expect(statements[4]).toMatch(/^LOCK TABLE public\.avance_planilla_mvd/);
+      expect(locks).toEqual([3, 4, 5]);
+      expect(statements[3]).toBe("LOCK TABLE public.avance_planilla_int IN SHARE ROW EXCLUSIVE MODE");
+      expect(statements[4]).toBe("LOCK TABLE public.avance_planilla_mvd IN SHARE ROW EXCLUSIVE MODE");
+      expect(statements[5]).toBe("LOCK TABLE public.avance_uruguay_planilla IN SHARE ROW EXCLUSIVE MODE");
+      expect(firstDelete).toBeGreaterThan(5);
       expect(stateReads.length).toBeGreaterThanOrEqual(1);
       expect(stateReads.every((index) => index > Math.max(...locks))).toBe(true);
-      expect(stateReads.some((index) => index < firstTruncate)).toBe(true);
+      expect(stateReads.some((index) => index < firstDelete)).toBe(true);
     });
 
     it("should still abort with ROLLBACK, after the locks and before any write, when a blocker appears once the locks are held", async () => {
@@ -128,7 +130,7 @@ describe("avance-ftth repository transaction (AC-12, AC-13, AC-19, AC-21)", () =
       // Assert
       await expect(attempt).rejects.toBeInstanceOf(LoadRefusedError);
       const statements = clients[0].statements;
-      expect(statements.slice(3, 5).every((statement) => /^LOCK TABLE/.test(statement))).toBe(true);
+      expect(statements.slice(3, 6).every((statement) => /^LOCK TABLE/.test(statement))).toBe(true);
       expect(statements.at(-1)).toBe("ROLLBACK");
       expect(hasCommit(clients[0])).toBe(false);
       expect(writesOf(clients[0])).toEqual([]);
@@ -238,7 +240,7 @@ describe("avance-ftth repository transaction (AC-12, AC-13, AC-19, AC-21)", () =
       expect(only.statements[0]).toBe("BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE");
       expect(only.statements.at(-1)).toBe("ROLLBACK");
       expect(hasCommit(only)).toBe(false);
-      expect(only.statements.filter((statement) => /^TRUNCATE TABLE public\.avance_uruguay_planilla/.test(statement))).toHaveLength(1);
+      expect(only.statements.filter((statement) => /^DELETE FROM public\.avance_uruguay_planilla/.test(statement))).toHaveLength(1);
       expect(only.statements.filter((statement) => statement === "SAVEPOINT avance_report")).toHaveLength(5);
       expect(only.statements).toContain(`SET LOCAL statement_timeout = ${DRY_RUN_REPORT_STATEMENT_TIMEOUT_MS}`);
       expect(result.dryRun).toBe(true);
@@ -380,8 +382,8 @@ describe("avance-ftth repository transaction (AC-12, AC-13, AC-19, AC-21)", () =
       ["the junk delete of INT", /DELETE FROM public\.avance_planilla_int/, 1],
       ["the junk delete of UDPEM", /DELETE FROM public\.avance_planilla_mvd/, 1],
       ["the history copy", /INSERT INTO historico\.h_avance_uruguay/, 1],
-      ["the Avance truncate (history already copied)", /^TRUNCATE TABLE public\.avance_uruguay_planilla/, 1],
-      ["the INT Avance insert (Avance already truncated)", /INSERT INTO public\.avance_uruguay_planilla/, 1],
+      ["the Avance delete (history already copied)", /^DELETE FROM public\.avance_uruguay_planilla/, 1],
+      ["the INT Avance insert (Avance already emptied)", /INSERT INTO public\.avance_uruguay_planilla/, 1],
       ["the UDPEM Avance insert (INT already inserted)", /INSERT INTO public\.avance_uruguay_planilla/, 2],
       ["the fuente update", /^UPDATE public\.avance_uruguay_planilla SET fuente/, 1],
       ["the final count check", /^SELECT count\(\*\)::int AS total FROM public\.avance_uruguay_planilla/, 1],
@@ -478,15 +480,15 @@ describe("avance-ftth repository transaction (AC-12, AC-13, AC-19, AC-21)", () =
   });
 
   describe("privileges are rechecked inside the write transaction (AC-12)", () => {
-    const grants = (avanceTruncate: boolean) => `
-      GRANT SELECT, INSERT, DELETE, TRUNCATE ON public.avance_planilla_int, public.avance_planilla_mvd TO avance_limited;
-      GRANT SELECT, INSERT, UPDATE${avanceTruncate ? ", TRUNCATE" : ""} ON public.avance_uruguay_planilla TO avance_limited;
+    const grants = (avanceDelete: boolean) => `
+      GRANT SELECT, INSERT, DELETE ON public.avance_planilla_int, public.avance_planilla_mvd TO avance_limited;
+      GRANT SELECT, INSERT, UPDATE${avanceDelete ? ", DELETE" : ""} ON public.avance_uruguay_planilla TO avance_limited;
       GRANT SELECT, INSERT ON historico.h_avance_uruguay TO avance_limited;
       GRANT SELECT ON public.area_zonas_ftth_f, public.limite_central_ftth TO avance_limited;
       GRANT USAGE ON ALL SEQUENCES IN SCHEMA public, historico TO avance_limited;
     `;
 
-    it("should refuse before any write when TRUNCATE on the Avance is missing and name the privilege", async () => {
+    it("should refuse before any write when DELETE on the Avance is missing and name the privilege", async () => {
       // Arrange
       await seedPreviousLoad(database);
       const before = await snapshotAvanceTables(database);
@@ -506,12 +508,12 @@ describe("avance-ftth repository transaction (AC-12, AC-13, AC-19, AC-21)", () =
 
       // Assert
       expect(refused).toBe(true);
-      expect(message).toContain("Faltan privilegios sobre public.avance_uruguay_planilla: TRUNCATE.");
+      expect(message).toContain("Faltan privilegios sobre public.avance_uruguay_planilla: DELETE.");
       expect(writesOf(clients[0])).toEqual([]);
       expect(await snapshotAvanceTables(database)).toEqual(before);
     });
 
-    it("should load with exactly the documented grants (staging x2, Avance, history, zones, limits, sequences)", async () => {
+    it("should load with exactly the documented grants (no TRUNCATE anywhere: staging x2, Avance, history, zones, limits, sequences)", async () => {
       // Arrange
       await seedPreviousLoad(database);
       const repository = serializedRepository();

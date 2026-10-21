@@ -64,7 +64,7 @@ function lastClient(): RecordingPgliteClient {
 }
 
 function writes(client: RecordingPgliteClient): string[] {
-  return client.statementsMatching(/^(TRUNCATE|INSERT|DELETE|UPDATE|COMMIT)|WITH borrado/i);
+  return client.statementsMatching(/^(INSERT|DELETE|UPDATE|COMMIT)|WITH borrado/i);
 }
 
 async function seedCut(fechaact: string, count: number, porcentaje = "10", prefix = "OLD"): Promise<void> {
@@ -308,7 +308,7 @@ describe("PgIndicatorsRepository against PGlite", () => {
       expect(client.statements.at(-1)).toBe("COMMIT");
       expect(client.statementsMatching(/^COMMIT$/)).toHaveLength(1);
       expect(client.statementsMatching(/^ROLLBACK$/)).toHaveLength(0);
-      expect(client.statementsMatching(/^TRUNCATE/)).toHaveLength(1);
+      expect(client.statementsMatching(/^DELETE FROM public\.indicadores_lte$/)).toHaveLength(1);
       expect(client.statementsMatching(/WITH borrado/)).toHaveLength(1);
       expect(client.statementsMatching(/^INSERT INTO public\.indicadores_lte/)).toHaveLength(1);
       expect(client.connectCount).toBe(1);
@@ -363,7 +363,7 @@ describe("PgIndicatorsRepository against PGlite", () => {
       return [...RUN_SIZES].reverse().map(([fechaact, count]) => makeCut(fechaact, makeRows(count, `N${fechaact.slice(5, 7)}`)));
     }
 
-    it("should leave all the rows of a 5-cut run in staging with YYYY-MM-DD text, TRUNCATE and REPLACE running once", async () => {
+    it("should leave all the rows of a 5-cut run in staging with YYYY-MM-DD text, the staging DELETE and REPLACE running once", async () => {
       // Arrange
       const cuts = runCutsNewestFirst();
 
@@ -377,7 +377,7 @@ describe("PgIndicatorsRepository against PGlite", () => {
       for (const row of staging) expect(row.fechaact).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(staging.map((row) => row.fechaact)).toEqual(RUN_SIZES.flatMap(([fechaact, count]) => Array(count).fill(fechaact)));
       const client = lastClient();
-      expect(client.statementsMatching(/^TRUNCATE/)).toHaveLength(1);
+      expect(client.statementsMatching(/^DELETE FROM public\.indicadores_lte$/)).toHaveLength(1);
       expect(client.statementsMatching(/WITH borrado/)).toHaveLength(1);
       expect(client.statementsMatching(/^INSERT INTO public\.indicadores_lte/)).toHaveLength(1);
       expect(client.calls.filter((call) => call.text.trim() === STORED_ROWS_SQL.trim())).toHaveLength(RUN_SIZES.length);
@@ -460,7 +460,7 @@ describe("PgIndicatorsRepository against PGlite", () => {
         await expect(attempt).rejects.toThrow();
         expect(await snapshotTables(database)).toEqual(before);
         const client = lastClient();
-        expect(client.statementsMatching(/^TRUNCATE/)).toHaveLength(1);
+        expect(client.statementsMatching(/^DELETE FROM public\.indicadores_lte$/)).toHaveLength(1);
         expect(client.statementsMatching(/^INSERT INTO public\.indicadores_lte/)).toHaveLength(1);
         expect(client.statementsMatching(/WITH borrado/)).toHaveLength(1);
         expect(client.calls.filter((call) => call.text.trim() === STORED_ROWS_SQL.trim())).toHaveLength(0);
@@ -590,7 +590,7 @@ describe("PgIndicatorsRepository against PGlite", () => {
     const FULL_GRANTS = `
       GRANT SELECT, INSERT, DELETE ON ${HISTORY} TO app_limited;
       GRANT USAGE ON ALL SEQUENCES IN SCHEMA historico, public TO app_limited;
-      GRANT TRUNCATE, INSERT, SELECT ON public.indicadores_lte TO app_limited;
+      GRANT SELECT, INSERT, DELETE ON public.indicadores_lte TO app_limited;
     `;
 
     it("should report no shortfall when the role holds every required privilege, and let the load through", async () => {
@@ -611,7 +611,7 @@ describe("PgIndicatorsRepository against PGlite", () => {
       const documentedOnly = `
         GRANT SELECT, INSERT, DELETE ON ${HISTORY} TO app_limited;
         GRANT USAGE ON ALL SEQUENCES IN SCHEMA historico, public TO app_limited;
-        GRANT TRUNCATE, INSERT ON public.indicadores_lte TO app_limited;
+        GRANT INSERT, DELETE ON public.indicadores_lte TO app_limited;
       `;
       await withLimitedRole(database, documentedOnly, async () => {
         // Act
@@ -621,6 +621,22 @@ describe("PgIndicatorsRepository against PGlite", () => {
         expect(state.shortfalls).toEqual([
           { table: "public.indicadores_lte", tableExists: true, missing: ["SELECT"] },
         ]);
+      });
+    });
+
+    it("should name DELETE on staging as missing, because the replace now empties it with DELETE instead of TRUNCATE", async () => {
+      // Arrange
+      const noStagingDelete = `
+        GRANT SELECT, INSERT, DELETE ON ${HISTORY} TO app_limited;
+        GRANT USAGE ON ALL SEQUENCES IN SCHEMA historico, public TO app_limited;
+        GRANT SELECT, INSERT ON public.indicadores_lte TO app_limited;
+      `;
+      await withLimitedRole(database, noStagingDelete, async () => {
+        // Act
+        const state = await newRepository().inspectHistory(CONNECTION, [SEPTEMBER]);
+
+        // Assert
+        expect(state.shortfalls).toEqual([{ table: "public.indicadores_lte", tableExists: true, missing: ["DELETE"] }]);
       });
     });
 
@@ -635,7 +651,7 @@ describe("PgIndicatorsRepository against PGlite", () => {
         expect(state.shortfalls).toHaveLength(2);
         expect(state.shortfalls[0]).toEqual({ table: HISTORY, tableExists: true, missing: ["INSERT", "DELETE"] });
         expect(state.shortfalls[1].table).toBe("public.indicadores_lte");
-        expect(state.shortfalls[1].missing).toEqual(expect.arrayContaining(["TRUNCATE", "INSERT"]));
+        expect(state.shortfalls[1].missing).toEqual(expect.arrayContaining(["SELECT", "INSERT", "DELETE"]));
         expect(state.existingRowsByDate).toEqual({ [SEPTEMBER]: 2 });
       });
     });
@@ -661,7 +677,7 @@ describe("PgIndicatorsRepository against PGlite", () => {
 
       await withLimitedRole(
         database,
-        `GRANT SELECT, INSERT ON ${HISTORY} TO app_limited; GRANT TRUNCATE, INSERT ON public.indicadores_lte TO app_limited;`,
+        `GRANT SELECT, INSERT ON ${HISTORY} TO app_limited; GRANT INSERT, DELETE ON public.indicadores_lte TO app_limited;`,
         async () => {
           // Act
           const attempt = newRepository().loadCuts(CONNECTION, { cuts: [makeCut(SEPTEMBER, makeRows(3))], acceptShrink: true });

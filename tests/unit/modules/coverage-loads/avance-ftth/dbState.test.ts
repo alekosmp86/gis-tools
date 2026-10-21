@@ -47,8 +47,8 @@ beforeEach(async () => {
 const state = () => readDbState(new RecordingPgliteClient(database));
 
 const ALL_GRANTS = `
-  GRANT SELECT, INSERT, DELETE, TRUNCATE ON public.avance_planilla_int, public.avance_planilla_mvd TO avance_limited;
-  GRANT SELECT, INSERT, UPDATE, TRUNCATE ON public.avance_uruguay_planilla TO avance_limited;
+  GRANT SELECT, INSERT, DELETE ON public.avance_planilla_int, public.avance_planilla_mvd TO avance_limited;
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.avance_uruguay_planilla TO avance_limited;
   GRANT SELECT, INSERT ON historico.h_avance_uruguay TO avance_limited;
   GRANT SELECT ON public.area_zonas_ftth_f, public.limite_central_ftth TO avance_limited;
 `;
@@ -249,11 +249,26 @@ describe("avance-ftth database state read (AC-7, AC-12, AC-20b)", () => {
       expect(result).toMatchObject({ shortfalls: [] });
     });
 
+    it("should not require TRUNCATE on any table: a role holding only the DELETE-based grants has no shortfall", async () => {
+      // Arrange
+      let result: Awaited<ReturnType<typeof state>> | undefined;
+      const noTruncateAnywhere = ALL_GRANTS + SEQUENCE_GRANTS;
+
+      // Act
+      await installPrivileges(database, noTruncateAnywhere, async () => {
+        result = await state();
+      });
+
+      // Assert
+      expect(noTruncateAnywhere).not.toMatch(/TRUNCATE/);
+      expect(result?.shortfalls).toEqual([]);
+    });
+
     it.each([
-      [STAGING_INT, "TRUNCATE ON public.avance_planilla_int", "TRUNCATE"],
+      [STAGING_INT, "DELETE ON public.avance_planilla_int", "DELETE"],
       [STAGING_UDPEM, "DELETE ON public.avance_planilla_mvd", "DELETE"],
       [AVANCE, "UPDATE ON public.avance_uruguay_planilla", "UPDATE"],
-      [AVANCE, "TRUNCATE ON public.avance_uruguay_planilla", "TRUNCATE"],
+      [AVANCE, "DELETE ON public.avance_uruguay_planilla", "DELETE"],
       [HISTORY, "INSERT ON historico.h_avance_uruguay", "INSERT"],
     ])("should name the missing privilege on %s when %s is not granted", async (table, revoked, privilege) => {
       // Arrange
@@ -317,7 +332,7 @@ describe("avance-ftth database state read (AC-7, AC-12, AC-20b)", () => {
       let result: Awaited<ReturnType<typeof state>> | undefined;
 
       // Act
-      await installPrivileges(database, ALL_GRANTS + "REVOKE TRUNCATE ON public.avance_planilla_int FROM avance_limited;", async () => {
+      await installPrivileges(database, ALL_GRANTS + "REVOKE DELETE ON public.avance_planilla_int FROM avance_limited;", async () => {
         result = await state();
       });
 
@@ -325,7 +340,7 @@ describe("avance-ftth database state read (AC-7, AC-12, AC-20b)", () => {
       expect(result?.shortfalls.find((shortfall) => shortfall.table === STAGING_INT)).toEqual({
         table: STAGING_INT,
         tableExists: true,
-        missing: ["TRUNCATE", "USAGE (secuencia de gid)"],
+        missing: ["DELETE", "USAGE (secuencia de gid)"],
       });
     });
 

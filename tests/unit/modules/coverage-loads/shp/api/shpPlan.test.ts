@@ -91,11 +91,11 @@ describe("buildShpPlan", () => {
 
   it("should report table privilege shortfalls separately from blockers and refuse to start", async () => {
     // Arrange & Act
-    const plan = await planFor({ missingTablePrivileges: ["TRUNCATE", "INSERT"] });
+    const plan = await planFor({ missingTablePrivileges: ["DELETE", "INSERT"] });
 
     // Assert
     expect(plan.blockers).toEqual([]);
-    expect(plan.privilegeShortfalls).toEqual(["Faltan privilegios sobre public.lte: TRUNCATE, INSERT."]);
+    expect(plan.privilegeShortfalls).toEqual(["Faltan privilegios sobre public.lte: DELETE, INSERT."]);
     expect(plan.canStart).toBe(false);
   });
 

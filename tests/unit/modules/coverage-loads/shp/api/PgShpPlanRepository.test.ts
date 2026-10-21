@@ -205,20 +205,44 @@ describe("PgShpPlanRepository.inspect", () => {
     const inspection = await repositoryFor(fake).inspect(CONNECTION, "lte");
 
     // Assert
-    expect(inspection.missingTablePrivileges).toEqual(["TRUNCATE", "SELECT"]);
+    expect(inspection.missingTablePrivileges).toEqual(["DELETE", "SELECT"]);
     expect(inspection.currentRows).toBeNull();
   });
 
   it("should count rows when SELECT is granted even if another privilege is missing", async () => {
     // Arrange
-    const fake = createFakeClient({ granted: (privilege) => privilege !== "TRUNCATE", total: "9" });
+    const fake = createFakeClient({ granted: (privilege) => privilege !== "DELETE", total: "9" });
 
     // Act
     const inspection = await repositoryFor(fake).inspect(CONNECTION, "lte");
 
     // Assert
-    expect(inspection.missingTablePrivileges).toEqual(["TRUNCATE"]);
+    expect(inspection.missingTablePrivileges).toEqual(["DELETE"]);
     expect(inspection.currentRows).toBe(9);
+  });
+
+  it("should require exactly DELETE, INSERT and SELECT on the target and never ask for TRUNCATE", async () => {
+    // Arrange
+    const fake = createFakeClient();
+
+    // Act
+    const inspection = await repositoryFor(fake).inspect(CONNECTION, "lte");
+
+    // Assert
+    const asked = fake.queries.filter((query) => query.text.includes("has_table_privilege")).map((query) => String(query.values[1]));
+    expect([...asked].sort()).toEqual(["DELETE", "INSERT", "SELECT"]);
+    expect(inspection.missingTablePrivileges).toEqual([]);
+  });
+
+  it("should report no shortfall for a role that lacks only TRUNCATE", async () => {
+    // Arrange
+    const fake = createFakeClient({ granted: (privilege) => privilege !== "TRUNCATE" });
+
+    // Act
+    const inspection = await repositoryFor(fake).inspect(CONNECTION, "lte");
+
+    // Assert
+    expect(inspection.missingTablePrivileges).toEqual([]);
   });
 
   it("should report schema CREATE and PostGIS shortfalls", async () => {

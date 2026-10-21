@@ -532,7 +532,7 @@ describe("avance-ftth handlers", () => {
       const { repository, handlers } = setup();
       repository.state = {
         ...HEALTHY_STATE,
-        shortfalls: [{ table: "public.avance_uruguay_planilla", tableExists: true, missing: ["TRUNCATE"] }],
+        shortfalls: [{ table: "public.avance_uruguay_planilla", tableExists: true, missing: ["DELETE"] }],
       };
 
       // Act
@@ -541,7 +541,7 @@ describe("avance-ftth handlers", () => {
 
       // Assert
       expect(response.status).toBe(409);
-      expect(payload.error).toContain("Faltan privilegios sobre public.avance_uruguay_planilla: TRUNCATE.");
+      expect(payload.error).toContain("Faltan privilegios sobre public.avance_uruguay_planilla: DELETE.");
       expect(payload.plan.privilegeShortfalls).toHaveLength(1);
       expect(repository.loads).toEqual([]);
     });

@@ -58,7 +58,8 @@ describe("createRealPipeline", () => {
         "WITH inserted",
         "WITH repaired",
         "BEGIN",
-        "TRUNCATE public.lte",
+        "LOCK TABLE public.lte IN SHARE ROW EXCLUSIVE MODE",
+        "DELETE FROM public.lte",
         "INSERT INTO public.lte",
         "COMMIT",
         "ANALYZE public.lte",
@@ -67,9 +68,90 @@ describe("createRealPipeline", () => {
       expect(order.every((i) => i >= 0)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
       expect(has(fake, "ROLLBACK")).toBe(false);
-      const commit = order[9] as number;
+      const commit = order[10] as number;
       expect(idx(t, "DROP TABLE IF EXISTS", commit)).toBeGreaterThan(commit);
       expect(fake.ended).toBe(1);
+    });
+
+    it("should lock the target in SHARE ROW EXCLUSIVE mode inside the swap transaction, right after SET lock_timeout and before the DELETE", async () => {
+      const { fake, run } = await setup("LOAD");
+
+      await run();
+
+      const t = fake.texts();
+      const begin = idx(t, "BEGIN");
+      const lockTimeout = fake.queries.findIndex((q, i) => i > begin && q.text.includes("set_config") && q.values[0] === "lock_timeout");
+      const lock = idx(t, "LOCK TABLE public.lte IN SHARE ROW EXCLUSIVE MODE");
+      const del = idx(t, "DELETE FROM public.lte");
+      const insert = idx(t, "INSERT INTO public.lte");
+      const count = idx(t, "SELECT count(*)::text AS rows FROM public.lte", insert);
+      const commit = idx(t, "COMMIT");
+      expect(begin).toBeGreaterThanOrEqual(0);
+      expect(lockTimeout).toBe(begin + 1);
+      expect(lock).toBe(lockTimeout + 1);
+      expect(del).toBe(lock + 1);
+      expect(insert).toBeGreaterThan(del);
+      expect(count).toBeGreaterThan(insert);
+      expect(commit).toBeGreaterThan(count);
+      expect(t.filter((text) => text.startsWith("LOCK TABLE"))).toEqual(["LOCK TABLE public.lte IN SHARE ROW EXCLUSIVE MODE"]);
+    });
+
+    it("should never issue TRUNCATE nor ACCESS EXCLUSIVE in a LOAD", async () => {
+      const { fake, run } = await setup("LOAD");
+
+      await run();
+
+      expect(fake.texts().some((text) => /TRUNCATE|ACCESS EXCLUSIVE/i.test(text))).toBe(false);
+    });
+
+    it("should delete with a plain DELETE of the target and no WHERE clause", async () => {
+      const { fake, run } = await setup("LOAD");
+
+      await run();
+
+      const del = fake.queries.find((q) => q.text.startsWith("DELETE FROM public.lte"));
+      expect(del?.text.trim()).toBe("DELETE FROM public.lte");
+      expect(del?.values).toEqual([]);
+    });
+
+    it("should roll back and never insert nor commit when the LOCK cannot be acquired in time", async () => {
+      const { fake, run } = await setup("LOAD");
+      fake.responder = (text) => {
+        if (text.startsWith("LOCK TABLE public.lte")) throw Object.assign(new Error("canceling statement due to lock timeout"), { code: "55P03" });
+        return undefined;
+      };
+
+      const outcome = await run();
+
+      expect(outcome).toMatchObject({ kind: "FAILED" });
+      expect(has(fake, "ROLLBACK")).toBe(true);
+      expect(has(fake, "COMMIT")).toBe(false);
+      expect(has(fake, "DELETE FROM public.lte")).toBe(false);
+      expect(has(fake, "INSERT INTO public.lte")).toBe(false);
+    });
+
+    it("should roll back and not commit when the DELETE fails", async () => {
+      const { fake, run } = await setup("LOAD");
+      fake.responder = (text) => {
+        if (text.startsWith("DELETE FROM public.lte")) throw new Error("boom");
+        return undefined;
+      };
+
+      const outcome = await run();
+
+      expect(outcome).toMatchObject({ kind: "FAILED" });
+      expect(has(fake, "ROLLBACK")).toBe(true);
+      expect(has(fake, "COMMIT")).toBe(false);
+      expect(has(fake, "INSERT INTO public.lte")).toBe(false);
+    });
+
+    it("should still ANALYZE the target after the commit", async () => {
+      const { fake, run } = await setup("LOAD");
+
+      await run();
+
+      const t = fake.texts();
+      expect(idx(t, "ANALYZE public.lte")).toBeGreaterThan(idx(t, "COMMIT"));
     });
 
     it("should bind fechaact and fuente as parameters and never splice them into SQL", async () => {
@@ -90,7 +172,7 @@ describe("createRealPipeline", () => {
       const outcome = await run();
 
       expect(rec.stages).toEqual(["READING", "STAGING", "SUBDIVIDING", "REPAIRING", "FINALIZING"]);
-      for (const forbidden of ["BEGIN", "COMMIT", "TRUNCATE", "INSERT INTO public.lte", "ANALYZE"]) expect(has(fake, forbidden)).toBe(false);
+      for (const forbidden of ["BEGIN", "COMMIT", "LOCK TABLE public.lte", "DELETE FROM public.lte", "INSERT INTO public.lte", "ANALYZE"]) expect(has(fake, forbidden)).toBe(false);
       expect(outcome).toMatchObject({
         kind: "SUCCEEDED",
         testReport: {
@@ -142,7 +224,8 @@ describe("createRealPipeline", () => {
       expect(outcome).toMatchObject({ kind: "FAILED", error: { code: "GATE_FAILED" } });
       expect(rec.stages).not.toContain("SWAPPING");
       expect(has(fake, "BEGIN")).toBe(false);
-      expect(has(fake, "TRUNCATE")).toBe(false);
+      expect(has(fake, "DELETE FROM public.lte")).toBe(false);
+      expect(has(fake, "LOCK TABLE public.lte")).toBe(false);
       const t = fake.texts();
       expect(idx(t, "DROP TABLE IF EXISTS", idx(t, "AS invalid_pieces"))).toBeGreaterThan(0);
       expect(has(fake, "pg_advisory_unlock")).toBe(true);
@@ -270,7 +353,7 @@ describe("createRealPipeline", () => {
 
       expect(await run()).toEqual({ kind: "CANCELLED" });
       expect(fake.texts().filter((t) => t.includes("WITH repaired"))).toHaveLength(1);
-      expect(has(fake, "TRUNCATE")).toBe(false);
+      expect(has(fake, "DELETE FROM public.lte")).toBe(false);
     });
 
     it("should roll back when cancelled inside the swap transaction before COMMIT", async () => {
@@ -354,7 +437,7 @@ describe("createRealPipeline", () => {
       const good = await setup("LOAD");
       const bad = await setup("LOAD");
       bad.fake.responder = (text) => {
-        if (text.startsWith("TRUNCATE")) throw new Error("boom");
+        if (text.startsWith("DELETE FROM public.lte")) throw new Error("boom");
         return undefined;
       };
 

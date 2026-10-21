@@ -240,7 +240,7 @@ export const SHP_PLAN_BLOCKED: ShpPlan = {
   ...SHP_PLAN_READY,
   leftovers: ["shp_stage_lte", "shp_work_lte"],
   privilegeShortfalls: [
-    "Faltan privilegios sobre public.lte: TRUNCATE.",
+    "Faltan privilegios sobre public.lte: DELETE.",
     "Falta el privilegio CREATE sobre el esquema public (necesario para las tablas de trabajo).",
   ],
   blockers: ["Otra sesión tiene tomado el bloqueo de carga de esta tabla."],

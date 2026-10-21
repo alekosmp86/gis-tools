@@ -7,7 +7,7 @@ import {
   LOCK_STAGING_SQL,
   REPLACE_HISTORY_SQL,
   STORED_ROWS_SQL,
-  TRUNCATE_STAGING_SQL,
+  DELETE_STAGING_SQL,
 } from "@/modules/coverage-loads/indicators/services/queries/historyQueries";
 import { PgIndicatorsRepository } from "@/modules/coverage-loads/indicators/services/PgIndicatorsRepository";
 import { TABLE_PRIVILEGE_SQL } from "@/modules/coverage-loads/shared/tablePrivileges";
@@ -33,10 +33,10 @@ const CONNECTION: DbConnection = {
 
 const HISTORY = "historico.h_cobertura_lte_localidad";
 const SEPTEMBER = "2026-09-01";
-const WRITE_STATEMENTS = /^(TRUNCATE|INSERT)|WITH borrado/i;
+const WRITE_STATEMENTS = /^(DELETE|INSERT)|WITH borrado/i;
 const MISSING_DELETE_GRANTS = `
   GRANT SELECT, INSERT ON ${HISTORY} TO app_limited;
-  GRANT TRUNCATE, INSERT ON public.indicadores_lte TO app_limited;
+  GRANT SELECT, INSERT, DELETE ON public.indicadores_lte TO app_limited;
 `;
 
 let database: PGlite;
@@ -121,8 +121,8 @@ describe("PgIndicatorsRepository.loadCuts statement order", () => {
       expect(statements.indexOf(TABLE_PRIVILEGE_SQL.trim())).toBe(3);
       expect(at(LOCK_STAGING_SQL)).toBeGreaterThan(lastPrivilegeCheck);
       expect(at(EXISTING_ROWS_SQL)).toBeGreaterThan(at(LOCK_STAGING_SQL));
-      expect(at(TRUNCATE_STAGING_SQL)).toBeGreaterThan(at(EXISTING_ROWS_SQL));
-      expect(at(INSERT_STAGING_SQL)).toBeGreaterThan(at(TRUNCATE_STAGING_SQL));
+      expect(at(DELETE_STAGING_SQL)).toBeGreaterThan(at(EXISTING_ROWS_SQL));
+      expect(at(INSERT_STAGING_SQL)).toBeGreaterThan(at(DELETE_STAGING_SQL));
       expect(at(REPLACE_HISTORY_SQL)).toBeGreaterThan(at(INSERT_STAGING_SQL));
       expect(at(STORED_ROWS_SQL)).toBeGreaterThan(at(REPLACE_HISTORY_SQL));
       expect(statements.at(-1)).toBe("COMMIT");
@@ -139,13 +139,13 @@ describe("PgIndicatorsRepository.loadCuts statement order", () => {
       expect(counts[0]).toBeGreaterThan(statements.indexOf(LOCK_STAGING_SQL.trim()));
     });
 
-    it("should issue the LOCK exactly once, as ACCESS EXCLUSIVE on the staging table", async () => {
+    it("should issue the LOCK exactly once, as SHARE ROW EXCLUSIVE on the staging table", async () => {
       // Arrange & Act
       await newRepository().loadCuts(CONNECTION, { cuts: [makeCut(SEPTEMBER, makeRows(2))], acceptShrink: false });
 
       // Assert
       expect(lastClient().statementsMatching(/^LOCK TABLE/)).toEqual([
-        "LOCK TABLE public.indicadores_lte IN ACCESS EXCLUSIVE MODE",
+        "LOCK TABLE public.indicadores_lte IN SHARE ROW EXCLUSIVE MODE",
       ]);
     });
 
@@ -181,7 +181,7 @@ describe("PgIndicatorsRepository.loadCuts statement order", () => {
 
   describe("lock failure", () => {
     it("should fail at the LOCK, change nothing and roll back when the lock cannot be acquired in time", async () => {
-      // Arrange: stands in for a second session holding ACCESS EXCLUSIVE (PGlite has one session only)
+      // Arrange: stands in for a second session holding SHARE ROW EXCLUSIVE (PGlite has one session only)
       await seedCut(SEPTEMBER, 3);
       const before = await snapshotTables(database);
 

@@ -65,11 +65,14 @@ describe("coverage-loads wiki content", () => {
     expect(html).toContain("<table");
   });
 
-  it("should render preguntas-frecuentes with a table and a GRANT TRUNCATE code block", () => {
+  it("should render preguntas-frecuentes with a table and a GRANT code block that grants DELETE and never TRUNCATE", () => {
     const html = render(index.findPage(TOOL, "preguntas-frecuentes")!);
+    const codeBlocks = [...html.matchAll(/<pre[\s\S]*?<\/pre>/g)].map((match) => match[0]);
 
     expect(html).toContain("<table");
-    expect(html).toMatch(/<pre[\s\S]*GRANT TRUNCATE[\s\S]*<\/pre>/);
+    expect(html).toMatch(/<pre[\s\S]*GRANT[^<]*DELETE[\s\S]*<\/pre>/);
+    expect(codeBlocks.some((block) => /GRANT/.test(block))).toBe(true);
+    for (const block of codeBlocks) expect(block).not.toMatch(/TRUNCATE/);
   });
 
   it("should render conexion with a link to the db-db-sync conexion page", () => {

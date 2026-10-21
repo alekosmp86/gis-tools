@@ -14,9 +14,13 @@ import {
   BREAKDOWN_BY_STATUS_SQL,
   COPY_TO_HISTORY_SQL,
   COUNT_UNMATCHED_SQL,
+  DELETE_AVANCE_SQL,
   DELETE_JUNK_SQL,
+  DELETE_STAGING_SQL,
   INSERT_AVANCE_SQL,
   INSERT_STAGING_SQL,
+  LOCK_AVANCE_SQL,
+  LOCK_STAGING_SQL,
 } from "@/modules/coverage-loads/avance-ftth/services/queries/rebuildQueries";
 import { lockStaging, rebuildAvance } from "@/modules/coverage-loads/avance-ftth/services/queries/runRebuildQueries";
 import { RecordingPgliteClient } from "../pgliteHarness";
@@ -101,15 +105,16 @@ describe("avance-ftth rebuild SQL (AC-13 .. AC-18, AC-20)", () => {
         const rules: Array<[RegExp, string]> = [
           [/^LOCK TABLE public\.avance_planilla_int/, "lock-int"],
           [/^LOCK TABLE public\.avance_planilla_mvd/, "lock-udpem"],
-          [/^TRUNCATE public\.avance_planilla_int/, "truncate-int"],
-          [/^TRUNCATE public\.avance_planilla_mvd/, "truncate-udpem"],
+          [/^LOCK TABLE public\.avance_uruguay_planilla/, "lock-avance"],
+          [/^DELETE FROM public\.avance_planilla_int/, "replace-int"],
+          [/^DELETE FROM public\.avance_planilla_mvd/, "replace-udpem"],
           [/^INSERT INTO public\.avance_planilla_int/, "stage-int"],
           [/^INSERT INTO public\.avance_planilla_mvd/, "stage-udpem"],
           [/DELETE FROM public\.avance_planilla_int/, "junk-int"],
           [/DELETE FROM public\.avance_planilla_mvd/, "junk-udpem"],
           [/loaded_today/, "read-avance-state"],
           [/INSERT INTO historico\.h_avance_uruguay/, "history-copy"],
-          [/^TRUNCATE TABLE public\.avance_uruguay_planilla/, "truncate-avance"],
+          [/^DELETE FROM public\.avance_uruguay_planilla/, "delete-avance"],
           [/GROUP BY 1\s+ORDER BY 1/, "breakdown"],
           [/SELECT DISTINCT trim/, "unmatched"],
           [/INSERT INTO public\.avance_uruguay_planilla/, "insert-avance"],
@@ -131,15 +136,16 @@ describe("avance-ftth rebuild SQL (AC-13 .. AC-18, AC-20)", () => {
       expect(client.statements.slice(1, -1).map(classify)).toEqual([
         "lock-int",
         "lock-udpem",
-        "truncate-int",
+        "lock-avance",
+        "replace-int",
         "stage-int",
-        "truncate-udpem",
+        "replace-udpem",
         "stage-udpem",
         "junk-int",
         "junk-udpem",
         "read-avance-state",
         "history-copy",
-        "truncate-avance",
+        "delete-avance",
         "breakdown",
         "unmatched",
         "insert-avance",
@@ -153,7 +159,7 @@ describe("avance-ftth rebuild SQL (AC-13 .. AC-18, AC-20)", () => {
       ]);
     });
 
-    it("should lock both staging tables in ACCESS EXCLUSIVE mode, INT first", async () => {
+    it("should lock both staging tables and then the Avance in SHARE ROW EXCLUSIVE mode, INT first", async () => {
       // Arrange
       const client = new RecordingPgliteClient(database);
 
@@ -163,10 +169,30 @@ describe("avance-ftth rebuild SQL (AC-13 .. AC-18, AC-20)", () => {
       await client.query("ROLLBACK", []);
 
       // Assert
-      expect(client.statements.slice(1, 3)).toEqual([
-        "LOCK TABLE public.avance_planilla_int IN ACCESS EXCLUSIVE MODE",
-        "LOCK TABLE public.avance_planilla_mvd IN ACCESS EXCLUSIVE MODE",
+      expect(client.statements.slice(1, 4)).toEqual([
+        "LOCK TABLE public.avance_planilla_int IN SHARE ROW EXCLUSIVE MODE",
+        "LOCK TABLE public.avance_planilla_mvd IN SHARE ROW EXCLUSIVE MODE",
+        "LOCK TABLE public.avance_uruguay_planilla IN SHARE ROW EXCLUSIVE MODE",
       ]);
+    });
+
+    it("should export the exact lock and delete statements, with no TRUNCATE and no ACCESS EXCLUSIVE", () => {
+      // Arrange
+      const all = [
+        ...Object.values(LOCK_STAGING_SQL),
+        ...Object.values(DELETE_STAGING_SQL),
+        LOCK_AVANCE_SQL,
+        DELETE_AVANCE_SQL,
+      ];
+
+      // Act & Assert
+      expect(LOCK_STAGING_SQL[AvanceFileKind.INT]).toBe("LOCK TABLE public.avance_planilla_int IN SHARE ROW EXCLUSIVE MODE");
+      expect(LOCK_STAGING_SQL[AvanceFileKind.UDPEM]).toBe("LOCK TABLE public.avance_planilla_mvd IN SHARE ROW EXCLUSIVE MODE");
+      expect(LOCK_AVANCE_SQL).toBe("LOCK TABLE public.avance_uruguay_planilla IN SHARE ROW EXCLUSIVE MODE");
+      expect(DELETE_STAGING_SQL[AvanceFileKind.INT]).toBe("DELETE FROM public.avance_planilla_int");
+      expect(DELETE_STAGING_SQL[AvanceFileKind.UDPEM]).toBe("DELETE FROM public.avance_planilla_mvd");
+      expect(DELETE_AVANCE_SQL).toBe("DELETE FROM public.avance_uruguay_planilla");
+      for (const sql of all) expect(sql).not.toMatch(/TRUNCATE|ACCESS EXCLUSIVE/i);
     });
 
     it("should process INT before UDPEM even when the files arrive in the other order", async () => {
@@ -306,7 +332,7 @@ describe("avance-ftth rebuild SQL (AC-13 .. AC-18, AC-20)", () => {
       await rebuildAvance(client, standardFiles());
 
       // Assert
-      const deletes = client.calls.filter((call) => /DELETE FROM/.test(call.text));
+      const deletes = client.calls.filter((call) => /conca LIKE/.test(call.text));
       expect(JUNK_CONCA_LIKE_PATTERN).toBe("CZONA%");
       expect(deletes.map((call) => call.values)).toEqual([["CZONA%"], ["CZONA%"]]);
       expect(DELETE_JUNK_SQL[AvanceFileKind.INT]).toContain("conca LIKE $1::text");
