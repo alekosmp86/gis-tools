@@ -51,6 +51,8 @@ src/modules/coverage-loads/
     job/         job-safe core run by the detached process (ESM scope, `.ts` imports)
     api/         one handler file per endpoint + handlers.ts (assembly)
     services/    plan repository, upload stream, spawn, cancel, sweep, log tail
+  avance-ftth/   Avance FTTH from the two CSV planillas (section 12)
+  sigra-layers/  refresh of the SIGRA WFS layers into PostGIS (section 13)
   workflow/      the multi-stage shell (UI refactor, no new endpoints)
     domain/      loadType (LoadType, stage ids per type), workflowState: pure reducer (phase
                  LOAD_TYPE|CONNECTION|STAGES|RESULT, load type, confirmed connection,
@@ -65,8 +67,9 @@ src/modules/coverage-loads/
 
 ### Workflow shell
 
-- First step "Tipo de carga": "Cobertura (3G, LTE, 5G, NBIOT)" (stages indicators, shp) or "FTTH" (stage
-  avance-ftth). Only the stages of the chosen type are mounted and shown in the result; switching type keeps the
+- First step "Tipo de carga": "Cobertura (3G, LTE, 5G, NBIOT)" (stages indicators, shp) or "FTTH" (stages
+  sigra-layers, then avance-ftth; Avance stays locked until Capas SIGRA is Completado, and Capas SIGRA cannot be
+  omitted). Only the stages of the chosen type are mounted and shown in the result; switching type keeps the
   connection and resets the stage progress; it is refused while a stage is working. `COVERAGE_STAGES` stays flat,
   `LOAD_TYPE_STAGE_IDS` assigns each stage to one type.
 - One shared connection step (password in memory only). Confirming it unlocks the stages.
@@ -708,3 +711,79 @@ All SQL against PostgreSQL/PostGIS (no PostGIS in the test setup): the first ver
 HGDesa with the two sample CSVs. Duration of the rebuild and of `fuera_central` on HGDesa (statement timeouts
 `WRITE_STATEMENT_TIMEOUT_MS` and `REPORT_STATEMENT_TIMEOUT_MS` are guesses). Whether `NULL situacion_distrito`
 zones matter: the legacy `<>` excluded them, `<> ALL('{}')` includes them (HGDesa has 0 such zones today).
+
+## 13. SIGRA layers (WFS refresh)
+
+Migration of the Pentaho jobs in `MIGRACION_PDI_WFS` (one folder per layer): each layer is read from the SGRA
+GeoServer WFS and replaces a PostGIS table. The Avance FTTH rebuild joins to `public.area_zonas_ftth_f` and the
+`fuera_central` report reads `public.limite_central_ftth`, and nothing refreshed them before; the other layers feed
+consumers not migrated yet (the Experto FTTH KML exports) and are loaded "just in case". Acceptance criteria:
+[`docs/specifications/COVERAGE_LOADS_SIGRA_LAYERS_SPEC.md`](../specifications/COVERAGE_LOADS_SIGRA_LAYERS_SPEC.md).
+It is a part of this module (`sigra-layers/`; parts never import each other) and the stage "Capas SIGRA" of the FTTH
+load type, placed before "Avance FTTH".
+
+```
+sigra-layers/
+  constants.ts   WFS base URL, the 0.97 validation ratio, SRID, timeouts, SigraLayerId, REQUIRED_LAYER_IDS
+  types.ts
+  domain/        pure: layerRegistry (the 18 layers), layerMappings (declarative column mapping), featureMapping,
+                 zonasFtthDerivations, wfsUrl, validation (97% rule), plan, loadResult, sigraFlow (UI reducer)
+  services/      WfsClient (retry + timeout), readLayerPages, probeLayers, SigraLayersRepository +
+                 PgSigraLayersRepository, queries/ (state, staging, swap, audit), auditLog
+  api/           plan / load handlers, request readers
+  ui/            panel, layer table, result table, client, flow hook
+```
+
+### Endpoints
+
+Both `POST`, `nodejs`, `force-dynamic`, JSON bodies, declared in `module.routes.json`.
+
+| Path | Body | Does |
+|---|---|---|
+| `sigra-layers/plan` | `{ connection, layerIds? }` (omitted = all 18) | `BEGIN READ ONLY`: per layer table state (rows, last update, privileges, sequence USAGE), TEMP privilege, audit table availability; plus one `count=1` WFS probe per layer (`numberMatched`). Writes nothing. Returns `{ success, plan }`. |
+| `sigra-layers/load` | `{ connection, layerIds, dryRun?, confirm? }` | 400 for unknown or empty ids, a non-boolean flag, or a real load without `confirm: true`; 409 with the plan when any selected layer has a blocker (nothing is loaded); otherwise loads the layers one by one, in order, and returns `{ success, dryRun, results }` (HTTP 200 even when a layer failed or was rejected). |
+
+### Per-layer load (one transaction per layer)
+
+1. Audit `INICIADO` row in `public.etl_auditoria` (own connection, autocommitted, skipped in a dry run or when the
+   table is missing/unwritable: the load goes on with a warning).
+2. `BEGIN`; a session TEMP staging table (`ON COMMIT DROP`) built from the final table's column types, without
+   defaults or sequences, with a unique index on the layer's key. No persistent `incoming_sgra_*` table is used.
+3. WFS pages (`sortBy` + `count` + `startIndex`; sizes 1000-5000 per layer) inserted with bind parameters
+   (`ON CONFLICT (key) DO NOTHING`); geometry `ST_SetSRID(ST_GeomFromGeoJSON(..), 31981)`; `fechaact`/`fuente`/
+   `area_m2`/`latitud`/`longitud` computed in SQL where the layer has them.
+4. Validation: pass when the final table is empty or staged/final >= 0.97 (the legacy rule). Otherwise ROLLBACK, the
+   table is untouched.
+5. Swap: `LOCK TABLE .. IN SHARE ROW EXCLUSIVE MODE`, `DELETE FROM`, `INSERT .. SELECT` from staging (the role has no
+   `TRUNCATE`), inserted count verified, COMMIT. A dry run stops after step 4 and rolls back (no lock, no `DELETE`,
+   the `gid` sequence is not used).
+6. Audit `EXITO`/`ERROR` with counts and the failing step (survives the rollback).
+
+### Layers
+
+Required (gate the Avance stage): `zonas-ftth` (`area_zonas_ftth_f`) and `limite-central-ftth`
+(`limite_central_ftth`). Optional: area-cd-sr, area-cable-cobre, area-cable-ftth, area-cajitas-cobre, area-tfo,
+limite-central-cobre, limite-economico-cobre, limite-mixto-cobre (typo `LIMTE_MIXTO` is the real WFS value),
+caja-distribucion, cajitas-cobre, tfo-divisores, camaras, centrales-cobre, centrales-ftth, postes,
+zonas-inseguridad. `infra-canalizada` is dropped (the legacy job never worked). Every table, typeName, CQL, page size,
+sort key and column mapping lives in `domain/layerRegistry.ts` and `domain/layerMappings.ts` only.
+
+### Differences from the Pentaho jobs
+
+No persistent staging table and no `TRUNCATE`; a stable `sortBy` on every layer (four legacy jobs paged without
+one); timeout and bounded retries on every WFS request; a plan with privilege and reachability checks before
+writing; a dry run; the audit never blocks a load. The 97% rule, the SRID, the column mapping and the audit table
+are the legacy ones.
+
+### Privileges
+
+Per final table: SELECT, INSERT, DELETE and USAGE on its serial sequence. TEMP on the database.
+`public.etl_auditoria`: SELECT, INSERT, UPDATE (optional).
+
+### Unverified until a real run
+
+All spatial SQL (`ST_*`) runs only against PostGIS: the first verification is "Probar sin guardar" on HGDesa for the
+two required layers. Reachability of `vmlx-sgrabal-prod` from the app server (verified from the developer
+machine only). The load transaction stays open during the whole download: a server with
+`idle_in_transaction_session_timeout` could abort a very large layer (0 on HGDesa). A WFS feature whose geometry
+type differs from the target column (e.g. MultiPolygon into `POLYGON`) fails the layer, as in the legacy job.
