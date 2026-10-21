@@ -88,7 +88,7 @@ export const ADVISORY_LOCK_ID_BY_TABLE: Readonly<Record<ShpTable, number>> = {
 };
 
 export const TARGET_SCHEMA = "public";
-export const TABLE_PRIVILEGES_REQUIRED = ["TRUNCATE", "INSERT", "SELECT"] as const;
+export const TABLE_PRIVILEGES_REQUIRED = ["DELETE", "INSERT", "SELECT"] as const;
 export const SCHEMA_PRIVILEGE_REQUIRED = "CREATE";
 
 /** Written to the `fuente` column of every loaded row (same value as the legacy GeoKettle job). */

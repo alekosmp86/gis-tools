@@ -13,9 +13,9 @@ interface AvanceBusyCardProps {
 
 const BUSY_TEXT: Readonly<Record<RunMode, string>> = {
   [RunMode.DRY_RUN]:
-    "Probando la carga completa sin guardar. Se bloquea la lectura de la tabla del Avance mientras dure, incluido el reporte lento de zonas fuera de la central.",
+    "Probando la carga completa sin guardar. Otras cargas esperan mientras dure, incluido el reporte lento de zonas fuera de la central.",
   [RunMode.LOAD]:
-    "Reemplazando el Avance. Se bloquea la lectura de la tabla del Avance mientras dure, y luego se generan los reportes.",
+    "Reemplazando el Avance. Otras cargas esperan mientras dure, y luego se generan los reportes.",
 };
 
 const PLANNING_TEXT = "Analizando los archivos contra la base de datos. No se escribe nada en este paso.";

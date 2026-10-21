@@ -5,12 +5,12 @@ import type { ReportKind } from "../../constants";
 import { describeIncompleteCut, type HistoryState } from "../../domain/plan";
 import type { LoadedCut, ParsedCut, ReportRow } from "../../types";
 import {
+  DELETE_STAGING_SQL,
   EXISTING_ROWS_SQL,
   INSERT_STAGING_SQL,
   LOCK_STAGING_SQL,
   REPLACE_HISTORY_SQL,
   STORED_ROWS_SQL,
-  TRUNCATE_STAGING_SQL,
 } from "./historyQueries";
 import { mapExistingRow, mapReportRow } from "./mapRows";
 import { REPORT_SQL } from "./reportQueries";
@@ -22,7 +22,7 @@ const PRIVILEGE_REQUIREMENTS: ReadonlyArray<PrivilegeRequirement> = [
   },
   {
     table: STAGING_TABLE,
-    privileges: [HistoryPrivilege.SELECT, HistoryPrivilege.TRUNCATE, HistoryPrivilege.INSERT],
+    privileges: [HistoryPrivilege.SELECT, HistoryPrivilege.INSERT, HistoryPrivilege.DELETE],
   },
 ];
 
@@ -74,7 +74,7 @@ export async function lockStaging(queryable: Queryable): Promise<void> {
 }
 
 async function refillStaging(queryable: Queryable, cuts: ReadonlyArray<ParsedCut>): Promise<void> {
-  await queryable.query(TRUNCATE_STAGING_SQL, []);
+  await queryable.query(DELETE_STAGING_SQL, []);
   const rows = cuts.flatMap((cut) => cut.rows.map((row) => ({ fechaact: cut.fechaact, row })));
   await queryable.query(INSERT_STAGING_SQL, [
     rows.map((entry) => entry.fechaact),
@@ -106,7 +106,7 @@ async function describeLoadedCut(queryable: Queryable, cut: ParsedCut, replacedR
 }
 
 /**
- * The legacy sequence for the whole run: TRUNCATE `public.indicadores_lte` once, fill it with the rows
+ * The legacy sequence for the whole run: DELETE all rows of `public.indicadores_lte` once, fill it with the rows
  * of every cut (oldest date first), run the replace statement once (it replaces every date present
  * in staging), then count the stored rows of each cut. Staging keeps the rows of all cuts.
  */

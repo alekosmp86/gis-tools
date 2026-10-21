@@ -169,9 +169,14 @@ export function targetStatsStatement(table: ShpTable): Statement {
   );
 }
 
-export function truncateTargetStatement(table: ShpTable): Statement {
+export function lockTargetStatement(table: ShpTable): Statement {
   const { target } = tableIdentifiers(table);
-  return statement(`TRUNCATE ${target}`);
+  return statement(`LOCK TABLE ${target} IN SHARE ROW EXCLUSIVE MODE`);
+}
+
+export function deleteTargetStatement(table: ShpTable): Statement {
+  const { target } = tableIdentifiers(table);
+  return statement(`DELETE FROM ${target}`);
 }
 
 export function insertTargetStatement(table: ShpTable, fechaact: string, source: string): Statement {

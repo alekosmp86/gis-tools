@@ -10,7 +10,6 @@ export const HistoryPrivilege = {
   SELECT: "SELECT",
   INSERT: "INSERT",
   DELETE: "DELETE",
-  TRUNCATE: "TRUNCATE",
 } as const;
 
 /** `IndicadoresLTE_aaaammdd.csv`: the prefix and the extension are case-sensitive. */

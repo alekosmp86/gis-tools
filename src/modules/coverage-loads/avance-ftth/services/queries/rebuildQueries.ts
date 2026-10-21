@@ -14,8 +14,9 @@ function perKind(build: (stagingTable: string) => string): Readonly<Record<Avanc
   };
 }
 
-export const LOCK_STAGING_SQL = perKind((table) => `LOCK TABLE ${table} IN ACCESS EXCLUSIVE MODE`);
-export const TRUNCATE_STAGING_SQL = perKind((table) => `TRUNCATE ${table}`);
+export const LOCK_STAGING_SQL = perKind((table) => `LOCK TABLE ${table} IN SHARE ROW EXCLUSIVE MODE`);
+export const LOCK_AVANCE_SQL = `LOCK TABLE ${AVANCE} IN SHARE ROW EXCLUSIVE MODE`;
+export const DELETE_STAGING_SQL = perKind((table) => `DELETE FROM ${table}`);
 export const COUNT_STAGING_SQL = perKind((table) => `SELECT count(*)::int AS total FROM ${table}`);
 export const COUNT_AVANCE_SQL = `SELECT count(*)::int AS total FROM ${AVANCE}`;
 
@@ -49,7 +50,7 @@ WITH copied AS (
 SELECT count(*)::int AS total FROM copied
 `;
 
-export const TRUNCATE_AVANCE_SQL = `TRUNCATE TABLE ${AVANCE}`;
+export const DELETE_AVANCE_SQL = `DELETE FROM ${AVANCE}`;
 
 /** Parameter $1: statuses to leave out. The GROUP BY collapses identical duplicate staging rows. */
 export const INSERT_AVANCE_SQL = perKind(

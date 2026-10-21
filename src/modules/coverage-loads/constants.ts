@@ -6,7 +6,7 @@ export const CONNECTION_TIMEOUT_MS = 10000;
 /** Budget for any single statement of the module; the loads are small, this is a safety net. */
 export const STATEMENT_TIMEOUT_MS = 120000;
 
-/** How long a write waits for a table lock (TRUNCATE takes an exclusive one) before giving up. */
+/** How long a write waits for a table lock (LOCK TABLE ... SHARE ROW EXCLUSIVE serialises loads) before giving up. */
 export const WRITE_LOCK_TIMEOUT = "10s";
 
 /** Upload limits and rejected-rows CSV shared by every part that takes files. */

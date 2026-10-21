@@ -29,7 +29,6 @@ const STAGING_PRIVILEGES = [
   TablePrivilege.SELECT,
   TablePrivilege.INSERT,
   TablePrivilege.DELETE,
-  TablePrivilege.TRUNCATE,
 ];
 
 const PRIVILEGE_REQUIREMENTS: ReadonlyArray<PrivilegeRequirement> = [
@@ -37,7 +36,7 @@ const PRIVILEGE_REQUIREMENTS: ReadonlyArray<PrivilegeRequirement> = [
   { table: STAGING_UDPEM, privileges: STAGING_PRIVILEGES },
   {
     table: AVANCE,
-    privileges: [TablePrivilege.SELECT, TablePrivilege.INSERT, TablePrivilege.UPDATE, TablePrivilege.TRUNCATE],
+    privileges: [TablePrivilege.SELECT, TablePrivilege.INSERT, TablePrivilege.UPDATE, TablePrivilege.DELETE],
   },
   { table: HISTORY, privileges: [TablePrivilege.SELECT, TablePrivilege.INSERT] },
   { table: ZONES, privileges: [TablePrivilege.SELECT] },

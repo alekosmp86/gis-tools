@@ -23,9 +23,10 @@ import {
   DELETE_JUNK_SQL,
   INSERT_AVANCE_SQL,
   INSERT_STAGING_SQL,
+  DELETE_AVANCE_SQL,
+  DELETE_STAGING_SQL,
+  LOCK_AVANCE_SQL,
   LOCK_STAGING_SQL,
-  TRUNCATE_AVANCE_SQL,
-  TRUNCATE_STAGING_SQL,
   UPDATE_AVANCE_FUENTE_SQL,
 } from "./rebuildQueries";
 import { mapSequentially } from "../sequentially";
@@ -46,9 +47,10 @@ function orderedFiles(files: ReadonlyArray<ParsedAvanceFile>): ParsedAvanceFile[
   return FILE_KINDS.flatMap((kind) => files.filter((file) => file.kind === kind));
 }
 
-/** Serialises concurrent loads: whoever holds these locks is the only one replacing the staging tables. */
+/** Serialises concurrent loads (SHARE ROW EXCLUSIVE, readers keep reading): whoever holds these locks is the only one replacing the staging tables and the Avance. */
 export async function lockStaging(queryable: Queryable): Promise<void> {
   for (const kind of FILE_KINDS) await queryable.query(LOCK_STAGING_SQL[kind], []);
+  await queryable.query(LOCK_AVANCE_SQL, []);
 }
 
 async function insertStagingRows(queryable: Queryable, file: ParsedAvanceFile): Promise<void> {
@@ -61,7 +63,7 @@ async function insertStagingRows(queryable: Queryable, file: ParsedAvanceFile): 
 
 async function refillStaging(queryable: Queryable, files: ReadonlyArray<ParsedAvanceFile>): Promise<void> {
   for (const file of files) {
-    await queryable.query(TRUNCATE_STAGING_SQL[file.kind], []);
+    await queryable.query(DELETE_STAGING_SQL[file.kind], []);
     await insertStagingRows(queryable, file);
   }
 }
@@ -89,7 +91,7 @@ async function copyHistory(queryable: Queryable): Promise<HistoryOutcome> {
 /** Steps 3 and 4: the old Avance goes to the history (unless O2 skips it) and the table is emptied. */
 async function archiveAndClearAvance(queryable: Queryable): Promise<HistoryOutcome> {
   const history = await copyHistory(queryable);
-  await queryable.query(TRUNCATE_AVANCE_SQL, []);
+  await queryable.query(DELETE_AVANCE_SQL, []);
   return history;
 }
 
@@ -146,7 +148,7 @@ async function archiveAndRebuild(
 
 /**
  * Steps 1 to 7 of the write transaction, in the order of AC-13: staging replaced, junk deleted,
- * Avance copied to the history (or not, O2), Avance truncated and rebuilt from the zones layer, new
+ * Avance copied to the history (or not, O2), Avance emptied (DELETE) and rebuilt from the zones layer, new
  * `fuente`, then the consistency check. The caller owns BEGIN/COMMIT/ROLLBACK.
  */
 export async function rebuildAvance(

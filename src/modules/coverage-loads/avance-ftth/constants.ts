@@ -28,7 +28,6 @@ export const TablePrivilege = {
   INSERT: "INSERT",
   UPDATE: "UPDATE",
   DELETE: "DELETE",
-  TRUNCATE: "TRUNCATE",
 } as const;
 
 export const SEQUENCE_USAGE_PRIVILEGE = "USAGE";

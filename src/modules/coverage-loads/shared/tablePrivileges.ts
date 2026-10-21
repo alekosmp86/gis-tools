@@ -3,7 +3,7 @@ import type { Queryable } from "./pgClient";
 export interface PrivilegeRequirement {
   /** Schema-qualified table name. */
   readonly table: string;
-  /** Privilege names as `has_table_privilege` spells them: SELECT, INSERT, DELETE, TRUNCATE... */
+  /** Privilege names as `has_table_privilege` spells them: SELECT, INSERT, UPDATE, DELETE... */
   readonly privileges: ReadonlyArray<string>;
 }
 

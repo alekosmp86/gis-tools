@@ -4,14 +4,15 @@ import { toNumber } from "./pgSession.ts";
 import type { PhaseContext } from "./phaseContext.ts";
 import {
   countTargetStatement,
+  deleteTargetStatement,
   insertTargetStatement,
+  lockTargetStatement,
   setConfigStatement,
-  truncateTargetStatement,
 } from "./realQueries.ts";
 import { FAILURE_CODE, JobStepError, throwIfCancelled } from "./stepErrors.ts";
 
 /**
- * REPLACE semantics in ONE transaction: TRUNCATE + INSERT of every piece. Any failure, a cancel or a
+ * REPLACE semantics in ONE transaction: LOCK (SHARE ROW EXCLUSIVE, readers keep reading) + DELETE + INSERT of every piece. Any failure, a cancel or a
  * row-count mismatch rolls back and leaves the previous data untouched.
  */
 export async function swappingPhase(context: PhaseContext, expectedRows: number): Promise<void> {
@@ -22,7 +23,8 @@ export async function swappingPhase(context: PhaseContext, expectedRows: number)
   await session.setStatementTimeout(LONG_STATEMENT_TIMEOUT_MS);
   await session.transaction(async () => {
     await session.rows(setConfigStatement("lock_timeout", String(SWAP_LOCK_TIMEOUT_MS), true));
-    await session.rows(truncateTargetStatement(table));
+    await session.rows(lockTargetStatement(table));
+    await session.rows(deleteTargetStatement(table));
     await session.rows(insertTargetStatement(table, job.target.fechaact, LOAD_SOURCE));
     const loaded = toNumber((await session.first(countTargetStatement(table))).rows);
     if (loaded !== expectedRows) {

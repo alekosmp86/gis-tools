@@ -14,8 +14,8 @@ FROM ${HISTORY_TABLE}
 WHERE fechaact = $1::text::date
 `;
 
-export const LOCK_STAGING_SQL = `LOCK TABLE ${STAGING_TABLE} IN ACCESS EXCLUSIVE MODE`;
-export const TRUNCATE_STAGING_SQL = `TRUNCATE ${STAGING_TABLE}`;
+export const LOCK_STAGING_SQL = `LOCK TABLE ${STAGING_TABLE} IN SHARE ROW EXCLUSIVE MODE`;
+export const DELETE_STAGING_SQL = `DELETE FROM ${STAGING_TABLE}`;
 
 /** Parameters: fechaact[], fuente, nombloc[], nombdepto[], cobertura_lte[], porcentaje[]. */
 export const INSERT_STAGING_SQL = `
