@@ -23,17 +23,17 @@ Once source (DB 1) and target (DB 2) tables are set, the user picks how to sync:
       `fieldsToCompare` selects all columns) with progress. Nothing is touched in the target yet.
    3. Build INSERT statements (reuse `SqlScriptBuilder`; geometry via its PostGIS expression using
       the target column types/SRID) for the columns present in BOTH tables (by name).
-   4. Script = `TRUNCATE TABLE "schema"."table";` as the FIRST statement + all INSERTs, executed
+   4. Script = `DELETE FROM "schema"."table";` as the FIRST statement + all INSERTs, executed
       with the existing `executeSqlInChunks` (500 per request, each request its own transaction).
-      Because the TRUNCATE shares chunk 1 with the first 499 INSERTs, a failure in chunk 1 rolls the
+      Because the DELETE shares chunk 1 with the first 499 INSERTs, a failure in chunk 1 rolls the
       wipe back and the target is intact.
    5. Result summary: source rows fetched, rows inserted, errors; rows count must be reported
       honestly (inserted vs source).
 3. No comparison engine, no pairing: byte-identical duplicate source rows ARE inserted (the old
    "wipe in step 4" design would have dropped them).
 4. Non-atomicity beyond chunk 1 is accepted and stated in the UI: if a later chunk fails the target
-   is partially loaded; re-running Full Replace is idempotent (truncates again and reloads).
-5. `TRUNCATE` without `CASCADE` (a future FK fails loudly instead of emptying other tables).
+   is partially loaded; re-running Full Replace is idempotent (deletes again and reloads).
+5. `DELETE` without `WHERE` or `CASCADE` (a future FK fails loudly instead of emptying other tables). `DELETE` is used because the target role typically has no table-wipe privilege beyond `DELETE`.
 
 ## 3. Acceptance criteria
 
@@ -50,8 +50,8 @@ Once source (DB 1) and target (DB 2) tables are set, the user picks how to sync:
   re-run is safe.
 - **AC-6** The target is not modified before all source rows are fetched and the INSERT script is built
   (a fetch/build failure leaves the target untouched and shows the error).
-- **AC-7** The first statement sent is `TRUNCATE TABLE "<schema>"."<table>";` (quotes in identifiers
-  doubled, empty schema -> `public`, no CASCADE), in the same first batch as the first INSERTs.
+- **AC-7** The first statement sent is `DELETE FROM "<schema>"."<table>";` (quotes in identifiers
+  doubled, empty schema -> `public`, no WHERE, no CASCADE), in the same first batch as the first INSERTs.
 - **AC-8** (v2.1, replaces name-matching) Column mapping step in replace mode, between the mode step
   and the replace step. Source and target tables commonly differ in column names and schema (first real
   use: source `public.wcdma` in the hg DB -> target `coverage.technology_3g` in the dev DB).
@@ -88,24 +88,35 @@ Once source (DB 1) and target (DB 2) tables are set, the user picks how to sync:
 - **AC-16** (v2.3) Sequence reset. The confirmation screen has a checkbox "Reiniciar secuencias del
   destino", CHECKED by default. The sequences are those feeding TARGET columns that are NOT mapped from the
   source (their column default is `nextval('<seq>'::regclass)`, taken from the already-loaded column
-  metadata: no new API). When checked, one `ALTER SEQUENCE "<schema>"."<seq>" RESTART WITH 1;` per
-  sequence (identifiers quoted/doubled; an unqualified name is qualified with the target schema) is
-  emitted immediately after the TRUNCATE, so TRUNCATE and the resets are the first statements of batch 1
-  (same transaction; if batch 1 fails they roll back together). The screen lists the sequences that will
-  be reset. A default that cannot be parsed is skipped and listed as a warning. Mapped columns are never
-  touched.
+  metadata: no new API). When checked, one `SELECT setval('"<schema>"."<seq>"'::regclass, 1, false);` per
+  sequence (identifiers quoted/doubled, then the whole qualified name placed in a text literal with single
+  quotes doubled; an unqualified name is qualified with the target schema) is
+  emitted immediately after the DELETE, so the DELETE and the resets are the first statements of batch 1
+  (same transaction; `setval` is not transactional). Only sequences with `mapped === false` get the start
+  reset; mapped ones never do. The screen lists the sequences that will be reset and, separately, all that
+  will be adjusted. A default that cannot be parsed is skipped and listed as a warning.
+- **AC-16b** Sequence repair (always). Every discovered sequence (mapped or not, one entry per sequence with
+  its `columns`) is repaired in its own request after the replace and before ANALYZE, in every outcome that
+  touched the DB (success, failed first batch, later-batch failure or rejection); a first-call rejection
+  attempts the repair, swallows its failure and rethrows the original error. Per sequence:
+  `SELECT setval('<seq>'::regclass, GREATEST(COALESCE(max over columns, 0) + 1,
+  COALESCE(pg_sequence_last_value('<seq>'::regclass) + 1, 1)), false);` on a single line. The role needs
+  `UPDATE` on the sequence and `SELECT` on the table. The execute API returns `selectResults`. Failure appends
+  `No se pudieron ajustar las secuencias: <detail>`, errorCount + 1, `sequencesAdjusted` empty.
+  Limitation: `pg_sequence_last_value` is NULL for a never-used sequence, so a START above max+1 can be
+  lowered to max+1 (relevant only for a shared sequence); not transactional.
 - **AC-17** After a run with zero errors, `ANALYZE "<schema>"."<table>";` is sent as its own request. If it
   fails (e.g. the user is not the table owner) the run stays DONE and the summary shows a warning that
   statistics were not refreshed. It is not attempted after a failed/partial run.
-- **AC-18** The final summary lists the sequences that were reset and the ANALYZE outcome
+- **AC-18** The final summary lists one line per adjusted sequence (`sequencesAdjusted`: next id, plus a note when it was reset to 1) and the ANALYZE outcome
   (ok / not executed / failed with message). Inserted-row accounting stays correct with the extra
-  header statements (statements before the first INSERT are TRUNCATE + N resets, not just 1).
+  header statements (statements before the first INSERT are DELETE + N start resets, not just 1).
   Known limits (documented, review round 1): (a) a sequence that ALSO feeds another table is reset too, so
   that table's next ids can collide: the checkbox text warns about it (detecting it needs ownership info
   from a new API, deferred); (b) an unqualified default (`nextval('seq'::regclass)`) is assumed to live in
   the TARGET table's schema, a wrong guess fails loudly and rolls back batch 1; (c) `GENERATED ... AS
-  IDENTITY` columns have no `column_default` and are not reset; (d) `ALTER SEQUENCE` needs ownership of the
-  sequence: if it fails, batch 1 rolls back (target intact) and the user unticks the checkbox (the label says
+  IDENTITY` columns have no `column_default` and are not reset; (d) `setval` needs `UPDATE` on the
+  sequence (not ownership): if it fails, batch 1 rolls back (target intact) and the user unticks the checkbox (the label says
   so).
 - **AC-17 note** (PostgreSQL 11): `ANALYZE` run by a role that is neither the table owner nor a superuser
   only emits a WARNING and still returns success, and the execute route does not surface notices. The summary
@@ -123,7 +134,7 @@ the destructive section; leave default behaviour identical).
 New (suggested, implementer may adjust within `src/components/tools/db-sync-common/` and
 `src/core/services/`, no new module): mode step builder; replace step component(s) + CSS module;
 `useFullReplaceWorkflow` hook; `src/core/services/fullReplaceService.ts` (build statements + orchestrate);
-`src/core/services/sqlStatements.ts` (`buildTruncateStatement`).
+`src/core/services/sqlStatements.ts` (`buildDeleteStatement`).
 
 A previous aborted attempt left uncommitted edits on the branch (drawer wiring, a destructive modal
 variant, `sqlStatements.ts`, `SqlExecutionDestructiveSection.tsx`, `SqlPatchReplaceButton.tsx`).
@@ -139,7 +150,7 @@ transformations/type casting beyond what existing INSERT generation does; tests 
 
 ## 6. Tests (separate run)
 
-`buildTruncateStatement`; `fullReplaceService` (statement order TRUNCATE first, column intersection,
+`buildDeleteStatement`; `fullReplaceService` (statement order DELETE first, column intersection,
 identical duplicate rows preserved, geometry expression, fetch failure -> nothing executed, inserted
 vs source mismatch flagged); confirm-button gating (AC-4); mode switching steps (AC-1/2).
 
@@ -148,4 +159,4 @@ vs source mismatch flagged); confirm-button gating (AC-4); mode switching steps 
 - Irreversible data loss: target in the confirmation must come from the same `dbConfig` object sent to
   `/api/db/execute`.
 - Memory/time for very large sources (whole source held in browser, same as the compare flow today).
-- Missing TRUNCATE privilege or target NOT NULL columns absent from the source -> chunk-1 error, target intact.
+- Missing DELETE privilege or target NOT NULL columns absent from the source -> chunk-1 error, target intact.

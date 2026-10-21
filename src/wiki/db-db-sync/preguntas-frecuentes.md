@@ -73,11 +73,11 @@ Hay columnas **NOT NULL (requerido)** sin mapear y sin valor por defecto. Mapée
 
 ### El reemplazo falla en el primer lote
 
-Si falla el primer lote **no se pierde nada**: el vaciado se revierte y la tabla destino queda como estaba. Causas comunes:
+Si falla el primer lote **no se pierde nada**: el borrado se revierte y la tabla destino recupera sus filas anteriores (las secuencias se ajustan igualmente al final). Causas comunes:
 
-- Su usuario no tiene permiso de `TRUNCATE` o `INSERT` sobre la tabla destino.
-- Otra tabla tiene una **clave foránea** hacia la tabla destino. El vaciado no usa `CASCADE`, así que PostgreSQL lo rechaza en lugar de vaciar otras tablas.
-- Falló el reinicio de secuencias porque su usuario no es propietario: desmarque *Reiniciar secuencias del destino* y reintente.
+- Su usuario no tiene permiso de `DELETE` o `INSERT` sobre la tabla destino.
+- Otra tabla tiene una **clave foránea** hacia la tabla destino. El borrado no usa `CASCADE`, así que PostgreSQL lo rechaza en lugar de borrar filas de otras tablas.
+- Su usuario no tiene permiso `UPDATE` sobre la secuencia: desmarque *Reiniciar secuencias del destino* y reintente. El ajuste final también necesita `UPDATE` sobre la secuencia y `SELECT` sobre la tabla.
 - Algún valor no cabe en el tipo de la columna destino.
 
 ### El reemplazo falló después del primer lote

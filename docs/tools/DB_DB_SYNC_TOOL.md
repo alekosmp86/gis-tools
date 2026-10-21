@@ -73,8 +73,8 @@ Source and target tables usually differ in column names and schema. For every **
 1. The user types the exact target `schema.table` (an empty schema is treated as `public`) and the target password. The screen is red and shows both endpoints.
 2. **All source rows are fetched first** (only the mapped columns, as Postgres text, see 5.3). A failed or incomplete read, an empty source, or no mapped source column aborts with the target untouched.
 3. INSERT statements are built in the browser (batched, yielding to the UI).
-4. Execution: `TRUNCATE TABLE "schema"."table";` (no `CASCADE`) is the **first statement of batch 1**, together with the first 499 INSERTs, in one transaction: if batch 1 fails, the TRUNCATE rolls back and the target is intact. Batch 1 is sent alone; later batches (500 statements each, one request and one transaction per batch) run only if it succeeded.
-5. A failure after batch 1 leaves the target partially loaded. The error text says so. **Re-running Full Replace is safe** (it truncates and reloads again).
+4. Execution: `DELETE FROM "schema"."table";` (no `WHERE`, no `CASCADE`) is the **first statement of batch 1**, together with the first 499 INSERTs, in one transaction: if batch 1 fails, the DELETE rolls back and the old rows are restored (the start reset is not rolled back, but the final repair re-adjusts the sequence, see 5.6). Batch 1 is sent alone; later batches (500 statements each, one request and one transaction per batch) run only if it succeeded.
+5. A failure after batch 1 leaves the target partially loaded. The error text says so. **Re-running Full Replace is safe** (it deletes and reloads again).
 
 Closing or reloading the tab, or losing the connection, interrupts the run at a batch boundary (no batch is ever half-applied) and can leave the target partially loaded; the confirmation text says so.
 
@@ -100,14 +100,15 @@ The run lives in a module-level store (`src/core/services/fullReplaceRunStore.ts
 - Only a server-side job could survive closing the browser; not implemented.
 - `uuid`, `json(b)` and `bytea` targets are treated as text for the empty-string rule (an empty string there still fails its batch).
 - The records query still ships an unmapped geometry column.
-- Batch error labels ("Lote N (a-b)") count statements, and statement 1 is the TRUNCATE (plus one statement per reset sequence).
+- Batch error labels ("Lote N (a-b)") count statements, and statement 1 is the DELETE (plus one statement per start-reset sequence).
 - No client-side timeout or abort (aborting a request does not cancel the server transaction, so a re-run could interleave with it).
 
 ### 5.6 Sequence reset and ANALYZE
 
-- **Sequence reset** (checkbox "Reiniciar secuencias del destino", on by default). Sequences behind target columns that are NOT mapped from the source (default `nextval('<seq>'::regclass)`, read from the column metadata already loaded) get `ALTER SEQUENCE "schema"."seq" RESTART WITH 1;` right after the TRUNCATE, inside batch 1, so a failed first batch rolls everything back. (`TRUNCATE ... RESTART IDENTITY` is not enough: the sequences are normally not owned by the columns.) Limits: a sequence shared with another table is reset too and that table's next ids can collide; an unqualified default is assumed to live in the target schema; `GENERATED ... AS IDENTITY` columns are not reset; the role must own the sequence (otherwise untick the checkbox).
-- **ANALYZE.** After a run with zero errors, `ANALYZE "schema"."table";` is sent as its own request so the planner has fresh statistics (autovacuum may be off, and TRUNCATE zeroes them). A failure only produces a warning. On PostgreSQL 11 a non-owner gets a silent warning and a success, so the summary says "ANALYZE enviado", not "statistics updated".
-- Batch error labels ("Lote N (a-b)") count statements, and statement 1 is the TRUNCATE.
+- **Sequence reset** (checkbox "Reiniciar secuencias del destino", on by default). Sequences behind target columns that are NOT mapped from the source (default `nextval('<seq>'::regclass)`, read from the column metadata already loaded) get `SELECT setval('"schema"."seq"'::regclass, 1, false);` right after the DELETE, inside batch 1. The role only needs `UPDATE` on the sequence, not ownership. `setval` is not transactional. The reset applies only to unmapped sequences and only when the checkbox is on.
+- **Sequence repair** (always, every discovered sequence, mapped or not, in every outcome that touched the DB): after the replace and before ANALYZE one separate request runs `SELECT setval(seq, GREATEST(COALESCE(GREATEST(max(col1), ...), 0) + 1, COALESCE(pg_sequence_last_value(seq) + 1, 1)), false);` per sequence (needs `UPDATE` on the sequence and `SELECT` on the target table; never reads the sequence relation). The execute API returns `selectResults` (one scalar per SELECT) and the result carries `sequencesAdjusted: { qualifiedLabel, nextValue, resetToStart }[]`; a repair failure appends one error line and leaves `sequencesAdjusted` empty. Known limitation: `pg_sequence_last_value` is NULL for a never-used sequence, so one whose START is above max(id)+1 can be lowered to max+1 (harmless for this table, relevant only if another table shares it). The repair is not transactional. Deleted rows stay as dead tuples until the admins' vacuum. Limits: a sequence shared with another table is reset too and that table's next ids can collide; an unqualified default is assumed to live in the target schema; `GENERATED ... AS IDENTITY` columns are not reset; without `UPDATE` on the sequence the batch fails (untick the checkbox).
+- **ANALYZE.** After a run with zero errors, `ANALYZE "schema"."table";` is sent as its own request so the planner has fresh statistics (autovacuum may be off, and a full DELETE leaves them stale). A failure only produces a warning. On PostgreSQL 11 a non-owner gets a silent warning and a success, so the summary says "ANALYZE enviado", not "statistics updated".
+- Batch error labels ("Lote N (a-b)") count statements, and statement 1 is the DELETE.
 
 ## 6. Record Selection
 
