@@ -17,10 +17,10 @@ Scope: module `src/modules/coverage-loads/`, part 2 (`indicators/`). The SHP loa
 
 ## Writing the history
 - AC-10: One connection, one transaction (`BEGIN`..`COMMIT`); any error -> `ROLLBACK`, previous rows stay.
-- AC-11: `public.indicadores_lte` is truncated once and filled with the parsed rows of all cuts of the run (`fechaact` as `YYYY-MM-DD` text per row, `fuente`, `nombloc`, `nombdepto`, `cobertura_lte` as in file, `porcentaje` text) in the same transaction; the replace statement runs once (it replaces every date present in staging).
+- AC-11: `public.indicadores_lte` is emptied once (`DELETE FROM`, the load role has no TRUNCATE privilege) and filled with the parsed rows of all cuts of the run (`fechaact` as `YYYY-MM-DD` text per row, `fuente`, `nombloc`, `nombdepto`, `cobertura_lte` as in file, `porcentaje` text) in the same transaction; the replace statement runs once (it replaces every date present in staging).
 - AC-12: Existing history rows of every loaded `fechaact` are deleted and the new rows inserted with `ROUND(porcentaje::NUMERIC, 2)`, `UPPER(cobertura_lte)`, `fecha_historico` = current date, `usuario` = `fuente`; other dates untouched; reloading does not duplicate.
 - AC-13: `fuente` is the named constant `EXTERNO/F.Maresca` in `constants.ts`, not a UI field.
-- AC-14: Privileges (SELECT/INSERT/DELETE on history, TRUNCATE/INSERT on `public.indicadores_lte`) are checked up front with `has_table_privilege`; missing -> 409 with a clear message and zero writes.
+- AC-14: Privileges (SELECT/INSERT/DELETE on history, SELECT/INSERT/DELETE on `public.indicadores_lte`) are checked up front with `has_table_privilege`; missing -> 409 with a clear message and zero writes.
 - AC-15: Dates never pass through a JS `Date` (formatted in SQL or read as text).
 
 ## Reports

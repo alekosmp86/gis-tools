@@ -59,7 +59,7 @@ Los botones **Descartar archivo** (cancela y elimina el archivo subido) y **Revi
 Si alguna verificación falla, se marca en rojo y **no se puede iniciar**:
 
 - **Bloqueo:** otra sesión tiene tomada la carga de esa tabla. Espere a que termine y use **Revisar de nuevo**.
-- **Privilegios:** faltan permisos (por ejemplo `TRUNCATE` sobre la tabla, o `CREATE` sobre el esquema `public`). Pídaselos al administrador de la base de datos: vea [Preguntas frecuentes](preguntas-frecuentes.md).
+- **Privilegios:** faltan permisos (por ejemplo `DELETE` sobre la tabla, o `CREATE` sobre el esquema `public`). Pídaselos al administrador de la base de datos: vea [Preguntas frecuentes](preguntas-frecuentes.md).
 - **Tablas de trabajo previas** (en naranja): quedaron tablas auxiliares de una carga anterior. Es solo un aviso y no impide cargar.
 
 ## Seguir la carga

@@ -73,7 +73,7 @@ estado, fechacarga date, fecha_historico date default now()`. `ZONES`: `edificio
 - AC-11: `POST avance-ftth/load` (multipart: `connection`, files, `confirm`, optional `dryRun`) recomputes the plan; without
   `confirm`=`"true"` -> 400 (not needed for `dryRun`); with blockers -> 409 with the plan; otherwise it writes.
 - AC-12: Privileges checked up front with `shared/tablePrivileges` and again inside the write transaction: staging x2
-  (SELECT, INSERT, DELETE, TRUNCATE), `AVANCE` (SELECT, INSERT, UPDATE, TRUNCATE), `HISTORY` (SELECT, INSERT), `ZONES` and
+  (SELECT, INSERT, DELETE), `AVANCE` (SELECT, INSERT, UPDATE, DELETE; the role has no TRUNCATE privilege, so every write uses DELETE), `HISTORY` (SELECT, INSERT), `ZONES` and
   `CENTRAL_LIMITS` (SELECT). Missing -> refuse before any write. `shared/tablePrivileges` checks table grants only; inserting into
   the serial/identity tables also needs USAGE on their sequences (staging gid, avance gid, history id). Check it with
   `has_sequence_privilege(pg_get_serial_sequence(...), 'USAGE')` using a query inside `avance-ftth/services` (do NOT edit
@@ -82,12 +82,13 @@ estado, fechacarga date, fecha_historico date default now()`. `ZONES`: `edificio
   lock_timeout` from `WRITE_LOCK_TIMEOUT`, a statement timeout constant of this part). Any failure -> `ROLLBACK`, all four tables
   keep their previous content (the legacy committed the staging load before the rebuild and could leave staging replaced with the
   avance not rebuilt). Order, each step a named SQL constant:
-  0. right after the `SET LOCAL`s and before ANY read: `LOCK TABLE` staging INT then UDPEM (a read first would take ACCESS SHARE and
-     deadlock on the lock upgrade); then privileges and the plan are verified ONCE, under the locks (there is no pre-lock check);
-  1. `TRUNCATE` staging INT then UDPEM and insert the valid rows (AC-14);
+  0. right after the `SET LOCAL`s and before ANY read: `LOCK TABLE ... IN SHARE ROW EXCLUSIVE MODE` on staging INT, UDPEM, then the
+     Avance (loads serialise; readers of the Avance are NOT blocked and keep seeing the published data until COMMIT); then privileges
+     and the plan are verified ONCE, under the locks (there is no pre-lock check);
+  1. `DELETE FROM` staging INT, insert its valid rows, then the same for UDPEM (AC-14);
   2. delete junk: `DELETE ... WHERE conca LIKE 'CZONA%'` on both staging tables;
   3. copy the current `AVANCE` into `HISTORY` (AC-15);
-  4. `TRUNCATE AVANCE`;
+  4. `DELETE FROM AVANCE` (dead rows remain until the admins' vacuum);
   5. insert INT then UDPEM joined to `ZONES` (AC-16);
   6. `UPDATE AVANCE SET fuente = 'Externo/J.Pierri + WFS/SIGRA'` (named constant);
   7. verify (AC-18), then COMMIT.
@@ -105,7 +106,7 @@ estado, fechacarga date, fecha_historico date default now()`. `ZONES`: `edificio
   re-load that supersedes it; its predecessor is already archived). The skip is reported ("historial omitido: el Avance actual ya
   fue cargado hoy"). No DELETE privilege is needed. Option "legacy append" = always copy. Exact rule: skip iff `AVANCE` has rows
   AND every row has `fechacarga = current_date`; an empty or mixed-date Avance copies (empty copies nothing). It is evaluated with
-  the DB-side `current_date` inside the write transaction, before the TRUNCATE. This clock is unrelated to the injected server
+  the DB-side `current_date` inside the write transaction, before the DELETE of the Avance. This clock is unrelated to the injected server
   clock used for report file names (AC-22).
 - AC-16: Rebuild inserts, ported statement by statement from `Planificacion_avance_ftth_update_bd.ktr`: for INT then UDPEM,
   `INSERT INTO AVANCE (central, cable, zona, conca, edificio, empresa, fecha, director, ejecutor, estado, geom) SELECT s.central,
@@ -125,7 +126,7 @@ estado, fechacarga date, fecha_historico date default now()`. `ZONES`: `edificio
 - AC-19: `dryRun`=`"true"`: the SAME code path (including the reports of AC-21 computed inside the transaction) and then
   `ROLLBACK`; the result is flagged `dryRun: true`, nothing persists. Serial values are not rolled back: every dry run (and every
   failed load) burns `gid` values of the staging and Avance tables and `id` values of the history table. UI button "Probar sin guardar". It exists because the PostGIS
-  SQL cannot be tested without PostGIS; it takes locks on the target tables for its duration and the UI says so.
+  SQL cannot be tested without PostGIS; it takes SHARE ROW EXCLUSIVE locks on the target tables for its duration: other loads wait, readers are not blocked, and the UI says so.
 - AC-20: The result returns: per-file rows loaded/junk deleted, history rows copied (or skipped with the reason), avance rows
   inserted (INT, UDPEM, total), unmatched staging rows, the inserted rows broken down by `ZONES.situacion_distrito`
   (`Existente`, `Proyectado/Instalacion`, `Proyectado/Eliminacion`, `Proyectado/Modificacion`, ... computed with a SELECT of the
@@ -191,8 +192,7 @@ estado, fechacarga date, fecha_historico date default now()`. `ZONES`: `edificio
   `REJECTED_CSV_HEADER`. `csvFormat`/`rejectedCsv` stay per part on purpose: `indicators/` right-trims every field it writes,
   this part does not, so the behaviours differ.
 - AC-31: Module stays deletable (folder + registry line + `tests/unit/modules/coverage-loads/`).
-- AC-32: Docs: new section in `docs/tools/COVERAGE_LOADS_MODULE.md` (behaviour, endpoints, SQL order, privileges incl. TRUNCATE and
-  DELETE, differences from the GeoKettle job, unverified items), this spec copied to
+- AC-32: Docs: new section in `docs/tools/COVERAGE_LOADS_MODULE.md` (behaviour, endpoints, SQL order, privileges incl. DELETE (no TRUNCATE), differences from the GeoKettle job, unverified items), this spec copied to
   `docs/specifications/COVERAGE_LOADS_AVANCE_FTTH_SPEC.md`, index lines in `docs/README.md` and `CLAUDE.md`.
 - AC-33: Gauntlet green with real output: `modules:routes:check`, `lint` (0/0), `test`, `build`, `doctor`, `fallow`;
   `.claude/baseline.json` not regressed (record an exception if coverage moves).

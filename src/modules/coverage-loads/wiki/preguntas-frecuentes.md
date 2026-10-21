@@ -12,8 +12,8 @@ Antes de escribir, la herramienta comprueba que el usuario tenga los permisos ne
 | Etapa | Tabla | Permisos |
 |---|---|---|
 | **Indicadores LTE** | `historico.h_cobertura_lte_localidad` (histórico) | `SELECT`, `INSERT`, `DELETE` |
-| **Indicadores LTE** | `public.indicadores_lte` (tabla de trabajo) | `SELECT`, `TRUNCATE`, `INSERT` |
-| **Cargas SHP** | la tabla de destino (`public.lte`, `public.wcdma`, `public.nbiot` o `public.cobertura5g`) | `SELECT`, `INSERT`, `TRUNCATE` |
+| **Indicadores LTE** | `public.indicadores_lte` (tabla de trabajo) | `SELECT`, `INSERT`, `DELETE` |
+| **Cargas SHP** | la tabla de destino (`public.lte`, `public.wcdma`, `public.nbiot` o `public.cobertura5g`) | `SELECT`, `INSERT`, `DELETE` |
 | **Cargas SHP** | esquema `public` | `CREATE` (para las tablas de trabajo) |
 
 La carga de geometrías también necesita que la base tenga **PostGIS** instalado.
@@ -26,15 +26,19 @@ El histórico se actualiza **reemplazando el corte**, y eso requiere `DELETE`. P
 GRANT DELETE ON historico.h_cobertura_lte_localidad TO <usuario>;
 ```
 
-### Falta el privilegio TRUNCATE (Cargas SHP)
+### Falta el privilegio DELETE (Cargas SHP)
 
-En PostgreSQL, `TRUNCATE` es un permiso aparte: tener `INSERT`, `UPDATE` y `DELETE` **no lo incluye**. Pídalo al administrador:
+Reemplazar la tabla de destino requiere `DELETE` sobre ella. Pídalo al administrador:
 
 ```sql
-GRANT TRUNCATE ON public.lte TO <usuario>;
+GRANT DELETE ON public.lte TO <usuario>;
 ```
 
 (cambie `lte` por la tabla que corresponda).
+
+### Nota: reemplazar datos deja filas muertas
+
+Las cargas reemplazan los datos con `DELETE` (no se vacía la tabla de golpe), así que quedan filas muertas hasta que el administrador ejecute el `VACUUM`. Mientras tanto otras personas pueden seguir consultando; solo otras cargas esperan su turno.
 
 ## Indicadores LTE
 

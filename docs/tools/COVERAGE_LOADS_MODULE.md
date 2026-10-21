@@ -187,7 +187,7 @@ back and the previous rows stay.
    one's rows when it decides replace vs shrink. With no shortfall the privilege result from step 1 is
    reused after the lock, not queried again.
 3. Existing rows per date, then the shrink guard (`assertLoadable`) on the plan rebuilt with those counts.
-4. Writes, once for the whole run: `TRUNCATE public.indicadores_lte` once, then insert the valid rows of
+4. Writes, once for the whole run: `DELETE FROM public.indicadores_lte` once, then insert the valid rows of
    **all cuts** (oldest date first) into staging in one `INSERT` (`fechaact` per row as `YYYY-MM-DD` text,
    `fuente`, `nombloc`, `nombdepto`, `cobertura_lte` as in the file, `porcentaje` as text), then the
    replace statement once (it replaces every date present in staging):
@@ -207,7 +207,7 @@ ORDER BY il.nombdepto, il.nombloc
 
    This is the legacy statement 2, unchanged. `fuente`/`usuario` is the constant `EXTERNO/F.Maresca`
    (`FUENTE`). Inserts use `unnest` arrays, never JS `Date`.
-   The order is: `TRUNCATE` staging, `INSERT` staging (all cuts), replace statement, then the stored-rows
+   The order is: `DELETE` staging, `INSERT` staging (all cuts), replace statement, then the stored-rows
    count per cut (`storedRows`). Then `COMMIT`.
 
 The legacy statement 3 (`UPDATE ... SET fechaact = latest WHERE fechaact IS NULL`) is unreachable with
@@ -230,9 +230,10 @@ a corrected file restores the full cut with no duplicates. Limits:
 
 ### Staging table refresh
 
-`public.indicadores_lte` is truncated once and filled with the rows of all cuts of the run inside the same
-transaction, for parity with the legacy GeoKettle job (other consumers are unknown). `TRUNCATE` takes an
-exclusive lock, held until commit (seconds). After a run staging holds the rows of all cuts (for example 5
+`public.indicadores_lte` is emptied once (`DELETE FROM`, the role has no `TRUNCATE` privilege) and filled with
+the rows of all cuts of the run inside the same transaction, for parity with the legacy GeoKettle job (other
+consumers are unknown). The lock is `LOCK TABLE ... IN SHARE ROW EXCLUSIVE MODE`: loads serialise, readers
+are not blocked. `DELETE` leaves dead rows until the admins' vacuum. After a run staging holds the rows of all cuts (for example 5
 files -> 3075 rows).
 
 ## 5. Reports
@@ -269,7 +270,7 @@ shortfall (or a missing table) is a 409 with zero writes.
 | Table | Privileges |
 |---|---|
 | `historico.h_cobertura_lte_localidad` | `SELECT`, `INSERT`, `DELETE` |
-| `public.indicadores_lte` | `SELECT`, `TRUNCATE`, `INSERT` |
+| `public.indicadores_lte` | `SELECT`, `INSERT`, `DELETE` |
 
 > **DELETE on the history was never needed by the old GeoKettle job.** Its role may not hold it. A DBA may
 > have to grant it, for example in PROD:
@@ -344,7 +345,7 @@ never logged. Errors are `{ success:false, error }` in Spanish.
 
 Two-step rule: `plan` writes nothing; `start` refuses (409) unless the same checks pass again.
 
-`plan` checks: target table exists in `public` (`to_regclass`), `TRUNCATE` + `INSERT` + `SELECT` on it,
+`plan` checks: target table exists in `public` (`to_regclass`), `DELETE` + `INSERT` + `SELECT` on it,
 `CREATE` on schema `public`, PostGIS in `pg_extension`, leftover work tables (reported, never dropped),
 the advisory lock key looked up in `pg_locks` WITHOUT taking it, a plain `count(*)` of the target.
 `leftovers` are warnings; blockers (missing table, no PostGIS, lock held) and privilege shortfalls block.
@@ -543,7 +544,7 @@ statements, 4 h for COPY / subdivide / repair / swap; `lock_timeout` 30 s inside
 | `STAGING` | `DROP TABLE IF EXISTS shp_stage_<t>, shp_work_<t>` (leftovers of a dead run; we hold the lock), `CREATE UNLOGGED TABLE shp_stage_<t> (rec int, npoints int, geom geometry)`, then `COPY ... (rec, npoints, geom) FROM STDIN WITH (FORMAT binary)`. One tuple per record, the geometry field being the MultiPolygon EWKB (SRID 32721) streamed from the reader in 1 MiB chunks with backpressure. Verifies `count(*)` equals the records sent. |
 | `SUBDIVIDING` | `CREATE UNLOGGED TABLE shp_work_<t> (piece_id identity PK, rec, geom geometry(Geometry,32721))`; `INSERT ... ST_Subdivide(ST_SetSRID(geom,32721), 256)` in batches of at most 2 M raw vertices (a bigger record runs alone). |
 | `REPAIRING` | `UPDATE ... SET geom = ST_Multi(ST_CollectionExtract(ST_MakeValid(geom,'method=structure'),3))` in batches of 2000 pieces; pieces that end up empty are deleted. Then the **gates**. |
-| `SWAPPING` (LOAD only) | One transaction: `lock_timeout 30s`, `TRUNCATE public.<t>`, `INSERT (geom, fechaact, fuente, fechacarga) SELECT ... ORDER BY piece_id` (`fechaact` = file-name date, `fuente` = `EXTERNO/F.Maresca`, `fechacarga` = server `current_date`, all text `YYYY-MM-DD`), row-count check, `COMMIT`. A failure, a cancel or a mismatch rolls back: the old data stays. Skipped in TEST. |
+| `SWAPPING` (LOAD only) | One transaction: `lock_timeout 30s`, `LOCK TABLE public.<t> IN SHARE ROW EXCLUSIVE MODE`, `DELETE FROM public.<t>`, `INSERT (geom, fechaact, fuente, fechacarga) SELECT ... ORDER BY piece_id` (`fechaact` = file-name date, `fuente` = `EXTERNO/F.Maresca`, `fechacarga` = server `current_date`, all text `YYYY-MM-DD`), row-count check, `COMMIT`. A failure, a cancel or a mismatch rolls back: the old data stays. Skipped in TEST. |
 | `FINALIZING` | LOAD: `ANALYZE public.<t>` (a failure is only a warning). TEST: the comparison report. Both: drop the two work tables. Then `pg_advisory_unlock`. |
 
 Gates (evaluated at the end of `REPAIRING`, before anything can be swapped; any failure ends the job as
@@ -640,13 +641,13 @@ the rebuild (counted, not rejections); empty/`#N/A` `edificio` rows load and are
 ### SQL order (one connection, one transaction)
 
 `BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE`, `SET LOCAL lock_timeout`, `SET LOCAL statement_timeout`; privileges
-checked once, after `LOCK`ing both staging tables (the locks come first, before any read; the plan is verified under them); then
+checked once, after `LOCK TABLE ... IN SHARE ROW EXCLUSIVE MODE` on both staging tables and the Avance (the locks come first, before any read; the plan is verified under them); then
 
-1. `TRUNCATE` staging INT, insert its rows in batches of 1000 (`INSERT ... SELECT FROM unnest(...)`), same for UDPEM.
+1. `DELETE FROM` staging INT, insert its rows in batches of 1000 (`INSERT ... SELECT FROM unnest(...)`), same for UDPEM.
 2. `DELETE ... WHERE conca LIKE 'CZONA%'` on both.
 3. Copy `AVANCE` into `HISTORY` (legacy statement, old `fechacarga` kept). Skipped iff the Avance has rows and
    every one has `fechacarga = current_date` (DB clock): decision O2, a same-day re-load must not archive twice.
-4. `TRUNCATE AVANCE`.
+4. `DELETE FROM AVANCE`.
 5. For INT then UDPEM: the breakdown by `situacion_distrito` and the unmatched-key count (SELECTs), then the
    legacy `INSERT ... SELECT ... INNER JOIN zones ... GROUP BY ...` with `ST_Multi(geom)`.
 6. `UPDATE AVANCE SET fuente = 'Externo/J.Pierri + WFS/SIGRA'`.
@@ -671,13 +672,15 @@ still run. In `dryRun` they run inside the write transaction (each in a SAVEPOIN
 
 ### Privileges
 
-Staging x2: SELECT, INSERT, DELETE, TRUNCATE. `AVANCE`: SELECT, INSERT, UPDATE, TRUNCATE. `HISTORY`: SELECT, INSERT.
+Staging x2: SELECT, INSERT, DELETE. `AVANCE`: SELECT, INSERT, UPDATE, DELETE. `HISTORY`: SELECT, INSERT.
 `ZONES` and `CENTRAL_LIMITS`: SELECT. Plus USAGE on the sequences behind the staging `gid`, the Avance `gid` and
 the history `id`, checked with `has_sequence_privilege(pg_get_serial_sequence(...), 'USAGE')` (undetermined, e.g.
-no serial sequence, is not a blocker; the dry run catches it). TRUNCATE and DELETE are the ones that usually need a
-DBA `GRANT`. Both the plan and the dry run take locks on the Avance table: readers (QGIS) wait for the duration.
+no serial sequence, is not a blocker; the dry run catches it). DELETE is the one that usually needs a
+DBA `GRANT` (the role has no `TRUNCATE` privilege, so every write path uses `DELETE`). The locks are SHARE ROW
+EXCLUSIVE: they serialise loads but readers (QGIS) are not blocked. `DELETE` leaves dead rows until the admins'
+vacuum (bloat); an occasional `REINDEX` of the SHP spatial indexes is recommended.
 In a dry run each report gets `SET LOCAL statement_timeout = 60000` (`DRY_RUN_REPORT_STATEMENT_TIMEOUT_MS`) inside its
-SAVEPOINT, so the locks are held at most about a minute per report; a cancelled report (SQLSTATE `57014`) is an
+SAVEPOINT, so other loads wait at most about a minute per report; a cancelled report (SQLSTATE `57014`) is an
 ordinary failed report (warning, rollback to the savepoint, the rest continue). Post-COMMIT reports keep the 15 min
 `REPORT_STATEMENT_TIMEOUT_MS`.
 
