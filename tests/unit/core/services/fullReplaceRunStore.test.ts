@@ -18,10 +18,11 @@ const params = (password = "pw") => ({
   sourceColumns: ["id"],
   targetColumns: ["id"],
   mapping,
-  sequencesToReset: [],
+  sequences: [],
+  resetSequences: true,
 });
 
-const outcome = { sourceRows: 3, insertedRows: 3, errorCount: 0, errors: [], ignoredSourceColumns: [], targetModified: true, sequencesReset: [], analyze: { status: "ok" as const } };
+const outcome = { sourceRows: 3, insertedRows: 3, errorCount: 0, errors: [], ignoredSourceColumns: [], targetModified: true, sequencesAdjusted: [], analyze: { status: "ok" as const } };
 
 const deferred = <T>() => {
   let resolve!: (v: T) => void;
@@ -125,7 +126,8 @@ describe("fullReplaceRunStore", () => {
       const arg = runMock.mock.calls[0][0];
       expect(arg.password).toBe("s3cret");
       expect(arg.mapping).toBe(mapping);
-      expect(arg.sequencesToReset).toEqual([]);
+      expect(arg.sequences).toEqual([]);
+      expect(arg.resetSequences).toBe(true);
       expect(typeof arg.onProgress).toBe("function");
     });
 

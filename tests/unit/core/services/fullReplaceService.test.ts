@@ -20,13 +20,18 @@ import {
 } from "@/core/services/fullReplaceService";
 import { resolveInsertColumns, type ReplaceColumnMapping } from "@/core/services/replaceColumnMapping";
 import type { SequenceRef } from "@/core/services/replaceSequences";
+import { buildRepairSequenceStatement } from "@/core/services/sqlStatements";
 
 const sourceConfig = { table_name: "src", schema_name: "public" } as unknown as DbConfig;
 const targetConfig = { table_name: "dst", schema_name: "geo" } as unknown as DbConfig;
 
+const REPAIR_BASE_VALUE = 100;
+
 const okBatch = (script: string): ExecuteBatchResult => {
-  const count = script.split("\n").filter((l) => l.trim() !== "").length;
-  return { success: true, totalProcessed: count, affectedRows: count, errorCount: 0, errors: [], message: "ok" };
+  const lines = script.split("\n").filter((l) => l.trim() !== "");
+  const count = lines.length;
+  const base: ExecuteBatchResult = { success: true, totalProcessed: count, affectedRows: count, errorCount: 0, errors: [], message: "ok" };
+  return script.includes("pg_sequence_last_value") ? { ...base, selectResults: lines.map((_line, index) => REPAIR_BASE_VALUE + index) } : base;
 };
 
 const makeRows = (n: number) => Array.from({ length: n }, (_, i) => ({ id: i, name: `n${i}` }));
@@ -40,11 +45,16 @@ const fetchResult = (records: Array<Record<string, unknown>>, totalCount = recor
 
 const mapping: ReplaceColumnMapping = { sourceByTarget: { id: "id", name: "name" }, defaults: {} };
 
-const seqA: SequenceRef = { qualifiedLabel: "geo.a_seq", schema: "geo", name: "a_seq" };
-const seqB: SequenceRef = { qualifiedLabel: "geo.b_seq", schema: "geo", name: "b_seq" };
+const seqA: SequenceRef = { qualifiedLabel: "geo.a_seq", schema: "geo", name: "a_seq", columns: ["id"], mapped: false };
+const seqB: SequenceRef = { qualifiedLabel: "geo.b_seq", schema: "geo", name: "b_seq", columns: ["code"], mapped: false };
+const mappedSeq: SequenceRef = { qualifiedLabel: "geo.m_seq", schema: "geo", name: "m_seq", columns: ["id"], mapped: true };
 const ANALYZE_SCRIPT = 'ANALYZE "geo"."dst";';
-const RESET_A = 'ALTER SEQUENCE "geo"."a_seq" RESTART WITH 1;';
-const RESET_B = 'ALTER SEQUENCE "geo"."b_seq" RESTART WITH 1;';
+const RESET_A = `SELECT setval('"geo"."a_seq"'::regclass, 1, false);`;
+const RESET_B = `SELECT setval('"geo"."b_seq"'::regclass, 1, false);`;
+const MAPPED_RESET = `SELECT setval('"geo"."m_seq"'::regclass, 1, false);`;
+const repairOf = (sequence: SequenceRef): string =>
+  buildRepairSequenceStatement(sequence.schema, sequence.name, "geo", "dst", sequence.columns);
+const isRepairScript = (script: string): boolean => script.includes("pg_sequence_last_value");
 
 const params = (overrides: Record<string, unknown> = {}) => ({
   sourceConfig,
@@ -53,7 +63,8 @@ const params = (overrides: Record<string, unknown> = {}) => ({
   sourceColumns: ["id", "name"],
   targetColumns: ["id", "name"],
   mapping,
-  sequencesToReset: [] as SequenceRef[],
+  sequences: [] as SequenceRef[],
+  resetSequences: true,
   ...overrides,
 });
 
@@ -85,10 +96,10 @@ describe("buildReplaceStatements", () => {
       targetSrid: srid,
     });
 
-  it("should put TRUNCATE first and emit one INSERT per row", async () => {
+  it("should put DELETE first and emit one INSERT per row", async () => {
     const statements = await build(makeRows(3), mapping, ["id", "name"], { id: "integer", name: "text" });
     expect(statements).toHaveLength(4);
-    expect(statements[0]).toBe('TRUNCATE TABLE "geo"."dst";');
+    expect(statements[0]).toBe('DELETE FROM "geo"."dst";');
     expect(statements[1]).toBe('INSERT INTO "geo"."dst" ("id", "name") VALUES (0, \'n0\');');
   });
 
@@ -108,33 +119,55 @@ describe("buildReplaceStatements", () => {
       const empty = await buildWith([]);
       expect(empty).toEqual(without);
       expect(empty).toHaveLength(3);
-      expect(empty[0]).toBe('TRUNCATE TABLE "geo"."dst";');
+      expect(empty[0]).toBe('DELETE FROM "geo"."dst";');
     });
 
-    it("should emit TRUNCATE, then one reset, then the INSERTs for one sequence", async () => {
+    it("should emit DELETE, then one reset, then the INSERTs for one sequence", async () => {
       const statements = await buildWith([seqA]);
       expect(statements).toHaveLength(4);
-      expect(statements[0]).toBe('TRUNCATE TABLE "geo"."dst";');
+      expect(statements[0]).toBe('DELETE FROM "geo"."dst";');
       expect(statements[1]).toBe(RESET_A);
       expect(statements[2]).toMatch(/^INSERT INTO "geo"\."dst"/);
       expect(statements[3]).toMatch(/^INSERT INTO/);
     });
 
-    it("should emit TRUNCATE, then both resets in order, then the INSERTs for two sequences", async () => {
+    it("should emit DELETE, then both resets in order, then the INSERTs for two sequences", async () => {
       const statements = await buildWith([seqA, seqB]);
       expect(statements).toHaveLength(5);
-      expect(statements.slice(0, 3)).toEqual(['TRUNCATE TABLE "geo"."dst";', RESET_A, RESET_B]);
+      expect(statements.slice(0, 3)).toEqual(['DELETE FROM "geo"."dst";', RESET_A, RESET_B]);
       expect(statements.slice(3).every((st) => st.startsWith("INSERT INTO"))).toBe(true);
     });
 
-    it("should emit TRUNCATE and the resets even when the source is empty", async () => {
-      expect(await buildWith([seqA, seqB], 0)).toEqual(['TRUNCATE TABLE "geo"."dst";', RESET_A, RESET_B]);
+    it("should emit DELETE and the resets even when the source is empty", async () => {
+      expect(await buildWith([seqA, seqB], 0)).toEqual(['DELETE FROM "geo"."dst";', RESET_A, RESET_B]);
+    });
+
+    it("should emit no start reset for a sequence whose column is mapped from the source", async () => {
+      const statements = await buildWith([mappedSeq]);
+      expect(statements).toHaveLength(3);
+      expect(statements[0]).toBe('DELETE FROM "geo"."dst";');
+      expect(statements.some((statement) => statement.includes("setval"))).toBe(false);
+    });
+
+    it("should reset only the unmapped sequences when given a mix of mapped and unmapped ones", async () => {
+      const statements = await buildWith([mappedSeq, seqA], 1);
+      expect(statements).toEqual([
+        'DELETE FROM "geo"."dst";',
+        RESET_A,
+        `INSERT INTO "geo"."dst" ("id", "name") VALUES (0, 'n0');`,
+      ]);
+      expect(statements).not.toContain(MAPPED_RESET);
+    });
+
+    it("should never put the repair statement in the replace script", async () => {
+      const statements = await buildWith([seqA, mappedSeq]);
+      expect(statements.some(isRepairScript)).toBe(false);
     });
   });
 
-  it("should emit only TRUNCATE when source is empty", async () => {
+  it("should emit only DELETE when source is empty", async () => {
     const statements = await build([], mapping, ["id", "name"], {});
-    expect(statements).toEqual(['TRUNCATE TABLE "geo"."dst";']);
+    expect(statements).toEqual(['DELETE FROM "geo"."dst";']);
   });
 
   it("should default the schema to public when target schema is empty", async () => {
@@ -145,7 +178,7 @@ describe("buildReplaceStatements", () => {
       targetColumnTypes: { id: "integer" },
       targetSrid: 4326,
     });
-    expect(statements[0]).toBe('TRUNCATE TABLE "public"."dst";');
+    expect(statements[0]).toBe('DELETE FROM "public"."dst";');
     expect(statements[1]).toContain('INSERT INTO "public"."dst"');
   });
 
@@ -465,16 +498,16 @@ describe("runFullReplace", () => {
     expect(result.insertedRows).toBe(result.sourceRows);
   });
 
-  it("should send TRUNCATE first in the first call and split at the batch size", async () => {
+  it("should send DELETE first in the first call and split at the batch size", async () => {
     arrangeFetch(makeRows(FULL_REPLACE_BATCH_SIZE + 10));
     await runFullReplace(params());
     expect(mocks.executeSqlInChunks).toHaveBeenCalledTimes(3);
     const first = mocks.executeSqlInChunks.mock.calls[0][2] as string;
     const second = mocks.executeSqlInChunks.mock.calls[1][2] as string;
-    expect(first.startsWith('TRUNCATE TABLE "geo"."dst";')).toBe(true);
+    expect(first.startsWith('DELETE FROM "geo"."dst";')).toBe(true);
     expect(first.split("\n")).toHaveLength(FULL_REPLACE_BATCH_SIZE);
     expect(second.split("\n")).toHaveLength(11);
-    expect(second).not.toContain("TRUNCATE");
+    expect(second).not.toContain("DELETE");
   });
 
   it("should use a single insert call plus the ANALYZE call when statements fit exactly in one batch", async () => {
@@ -497,9 +530,9 @@ describe("runFullReplace", () => {
     const scripts = mocks.executeSqlInChunks.mock.calls.map((c) => c[2] as string);
     expect(scripts.map((s) => s.split("\n").length)).toEqual([500, 500, 201, 1]);
     expect(scripts[3]).toBe(ANALYZE_SCRIPT);
-    expect(scripts[0].startsWith("TRUNCATE")).toBe(true);
-    expect(scripts[1]).not.toContain("TRUNCATE");
-    expect(scripts[2]).not.toContain("TRUNCATE");
+    expect(scripts[0].startsWith("DELETE")).toBe(true);
+    expect(scripts[1]).not.toContain("DELETE");
+    expect(scripts[2]).not.toContain("DELETE");
     expect(mocks.executeSqlInChunks.mock.calls.slice(0, 3).every((c) => c[4] === FULL_REPLACE_BATCH_SIZE)).toBe(true);
   });
 
@@ -545,7 +578,7 @@ describe("runFullReplace", () => {
     expect(result.targetModified).toBe(true);
     expect(result.errorCount).toBe(1);
     expect(result.errors).toHaveLength(1);
-    expect(result.errors[0]).toContain("La tabla destino ya fue modificada");
+    expect(result.errors[0]).toContain("La tabla destino ya fue modificada (DELETE aplicado)");
     expect(result.errors[0]).toContain("connection lost");
     expect(result.insertedRows).toBe(499);
   });
@@ -559,7 +592,7 @@ describe("runFullReplace", () => {
     const result = await runFullReplace(params());
     expect(result.targetModified).toBe(true);
     expect(result.errorCount).toBe(1);
-    expect(result.errors[0]).toContain("La tabla destino ya fue modificada");
+    expect(result.errors[0]).toContain("La tabla destino ya fue modificada (DELETE aplicado)");
     expect(result.errors[0]).toContain("Error desconocido");
     expect(result.insertedRows).toBe(499 + 500);
   });
@@ -589,94 +622,334 @@ describe("runFullReplace", () => {
   });
 });
 
-describe("runFullReplace with sequence resets", () => {
+describe("runFullReplace with sequences", () => {
+  const REPAIR_FAILURE_PREFIX = "No se pudieron ajustar las secuencias";
   const scriptsOf = () => mocks.executeSqlInChunks.mock.calls.map((c) => c[2] as string);
-
-  it("should put TRUNCATE, every reset and the first inserts in the first call", async () => {
-    arrangeFetch(makeRows(3));
-    await runFullReplace(params({ sequencesToReset: [seqA, seqB] }));
-    const lines = scriptsOf()[0].split("\n");
-    expect(lines.slice(0, 3)).toEqual(['TRUNCATE TABLE "geo"."dst";', RESET_A, RESET_B]);
-    expect(lines).toHaveLength(6);
-    expect(lines.slice(3).every((l) => l.startsWith("INSERT INTO"))).toBe(true);
+  const replaceScripts = () => scriptsOf().filter((script) => script !== ANALYZE_SCRIPT && !isRepairScript(script));
+  const failedBatch = (errors: string[], totalProcessed = 500): ExecuteBatchResult => ({
+    success: false,
+    totalProcessed,
+    affectedRows: 0,
+    errorCount: errors.length,
+    errors,
+    message: "x",
   });
+  const failRepairWith = (result: ExecuteBatchResult | Error | string) => {
+    mocks.executeSqlInChunks.mockImplementation(async (_c: DbConfig, _p: string, script: string) => {
+      if (!isRepairScript(script)) return okBatch(script);
+      if (result instanceof Error || typeof result === "string") throw result;
+      return result;
+    });
+  };
 
-  it.each([
-    ["small", 3, 1],
-    ["small", 3, 2],
-    ["exactly one full batch", FULL_REPLACE_BATCH_SIZE - 3, 2],
-    ["exactly one full batch", FULL_REPLACE_BATCH_SIZE - 2, 1],
-    ["multi-batch", 1200, 2],
-    ["multi-batch", 1200, 1],
-  ])("should report insertedRows as statements minus header for a %s run (%i rows, %i sequences)", async (_label, rows, n) => {
-    arrangeFetch(makeRows(rows));
-    const result = await runFullReplace(params({ sequencesToReset: [seqA, seqB].slice(0, n) }));
-    expect(result.sourceRows).toBe(rows);
-    expect(result.insertedRows).toBe(rows);
-    expect(result.errorCount).toBe(0);
-    const insertCalls = scriptsOf().filter((s) => s !== ANALYZE_SCRIPT);
-    expect(insertCalls[0].split("\n").length).toBeLessThanOrEqual(FULL_REPLACE_BATCH_SIZE);
-    expect(insertCalls.reduce((sum, s) => sum + s.split("\n").length, 0)).toBe(rows + 1 + n);
-  });
+  describe("start reset header", () => {
+    it("should put DELETE, every reset and the first inserts in the first call", async () => {
+      arrangeFetch(makeRows(3));
+      await runFullReplace(params({ sequences: [seqA, seqB] }));
+      const lines = scriptsOf()[0].split("\n");
+      expect(lines.slice(0, 3)).toEqual(['DELETE FROM "geo"."dst";', RESET_A, RESET_B]);
+      expect(lines).toHaveLength(6);
+      expect(lines.slice(3).every((line) => line.startsWith("INSERT INTO"))).toBe(true);
+    });
 
-  it("should use exactly one insert call when TRUNCATE, resets and inserts total 500 statements", async () => {
-    arrangeFetch(makeRows(FULL_REPLACE_BATCH_SIZE - 3));
-    await runFullReplace(params({ sequencesToReset: [seqA, seqB] }));
-    expect(scriptsOf()).toHaveLength(2);
-    expect(scriptsOf()[0].split("\n")).toHaveLength(FULL_REPLACE_BATCH_SIZE);
-  });
+    it("should not reset a sequence whose column is mapped from the source", async () => {
+      arrangeFetch(makeRows(3));
+      await runFullReplace(params({ sequences: [mappedSeq, seqA] }));
+      const lines = scriptsOf()[0].split("\n");
+      expect(lines.slice(0, 2)).toEqual(['DELETE FROM "geo"."dst";', RESET_A]);
+      expect(scriptsOf()[0]).not.toContain(MAPPED_RESET);
+      expect(lines).toHaveLength(5);
+    });
 
-  it("should never repeat TRUNCATE or resets in later slices", async () => {
-    arrangeFetch(makeRows(1200));
-    await runFullReplace(params({ sequencesToReset: [seqA, seqB] }));
-    const [first, ...later] = scriptsOf().filter((s) => s !== ANALYZE_SCRIPT);
-    expect(first.split("\n")).toHaveLength(FULL_REPLACE_BATCH_SIZE);
-    expect(first).toContain(RESET_A);
-    expect(later.length).toBeGreaterThan(0);
-    later.forEach((slice) => {
-      expect(slice).not.toContain("TRUNCATE");
-      expect(slice).not.toContain("ALTER SEQUENCE");
+    it("should emit no setval in the replace script when resetSequences is false", async () => {
+      arrangeFetch(makeRows(3));
+      await runFullReplace(params({ sequences: [seqA, seqB], resetSequences: false }));
+      expect(replaceScripts().join("\n")).not.toContain("setval");
+      expect(scriptsOf()[0].split("\n")).toHaveLength(4);
+    });
+
+    it.each([
+      ["small, one unmapped", 3, [seqA]],
+      ["small, two unmapped", 3, [seqA, seqB]],
+      ["small, mapped and unmapped", 3, [mappedSeq, seqA]],
+      ["small, only mapped", 3, [mappedSeq]],
+      ["exactly one full batch, two unmapped", FULL_REPLACE_BATCH_SIZE - 3, [seqA, seqB]],
+      ["exactly one full batch, one unmapped", FULL_REPLACE_BATCH_SIZE - 2, [seqA]],
+      ["multi-batch, two unmapped", 1200, [seqA, seqB]],
+      ["multi-batch, mapped and unmapped", 1200, [mappedSeq, seqA]],
+    ])(
+      "should report insertedRows as statements minus header for a %s run (%i rows)",
+      async (_label, rows, sequences) => {
+        arrangeFetch(makeRows(rows));
+        const result = await runFullReplace(params({ sequences }));
+        const headerResets = sequences.filter((sequence) => !sequence.mapped).length;
+        expect(result.sourceRows).toBe(rows);
+        expect(result.insertedRows).toBe(rows);
+        expect(result.errorCount).toBe(0);
+        expect(replaceScripts()[0].split("\n").length).toBeLessThanOrEqual(FULL_REPLACE_BATCH_SIZE);
+        expect(replaceScripts().reduce((sum, script) => sum + script.split("\n").length, 0)).toBe(rows + 1 + headerResets);
+      }
+    );
+
+    it("should never repeat DELETE or resets in later slices", async () => {
+      arrangeFetch(makeRows(1200));
+      await runFullReplace(params({ sequences: [seqA, seqB] }));
+      const [first, ...later] = replaceScripts();
+      expect(first.split("\n")).toHaveLength(FULL_REPLACE_BATCH_SIZE);
+      expect(first).toContain(RESET_A);
+      expect(later.length).toBeGreaterThan(0);
+      later.forEach((slice) => {
+        expect(slice).not.toContain("DELETE");
+        expect(slice).not.toContain("setval");
+      });
     });
   });
 
-  it("should list the qualified labels in sequencesReset when the run finishes", async () => {
-    arrangeFetch(makeRows(3));
-    const result = await runFullReplace(params({ sequencesToReset: [seqA, seqB] }));
-    expect(result.sequencesReset).toEqual(["geo.a_seq", "geo.b_seq"]);
-  });
-
-  it("should list the labels in sequencesReset when a later batch fails (run reached batch 2+)", async () => {
-    arrangeFetch(makeRows(1200));
-    mocks.executeSqlInChunks
-      .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script))
-      .mockRejectedValueOnce(new Error("connection lost"));
-    const result = await runFullReplace(params({ sequencesToReset: [seqA] }));
-    expect(result.targetModified).toBe(true);
-    expect(result.sequencesReset).toEqual(["geo.a_seq"]);
-  });
-
-  it("should return an empty sequencesReset when no sequences were requested", async () => {
-    arrangeFetch(makeRows(3));
-    const result = await runFullReplace(params());
-    expect(result.sequencesReset).toEqual([]);
-  });
-
-  it("should report no sequences reset, skip ANALYZE and send nothing further when batch 1 fails", async () => {
-    arrangeFetch(makeRows(1200));
-    mocks.executeSqlInChunks.mockResolvedValueOnce({
-      success: false,
-      totalProcessed: 500,
-      affectedRows: 0,
-      errorCount: 1,
-      errors: ["Lote 1 (1-500): fail"],
-      message: "x",
+  describe("repair after the replace", () => {
+    it("should run the repair of every discovered sequence as its own call between the last insert call and ANALYZE", async () => {
+      arrangeFetch(makeRows(1200));
+      await runFullReplace(params({ sequences: [seqA, seqB], password: "secret" }));
+      const calls = mocks.executeSqlInChunks.mock.calls;
+      expect(calls).toHaveLength(5);
+      expect(calls[3][2]).toBe(`${repairOf(seqA)}\n${repairOf(seqB)}`);
+      expect(calls[3][0]).toBe(targetConfig);
+      expect(calls[3][1]).toBe("secret");
+      expect(calls[4][2]).toBe(ANALYZE_SCRIPT);
+      expect(calls.slice(0, 3).every((call) => !isRepairScript(call[2] as string))).toBe(true);
     });
-    const result = await runFullReplace(params({ sequencesToReset: [seqA, seqB] }));
-    expect(mocks.executeSqlInChunks).toHaveBeenCalledTimes(1);
-    expect(result.targetModified).toBe(false);
-    expect(result.sequencesReset).toEqual([]);
-    expect(result.analyze).toEqual({ status: "skipped" });
-    expect(result.insertedRows).toBe(0);
+
+    it("should repair mapped and unmapped sequences in discovery order", async () => {
+      arrangeFetch(makeRows(3));
+      await runFullReplace(params({ sequences: [mappedSeq, seqA] }));
+      expect(scriptsOf()[1]).toBe(`${repairOf(mappedSeq)}\n${repairOf(seqA)}`);
+    });
+
+    it("should repair a mapped-only sequence list even though no start reset runs", async () => {
+      arrangeFetch(makeRows(3));
+      await runFullReplace(params({ sequences: [mappedSeq] }));
+      expect(scriptsOf()).toHaveLength(3);
+      expect(scriptsOf()[0]).not.toContain("setval");
+      expect(scriptsOf()[1]).toBe(repairOf(mappedSeq));
+    });
+
+    it("should still repair every sequence when the reset checkbox is off", async () => {
+      arrangeFetch(makeRows(3));
+      await runFullReplace(params({ sequences: [seqA, mappedSeq], resetSequences: false }));
+      expect(scriptsOf()[1]).toBe(`${repairOf(seqA)}\n${repairOf(mappedSeq)}`);
+    });
+
+    it("should not send any repair call when there are no sequences", async () => {
+      arrangeFetch(makeRows(3));
+      const result = await runFullReplace(params());
+      expect(scriptsOf().some(isRepairScript)).toBe(false);
+      expect(result.sequencesAdjusted).toEqual([]);
+      expect(result).not.toHaveProperty("sequencesReset");
+    });
+
+    it("should list every repaired sequence in sequencesAdjusted with the value setval returned and whether it was reset to the start", async () => {
+      arrangeFetch(makeRows(3));
+      const result = await runFullReplace(params({ sequences: [mappedSeq, seqA, seqB] }));
+      expect(result.sequencesAdjusted).toEqual([
+        { qualifiedLabel: "geo.m_seq", nextValue: 100, resetToStart: false },
+        { qualifiedLabel: "geo.a_seq", nextValue: 101, resetToStart: true },
+        { qualifiedLabel: "geo.b_seq", nextValue: 102, resetToStart: true },
+      ]);
+    });
+
+    it("should flag resetToStart false for every sequence but still adjust when the reset checkbox is off", async () => {
+      arrangeFetch(makeRows(3));
+      const result = await runFullReplace(params({ sequences: [seqA], resetSequences: false }));
+      expect(result.sequencesAdjusted).toEqual([{ qualifiedLabel: "geo.a_seq", nextValue: 100, resetToStart: false }]);
+    });
+
+    it("should repair after a failing first batch, report the target unmodified and still adjust the sequences", async () => {
+      arrangeFetch(makeRows(1200));
+      mocks.executeSqlInChunks.mockResolvedValueOnce(failedBatch(["Lote 1 (1-500): fail"]));
+      const result = await runFullReplace(params({ sequences: [seqA, seqB] }));
+      expect(mocks.executeSqlInChunks).toHaveBeenCalledTimes(2);
+      expect(scriptsOf()[1]).toBe(`${repairOf(seqA)}\n${repairOf(seqB)}`);
+      expect(result.targetModified).toBe(false);
+      expect(result.sequencesAdjusted).toEqual([
+        { qualifiedLabel: "geo.a_seq", nextValue: 100, resetToStart: false },
+        { qualifiedLabel: "geo.b_seq", nextValue: 101, resetToStart: false },
+      ]);
+      expect(result.analyze).toEqual({ status: "skipped" });
+      expect(result.insertedRows).toBe(0);
+      expect(result.errors).toEqual(["Lote 1 (1-500): fail"]);
+    });
+
+    it("should repair after a later batch returned errors and still skip ANALYZE", async () => {
+      arrangeFetch(makeRows(1200));
+      mocks.executeSqlInChunks
+        .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script))
+        .mockResolvedValueOnce(failedBatch(["Lote 1 (1-500): violation"]))
+        .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script));
+      const result = await runFullReplace(params({ sequences: [seqA] }));
+      expect(scriptsOf()[3]).toBe(repairOf(seqA));
+      expect(scriptsContainAnalyze()).toBe(false);
+      expect(result.sequencesAdjusted).toEqual([{ qualifiedLabel: "geo.a_seq", nextValue: 100, resetToStart: true }]);
+      expect(result.targetModified).toBe(true);
+    });
+
+    it("should repair after a later batch call rejected", async () => {
+      arrangeFetch(makeRows(1200));
+      mocks.executeSqlInChunks
+        .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script))
+        .mockRejectedValueOnce(new Error("connection lost"));
+      const result = await runFullReplace(params({ sequences: [seqA] }));
+      expect(scriptsOf()[2]).toBe(repairOf(seqA));
+      expect(result.targetModified).toBe(true);
+      expect(result.sequencesAdjusted).toEqual([{ qualifiedLabel: "geo.a_seq", nextValue: 100, resetToStart: true }]);
+      expect(result.errors[0]).toContain("connection lost");
+    });
+
+    it("should attempt the repair and rethrow the original error when the first batch call rejects", async () => {
+      arrangeFetch(makeRows(3));
+      mocks.executeSqlInChunks.mockRejectedValueOnce(new Error("socket closed"));
+      await expect(runFullReplace(params({ sequences: [seqA] }))).rejects.toThrow("socket closed");
+      expect(mocks.executeSqlInChunks).toHaveBeenCalledTimes(2);
+      expect(scriptsOf()[1]).toBe(repairOf(seqA));
+    });
+
+    it("should rethrow the original first-batch error even when the repair attempt fails as well", async () => {
+      arrangeFetch(makeRows(3));
+      mocks.executeSqlInChunks
+        .mockRejectedValueOnce(new Error("socket closed"))
+        .mockRejectedValueOnce(new Error("repair also failed"));
+      await expect(runFullReplace(params({ sequences: [seqA] }))).rejects.toThrow("socket closed");
+    });
+
+    it("should not touch the database nor repair when the source is empty", async () => {
+      arrangeFetch([]);
+      await expect(runFullReplace(params({ sequences: [seqA, mappedSeq] }))).rejects.toThrow(/no tiene registros/);
+      expect(mocks.executeSqlInChunks).not.toHaveBeenCalled();
+    });
+
+    it("should not touch the database nor repair when the source read is incomplete", async () => {
+      arrangeFetch(makeRows(3), 5);
+      await expect(runFullReplace(params({ sequences: [seqA] }))).rejects.toThrow(/incompleta/);
+      expect(mocks.executeSqlInChunks).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("repair values", () => {
+    const withValues = (selectResults: unknown[]) =>
+      mocks.executeSqlInChunks.mockImplementation(async (_c: DbConfig, _p: string, script: string) =>
+        isRepairScript(script) ? { ...okBatch(script), selectResults } : okBatch(script)
+      );
+
+    it("should parse numeric strings returned by setval (bigint) into numbers", async () => {
+      arrangeFetch(makeRows(3));
+      withValues(["154186"]);
+      const result = await runFullReplace(params({ sequences: [seqA] }));
+      expect(result.sequencesAdjusted).toEqual([{ qualifiedLabel: "geo.a_seq", nextValue: 154186, resetToStart: true }]);
+      expect(typeof result.sequencesAdjusted[0].nextValue).toBe("number");
+    });
+
+    it("should map the returned values to the sequences in statement order", async () => {
+      arrangeFetch(makeRows(3));
+      withValues([7, 11]);
+      const result = await runFullReplace(params({ sequences: [seqA, mappedSeq] }));
+      expect(result.sequencesAdjusted).toEqual([
+        { qualifiedLabel: "geo.a_seq", nextValue: 7, resetToStart: true },
+        { qualifiedLabel: "geo.m_seq", nextValue: 11, resetToStart: false },
+      ]);
+    });
+
+    it("should report resetToStart false after a failed first batch because the load never happened", async () => {
+      arrangeFetch(makeRows(3));
+      mocks.executeSqlInChunks.mockResolvedValueOnce({
+        success: false, totalProcessed: 4, affectedRows: 0, errorCount: 1, errors: ["Lote 1 (1-4): fail"], message: "x",
+      });
+      const result = await runFullReplace(params({ sequences: [seqA] }));
+      expect(result.sequencesAdjusted).toEqual([{ qualifiedLabel: "geo.a_seq", nextValue: 100, resetToStart: false }]);
+    });
+
+    it.each([[[]], [[null]], [["abc"]], [[Number.NaN]]])(
+      "should treat a repair whose returned value is missing or not numeric (%j) as failed with an extra error line",
+      async (selectResults) => {
+        arrangeFetch(makeRows(3));
+        withValues(selectResults);
+        const result = await runFullReplace(params({ sequences: [seqA] }));
+        expect(result.sequencesAdjusted).toEqual([]);
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]).toContain("No se pudieron ajustar las secuencias");
+        expect(result.insertedRows).toBe(3);
+      }
+    );
+  });
+
+  describe("repair failure", () => {
+    it("should add one extra error line, keep the replace result and report no adjusted sequences when the repair returns errors", async () => {
+      arrangeFetch(makeRows(3));
+      failRepairWith(failedBatch(["Lote 1 (1-1): permission denied for sequence a_seq"], 1));
+      const result = await runFullReplace(params({ sequences: [seqA] }));
+      expect(result.insertedRows).toBe(3);
+      expect(result.sourceRows).toBe(3);
+      expect(result.targetModified).toBe(true);
+      expect(result.errorCount).toBe(1);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain(REPAIR_FAILURE_PREFIX);
+      expect(result.errors[0]).toContain("permission denied for sequence a_seq");
+      expect(result.sequencesAdjusted).toEqual([]);
+    });
+
+    it("should add the extra error line instead of throwing when the repair call rejects", async () => {
+      arrangeFetch(makeRows(3));
+      failRepairWith(new Error("connection lost"));
+      const result = await runFullReplace(params({ sequences: [seqA] }));
+      expect(result.insertedRows).toBe(3);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain(REPAIR_FAILURE_PREFIX);
+      expect(result.errors[0]).toContain("connection lost");
+      expect(result.sequencesAdjusted).toEqual([]);
+    });
+
+    it("should say Error desconocido when the repair rejects with a non-Error", async () => {
+      arrangeFetch(makeRows(3));
+      failRepairWith("weird");
+      const result = await runFullReplace(params({ sequences: [seqA] }));
+      expect(result.errors[0]).toContain(REPAIR_FAILURE_PREFIX);
+      expect(result.errors[0]).toContain("Error desconocido");
+    });
+
+    it("should still run ANALYZE when only the repair failed", async () => {
+      arrangeFetch(makeRows(3));
+      failRepairWith(new Error("denied"));
+      const result = await runFullReplace(params({ sequences: [seqA] }));
+      expect(scriptsContainAnalyze()).toBe(true);
+      expect(result.analyze).toEqual({ status: "ok" });
+    });
+
+    it("should append the repair error after the replace errors instead of masking them", async () => {
+      arrangeFetch(makeRows(1200));
+      mocks.executeSqlInChunks
+        .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script))
+        .mockResolvedValueOnce(failedBatch(["Lote 1 (1-500): violation"]))
+        .mockImplementationOnce(async (_c: DbConfig, _p: string, script: string) => okBatch(script))
+        .mockRejectedValueOnce(new Error("no update on sequence"));
+      const result = await runFullReplace(params({ sequences: [seqA] }));
+      expect(result.errors).toHaveLength(2);
+      expect(result.errors[0]).toBe("Lote 2 (501-1000): violation");
+      expect(result.errors[1]).toContain(REPAIR_FAILURE_PREFIX);
+      expect(result.errors[1]).toContain("no update on sequence");
+      expect(result.errorCount).toBe(2);
+      expect(result.insertedRows).toBe(498 + 499 + 202);
+      expect(result.sequencesAdjusted).toEqual([]);
+    });
+
+    it("should append the repair error after the first-batch error and keep the target unmodified", async () => {
+      arrangeFetch(makeRows(3));
+      mocks.executeSqlInChunks.mockImplementation(async (_c: DbConfig, _p: string, script: string) => {
+        if (isRepairScript(script)) throw new Error("denied");
+        return failedBatch(["Lote 1 (1-4): fail"], 4);
+      });
+      const result = await runFullReplace(params({ sequences: [seqA] }));
+      expect(result.targetModified).toBe(false);
+      expect(result.errors[0]).toBe("Lote 1 (1-4): fail");
+      expect(result.errors[1]).toContain(REPAIR_FAILURE_PREFIX);
+      expect(result.insertedRows).toBe(0);
+    });
   });
 });
 

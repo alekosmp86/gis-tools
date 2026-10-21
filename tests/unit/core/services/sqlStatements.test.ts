@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   buildAnalyzeStatement,
   buildQualifiedTableLabel,
+  buildRepairSequenceStatement,
   buildResetSequenceStatement,
-  buildTruncateStatement,
+  buildDeleteStatement,
   formatReplaceLiteral,
   quoteIdentifier,
   resolveSchemaName,
@@ -127,34 +128,96 @@ describe("sqlStatements", () => {
     });
   });
 
-  describe("buildTruncateStatement", () => {
-    it("should build a quoted TRUNCATE for schema and table", () => {
-      expect(buildTruncateStatement("geo", "parcels")).toBe('TRUNCATE TABLE "geo"."parcels";');
+  describe("buildDeleteStatement", () => {
+    it("should build a quoted DELETE FROM for schema and table", () => {
+      expect(buildDeleteStatement("geo", "parcels")).toBe('DELETE FROM "geo"."parcels";');
     });
 
     it.each([undefined, null, "", "  "])("should use public when schema is %j", (schema) => {
-      expect(buildTruncateStatement(schema as string | undefined | null, "t")).toBe('TRUNCATE TABLE "public"."t";');
+      expect(buildDeleteStatement(schema as string | undefined | null, "t")).toBe('DELETE FROM "public"."t";');
     });
 
     it("should double double-quotes in schema and table", () => {
-      expect(buildTruncateStatement('s"x', 't"y')).toBe('TRUNCATE TABLE "s""x"."t""y";');
+      expect(buildDeleteStatement('s"x', 't"y')).toBe('DELETE FROM "s""x"."t""y";');
     });
 
-    it("should never contain CASCADE", () => {
-      expect(buildTruncateStatement("geo", "parcels").toUpperCase()).not.toContain("CASCADE");
+    it("should never contain CASCADE, WHERE or TRUNCATE", () => {
+      const statement = buildDeleteStatement("geo", "parcels").toUpperCase();
+      expect(statement).not.toContain("CASCADE");
+      expect(statement).not.toContain("WHERE");
+      expect(statement).not.toContain("TRUNCATE");
     });
   });
   describe("buildResetSequenceStatement", () => {
-    it("should build a quoted ALTER SEQUENCE RESTART WITH 1", () => {
-      expect(buildResetSequenceStatement("s", "q")).toBe('ALTER SEQUENCE "s"."q" RESTART WITH 1;');
+    it("should build a setval to 1 with is_called false on the regclass literal", () => {
+      expect(buildResetSequenceStatement("s", "q")).toBe(`SELECT setval('"s"."q"'::regclass, 1, false);`);
     });
 
     it("should double double-quotes in schema and sequence names", () => {
-      expect(buildResetSequenceStatement('My"Schema', 'Q"x')).toBe('ALTER SEQUENCE "My""Schema"."Q""x" RESTART WITH 1;');
+      expect(buildResetSequenceStatement('My"Schema', 'Q"x')).toBe(
+        `SELECT setval('"My""Schema"."Q""x"'::regclass, 1, false);`
+      );
+    });
+
+    it("should double single quotes inside names so the text literal cannot be broken out of", () => {
+      expect(buildResetSequenceStatement("s'1", "q'; DROP TABLE x; --")).toBe(
+        `SELECT setval('"s''1"."q''; DROP TABLE x; --"'::regclass, 1, false);`
+      );
+    });
+
+    it("should handle both a double quote and a single quote in the same name", () => {
+      expect(buildResetSequenceStatement('a"b', `c"d'e`)).toBe(`SELECT setval('"a""b"."c""d''e"'::regclass, 1, false);`);
     });
 
     it("should preserve case and spaces inside quotes", () => {
-      expect(buildResetSequenceStatement("My Schema", "Seq")).toBe('ALTER SEQUENCE "My Schema"."Seq" RESTART WITH 1;');
+      expect(buildResetSequenceStatement("My Schema", "Seq")).toBe(`SELECT setval('"My Schema"."Seq"'::regclass, 1, false);`);
+    });
+
+    it("should not use ALTER SEQUENCE, which needs sequence ownership", () => {
+      expect(buildResetSequenceStatement("s", "q").toUpperCase()).not.toContain("ALTER");
+    });
+  });
+
+  describe("buildRepairSequenceStatement", () => {
+    it("should raise the sequence above the highest column value without lowering it below its current position", () => {
+      const statement = buildRepairSequenceStatement("s", "q", "geo", "parcels", ["id"]);
+      expect(statement.startsWith(`SELECT setval('"s"."q"'::regclass,`)).toBe(true);
+      expect(statement).toContain("GREATEST(");
+      expect(statement).toContain('max("id")');
+      expect(statement).toContain('FROM "geo"."parcels"');
+      expect(statement).toContain(`pg_sequence_last_value('"s"."q"'::regclass)`);
+      expect(statement.endsWith(", false);")).toBe(true);
+    });
+
+    it("should be a single line so the line-based executor sends it as one statement", () => {
+      expect(buildRepairSequenceStatement("s", "q", "geo", "t", ["a", "b"])).not.toMatch(/[\n\r]/);
+    });
+
+    it("should take the maximum over every column that shares the sequence", () => {
+      const statement = buildRepairSequenceStatement("s", "q", "geo", "t", ["a", "b"]);
+      expect(statement).toContain('max("a")');
+      expect(statement).toContain('max("b")');
+    });
+
+    it.each([undefined, null, "", "  "])("should read the table from public when its schema is %j", (schema) => {
+      const statement = buildRepairSequenceStatement("s", "q", schema as string | undefined | null, "t", ["id"]);
+      expect(statement).toContain('FROM "public"."t"');
+    });
+
+    it("should quote adversarial sequence, table and column names without breaking out of the literals", () => {
+      const statement = buildRepairSequenceStatement("s'1", `q"x`, 'g"s', `t'; DROP TABLE x; --`, [`c"1`]);
+      expect(statement).toContain(`setval('"s''1"."q""x"'::regclass,`);
+      expect(statement).toContain(`pg_sequence_last_value('"s''1"."q""x"'::regclass)`);
+      expect(statement).toContain('max("c""1")');
+      expect(statement).toContain(`FROM "g""s"."t'; DROP TABLE x; --"`);
+    });
+
+    it("should neither use ALTER SEQUENCE, TRUNCATE nor read the sequence relation with SELECT", () => {
+      const statement = buildRepairSequenceStatement("s", "q", "geo", "t", ["id"]).toUpperCase();
+      expect(statement).not.toContain("ALTER");
+      expect(statement).not.toContain("TRUNCATE");
+      expect(statement).not.toMatch(/FROM\s+"S"\."Q"/);
+      expect(statement).not.toContain("LAST_VALUE FROM");
     });
   });
 

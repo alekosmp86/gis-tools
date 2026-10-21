@@ -3,7 +3,7 @@ import type { ReactElement, ReactNode } from "react";
 import type { DbColumnMetadata, DbConfig } from "@/core/types/db";
 import { FullReplaceStep } from "@/components/tools/db-sync-common/FullReplaceStep";
 
-type Sequence = { qualifiedLabel: string; schema: string; name: string };
+type Sequence = { qualifiedLabel: string; schema: string; name: string; columns: string[]; mapped: boolean };
 
 const workflow = vi.hoisted(() => ({
   confirmText: "public.t",
@@ -93,10 +93,34 @@ describe("FullReplaceStep", () => {
 
   describe("sequence reset option", () => {
     const sequences: Sequence[] = [
-      { qualifiedLabel: "geo.a_seq", schema: "geo", name: "a_seq" },
-      { qualifiedLabel: "geo.b_seq", schema: "geo", name: "b_seq" },
+      { qualifiedLabel: "geo.a_seq", schema: "geo", name: "a_seq", columns: ["id"], mapped: false },
+      { qualifiedLabel: "geo.b_seq", schema: "geo", name: "b_seq", columns: ["code"], mapped: false },
     ];
+    const mappedSequence: Sequence = { qualifiedLabel: "geo.m_seq", schema: "geo", name: "m_seq", columns: ["pk"], mapped: true };
     const render = () => FullReplaceStep({ ...base, sourceConfig: config, targetConfig: config }) as ReactNode;
+
+    it("should not render the checkbox when every discovered sequence feeds a mapped column", () => {
+      workflow.sequenceDiscovery = { sequences: [mappedSequence], unparsedDefaults: [] };
+      const tree = render();
+      expect(findElements(tree, isCheckbox)).toHaveLength(0);
+      expect(flatten(tree).texts).not.toContain("Reiniciar secuencias del destino");
+    });
+
+    it("should still explain the automatic adjustment when every discovered sequence feeds a mapped column", () => {
+      workflow.sequenceDiscovery = { sequences: [mappedSequence], unparsedDefaults: [] };
+      const text = flatten(render()).texts.join(" ").replace(/\s+/g, " ");
+      expect(text).toContain("geo.m_seq");
+      expect(text).toContain("siempre se ajustan");
+      expect(text).toContain("id más alto");
+      expect(text).not.toContain("Se reiniciarán en 1");
+    });
+
+    it("should list only the default-generated sequences under the reset line and keep mapped ones out of it", () => {
+      workflow.sequenceDiscovery = { sequences: [sequences[0], mappedSequence], unparsedDefaults: [] };
+      const resetLine = flatten(render()).texts.join(" ").match(/Se reiniciarán en 1: (.*?)\.(?:\s|$)/);
+      expect(resetLine?.[1]).toContain("geo.a_seq");
+      expect(resetLine?.[1]).not.toContain("geo.m_seq");
+    });
 
     it("should not render the checkbox when there are no discoverable sequences", () => {
       const tree = render();
@@ -128,7 +152,7 @@ describe("FullReplaceStep", () => {
       expect(findElements(tree, isCheckbox)[0].props.checked).toBe(false);
       const text = flatten(tree).texts.join(" ");
       expect(text).toContain("no se reiniciarán");
-      expect(text).not.toContain("geo.a_seq");
+      expect(text).not.toContain("Se reiniciarán en 1");
     });
 
     it("should disable the checkbox while a run is in progress", () => {
@@ -146,14 +170,44 @@ describe("FullReplaceStep", () => {
       expect(calls).toEqual([false]);
     });
 
-    it("should show the shared-sequence and ownership hint when sequences exist", () => {
+    it("should show the shared-sequence and UPDATE-permission hint when sequences exist", () => {
       workflow.sequenceDiscovery = { sequences, unparsedDefaults: [] };
       const text = flatten(render()).texts.join(" ").replace(/\s+/g, " ");
       expect(text).toContain("otra tabla usa la misma secuencia");
       expect(text).toContain("colisionarán");
       expect(text).toContain("propietario");
-      expect(text).toContain("se revierte todo el primer lote");
+      expect(text).toContain("UPDATE");
       expect(text).toContain("desmarcar esta opción");
+    });
+
+    it("should list every discovered sequence, mapped or not, in the always-adjusted line", () => {
+      workflow.sequenceDiscovery = { sequences: [...sequences, mappedSequence], unparsedDefaults: [] };
+      const text = flatten(render()).texts.join(" ").replace(/\s+/g, " ");
+      expect(text).toContain("Se ajustarán tras el reemplazo: geo.a_seq, geo.b_seq, geo.m_seq.");
+    });
+
+    it("should explain that the reset applies only to default-generated ids and that the sequences are always adjusted afterwards", () => {
+      workflow.sequenceDiscovery = { sequences, unparsedDefaults: [] };
+      const text = flatten(render()).texts.join(" ").replace(/\s+/g, " ");
+      expect(text).toContain("por defecto");
+      expect(text).toContain("siempre se ajustan");
+      expect(text).toContain("id más alto");
+      expect(text).toContain("cualquier fallo");
+    });
+
+    it("should no longer claim that a failed first batch leaves the sequence reset", () => {
+      workflow.sequenceDiscovery = { sequences, unparsedDefaults: [] };
+      const text = flatten(render()).texts.join(" ").replace(/\s+/g, " ").toLowerCase();
+      expect(text).not.toContain("no se revierte");
+      expect(text).not.toContain("se revierte todo el primer lote");
+      expect(text).not.toContain("el reinicio de la secuencia");
+    });
+
+    it("should show the same adjustment explanation when the reset checkbox is unchecked", () => {
+      workflow.sequenceDiscovery = { sequences, unparsedDefaults: [] };
+      workflow.resetSequences = false;
+      const text = flatten(render()).texts.join(" ").replace(/\s+/g, " ");
+      expect(text).toContain("siempre se ajustan");
     });
 
     it("should not show the shared-sequence hint when there are no sequences", () => {
@@ -172,6 +226,7 @@ describe("FullReplaceStep", () => {
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain("id: nextval(foo)");
       expect(warnings[0]).toContain("pk: nextval(('a'||'b')::regclass)");
+      expect(warnings[0]).toContain("no se ajustarán");
     });
 
     it("should not show the unparsable-defaults warning when there are none", () => {
