@@ -29,7 +29,7 @@ import {
   LOCK_STAGING_SQL,
   UPDATE_AVANCE_FUENTE_SQL,
 } from "./rebuildQueries";
-import { mapSequentially } from "../sequentially";
+import { mapSequentially } from "../../../shared/sequentially";
 import { readAvanceState, readTotal } from "./runStateQueries";
 
 export interface RebuildOutcome {
