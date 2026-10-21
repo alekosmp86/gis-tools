@@ -50,3 +50,6 @@ next-env.d.ts
 
 #ai-toolkit (local evidence only — context, agents, hooks and the manifest are committed)
 /.claude/ai-toolkit/evidence
+
+# local scratch handoff between sessions
+handoff.md
