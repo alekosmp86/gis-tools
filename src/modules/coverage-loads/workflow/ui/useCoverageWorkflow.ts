@@ -12,10 +12,11 @@ import {
   WorkflowActionType,
   workflowReducer,
 } from "../domain/workflowState";
+import type { LoadType, StageIdsByLoadType } from "../domain/loadType";
 
-/** Binds the workflow reducer to the list of stage ids and exposes ready-made actions. */
-export function useCoverageWorkflow(stageIds: ReadonlyArray<string>) {
-  const [state, dispatch] = useReducer(workflowReducer, stageIds, createInitialWorkflow);
+/** Binds the workflow reducer to the stage ids of each load type and exposes ready-made actions. */
+export function useCoverageWorkflow(stageIdsByLoadType: StageIdsByLoadType) {
+  const [state, dispatch] = useReducer(workflowReducer, stageIdsByLoadType, createInitialWorkflow);
 
   const publishStageStatus = (stageId: string, status: StageStatus, outcome?: StageOutcome) =>
     dispatch({ type: WorkflowActionType.STAGE_STATUS, stageId, status, outcome });
@@ -26,6 +27,8 @@ export function useCoverageWorkflow(stageIds: ReadonlyArray<string>) {
     isAnyStageBusy: isAnyStageBusy(state),
     canSkip: (stageId: string) => canSkipStage(state, stageId),
     canUnskip: (stageId: string) => canUnskipStage(state, stageId),
+    selectLoadType: (loadType: LoadType) => dispatch({ type: WorkflowActionType.SELECT_LOAD_TYPE, loadType }),
+    editLoadType: () => dispatch({ type: WorkflowActionType.EDIT_LOAD_TYPE }),
     setConnectionField: (field: ConnectionField, value: string) =>
       dispatch({ type: WorkflowActionType.SET_CONNECTION_FIELD, field, value }),
     applyProfile: (values: ProfileValues) => dispatch({ type: WorkflowActionType.APPLY_PROFILE, values }),

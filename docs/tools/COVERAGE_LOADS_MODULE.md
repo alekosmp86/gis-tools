@@ -52,7 +52,8 @@ src/modules/coverage-loads/
     api/         one handler file per endpoint + handlers.ts (assembly)
     services/    plan repository, upload stream, spawn, cancel, sweep, log tail
   workflow/      the multi-stage shell (UI refactor, no new endpoints)
-    domain/      workflowState: pure reducer (phase CONNECTION|STAGES|RESULT, confirmed connection,
+    domain/      loadType (LoadType, stage ids per type), workflowState: pure reducer (phase
+                 LOAD_TYPE|CONNECTION|STAGES|RESULT, load type, confirmed connection,
                  connection revision, active stage, per-stage status + outcome)
     ui/          coverageStages (the data-driven stage list), CoverageWorkflow, WorkflowStepper,
                  StageView, WorkflowResultStep, ...
@@ -64,6 +65,10 @@ src/modules/coverage-loads/
 
 ### Workflow shell
 
+- First step "Tipo de carga": "Cobertura (3G, LTE, 5G, NBIOT)" (stages indicators, shp) or "FTTH" (stage
+  avance-ftth). Only the stages of the chosen type are mounted and shown in the result; switching type keeps the
+  connection and resets the stage progress; it is refused while a stage is working. `COVERAGE_STAGES` stays flat,
+  `LOAD_TYPE_STAGE_IDS` assigns each stage to one type.
 - One shared connection step (password in memory only). Confirming it unlocks the stages.
 - `COVERAGE_STAGES` (`workflow/ui/coverageStages.ts`) is the list of stages: `{ id, label, Icon, Panel,
   ResultExtras? }`. A panel receives `{ connection, connectionRevision, onStatusChange }`. Adding a stage

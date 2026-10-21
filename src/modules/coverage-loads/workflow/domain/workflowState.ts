@@ -9,13 +9,16 @@ import {
   type ProfileValues,
 } from "../../shared/domain/connectionState";
 import { StageStatus, type StageOutcome } from "../../shared/domain/stageContract";
+import type { LoadType, StageIdsByLoadType } from "./loadType";
 
 /**
- * State of the multi-stage workflow: one shared connection, then independent stages that can be
- * done in any order or skipped, then a combined result. Pure and free of React.
+ * State of the multi-stage workflow: a load type, one shared connection, then the independent
+ * stages of that type that can be done in any order or skipped, then a combined result. Pure and
+ * free of React.
  */
 
 export const WorkflowPhase = {
+  LOAD_TYPE: "LOAD_TYPE",
   CONNECTION: "CONNECTION",
   STAGES: "STAGES",
   RESULT: "RESULT",
@@ -30,6 +33,9 @@ export interface StageProgress {
 
 export interface WorkflowState {
   readonly phase: WorkflowPhase;
+  /** The chosen type of load; `null` until the first choice. */
+  readonly loadType: LoadType | null;
+  readonly stageIdsByLoadType: StageIdsByLoadType;
   /** The connection being edited in the form. */
   readonly connection: ConnectionPayload;
   /** The connection the stages work against; `null` until the first confirmation. */
@@ -41,6 +47,8 @@ export interface WorkflowState {
 }
 
 export const WorkflowActionType = {
+  SELECT_LOAD_TYPE: "SELECT_LOAD_TYPE",
+  EDIT_LOAD_TYPE: "EDIT_LOAD_TYPE",
   SET_CONNECTION_FIELD: "SET_CONNECTION_FIELD",
   APPLY_PROFILE: "APPLY_PROFILE",
   CONTINUE: "CONTINUE",
@@ -54,6 +62,8 @@ export const WorkflowActionType = {
 } as const;
 
 export type WorkflowAction =
+  | { readonly type: typeof WorkflowActionType.SELECT_LOAD_TYPE; readonly loadType: LoadType }
+  | { readonly type: typeof WorkflowActionType.EDIT_LOAD_TYPE }
   | {
       readonly type: typeof WorkflowActionType.SET_CONNECTION_FIELD;
       readonly field: ConnectionField;
@@ -76,20 +86,37 @@ export type WorkflowAction =
 
 const PENDING_PROGRESS: StageProgress = { status: StageStatus.PENDING, outcome: null };
 
-/** The first stage in the list is active by default; the order is never enforced afterwards. */
-export function createInitialWorkflow(stageIds: ReadonlyArray<string>): WorkflowState {
+function allStageIds(stageIdsByLoadType: StageIdsByLoadType): string[] {
+  return Object.values(stageIdsByLoadType).flat();
+}
+
+function pendingStages(stageIdsByLoadType: StageIdsByLoadType): Record<string, StageProgress> {
+  return Object.fromEntries(allStageIds(stageIdsByLoadType).map((stageId) => [stageId, PENDING_PROGRESS]));
+}
+
+/** Stage ids of the chosen type; empty while no type is chosen. */
+function chosenStageIds(state: WorkflowState): ReadonlyArray<string> {
+  return state.loadType === null ? [] : state.stageIdsByLoadType[state.loadType];
+}
+
+/** Starts at the type choice; the first stage of the first type is active until a type is chosen. */
+export function createInitialWorkflow(stageIdsByLoadType: StageIdsByLoadType): WorkflowState {
   return {
-    phase: WorkflowPhase.CONNECTION,
+    phase: WorkflowPhase.LOAD_TYPE,
+    loadType: null,
+    stageIdsByLoadType,
     connection: INITIAL_CONNECTION,
     confirmedConnection: null,
     connectionRevision: 0,
-    activeStageId: stageIds[0],
-    stages: Object.fromEntries(stageIds.map((stageId) => [stageId, PENDING_PROGRESS])),
+    activeStageId: allStageIds(stageIdsByLoadType)[0],
+    stages: pendingStages(stageIdsByLoadType),
   };
 }
 
 export function canContinue(state: WorkflowState): boolean {
-  return state.phase === WorkflowPhase.CONNECTION && isConnectionComplete(state.connection);
+  return (
+    state.phase === WorkflowPhase.CONNECTION && state.loadType !== null && isConnectionComplete(state.connection)
+  );
 }
 
 export function isAnyStageBusy(state: WorkflowState): boolean {
@@ -103,6 +130,27 @@ export function canSkipStage(state: WorkflowState, stageId: string): boolean {
 
 export function canUnskipStage(state: WorkflowState, stageId: string): boolean {
   return state.stages[stageId]?.status === StageStatus.SKIPPED;
+}
+
+/** Choosing another type drops the progress of the old one; choosing the same type again keeps it. */
+function selectLoadType(state: WorkflowState, loadType: LoadType): WorkflowState {
+  if (state.phase !== WorkflowPhase.LOAD_TYPE) return state;
+  const phase = state.confirmedConnection === null ? WorkflowPhase.CONNECTION : WorkflowPhase.STAGES;
+  const connection = state.confirmedConnection ?? state.connection;
+  if (loadType === state.loadType) return { ...state, phase, connection };
+  return {
+    ...state,
+    phase,
+    connection,
+    loadType,
+    activeStageId: state.stageIdsByLoadType[loadType][0],
+    stages: pendingStages(state.stageIdsByLoadType),
+  };
+}
+
+function reopenLoadType(state: WorkflowState): WorkflowState {
+  if (state.phase === WorkflowPhase.LOAD_TYPE || isAnyStageBusy(state)) return state;
+  return { ...state, phase: WorkflowPhase.LOAD_TYPE };
 }
 
 function editConnection(state: WorkflowState, connection: ConnectionPayload): WorkflowState {
@@ -123,12 +171,15 @@ function confirmConnection(state: WorkflowState): WorkflowState {
 }
 
 function reopenConnection(state: WorkflowState): WorkflowState {
-  if (state.phase === WorkflowPhase.CONNECTION || isAnyStageBusy(state)) return state;
+  if (state.phase === WorkflowPhase.CONNECTION || state.phase === WorkflowPhase.LOAD_TYPE || isAnyStageBusy(state)) {
+    return state;
+  }
   return { ...state, phase: WorkflowPhase.CONNECTION };
 }
 
 function selectStage(state: WorkflowState, stageId: string): WorkflowState {
-  if (state.phase === WorkflowPhase.CONNECTION || !(stageId in state.stages)) return state;
+  const isStagePhase = state.phase === WorkflowPhase.STAGES || state.phase === WorkflowPhase.RESULT;
+  if (!isStagePhase || !chosenStageIds(state).includes(stageId)) return state;
   return { ...state, phase: WorkflowPhase.STAGES, activeStageId: stageId };
 }
 
@@ -136,9 +187,9 @@ function setStageProgress(state: WorkflowState, stageId: string, progress: Stage
   return { ...state, stages: { ...state.stages, [stageId]: progress } };
 }
 
-/** The next stage in order that still has work to do, searching after `stageId` and then from the start. */
+/** The next stage of the chosen type that still has work to do, searching after `stageId` and then from the start. */
 function nextOpenStageId(state: WorkflowState, stageId: string): string | null {
-  const ids = Object.keys(state.stages);
+  const ids = chosenStageIds(state);
   const start = ids.indexOf(stageId);
   const ordered = [...ids.slice(start + 1), ...ids.slice(0, start)];
   return ordered.find((id) => state.stages[id].status === StageStatus.PENDING) ?? null;
@@ -171,6 +222,10 @@ function publishStageStatus(
 
 export function workflowReducer(state: WorkflowState, action: WorkflowAction): WorkflowState {
   switch (action.type) {
+    case WorkflowActionType.SELECT_LOAD_TYPE:
+      return selectLoadType(state, action.loadType);
+    case WorkflowActionType.EDIT_LOAD_TYPE:
+      return reopenLoadType(state);
     case WorkflowActionType.SET_CONNECTION_FIELD:
       return editConnection(state, withConnectionField(state.connection, action.field, action.value));
     case WorkflowActionType.APPLY_PROFILE:

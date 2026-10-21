@@ -454,7 +454,7 @@ describe("module structure (AC-29, AC-30)", () => {
 
   it("should keep SHP code only under shp/ (plus the allowed wiring files, the stage registry and the generated shp routes)", () => {
     // Arrange
-    const ALLOWED_OUTSIDE_SHP = ["manifest.ts", "module.routes.json", "api/handlers.ts", "shared/httpResponses.ts", "workflow/ui/coverageStages.ts"];
+    const ALLOWED_OUTSIDE_SHP = ["manifest.ts", "module.routes.json", "api/handlers.ts", "shared/httpResponses.ts", "workflow/domain/coverageStageId.ts", "workflow/domain/loadType.ts","workflow/ui/coverageStages.ts"];
     const outsideShp = moduleFiles.map(toName).filter((name) => !name.startsWith("shp/"));
     const pagePaths = listFiles(PAGE_DIR).map((path) => relative(PAGE_DIR, path));
 

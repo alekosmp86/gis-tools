@@ -66,6 +66,7 @@ async function fillConnection(page: Page): Promise<void> {
 
 async function openWorkflow(page: Page): Promise<void> {
   await page.goto(TOOL_URL);
+  await page.getByRole("radio", { name: /Cobertura/ }).check();
   await expectHeading(page, HEADINGS.connection);
 }
 

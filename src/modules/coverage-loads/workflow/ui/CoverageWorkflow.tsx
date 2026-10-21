@@ -2,8 +2,10 @@
 
 import React from "react";
 import { CoverageConnectionForm } from "../../shared/ui/CoverageConnectionForm";
+import { LOAD_TYPE_STAGE_IDS, stagesForLoadType } from "../domain/loadType";
 import { WorkflowPhase } from "../domain/workflowState";
 import { COVERAGE_STAGES } from "./coverageStages";
+import { LoadTypeStep } from "./LoadTypeStep";
 import { buildStepperEntries } from "./stepperEntries";
 import { StageView } from "./StageView";
 import { useCoverageWorkflow } from "./useCoverageWorkflow";
@@ -11,18 +13,19 @@ import { WorkflowResultStep } from "./WorkflowResultStep";
 import { WorkflowStepCard } from "./WorkflowStepCard";
 import { WorkflowStepper } from "./WorkflowStepper";
 
-const STAGE_IDS = COVERAGE_STAGES.map((stage) => stage.id);
-
 /**
- * The workflow shell: one shared connection, independent stages that can be skipped, and a
- * combined result. Stage panels stay mounted once the connection is confirmed.
+ * The workflow shell: a load type, one shared connection, the independent stages of that type
+ * (which can be skipped) and a combined result. The panels of the chosen type stay mounted once
+ * the connection is confirmed.
  */
 export const CoverageWorkflow: React.FC = () => {
-  const workflow = useCoverageWorkflow(STAGE_IDS);
+  const workflow = useCoverageWorkflow(LOAD_TYPE_STAGE_IDS);
   const { state } = workflow;
   const { confirmedConnection } = state;
+  const chosenStages = stagesForLoadType(COVERAGE_STAGES, state.stageIdsByLoadType, state.loadType);
 
   const stepperEntries = buildStepperEntries(state, COVERAGE_STAGES, {
+    editLoadType: workflow.editLoadType,
     editConnection: workflow.editConnection,
     selectStage: workflow.selectStage,
     goToResult: workflow.goToResult,
@@ -31,6 +34,9 @@ export const CoverageWorkflow: React.FC = () => {
   return (
     <>
       <WorkflowStepper entries={stepperEntries} />
+      {state.phase === WorkflowPhase.LOAD_TYPE && (
+        <LoadTypeStep selected={state.loadType} onSelect={workflow.selectLoadType} />
+      )}
       {state.phase === WorkflowPhase.CONNECTION && (
         <WorkflowStepCard title="Conexión a la base de datos">
           <CoverageConnectionForm
@@ -43,7 +49,7 @@ export const CoverageWorkflow: React.FC = () => {
         </WorkflowStepCard>
       )}
       {confirmedConnection &&
-        COVERAGE_STAGES.map((stage) => (
+        chosenStages.map((stage) => (
           <StageView
             key={stage.id}
             stage={stage}
@@ -60,7 +66,7 @@ export const CoverageWorkflow: React.FC = () => {
         ))}
       {confirmedConnection && state.phase === WorkflowPhase.RESULT && (
         <WorkflowResultStep
-          stages={COVERAGE_STAGES}
+          stages={chosenStages}
           progress={state.stages}
           connection={confirmedConnection}
           onBack={workflow.backToStages}

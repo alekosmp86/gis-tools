@@ -8,11 +8,9 @@ import { IndicatorsPanel } from "../../indicators/ui/IndicatorsPanel";
 import { ReportDownloads } from "../../indicators/ui/ReportDownloads";
 import { ShpPanel } from "../../shp/ui/ShpPanel";
 
-export const CoverageStageId = {
-  INDICATORS: "indicators",
-  SHP: "shp",
-  AVANCE_FTTH: "avance-ftth",
-} as const;
+import { CoverageStageId } from "../domain/coverageStageId";
+
+export { CoverageStageId };
 
 export interface CoverageStage {
   readonly id: string;
