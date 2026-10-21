@@ -11,7 +11,7 @@ const baseResult: FullReplaceResult = {
   errors: [],
   ignoredSourceColumns: [],
   targetModified: true,
-  sequencesReset: [],
+  sequencesAdjusted: [],
   analyze: { status: "ok" },
 };
 
@@ -33,14 +33,64 @@ const render = (overrides: Partial<FullReplaceResult> = {}) =>
   alertsOf(FullReplaceSummary({ result: { ...baseResult, ...overrides } }) as ReactNode);
 
 describe("FullReplaceSummary", () => {
-  describe("sequences line", () => {
-    it("should list the reset sequences when some were reset", () => {
-      const alert = render({ sequencesReset: ["geo.a_seq", "geo.b_seq"] }).find((a) => a.text.startsWith("Secuencias reiniciadas"));
-      expect(alert).toEqual({ type: AlertType.INFO, text: "Secuencias reiniciadas en 1: geo.a_seq, geo.b_seq." });
+  describe("adjusted sequences lines", () => {
+    const line = (label: string, nextValue: number) => `Secuencia ${label} ajustada: el próximo id será ${nextValue}.`;
+    const sequenceAlerts = (overrides: Partial<FullReplaceResult>) =>
+      render(overrides).filter((alert) => alert.text.startsWith("Secuencia "));
+
+    it("should show one info line per adjusted sequence with the next id", () => {
+      const alerts = sequenceAlerts({
+        sequencesAdjusted: [
+          { qualifiedLabel: "coverage.technology_3g_gid_seq", nextValue: 154186, resetToStart: false },
+          { qualifiedLabel: "geo.b_seq", nextValue: 4, resetToStart: false },
+        ],
+      });
+      expect(alerts).toEqual([
+        { type: AlertType.INFO, text: line("coverage.technology_3g_gid_seq", 154186) },
+        { type: AlertType.INFO, text: line("geo.b_seq", 4) },
+      ]);
     });
 
-    it("should omit the sequences line when none were reset", () => {
-      expect(render({ sequencesReset: [] }).some((a) => a.text.includes("Secuencias reiniciadas"))).toBe(false);
+    it("should append the reset note when the sequence was reset to 1 before the load", () => {
+      const alerts = sequenceAlerts({
+        sequencesAdjusted: [{ qualifiedLabel: "geo.a_seq", nextValue: 11, resetToStart: true }],
+      });
+      expect(alerts).toEqual([
+        { type: AlertType.INFO, text: `${line("geo.a_seq", 11)} (se reinició en 1 antes de la carga).` },
+      ]);
+    });
+
+    it("should keep the reset note per sequence when reset and non-reset sequences are mixed", () => {
+      const alerts = sequenceAlerts({
+        sequencesAdjusted: [
+          { qualifiedLabel: "geo.a_seq", nextValue: 11, resetToStart: true },
+          { qualifiedLabel: "geo.m_seq", nextValue: 110, resetToStart: false },
+        ],
+      });
+      expect(alerts[0].text).toContain("(se reinició en 1 antes de la carga)");
+      expect(alerts[1].text).toBe(line("geo.m_seq", 110));
+    });
+
+    it("should render no sequence line when no sequence was adjusted", () => {
+      expect(sequenceAlerts({ sequencesAdjusted: [] })).toEqual([]);
+    });
+
+    it("should never claim the sequences ended reset at 1", () => {
+      const texts = render({
+        sequencesAdjusted: [{ qualifiedLabel: "geo.a_seq", nextValue: 11, resetToStart: true }],
+      }).map((alert) => alert.text);
+      expect(texts.some((text) => text.includes("reiniciadas en 1"))).toBe(false);
+    });
+
+    it("should show the lines even when the target was not modified because the first batch failed", () => {
+      const alerts = sequenceAlerts({
+        targetModified: false,
+        errorCount: 1,
+        errors: ["x"],
+        insertedRows: 0,
+        sequencesAdjusted: [{ qualifiedLabel: "geo.a_seq", nextValue: 4, resetToStart: false }],
+      });
+      expect(alerts).toEqual([{ type: AlertType.INFO, text: line("geo.a_seq", 4) }]);
     });
   });
 

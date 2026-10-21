@@ -222,7 +222,8 @@ describe("useFullReplaceWorkflow", () => {
         sourceColumns: ["id", "extra"],
         targetColumns: ["id"],
         mapping,
-        sequencesToReset: [],
+        sequences: [],
+        resetSequences: true,
       });
     });
 
@@ -241,11 +242,24 @@ describe("useFullReplaceWorkflow", () => {
       detail("seq_id", "nextval('parcels_seq_id_seq'::regclass)"),
       detail("other", "now()"),
     ];
-    const expectedSequence = { qualifiedLabel: "geo.parcels_seq_id_seq", schema: "geo", name: "parcels_seq_id_seq" };
+    const mappedSequence = {
+      qualifiedLabel: "geo.mapped_seq",
+      schema: "geo",
+      name: "mapped_seq",
+      columns: ["id"],
+      mapped: true,
+    };
+    const expectedSequence = {
+      qualifiedLabel: "geo.parcels_seq_id_seq",
+      schema: "geo",
+      name: "parcels_seq_id_seq",
+      columns: ["seq_id"],
+      mapped: false,
+    };
 
-    it("should discover sequences from target details excluding mapped columns", () => {
+    it("should discover all sequences from target details including mapped columns flagged as mapped", () => {
       const { result } = setup(target("geo"), source, seqDetails);
-      expect(result.current.sequenceDiscovery.sequences).toEqual([expectedSequence]);
+      expect(result.current.sequenceDiscovery.sequences).toEqual([mappedSequence, expectedSequence]);
       expect(result.current.sequenceDiscovery.unparsedDefaults).toEqual([]);
     });
 
@@ -254,29 +268,32 @@ describe("useFullReplaceWorkflow", () => {
       expect(result.current.resetSequences).toBe(true);
     });
 
-    it("should pass the discovered sequences to start when the checkbox is checked", () => {
+    it("should pass all discovered sequences and resetSequences true to start when the checkbox is checked", () => {
       const api = setup(target("geo"), source, seqDetails);
       fill(api);
       api.act(() => api.result.current.run());
       expect(startMock).toHaveBeenCalledOnce();
-      expect(startMock.mock.calls[0][0].sequencesToReset).toEqual([expectedSequence]);
+      expect(startMock.mock.calls[0][0].sequences).toEqual([mappedSequence, expectedSequence]);
+      expect(startMock.mock.calls[0][0].resetSequences).toBe(true);
     });
 
-    it("should pass an empty array to start when the checkbox is unchecked", () => {
+    it("should still pass the discovered sequences with resetSequences false when the checkbox is unchecked", () => {
       const api = setup(target("geo"), source, seqDetails);
       api.act(() => api.result.current.setResetSequences(false));
       expect(api.result.current.resetSequences).toBe(false);
       fill(api);
       api.act(() => api.result.current.run());
-      expect(startMock.mock.calls[0][0].sequencesToReset).toEqual([]);
+      expect(startMock.mock.calls[0][0].sequences).toEqual([mappedSequence, expectedSequence]);
+      expect(startMock.mock.calls[0][0].resetSequences).toBe(false);
     });
 
-    it("should pass an empty array to start when no sequences are discoverable", () => {
+    it("should pass an empty sequences array to start when no sequences are discoverable", () => {
       const api = setup(target("geo"), source, [detail("id", null), detail("other", "now()")]);
       expect(api.result.current.sequenceDiscovery.sequences).toEqual([]);
       fill(api);
       api.act(() => api.result.current.run());
-      expect(startMock.mock.calls[0][0].sequencesToReset).toEqual([]);
+      expect(startMock.mock.calls[0][0].sequences).toEqual([]);
+      expect(startMock.mock.calls[0][0].resetSequences).toBe(true);
     });
 
     it("should qualify unqualified sequences with public when the target schema is empty", () => {

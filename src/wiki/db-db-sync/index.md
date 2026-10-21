@@ -25,7 +25,7 @@ Según lo que necesite, elija uno de los dos modos de trabajo:
 
 - Los datos de conexión de las dos bases: servidor, puerto, base de datos, usuario y contraseña.
 - Saber el esquema y el nombre de la tabla de cada lado.
-- Un usuario con los permisos adecuados en la **tabla destino**: lectura y `UPDATE`/`INSERT` para el modo Comparar; `TRUNCATE` e `INSERT` para el Reemplazo completo.
+- Un usuario con los permisos adecuados en la **tabla destino**: lectura y `UPDATE`/`INSERT` para el modo Comparar; `DELETE` e `INSERT` para el Reemplazo completo (más `UPDATE` sobre sus secuencias si reinicia secuencias).
 - Una copia de seguridad de la tabla destino si los datos son importantes: las modificaciones **no se pueden deshacer** desde la herramienta.
 
 ## Recorrido general

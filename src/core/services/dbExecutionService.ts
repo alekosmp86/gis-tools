@@ -72,6 +72,7 @@ export async function executeSqlInChunks(
   let successCount = 0;
   let errorCount = 0;
   const errors: string[] = [];
+  const selectResults: unknown[] = [];
 
   const processBatch = async (batchIdx: number): Promise<void> => {
     if (batchIdx >= totalBatches) return;
@@ -86,6 +87,7 @@ export async function executeSqlInChunks(
       const affected = res.affectedRows ?? chunkStatements.length;
       totalAffectedRows += affected;
       successCount += chunkStatements.length;
+      if (res.selectResults) selectResults.push(...res.selectResults);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : "Error desconocido en lote";
       errorCount += chunkStatements.length;
@@ -124,5 +126,6 @@ export async function executeSqlInChunks(
     errorCount,
     errors,
     message: summaryMessage,
+    selectResults,
   };
 }

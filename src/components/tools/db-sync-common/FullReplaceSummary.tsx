@@ -56,12 +56,13 @@ export const FullReplaceSummary: React.FC<FullReplaceSummaryProps> = ({ result }
         />
       )}
 
-      {result.sequencesReset.length > 0 && (
+      {result.sequencesAdjusted.map(({ qualifiedLabel, nextValue, resetToStart }) => (
         <AlertMessage
+          key={qualifiedLabel}
           type={AlertType.INFO}
-          text={`Secuencias reiniciadas en 1: ${result.sequencesReset.join(", ")}.`}
+          text={`Secuencia ${qualifiedLabel} ajustada: el próximo id será ${nextValue}.${resetToStart ? " (se reinició en 1 antes de la carga)." : ""}`}
         />
-      )}
+      ))}
 
       {result.analyze.status === AnalyzeStatus.OK && (
         <AlertMessage type={AlertType.INFO} text="ANALYZE enviado a la tabla destino." />

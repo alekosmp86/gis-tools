@@ -6,6 +6,8 @@ export interface SequenceRef {
   qualifiedLabel: string;
   schema: string;
   name: string;
+  columns: string[];
+  mapped: boolean;
 }
 
 export interface SequenceDiscovery {
@@ -55,7 +57,10 @@ function splitIdentifierParts(text: string): string[] | null {
   return parts.length === 1 || parts.length === 2 ? parts : null;
 }
 
-function parseSequenceDefault(columnDefault: string, targetSchema: string): SequenceRef | null {
+function parseSequenceDefault(
+  columnDefault: string,
+  targetSchema: string
+): Pick<SequenceRef, "qualifiedLabel" | "schema" | "name"> | null {
   const match = NEXTVAL_PATTERN.exec(columnDefault);
   if (!match) return null;
   const parts = splitIdentifierParts(match[1].replace(/''/g, "'"));
@@ -78,10 +83,17 @@ export function discoverTargetSequences(
 
   targetDetails.forEach((detail) => {
     const columnDefault = detail.column_default;
-    if (mappedColumns.has(detail.column_name) || !columnDefault || !/nextval\s*\(/i.test(columnDefault)) return;
+    if (!columnDefault || !/nextval\s*\(/i.test(columnDefault)) return;
     const sequence = parseSequenceDefault(columnDefault, schema);
-    if (sequence) sequences.set(`${sequence.schema}\u0000${sequence.name}`, sequence);
-    else unparsedDefaults.push(`${detail.column_name}: ${columnDefault}`);
+    if (!sequence) {
+      unparsedDefaults.push(`${detail.column_name}: ${columnDefault}`);
+      return;
+    }
+    const key = `${sequence.schema}\u0000${sequence.name}`;
+    const existing = sequences.get(key) ?? { ...sequence, columns: [], mapped: false };
+    existing.columns.push(detail.column_name);
+    existing.mapped = existing.mapped || mappedColumns.has(detail.column_name);
+    sequences.set(key, existing);
   });
 
   return { sequences: Array.from(sequences.values()), unparsedDefaults };

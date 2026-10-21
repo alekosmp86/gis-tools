@@ -46,11 +46,16 @@ La pantalla es roja a propósito.
 
 ### Reiniciar secuencias del destino
 
-Si marca esta opción (viene marcada), los contadores automáticos (secuencias) de las columnas destino que **no** reciben datos del origen vuelven a empezar en 1, para que los identificadores nuevos arranquen desde cero. Tenga en cuenta:
+Si marca esta opción (viene marcada), los contadores automáticos (secuencias) de las columnas destino que **no** reciben datos del origen (ids generados por defecto) vuelven a empezar en 1 antes de la carga. Tenga en cuenta:
 
 - Si otra tabla usa la **misma secuencia**, también se reinicia y sus próximos identificadores podrían chocar.
-- Su usuario debe ser **propietario de la secuencia**. Si no lo es, desmarque la opción.
-- Si el reinicio falla, se revierte todo el primer lote y la tabla destino queda intacta.
+- Su usuario necesita permiso `UPDATE` sobre la secuencia (y `SELECT` sobre la tabla destino para calcular el id más alto). Si no lo tiene, el ajuste final falla y se informa como error.
+
+### Ajuste final de secuencias
+
+Al terminar, **siempre se ajusta** cada secuencia de la tabla destino, tanto si la columna se carga desde el origen como si no, y sea cual sea el resultado (éxito, fallo del primer lote o de un lote posterior). El próximo id queda por encima del **id más alto** que hay en la tabla y nunca por debajo de lo que la secuencia ya entregó. Así, un `INSERT` posterior sin id no choca con las filas existentes. El resumen muestra el próximo id de cada secuencia.
+
+Limitación conocida: PostgreSQL no informa de un último valor para una secuencia que nunca se usó. Si esa secuencia tenía un inicio mayor que el id más alto + 1, puede quedar en el id más alto + 1. Es inofensivo para esta tabla y solo importa si otra tabla comparte la secuencia. El ajuste de secuencias tampoco es transaccional.
 
 ### Confirmar
 
@@ -64,9 +69,13 @@ El orden está pensado para proteger la tabla destino:
 
 1. **Primero se leen todos los registros del origen.** Solo se piden las columnas mapeadas. Si la lectura falla, el origen está vacío o no hay columnas mapeadas, el proceso se detiene y **la tabla destino queda intacta**.
 2. Se arman las sentencias `INSERT` en el navegador.
-3. Se ejecuta el primer lote: la sentencia `TRUNCATE` (vaciado, **sin** `CASCADE`) más los primeros 499 `INSERT`, todo en una sola transacción. Si ese lote falla, el vaciado se revierte y la tabla destino sigue como estaba.
+3. Se ejecuta el primer lote: la sentencia `DELETE` (borra todas las filas, sin `WHERE` ni `CASCADE`), los reinicios de secuencias y los primeros `INSERT`, todo en una sola transacción. Si ese lote falla, el borrado se revierte y la tabla destino recupera sus filas anteriores.
+
+> [!NOTE]
+> Las filas borradas quedan como espacio muerto hasta que los administradores ejecuten un vacuum.
 4. Los lotes siguientes (de 500 sentencias cada uno) se ejecutan solo si el primero tuvo éxito.
-5. Si hubo cero errores, se envía un `ANALYZE` a la tabla destino para actualizar las estadísticas del planificador.
+5. Se ajustan las secuencias (también si algo falló, mientras se haya tocado la base de datos).
+6. Si hubo cero errores en el reemplazo, se envía un `ANALYZE` a la tabla destino para actualizar las estadísticas del planificador.
 
 > [!NOTE]
 > Los valores se copian **tal cual** están en el origen (texto exacto de PostgreSQL), sin reinterpretar fechas ni números. Una cadena vacía hacia una columna numérica, de fecha, booleana o geométrica se guarda como `NULL`. Las geometrías se escriben con el tipo y el SRID de la columna destino. Si el origen tiene filas idénticas repetidas, **se copian todas**.
@@ -88,7 +97,7 @@ Al terminar aparece un resumen.
 ![Resumen de un reemplazo completo finalizado](images/12-reemplazo-resultado.png)
 
 - **Registros en origen**, **Registros insertados** y **Errores**. Estos números deben coincidir: si los registros insertados son menos que los del origen, se muestra una advertencia en lugar de un éxito.
-- Avisos informativos: columnas del origen ignoradas, secuencias reiniciadas y **ANALYZE enviado a la tabla destino**.
+- Avisos informativos: columnas del origen ignoradas, una línea por secuencia ajustada con su próximo id y **ANALYZE enviado a la tabla destino**.
 - Presione **Cerrar** para volver a la herramienta (solo se ofrece cuando el proceso terminó o falló).
 
 > [!TIP]
