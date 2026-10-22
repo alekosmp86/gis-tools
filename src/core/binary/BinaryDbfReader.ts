@@ -110,17 +110,21 @@ export class BinaryDbfReader {
     };
   }
 
+  public isDeleted(recordIndex: number): boolean {
+    const recordStart = this.header.headerLength + recordIndex * this.header.recordLength;
+    return this.uint8View[recordStart] === 0x2a;
+  }
+
   public readFieldValue(recordIndex: number, field: DbfFieldDescriptor): unknown {
     if (recordIndex < 0 || recordIndex >= this.header.recordCount) {
       return null;
     }
 
-    const recordStart = this.header.headerLength + recordIndex * this.header.recordLength;
-    const isDeleted = this.uint8View[recordStart] === 0x2a;
-    if (isDeleted) {
+    if (this.isDeleted(recordIndex)) {
       return null;
     }
 
+    const recordStart = this.header.headerLength + recordIndex * this.header.recordLength;
     const fieldStart = recordStart + field.byteOffsetInRecord;
     const fieldBytes = this.uint8View.subarray(fieldStart, fieldStart + field.length);
     const rawText = this.decoder.decode(fieldBytes).trim();

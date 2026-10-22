@@ -20,6 +20,7 @@ import {
   type ReplaceInsertColumn,
 } from "@/core/services/replaceColumnMapping";
 import type { DbConfig, ExecuteChunkProgress } from "@/core/types/db";
+import { AnalyzeStatus, type AnalyzeOutcome, type SequenceAdjustment } from "@/core/types/replace";
 
 export const FULL_REPLACE_BATCH_SIZE = 500;
 const BUILD_YIELD_EVERY = 2000;
@@ -39,24 +40,8 @@ export interface FullReplaceProgress {
   total: number;
 }
 
-export const AnalyzeStatus = {
-  OK: "ok",
-  FAILED: "failed",
-  SKIPPED: "skipped",
-} as const;
-
-type AnalyzeStatus = (typeof AnalyzeStatus)[keyof typeof AnalyzeStatus];
-
-export interface AnalyzeOutcome {
-  status: AnalyzeStatus;
-  message?: string;
-}
-
-export interface SequenceAdjustment {
-  qualifiedLabel: string;
-  nextValue: number;
-  resetToStart: boolean;
-}
+export { AnalyzeStatus };
+export type { AnalyzeOutcome, SequenceAdjustment };
 
 export interface FullReplaceResult {
   sourceRows: number;
