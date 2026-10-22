@@ -7,12 +7,23 @@ import {
   type ProgressCallback,
 } from "@/core/types/parsers";
 import { extractShapefileZip } from "@/core/binary/ZipShapefileExtractor";
+import { readZipEntryDates } from "@/core/binary/zipEntryDates";
+import { pickDatasetModifiedAt } from "@/core/services/fileDateSuggestion";
 import { BinaryDbfReader } from "@/core/binary/BinaryDbfReader";
 import { BinaryShpReader, ShapeType } from "@/core/binary/BinaryShpReader";
 import { MAX_MAP_PREVIEW_FEATURES } from "@/core/constants/mapConstants";
 import { PARSE_PROGRESS_CHUNK_SIZE } from "@/core/constants/parserConstants";
 import { yieldToMainThread } from "@/core/common/mainThreadYield";
 import { createProjectionConverter } from "@/core/spatial/ProjectionEngine";
+
+function toIsoString(date: Date | null): string | undefined {
+  if (date === null || Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
+}
+
+function resolveZipModifiedAt(rawBuffer: ArrayBuffer, fallback: Date | null): string | undefined {
+  return toIsoString(pickDatasetModifiedAt(readZipEntryDates(new Uint8Array(rawBuffer)), fallback));
+}
 
 function resolveShapeTypeName(shapeType: number): string {
   switch (shapeType) {
@@ -45,8 +56,10 @@ export class ShapefileParser implements ISpatialFileParser {
     const fileName = file.name;
     const fileSize = file.size;
     const rawBuffer = await file.arrayBuffer();
+    const fallbackModifiedAt = file.lastModified ? new Date(file.lastModified) : null;
 
     if (fileName.toLowerCase().endsWith(".zip")) {
+      const modifiedAt = resolveZipModifiedAt(rawBuffer, fallbackModifiedAt);
       const extractedPackage = await extractShapefileZip(rawBuffer);
 
       if (extractedPackage.dbfBuffer) {
@@ -123,6 +136,7 @@ export class ShapefileParser implements ISpatialFileParser {
           prjText: extractedPackage.prjText,
           cpgText: extractedPackage.cpgText,
           isLargeDataset,
+          modifiedAt,
         };
       }
 
@@ -135,13 +149,19 @@ export class ShapefileParser implements ISpatialFileParser {
         featureCollection = fallbackResult as FeatureCollection<Geometry, GeoJsonProperties>;
       }
 
-      return this.buildDatasetFromGeoJson(fileName, fileSize, featureCollection, onProgress);
+      return this.buildDatasetFromGeoJson(fileName, fileSize, featureCollection, modifiedAt, onProgress);
     }
 
     if (fileName.toLowerCase().endsWith(".json") || fileName.toLowerCase().endsWith(".geojson")) {
       const text = new TextDecoder().decode(rawBuffer);
       const featureCollection = JSON.parse(text) as FeatureCollection<Geometry, GeoJsonProperties>;
-      return this.buildDatasetFromGeoJson(fileName, fileSize, featureCollection, onProgress);
+      return this.buildDatasetFromGeoJson(
+        fileName,
+        fileSize,
+        featureCollection,
+        toIsoString(fallbackModifiedAt),
+        onProgress
+      );
     }
 
     throw new Error("Formato no soportado. Por favor suba un archivo .zip (SHP+DBF) o .geojson.");
@@ -151,6 +171,7 @@ export class ShapefileParser implements ISpatialFileParser {
     fileName: string,
     fileSize: number,
     featureCollection: FeatureCollection<Geometry, GeoJsonProperties>,
+    modifiedAt: string | undefined,
     onProgress?: ProgressCallback
   ): Promise<ParsedFileDataset> {
     if (!featureCollection || !featureCollection.features) {
@@ -211,6 +232,7 @@ export class ShapefileParser implements ISpatialFileParser {
       recordsMap,
       geojson: previewGeojson,
       isLargeDataset,
+      modifiedAt,
     };
   }
 }

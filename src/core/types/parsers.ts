@@ -25,6 +25,8 @@ export interface ParsedFileDataset {
   shpBuffer?: Uint8Array;
   /** Coordinate projection PRJ text */
   prjText?: string;
+  /** Dataset modification date as ISO 8601 (newest .shp/.dbf entry, else File.lastModified) */
+  modifiedAt?: string;
   /** Character encoding CPG text */
   cpgText?: string;
   /** Flag indicating dataset has >50k records and uses memory-optimized columnar storage */

@@ -9,5 +9,7 @@ export interface ParsedShapefileData {
   geometryType: string;
   attributes: string[];
   crs?: string;
+  prjText?: string;
+  modifiedAt?: string;
   geojson: FeatureCollection<Geometry, GeoJsonProperties>;
 }
