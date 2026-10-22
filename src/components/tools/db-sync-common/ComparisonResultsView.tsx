@@ -10,20 +10,65 @@ import { DiscrepanciesTable } from "./discrepancies-table/DiscrepanciesTable";
 import { SelectionSqlPatchDrawer } from "./sql-patch-drawer/SelectionSqlPatchDrawer";
 import { useDiscrepancySelection } from "./discrepancies-table/useDiscrepancySelection";
 import { ResultsControlsBar } from "./ResultsControlsBar";
-import { useDiscrepancyGeojson } from "@/hooks/useDiscrepancyGeojson";
 import { useDatasetComparison } from "@/hooks/useDatasetComparison";
 import { DiscrepancyFilter, ResultsViewTab } from "@/core/types/comparison";
 import type { ParsedFileDataset } from "@/core/types/parsers";
 import type { DbConfig } from "@/core/types/db";
 import type { ParsedShapefileData } from "@/core/types/shp";
-import type { ColumnMappingConfig, ComparisonSourceDescriptor } from "@/core/types/comparison";
+import type { ColumnMappingConfig, ComparisonProgress, ComparisonSourceDescriptor } from "@/core/types/comparison";
 import { resolveComparisonDescriptor } from "@/core/constants/comparisonDescriptors";
 import { ResyncBanner } from "./ResyncBanner";
+import { useDiscrepancyMapGeojson } from "./useDiscrepancyMapGeojson";
 import styles from "./ComparisonResultsView.module.css";
 
 const SpatialMapPreview = dynamic(
   () => import("@/ui-kit/components/SpatialMapPreview").then((m) => m.SpatialMapPreview),
   { ssr: false }
+);
+
+const ComparisonLoadingArea: React.FC<{ progress: ComparisonProgress }> = ({ progress }) => (
+  <div className={styles.loadingArea}>
+    {progress.phase !== "" ? (
+      <div className={styles.progressArea}>
+        <ProgressBar
+          phase={progress.phase}
+          current={progress.current}
+          total={progress.total}
+          pct={progress.pct}
+        />
+      </div>
+    ) : (
+      <>
+        <Loader2 size={36} className={styles.spin} />
+        <span>Consultando registros PostGIS...</span>
+      </>
+    )}
+  </div>
+);
+
+const DiscrepancyMapSection: React.FC<{ geojson: FeatureCollection; isVisible: boolean }> = ({
+  geojson,
+  isVisible,
+}) => (
+  <div className={isVisible ? undefined : styles.tabHidden}>
+    {geojson.features.length === 0 && (
+      <AlertMessage
+        type={AlertType.INFO}
+        text="No se encontraron discrepancias para el filtro seleccionado."
+      />
+    )}
+    <SpatialMapPreview
+      geojson={geojson}
+      title="MAPA DE DISCREPANCIAS ESPACIALES"
+      isVisible={isVisible}
+      /* The discrepancy map must show every difference found, so it is never capped.
+       * maxFeatures={null} disables static pre-slice, while neverCapViewportRender={true}
+       * prevents the viewport-windowing layer from truncating for density. Both together
+       * satisfy the "never capped" contract. */
+      maxFeatures={null}
+      neverCapViewportRender={true}
+    />
+  </div>
 );
 
 export interface ComparisonResultsViewProps {
@@ -81,37 +126,10 @@ export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
 
   const errorMessage = error ? error.message : null;
 
-  const showProgress = loading && progress.phase !== "";
   const hasGeojson = Boolean(fileDataset.geojson && fileDataset.geojson.features && fileDataset.geojson.features.length > 0);
 
-  const [hasActivatedMap, setHasActivatedMap] = useState<boolean>(false);
-  if (activeViewTab === ResultsViewTab.MAP && !hasActivatedMap) {
-    setHasActivatedMap(true);
-  }
-
+  const discrepancyGeojson = useDiscrepancyMapGeojson(summary, fileDataset, activeFilter, activeViewTab);
   const isMapActive = activeViewTab === ResultsViewTab.MAP;
-
-  // Hook encapsulating discrepancy GeoJSON feature collection creation (Lazy-evaluated only when Map tab is active)
-  const rawDiscrepancyGeojson = useDiscrepancyGeojson(summary, fileDataset, activeFilter, isMapActive);
-
-  const [discrepancyGeojsonCache, setDiscrepancyGeojsonCache] = useState<{
-    summary: typeof summary;
-    fileDataset: typeof fileDataset;
-    activeFilter: typeof activeFilter;
-    geojson: FeatureCollection;
-  } | null>(null);
-
-  if (
-    rawDiscrepancyGeojson !== null &&
-    (!discrepancyGeojsonCache ||
-      discrepancyGeojsonCache.summary !== summary ||
-      discrepancyGeojsonCache.fileDataset !== fileDataset ||
-      discrepancyGeojsonCache.activeFilter !== activeFilter)
-  ) {
-    setDiscrepancyGeojsonCache({ summary, fileDataset, activeFilter, geojson: rawDiscrepancyGeojson });
-  }
-
-  const discrepancyGeojson = hasActivatedMap ? (discrepancyGeojsonCache?.geojson ?? null) : null;
 
   const descriptor = resolveComparisonDescriptor({
     descriptor: customDescriptor,
@@ -122,25 +140,7 @@ export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
   return (
     <div className={styles.container}>
       {/* Loading State */}
-      {loading && (
-        <div className={styles.loadingArea}>
-          {showProgress ? (
-            <div className={styles.progressArea}>
-              <ProgressBar
-                phase={progress.phase}
-                current={progress.current}
-                total={progress.total}
-                pct={progress.pct}
-              />
-            </div>
-          ) : (
-            <>
-              <Loader2 size={36} className={styles.spin} />
-              <span>Consultando registros PostGIS...</span>
-            </>
-          )}
-        </div>
-      )}
+      {loading && <ComparisonLoadingArea progress={progress} />}
 
       {/* Error Alert */}
       {errorMessage && <AlertMessage type="error" text={errorMessage} />}
@@ -183,25 +183,7 @@ export const ComparisonResultsView: React.FC<ComparisonResultsViewProps> = ({
 
           {/* Map View with Color-Coded Discrepancies (Preserved in DOM to eliminate 500k layer teardown overhead) */}
           {hasGeojson && discrepancyGeojson && (
-            <div className={activeViewTab === ResultsViewTab.MAP ? undefined : styles.tabHidden}>
-              {discrepancyGeojson.features.length === 0 && (
-                <AlertMessage
-                  type={AlertType.INFO}
-                  text="No se encontraron discrepancias para el filtro seleccionado."
-                />
-              )}
-              <SpatialMapPreview
-                geojson={discrepancyGeojson}
-                title="MAPA DE DISCREPANCIAS ESPACIALES"
-                isVisible={activeViewTab === ResultsViewTab.MAP}
-                /* The discrepancy map must show every difference found, so it is never capped.
-                 * maxFeatures={null} disables static pre-slice, while neverCapViewportRender={true}
-                 * prevents the viewport-windowing layer from truncating for density. Both together
-                 * satisfy the "never capped" contract. */
-                maxFeatures={null}
-                neverCapViewportRender={true}
-              />
-            </div>
+            <DiscrepancyMapSection geojson={discrepancyGeojson} isVisible={isMapActive} />
           )}
 
           {/* SQL Patch Script Drawer (selected records only) */}

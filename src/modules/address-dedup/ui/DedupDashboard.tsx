@@ -14,7 +14,7 @@ import {
   parseProvinceId,
   toConnectionPayload,
 } from "../domain/provinceSelection";
-import type { DedupRequestPayload } from "../types";
+import type { DedupRequestPayload, ProvinceOption } from "../types";
 import { DedupConfigCard } from "./DedupConfigCard";
 import { DedupContextBar } from "./DedupContextBar";
 import { DedupLoadingCard } from "./DedupLoadingCard";
@@ -26,6 +26,20 @@ import { useDedupProvinces } from "./useDedupProvinces";
 /** The page this module owns, served at /tools/m/address-dedup. Analysis is read-only; removal is a separate confirmed flow. */
 
 const MISSING_ANALYSIS_MESSAGE = "Ejecute primero el análisis.";
+
+function resolveProvinceSelection(
+  provinceIdText: string,
+  provinceList: ReadonlyArray<ProvinceOption>
+): { provinceId: number; provinceName: string } | null {
+  const provinceId = parseProvinceId(provinceIdText);
+  if (provinceId === null) return null;
+  const provinceName = findProvinceName(provinceList, provinceId);
+  return provinceName === undefined ? null : { provinceId, provinceName };
+}
+
+function errorMessageOf(error: unknown): string | null {
+  return error instanceof Error ? error.message : null;
+}
 
 function buildPayload(
   config: DbConfig,
@@ -73,24 +87,21 @@ export const DedupDashboard: React.FC = () => {
   };
 
   const handleSubmit = () => {
-    const provinceId = parseProvinceId(provinceIdText);
-    const provinceName =
-      provinceId === null ? undefined : findProvinceName(provinces.provinces, provinceId);
-    if (provinceId === null || provinceName === undefined) {
+    const selection = resolveProvinceSelection(provinceIdText, provinces.provinces);
+    if (selection === null) {
       setValidationError(MISSING_PROVINCE_MESSAGE);
       return;
     }
 
     setValidationError(null);
-    setLastProvinceName(provinceName);
+    setLastProvinceName(selection.provinceName);
     runAnalysis(
-      buildPayload(config, provinceId, protectedSiblingRemovesLone, includeGroupsWithoutRemovals)
+      buildPayload(config, selection.provinceId, protectedSiblingRemovesLone, includeGroupsWithoutRemovals)
     );
   };
 
   const configErrorText = validationError ?? analysis.error?.message ?? null;
-  const exportErrorText =
-    exportMutation.error instanceof Error ? exportMutation.error.message : null;
+  const exportErrorText = errorMessageOf(exportMutation.error);
   const resultPayload = analysis.data ? lastPayload : null;
   const hasResult = resultPayload !== null;
   const isConfigVisible = !hasResult || isEditing;

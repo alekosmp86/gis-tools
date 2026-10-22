@@ -36,6 +36,7 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
   const targetDetailMap = new Map(targetDetails.map((detail) => [detail.column_name, detail]));
   const insertColumns = resolveInsertColumns(mapping, targetColumns);
   const missingRequired = findMissingRequiredColumns(insertColumns, targetDetails);
+  const missingRequiredSet = new Set(missingRequired);
   const ignoredSource = getIgnoredSourceColumns(insertColumns, sourceColumns);
   const unmappedTargets = targetColumns.filter((column) => !mapping.sourceByTarget[column]);
 
@@ -46,7 +47,7 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
           const detail = targetDetailMap.get(targetColumn);
           const selectedSource = mapping.sourceByTarget[targetColumn] ?? "";
           const isRequired = detail ? !detail.is_nullable && detail.column_default == null : false;
-          const isMissing = missingRequired.includes(targetColumn);
+          const isMissing = missingRequiredSet.has(targetColumn);
           const conflict = selectedSource
             ? hasTypeConflict(sourceTypes.get(selectedSource), detail?.data_type)
             : false;

@@ -13,51 +13,21 @@ export function useMapInstance(mapContainerNode: HTMLDivElement | null): {
   useEffect(() => {
     if (!mapContainerNode) return;
 
-    let map: L.Map | null = null;
-    let writeCenterAttributes: (() => void) | null = null;
-
     if (!mapInstanceRef.current) {
-      map = L.map(mapContainerNode, {
+      const map = L.map(mapContainerNode, {
         zoomControl: false,
         attributionControl: false,
       }).setView([-32.5, -56.0], 7);
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
 
-      const canvasRenderer = L.canvas({ padding: 0.5 });
-
       mapInstanceRef.current = map;
-      canvasRendererRef.current = canvasRenderer;
-
-      writeCenterAttributes = () => {
-        const center = map!.getCenter();
-        const container = map!.getContainer();
-        container.dataset.centerLat = String(center.lat);
-        container.dataset.centerLng = String(center.lng);
-      };
-      writeCenterAttributes();
-      map.on("moveend", writeCenterAttributes);
+      canvasRendererRef.current = L.canvas({ padding: 0.5 });
 
       setIsMapReady(true);
     }
 
-    let resizeObserver: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined") {
-      resizeObserver = new ResizeObserver(() => {
-        if (mapInstanceRef.current && mapContainerNode.offsetWidth > 0 && mapContainerNode.offsetHeight > 0) {
-          mapInstanceRef.current.invalidateSize();
-        }
-      });
-      resizeObserver.observe(mapContainerNode);
-    }
-
     return () => {
-      if (resizeObserver) {
-        resizeObserver.disconnect();
-      }
-      if (map && writeCenterAttributes) {
-        map.off("moveend", writeCenterAttributes);
-      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -66,6 +36,39 @@ export function useMapInstance(mapContainerNode: HTMLDivElement | null): {
       }
     };
   }, [mapContainerNode]);
+
+  useEffect(() => {
+    if (!mapContainerNode || typeof ResizeObserver === "undefined") return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapInstanceRef.current && mapContainerNode.offsetWidth > 0 && mapContainerNode.offsetHeight > 0) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    });
+    resizeObserver.observe(mapContainerNode);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [mapContainerNode]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!isMapReady || !map) return;
+
+    const writeCenterAttributes = () => {
+      const center = map.getCenter();
+      const container = map.getContainer();
+      container.dataset.centerLat = String(center.lat);
+      container.dataset.centerLng = String(center.lng);
+    };
+    writeCenterAttributes();
+    map.on("moveend", writeCenterAttributes);
+
+    return () => {
+      map.off("moveend", writeCenterAttributes);
+    };
+  }, [isMapReady, mapContainerNode]);
 
   return {
     mapInstanceRef,

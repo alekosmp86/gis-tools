@@ -4,6 +4,7 @@ import React from "react";
 import { formatNumber } from "@/core/common/ValueFormatter";
 import type { RejectedFileGroup } from "../domain/planView";
 import shared from "./AvanceShared.module.css";
+import { AvanceTable } from "./AvanceTable";
 import styles from "./RejectedFileTable.module.css";
 
 interface RejectedFileTableProps {
@@ -19,27 +20,18 @@ export const RejectedFileTable: React.FC<RejectedFileTableProps> = ({ group }) =
 
   return (
     <div className={styles.wrapper}>
-      <table className={shared.table}>
-        <caption>
-          {group.file}: {formatNumber(group.rows.length)} filas rechazadas listadas
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Línea</th>
-            <th scope="col">Texto</th>
-            <th scope="col">Motivo</th>
+      <AvanceTable
+        caption={`${group.file}: ${formatNumber(group.rows.length)} filas rechazadas listadas`}
+        headers={["Línea", "Texto", "Motivo"]}
+      >
+        {visibleRows.map((row) => (
+          <tr key={`${row.file}-${row.line}`}>
+            <td className={shared.numeric}>{row.line}</td>
+            <td className={styles.rawText}>{row.text}</td>
+            <td>{row.reason}</td>
           </tr>
-        </thead>
-        <tbody>
-          {visibleRows.map((row) => (
-            <tr key={`${row.file}-${row.line}`}>
-              <td className={shared.numeric}>{row.line}</td>
-              <td className={styles.rawText}>{row.text}</td>
-              <td>{row.reason}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        ))}
+      </AvanceTable>
       {hiddenCount > 0 && (
         <p className={styles.more}>y {formatNumber(hiddenCount)} más (descargue el CSV para verlas todas)</p>
       )}
