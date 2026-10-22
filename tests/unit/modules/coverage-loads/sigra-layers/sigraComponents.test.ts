@@ -5,9 +5,14 @@ import { INITIAL_CONNECTION } from "@/modules/coverage-loads/shared/domain/conne
 import { REQUIRED_LAYER_IDS, SigraLayerId } from "@/modules/coverage-loads/sigra-layers/constants";
 import { LAYER_GROUPS } from "@/modules/coverage-loads/sigra-layers/domain/layerGroups";
 import { SIGRA_LAYERS, getSigraLayer } from "@/modules/coverage-loads/sigra-layers/domain/layerRegistry";
+import { SigraFlowPhase, createInitialSigraFlow } from "@/modules/coverage-loads/sigra-layers/domain/sigraFlow";
+import { SigraLayerRow } from "@/modules/coverage-loads/sigra-layers/ui/SigraLayerRow";
 import { SigraLayerTable } from "@/modules/coverage-loads/sigra-layers/ui/SigraLayerTable";
 import { SigraLayersPanel } from "@/modules/coverage-loads/sigra-layers/ui/SigraLayersPanel";
+import { SigraResultRow } from "@/modules/coverage-loads/sigra-layers/ui/SigraResultRow";
 import { SigraResultTable } from "@/modules/coverage-loads/sigra-layers/ui/SigraResultTable";
+import shared from "@/modules/coverage-loads/sigra-layers/ui/SigraShared.module.css";
+import { useSigraLayersFlow } from "@/modules/coverage-loads/sigra-layers/ui/useSigraLayersFlow";
 import {
   LayerLoadStatus,
   LayerLoadStep,
@@ -15,6 +20,14 @@ import {
   type PlanLayer,
   type SigraPlan,
 } from "@/modules/coverage-loads/sigra-layers/types";
+
+const useFlowMock = vi.hoisted(() => vi.fn<typeof useSigraLayersFlow>());
+
+vi.mock("@/modules/coverage-loads/sigra-layers/ui/useSigraLayersFlow", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/coverage-loads/sigra-layers/ui/useSigraLayersFlow")>();
+  useFlowMock.mockImplementation(actual.useSigraLayersFlow);
+  return { ...actual, useSigraLayersFlow: useFlowMock };
+});
 
 const [ZONAS, LIMITE] = REQUIRED_LAYER_IDS;
 const OPTIONAL = SigraLayerId.CAMARAS;
@@ -314,6 +327,126 @@ describe("SigraResultTable (AC-3, AC-9)", () => {
   });
 });
 
+const LAYER_VARIACION_CELL = 4;
+const RESULT_VARIACION_CELL = 6;
+
+function cellOf(html: string, index: number): string {
+  return (html.match(/<td[^>]*>[\s\S]*?<\/td>/g) ?? [])[index] ?? "";
+}
+
+function variationCellOf(html: string, index: number): string {
+  return cellOf(html, index);
+}
+
+function variationTextOf(html: string, index: number): string {
+  return cellOf(html, index).replace(/<[^>]+>/g, "");
+}
+
+function inTable(row: React.ReactElement): string {
+  return renderToStaticMarkup(React.createElement("table", null, React.createElement("tbody", null, row)));
+}
+
+describe("Variación cell of SigraLayerRow", () => {
+  function renderLayerRow(layer: PlanLayer): string {
+    return inTable(
+      React.createElement(SigraLayerRow, { layer, isSelected: false, isLocked: false, onToggle: vi.fn() })
+    );
+  }
+
+  it("should show a plus-signed delta when the WFS count is above the table count", () => {
+    // Arrange
+    const layer = planLayer(OPTIONAL, { rowCount: 100, wfsCount: 150 });
+
+    // Act
+    const html = renderLayerRow(layer);
+
+    // Assert
+    expect(variationTextOf(html, LAYER_VARIACION_CELL)).toBe("+50");
+    expect(variationCellOf(html, LAYER_VARIACION_CELL)).toContain(shared.positive);
+  });
+
+  it("should show a minus-signed delta when the WFS count is below the table count", () => {
+    // Arrange
+    const layer = planLayer(OPTIONAL, { rowCount: 100, wfsCount: 95 });
+
+    // Act
+    const html = renderLayerRow(layer);
+
+    // Assert
+    expect(variationTextOf(html, LAYER_VARIACION_CELL)).toBe("-5");
+    expect(variationCellOf(html, LAYER_VARIACION_CELL)).toContain(shared.negative);
+  });
+
+  it("should show a plain zero without a direction class when the counts match", () => {
+    // Arrange
+    const layer = planLayer(OPTIONAL, { rowCount: 777, wfsCount: 777 });
+
+    // Act
+    const html = renderLayerRow(layer);
+
+    // Assert
+    expect(variationTextOf(html, LAYER_VARIACION_CELL)).toBe("0");
+    expect(variationCellOf(html, LAYER_VARIACION_CELL)).not.toContain(shared.positive);
+    expect(variationCellOf(html, LAYER_VARIACION_CELL)).not.toContain(shared.negative);
+  });
+
+  it("should show an em dash when the WFS count is unknown", () => {
+    // Arrange
+    const layer = planLayer(OPTIONAL, { rowCount: 100, wfsCount: null });
+
+    // Act
+    const html = renderLayerRow(layer);
+
+    // Assert
+    expect(variationTextOf(html, LAYER_VARIACION_CELL)).toBe("—");
+  });
+});
+
+describe("Variación cell of SigraResultRow", () => {
+  function renderResultRow(result: LayerLoadResult, dryRun: boolean): string {
+    return inTable(React.createElement(SigraResultRow, { result, dryRun }));
+  }
+
+  it("should show the staged difference against the previous count on a dry run", () => {
+    // Arrange
+    const result = resultOf(ZONAS, { status: LayerLoadStatus.DRY_RUN_OK, staged: 2222, previousCount: 4444 });
+
+    // Act
+    const text = variationTextOf(renderResultRow(result, true), RESULT_VARIACION_CELL);
+
+    // Assert
+    expect(text).toMatch(/^-2[.,\s]?222$/);
+  });
+
+  it("should show the final difference against the previous count on a real run", () => {
+    // Arrange
+    const result = resultOf(ZONAS, { staged: 2222, previousCount: 4444, finalCount: 5555 });
+
+    // Act
+    const html = renderResultRow(result, false);
+
+    // Assert
+    expect(variationTextOf(html, RESULT_VARIACION_CELL)).toMatch(/^\+1[.,\s]?111$/);
+    expect(variationCellOf(html, RESULT_VARIACION_CELL)).toContain(shared.positive);
+  });
+
+  it("should show an em dash for a failed layer", () => {
+    // Arrange
+    const result = resultOf(ZONAS, {
+      status: LayerLoadStatus.FAILED,
+      step: LayerLoadStep.WFS,
+      previousCount: 4444,
+      finalCount: null,
+    });
+
+    // Act
+    const text = variationTextOf(renderResultRow(result, false), RESULT_VARIACION_CELL);
+
+    // Assert
+    expect(text).toBe("—");
+  });
+});
+
 describe("SigraLayersPanel", () => {
   it("should render its initial PLANNING state without throwing, saying it is consulting, with no inline styles", () => {
     // Arrange & Act
@@ -328,5 +461,53 @@ describe("SigraLayersPanel", () => {
     // Assert
     expect(html).toContain("Consultando");
     expect(html).not.toContain("style=");
+  });
+
+  describe("result modal", () => {
+    function renderWithPhase(phase: SigraFlowPhase, results: ReadonlyArray<LayerLoadResult>): string {
+      const state = { ...createInitialSigraFlow(), phase, results, lastRunDryRun: false };
+      useFlowMock.mockImplementationOnce(() => ({
+        state,
+        canRun: false,
+        refresh: vi.fn(),
+        toggleLayer: vi.fn(),
+        selectAll: vi.fn(),
+        selectRequiredOnly: vi.fn(),
+        runDryRun: vi.fn(),
+        runLoad: vi.fn(),
+      }));
+      return renderToStaticMarkup(
+        React.createElement(SigraLayersPanel, {
+          connection: INITIAL_CONNECTION,
+          connectionRevision: 0,
+          onStatusChange: vi.fn(),
+        })
+      );
+    }
+
+    it("should keep the result modal mounted while PLANNING when results of the last run exist", () => {
+      // Arrange & Act
+      const html = renderWithPhase(SigraFlowPhase.PLANNING, [resultOf(ZONAS)]);
+
+      // Assert
+      expect(html).toContain('aria-label="Resultado de la corrida"');
+      expect(html).toContain("Resultado de la carga");
+    });
+
+    it("should not mount the result modal while a run is RUNNING", () => {
+      // Arrange & Act
+      const html = renderWithPhase(SigraFlowPhase.RUNNING, [resultOf(ZONAS)]);
+
+      // Assert
+      expect(html).not.toContain('aria-label="Resultado de la corrida"');
+    });
+
+    it("should not mount the result modal when there are no results", () => {
+      // Arrange & Act
+      const html = renderWithPhase(SigraFlowPhase.READY, []);
+
+      // Assert
+      expect(html).not.toContain('aria-label="Resultado de la corrida"');
+    });
   });
 });

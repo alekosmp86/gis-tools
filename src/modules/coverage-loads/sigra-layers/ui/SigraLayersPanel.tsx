@@ -38,7 +38,7 @@ export const SigraLayersPanel: React.FC<StagePanelProps> = ({ connection, connec
   const notice = busyText(phase);
   const isBusy = notice !== null;
   const hasResults = results.length > 0;
-  const showResult = hasResults && !isBusy && closedResults !== results;
+  const showResult = hasResults && phase !== SigraFlowPhase.RUNNING && closedResults !== results;
 
   return (
     <SigraStepCard title="Capas SIGRA">

@@ -51,6 +51,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.positive {
+  color: var(--accent-emerald);
+}
+
+.negative {
+  color: var(--accent-rose);
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }

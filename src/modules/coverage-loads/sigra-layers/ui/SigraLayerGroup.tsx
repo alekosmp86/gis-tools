@@ -29,6 +29,7 @@ export const SigraLayerGroup: React.FC<SigraLayerGroupProps> = ({ group, layers,
             <th scope="col" className={shared.numeric}>Registros actuales</th>
             <th scope="col">Última actualización</th>
             <th scope="col" className={shared.numeric}>Registros en SIGRA</th>
+            <th scope="col" className={shared.numeric}>Variación</th>
           </tr>
         </thead>
         <tbody>

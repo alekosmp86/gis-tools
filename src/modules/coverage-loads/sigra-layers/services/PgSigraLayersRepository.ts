@@ -69,7 +69,7 @@ export class PgSigraLayersRepository implements SigraLayersRepository {
 
     const auditWarning = options.dryRun
       ? null
-      : await finishAudit(this.createClient, connection, audit, { layerId, outcome, progress }, describeFailure);
+      : await finishAudit(this.createClient, connection, audit, { outcome, progress }, describeFailure);
     return buildLayerResult(layerId, outcome, progress, elapsedMs, auditWarning);
   }
 

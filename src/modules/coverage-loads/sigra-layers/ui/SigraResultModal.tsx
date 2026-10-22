@@ -3,7 +3,6 @@
 import React from "react";
 import { X } from "lucide-react";
 import { Button } from "@/ui-kit/components/ui/Button";
-import { ButtonVariant } from "@/ui-kit/types/ui";
 import type { LayerLoadResult } from "../types";
 import { SigraResultTable } from "./SigraResultTable";
 import styles from "./SigraResultModal.module.css";

@@ -1,4 +1,4 @@
-import { AuditState, type SigraLayerId } from "../constants";
+import { AuditState } from "../constants";
 import type { PgClientFactory, PgClientLike } from "../../shared/pgClient";
 import type { DbConnection } from "../../types";
 import { LayerLoadStatus, type AuditHandle, type LoadOutcome, type LoadProgress } from "../types";
@@ -6,7 +6,6 @@ import { AUDIT_FINISH_SQL, AUDIT_START_SQL } from "./queries/auditQueries";
 import { firstRow } from "./queries/queryRows";
 
 export interface AuditClosing {
-  readonly layerId: SigraLayerId;
   readonly outcome: LoadOutcome;
   readonly progress: LoadProgress;
 }
@@ -49,11 +48,11 @@ export async function startAudit(
 }
 
 function closingValues(closing: AuditClosing, auditId: number): unknown[] {
-  const { outcome, progress, layerId } = closing;
+  const { outcome, progress } = closing;
   if (outcome.status === LayerLoadStatus.LOADED) {
-    return [AuditState.SUCCESS, progress.staged, progress.finalCount, null, null, null, auditId];
+    return [AuditState.SUCCESS, progress.staged, progress.staged, null, null, null, auditId];
   }
-  return [AuditState.ERROR, progress.staged, null, outcome.step, outcome.message, layerId, auditId];
+  return [AuditState.ERROR, null, null, outcome.step, outcome.message, outcome.step, auditId];
 }
 
 /** Returns the warning to show, or null when the audit row was closed (or no audit applies). */

@@ -29,14 +29,6 @@
   border-color: var(--accent-rose);
 }
 
-.positive {
-  color: var(--accent-emerald);
-}
-
-.negative {
-  color: var(--accent-rose);
-}
-
 .detail {
   display: flex;
   flex-direction: column;

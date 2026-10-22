@@ -57,8 +57,6 @@ async function loadZonas(pages: ScriptedPage[], options: { dryRun?: boolean; fai
   return { result, rig };
 }
 
-const NO_INSERTED_ROWS = [null, 0];
-
 describe("sigra-layers load audit (AC-7)", () => {
   describe("a successful load", () => {
     it("should write INICIADO and then update the same row to EXITO with the extracted and inserted counts", async () => {
@@ -90,10 +88,25 @@ describe("sigra-layers load audit (AC-7)", () => {
       const features = [zonaFeature(1), zonaFeature(1), zonaFeature(2), zonaFeature(3), zonaFeature(3)];
 
       // Act
-      await loadZonas([features]);
+      const { result } = await loadZonas([features]);
 
       // Assert
+      expect(result.staged).toBe(3);
       expect(await auditRows(database)).toMatchObject([{ estado: "EXITO", registros_extraidos: 3, registros_insertados: 3 }]);
+    });
+
+    it("should record registros_insertados equal to registros_extraidos, both equal to the staged count", async () => {
+      // Arrange
+      const features = [zonaFeature(1), zonaFeature(1), zonaFeature(2), zonaFeature(3), zonaFeature(3)];
+
+      // Act
+      const { result } = await loadZonas([features]);
+
+      // Assert
+      const [row] = await auditRows(database);
+      expect(row.registros_extraidos).toBe(result.staged);
+      expect(row.registros_insertados).toBe(result.staged);
+      expect(row.registros_insertados).toBe(row.registros_extraidos);
     });
 
     it("should insert the INICIADO row in its own committed statement before the load transaction and update it after the transaction ended", async () => {
@@ -163,15 +176,15 @@ describe("sigra-layers load audit (AC-7)", () => {
         etl_nombre: ZONAS.etlName,
         estado: "ERROR",
         finished: true,
-        registros_extraidos: 96,
-        transform_error: TestLayer.ZONAS,
+        registros_extraidos: null,
+        registros_insertados: null,
+        transform_error: LayerLoadStep.VALIDATION,
         paso_error: LayerLoadStep.VALIDATION,
         mensaje_error: verdict,
       });
-      expect(NO_INSERTED_ROWS).toContain(rows[0].registros_insertados);
     });
 
-    it("should record a WFS failure as ERROR with paso_error wfs and the layer id as transform_error, and keep the row although the transaction rolled back", async () => {
+    it("should record a WFS failure as ERROR with paso_error wfs and transform_error wfs, and keep the row although the transaction rolled back", async () => {
       // Arrange
       await seedFinalRows(database, TestLayer.ZONAS, { count: 3 });
       const before = await snapshotFinalTables(database);
@@ -188,8 +201,10 @@ describe("sigra-layers load audit (AC-7)", () => {
         etl_nombre: ZONAS.etlName,
         estado: "ERROR",
         finished: true,
+        registros_extraidos: null,
+        registros_insertados: null,
         paso_error: LayerLoadStep.WFS,
-        transform_error: TestLayer.ZONAS,
+        transform_error: LayerLoadStep.WFS,
         mensaje_error: result.message,
       });
       expect(JSON.stringify(rows)).not.toContain(PASSWORD);
@@ -210,7 +225,15 @@ describe("sigra-layers load audit (AC-7)", () => {
       expect(result).toMatchObject({ status: LayerLoadStatus.FAILED, step, auditWarning: null });
       const rows = await auditRows(database);
       expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ estado: "ERROR", finished: true, paso_error: step, transform_error: TestLayer.ZONAS, mensaje_error: result.message });
+      expect(rows[0]).toMatchObject({
+        estado: "ERROR",
+        finished: true,
+        registros_extraidos: null,
+        registros_insertados: null,
+        paso_error: step,
+        transform_error: step,
+        mensaje_error: result.message,
+      });
       expect(JSON.stringify(rows)).not.toContain(PASSWORD);
       expect(await finalRows(database, TestLayer.ZONAS)).toHaveLength(3);
     });
