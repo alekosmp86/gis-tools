@@ -1,7 +1,8 @@
 import React from "react";
-import { PlusSquare, AlertTriangle, CheckCircle2, Code2, Sparkles } from "lucide-react";
+import { PlusSquare, AlertTriangle, CheckCircle2, CalendarClock, Code2, Sparkles } from "lucide-react";
 import type { DbColumnMetadata } from "@/core/types/db";
 import type { InsertFieldDefault } from "@/core/types/comparison";
+import { formatDateSuggestion, isDateLikeType } from "@/core/services/fileDateSuggestion";
 import styles from "./InsertDefaultsCard.module.css";
 
 interface InsertDefaultsCardProps {
@@ -9,13 +10,23 @@ interface InsertDefaultsCardProps {
   columnDetails?: DbColumnMetadata[];
   defaults: Record<string, InsertFieldDefault>;
   onChangeDefault: (fieldName: string, fieldDefault: InsertFieldDefault) => void;
+  fileDate?: Date | null;
 }
+
+const resolveFileDateSuggestion = (
+  fileDate: Date | null | undefined,
+  detail: DbColumnMetadata | undefined
+): string | null => {
+  if (!fileDate || !detail || !isDateLikeType(detail.data_type)) return null;
+  return formatDateSuggestion(fileDate, detail.data_type);
+};
 
 export const InsertDefaultsCard: React.FC<InsertDefaultsCardProps> = ({
   unmappedColumns,
   columnDetails = [],
   defaults,
   onChangeDefault,
+  fileDate,
 }) => {
   if (unmappedColumns.length === 0) {
     return null;
@@ -50,6 +61,7 @@ export const InsertDefaultsCard: React.FC<InsertDefaultsCardProps> = ({
 
           const isRequired = detail ? !detail.is_nullable && !detail.column_default : false;
           const hasDbDefault = detail?.column_default != null;
+          const fileDateSuggestion = resolveFileDateSuggestion(fileDate, detail);
 
           return (
             <div
@@ -149,6 +161,24 @@ export const InsertDefaultsCard: React.FC<InsertDefaultsCardProps> = ({
                         &apos;SISTEMA&apos;
                       </button>
                     )}
+                  </div>
+                )}
+                {fileDateSuggestion !== null && current.value === "" && (
+                  <div className={styles.quickFillButtons}>
+                    <button
+                      type="button"
+                      className={`${styles.quickBtn} ${styles.quickBtnFile}`}
+                      onClick={() =>
+                        onChangeDefault(colName, {
+                          fieldName: colName,
+                          value: fileDateSuggestion,
+                          useRawExpression: false,
+                        })
+                      }
+                    >
+                      <CalendarClock size={12} />
+                      {`Fecha del archivo: ${fileDateSuggestion}`}
+                    </button>
                   </div>
                 )}
               </div>

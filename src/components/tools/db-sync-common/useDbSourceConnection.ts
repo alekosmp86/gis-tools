@@ -10,6 +10,7 @@ export function useDbSourceConnection(onConnected: () => void) {
   const [dbConfig, setDbConfig] = useState<DbConfig | null>(null);
   const [dbColumns, setDbColumns] = useState<string[]>([]);
   const [columnDetails, setColumnDetails] = useState<DbColumnMetadata[]>([]);
+  const [dbTotalRows, setDbTotalRows] = useState(0);
   const [isDbConnected, setIsDbConnected] = useState(false);
 
   const dbFormRef = useRef<DbConnectionFormRef | null>(null);
@@ -17,10 +18,11 @@ export function useDbSourceConnection(onConnected: () => void) {
   const handleDbSuccess = (
     config: DbConfig,
     columns: string[],
-    _totalRows: number,
+    totalRows: number,
     details?: DbColumnMetadata[]
   ) => {
     setDbConfig(config);
+    setDbTotalRows(totalRows);
     setDbColumns(columns);
     setColumnDetails(details || []);
     onConnected();
@@ -34,6 +36,7 @@ export function useDbSourceConnection(onConnected: () => void) {
     dbConfig,
     dbColumns,
     columnDetails,
+    dbTotalRows,
     isDbConnected,
     dbFormRef,
     handleDbSuccess,

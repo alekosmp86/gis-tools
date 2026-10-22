@@ -6,7 +6,7 @@ export interface UseSpatialFileUploadOptions {
   createParser: () => ISpatialFileParser;
   fallbackErrorMessage: string;
   loadedData: ParsedFileDataset | null;
-  onSuccess: (data: ParsedFileDataset) => void;
+  onSuccess: (data: ParsedFileDataset, file: File) => void;
   onDiscard: () => void;
 }
 
@@ -59,7 +59,7 @@ export const useSpatialFileUpload = ({
         });
       });
       setData(parsed);
-      onSuccess(parsed);
+      onSuccess(parsed, file);
       setLoading(false);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : fallbackErrorMessage;

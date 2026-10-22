@@ -33,30 +33,36 @@ const OPTIONS: SyncModeOption[] = [
 export interface SyncModeStepProps {
   mode: SyncMode;
   onModeChange: (mode: SyncMode) => void;
+  replaceDisabledReason?: string | null;
 }
 
-export const SyncModeStep: React.FC<SyncModeStepProps> = ({ mode, onModeChange }) => {
+export const SyncModeStep: React.FC<SyncModeStepProps> = ({ mode, onModeChange, replaceDisabledReason = null }) => {
   return (
     <div className={styles.options} role="radiogroup" aria-label="Modo de sincronización">
-      {OPTIONS.map((option) => (
-        <label
-          key={option.mode}
-          className={`${styles.option} ${option.toneClass} ${mode === option.mode ? styles.optionSelected : ""}`}
-        >
-          <input
-            type="radio"
-            name="syncMode"
-            className={styles.radio}
-            checked={mode === option.mode}
-            onChange={() => onModeChange(option.mode)}
-          />
-          <div className={styles.iconWrapper}>{option.icon}</div>
-          <div className={styles.text}>
-            <span className={styles.optionTitle}>{option.title}</span>
-            <span className={styles.optionDescription}>{option.description}</span>
-          </div>
-        </label>
-      ))}
+      {OPTIONS.map((option) => {
+        const reason = option.mode === SyncMode.REPLACE ? replaceDisabledReason : null;
+        return (
+          <label
+            key={option.mode}
+            className={`${styles.option} ${option.toneClass} ${mode === option.mode ? styles.optionSelected : ""} ${reason ? styles.optionDisabled : ""}`}
+          >
+            <input
+              type="radio"
+              name="syncMode"
+              className={styles.radio}
+              checked={mode === option.mode}
+              disabled={Boolean(reason)}
+              onChange={() => onModeChange(option.mode)}
+            />
+            <div className={styles.iconWrapper}>{option.icon}</div>
+            <div className={styles.text}>
+              <span className={styles.optionTitle}>{option.title}</span>
+              <span className={styles.optionDescription}>{option.description}</span>
+              {reason && <span className={styles.disabledReason}>{reason}</span>}
+            </div>
+          </label>
+        );
+      })}
     </div>
   );
 };

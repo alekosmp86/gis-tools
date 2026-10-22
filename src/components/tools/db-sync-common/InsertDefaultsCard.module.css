@@ -203,3 +203,13 @@
 .quickBtn:hover {
   background: rgba(6, 182, 212, 0.25);
 }
+
+.quickBtnFile {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.3);
+  color: #34d399;
+}
+
+.quickBtnFile:hover {
+  background: rgba(52, 211, 153, 0.25);
+}

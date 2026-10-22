@@ -10,7 +10,12 @@ import {
 } from "@/core/services/replaceColumnMapping";
 import type { DbColumnMetadata } from "@/core/types/db";
 import type { InsertFieldDefault } from "@/core/types/comparison";
+import { SHP_GEOMETRY_LABEL } from "@/core/services/shpReplaceSource";
+import { SHP_GEOMETRY_SOURCE } from "@/core/types/shpReplace";
 import { InsertDefaultsCard } from "./InsertDefaultsCard";
+
+const describeSourceColumn = (sourceColumn: string): string =>
+  sourceColumn === SHP_GEOMETRY_SOURCE ? SHP_GEOMETRY_LABEL : sourceColumn;
 import styles from "./ColumnMappingStep.module.css";
 
 export interface ColumnMappingStepProps {
@@ -21,6 +26,7 @@ export interface ColumnMappingStepProps {
   mapping: ReplaceColumnMapping;
   onSourceChange: (targetColumn: string, sourceColumn: string | null) => void;
   onDefaultChange: (targetColumn: string, fieldDefault: InsertFieldDefault) => void;
+  fileDate?: Date | null;
 }
 
 export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
@@ -31,6 +37,7 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
   mapping,
   onSourceChange,
   onDefaultChange,
+  fileDate,
 }) => {
   const sourceTypes = new Map(sourceDetails.map((detail) => [detail.column_name, detail.data_type]));
   const targetDetailMap = new Map(targetDetails.map((detail) => [detail.column_name, detail]));
@@ -68,7 +75,7 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
                 <option value="">— no mapear —</option>
                 {sourceColumns.map((sourceColumn) => (
                   <option key={sourceColumn} value={sourceColumn}>
-                    {sourceColumn}
+                    {describeSourceColumn(sourceColumn)}
                     {sourceTypes.get(sourceColumn) ? ` (${sourceTypes.get(sourceColumn)})` : ""}
                   </option>
                 ))}
@@ -88,6 +95,7 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
         columnDetails={targetDetails}
         defaults={mapping.defaults}
         onChangeDefault={onDefaultChange}
+        fileDate={fileDate}
       />
 
       {missingRequired.length > 0 && (
@@ -98,7 +106,9 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
       )}
 
       {ignoredSource.length > 0 && (
-        <span className={styles.ignored}>Columnas del origen ignoradas: {ignoredSource.join(", ")}.</span>
+        <span className={styles.ignored}>
+          Columnas del origen ignoradas: {ignoredSource.map(describeSourceColumn).join(", ")}.
+        </span>
       )}
     </div>
   );

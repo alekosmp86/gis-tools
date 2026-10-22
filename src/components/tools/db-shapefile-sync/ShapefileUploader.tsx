@@ -8,7 +8,7 @@ import { useSpatialFileUpload } from "../db-sync-common/useSpatialFileUpload";
 import { LoadedShapefileCard } from "./LoadedShapefileCard";
 
 export interface ShapefileUploaderProps {
-  onSuccess: (data: ParsedShapefileData) => void;
+  onSuccess: (data: ParsedShapefileData, file: File) => void;
   onDiscard: () => void;
   loadedData?: ParsedShapefileData | null;
 }
@@ -22,7 +22,7 @@ export const ShapefileUploader: React.FC<ShapefileUploaderProps> = ({
     createParser: () => new ShapefileParser(),
     fallbackErrorMessage: "Error al procesar el archivo Shapefile.",
     loadedData: loadedData ? (loadedData as unknown as ParsedFileDataset) : null,
-    onSuccess: (parsed) => onSuccess(parsed as unknown as ParsedShapefileData),
+    onSuccess: (parsed, file) => onSuccess(parsed as unknown as ParsedShapefileData, file),
     onDiscard,
   });
   const { data } = upload;

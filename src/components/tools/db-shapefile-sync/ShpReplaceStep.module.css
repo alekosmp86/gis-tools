@@ -1,0 +1,15 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.runButton {
+  background: var(--accent-rose);
+  border-color: var(--accent-rose);
+}

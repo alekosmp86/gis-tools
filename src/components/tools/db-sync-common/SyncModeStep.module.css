@@ -28,6 +28,17 @@
   --mode-color: var(--accent-rose);
 }
 
+.optionDisabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.disabledReason {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--accent-amber);
+}
+
 .optionSelected {
   border-color: var(--mode-color);
   box-shadow: 0 0 0 1px var(--mode-color);
