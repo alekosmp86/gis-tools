@@ -139,8 +139,11 @@ The legacy job is broken (inserts centrales columns into a table that does not e
 - AC-7: Audit (when the table exists and is writable): before the transaction, in its own autocommitted statement, insert
   `(etl_nombre = etlName, estado = 'INICIADO')` and keep the id; after the outcome, in a separate statement,
   `UPDATE .. SET estado='EXITO'|'ERROR', fecha_fin=now()`, `registros_extraidos` = staging count, `registros_insertados` = rows swapped,
-  and on error `paso_error` (`wfs` | `insert` | `validacion` | `swap`), `mensaje_error`, `transform_error` (= layer id). A dry run writes
+  and on error `paso_error` (`wfs` | `insert` | `validacion` | `swap`), `mensaje_error`, `transform_error` (= failing step). A dry run writes
   no audit rows. An audit failure never fails the load (it becomes a warning in the result).
+  Audit rows follow the legacy convention: on success `registros_extraidos` = `registros_insertados` = staged count; on error no counts
+  (both null) and the failing step is in `transform_error`. A layer whose WFS returns 0 rows into an empty final table is accepted as
+  `loaded` (legacy rule, deliberate).
 - AC-8: Failure of any step rolls the layer back (final table unchanged), marks the audit `ERROR`, and the result for that layer says
   which step failed. Secrets (connection credentials) never appear in results, logs or errors.
 - AC-9: Result per layer: `layerId`, `status` (`loaded` | `dry-run-ok` | `rejected-validation` | `failed`), `downloaded` (features
