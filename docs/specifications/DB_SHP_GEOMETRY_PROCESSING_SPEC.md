@@ -32,9 +32,12 @@
   geometry column is a single type (e.g. POLYGON) the run is refused before any processing statement with a
   Spanish error naming MultiPolígono.
 - Incompatible geometries: with processing active and a single-type target column (e.g. POLYGON, not Multi and not
-  unconstrained), any `MULTI*` geometry cannot be stored. The analysis shows an ERROR notice ("N geometrías MultiPolígono
-  no caben en la columna destino de tipo Polígono"), "Reemplazar ahora" is disabled and a real run is refused before the
-  table lock. Known limitation: the wording names Polígono for every single-type target.
+  unconstrained), any multi-part geometry (`MULTI*`) cannot be stored. The analysis shows an ERROR notice ("N geometrías
+  de varias partes no caben en la columna destino de tipo <tipo>", singular "1 geometría ... no cabe ..."), where
+  `<tipo>` is the real target type from the catalog (Polígono, Punto, Línea; other types verbatim, capitalised) and the
+  sentence reads "de una sola parte" when no label applies. "Reemplazar ahora" is disabled and a real run is refused
+  before the table lock with the same wording. The report carries `incompatibleTargetType` (`null` when no row is
+  incompatible).
 - Rows whose key is NULL in any key field are NOT unified: each one stays a singleton group (grouped on its record
   number), so a NULL key never merges unrelated records and is never reported as a group or as an attribute
   conflict. They are counted in `nullKeyRows` and reported as a warning ("N registros con clave vacía no se
@@ -84,7 +87,7 @@ Validated server side (key fields must exist in the DBF, at least one when unify
 6. Incompatible count (only when the target geometry column is a single type such as POLYGON; not Multi, not unconstrained GEOMETRY): `incompatibleGeometryRows` counts the `MULTI*` geometries of the work table, NULLs excluded, because that column cannot hold them. Then the final invalid count on the work table (`insertedInvalid`: the unified table when unify is on, the base table otherwise).
 7. Overlaps (if on): over the final geometries, excluding invalid ones (counted as `overlapSkippedInvalid`): self-join `a.rec < b.rec AND a.geom && b.geom AND ST_Intersects` then intersection area > threshold; count + first 20 pairs (their keys). No implicit `ST_MakeValid` is ever applied when repair is off.
 8. Policy `block` with overlaps > 0 fails the run (rollback). A real run also fails before the table lock when `incompatibleGeometryRows` > 0 (Spanish error with the notice wording; rollback; table untouched). `dryRun` always rolls back after returning the report.
-9. The final INSERT reads the processed table. For a Multi target the INSERT wraps the geometry in `ST_Multi`; the repair pass itself does not, so a repaired single polygon stays a polygon until that INSERT. The result gains `geometry: { invalidBefore, repaired, emptyAfterRepair, groups, rowsMerged, attributeConflicts, attributeConflictSamples, nullKeyRows, overlapCount, overlapSamples, overlapSkippedInvalid, insertedInvalid, incompatibleGeometryRows, wouldBlock }`; `stagedRows`/`insertedRows` count the processed rows, `sourceRows` the file rows.
+9. The final INSERT reads the processed table. For a Multi target the INSERT wraps the geometry in `ST_Multi`; the repair pass itself does not, so a repaired single polygon stays a polygon until that INSERT. The result gains `geometry: { invalidBefore, repaired, emptyAfterRepair, groups, rowsMerged, attributeConflicts, attributeConflictSamples, nullKeyRows, overlapCount, overlapSamples, overlapSkippedInvalid, insertedInvalid, incompatibleGeometryRows, incompatibleTargetType, wouldBlock, stepTimings, processingMs }`; `stagedRows`/`insertedRows` count the processed rows, `sourceRows` the file rows.
 
 ## 5. API and client
 
