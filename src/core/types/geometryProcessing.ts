@@ -45,6 +45,11 @@ export interface OverlapSample {
   readonly keyB: GroupKeyValues;
 }
 
+export interface StepTiming {
+  readonly label: string;
+  readonly ms: number;
+}
+
 export interface GeometryProcessingReport {
   readonly invalidBefore: number;
   readonly repaired: number;
@@ -60,7 +65,10 @@ export interface GeometryProcessingReport {
   readonly overlapSkippedInvalid: number;
   readonly insertedInvalid: number;
   readonly incompatibleGeometryRows: number;
+  readonly incompatibleTargetType: string | null;
   readonly wouldBlock: boolean;
+  readonly stepTimings: ReadonlyArray<StepTiming>;
+  readonly processingMs: number;
 }
 
 export const EMPTY_GEOMETRY_REPORT: GeometryProcessingReport = {
@@ -78,5 +86,8 @@ export const EMPTY_GEOMETRY_REPORT: GeometryProcessingReport = {
   overlapSkippedInvalid: 0,
   insertedInvalid: 0,
   incompatibleGeometryRows: 0,
+  incompatibleTargetType: null,
   wouldBlock: false,
+  stepTimings: [],
+  processingMs: 0,
 };

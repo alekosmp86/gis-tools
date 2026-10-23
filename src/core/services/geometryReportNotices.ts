@@ -15,14 +15,31 @@ export interface ReportNotice {
 
 const plural = (count: number, singular: string, pluralForm: string): string => (count === 1 ? singular : pluralForm);
 
-export const incompatibleGeometryText = (count: number): string =>
-  count === 1
-    ? "1 geometría MultiPolígono no cabe en la columna destino de tipo Polígono"
-    : `${count} geometrías MultiPolígono no caben en la columna destino de tipo Polígono`;
+const TARGET_TYPE_LABELS: ReadonlyMap<string, string> = new Map([
+  ["POLYGON", "Polígono"],
+  ["POINT", "Punto"],
+  ["LINESTRING", "Línea"],
+]);
 
-const incompatibleGeometryNotice = (count: number): ReportNotice => ({
+export const geometryTypeLabelOf = (rawType: string): string => {
+  const normalizedType = rawType.trim().toUpperCase();
+  const knownLabel = TARGET_TYPE_LABELS.get(normalizedType);
+  if (knownLabel !== undefined) return knownLabel;
+  const lowerCased = rawType.trim().toLowerCase();
+  return lowerCased.charAt(0).toUpperCase() + lowerCased.slice(1);
+};
+
+const incompatibleTargetPhrase = (targetTypeLabel: string | null): string =>
+  targetTypeLabel === null ? "de una sola parte" : `de tipo ${targetTypeLabel}`;
+
+export const incompatibleGeometryText = (count: number, targetTypeLabel: string | null): string =>
+  count === 1
+    ? `1 geometría de varias partes no cabe en la columna destino ${incompatibleTargetPhrase(targetTypeLabel)}`
+    : `${count} geometrías de varias partes no caben en la columna destino ${incompatibleTargetPhrase(targetTypeLabel)}`;
+
+const incompatibleGeometryNotice = (report: GeometryProcessingReport): ReportNotice => ({
   level: NoticeLevel.ERROR,
-  text: incompatibleGeometryText(count),
+  text: incompatibleGeometryText(report.incompatibleGeometryRows, report.incompatibleTargetType),
 });
 
 const invalidInsertedNotice = (count: number): ReportNotice => ({
@@ -99,7 +116,7 @@ export function isReplaceBlocked(report: GeometryProcessingReport): boolean {
 }
 
 function incompatibleNotices(report: GeometryProcessingReport): ReportNotice[] {
-  return report.incompatibleGeometryRows > 0 ? [incompatibleGeometryNotice(report.incompatibleGeometryRows)] : [];
+  return report.incompatibleGeometryRows > 0 ? [incompatibleGeometryNotice(report)] : [];
 }
 
 function repairNotices(report: GeometryProcessingReport, options: GeometryProcessingOptions): ReportNotice[] {

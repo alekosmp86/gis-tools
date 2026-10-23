@@ -77,7 +77,10 @@ const GEOMETRY_REPORT: GeometryProcessingReport = {
   overlapSkippedInvalid: 0,
   insertedInvalid: 0,
   incompatibleGeometryRows: 0,
+  incompatibleTargetType: null,
   wouldBlock: false,
+  stepTimings: [],
+  processingMs: 0,
 };
 
 const BLOCKED_REPORT: GeometryProcessingReport = { ...GEOMETRY_REPORT, overlapCount: 3, wouldBlock: true };

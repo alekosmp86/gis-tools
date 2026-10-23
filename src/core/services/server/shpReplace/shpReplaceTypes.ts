@@ -45,6 +45,7 @@ export interface RunShpReplaceParams {
   processing?: GeometryProcessingOptions;
   dryRun?: boolean;
   onProgress?: (progress: ShpReplaceProgress) => void;
+  now?: () => number;
 }
 
 export interface ShpReplaceResult {

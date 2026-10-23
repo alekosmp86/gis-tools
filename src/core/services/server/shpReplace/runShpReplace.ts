@@ -171,6 +171,9 @@ async function stageRecords(session: ShpReplaceSession, params: RunShpReplacePar
   return copiedRows;
 }
 
+const singleGeometryTypeOf = (catalog: TargetCatalog): string | null =>
+  catalog.geometry !== undefined && !catalog.acceptsMulti ? (catalog.geometryTypeName ?? null) : null;
+
 function buildProcessingInput(
   params: RunShpReplaceParams,
   plan: ReplacePlan,
@@ -184,8 +187,9 @@ function buildProcessingInput(
     mappedFields: plan.mappedFields,
     sourceSrid: params.sourceSrid,
     geographic: catalog.sourceGeographic,
-    targetSingleGeometry: catalog.geometry !== undefined && !catalog.acceptsMulti,
+    targetSingleGeometryType: singleGeometryTypeOf(catalog),
     onStep: (label) => emitStep(params, ShpReplacePhase.PROCESSING, steps, label),
+    now: params.now,
   };
 }
 
@@ -285,7 +289,7 @@ function assertNotBlocked(geometry: GeometryProcessingReport | undefined): void 
 
 function assertNoIncompatibleGeometries(geometry: GeometryProcessingReport | undefined): void {
   if (geometry && geometry.incompatibleGeometryRows > 0) {
-    throw new Error(incompatibleGeometryText(geometry.incompatibleGeometryRows));
+    throw new Error(incompatibleGeometryText(geometry.incompatibleGeometryRows, geometry.incompatibleTargetType));
   }
 }
 

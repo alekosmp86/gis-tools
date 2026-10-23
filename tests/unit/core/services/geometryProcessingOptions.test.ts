@@ -61,7 +61,10 @@ describe("geometryProcessingOptions", () => {
         overlapSkippedInvalid: 0,
         insertedInvalid: 0,
         incompatibleGeometryRows: 0,
+        incompatibleTargetType: null,
         wouldBlock: false,
+        stepTimings: [],
+        processingMs: 0,
       });
     });
   });

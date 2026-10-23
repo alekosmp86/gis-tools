@@ -17,8 +17,9 @@ import {
   buildUnifySql,
   type ProcessingLayout,
 } from "@/core/services/server/shpReplace/geometryProcessingSql";
+import { geometryTypeLabelOf } from "@/core/services/geometryReportNotices";
 import { stageColumnName } from "@/core/services/server/shpReplace/replaceSql";
-import { ProcessingStep } from "@/core/services/server/shpReplace/shpReplaceSteps";
+import { createStepClock, ProcessingStep } from "@/core/services/server/shpReplace/shpReplaceSteps";
 import type { ShpQuerySession } from "@/core/services/server/shpReplace/shpReplaceTypes";
 import {
   OverlapPolicy,
@@ -28,6 +29,7 @@ import {
   type GroupKeyValues,
   type LargestGroup,
   type OverlapSample,
+  type StepTiming,
 } from "@/core/types/geometryProcessing";
 
 export interface GeometryProcessingInput {
@@ -36,8 +38,16 @@ export interface GeometryProcessingInput {
   readonly mappedFields: readonly string[];
   readonly sourceSrid: number;
   readonly geographic: boolean;
-  readonly targetSingleGeometry: boolean;
+  readonly targetSingleGeometryType: string | null;
   readonly onStep: (label: string) => void;
+  readonly now?: () => number;
+}
+
+type ProcessingReportCore = Omit<GeometryProcessingReport, "stepTimings" | "processingMs">;
+
+interface ProcessingStepsOutcome {
+  readonly workTable: string;
+  readonly report: ProcessingReportCore;
 }
 
 export interface GeometryProcessingOutcome {
@@ -51,7 +61,7 @@ interface ProcessingContext {
   readonly comparedColumns: readonly string[];
   readonly dbfNameByColumn: ReadonlyMap<string, string>;
   readonly areaMode: AreaMode;
-  readonly targetSingleGeometry: boolean;
+  readonly targetTypeLabel: string | null;
   readonly onStep: (label: string) => void;
 }
 
@@ -130,7 +140,7 @@ function buildProcessingContext(input: GeometryProcessingInput): ProcessingConte
       .map((field) => stageColumnOf(stageFields, field)),
     dbfNameByColumn: new Map(stageFields.map((field, index) => [stageColumnName(index), field])),
     areaMode: input.geographic ? AreaMode.GEOGRAPHY : AreaMode.PLANAR,
-    targetSingleGeometry: input.targetSingleGeometry,
+    targetTypeLabel: input.targetSingleGeometryType === null ? null : geometryTypeLabelOf(input.targetSingleGeometryType),
     onStep: input.onStep,
   };
 }
@@ -238,7 +248,7 @@ async function runRepair(session: ShpQuerySession, workTable: string): Promise<R
 }
 
 async function countIncompatible(session: ShpQuerySession, context: ProcessingContext, workTable: string): Promise<number> {
-  if (!context.targetSingleGeometry) return 0;
+  if (context.targetTypeLabel === null) return 0;
   return countFirst(session, buildIncompatibleGeometryCountSql(workTable));
 }
 
@@ -275,7 +285,7 @@ function assembleReport(
   unify: UnifyStats,
   repair: RepairStats,
   overlaps: OverlapStats
-): GeometryProcessingReport {
+): ProcessingReportCore {
   return {
     invalidBefore: validity.invalidBefore,
     repaired: repair.repaired,
@@ -291,6 +301,7 @@ function assembleReport(
     overlapSkippedInvalid: overlaps.overlapSkippedInvalid,
     insertedInvalid: validity.insertedInvalid,
     incompatibleGeometryRows: validity.incompatibleGeometryRows,
+    incompatibleTargetType: validity.incompatibleGeometryRows > 0 ? context.targetTypeLabel : null,
     wouldBlock: isBlocking(context.processing, overlaps.overlapCount),
   };
 }
@@ -315,10 +326,10 @@ async function runUnifiedRepair(session: ShpQuerySession, context: ProcessingCon
   return runRepair(session, UNIFIED_TABLE);
 }
 
-export async function runGeometryProcessing(
+async function runProcessingSteps(
   session: ShpQuerySession,
   input: GeometryProcessingInput
-): Promise<GeometryProcessingOutcome> {
+): Promise<ProcessingStepsOutcome> {
   const context = buildProcessingContext(input);
   const { processing, layout } = context;
   context.onStep(ProcessingStep.CONVERT);
@@ -342,5 +353,27 @@ export async function runGeometryProcessing(
   return {
     workTable,
     report: assembleReport(context, validity, unify, repair, overlaps),
+  };
+}
+
+const sumTimingsMs = (timings: ReadonlyArray<StepTiming>): number =>
+  timings.reduce((total, timing) => total + timing.ms, 0);
+
+export async function runGeometryProcessing(
+  session: ShpQuerySession,
+  input: GeometryProcessingInput
+): Promise<GeometryProcessingOutcome> {
+  const clock = createStepClock(input.now);
+  const outcome = await runProcessingSteps(session, {
+    ...input,
+    onStep: (label) => {
+      clock.start(label);
+      input.onStep(label);
+    },
+  });
+  const stepTimings = clock.finish();
+  return {
+    workTable: outcome.workTable,
+    report: { ...outcome.report, stepTimings, processingMs: sumTimingsMs(stepTimings) },
   };
 }

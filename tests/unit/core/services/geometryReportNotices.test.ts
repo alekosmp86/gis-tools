@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   NoticeLevel,
   buildReportNotices,
+  incompatibleGeometryText,
   isReplaceBlocked,
   shouldOfferRepair,
   type ReportNotice,
@@ -446,20 +447,93 @@ describe("geometryReportNotices", () => {
       });
     });
 
+    describe("incompatibleGeometryText", () => {
+      it("should return the plural wording naming the target type when several rows do not fit", () => {
+        expect(incompatibleGeometryText(3, "Polígono")).toBe(
+          "3 geometrías de varias partes no caben en la columna destino de tipo Polígono"
+        );
+      });
+
+      it("should return the singular wording naming the target type when one row does not fit", () => {
+        expect(incompatibleGeometryText(1, "Polígono")).toBe(
+          "1 geometría de varias partes no cabe en la columna destino de tipo Polígono"
+        );
+      });
+
+      it("should name a POINT target as Punto in both plural and singular forms", () => {
+        expect(incompatibleGeometryText(2, "Punto")).toBe(
+          "2 geometrías de varias partes no caben en la columna destino de tipo Punto"
+        );
+        expect(incompatibleGeometryText(1, "Punto")).toBe(
+          "1 geometría de varias partes no cabe en la columna destino de tipo Punto"
+        );
+      });
+
+      it("should name a LINESTRING target as Línea in the plural form", () => {
+        expect(incompatibleGeometryText(4, "Línea")).toBe(
+          "4 geometrías de varias partes no caben en la columna destino de tipo Línea"
+        );
+      });
+
+      it("should name an unknown catalog type with its fallback label verbatim", () => {
+        expect(incompatibleGeometryText(1, "Curvepolygon")).toBe(
+          "1 geometría de varias partes no cabe en la columna destino de tipo Curvepolygon"
+        );
+      });
+
+      it("should use the single-part phrasing when the target label is null", () => {
+        expect(incompatibleGeometryText(1, null)).toBe(
+          "1 geometría de varias partes no cabe en la columna destino de una sola parte"
+        );
+        expect(incompatibleGeometryText(2, null)).toBe(
+          "2 geometrías de varias partes no caben en la columna destino de una sola parte"
+        );
+      });
+    });
+
     describe("incompatible multi-part geometries", () => {
-      const SINGULAR_TEXT = "1 geometría MultiPolígono no cabe en la columna destino de tipo Polígono";
-      const PLURAL_TEXT = "3 geometrías MultiPolígono no caben en la columna destino de tipo Polígono";
+      const SINGULAR_TEXT = "1 geometría de varias partes no cabe en la columna destino de tipo Polígono";
+      const PLURAL_TEXT = "3 geometrías de varias partes no caben en la columna destino de tipo Polígono";
+      const POLYGON_REPORT = { incompatibleTargetType: "Polígono" } as const;
 
       it("should return an ERROR with the plural wording when several multi-part geometries do not fit a Polygon column", () => {
-        const notices = buildReportNotices(report({ incompatibleGeometryRows: 3 }), DEFAULT_GEOMETRY_PROCESSING);
+        const notices = buildReportNotices(
+          report({ incompatibleGeometryRows: 3, ...POLYGON_REPORT }),
+          DEFAULT_GEOMETRY_PROCESSING
+        );
 
         expect(notices).toContainEqual({ level: NoticeLevel.ERROR, text: PLURAL_TEXT });
       });
 
       it("should return an ERROR with the exact singular wording when one multi-part geometry does not fit a Polygon column", () => {
-        const notices = buildReportNotices(report({ incompatibleGeometryRows: 1 }), DEFAULT_GEOMETRY_PROCESSING);
+        const notices = buildReportNotices(
+          report({ incompatibleGeometryRows: 1, ...POLYGON_REPORT }),
+          DEFAULT_GEOMETRY_PROCESSING
+        );
 
         expect(textsOf(notices, NoticeLevel.ERROR)).toEqual([SINGULAR_TEXT]);
+      });
+
+      it("should name the Punto label in the ERROR when a POINT target rejects multi-part geometries", () => {
+        const notices = buildReportNotices(
+          report({ incompatibleGeometryRows: 2, incompatibleTargetType: "Punto" }),
+          DEFAULT_GEOMETRY_PROCESSING
+        );
+
+        expect(textsOf(notices, NoticeLevel.ERROR)).toEqual([
+          "2 geometrías de varias partes no caben en la columna destino de tipo Punto",
+        ]);
+      });
+
+      it("should use the single-part phrasing in the ERROR when the report carries no target label", () => {
+        const notices = buildReportNotices(
+          report({ incompatibleGeometryRows: 1, incompatibleTargetType: null }),
+          DEFAULT_GEOMETRY_PROCESSING
+        );
+
+        expect(textsOf(notices, NoticeLevel.ERROR)).toEqual([
+          "1 geometría de varias partes no cabe en la columna destino de una sola parte",
+        ]);
       });
 
       it("should return no incompatible-geometry ERROR when the incompatible count is zero", () => {
@@ -476,11 +550,11 @@ describe("geometryReportNotices", () => {
         };
 
         const notices = buildReportNotices(
-          report({ incompatibleGeometryRows: 2, invalidBefore: 1, insertedInvalid: 1, attributeConflicts: 1, groups: 2, rowsMerged: 3 }),
+          report({ incompatibleGeometryRows: 2, incompatibleTargetType: "Polígono", invalidBefore: 1, insertedInvalid: 1, attributeConflicts: 1, groups: 2, rowsMerged: 3 }),
           options
         );
 
-        const incompatibleIndex = notices.findIndex((notice) => notice.text.includes("MultiPolígono"));
+        const incompatibleIndex = notices.findIndex((notice) => notice.text.includes("de varias partes"));
         const firstWarningIndex = notices.findIndex((notice) => notice.level === NoticeLevel.WARNING);
         expect(notices[incompatibleIndex].level).toBe(NoticeLevel.ERROR);
         expect(incompatibleIndex).toBeLessThan(firstWarningIndex);
@@ -494,7 +568,13 @@ describe("geometryReportNotices", () => {
         };
 
         const notices = buildReportNotices(
-          report({ incompatibleGeometryRows: 1, wouldBlock: true, overlapCount: 2, overlapSkippedInvalid: 1 }),
+          report({
+            incompatibleGeometryRows: 1,
+            incompatibleTargetType: "Polígono",
+            wouldBlock: true,
+            overlapCount: 2,
+            overlapSkippedInvalid: 1,
+          }),
           options
         );
 

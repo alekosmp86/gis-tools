@@ -40,7 +40,10 @@ const REPORT: GeometryProcessingReport = {
   overlapSkippedInvalid: 0,
   insertedInvalid: 0,
   incompatibleGeometryRows: 0,
+  incompatibleTargetType: null,
   wouldBlock: true,
+  stepTimings: [],
+  processingMs: 0,
 };
 
 function startOrFail(store: ShpJobStore, tableKey: string): ShpJobSnapshot {

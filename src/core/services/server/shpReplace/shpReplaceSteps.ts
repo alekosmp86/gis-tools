@@ -1,4 +1,47 @@
-import type { GeometryProcessingOptions } from "@/core/types/geometryProcessing";
+import type { GeometryProcessingOptions, StepTiming } from "@/core/types/geometryProcessing";
+
+export interface StepClock {
+  start(label: string): void;
+  finish(): StepTiming[];
+}
+
+interface OpenStep {
+  readonly label: string;
+  readonly startedAt: number;
+}
+
+const elapsedMsBetween = (startedAt: number, endedAt: number): number => Math.max(0, Math.round(endedAt - startedAt));
+
+export function createStepClock(now: () => number = () => performance.now()): StepClock {
+  let timings: StepTiming[] = [];
+  let openStep: OpenStep | undefined;
+  let finished = false;
+
+  const closeOpenStep = (instant: number): void => {
+    if (openStep === undefined) return;
+    timings.push({ label: openStep.label, ms: elapsedMsBetween(openStep.startedAt, instant) });
+    openStep = undefined;
+  };
+
+  return {
+    start(label) {
+      const instant = now();
+      if (finished) {
+        timings = [];
+        finished = false;
+      }
+      closeOpenStep(instant);
+      openStep = { label, startedAt: instant };
+    },
+    finish() {
+      if (!finished) {
+        closeOpenStep(now());
+        finished = true;
+      }
+      return [...timings];
+    },
+  };
+}
 
 export const ProcessingStep = {
   CONVERT: "Convirtiendo geometrías",

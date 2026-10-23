@@ -12,7 +12,7 @@ import type { SequenceRef } from "@/core/services/replaceSequences";
 import { buildRepairSequenceStatement, buildResetSequenceStatement } from "@/core/services/sqlStatements";
 import type { DbColumnMetadata } from "@/core/types/db";
 import { ShpCommitUncertainError, ShpProcessingBlockedError } from "@/core/services/server/shpReplace/shpReplaceTypes";
-import type { GeometryProcessingOptions } from "@/core/types/geometryProcessing";
+import type { GeometryProcessingOptions, GeometryProcessingReport } from "@/core/types/geometryProcessing";
 import {
   AreaMode,
   BASE_TABLE,
@@ -1487,8 +1487,8 @@ describe("runShpReplace geometry processing", () => {
       const dry = processingSession();
       const real = processingSession();
 
-      const dryResult = await run(dry, withProcessing(FULL_PROCESSING, { dryRun: true }));
-      const realResult = await run(real, withProcessing(FULL_PROCESSING));
+      const dryResult = await run(dry, withProcessing(FULL_PROCESSING, { dryRun: true, now: steppingClock() }));
+      const realResult = await run(real, withProcessing(FULL_PROCESSING, { now: steppingClock() }));
 
       expect(dryResult.geometry).toEqual(realResult.geometry);
     });
@@ -1639,6 +1639,7 @@ describe("runShpReplace geometry processing", () => {
 
       expect(session.sqlLog).toContain(buildIncompatibleGeometryCountSql(BASE_TABLE));
       expect(result.geometry?.incompatibleGeometryRows).toBe(0);
+      expect(result.geometry?.incompatibleTargetType).toBeNull();
     });
 
     it("should run the incompatible count after the repair statements and before the final invalid count", async () => {
@@ -1660,9 +1661,60 @@ describe("runShpReplace geometry processing", () => {
       const error = await captureRejection(run(session, withProcessing(NO_UNIFY_PROCESSING)));
 
       expectSpanishMessage(error);
+      expect(error.message).toContain("3 geometrías de varias partes no caben en la columna destino de tipo Polígono");
       expect(session.sqlLog.some((sql) => sql.startsWith("LOCK TABLE"))).toBe(false);
       expect(session.sqlLog.some((sql) => sql.startsWith("DELETE FROM"))).toBe(false);
       expect(session.sqlLog[session.sqlLog.length - 1]).toBe("ROLLBACK");
+    });
+
+    it("should report the Polígono label on the dry-run geometry report when a POLYGON target rejects multi-part geometries", async () => {
+      const session = processingSession({ unify: false, incompatible: 2 }, { geometryRows: POLYGON_GEOMETRY });
+
+      const result = await run(session, { ...withProcessing(NO_UNIFY_PROCESSING), dryRun: true });
+
+      expect(result.geometry?.incompatibleGeometryRows).toBe(2);
+      expect(result.geometry?.incompatibleTargetType).toBe("Polígono");
+    });
+
+    it.each([
+      ["a POINT", "POINT", "Punto"],
+      ["a LINESTRING", "LINESTRING", "Línea"],
+      ["an unknown CURVEPOLYGON fallback", "CURVEPOLYGON", "Curvepolygon"],
+      ["a lower-cased point", "point", "Punto"],
+    ])("should report the expected target label for %s on the dry-run geometry report when the target rejects multi-part geometries", async (_label, catalogType, expectedLabel) => {
+      const session = processingSession({ unify: false, incompatible: 2 }, { geometryRows: [{ srid: 4326, type: catalogType }] });
+
+      const result = await run(session, { ...withProcessing(NO_UNIFY_PROCESSING), dryRun: true });
+
+      expect(result.geometry?.incompatibleGeometryRows).toBe(2);
+      expect(result.geometry?.incompatibleTargetType).toBe(expectedLabel);
+    });
+
+    it("should refuse a real run naming the Punto label when a POINT target rejects multi-part geometries", async () => {
+      const session = processingSession({ unify: false, incompatible: 2 }, { geometryRows: [{ srid: 4326, type: "POINT" }] });
+
+      const error = await captureRejection(run(session, withProcessing(NO_UNIFY_PROCESSING)));
+
+      expectSpanishMessage(error);
+      expect(error.message).toContain("2 geometrías de varias partes no caben en la columna destino de tipo Punto");
+      expect(session.sqlLog.some((sql) => sql.startsWith("LOCK TABLE"))).toBe(false);
+      expect(session.sqlLog.some((sql) => sql.startsWith("DELETE FROM"))).toBe(false);
+    });
+
+    it("should refuse a real run with the singular Línea wording when one LINESTRING geometry is multi-part", async () => {
+      const session = processingSession({ unify: false, incompatible: 1 }, { geometryRows: [{ srid: 4326, type: "LINESTRING" }] });
+
+      const error = await captureRejection(run(session, withProcessing(NO_UNIFY_PROCESSING)));
+
+      expect(error.message).toContain("1 geometría de varias partes no cabe en la columna destino de tipo Línea");
+    });
+
+    it("should report a null label on the geometry report when a MULTIPOLYGON target accepts multi-part geometries", async () => {
+      const session = processingSession({ unify: false, incompatible: 4 }, { geometryRows: MULTIPOLYGON_GEOMETRY });
+
+      const result = await run(session, withProcessing(NO_UNIFY_PROCESSING));
+
+      expect(result.geometry?.incompatibleTargetType).toBeNull();
     });
 
     it("should never reach the incompatible count when a POLYGON target is combined with unify", async () => {
@@ -1994,6 +2046,117 @@ describe("runShpReplace progress steps", () => {
       const staging = recorder.events.filter((event) => event.phase === ShpReplacePhase.STAGING);
       expect(staging.length).toBeGreaterThan(0);
       expect(staging.every((event) => event.detail === undefined)).toBe(true);
+    });
+  });
+});
+
+const TICK_MS = 7;
+
+function steppingClock(tick = TICK_MS): () => number {
+  let current = 0;
+  return () => {
+    current += tick;
+    return current;
+  };
+}
+
+const stepLabelsOf = (report: GeometryProcessingReport | undefined): string[] =>
+  (report?.stepTimings ?? []).map((timing) => timing.label);
+
+describe("runShpReplace step timings", () => {
+  describe("timings per processing step", () => {
+    it("should record one timing per processing step in plan order when repair, unify and overlaps are all on", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING, { now: steppingClock() }));
+
+      expect(stepLabelsOf(result.geometry)).toEqual(ALL_PROCESSING_STEPS);
+    });
+
+    it("should record convert, repair and validity timings in plan order when only repair is on", async () => {
+      const session = processingSession({ unify: false });
+
+      const result = await run(session, withProcessing(ONLY_REPAIR, { now: steppingClock() }));
+
+      expect(stepLabelsOf(result.geometry)).toEqual([CONVERT_STEP, REPAIR_STEP, VALIDITY_STEP]);
+    });
+
+    it("should record every step timing as a non-negative integer ms when processing runs", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING, { now: steppingClock() }));
+
+      const timings = result.geometry?.stepTimings ?? [];
+      expect(timings.length).toBeGreaterThan(0);
+      for (const timing of timings) {
+        expect(Number.isInteger(timing.ms)).toBe(true);
+        expect(timing.ms).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it("should give each step the ticks elapsed until the next step starts when the clock advances by a fixed amount per call", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING, { now: steppingClock() }));
+
+      expect(result.geometry?.stepTimings.map((timing) => timing.ms)).toEqual(
+        ALL_PROCESSING_STEPS.map(() => TICK_MS)
+      );
+    });
+
+    it("should set processingMs to the sum of the step timings when processing runs", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING, { now: steppingClock() }));
+
+      const summed = (result.geometry?.stepTimings ?? []).reduce((total, timing) => total + timing.ms, 0);
+      expect(result.geometry?.processingMs).toBe(summed);
+      expect(result.geometry?.processingMs).toBe(ALL_PROCESSING_STEPS.length * TICK_MS);
+    });
+  });
+
+  describe("no processing", () => {
+    it("should expose no geometry report and so no step timings when every process is disabled", async () => {
+      const session = createSession();
+
+      const result = await run(session, buildParams({ processing: DISABLED_PROCESSING, now: steppingClock() }));
+
+      expect(result.geometry).toBeUndefined();
+    });
+  });
+
+  describe("dry run and real run", () => {
+    it("should include the step timings and processingMs in the geometry report of a dry run", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING, { dryRun: true, now: steppingClock() }));
+
+      expect(stepLabelsOf(result.geometry)).toEqual(ALL_PROCESSING_STEPS);
+      expect(result.geometry?.processingMs).toBe(ALL_PROCESSING_STEPS.length * TICK_MS);
+    });
+
+    it("should include the step timings and processingMs in the geometry report of a real run", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING, { now: steppingClock() }));
+
+      expect(stepLabelsOf(result.geometry)).toEqual(ALL_PROCESSING_STEPS);
+      expect(result.geometry?.processingMs).toBe(ALL_PROCESSING_STEPS.length * TICK_MS);
+    });
+  });
+
+  describe("blocked by overlaps", () => {
+    it("should carry the step timings and processingMs in the ShpProcessingBlockedError report when the block policy finds overlaps", async () => {
+      const session = processingSession({ overlapCount: 3 });
+
+      const error = await captureRejection(
+        run(session, withProcessing(FULL_BLOCKING_PROCESSING, { now: steppingClock() }))
+      );
+
+      expect(error).toBeInstanceOf(ShpProcessingBlockedError);
+      const blocked = error as ShpProcessingBlockedError;
+      expect(stepLabelsOf(blocked.report)).toEqual(ALL_PROCESSING_STEPS);
+      expect(blocked.report.processingMs).toBe(ALL_PROCESSING_STEPS.length * TICK_MS);
     });
   });
 });

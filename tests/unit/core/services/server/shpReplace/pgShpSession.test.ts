@@ -9,7 +9,13 @@ import type { ShpReplaceSession } from "@/core/services/server/shpReplace/shpRep
 
 const PASSWORD = "s3cret-pass";
 const CONFIG: PgShpConfig = { host: "db.local", port: 5432, db_name: "gis", user: "app", password: PASSWORD };
-const SET_STATEMENTS = ["SET statement_timeout = '4h'", "SET lock_timeout = '30s'", "SET client_encoding = 'UTF8'"];
+const SET_STATEMENTS = [
+  "SET statement_timeout = '4h'",
+  "SET lock_timeout = '30s'",
+  "SET client_encoding = 'UTF8'",
+  "SET work_mem = '128MB'",
+  "SET maintenance_work_mem = '256MB'",
+];
 const SPANISH_MARKER = /\b(el|la|los|las|de|del|no|que|con|para|se|una|un|en)\b|[áéíóúñ¿¡]/i;
 const COPY_SQL = 'COPY "shp_replace_stage" ("rec","c0") FROM STDIN';
 
@@ -161,7 +167,7 @@ describe("openPgShpSession", () => {
       expect(harness.client.connectCount).toBe(1);
     });
 
-    it("should run only the statement_timeout, lock_timeout and client_encoding SET statements in order after connecting", async () => {
+    it("should run only the statement_timeout, lock_timeout, client_encoding, work_mem and maintenance_work_mem SET statements in order after connecting", async () => {
       const harness = createHarness();
 
       await harness.open();

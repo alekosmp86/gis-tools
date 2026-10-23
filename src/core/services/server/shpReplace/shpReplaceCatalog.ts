@@ -23,6 +23,7 @@ export type TargetColumn = DbColumnMetadata & { udt_name: string; cast_type: str
 export interface TargetCatalog {
   columns: TargetColumn[];
   geometry?: GeometryPlan;
+  geometryTypeName?: string;
   acceptsMulti: boolean;
   sourceGeographic: boolean;
 }
@@ -36,6 +37,7 @@ export interface ReplacePlan {
 
 interface GeometryLoad {
   plan: GeometryPlan;
+  typeName: string;
   acceptsMulti: boolean;
   sourceGeographic: boolean;
 }
@@ -138,6 +140,7 @@ async function loadGeometryPlan(
   const sourceGeographic = await fetchSourceSridRow(session, validSourceSrid);
   return {
     plan: { sourceSrid: validSourceSrid, targetSrid: registered.srid, multi: isMultiGeometryType(registered.type) },
+    typeName: registered.type,
     acceptsMulti: isMultiGeometryType(registered.type) || isUnconstrainedGeometryType(registered.type),
     sourceGeographic,
   };
@@ -154,6 +157,7 @@ export async function loadTargetCatalog(
   return {
     columns,
     geometry: geometryLoad?.plan,
+    geometryTypeName: geometryLoad?.typeName,
     acceptsMulti: geometryLoad?.acceptsMulti ?? false,
     sourceGeographic: geometryLoad?.sourceGeographic ?? false,
   };

@@ -29,6 +29,8 @@ const SESSION_SETUP_STATEMENTS = [
   "SET statement_timeout = '4h'",
   "SET lock_timeout = '30s'",
   "SET client_encoding = 'UTF8'",
+  "SET work_mem = '128MB'",
+  "SET maintenance_work_mem = '256MB'",
 ] as const;
 const CLIENT_CONNECT_TIMEOUT_MS = 10_000;
 
