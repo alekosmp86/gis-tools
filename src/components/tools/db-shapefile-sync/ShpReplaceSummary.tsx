@@ -38,7 +38,18 @@ const describeAnalyze = (analyze: AnalyzeOutcome): { type: AlertType; text: stri
 const describeSequence = ({ qualifiedLabel, nextValue, resetToStart }: SequenceAdjustment): string =>
   `Secuencia ${qualifiedLabel} ajustada: el próximo id será ${nextValue}.${resetToStart ? " (se reinició en 1 antes de la carga)." : ""}`;
 
+const AnalysisSummary: React.FC<ShpReplaceSummaryProps> = ({ result }) => (
+  <div className={styles.summary}>
+    <AlertMessage type={AlertType.INFO} text="Análisis completado: la tabla destino no fue modificada." />
+    <div className={styles.kpiGrid}>
+      <Kpi label="Registros en el archivo" value={result.sourceRows} />
+      <Kpi label="Registros procesados" value={result.stagedRows} />
+    </div>
+  </div>
+);
+
 export const ShpReplaceSummary: React.FC<ShpReplaceSummaryProps> = ({ result }) => {
+  if (result.dryRun) return <AnalysisSummary result={result} />;
   const analyzeMessage = describeAnalyze(result.analyze);
   return (
     <div className={styles.summary}>

@@ -1,5 +1,7 @@
-import { Columns3, Eraser } from "lucide-react";
+import { Columns3, Eraser, Shapes } from "lucide-react";
 import { ColumnMappingStep } from "@/components/tools/db-sync-common/ColumnMappingStep";
+import { GeometryProcessingStep } from "@/components/tools/db-sync-common/geometry-processing/GeometryProcessingStep";
+import type { GeometryProcessingController } from "@/components/tools/db-sync-common/geometry-processing/useGeometryProcessingOptions";
 import type { ReplaceColumnMapping } from "@/core/services/replaceColumnMapping";
 import type { InsertFieldDefault } from "@/core/types/comparison";
 import type { DbColumnMetadata, DbConfig } from "@/core/types/db";
@@ -12,6 +14,7 @@ export interface BuildShpReplaceStepsParams {
   targetColumns: string[];
   targetDetails: DbColumnMetadata[];
   mapping: ReplaceColumnMapping;
+  autoMatches: Record<string, string>;
   isMappingValid: boolean;
   onSourceChange: (targetColumn: string, sourceColumn: string | null) => void;
   onDefaultChange: (targetColumn: string, fieldDefault: InsertFieldDefault) => void;
@@ -22,6 +25,9 @@ export interface BuildShpReplaceStepsParams {
   detectedSrid: number | null;
   prjText: string | undefined;
   fileDate: Date | null;
+  dbfFields: string[];
+  geometry: GeometryProcessingController;
+  uploadId: string | null;
   goToStep: (stepId: number) => void;
 }
 
@@ -45,16 +51,43 @@ export function buildShpReplaceSteps(params: BuildShpReplaceStepsParams): Wizard
           onSourceChange={params.onSourceChange}
           onDefaultChange={params.onDefaultChange}
           fileDate={params.fileDate}
+          autoMatches={params.autoMatches}
         />
       ),
       canProceed: params.isMappingValid,
-      nextLabel: "Continuar a Reemplazo Completo",
+      nextLabel: "Continuar a Procesamiento de Geometrías",
       onNext: () => params.goToStep(5),
       onBack: () => params.goToStep(3),
       backLabel: "Volver al Paso 3: Modo",
     },
     {
       id: 5,
+      title: "Procesamiento de Geometrías",
+      subtitle: "Reparar, Unificar y Validar (opcional)",
+      cardTitle: "Procesamiento de Geometrías",
+      cardSubtitle:
+        "Paso opcional: repare geometrías inválidas, unifique registros por clave o valide solapes antes de cargar.",
+      icon: Shapes,
+      content: (
+        <GeometryProcessingStep
+          dbfFields={params.dbfFields}
+          options={params.geometry.options}
+          suggestionOrigin={params.geometry.suggestionOrigin}
+          onChange={params.geometry.onChange}
+          onSkip={() => {
+            params.geometry.omit();
+            params.goToStep(6);
+          }}
+        />
+      ),
+      canProceed: true,
+      nextLabel: "Continuar a Reemplazo Completo",
+      onNext: () => params.goToStep(6),
+      onBack: () => params.goToStep(4),
+      backLabel: "Volver al Paso 4: Mapeo de Columnas",
+    },
+    {
+      id: 6,
       title: "Reemplazo Completo",
       subtitle: "Vaciar y Recargar",
       cardTitle: "Reemplazo Completo de la Tabla Destino",
@@ -69,10 +102,12 @@ export function buildShpReplaceSteps(params: BuildShpReplaceStepsParams): Wizard
           detectedSrid={params.detectedSrid}
           prjText={params.prjText}
           mapping={params.mapping}
+          geometry={params.geometry}
+          uploadId={params.uploadId}
         />
       ),
-      onBack: () => params.goToStep(4),
-      backLabel: "Volver al Paso 4: Mapeo de Columnas",
+      onBack: () => params.goToStep(5),
+      backLabel: "Volver al Paso 5: Procesamiento de Geometrías",
     },
   ];
 }

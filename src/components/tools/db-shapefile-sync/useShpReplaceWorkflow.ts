@@ -3,6 +3,9 @@ import { start } from "@/core/services/shpReplaceRunStore";
 import { buildQualifiedTableLabel } from "@/core/services/sqlStatements";
 import type { ReplaceColumnMapping } from "@/core/services/replaceColumnMapping";
 import type { DbConfig } from "@/core/types/db";
+import type { GeometryProcessingController } from "@/components/tools/db-sync-common/geometry-processing/useGeometryProcessingOptions";
+import { isProcessingActive } from "@/core/services/geometryProcessingOptions";
+import { computeReplaceGates } from "./shpReplaceGates";
 
 const SRID_DIGITS_PATTERN = /^\d+$/;
 const SHP_MIN_SRID = 1;
@@ -20,9 +23,11 @@ export interface UseShpReplaceWorkflowParams {
   file: File | null;
   mapping: ReplaceColumnMapping;
   detectedSrid: number | null;
+  geometry: GeometryProcessingController;
+  uploadId: string | null;
 }
 
-export function useShpReplaceWorkflow({ target, file, mapping, detectedSrid }: UseShpReplaceWorkflowParams) {
+export function useShpReplaceWorkflow({ target, file, mapping, detectedSrid, geometry, uploadId }: UseShpReplaceWorkflowParams) {
   const [confirmValue, setConfirmValue] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -31,16 +36,21 @@ export function useShpReplaceWorkflow({ target, file, mapping, detectedSrid }: U
 
   const confirmText = target ? buildQualifiedTableLabel(target.schema_name, target.table_name) : "";
   const sourceSrid = parseSourceSrid(sridText);
-  const canRun =
-    Boolean(target && file) &&
-    sourceSrid !== null &&
-    confirmValue === confirmText &&
-    password.trim() !== "";
+  const { canAnalyze, canRun } = computeReplaceGates({
+    hasTarget: Boolean(target),
+    hasFile: Boolean(file),
+    sridValid: sourceSrid !== null,
+    passwordFilled: password.trim() !== "",
+    processingValid: geometry.isValid,
+    processingActive: isProcessingActive(geometry.options),
+    confirmMatches: confirmValue === confirmText,
+  });
 
-  const run = () => {
-    if (!target || !file || sourceSrid === null || !canRun) return;
+  const launch = (dryRun: boolean) => {
+    if (!target || !file || sourceSrid === null) return;
     const runPassword = password;
     setPassword("");
+    geometry.prepareRun(geometry.options, dryRun);
     void start({
       file,
       fileName: file.name,
@@ -48,6 +58,9 @@ export function useShpReplaceWorkflow({ target, file, mapping, detectedSrid }: U
       mapping,
       sourceSrid,
       resetSequences,
+      processing: geometry.options,
+      dryRun,
+      uploadId: uploadId ?? undefined,
     });
   };
 
@@ -64,8 +77,14 @@ export function useShpReplaceWorkflow({ target, file, mapping, detectedSrid }: U
     sourceSrid,
     resetSequences,
     setResetSequences,
+    canAnalyze,
     canRun,
-    run,
+    analyze: () => {
+      if (canAnalyze) launch(true);
+    },
+    run: () => {
+      if (canRun) launch(false);
+    },
   };
 }
 

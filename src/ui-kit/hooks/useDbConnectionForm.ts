@@ -17,7 +17,8 @@ interface UseDbConnectionFormCallbacks {
     config: DbConfig,
     columns: string[],
     totalRows: number,
-    columnDetails?: DbColumnMetadata[]
+    columnDetails?: DbColumnMetadata[],
+    uniqueKeys?: string[][]
   ) => void;
   onStatusChange?: (status: DbConnectionStatusPayload) => void;
 }
@@ -34,6 +35,7 @@ export function useDbConnectionForm(
   } | null>(null);
   const [columnsLoaded, setColumnsLoaded] = useState<string[]>([]);
   const [columnDetailsLoaded, setColumnDetailsLoaded] = useState<DbColumnMetadata[]>([]);
+  const [uniqueKeysLoaded, setUniqueKeysLoaded] = useState<string[][]>([]);
   const [totalRowsLoaded, setTotalRowsLoaded] = useState<number | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [savedProfiles, setSavedProfiles] = useState<SavedDbProfile[]>([]);
@@ -122,6 +124,7 @@ export function useDbConnectionForm(
       onSuccess: (data) => {
         setColumnsLoaded(data.columns);
         setColumnDetailsLoaded(data.columnDetails || []);
+        setUniqueKeysLoaded(data.uniqueKeys || []);
         setTotalRowsLoaded(data.totalRows);
         setIsConnected(true);
 
@@ -203,7 +206,7 @@ export function useDbConnectionForm(
 
   const handleProceed = () => {
     if (isConnected && columnsLoaded.length > 0) {
-      onSuccess(config, columnsLoaded, totalRowsLoaded || 0, columnDetailsLoaded);
+      onSuccess(config, columnsLoaded, totalRowsLoaded || 0, columnDetailsLoaded, uniqueKeysLoaded);
     }
   };
 

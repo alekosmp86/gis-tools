@@ -7,6 +7,15 @@
 .actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.analysisHint {
+  margin-right: auto;
+  align-self: center;
+  font-size: 0.75rem;
+  color: var(--text-dim);
 }
 
 .runButton {

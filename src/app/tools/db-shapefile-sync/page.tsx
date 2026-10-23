@@ -15,16 +15,24 @@ import { SyncMode } from "@/components/tools/db-sync-common/syncMode";
 import { useDbSourceConnection } from "@/components/tools/db-sync-common/useDbSourceConnection";
 import { useWizardMappingState } from "@/components/tools/db-sync-common/useWizardMappingState";
 import { ShpReplaceRunPanel } from "@/components/tools/db-shapefile-sync/ShpReplaceRunPanel";
+import type { ShpRerunRequest } from "@/components/tools/db-shapefile-sync/ShpReplaceFollowUp";
 import { useShpReplaceRun } from "@/components/tools/db-shapefile-sync/useShpReplaceRun";
+import { useGeometryProcessingOptions } from "@/components/tools/db-sync-common/geometry-processing/useGeometryProcessingOptions";
 import { useShpReplaceMapping } from "@/components/tools/db-shapefile-sync/useShpReplaceMapping";
 import { buildShpReplaceSteps } from "@/components/tools/db-shapefile-sync/shpReplaceWizardSteps";
 import { getShpReplaceUnavailableReason } from "@/components/tools/db-shapefile-sync/shpReplaceAvailability";
-import { ShpReplaceRunStatus } from "@/core/services/shpReplaceRunStore";
+import {
+  ShpReplaceRunStatus,
+  rerun as rerunShpReplace,
+  reset as resetShpReplaceRun,
+} from "@/core/services/shpReplaceRunStore";
 import { detectSridFromPrj } from "@/core/services/shpSrid";
 import { ParsedShapefileData } from "@/core/types/shp";
 import { WizardStepDef } from "@/ui-kit/types/ui";
 import { DB_VS_SHAPEFILE_DESCRIPTOR } from "@/core/constants/comparisonDescriptors";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
+
+const NO_DBF_FIELDS: string[] = [];
 
 export default function DbShapefileSyncToolPage() {
   const {
@@ -44,6 +52,7 @@ export default function DbShapefileSyncToolPage() {
     dbColumns,
     columnDetails,
     dbTotalRows,
+    uniqueKeys,
     isDbConnected,
     dbFormRef,
     handleDbSuccess,
@@ -53,7 +62,7 @@ export default function DbShapefileSyncToolPage() {
   const [shapefileData, setShapefileData] = useState<ParsedShapefileData | null>(null);
   const [shapefileFile, setShapefileFile] = useState<File | null>(null);
   const [syncMode, setSyncMode] = useState<SyncMode>(SyncMode.COMPARE);
-  const { status: replaceRunStatus } = useShpReplaceRun();
+  const { status: replaceRunStatus, uploadId } = useShpReplaceRun();
 
   const replaceUnavailableReason = getShpReplaceUnavailableReason(shapefileFile);
   const effectiveMode = replaceUnavailableReason ? SyncMode.COMPARE : syncMode;
@@ -64,15 +73,33 @@ export default function DbShapefileSyncToolPage() {
   });
   const detectedSrid = detectSridFromPrj(shapefileData?.prjText);
 
+  const dbfFields = shapefileData?.attributes ?? NO_DBF_FIELDS;
+  const geometry = useGeometryProcessingOptions({
+    target: dbConfig,
+    uniqueKeys,
+    mapping: replaceMapping.mapping,
+    dbfFields,
+  });
+
   const handleShapefileSuccess = (parsedData: ParsedShapefileData, file: File) => {
+    resetShpReplaceRun();
     setShapefileData(parsedData);
     setShapefileFile(file);
   };
 
   const handleShapefileDiscard = () => {
+    resetShpReplaceRun();
     setShapefileData(null);
     setShapefileFile(null);
   };
+
+  const handleRerun = (request: ShpRerunRequest) => {
+    geometry.onChange(request.processing);
+    geometry.prepareRun(request.processing, request.dryRun);
+    void rerunShpReplace({ password: request.password, processing: request.processing, dryRun: request.dryRun });
+  };
+
+  const handleReconfigure = () => resetShpReplaceRun({ keepUpload: true });
 
   const modeStep: WizardStepDef = {
     id: 3,
@@ -152,6 +179,7 @@ export default function DbShapefileSyncToolPage() {
     targetColumns: dbColumns,
     targetDetails: columnDetails,
     mapping: replaceMapping.mapping,
+    autoMatches: replaceMapping.autoMatches,
     isMappingValid: replaceMapping.isMappingValid,
     onSourceChange: replaceMapping.setSource,
     onDefaultChange: replaceMapping.setDefault,
@@ -162,6 +190,9 @@ export default function DbShapefileSyncToolPage() {
     detectedSrid,
     prjText: shapefileData?.prjText,
     fileDate: shapefileData?.modifiedAt ? new Date(shapefileData.modifiedAt) : null,
+    dbfFields,
+    geometry,
+    uploadId,
     goToStep: setCurrentStep,
   });
 
@@ -202,7 +233,11 @@ export default function DbShapefileSyncToolPage() {
       {replaceRunStatus === ShpReplaceRunStatus.IDLE ? (
         <WizardOrchestrator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
       ) : (
-        <ShpReplaceRunPanel />
+        <ShpReplaceRunPanel
+          processing={geometry.analyzedOptions ?? geometry.options}
+          onRerun={handleRerun}
+          onReconfigure={handleReconfigure}
+        />
       )}
     </ToolWorkspaceLayout>
   );

@@ -50,7 +50,16 @@
   color: var(--accent-rose);
 }
 
+.selectGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .select {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   padding: 8px 10px;
   border-radius: 8px;
@@ -58,6 +67,26 @@
   border: 1px solid var(--border-color);
   color: var(--text-main);
   font-size: 0.85rem;
+}
+
+.autoChip {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.autoChipReview {
+  border-color: rgba(245, 158, 11, 0.45);
+  color: var(--accent-amber);
+}
+
+.autoSummary {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .conflict {
