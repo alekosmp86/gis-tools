@@ -4,6 +4,7 @@ import { AlertType } from "@/ui-kit/types/ui";
 import { NoticeLevel, buildReportNotices, type ReportNotice } from "@/core/services/geometryReportNotices";
 import type { GeometryProcessingOptions, GeometryProcessingReport } from "@/core/types/geometryProcessing";
 import { GeometryReportKpis } from "./GeometryReportKpis";
+import { GeometryReportTimings } from "./GeometryReportTimings";
 import {
   AttributeConflictsTable,
   LargestGroupsTable,
@@ -51,6 +52,10 @@ export const GeometryReportPanel: React.FC<GeometryReportPanelProps> = ({ report
         <ReportSection title="Grupos más grandes" count={report.largestGroups.length}>
           <LargestGroupsTable groups={report.largestGroups} />
         </ReportSection>
+      )}
+
+      {report.stepTimings.length > 0 && (
+        <GeometryReportTimings timings={report.stepTimings} processingMs={report.processingMs} />
       )}
     </div>
   );

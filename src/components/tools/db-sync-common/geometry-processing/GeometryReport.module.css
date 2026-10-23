@@ -80,6 +80,13 @@
   word-break: break-all;
 }
 
+.timingTotal {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
 .value {
   display: inline-block;
   margin-right: 8px;
