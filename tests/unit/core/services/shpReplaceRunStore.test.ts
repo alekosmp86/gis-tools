@@ -5,7 +5,33 @@ import type { ReplaceColumnMapping } from "@/core/services/replaceColumnMapping"
 import type { ShpJobSnapshot } from "@/core/services/server/shpReplace/shpReplaceJobStore";
 import type { ShpReplaceResult } from "@/core/services/server/shpReplace/shpReplaceTypes";
 
+import type { GeometryProcessingOptions, GeometryProcessingReport } from "@/core/types/geometryProcessing";
+
 type Store = typeof import("@/core/services/shpReplaceRunStore");
+
+const PROCESSING: GeometryProcessingOptions = {
+  repair: { enabled: true },
+  unify: { enabled: true, keyFields: ["NOMBRE"] },
+  overlaps: { enabled: true, policy: "report", minAreaM2: 1 },
+};
+
+const GEOMETRY_REPORT: GeometryProcessingReport = {
+  invalidBefore: 2,
+  repaired: 2,
+  emptyAfterRepair: 1,
+  groups: 2,
+  rowsMerged: 1,
+  nullKeyRows: 0,
+  largestGroups: [],
+  attributeConflicts: 0,
+  attributeConflictSamples: [],
+  overlapCount: 0,
+  overlapSamples: [],
+  overlapSkippedInvalid: 0,
+  insertedInvalid: 0,
+  incompatibleGeometryRows: 0,
+  wouldBlock: false,
+};
 
 interface FakeClient {
   upload: Mock<ShpReplaceRunClient["upload"]>;
@@ -38,6 +64,7 @@ const doneResult: ShpReplaceResult = {
   stagedRows: 3,
   previousRows: 2,
   insertedRows: 3,
+  dryRun: false,
   targetModified: true,
   sequencesAdjusted: [],
   analyze: { status: "ok" },
@@ -48,7 +75,9 @@ const job = (changes: Partial<ShpJobSnapshot> = {}): ShpJobSnapshot => ({
   tableKey: "tgt:6543/tdb|geo|parcelas",
   state: "running",
   phase: null,
+  detail: null,
   startedAt: 1,
+  dryRun: false,
   ...changes,
 });
 
@@ -121,6 +150,10 @@ describe("shpReplaceRunStore", () => {
         context: null,
         jobId: null,
         outcomeUnknown: false,
+        uploadId: null,
+        dryRun: false,
+        report: null,
+        detail: null,
       });
       expect(store.getSnapshot()).toEqual(store.getServerSnapshot());
     });
@@ -160,6 +193,12 @@ describe("shpReplaceRunStore", () => {
       expect(store.getSnapshot().uploadPct).toBe(33);
       onProgress(200, 200);
       expect(store.getSnapshot().uploadPct).toBe(100);
+    });
+
+    it("should keep the step detail null while uploading", () => {
+      client.upload.mockReturnValue(neverSettles());
+      void store.start(runParams(client));
+      expect(store.getSnapshot().detail).toBeNull();
     });
 
     it("should not call start on the server before the upload resolves", () => {
@@ -211,6 +250,12 @@ describe("shpReplaceRunStore", () => {
         sourceSrid: 32721,
         resetSequences: true,
         confirm: true,
+        geometryProcessing: {
+          repair: { enabled: false },
+          unify: { enabled: false, keyFields: [] },
+          overlaps: { enabled: false, policy: "block", minAreaM2: 1 },
+        },
+        dryRun: false,
       });
     });
 
@@ -251,6 +296,35 @@ describe("shpReplaceRunStore", () => {
       expect(snapshot.phase).toBe("staging");
       expect(snapshot.current).toBe(500);
       expect(snapshot.total).toBe(1000);
+    });
+
+    it("should copy the step detail from the polled job", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(
+        job({ state: "running", phase: "swapping", current: 1, total: 3, detail: "Bloqueando la tabla destino" })
+      );
+      void store.start(runParams(client));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(store.getSnapshot().detail).toBe("Bloqueando la tabla destino");
+    });
+
+    it("should clear the step detail once the run settles as done", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status
+        .mockResolvedValueOnce(
+          job({ state: "running", phase: "finalizing", current: 1, total: 3, detail: "Ajustando secuencias" })
+        )
+        .mockResolvedValueOnce(job({ state: "done", result: doneResult }));
+      const run = store.start(runParams(client));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(store.getSnapshot().detail).toBe("Ajustando secuencias");
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await run;
+      expect(store.getSnapshot()).toMatchObject({ status: "done", detail: null });
     });
 
     it("should resolve to DONE with the result when the job state is done", async () => {
@@ -671,6 +745,349 @@ describe("shpReplaceRunStore", () => {
       await vi.advanceTimersByTimeAsync(POLL_MS);
       await expect(run).resolves.toBeUndefined();
       expect(store.getSnapshot().status).toBe("done");
+    });
+  });
+
+  describe("reused upload", () => {
+    it("should skip the upload and send the start with the given uploadId when uploadId is provided", async () => {
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "running" }));
+
+      void store.start(runParams(client, { uploadId: "up-existing" }));
+      await settle();
+
+      expect(client.upload).not.toHaveBeenCalled();
+      expect(client.start).toHaveBeenCalledOnce();
+      expect(client.start.mock.calls[0][0].uploadId).toBe("up-existing");
+    });
+
+    it("should move straight to RUNNING with the jobId after start when uploadId is provided", async () => {
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "running" }));
+
+      void store.start(runParams(client, { uploadId: "up-existing" }));
+      await settle();
+
+      expect(store.getSnapshot()).toMatchObject({ status: "running", jobId: "job-1", uploadPct: 100 });
+    });
+
+    it("should record the reused uploadId in the state", async () => {
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "running" }));
+
+      void store.start(runParams(client, { uploadId: "up-existing" }));
+      await settle();
+
+      expect(store.getSnapshot().uploadId).toBe("up-existing");
+    });
+  });
+
+  describe("uploadId retention", () => {
+    it("should record the uploadId returned by a successful upload", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "running" }));
+
+      void store.start(runParams(client));
+      await settle();
+
+      expect(store.getSnapshot().uploadId).toBe("up-1");
+    });
+
+    it("should keep the uploadId when the run finishes DONE", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "done", result: doneResult }));
+      const run = store.start(runParams(client));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await run;
+
+      expect(store.getSnapshot()).toMatchObject({ status: "done", uploadId: "up-1" });
+    });
+
+    it("should keep the uploadId when the run finishes FAILED", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "failed", error: "Tabla bloqueada por otro proceso." }));
+      const run = store.start(runParams(client));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await run;
+
+      expect(store.getSnapshot()).toMatchObject({ status: "failed", uploadId: "up-1" });
+    });
+
+    it("should clear the uploadId when reset is called without options", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "done", result: doneResult }));
+      const run = store.start(runParams(client));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await run;
+
+      store.reset();
+
+      expect(store.getSnapshot().uploadId).toBeNull();
+    });
+
+    it("should keep the uploadId and return every other field to idle when reset is called with keepUpload true", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "done", result: doneResult }));
+      const run = store.start(runParams(client));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await run;
+
+      store.reset({ keepUpload: true });
+
+      expect(store.getSnapshot()).toEqual({ ...store.getServerSnapshot(), uploadId: "up-1" });
+    });
+
+    it("should start the real run without uploading again when an analysis kept its upload", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "done", result: doneResult }));
+      const analysis = store.start(runParams(client, { dryRun: true }));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await analysis;
+      store.reset({ keepUpload: true });
+
+      await store.start(runParams(client, { uploadId: store.getSnapshot().uploadId ?? undefined }));
+
+      expect(client.upload).toHaveBeenCalledOnce();
+      expect(client.start.mock.calls[1][0].uploadId).toBe("up-1");
+    });
+  });
+
+  describe("dry run and geometry report", () => {
+    it("should send dryRun true and the processing options in the start body when they are given", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "running" }));
+
+      await store.start(runParams(client, { dryRun: true, processing: PROCESSING }));
+
+      expect(client.start.mock.calls[0][0]).toMatchObject({ dryRun: true, geometryProcessing: PROCESSING });
+    });
+
+    it("should report dryRun true in the state while a dry run is running", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "running" }));
+
+      await store.start(runParams(client, { dryRun: true }));
+
+      expect(store.getSnapshot()).toMatchObject({ status: "running", dryRun: true });
+    });
+
+    it("should default dryRun to false in the state when the run does not set it", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "running" }));
+
+      await store.start(runParams(client));
+
+      expect(store.getSnapshot().dryRun).toBe(false);
+    });
+
+    it("should resolve to DONE with dryRun true and targetModified false when a dry run job is done", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(
+        job({
+          state: "done",
+          dryRun: true,
+          result: { ...doneResult, dryRun: true, targetModified: false, insertedRows: 0 },
+        })
+      );
+      const run = store.start(runParams(client, { dryRun: true }));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await run;
+
+      expect(store.getSnapshot()).toMatchObject({
+        status: "done",
+        dryRun: true,
+        result: { dryRun: true, targetModified: false },
+      });
+    });
+
+    it("should copy the geometry report from a done job into the state", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "done", result: doneResult, report: GEOMETRY_REPORT }));
+      const run = store.start(runParams(client));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await run;
+
+      expect(store.getSnapshot().report).toEqual(GEOMETRY_REPORT);
+    });
+
+    it("should copy the geometry report from a failed job blocked by overlaps into the state", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(
+        job({
+          state: "failed",
+          error: "Se detectaron 2 solapes.",
+          outcomeUnknown: false,
+          report: { ...GEOMETRY_REPORT, overlapCount: 2, wouldBlock: true },
+        })
+      );
+      const run = store.start(runParams(client, { processing: PROCESSING }));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await run;
+
+      expect(store.getSnapshot()).toMatchObject({
+        status: "failed",
+        error: "Se detectaron 2 solapes.",
+        report: { overlapCount: 2, wouldBlock: true },
+      });
+    });
+
+    it("should set the state report to null when the job carries no report", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "done", result: doneResult }));
+      const run = store.start(runParams(client));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await run;
+
+      expect(store.getSnapshot().report).toBeNull();
+    });
+  });
+
+  describe("rerun", () => {
+    const NEW_PASSWORD = "nueva-clave-2";
+
+    const finishFirstRun = async (changes: Record<string, unknown> = {}) => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "done", result: doneResult }));
+      const run = store.start(runParams(client, changes));
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await run;
+    };
+
+    it("should reuse the last start parameters and the stored uploadId without uploading again", async () => {
+      await finishFirstRun();
+      store.reset({ keepUpload: true });
+
+      await store.rerun({ password: NEW_PASSWORD, processing: PROCESSING, dryRun: false });
+
+      expect(client.upload).toHaveBeenCalledOnce();
+      expect(client.start).toHaveBeenCalledTimes(2);
+      expect(client.start.mock.calls[1][0]).toMatchObject({
+        host: "tgt",
+        port: "6543",
+        db_name: "tdb",
+        user: "u",
+        schema_name: "geo",
+        table_name: "parcelas",
+        uploadId: "up-1",
+        mapping,
+        sourceSrid: 32721,
+        resetSequences: true,
+      });
+    });
+
+    it("should send the new password, processing options and dryRun given to rerun in the start body", async () => {
+      await finishFirstRun();
+      store.reset({ keepUpload: true });
+
+      await store.rerun({ password: NEW_PASSWORD, processing: PROCESSING, dryRun: true });
+
+      expect(client.start.mock.calls[1][0]).toMatchObject({
+        password: NEW_PASSWORD,
+        geometryProcessing: PROCESSING,
+        dryRun: true,
+      });
+    });
+
+    it("should never keep the password in any state snapshot during and after the rerun", async () => {
+      await finishFirstRun();
+      store.reset({ keepUpload: true });
+      client.start.mockClear();
+      client.status.mockResolvedValue(job({ state: "done", result: doneResult }));
+
+      const rerun = store.rerun({ password: NEW_PASSWORD, processing: PROCESSING, dryRun: false });
+      expect(JSON.stringify(store.getSnapshot())).not.toContain(NEW_PASSWORD);
+      expect(JSON.stringify(store.getSnapshot())).not.toContain(PASSWORD);
+      await settle();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      await rerun;
+
+      expect(JSON.stringify(store.getSnapshot())).not.toContain(NEW_PASSWORD);
+      expect(JSON.stringify(store.getSnapshot())).not.toContain(PASSWORD);
+      expect(JSON.stringify(store.getSnapshot().context)).not.toContain(NEW_PASSWORD);
+    });
+
+    it("should be a no-op when the store is uploading", async () => {
+      await finishFirstRun();
+      store.reset({ keepUpload: true });
+      client.start.mockClear();
+      client.upload.mockReturnValue(neverSettles());
+      void store.start(runParams(client));
+      expect(store.getSnapshot().status).toBe("uploading");
+
+      await store.rerun({ password: NEW_PASSWORD, processing: PROCESSING, dryRun: false });
+
+      expect(client.start).not.toHaveBeenCalled();
+      expect(client.upload).toHaveBeenCalledTimes(2);
+      expect(store.getSnapshot().status).toBe("uploading");
+    });
+
+    it("should be a no-op when the store is running", async () => {
+      client.upload.mockResolvedValue({ uploadId: "up-1", size: 9 });
+      client.start.mockResolvedValue({ jobId: "job-1" });
+      client.status.mockResolvedValue(job({ state: "running" }));
+      void store.start(runParams(client));
+      await settle();
+      expect(store.getSnapshot().status).toBe("running");
+
+      await store.rerun({ password: NEW_PASSWORD, processing: PROCESSING, dryRun: false });
+
+      expect(client.start).toHaveBeenCalledOnce();
+      expect(client.upload).toHaveBeenCalledOnce();
+      expect(store.getSnapshot().status).toBe("running");
+    });
+
+    it("should be a no-op when no run was ever started", async () => {
+      await store.rerun({ password: NEW_PASSWORD, processing: PROCESSING, dryRun: false });
+
+      expect(store.getSnapshot()).toEqual(store.getServerSnapshot());
+      expect(client.upload).not.toHaveBeenCalled();
+      expect(client.start).not.toHaveBeenCalled();
+    });
+
+    it("should be a no-op after reset without keepUpload clears the stored parameters", async () => {
+      await finishFirstRun();
+      store.reset();
+      client.start.mockClear();
+
+      await store.rerun({ password: NEW_PASSWORD, processing: PROCESSING, dryRun: false });
+
+      expect(client.start).not.toHaveBeenCalled();
+      expect(store.getSnapshot()).toEqual(store.getServerSnapshot());
+    });
+
+    it("should keep the stored parameters so rerun still starts after reset with keepUpload true", async () => {
+      await finishFirstRun();
+      store.reset({ keepUpload: true });
+      client.start.mockClear();
+
+      await store.rerun({ password: NEW_PASSWORD, processing: PROCESSING, dryRun: false });
+
+      expect(client.start).toHaveBeenCalledOnce();
+      expect(client.start.mock.calls[0][0].uploadId).toBe("up-1");
     });
   });
 });

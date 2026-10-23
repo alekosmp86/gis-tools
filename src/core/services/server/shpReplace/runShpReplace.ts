@@ -6,6 +6,8 @@ import {
   quoteIdentifier,
   resolveSchemaName,
 } from "@/core/services/sqlStatements";
+import { isProcessingActive } from "@/core/services/geometryProcessingOptions";
+import { incompatibleGeometryText } from "@/core/services/geometryReportNotices";
 import { AnalyzeStatus, type AnalyzeOutcome, type SequenceAdjustment } from "@/core/types/replace";
 import { discoverTargetSequences, type SequenceRef } from "@/core/services/replaceSequences";
 import { resolveInsertColumns } from "@/core/services/replaceColumnMapping";
@@ -13,7 +15,9 @@ import {
   buildCopySql,
   buildCreateStageSql,
   buildInsertSelectSql,
+  GeometrySourceKind,
   STAGE_TABLE,
+  type InsertSource,
 } from "@/core/services/server/shpReplace/replaceSql";
 import { encodeCopyRow } from "@/core/services/server/shpReplace/copyText";
 import type { OpenShapefile, ShpRecordRow } from "@/core/services/server/shpReplace/shpRecordSource";
@@ -23,8 +27,17 @@ import {
   type ReplacePlan,
   type TargetCatalog,
 } from "@/core/services/server/shpReplace/shpReplaceCatalog";
+import { runGeometryProcessing, type GeometryProcessingInput } from "@/core/services/server/shpReplace/runGeometryProcessing";
+import {
+  buildProcessingStepPlan,
+  FINALIZE_STEP_PLAN,
+  FinalizeStep,
+  SWAP_STEP_PLAN,
+  SwapStep,
+} from "@/core/services/server/shpReplace/shpReplaceSteps";
 import {
   ShpCommitUncertainError,
+  ShpProcessingBlockedError,
   ShpReplacePhase,
   type RunShpReplaceParams,
   type ShpQuerySession,
@@ -34,6 +47,7 @@ import {
   type ShpReplaceSessionOpener,
   type ShpReplaceTarget,
 } from "@/core/services/server/shpReplace/shpReplaceTypes";
+import type { GeometryProcessingOptions, GeometryProcessingReport } from "@/core/types/geometryProcessing";
 
 export { ShpReplacePhase } from "@/core/services/server/shpReplace/shpReplaceTypes";
 export type {
@@ -44,17 +58,29 @@ export type {
 
 const STAGE_PROGRESS_STEPS = 100;
 
-type SwapOutcome = Omit<ShpReplaceResult, "targetModified" | "analyze">;
+interface PreparedRows {
+  rows: number;
+  insertSource?: InsertSource;
+  geometry?: GeometryProcessingReport;
+}
+
+type SwapOutcome = Omit<ShpReplaceResult, "dryRun" | "targetModified" | "analyze">;
 
 const errorMessageOf = (error: unknown): string => (error instanceof Error ? error.message : "Error desconocido");
 
 const toReplaceError = (error: unknown): Error =>
   new Error(`No se pudo completar el reemplazo: ${errorMessageOf(error)}. La tabla destino no fue modificada.`);
 
+const toFailure = (error: unknown): Error =>
+  error instanceof ShpProcessingBlockedError ? error : toReplaceError(error);
+
 const toCommitUncertainError = (error: unknown): ShpCommitUncertainError =>
   new ShpCommitUncertainError(
     `No se pudo confirmar si el reemplazo se aplicó: ${errorMessageOf(error)}. Verifique el contenido de la tabla destino antes de reintentar.`
   );
+
+const blockedMessageOf = (report: GeometryProcessingReport): string =>
+  `Se detectaron ${report.overlapCount} solapes entre geometrías y la política es bloquear. El reemplazo no se realizó y la tabla destino no fue modificada.`;
 
 const qualifiedTableOf = (target: ShpReplaceTarget): string =>
   `${quoteIdentifier(resolveSchemaName(target.schema_name))}.${quoteIdentifier(target.table_name)}`;
@@ -63,8 +89,11 @@ const emitProgress = (params: RunShpReplaceParams, progress: ShpReplaceProgress)
   params.onProgress?.(progress);
 };
 
-const emitPhase = (params: RunShpReplaceParams, phase: ShpReplacePhase): void =>
-  emitProgress(params, { phase, current: 0, total: 0 });
+const emitStep = (params: RunShpReplaceParams, phase: ShpReplacePhase, steps: readonly string[], detail: string): void =>
+  emitProgress(params, { phase, current: steps.indexOf(detail) + 1, total: steps.length, detail });
+
+const activeProcessingOf = (params: RunShpReplaceParams): GeometryProcessingOptions | undefined =>
+  params.processing && isProcessingActive(params.processing) ? params.processing : undefined;
 
 function assertReadableShapefile(shapefile: OpenShapefile): void {
   if (shapefile.recordCount === 0) {
@@ -74,6 +103,25 @@ function assertReadableShapefile(shapefile: OpenShapefile): void {
     throw new Error(
       `El .shp tiene ${shapefile.shapeRecordCount} registros y el .dbf tiene ${shapefile.recordCount}: los archivos no coinciden.`
     );
+  }
+}
+
+function assertUnifyTargetIsMulti(processing: GeometryProcessingOptions, catalog: TargetCatalog): void {
+  if (processing.unify.enabled && catalog.geometry !== undefined && !catalog.acceptsMulti) {
+    throw new Error(
+      "Unificar geometrías requiere que la columna geométrica destino sea de tipo MultiPolígono. Cambie la columna destino o desactive la unificación."
+    );
+  }
+}
+
+function assertProcessingGeometry(processing: GeometryProcessingOptions | undefined, catalog: TargetCatalog): void {
+  if (processing && catalog.geometry === undefined) {
+    throw new Error(
+      "El procesamiento de geometrías requiere mapear una columna destino a la geometría del SHP."
+    );
+  }
+  if (processing) {
+    assertUnifyTargetIsMulti(processing, catalog);
   }
 }
 
@@ -123,22 +171,59 @@ async function stageRecords(session: ShpReplaceSession, params: RunShpReplacePar
   return copiedRows;
 }
 
+function buildProcessingInput(
+  params: RunShpReplaceParams,
+  plan: ReplacePlan,
+  catalog: TargetCatalog,
+  processing: GeometryProcessingOptions
+): GeometryProcessingInput {
+  const steps = buildProcessingStepPlan(processing);
+  return {
+    processing,
+    stageFields: plan.stageFields,
+    mappedFields: plan.mappedFields,
+    sourceSrid: params.sourceSrid,
+    geographic: catalog.sourceGeographic,
+    targetSingleGeometry: catalog.geometry !== undefined && !catalog.acceptsMulti,
+    onStep: (label) => emitStep(params, ShpReplacePhase.PROCESSING, steps, label),
+  };
+}
+
+async function processStagedRows(
+  session: ShpReplaceSession,
+  params: RunShpReplaceParams,
+  plan: ReplacePlan,
+  catalog: TargetCatalog,
+  processing: GeometryProcessingOptions
+): Promise<PreparedRows> {
+  const outcome = await runGeometryProcessing(session, buildProcessingInput(params, plan, catalog, processing));
+  const rows = await countRows(session, quoteIdentifier(outcome.workTable));
+  return {
+    rows,
+    insertSource: { table: outcome.workTable, geometry: GeometrySourceKind.NATIVE },
+    geometry: outcome.report,
+  };
+}
+
 async function swapTargetRows(
   session: ShpReplaceSession,
   params: RunShpReplaceParams,
   plan: ReplacePlan,
-  stagedRows: number
+  prepared: PreparedRows
 ): Promise<Pick<SwapOutcome, "previousRows" | "insertedRows">> {
   const { target } = params;
   const qualifiedTable = qualifiedTableOf(target);
+  emitStep(params, ShpReplacePhase.SWAPPING, SWAP_STEP_PLAN, SwapStep.LOCK);
   await session.query(`LOCK TABLE ${qualifiedTable} IN SHARE ROW EXCLUSIVE MODE`);
   const previousRows = await countRows(session, qualifiedTable);
+  emitStep(params, ShpReplacePhase.SWAPPING, SWAP_STEP_PLAN, SwapStep.DELETE);
   await session.query(buildDeleteStatement(target.schema_name, target.table_name));
+  emitStep(params, ShpReplacePhase.SWAPPING, SWAP_STEP_PLAN, SwapStep.INSERT);
   const insertResult = await session.query(
-    buildInsertSelectSql(target.schema_name, target.table_name, plan.insertColumns, plan.geometry)
+    buildInsertSelectSql(target.schema_name, target.table_name, plan.insertColumns, plan.geometry, prepared.insertSource)
   );
-  if (insertResult.rowCount !== stagedRows) {
-    throw new Error(`Se insertaron ${insertResult.rowCount} filas de ${stagedRows} preparadas.`);
+  if (insertResult.rowCount !== prepared.rows) {
+    throw new Error(`Se insertaron ${insertResult.rowCount} filas de ${prepared.rows} preparadas.`);
   }
   return { previousRows, insertedRows: insertResult.rowCount };
 }
@@ -180,6 +265,7 @@ async function adjustSequences(
   sequences: SequenceRef[]
 ): Promise<SequenceAdjustment[]> {
   const { target, resetSequences } = params;
+  emitStep(params, ShpReplacePhase.FINALIZING, FINALIZE_STEP_PLAN, FinalizeStep.ADJUST_SEQUENCES);
   if (resetSequences) {
     await resetUnmappedSequences(session, sequences.filter((sequence) => !sequence.mapped));
   }
@@ -191,44 +277,94 @@ async function adjustSequences(
   return adjusted;
 }
 
-async function replaceRows(session: ShpReplaceSession, params: RunShpReplaceParams): Promise<SwapOutcome> {
-  assertReadableShapefile(params.shapefile);
-  const catalog = await loadTargetCatalog(session, params);
-  const plan = buildReplacePlan(params, catalog);
-  const sequences = resolveSequences(params, catalog);
-  const stagedRows = await stageRecords(session, params, plan);
-  emitPhase(params, ShpReplacePhase.SWAPPING);
-  const { previousRows, insertedRows } = await swapTargetRows(session, params, plan, stagedRows);
-  emitPhase(params, ShpReplacePhase.FINALIZING);
+function assertNotBlocked(geometry: GeometryProcessingReport | undefined): void {
+  if (geometry?.wouldBlock) {
+    throw new ShpProcessingBlockedError(blockedMessageOf(geometry), geometry);
+  }
+}
+
+function assertNoIncompatibleGeometries(geometry: GeometryProcessingReport | undefined): void {
+  if (geometry && geometry.incompatibleGeometryRows > 0) {
+    throw new Error(incompatibleGeometryText(geometry.incompatibleGeometryRows));
+  }
+}
+
+async function swapAndFinalize(
+  session: ShpReplaceSession,
+  params: RunShpReplaceParams,
+  plan: ReplacePlan,
+  sequences: SequenceRef[],
+  prepared: PreparedRows
+): Promise<SwapOutcome> {
+  assertNoIncompatibleGeometries(prepared.geometry);
+  assertNotBlocked(prepared.geometry);
+  const { previousRows, insertedRows } = await swapTargetRows(session, params, plan, prepared);
+  // Ordered statements on one transactional connection: sequences are repaired after the rows are swapped.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const sequencesAdjusted = await adjustSequences(session, params, sequences);
   return {
     sourceRows: params.shapefile.recordCount,
-    stagedRows,
+    stagedRows: prepared.rows,
     previousRows,
     insertedRows,
     sequencesAdjusted,
+    geometry: prepared.geometry,
   };
 }
 
-async function commitOrFail(session: ShpReplaceSession): Promise<void> {
+async function measureDryRun(
+  session: ShpQuerySession,
+  params: RunShpReplaceParams,
+  prepared: PreparedRows
+): Promise<SwapOutcome> {
+  const previousRows = await countRows(session, qualifiedTableOf(params.target));
+  return {
+    sourceRows: params.shapefile.recordCount,
+    stagedRows: prepared.rows,
+    previousRows,
+    insertedRows: 0,
+    sequencesAdjusted: [],
+    geometry: prepared.geometry,
+  };
+}
+
+async function replaceRows(session: ShpReplaceSession, params: RunShpReplaceParams): Promise<SwapOutcome> {
+  assertReadableShapefile(params.shapefile);
+  const catalog = await loadTargetCatalog(session, params);
+  const processing = activeProcessingOf(params);
+  assertProcessingGeometry(processing, catalog);
+  const plan = buildReplacePlan(params, catalog);
+  const sequences = resolveSequences(params, catalog);
+  const stagedRows = await stageRecords(session, params, plan);
+  const prepared: PreparedRows = processing
+    ? await processStagedRows(session, params, plan, catalog, processing)
+    : { rows: stagedRows };
+  return params.dryRun
+    ? measureDryRun(session, params, prepared)
+    : swapAndFinalize(session, params, plan, sequences, prepared);
+}
+
+async function rollbackQuietly(session: ShpQuerySession): Promise<void> {
+  await session.query("ROLLBACK").catch(() => undefined);
+}
+
+async function replaceSafely(session: ShpReplaceSession, params: RunShpReplaceParams): Promise<SwapOutcome> {
+  try {
+    await session.query("BEGIN");
+    return await replaceRows(session, params);
+  } catch (error: unknown) {
+    await rollbackQuietly(session);
+    throw toFailure(error);
+  }
+}
+
+async function commitOrFail(session: ShpReplaceSession, params: RunShpReplaceParams): Promise<void> {
+  emitStep(params, ShpReplacePhase.FINALIZING, FINALIZE_STEP_PLAN, FinalizeStep.COMMIT);
   try {
     await session.query("COMMIT");
   } catch (error: unknown) {
     throw toCommitUncertainError(error);
   }
-}
-
-async function replaceInTransaction(session: ShpReplaceSession, params: RunShpReplaceParams): Promise<SwapOutcome> {
-  let outcome: SwapOutcome;
-  try {
-    await session.query("BEGIN");
-    outcome = await replaceRows(session, params);
-  } catch (error: unknown) {
-    await session.query("ROLLBACK").catch(() => undefined);
-    throw toReplaceError(error);
-  }
-  await commitOrFail(session);
-  return outcome;
 }
 
 async function analyzeTarget(session: ShpQuerySession, target: ShpReplaceTarget): Promise<AnalyzeOutcome> {
@@ -240,15 +376,25 @@ async function analyzeTarget(session: ShpQuerySession, target: ShpReplaceTarget)
   }
 }
 
+async function replaceInTransaction(session: ShpReplaceSession, params: RunShpReplaceParams): Promise<ShpReplaceResult> {
+  const outcome = await replaceSafely(session, params);
+  if (params.dryRun) {
+    await rollbackQuietly(session);
+    return { ...outcome, dryRun: true, targetModified: false, analyze: { status: AnalyzeStatus.SKIPPED } };
+  }
+  await commitOrFail(session, params);
+  emitStep(params, ShpReplacePhase.FINALIZING, FINALIZE_STEP_PLAN, FinalizeStep.ANALYZE);
+  const analyze = await analyzeTarget(session, params.target);
+  return { ...outcome, dryRun: false, targetModified: true, analyze };
+}
+
 export async function runShpReplace(
   openSession: ShpReplaceSessionOpener,
   params: RunShpReplaceParams
 ): Promise<ShpReplaceResult> {
   const session = await openSession();
   try {
-    const swapped = await replaceInTransaction(session, params);
-    const analyze = await analyzeTarget(session, params.target);
-    return { ...swapped, targetModified: true, analyze };
+    return await replaceInTransaction(session, params);
   } finally {
     await session.close();
   }

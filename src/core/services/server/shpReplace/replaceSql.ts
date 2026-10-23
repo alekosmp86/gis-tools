@@ -2,8 +2,8 @@ import { quoteIdentifier, resolveSchemaName } from "@/core/services/sqlStatement
 
 export const STAGE_TABLE = "shp_replace_stage";
 export const GEOMETRY_STAGE_COLUMN = "geom_json";
-
-const STAGE_RECORD_COLUMN = "rec";
+export const PROCESSED_GEOMETRY_COLUMN = "geom";
+export const STAGE_RECORD_COLUMN = "rec";
 const STAGE_FIELD_PREFIX = "c";
 const MAX_SRID = 998999;
 const UNCONSTRAINED_SRID = 0;
@@ -34,6 +34,20 @@ export interface GeometryPlan {
   readonly targetSrid: number;
   readonly multi: boolean;
 }
+
+export const GeometrySourceKind = {
+  JSON: "json",
+  NATIVE: "native",
+} as const;
+
+export type GeometrySourceKind = (typeof GeometrySourceKind)[keyof typeof GeometrySourceKind];
+
+export interface InsertSource {
+  readonly table: string;
+  readonly geometry: GeometrySourceKind;
+}
+
+const DEFAULT_INSERT_SOURCE: InsertSource = { table: STAGE_TABLE, geometry: GeometrySourceKind.JSON };
 
 export const stageColumnName = (index: number): string => `${STAGE_FIELD_PREFIX}${index}`;
 
@@ -79,12 +93,15 @@ const buildReprojectedGeometry = (sourceGeometry: string, sourceSrid: number, ta
     ? sourceGeometry
     : `ST_Transform(${sourceGeometry},${targetSrid})`;
 
-const buildGeometryExpression = (geometry: GeometryPlan): string => {
+const buildSourceGeometry = (source: InsertSource, sourceSrid: number): string =>
+  source.geometry === GeometrySourceKind.NATIVE
+    ? quoteIdentifier(PROCESSED_GEOMETRY_COLUMN)
+    : `ST_SetSRID(ST_GeomFromGeoJSON(NULLIF(${quoteIdentifier(GEOMETRY_STAGE_COLUMN)},'')),${sourceSrid})`;
+
+const buildGeometryExpression = (geometry: GeometryPlan, source: InsertSource): string => {
   const sourceSrid = assertSafeSridNumber(geometry.sourceSrid);
   const targetSrid = assertSafeTargetSridNumber(geometry.targetSrid);
-  const geoJsonInput = `NULLIF(${quoteIdentifier(GEOMETRY_STAGE_COLUMN)},'')`;
-  const sourceGeometry = `ST_SetSRID(ST_GeomFromGeoJSON(${geoJsonInput}),${sourceSrid})`;
-  const reprojected = buildReprojectedGeometry(sourceGeometry, sourceSrid, targetSrid);
+  const reprojected = buildReprojectedGeometry(buildSourceGeometry(source, sourceSrid), sourceSrid, targetSrid);
   return geometry.multi ? `ST_Multi(${reprojected})` : reprojected;
 };
 
@@ -95,12 +112,16 @@ const requireGeometryPlan = (geometry: GeometryPlan | undefined): GeometryPlan =
   return geometry;
 };
 
-const buildSelectExpression = (column: InsertColumnPlan, geometry: GeometryPlan | undefined): string => {
+const buildSelectExpression = (
+  column: InsertColumnPlan,
+  geometry: GeometryPlan | undefined,
+  source: InsertSource
+): string => {
   switch (column.kind) {
     case InsertColumnKind.SOURCE:
       return buildSourceExpression(column.stageColumn, column.dataType);
     case InsertColumnKind.GEOMETRY:
-      return buildGeometryExpression(requireGeometryPlan(geometry));
+      return buildGeometryExpression(requireGeometryPlan(geometry), source);
     case InsertColumnKind.DEFAULT:
       return column.defaultSql;
   }
@@ -110,10 +131,11 @@ export const buildInsertSelectSql = (
   schema: string | null | undefined,
   table: string,
   columns: ReadonlyArray<InsertColumnPlan>,
-  geometry?: GeometryPlan
+  geometry?: GeometryPlan,
+  source: InsertSource = DEFAULT_INSERT_SOURCE
 ): string => {
   const targetTable = `${quoteIdentifier(resolveSchemaName(schema))}.${quoteIdentifier(table)}`;
   const targetColumns = columns.map((column) => quoteIdentifier(column.targetColumn)).join(",");
-  const selectList = columns.map((column) => buildSelectExpression(column, geometry)).join(", ");
-  return `INSERT INTO ${targetTable} (${targetColumns}) SELECT ${selectList} FROM ${quoteIdentifier(STAGE_TABLE)} ORDER BY ${quoteIdentifier(STAGE_RECORD_COLUMN)}`;
+  const selectList = columns.map((column) => buildSelectExpression(column, geometry, source)).join(", ");
+  return `INSERT INTO ${targetTable} (${targetColumns}) SELECT ${selectList} FROM ${quoteIdentifier(source.table)} ORDER BY ${quoteIdentifier(STAGE_RECORD_COLUMN)}`;
 };

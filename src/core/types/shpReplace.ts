@@ -2,6 +2,7 @@ export const SHP_GEOMETRY_SOURCE = "__geometry__";
 
 export const ShpReplacePhase = {
   STAGING: "staging",
+  PROCESSING: "processing",
   SWAPPING: "swapping",
   FINALIZING: "finalizing",
 } as const;

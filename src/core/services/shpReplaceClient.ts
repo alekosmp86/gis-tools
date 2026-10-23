@@ -1,5 +1,6 @@
 import type { ReplaceColumnMapping } from "@/core/services/replaceColumnMapping";
 import type { ShpJobSnapshot } from "@/core/services/server/shpReplace/shpReplaceJobStore";
+import type { GeometryProcessingOptions } from "@/core/types/geometryProcessing";
 
 export const SHP_UPLOAD_FILE_NAME = "shapefile.zip";
 
@@ -37,6 +38,8 @@ export interface ShpStartBody {
   mapping: ReplaceColumnMapping;
   sourceSrid: number;
   resetSequences: boolean;
+  geometryProcessing: GeometryProcessingOptions;
+  dryRun: boolean;
   confirm: true;
 }
 

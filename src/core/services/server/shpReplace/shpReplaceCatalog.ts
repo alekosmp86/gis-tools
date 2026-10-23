@@ -16,18 +16,28 @@ import {
 } from "@/core/services/server/shpReplace/replaceSql";
 import { SHP_GEOMETRY_SOURCE } from "@/core/types/shpReplace";
 import type { RunShpReplaceParams, ShpQuerySession, ShpReplaceTarget } from "@/core/services/server/shpReplace/shpReplaceTypes";
+import type { GeometryProcessingOptions } from "@/core/types/geometryProcessing";
 
 export type TargetColumn = DbColumnMetadata & { udt_name: string; cast_type: string };
 
 export interface TargetCatalog {
   columns: TargetColumn[];
   geometry?: GeometryPlan;
+  acceptsMulti: boolean;
+  sourceGeographic: boolean;
 }
 
 export interface ReplacePlan {
   insertColumns: InsertColumnPlan[];
   stageFields: string[];
+  mappedFields: string[];
   geometry?: GeometryPlan;
+}
+
+interface GeometryLoad {
+  plan: GeometryPlan;
+  acceptsMulti: boolean;
+  sourceGeographic: boolean;
 }
 
 interface RegisteredGeometry {
@@ -38,6 +48,7 @@ interface RegisteredGeometry {
 
 const UDT_NAME_TYPES: ReadonlySet<string> = new Set(["USER-DEFINED", "ARRAY"]);
 const MULTI_GEOMETRY_PREFIX = "MULTI";
+const UNCONSTRAINED_GEOMETRY_TYPE = "GEOMETRY";
 const MAX_COORD_DIMENSION = 2;
 
 const toTargetColumn = (row: Record<string, unknown>): TargetColumn => ({
@@ -92,22 +103,30 @@ function assertTwoDimensional(geometryColumn: string, coordDimension: number): v
   }
 }
 
-async function assertSridRegistered(session: ShpQuerySession, sourceSrid: number): Promise<void> {
-  const result = await session.query(`SELECT srid FROM spatial_ref_sys WHERE srid = $1`, [sourceSrid]);
-  if (result.rows.length === 0) {
+async function fetchSourceSridRow(session: ShpQuerySession, sourceSrid: number): Promise<boolean> {
+  const result = await session.query(
+    "SELECT srid, (proj4text LIKE '%+proj=longlat%') AS geographic FROM spatial_ref_sys WHERE srid = $1",
+    [sourceSrid]
+  );
+  const row = result.rows[0];
+  if (!row) {
     throw new Error(`El SRID de origen ${sourceSrid} no existe en spatial_ref_sys.`);
   }
+  return row.geographic === true;
 }
 
 const isMultiGeometryType = (geometryType: string): boolean =>
   geometryType.trim().toUpperCase().startsWith(MULTI_GEOMETRY_PREFIX);
+
+const isUnconstrainedGeometryType = (geometryType: string): boolean =>
+  geometryType.trim().toUpperCase() === UNCONSTRAINED_GEOMETRY_TYPE;
 
 async function loadGeometryPlan(
   session: ShpQuerySession,
   target: ShpReplaceTarget,
   mapping: ReplaceColumnMapping,
   sourceSrid: number
-): Promise<GeometryPlan | undefined> {
+): Promise<GeometryLoad | undefined> {
   const [geometryColumn] = findGeometryTargetColumns(mapping);
   if (geometryColumn === undefined) return undefined;
   const validSourceSrid = assertSafeSridNumber(sourceSrid);
@@ -116,19 +135,28 @@ async function loadGeometryPlan(
     throw new Error(`La columna geométrica "${geometryColumn}" no está registrada en geometry_columns.`);
   }
   assertTwoDimensional(geometryColumn, registered.coordDimension);
-  await assertSridRegistered(session, validSourceSrid);
-  return { sourceSrid: validSourceSrid, targetSrid: registered.srid, multi: isMultiGeometryType(registered.type) };
+  const sourceGeographic = await fetchSourceSridRow(session, validSourceSrid);
+  return {
+    plan: { sourceSrid: validSourceSrid, targetSrid: registered.srid, multi: isMultiGeometryType(registered.type) },
+    acceptsMulti: isMultiGeometryType(registered.type) || isUnconstrainedGeometryType(registered.type),
+    sourceGeographic,
+  };
 }
 
 export async function loadTargetCatalog(
   session: ShpQuerySession,
   params: Pick<RunShpReplaceParams, "target" | "mapping" | "sourceSrid">
 ): Promise<TargetCatalog> {
-  const [columns, geometry] = await Promise.all([
+  const [columns, geometryLoad] = await Promise.all([
     fetchTargetColumns(session, params.target),
     loadGeometryPlan(session, params.target, params.mapping, params.sourceSrid),
   ]);
-  return { columns, geometry };
+  return {
+    columns,
+    geometry: geometryLoad?.plan,
+    acceptsMulti: geometryLoad?.acceptsMulti ?? false,
+    sourceGeographic: geometryLoad?.sourceGeographic ?? false,
+  };
 }
 
 const castTypeOf = (column: TargetColumn): string =>
@@ -195,12 +223,23 @@ function resolveValidInsertColumns(
   return insertColumns;
 }
 
-const collectStageFields = (insertColumns: ReplaceInsertColumn[]): string[] => {
+const collectMappedFields = (insertColumns: ReplaceInsertColumn[]): string[] => {
   const sources = insertColumns
     .map((column) => column.sourceColumn)
     .filter((source): source is string => source !== null && source !== SHP_GEOMETRY_SOURCE);
   return Array.from(new Set(sources));
 };
+
+const unifyKeyFieldsOf = (processing: GeometryProcessingOptions | undefined): string[] =>
+  processing?.unify.enabled ? [...processing.unify.keyFields] : [];
+
+function assertKeyFieldsExist(keyFields: string[], fieldNames: string[]): void {
+  const known = new Set(fieldNames);
+  const unknown = keyFields.filter((field) => !known.has(field));
+  if (unknown.length > 0) {
+    throw new Error(`Campos clave no encontrados en el DBF: ${joinNames(unknown)}.`);
+  }
+}
 
 const buildDefaultSql = (fixedDefault: InsertFieldDefault | null, dataType: string): string => {
   if (!fixedDefault) return "NULL";
@@ -229,11 +268,14 @@ function toInsertColumnPlan(
 }
 
 export function buildReplacePlan(
-  params: Pick<RunShpReplaceParams, "mapping" | "shapefile">,
+  params: Pick<RunShpReplaceParams, "mapping" | "shapefile" | "processing">,
   catalog: TargetCatalog
 ): ReplacePlan {
   const insertColumns = resolveValidInsertColumns(params.mapping, catalog.columns, params.shapefile.fieldNames);
-  const stageFields = collectStageFields(insertColumns);
+  const mappedFields = collectMappedFields(insertColumns);
+  const keyFields = unifyKeyFieldsOf(params.processing);
+  assertKeyFieldsExist(keyFields, params.shapefile.fieldNames);
+  const stageFields = Array.from(new Set([...mappedFields, ...keyFields]));
   const stageColumnByField = new Map(stageFields.map((field, index) => [field, stageColumnName(index)]));
   const dataTypeByColumn = new Map(catalog.columns.map((column) => [column.column_name, castTypeOf(column)]));
   return {
@@ -241,6 +283,7 @@ export function buildReplacePlan(
       toInsertColumnPlan(column, dataTypeByColumn.get(column.targetColumn) ?? "", stageColumnByField)
     ),
     stageFields,
+    mappedFields,
     geometry: catalog.geometry,
   };
 }

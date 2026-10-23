@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ShpReplaceProgress, ShpReplaceResult } from "@/core/services/server/shpReplace/shpReplaceTypes";
+import type { GeometryProcessingReport } from "@/core/types/geometryProcessing";
 import { ShpJobState, type ShpReplacePhase } from "@/core/types/shpReplace";
 
 export { ShpJobState };
@@ -9,20 +10,23 @@ export interface ShpJobSnapshot {
   tableKey: string;
   state: ShpJobState;
   phase: ShpReplacePhase | null;
+  detail?: string | null;
   current?: number;
   total?: number;
   startedAt: number;
   finishedAt?: number;
+  dryRun: boolean;
   result?: ShpReplaceResult;
+  report?: GeometryProcessingReport;
   error?: string;
   outcomeUnknown?: boolean;
 }
 
 export interface ShpJobStore {
-  tryStart(tableKey: string): ShpJobSnapshot | null;
+  tryStart(tableKey: string, dryRun?: boolean): ShpJobSnapshot | null;
   progress(jobId: string, progress: ShpReplaceProgress): void;
   finish(jobId: string, result: ShpReplaceResult): void;
-  fail(jobId: string, error: string, outcomeUnknown?: boolean): void;
+  fail(jobId: string, error: string, outcomeUnknown?: boolean, report?: GeometryProcessingReport): void;
   get(jobId: string): ShpJobSnapshot | undefined;
   sweep(maxAgeMs: number): number;
 }
@@ -50,7 +54,7 @@ export function createShpJobStore(now: Clock = Date.now): ShpJobStore {
     update(jobId, { ...changes, finishedAt: now() });
 
   return {
-    tryStart(tableKey) {
+    tryStart(tableKey, dryRun = false) {
       const busy = Array.from(jobs.values()).some(
         (job) => job.tableKey === tableKey && job.state === ShpJobState.RUNNING
       );
@@ -60,19 +64,32 @@ export function createShpJobStore(now: Clock = Date.now): ShpJobStore {
         tableKey,
         state: ShpJobState.RUNNING,
         phase: null,
+        detail: null,
         startedAt: now(),
+        dryRun,
       };
       jobs.set(job.jobId, job);
       return { ...job };
     },
     progress(jobId, progress) {
-      update(jobId, { phase: progress.phase, current: progress.current, total: progress.total });
+      update(jobId, {
+        phase: progress.phase,
+        current: progress.current,
+        total: progress.total,
+        detail: progress.detail ?? null,
+      });
     },
     finish(jobId, result) {
-      finishWith(jobId, { state: ShpJobState.DONE, result, outcomeUnknown: false });
+      finishWith(jobId, {
+        state: ShpJobState.DONE,
+        result,
+        outcomeUnknown: false,
+        report: result.geometry,
+        detail: null,
+      });
     },
-    fail(jobId, error, outcomeUnknown = false) {
-      finishWith(jobId, { state: ShpJobState.FAILED, error, outcomeUnknown });
+    fail(jobId, error, outcomeUnknown = false, report) {
+      finishWith(jobId, { state: ShpJobState.FAILED, error, outcomeUnknown, report, detail: null });
     },
     get(jobId) {
       const job = jobs.get(jobId);

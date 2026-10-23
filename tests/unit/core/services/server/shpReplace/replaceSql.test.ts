@@ -9,6 +9,7 @@ import {
   stageColumnName,
   type GeometryPlan,
   type InsertColumnPlan,
+  type InsertSource,
 } from "@/core/services/server/shpReplace/replaceSql";
 
 const STAGE_FROM = ' FROM "shp_replace_stage" ORDER BY "rec"';
@@ -16,7 +17,7 @@ const STAGE_FROM = ' FROM "shp_replace_stage" ORDER BY "rec"';
 function selectListOf(sql: string): string {
   const separator = ") SELECT ";
   const start = sql.indexOf(separator) + separator.length;
-  return sql.slice(start, sql.length - STAGE_FROM.length);
+  return sql.slice(start, sql.lastIndexOf(" FROM "));
 }
 
 function compact(sql: string): string {
@@ -399,6 +400,140 @@ describe("replaceSql", () => {
       const sql = buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry);
 
       expect(compact(selectListOf(sql))).toBe('ST_SetSRID(ST_GeomFromGeoJSON(NULLIF("geom_json",\'\')),25830)');
+    });
+  });
+
+  describe("buildInsertSelectSql with an explicit source", () => {
+    const PROCESSED_FROM = ' FROM "shp_proc_unified" ORDER BY "rec"';
+    const nativeSource: InsertSource = { table: "shp_proc_unified", geometry: "native" };
+
+    it("should produce the same statement as the default source when the source is omitted", () => {
+      const geometry: GeometryPlan = { sourceSrid: 25830, targetSrid: 4326, multi: true };
+      const columns = [sourceColumn("nombre", "text", "c0"), geometryColumn("geom")];
+
+      const omitted = buildInsertSelectSql("public", "parcels", columns, geometry);
+      const explicitDefault = buildInsertSelectSql("public", "parcels", columns, geometry, {
+        table: STAGE_TABLE,
+        geometry: "json",
+      });
+
+      expect(explicitDefault).toBe(omitted);
+    });
+
+    it("should read a json source from the given table while keeping the GeoJSON conversion", () => {
+      const geometry: GeometryPlan = { sourceSrid: 4326, targetSrid: 4326, multi: false };
+
+      const sql = buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry, {
+        table: "other_stage",
+        geometry: "json",
+      });
+
+      expect(sql.endsWith(' FROM "other_stage" ORDER BY "rec"')).toBe(true);
+      expect(compact(selectListOf(sql))).toBe(
+        'ST_SetSRID(ST_GeomFromGeoJSON(NULLIF("geom_json",\'\')),4326)'
+      );
+    });
+
+    it("should build a native insert that reads the processed geometry column directly when SRIDs match and the target is multi", () => {
+      const geometry: GeometryPlan = { sourceSrid: 4326, targetSrid: 4326, multi: true };
+
+      const sql = buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry, nativeSource);
+
+      expect(sql).toBe(`INSERT INTO "public"."parcels" ("geom") SELECT ST_Multi("geom")${PROCESSED_FROM}`);
+    });
+
+    it("should pass the processed geometry through unchanged when SRIDs match and the target is not multi", () => {
+      const geometry: GeometryPlan = { sourceSrid: 4326, targetSrid: 4326, multi: false };
+
+      const sql = buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry, nativeSource);
+
+      expect(sql).toBe(`INSERT INTO "public"."parcels" ("geom") SELECT "geom"${PROCESSED_FROM}`);
+    });
+
+    it("should wrap ST_Transform and ST_Multi around the processed geometry when SRIDs differ and the target is multi", () => {
+      const geometry: GeometryPlan = { sourceSrid: 25830, targetSrid: 4326, multi: true };
+
+      const sql = buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry, nativeSource);
+
+      expect(sql).toBe(
+        `INSERT INTO "public"."parcels" ("geom") SELECT ST_Multi(ST_Transform("geom",4326))${PROCESSED_FROM}`
+      );
+    });
+
+    it("should apply only ST_Transform to the processed geometry when SRIDs differ and the target is not multi", () => {
+      const geometry: GeometryPlan = { sourceSrid: 25830, targetSrid: 4326, multi: false };
+
+      const sql = buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry, nativeSource);
+
+      expect(sql).toBe(`INSERT INTO "public"."parcels" ("geom") SELECT ST_Transform("geom",4326)${PROCESSED_FROM}`);
+    });
+
+    it("should skip ST_Transform for an unconstrained target SRID of 0 and keep ST_Multi when multi", () => {
+      const geometry: GeometryPlan = { sourceSrid: 25830, targetSrid: 0, multi: true };
+
+      const sql = buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry, nativeSource);
+
+      expect(sql).toBe(`INSERT INTO "public"."parcels" ("geom") SELECT ST_Multi("geom")${PROCESSED_FROM}`);
+    });
+
+    it("should never read geom_json, NULLIF, ST_GeomFromGeoJSON or ST_SetSRID for a native source", () => {
+      const geometry: GeometryPlan = { sourceSrid: 25830, targetSrid: 4326, multi: true };
+
+      const sql = buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry, nativeSource);
+
+      expect(sql).not.toContain("geom_json");
+      expect(sql).not.toContain("NULLIF");
+      expect(sql).not.toContain("ST_GeomFromGeoJSON");
+      expect(sql).not.toContain("ST_SetSRID");
+    });
+
+    it("should not reference the stage table for a native source", () => {
+      const geometry: GeometryPlan = { sourceSrid: 4326, targetSrid: 4326, multi: true };
+
+      const sql = buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry, nativeSource);
+
+      expect(sql).not.toContain("shp_replace_stage");
+    });
+
+    it("should read the field columns of a native source from the given table alongside the geometry", () => {
+      const geometry: GeometryPlan = { sourceSrid: 4326, targetSrid: 4326, multi: true };
+
+      const sql = buildInsertSelectSql(
+        "public",
+        "parcels",
+        [sourceColumn("nombre", "text", "c0"), geometryColumn("geom")],
+        geometry,
+        nativeSource
+      );
+
+      expect(sql).toBe(
+        `INSERT INTO "public"."parcels" ("nombre","geom") SELECT "c0", ST_Multi("geom")${PROCESSED_FROM}`
+      );
+    });
+
+    it("should quote the given source table name when it contains a double quote", () => {
+      const geometry: GeometryPlan = { sourceSrid: 4326, targetSrid: 4326, multi: false };
+
+      const sql = buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry, {
+        table: 'odd"name',
+        geometry: "native",
+      });
+
+      expect(sql.endsWith(' FROM "odd""name" ORDER BY "rec"')).toBe(true);
+    });
+
+    it("should throw when a native source has a geometry column but no geometry plan", () => {
+      expect(() => buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], undefined, nativeSource)).toThrow(
+        Error
+      );
+    });
+
+    it("should throw when the target SRID is out of range for a native source", () => {
+      const geometry: GeometryPlan = { sourceSrid: 4326, targetSrid: 999000, multi: true };
+
+      expect(() => buildInsertSelectSql("public", "parcels", [geometryColumn("geom")], geometry, nativeSource)).toThrow(
+        Error
+      );
     });
   });
 

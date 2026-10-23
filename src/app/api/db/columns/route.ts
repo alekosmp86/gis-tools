@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Client } from "pg";
 import type { DbColumnMetadata } from "@/core/types/db";
+import { readUniqueKeys } from "@/core/services/server/uniqueKeysQuery";
 
 interface RawColumnRow {
   column_name: string;
@@ -61,6 +62,18 @@ async function fetchPrimaryKeyColumn(
     return null;
   } catch {
     return null;
+  }
+}
+
+async function fetchUniqueKeysOrOmit(
+  client: Client,
+  schema: string,
+  tableName: string
+): Promise<string[][] | undefined> {
+  try {
+    return await readUniqueKeys(client, schema, tableName);
+  } catch {
+    return undefined;
   }
 }
 
@@ -141,6 +154,7 @@ export async function POST(request: Request) {
     // 2. Fetch primary key & row count concurrently/sequentially
     const primaryKeyColumn = await fetchPrimaryKeyColumn(client, schema, table_name);
     const rowCount = await fetchTableRowCount(client, schema, table_name);
+    const uniqueKeys = await fetchUniqueKeysOrOmit(client, schema, table_name);
 
     await client.end();
 
@@ -156,6 +170,7 @@ export async function POST(request: Request) {
       columnDetails,
       primaryKeyColumn,
       totalRows: rowCount,
+      uniqueKeys,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error al inspeccionar las columnas de la tabla.";

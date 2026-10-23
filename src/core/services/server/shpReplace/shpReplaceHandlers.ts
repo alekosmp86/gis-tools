@@ -1,4 +1,9 @@
 import { openShapefileZip, type OpenShapefile } from "@/core/services/server/shpReplace/shpRecordSource";
+import {
+  GeometryOptionsInvalidError,
+  parseGeometryProcessingOptions,
+} from "@/core/services/geometryProcessingOptions";
+import type { GeometryProcessingOptions } from "@/core/types/geometryProcessing";
 import { openPgShpSession, type PgShpConfig } from "@/core/services/server/shpReplace/pgShpSession";
 import { getShpJobStore, type ShpJobStore } from "@/core/services/server/shpReplace/shpReplaceJobStore";
 import {
@@ -10,6 +15,7 @@ import {
 import { runShpReplace } from "@/core/services/server/shpReplace/runShpReplace";
 import {
   ShpCommitUncertainError,
+  ShpProcessingBlockedError,
   type RunShpReplaceParams,
   type ShpReplaceResult,
   type ShpReplaceSession,
@@ -79,6 +85,7 @@ function statusOf(error: unknown): number {
   if (error instanceof UploadTooLargeError) return 413;
   if (error instanceof UploadNotFoundError) return 404;
   if (error instanceof UploadInvalidError || error instanceof ShpRequestInvalidError) return 400;
+  if (error instanceof GeometryOptionsInvalidError) return 400;
   return 500;
 }
 
@@ -118,6 +125,7 @@ async function readZipOrFail(deps: ShpReplaceHandlerDeps, jobId: string, uploadI
 function buildRunParams(
   start: ShpStartRequest,
   shapefile: OpenShapefile,
+  processing: GeometryProcessingOptions,
   store: ShpJobStore,
   jobId: string
 ): RunShpReplaceParams {
@@ -127,6 +135,8 @@ function buildRunParams(
     mapping: start.mapping,
     sourceSrid: start.sourceSrid,
     resetSequences: start.resetSequences,
+    processing,
+    dryRun: start.dryRun,
     onProgress: (progress) => store.progress(jobId, progress),
   };
 }
@@ -135,26 +145,63 @@ async function runReplaceJob(
   deps: ShpReplaceHandlerDeps,
   start: ShpStartRequest,
   jobId: string,
-  zip: Uint8Array
+  params: RunShpReplaceParams
 ): Promise<void> {
-  try {
-    const shapefile = await deps.openShapefile(zip);
-    const params = buildRunParams(start, shapefile, deps.store, jobId);
-    const result = await deps.runReplace(() => deps.openSession(start.connection), params);
-    deps.store.finish(jobId, result);
-  } finally {
+  const result = await deps.runReplace(() => deps.openSession(start.connection), params);
+  deps.store.finish(jobId, result);
+  if (!start.dryRun) {
     await deps.uploads.delete(start.uploadId).catch(() => undefined);
   }
 }
 
-function startInBackground(deps: ShpReplaceHandlerDeps, start: ShpStartRequest, jobId: string, zip: Uint8Array): void {
-  void runReplaceJob(deps, start, jobId, zip).catch((error: unknown) => {
-    deps.store.fail(
-      jobId,
-      scrubSecret(errorTextOf(error), start.connection.password),
-      error instanceof ShpCommitUncertainError
-    );
-  });
+function failJob(store: ShpJobStore, jobId: string, start: ShpStartRequest, error: unknown): void {
+  const message = scrubSecret(errorTextOf(error), start.connection.password);
+  if (error instanceof ShpProcessingBlockedError) {
+    store.fail(jobId, message, false, error.report);
+    return;
+  }
+  store.fail(jobId, message, error instanceof ShpCommitUncertainError);
+}
+
+function startInBackground(
+  deps: ShpReplaceHandlerDeps,
+  start: ShpStartRequest,
+  jobId: string,
+  params: RunShpReplaceParams
+): void {
+  void runReplaceJob(deps, start, jobId, params).catch((error: unknown) => failJob(deps.store, jobId, start, error));
+}
+
+async function openShapefileOrFail(
+  deps: ShpReplaceHandlerDeps,
+  jobId: string,
+  zip: Uint8Array
+): Promise<OpenShapefile | null> {
+  try {
+    return await deps.openShapefile(zip);
+  } catch (error) {
+    deps.store.fail(jobId, errorTextOf(error));
+    return null;
+  }
+}
+
+function parseProcessingOrFail(
+  store: ShpJobStore,
+  jobId: string,
+  raw: unknown,
+  fieldNames: string[]
+): GeometryProcessingOptions {
+  try {
+    return parseGeometryProcessingOptions(raw, fieldNames);
+  } catch (error) {
+    store.fail(jobId, errorTextOf(error));
+    throw error;
+  }
+}
+
+function launchJob(deps: ShpReplaceHandlerDeps, start: ShpStartRequest, jobId: string, shapefile: OpenShapefile): void {
+  const processing = parseProcessingOrFail(deps.store, jobId, start.geometryProcessing, shapefile.fieldNames);
+  startInBackground(deps, start, jobId, buildRunParams(start, shapefile, processing, deps.store, jobId));
 }
 
 export async function handleUpload(
@@ -178,10 +225,11 @@ export async function handleStart(
     const start = parseStartRequest(await readJsonBody(request));
     await sweepUploadsStale(deps.uploads);
     sweepJobsStale(deps.store);
-    const job = deps.store.tryStart(tableKeyOf(start));
+    const job = deps.store.tryStart(tableKeyOf(start), start.dryRun);
     if (!job) return errorResponse(409, CONFLICT_MESSAGE);
     const zip = await readZipOrFail(deps, job.jobId, start.uploadId);
-    startInBackground(deps, start, job.jobId, zip);
+    const shapefile = await openShapefileOrFail(deps, job.jobId, zip);
+    if (shapefile) launchJob(deps, start, job.jobId, shapefile);
     return jsonResponse(200, { success: true, jobId: job.jobId });
   } catch (error) {
     return failureResponse(error);

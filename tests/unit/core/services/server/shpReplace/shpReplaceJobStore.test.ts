@@ -8,6 +8,7 @@ import {
 } from "@/core/services/server/shpReplace/shpReplaceJobStore";
 import type { ShpReplaceResult } from "@/core/services/server/shpReplace/shpReplaceTypes";
 import { AnalyzeStatus } from "@/core/types/replace";
+import type { GeometryProcessingReport } from "@/core/types/geometryProcessing";
 
 const TABLE_KEY = "gis|public|parcelas";
 const OTHER_TABLE_KEY = "gis|public|otra";
@@ -18,9 +19,28 @@ const RESULT: ShpReplaceResult = {
   stagedRows: 3,
   previousRows: 7,
   insertedRows: 3,
+  dryRun: false,
   targetModified: true,
   sequencesAdjusted: [],
   analyze: { status: AnalyzeStatus.OK },
+};
+
+const REPORT: GeometryProcessingReport = {
+  invalidBefore: 1,
+  repaired: 1,
+  emptyAfterRepair: 0,
+  groups: 2,
+  rowsMerged: 1,
+  nullKeyRows: 0,
+  largestGroups: [],
+  attributeConflicts: 0,
+  attributeConflictSamples: [],
+  overlapCount: 2,
+  overlapSamples: [],
+  overlapSkippedInvalid: 0,
+  insertedInvalid: 0,
+  incompatibleGeometryRows: 0,
+  wouldBlock: true,
 };
 
 function startOrFail(store: ShpJobStore, tableKey: string): ShpJobSnapshot {
@@ -45,6 +65,12 @@ describe("createShpJobStore", () => {
       expect(snapshot?.finishedAt).toBeUndefined();
       expect(typeof snapshot?.jobId).toBe("string");
       expect(snapshot?.jobId.length).toBeGreaterThan(0);
+    });
+
+    it("should return a RUNNING snapshot with a null step detail when no job holds the key", () => {
+      const store = createShpJobStore(() => 0);
+
+      expect(store.tryStart(TABLE_KEY)?.detail).toBeNull();
     });
 
     it("should return null when a RUNNING job already holds the same table key", () => {
@@ -97,6 +123,30 @@ describe("createShpJobStore", () => {
       expect(store.get(job.jobId)).toMatchObject({ state: ShpJobState.RUNNING, phase: "staging", current: 2, total: 3 });
     });
 
+    it("should store the step detail on the running job when progress carries a detail", () => {
+      const store = createShpJobStore(() => 0);
+      const job = startOrFail(store, TABLE_KEY);
+
+      store.progress(job.jobId, { phase: "processing", current: 2, total: 6, detail: "Reparando geometrías" });
+
+      expect(store.get(job.jobId)).toMatchObject({
+        phase: "processing",
+        current: 2,
+        total: 6,
+        detail: "Reparando geometrías",
+      });
+    });
+
+    it("should set the step detail to null when progress carries no detail after a step was reported", () => {
+      const store = createShpJobStore(() => 0);
+      const job = startOrFail(store, TABLE_KEY);
+      store.progress(job.jobId, { phase: "processing", current: 2, total: 6, detail: "Reparando geometrías" });
+
+      store.progress(job.jobId, { phase: "staging", current: 2, total: 3 });
+
+      expect(store.get(job.jobId)?.detail).toBeNull();
+    });
+
     it("should ignore progress for an unknown jobId without throwing", () => {
       const store = createShpJobStore(() => 0);
 
@@ -115,6 +165,16 @@ describe("createShpJobStore", () => {
       store.finish(job.jobId, RESULT);
 
       expect(store.get(job.jobId)).toMatchObject({ state: ShpJobState.DONE, result: RESULT, finishedAt: 250 });
+    });
+
+    it("should set the step detail to null when the job finishes after reporting a step", () => {
+      const store = createShpJobStore(() => 0);
+      const job = startOrFail(store, TABLE_KEY);
+      store.progress(job.jobId, { phase: "finalizing", current: 3, total: 3, detail: "Actualizando estadísticas" });
+
+      store.finish(job.jobId, RESULT);
+
+      expect(store.get(job.jobId)?.detail).toBeNull();
     });
 
     it("should do nothing without throwing when finish is called with an unknown jobId", () => {
@@ -171,6 +231,16 @@ describe("createShpJobStore", () => {
         error: "No se pudo completar el reemplazo.",
         finishedAt: 40,
       });
+    });
+
+    it("should set the step detail to null when the job fails after reporting a step", () => {
+      const store = createShpJobStore(() => 0);
+      const job = startOrFail(store, TABLE_KEY);
+      store.progress(job.jobId, { phase: "swapping", current: 1, total: 3, detail: "Bloqueando la tabla destino" });
+
+      store.fail(job.jobId, "fallo");
+
+      expect(store.get(job.jobId)?.detail).toBeNull();
     });
 
     it("should do nothing without throwing when fail is called with an unknown jobId", () => {
@@ -273,5 +343,48 @@ describe("getShpJobStore", () => {
     expect(getShpJobStore().get(job.jobId)?.tableKey).toBe("singleton|public|job-visibility");
 
     first.fail(job.jobId, "limpieza del test");
+  });
+});
+
+describe("createShpJobStore geometry report", () => {
+  it("should expose the result geometry as the snapshot report when finish is called with a geometry", () => {
+    const store = createShpJobStore(() => 0);
+    const job = startOrFail(store, TABLE_KEY);
+
+    store.finish(job.jobId, { ...RESULT, geometry: REPORT });
+
+    expect(store.get(job.jobId)).toMatchObject({ state: ShpJobState.DONE, report: REPORT });
+  });
+
+  it("should leave the snapshot report undefined when finish is called with a result without geometry", () => {
+    const store = createShpJobStore(() => 0);
+    const job = startOrFail(store, TABLE_KEY);
+
+    store.finish(job.jobId, RESULT);
+
+    expect(store.get(job.jobId)?.report).toBeUndefined();
+  });
+
+  it("should store the report on the FAILED snapshot with outcomeUnknown false when fail is called with a report", () => {
+    const store = createShpJobStore(() => 0);
+    const job = startOrFail(store, TABLE_KEY);
+
+    store.fail(job.jobId, "Se detectaron 2 solapes.", false, REPORT);
+
+    expect(store.get(job.jobId)).toMatchObject({
+      state: ShpJobState.FAILED,
+      error: "Se detectaron 2 solapes.",
+      outcomeUnknown: false,
+      report: REPORT,
+    });
+  });
+
+  it("should leave the snapshot report undefined when fail is called without a report", () => {
+    const store = createShpJobStore(() => 0);
+    const job = startOrFail(store, TABLE_KEY);
+
+    store.fail(job.jobId, "fallo");
+
+    expect(store.get(job.jobId)?.report).toBeUndefined();
   });
 });

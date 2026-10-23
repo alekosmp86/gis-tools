@@ -15,6 +15,11 @@ import { buildQualifiedTableLabel } from "@/core/services/sqlStatements";
 import type { ShpJobSnapshot } from "@/core/services/server/shpReplace/shpReplaceJobStore";
 import type { ShpReplaceResult } from "@/core/services/server/shpReplace/shpReplaceTypes";
 import type { DbConfig } from "@/core/types/db";
+import {
+  DEFAULT_GEOMETRY_PROCESSING,
+  type GeometryProcessingOptions,
+  type GeometryProcessingReport,
+} from "@/core/types/geometryProcessing";
 import { ShpJobState, type ShpReplacePhase } from "@/core/types/shpReplace";
 
 export const ShpReplaceRunStatus = {
@@ -38,6 +43,7 @@ export interface ShpReplaceRunState {
   status: ShpReplaceRunStatus;
   uploadPct: number;
   phase: ShpReplacePhase | null;
+  detail: string | null;
   current: number;
   total: number;
   result: ShpReplaceResult | null;
@@ -45,6 +51,19 @@ export interface ShpReplaceRunState {
   context: ShpReplaceRunContext | null;
   jobId: string | null;
   outcomeUnknown: boolean;
+  uploadId: string | null;
+  dryRun: boolean;
+  report: GeometryProcessingReport | null;
+}
+
+export interface ShpReplaceResetOptions {
+  keepUpload?: boolean;
+}
+
+export interface ShpReplaceRerunParams {
+  password: string;
+  processing: GeometryProcessingOptions;
+  dryRun: boolean;
 }
 
 export interface ShpReplaceRunClient {
@@ -60,6 +79,9 @@ export interface ShpReplaceRunParams {
   mapping: ReplaceColumnMapping;
   sourceSrid: number;
   resetSequences: boolean;
+  processing?: GeometryProcessingOptions;
+  dryRun?: boolean;
+  uploadId?: string;
   pollIntervalMs?: number;
   pollFailureGraceMs?: number;
   client?: ShpReplaceRunClient;
@@ -73,7 +95,9 @@ interface PollTiming {
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_POLL_FAILURE_GRACE_MS = 60_000;
 const UNKNOWN_RUN_ERROR = "Error desconocido durante el reemplazo completo.";
+const UNKNOWN_ANALYSIS_ERROR = "Error desconocido durante el análisis.";
 const JOB_FAILED_ERROR = "El reemplazo falló en el servidor.";
+const ANALYSIS_FAILED_ERROR = "El análisis falló en el servidor.";
 const statusFailureMessage = (jobId: string): string =>
   `Se perdió la conexión con el servidor al consultar el trabajo ${jobId}.`;
 
@@ -87,6 +111,7 @@ const IDLE_STATE: ShpReplaceRunState = {
   status: ShpReplaceRunStatus.IDLE,
   uploadPct: 0,
   phase: null,
+  detail: null,
   current: 0,
   total: 0,
   result: null,
@@ -94,9 +119,13 @@ const IDLE_STATE: ShpReplaceRunState = {
   context: null,
   jobId: null,
   outcomeUnknown: false,
+  uploadId: null,
+  dryRun: false,
+  report: null,
 };
 
 let state: ShpReplaceRunState = IDLE_STATE;
+let lastRunParams: ShpReplaceRunParams | null = null;
 const listeners = new Set<() => void>();
 
 const warnBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -120,8 +149,10 @@ const isBusy = (status: ShpReplaceRunStatus): boolean =>
 const toPercent = (loaded: number, total: number): number =>
   total > 0 ? Math.round((loaded / total) * 100) : 0;
 
-const describeRunError = (error: unknown): string =>
-  error instanceof Error && error.message.trim() !== "" ? error.message : UNKNOWN_RUN_ERROR;
+const describeRunError = (error: unknown, dryRun: boolean): string => {
+  if (error instanceof Error && error.message.trim() !== "") return error.message;
+  return dryRun ? UNKNOWN_ANALYSIS_ERROR : UNKNOWN_RUN_ERROR;
+};
 
 const sleep = (milliseconds: number): Promise<void> =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
@@ -161,6 +192,8 @@ function buildStartBody(params: ShpReplaceRunParams, uploadId: string): ShpStart
     mapping: params.mapping,
     sourceSrid: params.sourceSrid,
     resetSequences: params.resetSequences,
+    geometryProcessing: params.processing ?? DEFAULT_GEOMETRY_PROCESSING,
+    dryRun: params.dryRun ?? false,
     confirm: true,
   };
 }
@@ -174,20 +207,29 @@ const isSettledJob = (job: ShpJobSnapshot): boolean =>
 
 function applySettledJob(job: ShpJobSnapshot): void {
   if (job.state === ShpJobState.DONE) {
-    setState({ ...state, status: ShpReplaceRunStatus.DONE, result: job.result ?? null, error: null });
+    setState({
+      ...state,
+      status: ShpReplaceRunStatus.DONE,
+      result: job.result ?? null,
+      error: null,
+      detail: null,
+      report: job.report ?? null,
+    });
     return;
   }
   setState({
     ...state,
     status: ShpReplaceRunStatus.FAILED,
     result: null,
-    error: job.error ?? JOB_FAILED_ERROR,
+    detail: null,
+    error: job.error ?? (state.dryRun ? ANALYSIS_FAILED_ERROR : JOB_FAILED_ERROR),
     outcomeUnknown: job.outcomeUnknown ?? false,
+    report: job.report ?? null,
   });
 }
 
 function applyRunningJob(job: ShpJobSnapshot): void {
-  setState({ ...state, phase: job.phase, current: job.current ?? 0, total: job.total ?? 0 });
+  setState({ ...state, phase: job.phase, detail: job.detail ?? null, current: job.current ?? 0, total: job.total ?? 0 });
 }
 
 async function fetchJobOrNull(jobId: string, client: ShpReplaceRunClient): Promise<ShpJobSnapshot | null> {
@@ -224,26 +266,59 @@ function buildPollTiming(params: ShpReplaceRunParams): PollTiming {
   };
 }
 
+async function resolveUploadId(params: ShpReplaceRunParams, client: ShpReplaceRunClient): Promise<string> {
+  if (params.uploadId !== undefined) return params.uploadId;
+  const upload = await client.upload(params.file, handleUploadProgress);
+  setState({ ...state, uploadId: upload.uploadId });
+  return upload.uploadId;
+}
+
+const withoutPassword = (params: ShpReplaceRunParams): ShpReplaceRunParams => ({
+  ...params,
+  connection: { ...params.connection, password: undefined },
+});
+
 export async function start(params: ShpReplaceRunParams): Promise<void> {
   if (isBusy(state.status)) return;
   const client = params.client ?? DEFAULT_CLIENT;
-  setState({ ...IDLE_STATE, status: ShpReplaceRunStatus.UPLOADING, context: buildRunContext(params) });
+  lastRunParams = withoutPassword(params);
+  setState({
+    ...IDLE_STATE,
+    status: ShpReplaceRunStatus.UPLOADING,
+    context: buildRunContext(params),
+    uploadId: params.uploadId ?? null,
+    dryRun: params.dryRun ?? false,
+  });
   registerBeforeUnload();
 
   try {
-    const upload = await client.upload(params.file, handleUploadProgress);
-    const { jobId } = await client.start(buildStartBody(params, upload.uploadId));
+    const uploadId = await resolveUploadId(params, client);
+    const { jobId } = await client.start(buildStartBody(params, uploadId));
     setState({ ...state, status: ShpReplaceRunStatus.RUNNING, uploadPct: 100, jobId });
     unregisterBeforeUnload();
     void pollUntilSettled(jobId, client, buildPollTiming(params));
   } catch (runError: unknown) {
-    setState({ ...state, status: ShpReplaceRunStatus.FAILED, error: describeRunError(runError) });
+    setState({ ...state, status: ShpReplaceRunStatus.FAILED, error: describeRunError(runError, state.dryRun) });
   } finally {
     unregisterBeforeUnload();
   }
 }
 
-export function reset(): void {
-  if (isBusy(state.status) || state.status === ShpReplaceRunStatus.IDLE) return;
-  setState(IDLE_STATE);
+const hasNothingToReset = (): boolean => state.status === ShpReplaceRunStatus.IDLE && state.uploadId === null;
+
+export function reset(options: ShpReplaceResetOptions = {}): void {
+  if (isBusy(state.status) || hasNothingToReset()) return;
+  lastRunParams = options.keepUpload ? lastRunParams : null;
+  setState({ ...IDLE_STATE, uploadId: options.keepUpload ? state.uploadId : null });
+}
+
+export async function rerun({ password, processing, dryRun }: ShpReplaceRerunParams): Promise<void> {
+  if (!lastRunParams || isBusy(state.status)) return;
+  await start({
+    ...lastRunParams,
+    connection: { ...lastRunParams.connection, password },
+    processing,
+    dryRun,
+    uploadId: state.uploadId ?? undefined,
+  });
 }

@@ -11,6 +11,8 @@ export interface ShpStartRequest {
   mapping: ReplaceColumnMapping;
   sourceSrid: number;
   resetSequences: boolean;
+  geometryProcessing: unknown;
+  dryRun: boolean;
 }
 
 export class ShpRequestInvalidError extends Error {
@@ -69,6 +71,10 @@ function readConfirmation(body: JsonRecord): void {
 function readBoolean(body: JsonRecord, key: string): boolean {
   if (typeof body[key] !== "boolean") throw invalid(`El campo ${key} debe ser verdadero o falso.`);
   return body[key] as boolean;
+}
+
+function readOptionalFlag(body: JsonRecord, key: string): boolean {
+  return body[key] === undefined ? false : readBoolean(body, key);
 }
 
 function readSourceSrid(body: JsonRecord): number {
@@ -135,6 +141,8 @@ export function parseStartRequest(raw: unknown): ShpStartRequest {
     mapping: readMapping(body),
     sourceSrid: readSourceSrid(body),
     resetSequences: readBoolean(body, "resetSequences"),
+    geometryProcessing: body.geometryProcessing,
+    dryRun: readOptionalFlag(body, "dryRun"),
   };
 }
 

@@ -35,6 +35,7 @@ export interface ColumnsResponse {
   columnDetails?: DbColumnMetadata[];
   primaryKeyColumn?: string | null;
   totalRows: number;
+  uniqueKeys?: string[][];
   error?: string;
 }
 

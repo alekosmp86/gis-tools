@@ -11,7 +11,25 @@ import type { ReplaceColumnMapping } from "@/core/services/replaceColumnMapping"
 import type { SequenceRef } from "@/core/services/replaceSequences";
 import { buildRepairSequenceStatement, buildResetSequenceStatement } from "@/core/services/sqlStatements";
 import type { DbColumnMetadata } from "@/core/types/db";
-import { ShpCommitUncertainError } from "@/core/services/server/shpReplace/shpReplaceTypes";
+import { ShpCommitUncertainError, ShpProcessingBlockedError } from "@/core/services/server/shpReplace/shpReplaceTypes";
+import type { GeometryProcessingOptions } from "@/core/types/geometryProcessing";
+import {
+  AreaMode,
+  BASE_TABLE,
+  UNIFIED_TABLE,
+  buildBaseTableSql,
+  buildConflictCountSql,
+  buildConflictSamplesSql,
+  buildGroupStatsSql,
+  buildIncompatibleGeometryCountSql,
+  buildInvalidCountSql,
+  buildNullKeyCountSql,
+  buildOverlapCountSql,
+  buildOverlapInputSql,
+  buildOverlapSamplesSql,
+  buildRepairSql,
+  buildUnifySql,
+} from "@/core/services/server/shpReplace/geometryProcessingSql";
 
 type StatementKind =
   | "BEGIN"
@@ -27,6 +45,8 @@ type StatementKind =
   | "COMMIT"
   | "ROLLBACK"
   | "ANALYZE"
+  | "PROCESSING"
+  | "WORK_COUNT"
   | "UNKNOWN";
 
 type TargetColumnFixture = DbColumnMetadata & { udt_name: string };
@@ -39,7 +59,7 @@ interface QueryResult {
 interface FakeOptions {
   columns: TargetColumnFixture[];
   geometryRows: Array<{ srid: number; type: string; coord_dimension?: number }>;
-  sridRows: Array<{ srid: number }>;
+  sridRows: Array<{ srid: number; geographic?: boolean }>;
   previousRows: number;
   setvalNextValue: number;
   stageCountOverride?: number;
@@ -49,6 +69,12 @@ interface FakeOptions {
   commitError?: Error;
   analyzeError?: Error;
   onCopyLine?: (line: string) => void;
+  canned?: CannedQuery[];
+}
+
+interface CannedQuery {
+  match: (sql: string) => boolean;
+  results: QueryResult[];
 }
 
 const STAGE_TABLE_NAME = "shp_replace_stage";
@@ -117,6 +143,9 @@ function classify(sql: string): StatementKind {
   if (/^BEGIN\b/i.test(text)) return "BEGIN";
   if (/^COMMIT\b/i.test(text)) return "COMMIT";
   if (/^ROLLBACK\b/i.test(text)) return "ROLLBACK";
+  if (/^INSERT INTO\b/i.test(text)) return "INSERT";
+  if (/^SELECT count\(\*\) AS count FROM "shp_proc_(base|unified)"$/i.test(text)) return "WORK_COUNT";
+  if (/shp_proc_/.test(text)) return "PROCESSING";
   if (/^COPY\b/i.test(text)) return "COPY";
   if (/^CREATE TEMP TABLE\b/i.test(text)) return "CREATE_STAGE";
   if (/^LOCK TABLE\b/i.test(text)) return "LOCK";
@@ -151,6 +180,8 @@ class FakeSession implements ShpReplaceSession {
 
   async query(sql: string): Promise<QueryResult> {
     const kind = this.record(sql);
+    const canned = this.nextCanned(sql);
+    if (canned) return canned;
     if (kind === "CATALOG") return this.catalogResult(sql);
     if (kind === "STAGE_COUNT") {
       return rowsResult([{ count: this.options.stageCountOverride ?? this.stagedRowCount }]);
@@ -186,6 +217,12 @@ class FakeSession implements ShpReplaceSession {
 
   sqlOf(kind: StatementKind): string {
     return this.sqlLog[this.kinds.indexOf(kind)];
+  }
+
+  private nextCanned(sql: string): QueryResult | undefined {
+    const entry = this.options.canned?.find((candidate) => candidate.match(sql));
+    if (!entry) return undefined;
+    return entry.results.length > 1 ? (entry.results.shift() as QueryResult) : entry.results[0];
   }
 
   private record(sql: string): StatementKind {
@@ -672,7 +709,7 @@ describe("runShpReplace", () => {
         .map((event) => event.phase)
         .filter((phase, index, phases) => phase !== phases[index - 1])
         .filter((phase) =>
-          [ShpReplacePhase.STAGING, ShpReplacePhase.SWAPPING, ShpReplacePhase.FINALIZING].includes(phase)
+          ([ShpReplacePhase.STAGING, ShpReplacePhase.SWAPPING, ShpReplacePhase.FINALIZING] as string[]).includes(phase)
         );
       expect(orderedPhases).toEqual([
         ShpReplacePhase.STAGING,
@@ -857,6 +894,1106 @@ describe("runShpReplace", () => {
       const error = await captureRejection(run(session, buildParams()));
 
       expect(error).not.toBeInstanceOf(ShpCommitUncertainError);
+    });
+  });
+});
+
+const FULL_PROCESSING: GeometryProcessingOptions = {
+  repair: { enabled: true },
+  unify: { enabled: true, keyFields: ["NOMBRE"] },
+  overlaps: { enabled: true, policy: "report", minAreaM2: 1 },
+};
+
+const FULL_BLOCKING_PROCESSING: GeometryProcessingOptions = {
+  ...FULL_PROCESSING,
+  overlaps: { enabled: true, policy: "block", minAreaM2: 1 },
+};
+
+const DISABLED_PROCESSING: GeometryProcessingOptions = {
+  repair: { enabled: false },
+  unify: { enabled: false, keyFields: [] },
+  overlaps: { enabled: false, policy: "block", minAreaM2: 1 },
+};
+
+const PROCESSING_LAYOUT = { stageFields: ["c0", "c1"], keyFields: ["c0"], sourceSrid: SOURCE_SRID };
+const COMPARED_FIELDS = ["c1"];
+const SAMPLE_LIMIT = 20;
+
+interface ProcessingFixture {
+  unify: boolean;
+  repair: boolean;
+  overlapCount: number;
+  geographic: boolean;
+  invalidBefore: number;
+  invalidFinal: number;
+  nullKeyRows: number;
+  incompatible: number;
+}
+
+const DEFAULT_FIXTURE: ProcessingFixture = {
+  unify: true,
+  repair: true,
+  overlapCount: 3,
+  geographic: false,
+  invalidBefore: 2,
+  invalidFinal: 0,
+  nullKeyRows: 0,
+  incompatible: 0,
+};
+
+const exactSql = (sql: string) => (candidate: string): boolean => candidate === sql;
+const isLargestGroupsSql = (sql: string): boolean => /ORDER BY\s+"?size"?\s+DESC/i.test(sql);
+const isOverlapCountSql = (sql: string): boolean => /AS\s+"?overlaps"?\b/i.test(sql);
+const isOverlapSamplesSql = (sql: string): boolean =>
+  sql.includes('FROM "shp_proc_overlap" a') && /ORDER BY\s+"?area"?\s+DESC/i.test(sql);
+const isIncompatibleCountSql = (sql: string): boolean => /AS\s+"?incompatible"?\b/i.test(sql);
+const isWorkTableCountSql = (table: string) => (sql: string): boolean =>
+  sql.includes(`"${table}"`) && /count\(\*\)/i.test(sql);
+const countResult = (count: number): QueryResult => rowsResult([{ count, n: count, invalid: count, overlaps: count }]);
+
+const BASE_REPAIR_UPDATED = 3;
+const UNIFIED_REPAIR_UPDATED = 2;
+const BASE_REPAIR_EMPTIED = 1;
+const UNIFIED_REPAIR_EMPTIED = 1;
+
+function processingCanned(fixture: ProcessingFixture): CannedQuery[] {
+  const work = fixture.unify ? UNIFIED_TABLE : BASE_TABLE;
+  const [baseRepairUpdate, baseRepairEmptied] = buildRepairSql(BASE_TABLE);
+  const [unifiedRepairUpdate, unifiedRepairEmptied] = buildRepairSql(UNIFIED_TABLE);
+  const baseInvalidResults =
+    fixture.unify || !fixture.repair
+      ? [countResult(fixture.invalidBefore)]
+      : [countResult(fixture.invalidBefore), countResult(fixture.invalidFinal)];
+  return [
+    { match: exactSql(buildInvalidCountSql(BASE_TABLE)), results: baseInvalidResults },
+    { match: exactSql(buildInvalidCountSql(UNIFIED_TABLE)), results: [countResult(fixture.invalidFinal)] },
+    { match: exactSql(buildGroupStatsSql(PROCESSING_LAYOUT)), results: [rowsResult([{ groups: 2, rows_merged: 1 }])] },
+    {
+      match: (sql) => sql.includes("null_key_rows"),
+      results: [rowsResult([{ null_key_rows: String(fixture.nullKeyRows) }])],
+    },
+    { match: isLargestGroupsSql, results: [rowsResult([{ c0: "Alpha", size: 2 }])] },
+    {
+      match: exactSql(buildConflictCountSql(PROCESSING_LAYOUT, COMPARED_FIELDS)),
+      results: [countResult(1)],
+    },
+    {
+      match: exactSql(buildConflictSamplesSql(PROCESSING_LAYOUT, COMPARED_FIELDS, SAMPLE_LIMIT)),
+      results: [rowsResult([{ c0: "Alpha", c1: "12.5 | 13" }])],
+    },
+    { match: exactSql(baseRepairUpdate), results: [{ rows: [], rowCount: BASE_REPAIR_UPDATED }] },
+    { match: exactSql(baseRepairEmptied), results: [{ rows: [], rowCount: BASE_REPAIR_EMPTIED }] },
+    { match: exactSql(unifiedRepairUpdate), results: [{ rows: [], rowCount: UNIFIED_REPAIR_UPDATED }] },
+    { match: exactSql(unifiedRepairEmptied), results: [{ rows: [], rowCount: UNIFIED_REPAIR_EMPTIED }] },
+    { match: isOverlapCountSql, results: [countResult(fixture.overlapCount)] },
+    {
+      match: isOverlapSamplesSql,
+      results: [
+        rowsResult([
+          { rec_a: 1, rec_b: 2, area: 2.5, c0: "Alpha" },
+          { rec_a: 1, rec_b: 3, area: 1.5, c0: "Alpha" },
+        ]),
+      ],
+    },
+    {
+      match: isIncompatibleCountSql,
+      results: [rowsResult([{ incompatible: fixture.incompatible }])],
+    },
+    { match: isWorkTableCountSql(work), results: [countResult(fixture.unify ? 2 : 3)] },
+    { match: (sql) => sql.includes("shp_proc_") && /count\(\*\)/i.test(sql), results: [countResult(0)] },
+  ];
+}
+
+function processingSession(fixture: Partial<ProcessingFixture> = {}, overrides: Partial<FakeOptions> = {}): FakeSession {
+  const resolved = { ...DEFAULT_FIXTURE, ...fixture };
+  return createSession({
+    sridRows: [{ srid: SOURCE_SRID, geographic: resolved.geographic }],
+    canned: processingCanned(resolved),
+    insertRowCount: resolved.unify ? 2 : 3,
+    ...overrides,
+  });
+}
+
+const withProcessing = (
+  processing: GeometryProcessingOptions,
+  overrides: Partial<RunShpReplaceParams> = {}
+): RunShpReplaceParams => buildParams({ processing, ...overrides });
+
+const processingStatements = (session: FakeSession): string[] =>
+  session.sqlLog.filter((sql, index) => session.kinds[index] === "PROCESSING" && !isLargestGroupsSql(sql));
+
+const lastIndexOfKind = (session: FakeSession, kind: StatementKind): number => session.kinds.lastIndexOf(kind);
+
+const insertTargetColumns = (session: FakeSession): string => {
+  const match = /INSERT INTO [^(]*\(([^)]*)\)/.exec(session.sqlOf("INSERT"));
+  return match?.[1] ?? "";
+};
+
+describe("runShpReplace geometry processing", () => {
+  describe("disabled processing", () => {
+    it("should issue exactly the statements of the plain replace when every process is disabled", async () => {
+      const plain = createSession();
+      const disabled = createSession();
+
+      await run(plain, buildParams());
+      await run(disabled, buildParams({ processing: DISABLED_PROCESSING }));
+
+      expect(disabled.sqlLog).toEqual(plain.sqlLog);
+    });
+
+    it("should report no geometry and no PROCESSING phase when every process is disabled", async () => {
+      const session = createSession();
+      const events: ShpReplaceProgress[] = [];
+
+      const result = await run(session, buildParams({ processing: DISABLED_PROCESSING, onProgress: (p) => events.push(p) }));
+
+      expect(result.geometry).toBeUndefined();
+      expect(events.some((event) => event.phase === ShpReplacePhase.PROCESSING)).toBe(false);
+    });
+  });
+
+  describe("statement plan", () => {
+    it("should run every processing statement after the stage count and before the LOCK when processing is active", async () => {
+      const session = processingSession();
+
+      await run(session, withProcessing(FULL_PROCESSING));
+
+      const stageCount = session.kinds.indexOf("STAGE_COUNT");
+      const lock = session.kinds.indexOf("LOCK");
+      const processingIndexes = session.kinds
+        .map((kind, index) => (kind === "PROCESSING" ? index : -1))
+        .filter((index) => index >= 0);
+      expect(processingIndexes.length).toBeGreaterThan(0);
+      expect(processingIndexes.every((index) => index > stageCount && index < lock)).toBe(true);
+    });
+
+    it("should issue base, invalid count on base, base repair, unify, group stats, conflict statements, null key count, unified repair, final invalid count and overlap statements in that order when every process is enabled", async () => {
+      const session = processingSession();
+
+      await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(processingStatements(session)).toEqual([
+        buildBaseTableSql(PROCESSING_LAYOUT),
+        buildInvalidCountSql(BASE_TABLE),
+        ...buildRepairSql(BASE_TABLE),
+        buildUnifySql(PROCESSING_LAYOUT),
+        buildGroupStatsSql(PROCESSING_LAYOUT),
+        buildConflictCountSql(PROCESSING_LAYOUT, COMPARED_FIELDS),
+        buildConflictSamplesSql(PROCESSING_LAYOUT, COMPARED_FIELDS, SAMPLE_LIMIT),
+        buildNullKeyCountSql(PROCESSING_LAYOUT),
+        ...buildRepairSql(UNIFIED_TABLE),
+        buildInvalidCountSql(UNIFIED_TABLE),
+        ...buildOverlapInputSql(UNIFIED_TABLE),
+        buildOverlapCountSql(1, AreaMode.PLANAR),
+        buildOverlapSamplesSql(PROCESSING_LAYOUT, UNIFIED_TABLE, 1, AreaMode.PLANAR, SAMPLE_LIMIT),
+      ]);
+    });
+
+    it("should run repair and the final invalid count on the base table when unify is disabled", async () => {
+      const session = processingSession({ unify: false });
+
+      await run(session, withProcessing({ ...FULL_PROCESSING, unify: { enabled: false, keyFields: [] } }));
+
+      expect(session.sqlLog).toContain(buildRepairSql(BASE_TABLE)[0]);
+      expect(session.sqlLog).toContain(buildRepairSql(BASE_TABLE)[1]);
+      expect(session.sqlLog.some((sql) => sql.includes('"shp_proc_unified"'))).toBe(false);
+    });
+
+    it("should issue no UPDATE and no ST_MakeValid anywhere when repair is disabled", async () => {
+      const session = processingSession({ repair: false, invalidFinal: 1 });
+
+      await run(session, withProcessing({ ...FULL_PROCESSING, repair: { enabled: false } }));
+
+      expect(session.sqlLog.some((sql) => sql.trimStart().startsWith("UPDATE"))).toBe(false);
+      expect(session.sqlLog.some((sql) => sql.includes("ST_MakeValid"))).toBe(false);
+    });
+
+    it("should stage the unmapped key field and keep it out of the INSERT columns when the key is not mapped", async () => {
+      const baseline = createSession();
+      await run(baseline, buildParams());
+      const session = processingSession();
+
+      await run(session, withProcessing({ ...FULL_PROCESSING, unify: { enabled: true, keyFields: ["SUID"] } }));
+
+      expect(session.sqlOf("CREATE_STAGE").match(/"c\d+"/g)).toHaveLength(3);
+      expect(session.copiedLines.some((line) => line.includes("A1"))).toBe(true);
+      expect(insertTargetColumns(session)).toBe(insertTargetColumns(baseline));
+    });
+
+    it("should not add a second stage column when the key field is already a mapped source", async () => {
+      const session = processingSession();
+
+      await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(session.sqlOf("CREATE_STAGE").match(/"c\d+"/g)).toHaveLength(2);
+    });
+  });
+
+  describe("repair passes", () => {
+    const repairUpdates = (session: FakeSession): string[] =>
+      session.sqlLog.filter((sql) => sql.trimStart().startsWith("UPDATE"));
+
+    it("should run the base repair pass after the base invalid count and before unify, and the unified repair pass after the null key count and before the final invalid count, when repair and unify are both enabled", async () => {
+      const session = processingSession();
+
+      await run(session, withProcessing(FULL_PROCESSING));
+
+      const baseCount = session.sqlLog.indexOf(buildInvalidCountSql(BASE_TABLE));
+      const basePass = session.sqlLog.indexOf(buildRepairSql(BASE_TABLE)[0]);
+      const unify = session.sqlLog.indexOf(buildUnifySql(PROCESSING_LAYOUT));
+      const nullKey = session.sqlLog.indexOf(buildNullKeyCountSql(PROCESSING_LAYOUT));
+      const unifiedPass = session.sqlLog.indexOf(buildRepairSql(UNIFIED_TABLE)[0]);
+      const finalCount = session.sqlLog.indexOf(buildInvalidCountSql(UNIFIED_TABLE));
+      expect(baseCount).toBeGreaterThanOrEqual(0);
+      expect(basePass).toBeGreaterThan(baseCount);
+      expect(unify).toBeGreaterThan(basePass);
+      expect(nullKey).toBeGreaterThan(unify);
+      expect(unifiedPass).toBeGreaterThan(nullKey);
+      expect(finalCount).toBeGreaterThan(unifiedPass);
+    });
+
+    it("should issue exactly two repair passes, the first on the base table and the second on the unified table, when repair and unify are both enabled", async () => {
+      const session = processingSession();
+
+      await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(repairUpdates(session)).toEqual([...buildRepairSql(BASE_TABLE), ...buildRepairSql(UNIFIED_TABLE)]);
+    });
+
+    it("should issue exactly one repair pass on the base table and no unified repair when unify is disabled", async () => {
+      const session = processingSession({ unify: false });
+
+      await run(session, withProcessing({ ...FULL_PROCESSING, unify: { enabled: false, keyFields: [] } }));
+
+      expect(repairUpdates(session)).toEqual(buildRepairSql(BASE_TABLE));
+    });
+
+    it("should issue no repair statement on either work table when repair is disabled even though unify is enabled", async () => {
+      const session = processingSession({ repair: false });
+
+      await run(session, withProcessing({ ...FULL_PROCESSING, repair: { enabled: false } }));
+
+      expect(repairUpdates(session)).toEqual([]);
+      expect(session.sqlLog).not.toContain(buildRepairSql(BASE_TABLE)[0]);
+      expect(session.sqlLog).not.toContain(buildRepairSql(UNIFIED_TABLE)[0]);
+      expect(session.sqlLog).toContain(buildUnifySql(PROCESSING_LAYOUT));
+    });
+
+    it("should report repaired as the base pass updates plus the unified pass updates and emptyAfterRepair as the sum of both null passes when repair and unify are enabled", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(result.geometry).toMatchObject({ repaired: 5, emptyAfterRepair: 2 });
+    });
+
+    it("should report repaired and emptyAfterRepair from the base pass only when unify is disabled", async () => {
+      const session = processingSession({ unify: false });
+
+      const result = await run(session, withProcessing({ ...FULL_PROCESSING, unify: { enabled: false, keyFields: [] } }));
+
+      expect(result.geometry).toMatchObject({ repaired: BASE_REPAIR_UPDATED, emptyAfterRepair: BASE_REPAIR_EMPTIED });
+    });
+  });
+
+  describe("null key rows", () => {
+    it("should run the null key count after the unify statements and before the unified repair pass when unify is enabled", async () => {
+      const session = processingSession();
+
+      await run(session, withProcessing(FULL_PROCESSING));
+
+      const nullKeyIndex = session.sqlLog.indexOf(buildNullKeyCountSql(PROCESSING_LAYOUT));
+      expect(nullKeyIndex).toBeGreaterThan(session.sqlLog.indexOf(buildConflictSamplesSql(PROCESSING_LAYOUT, COMPARED_FIELDS, SAMPLE_LIMIT)));
+      expect(nullKeyIndex).toBeLessThan(session.sqlLog.indexOf(buildRepairSql(UNIFIED_TABLE)[0]));
+    });
+
+    it("should report the null key row count as a number from the count returned by the database", async () => {
+      const session = processingSession({ nullKeyRows: 3 });
+
+      const result = await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(result.geometry?.nullKeyRows).toBe(3);
+    });
+
+    it("should report zero nullKeyRows when the null key count is zero", async () => {
+      const session = processingSession({ nullKeyRows: 0 });
+
+      const result = await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(result.geometry?.nullKeyRows).toBe(0);
+    });
+
+    it("should never run the null key count and report zero nullKeyRows when unify is disabled", async () => {
+      const session = processingSession({ unify: false, nullKeyRows: 4 });
+
+      const result = await run(
+        session,
+        withProcessing({ ...FULL_PROCESSING, unify: { enabled: false, keyFields: [] } })
+      );
+
+      expect(session.sqlLog.some((sql) => sql.includes("null_key_rows"))).toBe(false);
+      expect(result.geometry?.nullKeyRows).toBe(0);
+    });
+  });
+
+  describe("geometry requirement", () => {
+    it("should reject with a Spanish error, roll back and never DELETE when processing is active and no column maps to the shapefile geometry", async () => {
+      const session = processingSession();
+
+      const error = await captureRejection(
+        run(session, withProcessing(FULL_PROCESSING, { mapping: NO_GEOMETRY_MAPPING }))
+      );
+
+      expectSpanishMessage(error);
+      expect(session.kinds).not.toContain("DELETE");
+      expect(session.kinds).not.toContain("INSERT");
+      expect(session.kinds).not.toContain("COMMIT");
+      expect(session.kinds[session.kinds.length - 1]).toBe("ROLLBACK");
+      expect(session.closeCount).toBe(1);
+    });
+
+    it("should reject with a Spanish error naming MultiPolígono before any processing statement when unify is enabled and the target geometry is a single POLYGON", async () => {
+      const session = processingSession({}, { geometryRows: [{ srid: 4326, type: "POLYGON" }] });
+
+      const error = await captureRejection(run(session, withProcessing(FULL_PROCESSING)));
+
+      expectSpanishMessage(error);
+      expect(error.message).toMatch(/MultiPol[ií]gono|Multi/);
+      expect(session.kinds).not.toContain("PROCESSING");
+      expect(session.sqlLog.some((sql) => sql.includes('"shp_proc_base"'))).toBe(false);
+      expect(session.kinds).not.toContain("LOCK");
+      expect(session.kinds).not.toContain("DELETE");
+      expect(session.kinds).not.toContain("INSERT");
+      expect(session.kinds).not.toContain("COMMIT");
+      expect(session.kinds[session.kinds.length - 1]).toBe("ROLLBACK");
+      expect(session.closeCount).toBe(1);
+    });
+
+    it("should reject with a Spanish error naming MultiPolígono before any processing statement when unify is enabled and the target geometry is a single POINT", async () => {
+      const session = processingSession({}, { geometryRows: [{ srid: 4326, type: "POINT" }] });
+
+      const error = await captureRejection(run(session, withProcessing(FULL_PROCESSING)));
+
+      expectSpanishMessage(error);
+      expect(error.message).toMatch(/MultiPol[ií]gono/);
+      expect(session.kinds).not.toContain("PROCESSING");
+      expect(session.kinds).not.toContain("LOCK");
+      expect(session.kinds).not.toContain("DELETE");
+      expect(session.kinds).not.toContain("INSERT");
+      expect(session.kinds[session.kinds.length - 1]).toBe("ROLLBACK");
+    });
+
+    it("should reject with a Spanish error naming MultiPolígono before any processing statement when unify is enabled and the target geometry is a single LINESTRING", async () => {
+      const session = processingSession({}, { geometryRows: [{ srid: 4326, type: "LINESTRING" }] });
+
+      const error = await captureRejection(run(session, withProcessing(FULL_PROCESSING)));
+
+      expectSpanishMessage(error);
+      expect(error.message).toMatch(/MultiPol[ií]gono/);
+      expect(session.kinds).not.toContain("PROCESSING");
+      expect(session.kinds).not.toContain("LOCK");
+      expect(session.kinds).not.toContain("DELETE");
+      expect(session.kinds).not.toContain("INSERT");
+      expect(session.kinds[session.kinds.length - 1]).toBe("ROLLBACK");
+    });
+
+    it("should run unify without rejection when the target geometry type is MULTIPOLYGON", async () => {
+      const session = processingSession({}, { geometryRows: [{ srid: 4326, type: "MULTIPOLYGON" }] });
+
+      await expect(run(session, withProcessing(FULL_PROCESSING))).resolves.toBeDefined();
+
+      expect(session.kinds).toContain("PROCESSING");
+      expect(session.kinds).toContain("INSERT");
+      expect(session.kinds).toContain("COMMIT");
+    });
+
+    it("should run unify without rejection when the target geometry type is the unconstrained GEOMETRY", async () => {
+      const session = processingSession({}, { geometryRows: [{ srid: 4326, type: "GEOMETRY" }] });
+
+      await expect(run(session, withProcessing(FULL_PROCESSING))).resolves.toBeDefined();
+
+      expect(session.kinds).toContain("PROCESSING");
+      expect(session.kinds).toContain("INSERT");
+      expect(session.kinds).toContain("COMMIT");
+    });
+
+    it("should run unify without rejection when the target geometry type is lowercase geometry", async () => {
+      const session = processingSession({}, { geometryRows: [{ srid: 4326, type: "geometry" }] });
+
+      await expect(run(session, withProcessing(FULL_PROCESSING))).resolves.toBeDefined();
+
+      expect(session.kinds).toContain("PROCESSING");
+      expect(session.kinds).toContain("INSERT");
+      expect(session.kinds).toContain("COMMIT");
+    });
+
+    it("should issue exactly the statements of the plain replace without ST_Multi when the target geometry type is GEOMETRY and every process is disabled", async () => {
+      const plain = createSession({ geometryRows: [{ srid: 4326, type: "GEOMETRY" }] });
+      const disabled = createSession({ geometryRows: [{ srid: 4326, type: "GEOMETRY" }] });
+
+      await run(plain, buildParams());
+      await run(disabled, buildParams({ processing: DISABLED_PROCESSING }));
+
+      expect(disabled.sqlLog).toEqual(plain.sqlLog);
+      expect(disabled.sqlOf("INSERT")).not.toContain("ST_Multi");
+    });
+
+    it("should run repair without rejection when the target geometry type is GEOMETRY and unify is disabled", async () => {
+      const session = processingSession({ unify: false }, { geometryRows: [{ srid: 4326, type: "GEOMETRY" }] });
+
+      await expect(
+        run(session, withProcessing({ ...FULL_PROCESSING, unify: { enabled: false, keyFields: [] } }))
+      ).resolves.toBeDefined();
+
+      expect(session.sqlLog).toContain(buildRepairSql(BASE_TABLE)[0]);
+      expect(session.kinds).toContain("COMMIT");
+    });
+  });
+
+  describe("overlap policy", () => {
+    it("should reject with ShpProcessingBlockedError, roll back and never lock or delete when the block policy finds overlaps", async () => {
+      const session = processingSession({ overlapCount: 3 });
+
+      const error = await captureRejection(run(session, withProcessing(FULL_BLOCKING_PROCESSING)));
+
+      expect(error).toBeInstanceOf(ShpProcessingBlockedError);
+      const blocked = error as ShpProcessingBlockedError;
+      expect(blocked.report.overlapCount).toBe(3);
+      expect(blocked.report.wouldBlock).toBe(true);
+      expect(blocked.message).toContain("3");
+      expectSpanishMessage(blocked);
+      expect(session.kinds).not.toContain("LOCK");
+      expect(session.kinds).not.toContain("DELETE");
+      expect(session.kinds).not.toContain("INSERT");
+      expect(session.kinds).not.toContain("COMMIT");
+      expect(session.kinds[session.kinds.length - 1]).toBe("ROLLBACK");
+      expect(session.closeCount).toBe(1);
+    });
+
+    it("should replace rows and report wouldBlock false when the report policy finds overlaps", async () => {
+      const session = processingSession({ overlapCount: 3 });
+
+      const result = await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(session.kinds).toContain("DELETE");
+      expect(session.kinds).toContain("COMMIT");
+      expect(result.geometry).toMatchObject({ overlapCount: 3, wouldBlock: false });
+    });
+
+    it("should replace rows when the block policy finds no overlap", async () => {
+      const session = processingSession({ overlapCount: 0 });
+
+      const result = await run(session, withProcessing(FULL_BLOCKING_PROCESSING));
+
+      expect(session.kinds).toContain("COMMIT");
+      expect(result.geometry).toMatchObject({ overlapCount: 0, wouldBlock: false });
+    });
+
+    it("should skip every overlap statement and report no overlaps when overlaps are disabled", async () => {
+      const session = processingSession();
+
+      const result = await run(
+        session,
+        withProcessing({ ...FULL_PROCESSING, overlaps: { enabled: false, policy: "block", minAreaM2: 1 } })
+      );
+
+      expect(session.sqlLog.some((sql) => sql.includes("shp_proc_overlap"))).toBe(false);
+      expect(result.geometry).toMatchObject({ overlapCount: 0, overlapSamples: [], wouldBlock: false });
+    });
+
+    it("should measure the intersection area as geography when the catalog SRID is geographic", async () => {
+      const session = processingSession({ geographic: true });
+
+      await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(session.sqlLog).toContain(buildOverlapCountSql(1, AreaMode.GEOGRAPHY));
+      expect(session.sqlLog).not.toContain(buildOverlapCountSql(1, AreaMode.PLANAR));
+    });
+
+    it("should measure the intersection area as planar when the catalog SRID is not geographic", async () => {
+      const session = processingSession({ geographic: false });
+
+      await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(session.sqlLog).toContain(buildOverlapCountSql(1, AreaMode.PLANAR));
+      expect(session.sqlLog).not.toContain(buildOverlapCountSql(1, AreaMode.GEOGRAPHY));
+    });
+
+    it("should pass the configured minimum area to the overlap count statement", async () => {
+      const session = processingSession();
+
+      await run(
+        session,
+        withProcessing({ ...FULL_PROCESSING, overlaps: { enabled: true, policy: "report", minAreaM2: 0.5 } })
+      );
+
+      expect(session.sqlLog).toContain(buildOverlapCountSql(0.5, AreaMode.PLANAR));
+    });
+  });
+
+  describe("dry run", () => {
+    it("should resolve without throwing and report wouldBlock true when dryRun is true and the block policy finds overlaps", async () => {
+      const session = processingSession({ overlapCount: 3 });
+
+      const result = await run(session, withProcessing(FULL_BLOCKING_PROCESSING, { dryRun: true }));
+
+      expect(result).toMatchObject({
+        dryRun: true,
+        targetModified: false,
+        insertedRows: 0,
+        stagedRows: 2,
+        previousRows: 7,
+      });
+      expect(result.geometry?.wouldBlock).toBe(true);
+      expect(session.closeCount).toBe(1);
+    });
+
+    it("should never lock, delete, insert, commit, analyze or touch sequences when dryRun is true", async () => {
+      const session = processingSession({ overlapCount: 3 });
+
+      await run(session, withProcessing(FULL_PROCESSING, { dryRun: true }));
+
+      expect(session.kinds).not.toContain("LOCK");
+      expect(session.kinds).not.toContain("DELETE");
+      expect(session.kinds).not.toContain("INSERT");
+      expect(session.kinds).not.toContain("COMMIT");
+      expect(session.kinds).not.toContain("ANALYZE");
+      expect(session.kinds).not.toContain("SEQUENCE");
+      expect(session.kinds).toContain("TARGET_COUNT");
+    });
+
+    it("should roll back after the last processing statement when dryRun is true", async () => {
+      const session = processingSession();
+
+      await run(session, withProcessing(FULL_PROCESSING, { dryRun: true }));
+
+      expect(session.kinds).toContain("ROLLBACK");
+      expect(session.kinds.indexOf("ROLLBACK")).toBeGreaterThan(lastIndexOfKind(session, "PROCESSING"));
+    });
+
+    it("should roll back, report no geometry and keep the target untouched when dryRun is true and processing is disabled", async () => {
+      const session = createSession();
+
+      const result = await run(session, buildParams({ dryRun: true }));
+
+      expect(result).toMatchObject({ dryRun: true, targetModified: false, insertedRows: 0 });
+      expect(result.geometry).toBeUndefined();
+      expect(session.kinds).toContain("ROLLBACK");
+      expect(session.kinds).not.toContain("DELETE");
+      expect(session.kinds).not.toContain("COMMIT");
+    });
+
+    it("should return the same geometry report as a real run when dryRun is true", async () => {
+      const dry = processingSession();
+      const real = processingSession();
+
+      const dryResult = await run(dry, withProcessing(FULL_PROCESSING, { dryRun: true }));
+      const realResult = await run(real, withProcessing(FULL_PROCESSING));
+
+      expect(dryResult.geometry).toEqual(realResult.geometry);
+    });
+
+    it("should report dryRun false and targetModified true for a real run with processing", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(result).toMatchObject({ dryRun: false, targetModified: true });
+    });
+  });
+
+  describe("final INSERT", () => {
+    it("should read the unified work table with native geometry instead of the stage GeoJSON when unify is enabled", async () => {
+      const session = processingSession();
+
+      await run(session, withProcessing(FULL_PROCESSING));
+
+      const insert = session.sqlOf("INSERT");
+      expect(insert).toContain('FROM "shp_proc_unified"');
+      expect(insert).not.toContain("ST_GeomFromGeoJSON");
+      expect(insert).not.toContain("shp_replace_stage");
+      expect(insert).toMatch(/ST_Transform\(\s*"geom"\s*,\s*4326\s*\)/);
+    });
+
+    it("should read the base work table with native geometry when unify is disabled", async () => {
+      const session = processingSession({ unify: false });
+
+      await run(session, withProcessing({ ...FULL_PROCESSING, unify: { enabled: false, keyFields: [] } }));
+
+      expect(session.sqlOf("INSERT")).toContain('FROM "shp_proc_base"');
+      expect(session.sqlOf("INSERT")).not.toContain("ST_GeomFromGeoJSON");
+    });
+
+    it("should roll back without COMMIT when the INSERT rowCount differs from the processed row count", async () => {
+      const session = processingSession({}, { insertRowCount: 3 });
+
+      const error = await captureRejection(run(session, withProcessing(FULL_PROCESSING)));
+
+      expectSpanishMessage(error);
+      expect(session.kinds).toContain("DELETE");
+      expect(session.kinds).not.toContain("COMMIT");
+      expect(session.kinds[session.kinds.length - 1]).toBe("ROLLBACK");
+      expect(session.closeCount).toBe(1);
+    });
+
+    it("should report stagedRows as the processed row count and sourceRows as the file count when unify merges rows", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(result).toMatchObject({ sourceRows: 3, stagedRows: 2, insertedRows: 2 });
+    });
+  });
+
+  describe("geometry report", () => {
+    it("should report invalidBefore from the base count and repaired and emptyAfterRepair summed over both repair passes when repair and unify are enabled", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(result.geometry).toMatchObject({ invalidBefore: 2, repaired: 5, emptyAfterRepair: 2 });
+    });
+
+    it("should report groups, rowsMerged, the largest groups and the attribute conflicts when unify is enabled", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(result.geometry).toMatchObject({ groups: 2, rowsMerged: 1, attributeConflicts: 1 });
+      expect(result.geometry?.largestGroups).toHaveLength(1);
+      expect(result.geometry?.attributeConflictSamples).toHaveLength(1);
+    });
+
+    it("should report the overlap count, the sample pairs and no skipped invalid geometries when the overlap check runs on valid geometries", async () => {
+      const session = processingSession();
+
+      const result = await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(result.geometry).toMatchObject({
+        overlapCount: 3,
+        overlapSkippedInvalid: 0,
+        insertedInvalid: 0,
+        wouldBlock: false,
+      });
+      expect(result.geometry?.overlapSamples).toHaveLength(2);
+    });
+
+    it("should report zero repaired, the remaining invalid count as insertedInvalid and as overlapSkippedInvalid when repair is disabled", async () => {
+      const session = processingSession({ repair: false, invalidFinal: 1 });
+
+      const result = await run(session, withProcessing({ ...FULL_PROCESSING, repair: { enabled: false } }));
+
+      expect(result.geometry).toMatchObject({
+        invalidBefore: 2,
+        repaired: 0,
+        emptyAfterRepair: 0,
+        insertedInvalid: 1,
+        overlapSkippedInvalid: 1,
+      });
+    });
+
+    it("should report zero and empty lists for every unify field when unify is disabled", async () => {
+      const session = processingSession({ unify: false });
+
+      const result = await run(
+        session,
+        withProcessing({ ...FULL_PROCESSING, unify: { enabled: false, keyFields: [] } })
+      );
+
+      expect(result.geometry).toMatchObject({
+        groups: 0,
+        rowsMerged: 0,
+        largestGroups: [],
+        attributeConflicts: 0,
+        attributeConflictSamples: [],
+      });
+    });
+  });
+
+  describe("incompatible multi-part geometries", () => {
+    const POLYGON_GEOMETRY = [{ srid: 4326, type: "POLYGON" }];
+    const MULTIPOLYGON_GEOMETRY = [{ srid: 4326, type: "MULTIPOLYGON" }];
+    const UNCONSTRAINED_GEOMETRY = [{ srid: 4326, type: "GEOMETRY" }];
+    const NO_UNIFY_PROCESSING: GeometryProcessingOptions = { ...FULL_PROCESSING, unify: { enabled: false, keyFields: [] } };
+
+    it("should issue the incompatible count on the base table when a POLYGON target has processing active without unify", async () => {
+      const session = processingSession({ unify: false, incompatible: 2 }, { geometryRows: POLYGON_GEOMETRY });
+
+      await run(session, { ...withProcessing(NO_UNIFY_PROCESSING), dryRun: true });
+
+      expect(session.sqlLog).toContain(buildIncompatibleGeometryCountSql(BASE_TABLE));
+    });
+
+    it("should report the incompatible row count returned by the count query when the target is POLYGON", async () => {
+      const session = processingSession({ unify: false, incompatible: 2 }, { geometryRows: POLYGON_GEOMETRY });
+
+      const result = await run(session, { ...withProcessing(NO_UNIFY_PROCESSING), dryRun: true });
+
+      expect(result.geometry?.incompatibleGeometryRows).toBe(2);
+    });
+
+    it("should report zero incompatible rows when the POLYGON target receives only single-part geometries", async () => {
+      const session = processingSession({ unify: false, incompatible: 0 }, { geometryRows: POLYGON_GEOMETRY });
+
+      const result = await run(session, withProcessing(NO_UNIFY_PROCESSING));
+
+      expect(session.sqlLog).toContain(buildIncompatibleGeometryCountSql(BASE_TABLE));
+      expect(result.geometry?.incompatibleGeometryRows).toBe(0);
+    });
+
+    it("should run the incompatible count after the repair statements and before the final invalid count", async () => {
+      const session = processingSession({ unify: false, incompatible: 1 }, { geometryRows: POLYGON_GEOMETRY });
+
+      await run(session, { ...withProcessing(NO_UNIFY_PROCESSING), dryRun: true });
+
+      const incompatibleAt = session.sqlLog.indexOf(buildIncompatibleGeometryCountSql(BASE_TABLE));
+      const lastRepairAt = session.sqlLog.indexOf(buildRepairSql(BASE_TABLE)[1]);
+      const finalInvalidAt = session.sqlLog.lastIndexOf(buildInvalidCountSql(BASE_TABLE));
+      expect(lastRepairAt).toBeGreaterThanOrEqual(0);
+      expect(incompatibleAt).toBeGreaterThan(lastRepairAt);
+      expect(incompatibleAt).toBeLessThan(finalInvalidAt);
+    });
+
+    it("should refuse a real run before the lock when incompatible multi-part geometries exist", async () => {
+      const session = processingSession({ unify: false, incompatible: 3 }, { geometryRows: POLYGON_GEOMETRY });
+
+      const error = await captureRejection(run(session, withProcessing(NO_UNIFY_PROCESSING)));
+
+      expectSpanishMessage(error);
+      expect(session.sqlLog.some((sql) => sql.startsWith("LOCK TABLE"))).toBe(false);
+      expect(session.sqlLog.some((sql) => sql.startsWith("DELETE FROM"))).toBe(false);
+      expect(session.sqlLog[session.sqlLog.length - 1]).toBe("ROLLBACK");
+    });
+
+    it("should never reach the incompatible count when a POLYGON target is combined with unify", async () => {
+      const session = processingSession({ unify: true, incompatible: 5 }, { geometryRows: POLYGON_GEOMETRY });
+
+      const error = await captureRejection(run(session, withProcessing(FULL_PROCESSING)));
+
+      expectSpanishMessage(error);
+      expect(session.sqlLog.some((sql) => sql.includes("GeometryType"))).toBe(false);
+    });
+
+    it.each([
+      ["MULTIPOLYGON", MULTIPOLYGON_GEOMETRY],
+      ["unconstrained GEOMETRY", UNCONSTRAINED_GEOMETRY],
+    ])("should not issue the incompatible count when the target geometry accepts multi-part geometries (%s)", async (_label, geometryRows) => {
+      const session = processingSession({ incompatible: 4 }, { geometryRows });
+
+      const result = await run(session, withProcessing(FULL_PROCESSING));
+
+      expect(session.sqlLog.some((sql) => sql.includes("GeometryType"))).toBe(false);
+      expect(result.geometry?.incompatibleGeometryRows).toBe(0);
+    });
+
+    it("should not issue the incompatible count when the target is POLYGON but processing is disabled", async () => {
+      const session = createSession({ geometryRows: POLYGON_GEOMETRY });
+
+      const result = await run(session, buildParams({ processing: DISABLED_PROCESSING }));
+
+      expect(session.sqlLog.some((sql) => sql.includes("GeometryType"))).toBe(false);
+      expect(result.geometry).toBeUndefined();
+    });
+  });
+
+  describe("progress", () => {
+    it("should emit the PROCESSING phase between STAGING and SWAPPING when processing is active", async () => {
+      const session = processingSession();
+      const events: ShpReplaceProgress[] = [];
+
+      await run(session, withProcessing(FULL_PROCESSING, { onProgress: (progress) => events.push(progress) }));
+
+      const orderedPhases = events
+        .map((event) => event.phase)
+        .filter((phase, index, phases) => phase !== phases[index - 1])
+        .filter((phase) =>
+          [
+            ShpReplacePhase.STAGING,
+            ShpReplacePhase.PROCESSING,
+            ShpReplacePhase.SWAPPING,
+            ShpReplacePhase.FINALIZING,
+          ].includes(phase)
+        );
+      expect(orderedPhases).toEqual([
+        ShpReplacePhase.STAGING,
+        ShpReplacePhase.PROCESSING,
+        ShpReplacePhase.SWAPPING,
+        ShpReplacePhase.FINALIZING,
+      ]);
+    });
+
+    it("should never emit the PROCESSING phase when processing is disabled", async () => {
+      const session = createSession();
+      const events: ShpReplaceProgress[] = [];
+
+      await run(session, buildParams({ processing: DISABLED_PROCESSING, onProgress: (progress) => events.push(progress) }));
+
+      expect(events.some((event) => event.phase === ShpReplacePhase.PROCESSING)).toBe(false);
+    });
+  });
+});
+
+interface TimedProgress extends ShpReplaceProgress {
+  at: number;
+}
+
+function timedRecorder(session: FakeSession): { events: TimedProgress[]; onProgress: (progress: ShpReplaceProgress) => void } {
+  const events: TimedProgress[] = [];
+  return {
+    events,
+    onProgress: (progress) => {
+      events.push({ ...progress, at: session.sqlLog.length });
+    },
+  };
+}
+
+function eventFor(events: TimedProgress[], detail: string): TimedProgress {
+  const found = events.find((event) => event.detail === detail);
+  if (!found) throw new Error(`expected a progress event with detail "${detail}"`);
+  return found;
+}
+
+const stepsOf = (events: TimedProgress[], phase: ShpReplacePhase) =>
+  events.filter((event) => event.phase === phase).map(({ current, total, detail }) => ({ current, total, detail }));
+
+const expectedSteps = (labels: readonly string[]) =>
+  labels.map((detail, index) => ({ current: index + 1, total: labels.length, detail }));
+
+const CONVERT_STEP = "Convirtiendo geometrías";
+const REPAIR_STEP = "Reparando geometrías";
+const UNIFY_STEP = "Unificando por clave";
+const REPAIR_UNIFIED_STEP = "Reparando geometrías unificadas";
+const VALIDITY_STEP = "Revisando validez de geometrías";
+const OVERLAPS_STEP = "Buscando solapes";
+const LOCK_STEP = "Bloqueando la tabla destino";
+const DELETE_STEP = "Eliminando registros actuales";
+const INSERT_STEP = "Insertando registros nuevos";
+const ADJUST_SEQUENCES_STEP = "Ajustando secuencias";
+const COMMIT_STEP = "Confirmando la transacción";
+const ANALYZE_STEP = "Actualizando estadísticas";
+
+const ALL_PROCESSING_STEPS = [CONVERT_STEP, REPAIR_STEP, UNIFY_STEP, REPAIR_UNIFIED_STEP, VALIDITY_STEP, OVERLAPS_STEP];
+
+const ONLY_REPAIR: GeometryProcessingOptions = {
+  repair: { enabled: true },
+  unify: { enabled: false, keyFields: [] },
+  overlaps: { enabled: false, policy: "block", minAreaM2: 1 },
+};
+
+const ONLY_UNIFY: GeometryProcessingOptions = {
+  repair: { enabled: false },
+  unify: { enabled: true, keyFields: ["NOMBRE"] },
+  overlaps: { enabled: false, policy: "block", minAreaM2: 1 },
+};
+
+const REPAIR_AND_UNIFY: GeometryProcessingOptions = {
+  ...FULL_PROCESSING,
+  overlaps: { enabled: false, policy: "block", minAreaM2: 1 },
+};
+
+const ONLY_OVERLAPS: GeometryProcessingOptions = {
+  repair: { enabled: false },
+  unify: { enabled: false, keyFields: [] },
+  overlaps: { enabled: true, policy: "report", minAreaM2: 1 },
+};
+
+describe("runShpReplace progress steps", () => {
+  describe("PROCESSING steps", () => {
+    it("should emit the six active processing steps with current 1 to 6 and total 6 when repair, unify and overlaps are all on", async () => {
+      const session = processingSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, withProcessing(FULL_PROCESSING, { onProgress: recorder.onProgress }));
+
+      expect(stepsOf(recorder.events, ShpReplacePhase.PROCESSING)).toEqual(expectedSteps(ALL_PROCESSING_STEPS));
+    });
+
+    it("should emit convert, repair and validity steps with total 3 when only repair is on", async () => {
+      const session = processingSession({ unify: false });
+      const recorder = timedRecorder(session);
+
+      await run(session, withProcessing(ONLY_REPAIR, { onProgress: recorder.onProgress }));
+
+      expect(stepsOf(recorder.events, ShpReplacePhase.PROCESSING)).toEqual(
+        expectedSteps([CONVERT_STEP, REPAIR_STEP, VALIDITY_STEP])
+      );
+    });
+
+    it("should emit convert, unify and validity steps with total 3 when only unify is on", async () => {
+      const session = processingSession({ repair: false });
+      const recorder = timedRecorder(session);
+
+      await run(session, withProcessing(ONLY_UNIFY, { onProgress: recorder.onProgress }));
+
+      expect(stepsOf(recorder.events, ShpReplacePhase.PROCESSING)).toEqual(
+        expectedSteps([CONVERT_STEP, UNIFY_STEP, VALIDITY_STEP])
+      );
+    });
+
+    it("should emit the unified repair step only when repair and unify are both on", async () => {
+      const session = processingSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, withProcessing(REPAIR_AND_UNIFY, { onProgress: recorder.onProgress }));
+
+      expect(stepsOf(recorder.events, ShpReplacePhase.PROCESSING)).toEqual(
+        expectedSteps([CONVERT_STEP, REPAIR_STEP, UNIFY_STEP, REPAIR_UNIFIED_STEP, VALIDITY_STEP])
+      );
+    });
+
+    it("should emit convert, validity and overlap steps with total 3 when only overlaps are on", async () => {
+      const session = processingSession({ unify: false, repair: false });
+      const recorder = timedRecorder(session);
+
+      await run(session, withProcessing(ONLY_OVERLAPS, { onProgress: recorder.onProgress }));
+
+      expect(stepsOf(recorder.events, ShpReplacePhase.PROCESSING)).toEqual(
+        expectedSteps([CONVERT_STEP, VALIDITY_STEP, OVERLAPS_STEP])
+      );
+    });
+  });
+
+  describe("PROCESSING step order against statements", () => {
+    it("should emit each processing step before the first statement of that step when every process is enabled", async () => {
+      const session = processingSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, withProcessing(FULL_PROCESSING, { onProgress: recorder.onProgress }));
+
+      expect(eventFor(recorder.events, CONVERT_STEP).at).toBeLessThanOrEqual(
+        session.sqlLog.indexOf(buildBaseTableSql(PROCESSING_LAYOUT))
+      );
+      expect(eventFor(recorder.events, REPAIR_STEP).at).toBeLessThanOrEqual(
+        session.sqlLog.indexOf(buildRepairSql(BASE_TABLE)[0])
+      );
+      expect(eventFor(recorder.events, UNIFY_STEP).at).toBeLessThanOrEqual(
+        session.sqlLog.indexOf(buildUnifySql(PROCESSING_LAYOUT))
+      );
+      expect(eventFor(recorder.events, REPAIR_UNIFIED_STEP).at).toBeLessThanOrEqual(
+        session.sqlLog.indexOf(buildRepairSql(UNIFIED_TABLE)[0])
+      );
+      expect(eventFor(recorder.events, VALIDITY_STEP).at).toBeLessThanOrEqual(
+        session.sqlLog.indexOf(buildInvalidCountSql(UNIFIED_TABLE))
+      );
+      expect(eventFor(recorder.events, OVERLAPS_STEP).at).toBeLessThanOrEqual(
+        session.sqlLog.indexOf(buildOverlapInputSql(UNIFIED_TABLE)[0])
+      );
+    });
+
+    it("should emit each processing step only after the last statement of the step before it when every process is enabled", async () => {
+      const session = processingSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, withProcessing(FULL_PROCESSING, { onProgress: recorder.onProgress }));
+
+      const baseTableIndex = session.sqlLog.indexOf(buildBaseTableSql(PROCESSING_LAYOUT));
+      const baseRepairEmptiedIndex = session.sqlLog.indexOf(buildRepairSql(BASE_TABLE)[1]);
+      const unifyIndex = session.sqlLog.indexOf(buildUnifySql(PROCESSING_LAYOUT));
+      const unifiedRepairEmptiedIndex = session.sqlLog.indexOf(buildRepairSql(UNIFIED_TABLE)[1]);
+      const validityIndex = session.sqlLog.indexOf(buildInvalidCountSql(UNIFIED_TABLE));
+
+      expect(eventFor(recorder.events, REPAIR_STEP).at).toBeGreaterThan(baseTableIndex);
+      expect(eventFor(recorder.events, UNIFY_STEP).at).toBeGreaterThan(baseRepairEmptiedIndex);
+      expect(eventFor(recorder.events, REPAIR_UNIFIED_STEP).at).toBeGreaterThan(unifyIndex);
+      expect(eventFor(recorder.events, VALIDITY_STEP).at).toBeGreaterThan(unifiedRepairEmptiedIndex);
+      expect(eventFor(recorder.events, OVERLAPS_STEP).at).toBeGreaterThan(validityIndex);
+    });
+  });
+
+  describe("dry run steps", () => {
+    it("should emit only the processing steps and no swapping or finalizing events when dryRun is true", async () => {
+      const session = processingSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, withProcessing(FULL_PROCESSING, { dryRun: true, onProgress: recorder.onProgress }));
+
+      expect(stepsOf(recorder.events, ShpReplacePhase.PROCESSING)).toEqual(expectedSteps(ALL_PROCESSING_STEPS));
+      expect(
+        recorder.events.some(
+          (event) => event.phase === ShpReplacePhase.SWAPPING || event.phase === ShpReplacePhase.FINALIZING
+        )
+      ).toBe(false);
+    });
+  });
+
+  describe("SWAPPING steps", () => {
+    it("should emit the lock, delete and insert steps with current 1 to 3 and total 3 when the real run swaps rows", async () => {
+      const session = createSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, buildParams({ onProgress: recorder.onProgress }));
+
+      expect(stepsOf(recorder.events, ShpReplacePhase.SWAPPING)).toEqual(
+        expectedSteps([LOCK_STEP, DELETE_STEP, INSERT_STEP])
+      );
+    });
+
+    it("should emit each swapping step between the statement before it and the statement it precedes", async () => {
+      const session = createSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, buildParams({ onProgress: recorder.onProgress }));
+
+      const lockIndex = session.kinds.indexOf("LOCK");
+      const deleteIndex = session.kinds.indexOf("DELETE");
+      const insertIndex = session.kinds.indexOf("INSERT");
+      expect(eventFor(recorder.events, LOCK_STEP).at).toBeLessThanOrEqual(lockIndex);
+      expect(eventFor(recorder.events, DELETE_STEP).at).toBeGreaterThan(lockIndex);
+      expect(eventFor(recorder.events, DELETE_STEP).at).toBeLessThanOrEqual(deleteIndex);
+      expect(eventFor(recorder.events, INSERT_STEP).at).toBeGreaterThan(deleteIndex);
+      expect(eventFor(recorder.events, INSERT_STEP).at).toBeLessThanOrEqual(insertIndex);
+    });
+  });
+
+  describe("FINALIZING steps", () => {
+    it("should emit the sequence, commit and statistics steps with current 1 to 3 and total 3 when the real run finalizes", async () => {
+      const session = createSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, buildParams({ onProgress: recorder.onProgress }));
+
+      expect(stepsOf(recorder.events, ShpReplacePhase.FINALIZING)).toEqual(
+        expectedSteps([ADJUST_SEQUENCES_STEP, COMMIT_STEP, ANALYZE_STEP])
+      );
+    });
+
+    it("should emit the statistics step after COMMIT and before ANALYZE when the real run finalizes", async () => {
+      const session = createSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, buildParams({ onProgress: recorder.onProgress }));
+
+      const commitIndex = session.kinds.indexOf("COMMIT");
+      const analyzeIndex = session.kinds.indexOf("ANALYZE");
+      expect(eventFor(recorder.events, COMMIT_STEP).at).toBeLessThanOrEqual(commitIndex);
+      expect(eventFor(recorder.events, ANALYZE_STEP).at).toBeGreaterThan(commitIndex);
+      expect(eventFor(recorder.events, ANALYZE_STEP).at).toBeLessThanOrEqual(analyzeIndex);
+    });
+
+    it("should emit the sequence step before the first sequence statement and the commit step after the last one when sequences are adjusted", async () => {
+      const session = createSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, buildParams({ sequences: [MAPPED_SEQUENCE], onProgress: recorder.onProgress }));
+
+      const firstSequenceIndex = session.kinds.indexOf("SEQUENCE");
+      const lastSequenceIndex = session.kinds.lastIndexOf("SEQUENCE");
+      expect(firstSequenceIndex).toBeGreaterThan(-1);
+      expect(eventFor(recorder.events, ADJUST_SEQUENCES_STEP).at).toBeLessThanOrEqual(firstSequenceIndex);
+      expect(eventFor(recorder.events, COMMIT_STEP).at).toBeGreaterThan(lastSequenceIndex);
+    });
+  });
+
+  describe("STAGING steps", () => {
+    it("should leave the step detail undefined on every staging progress event", async () => {
+      const session = createSession();
+      const recorder = timedRecorder(session);
+
+      await run(session, buildParams({ onProgress: recorder.onProgress }));
+
+      const staging = recorder.events.filter((event) => event.phase === ShpReplacePhase.STAGING);
+      expect(staging.length).toBeGreaterThan(0);
+      expect(staging.every((event) => event.detail === undefined)).toBe(true);
     });
   });
 });

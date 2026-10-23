@@ -1,3 +1,4 @@
+import { DEFAULT_GEOMETRY_PROCESSING } from "@/core/types/geometryProcessing";
 import { describe, it, expect, vi } from "vitest";
 import {
   SHP_UPLOAD_FILE_NAME,
@@ -104,6 +105,8 @@ const START_BODY: ShpStartBody = {
   mapping: { sourceByTarget: { nombre: "NOMBRE", geom: "__geometry__" }, defaults: {} },
   sourceSrid: 32721,
   resetSequences: true,
+  geometryProcessing: DEFAULT_GEOMETRY_PROCESSING,
+  dryRun: false,
   confirm: true,
 };
 
@@ -111,6 +114,7 @@ const SNAPSHOT: ShpJobSnapshot = {
   jobId: "job-1",
   tableKey: "tgt:6543/tdb|geo|parcelas",
   state: "running",
+  dryRun: false,
   phase: "staging",
   current: 500,
   total: 1000,

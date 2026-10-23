@@ -10,12 +10,14 @@ import { SHP_GEOMETRY_SOURCE, type OpenShapefile } from "@/core/services/server/
 import type { PgShpConfig } from "@/core/services/server/shpReplace/pgShpSession";
 import {
   ShpCommitUncertainError,
+  ShpProcessingBlockedError,
   type RunShpReplaceParams,
   type ShpReplaceResult,
   type ShpReplaceSession,
 } from "@/core/services/server/shpReplace/shpReplaceTypes";
 import { UploadInvalidError, UploadNotFoundError, UploadTooLargeError } from "@/core/services/server/shpReplace/shpUploadStore";
 import { AnalyzeStatus } from "@/core/types/replace";
+import type { GeometryProcessingReport } from "@/core/types/geometryProcessing";
 
 const SHP_URL = "http://localhost/api/db/shp-replace";
 const UPLOAD_ID = "123e4567-e89b-42d3-a456-426614174000";
@@ -29,10 +31,58 @@ const RESULT: ShpReplaceResult = {
   stagedRows: 3,
   previousRows: 7,
   insertedRows: 3,
+  dryRun: false,
   targetModified: true,
   sequencesAdjusted: [],
   analyze: { status: AnalyzeStatus.OK },
 };
+
+const DRY_RUN_RESULT: ShpReplaceResult = {
+  ...RESULT,
+  dryRun: true,
+  targetModified: false,
+  insertedRows: 0,
+};
+
+const PROCESSING_BODY = {
+  repair: { enabled: true },
+  unify: { enabled: true, keyFields: ["NOMBRE"] },
+  overlaps: { enabled: true, policy: "report", minAreaM2: 1 },
+};
+
+const PARSED_PROCESSING = {
+  repair: { enabled: true },
+  unify: { enabled: true, keyFields: ["NOMBRE"] },
+  overlaps: { enabled: true, policy: "report", minAreaM2: 1 },
+};
+
+const DISABLED_PROCESSING = {
+  repair: { enabled: false },
+  unify: { enabled: false, keyFields: [] },
+  overlaps: { enabled: false, policy: "block", minAreaM2: 1 },
+};
+
+const GEOMETRY_REPORT: GeometryProcessingReport = {
+  invalidBefore: 2,
+  repaired: 2,
+  emptyAfterRepair: 1,
+  groups: 2,
+  rowsMerged: 1,
+  nullKeyRows: 0,
+  largestGroups: [],
+  attributeConflicts: 0,
+  attributeConflictSamples: [],
+  overlapCount: 3,
+  overlapSamples: [],
+  overlapSkippedInvalid: 0,
+  insertedInvalid: 0,
+  incompatibleGeometryRows: 0,
+  wouldBlock: false,
+};
+
+const BLOCKED_REPORT: GeometryProcessingReport = { ...GEOMETRY_REPORT, overlapCount: 3, wouldBlock: true };
+
+const BLOCKED_MESSAGE = "No se puede reemplazar: se detectaron 3 solapes entre geometrías.";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -439,6 +489,25 @@ describe("shpReplaceHandlers", () => {
       expect(harness.store.get(body.jobId as string)).toMatchObject({ phase: "staging", current: 2, total: 3 });
     });
 
+    it("should record the step detail on the job when runReplace reports a step through onProgress", async () => {
+      const { body } = await readJson(await handleStart(startRequest(validStartBody()), harness.deps));
+      await settle(() => harness.runCalls.length === 1);
+
+      harness.runCalls[0].params.onProgress?.({
+        phase: "swapping",
+        current: 1,
+        total: 3,
+        detail: "Bloqueando la tabla destino",
+      });
+
+      expect(harness.store.get(body.jobId as string)).toMatchObject({
+        phase: "swapping",
+        current: 1,
+        total: 3,
+        detail: "Bloqueando la tabla destino",
+      });
+    });
+
     it("should mark the job DONE with the result and delete the upload when runReplace resolves", async () => {
       const { body } = await readJson(await handleStart(startRequest(validStartBody()), harness.deps));
       await settle(() => harness.pending.length === 1);
@@ -453,17 +522,18 @@ describe("shpReplaceHandlers", () => {
       expect(harness.deleted).toEqual([UPLOAD_ID]);
     });
 
-    it("should mark the job FAILED with the error message and delete the upload when runReplace rejects", async () => {
+    it("should mark the job FAILED with the error message and keep the upload when runReplace rejects", async () => {
       const { body } = await readJson(await handleStart(startRequest(validStartBody()), harness.deps));
       await settle(() => harness.pending.length === 1);
 
       harness.pending[0].reject(new Error("No se pudo completar el reemplazo: columna inválida."));
-      await settle(() => harness.deleted.length === 1);
+      await settle(() => harness.store.get(body.jobId as string)?.state === ShpJobState.FAILED);
 
       const job = harness.store.get(body.jobId as string);
       expect(job?.state).toBe(ShpJobState.FAILED);
       expect(job?.error).toBe("No se pudo completar el reemplazo: columna inválida.");
-      expect(harness.deleted).toEqual([UPLOAD_ID]);
+      expect(harness.deleted).toEqual([]);
+      expect(harness.files.has(UPLOAD_ID)).toBe(true);
     });
 
     it("should replace every occurrence of the password with *** in the failure message", async () => {
@@ -524,7 +594,7 @@ describe("shpReplaceHandlers", () => {
       expect(harness.store.get(body.jobId as string)).toMatchObject({ state: ShpJobState.DONE, outcomeUnknown: false });
     });
 
-    it("should fail the job and delete the upload without calling runReplace when the shapefile cannot be opened", async () => {
+    it("should fail the job and keep the upload without calling runReplace when the shapefile cannot be opened", async () => {
       const failingDeps: ShpReplaceHandlerDeps = {
         ...harness.deps,
         openShapefile: async () => {
@@ -532,20 +602,21 @@ describe("shpReplaceHandlers", () => {
         },
       };
       const { body } = await readJson(await handleStart(startRequest(validStartBody()), failingDeps));
-      await settle(() => harness.deleted.length === 1);
+      await settle(() => harness.store.get(body.jobId as string)?.state === ShpJobState.FAILED);
 
       const job = harness.store.get(body.jobId as string);
       expect(job?.state).toBe(ShpJobState.FAILED);
       expect(job?.error).toBe("No se encontró el archivo .shp dentro del ZIP.");
       expect(harness.runCalls).toHaveLength(0);
-      expect(harness.deleted).toEqual([UPLOAD_ID]);
+      expect(harness.deleted).toEqual([]);
+      expect(harness.files.has(UPLOAD_ID)).toBe(true);
     });
 
     it("should release the table lock when the run has failed so that a new start succeeds", async () => {
-      await handleStart(startRequest(validStartBody()), harness.deps);
+      const { body } = await readJson(await handleStart(startRequest(validStartBody()), harness.deps));
       await settle(() => harness.pending.length === 1);
       harness.pending[0].reject(new Error("fallo"));
-      await settle(() => harness.deleted.length === 1);
+      await settle(() => harness.store.get(body.jobId as string)?.state === ShpJobState.FAILED);
       harness.files.set(UPLOAD_ID, ZIP_BYTES);
 
       const { status } = await readJson(await handleStart(startRequest(validStartBody()), harness.deps));
@@ -597,6 +668,25 @@ describe("shpReplaceHandlers", () => {
       expect(status).toBe(200);
       expect(body.success).toBe(true);
       expect(body.job).toMatchObject({ jobId: job.jobId, tableKey: TABLE_KEY, state: ShpJobState.RUNNING, phase: null });
+    });
+
+    it("should respond 200 with a null step detail in the job when the running job has reported no step", async () => {
+      const job = harness.store.tryStart(TABLE_KEY);
+      if (!job) throw new Error("expected a job to start");
+
+      const { body } = await readJson(await handleStatus(statusRequest(job.jobId), harness.deps));
+
+      expect(body.job).toMatchObject({ state: ShpJobState.RUNNING, detail: null });
+    });
+
+    it("should respond 200 with the step detail in the job when the running job reports a step", async () => {
+      const job = harness.store.tryStart(TABLE_KEY);
+      if (!job) throw new Error("expected a job to start");
+      harness.store.progress(job.jobId, { phase: "processing", current: 2, total: 6, detail: "Reparando geometrías" });
+
+      const { body } = await readJson(await handleStatus(statusRequest(job.jobId), harness.deps));
+
+      expect(body.job).toMatchObject({ phase: "processing", current: 2, total: 6, detail: "Reparando geometrías" });
     });
 
     it("should respond 200 with the result in the job when the job is DONE", async () => {
@@ -654,6 +744,165 @@ describe("shpReplaceHandlers", () => {
       expect(response.status).toBe(200);
       expect(text).not.toContain(PASSWORD);
       expect(text).toContain("***");
+    });
+  });
+
+  describe("handleStart geometry processing and dry run options", () => {
+    it("should pass the parsed processing options and dryRun true to runReplace when the start body sets them", async () => {
+      await handleStart(startRequest(validStartBody({ geometryProcessing: PROCESSING_BODY, dryRun: true })), harness.deps);
+      await settle(() => harness.runCalls.length === 1);
+
+      expect(harness.runCalls[0].params.processing).toEqual(PARSED_PROCESSING);
+      expect(harness.runCalls[0].params.dryRun).toBe(true);
+    });
+
+    it("should pass all-disabled processing and dryRun false to runReplace when the start body omits both", async () => {
+      await handleStart(startRequest(validStartBody()), harness.deps);
+      await settle(() => harness.runCalls.length === 1);
+
+      expect(harness.runCalls[0].params.processing).toEqual(DISABLED_PROCESSING);
+      expect(harness.runCalls[0].params.dryRun).toBe(false);
+    });
+
+    it.each<[string, unknown]>([
+      ["a key field is not a DBF field", { unify: { enabled: true, keyFields: ["NO_EXISTE"] } }],
+      ["unify is enabled without key fields", { unify: { enabled: true, keyFields: [] } }],
+      ["the overlap policy is unknown", { overlaps: { enabled: true, policy: "merge", minAreaM2: 1 } }],
+      ["the overlap minimum area is negative", { overlaps: { enabled: true, policy: "block", minAreaM2: -1 } }],
+      ["geometryProcessing is a string", "repair"],
+    ])(
+      "should respond 400 with a Spanish error, release the lock and keep the upload when %s",
+      async (_label, geometryProcessing) => {
+        const { status, body } = await readJson(
+          await handleStart(startRequest(validStartBody({ geometryProcessing })), harness.deps)
+        );
+
+        expect(status).toBe(400);
+        expectSpanishFailure(body);
+        expect(harness.runCalls).toHaveLength(0);
+        expect(harness.deleted).toEqual([]);
+        expect(harness.files.has(UPLOAD_ID)).toBe(true);
+        expect(harness.store.tryStart(TABLE_KEY)).not.toBeNull();
+      }
+    );
+
+    it("should name the offending key field in the 400 message when a key field is not a DBF field", async () => {
+      const { body } = await readJson(
+        await handleStart(
+          startRequest(validStartBody({ geometryProcessing: { unify: { enabled: true, keyFields: ["NO_EXISTE"] } } })),
+          harness.deps
+        )
+      );
+
+      expect(body.error as string).toContain("NO_EXISTE");
+    });
+
+    it("should respond 400 with a Spanish error when dryRun is not a boolean", async () => {
+      const { status, body } = await readJson(
+        await handleStart(startRequest(validStartBody({ dryRun: "yes" })), harness.deps)
+      );
+
+      expect(status).toBe(400);
+      expectSpanishFailure(body);
+      expect(harness.runCalls).toHaveLength(0);
+    });
+
+    it("should respond 200 on a valid start after an invalid geometry options start was rejected", async () => {
+      await handleStart(startRequest(validStartBody({ geometryProcessing: { repair: "yes" } })), harness.deps);
+
+      const { status } = await readJson(await handleStart(startRequest(validStartBody()), harness.deps));
+
+      expect(status).toBe(200);
+    });
+  });
+
+  describe("upload retention", () => {
+    it("should keep the upload and never delete it when a dry run ends DONE", async () => {
+      const { body } = await readJson(
+        await handleStart(startRequest(validStartBody({ dryRun: true })), harness.deps)
+      );
+      await settle(() => harness.pending.length === 1);
+
+      harness.pending[0].resolve(DRY_RUN_RESULT);
+      await settle(() => harness.store.get(body.jobId as string)?.state === ShpJobState.DONE);
+
+      expect(harness.store.get(body.jobId as string)?.state).toBe(ShpJobState.DONE);
+      expect(harness.deleted).toEqual([]);
+      expect(harness.files.has(UPLOAD_ID)).toBe(true);
+    });
+
+    it("should keep the upload when a dry run ends FAILED", async () => {
+      const { body } = await readJson(
+        await handleStart(startRequest(validStartBody({ dryRun: true })), harness.deps)
+      );
+      await settle(() => harness.pending.length === 1);
+
+      harness.pending[0].reject(new Error("fallo en el análisis"));
+      await settle(() => harness.store.get(body.jobId as string)?.state === ShpJobState.FAILED);
+
+      expect(harness.deleted).toEqual([]);
+      expect(harness.files.has(UPLOAD_ID)).toBe(true);
+    });
+
+    it("should keep the upload and the blocked report when the run is blocked by overlaps", async () => {
+      const { body } = await readJson(await handleStart(startRequest(validStartBody()), harness.deps));
+      await settle(() => harness.pending.length === 1);
+
+      harness.pending[0].reject(new ShpProcessingBlockedError(BLOCKED_MESSAGE, BLOCKED_REPORT));
+      await settle(() => harness.store.get(body.jobId as string)?.state === ShpJobState.FAILED);
+
+      expect(harness.store.get(body.jobId as string)).toMatchObject({
+        state: ShpJobState.FAILED,
+        error: BLOCKED_MESSAGE,
+        outcomeUnknown: false,
+        report: BLOCKED_REPORT,
+      });
+      expect(harness.deleted).toEqual([]);
+    });
+  });
+
+  describe("job snapshot dry run and report", () => {
+    it("should mark the snapshot dryRun true when the start body sets dryRun true", async () => {
+      const { body } = await readJson(
+        await handleStart(startRequest(validStartBody({ dryRun: true })), harness.deps)
+      );
+
+      expect(harness.store.get(body.jobId as string)?.dryRun).toBe(true);
+    });
+
+    it("should mark the snapshot dryRun false when the start body omits dryRun", async () => {
+      const { body } = await readJson(await handleStart(startRequest(validStartBody()), harness.deps));
+
+      expect(harness.store.get(body.jobId as string)?.dryRun).toBe(false);
+    });
+
+    it("should expose the dry run flag and the geometry report in the status body when a dry run job is DONE", async () => {
+      const { body } = await readJson(
+        await handleStart(startRequest(validStartBody({ dryRun: true })), harness.deps)
+      );
+      await settle(() => harness.pending.length === 1);
+      harness.pending[0].resolve({ ...DRY_RUN_RESULT, geometry: GEOMETRY_REPORT });
+      await settle(() => harness.store.get(body.jobId as string)?.state === ShpJobState.DONE);
+
+      const { body: status } = await readJson(await handleStatus(statusRequest(body.jobId as string), harness.deps));
+
+      expect(status.job).toMatchObject({
+        state: ShpJobState.DONE,
+        dryRun: true,
+        report: GEOMETRY_REPORT,
+        result: { dryRun: true, targetModified: false },
+      });
+    });
+
+    it("should expose the blocked report in the status body when the run is blocked by overlaps", async () => {
+      const { body } = await readJson(await handleStart(startRequest(validStartBody()), harness.deps));
+      await settle(() => harness.pending.length === 1);
+      harness.pending[0].reject(new ShpProcessingBlockedError(BLOCKED_MESSAGE, BLOCKED_REPORT));
+      await settle(() => harness.store.get(body.jobId as string)?.state === ShpJobState.FAILED);
+
+      const { body: status } = await readJson(await handleStatus(statusRequest(body.jobId as string), harness.deps));
+
+      expect(status.job).toMatchObject({ state: ShpJobState.FAILED, error: BLOCKED_MESSAGE, report: BLOCKED_REPORT });
     });
   });
 });
