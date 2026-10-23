@@ -60,6 +60,11 @@ Flow:
 - AC-2 Column mapping maps each TARGET column to a DBF field, to the geometry, or to a fixed default. DBF field
   names are shown as-is (10 chars). Unmapped target columns without default are left to the table default; a
   NOT NULL column without source or default blocks the run (existing `findMissingRequiredColumns`).
+  Auto-mapping pre-fills DBF fields by tiers, in order, each consuming its matches: exact name; case-insensitive;
+  normalized (ignoring case, underscores, hyphens, spaces, accents); truncated (a 10-character DBF name that is the
+  prefix of a longer target name); similar (normalized Damerau-Levenshtein distance 1, both names at least 5
+  characters). A pair is accepted only when it is unique on both sides. Auto-matched columns are marked and can be
+  changed by the user; the geometry is never auto-matched and is selected by default.
 - AC-3 Upload streams the file; server memory does not grow with the body beyond the chunk size. An upload over
   the cap is rejected with 413 and nothing is left on disk.
 - AC-4 `start` requires `confirm: true`, an existing `uploadId`, a password, a table that exists, a mapping whose
