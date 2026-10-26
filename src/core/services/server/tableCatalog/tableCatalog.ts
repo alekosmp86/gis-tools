@@ -5,6 +5,13 @@ import {
   type AutoMatch,
 } from "@/core/services/columnAutoMapper";
 import type { DbColumnMetadata } from "@/core/types/db";
+import {
+  ColumnStatus,
+  TableKind,
+  type CatalogTable,
+  type ResolvedColumn,
+  type TableListing,
+} from "@/core/types/tableCatalog";
 
 export interface CatalogQueryResult {
   rows: Array<Record<string, unknown>>;
@@ -13,39 +20,6 @@ export interface CatalogQueryResult {
 
 export interface CatalogQuerySession {
   query(sql: string, values?: unknown[]): Promise<CatalogQueryResult>;
-}
-
-const TableKind = {
-  TABLE: "TABLE",
-  VIEW: "VIEW",
-} as const;
-
-type TableKind = (typeof TableKind)[keyof typeof TableKind];
-
-export interface CatalogTable {
-  name: string;
-  kind: TableKind;
-}
-
-export interface ListTablesResult {
-  schemaExists: boolean;
-  tables: CatalogTable[];
-}
-
-export const ColumnStatus = {
-  RESOLVED: "resolved",
-  MISSING: "missing",
-  AMBIGUOUS: "ambiguous",
-} as const;
-
-export type ColumnStatus = (typeof ColumnStatus)[keyof typeof ColumnStatus];
-
-export interface ResolvedColumn {
-  logical: string;
-  status: ColumnStatus;
-  column?: string;
-  dataType?: string;
-  suggestion?: string;
 }
 
 const EXACT_MATCH_KINDS: ReadonlySet<MatchKind> = new Set([
@@ -93,7 +67,7 @@ const toCatalogColumn = (row: Record<string, unknown>): DbColumnMetadata => ({
 
 const byTableName = (left: CatalogTable, right: CatalogTable): number => left.name.localeCompare(right.name);
 
-export async function listTables(session: CatalogQuerySession, schema: string): Promise<ListTablesResult> {
+export async function listTables(session: CatalogQuerySession, schema: string): Promise<TableListing> {
   const existing = await session.query(SCHEMA_EXISTS_SQL, [schema]);
   if (existing.rows.length === 0) {
     return { schemaExists: false, tables: [] };

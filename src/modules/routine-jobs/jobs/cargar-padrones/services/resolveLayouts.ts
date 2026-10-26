@@ -1,12 +1,11 @@
 import { buildQualifiedTableLabel } from "@/core/services/sqlStatements";
 import {
-  ColumnStatus,
   fetchCatalogColumns,
   matchColumns,
   type CatalogQuerySession,
-  type ResolvedColumn,
 } from "@/core/services/server/tableCatalog/tableCatalog";
 import type { DbColumnMetadata } from "@/core/types/db";
+import { ColumnStatus, type ResolvedColumn } from "@/core/types/tableCatalog";
 import {
   COLUMN,
   MULTIPOLYGON_TYPE,
