@@ -25,7 +25,7 @@ export interface PgShpSessionDeps {
   createCopyStream?: (sql: string) => CopyStream;
 }
 
-const SESSION_SETUP_STATEMENTS = [
+export const SESSION_SETUP_STATEMENTS = [
   "SET statement_timeout = '4h'",
   "SET lock_timeout = '30s'",
   "SET client_encoding = 'UTF8'",
@@ -34,7 +34,7 @@ const SESSION_SETUP_STATEMENTS = [
 ] as const;
 const CLIENT_CONNECT_TIMEOUT_MS = 10_000;
 
-const defaultCreateClient = (config: PgShpConfig): PgClientLike =>
+export const defaultCreateClient = (config: PgShpConfig): PgClientLike =>
   new Client({
     host: config.host,
     port: config.port,
@@ -44,7 +44,7 @@ const defaultCreateClient = (config: PgShpConfig): PgClientLike =>
     connectionTimeoutMillis: CLIENT_CONNECT_TIMEOUT_MS,
   }) as unknown as PgClientLike;
 
-const connectErrorMessage = (config: PgShpConfig): string =>
+export const connectErrorMessage = (config: PgShpConfig): string =>
   `No se pudo conectar a PostgreSQL en ${config.host}:${config.port} (base "${config.db_name}"). Revise los datos de conexión.`;
 
 interface PgQueryResult {
@@ -57,7 +57,7 @@ const toQueryResult = (result: PgQueryResult): ShpQueryResult => ({
   rowCount: result.rowCount ?? 0,
 });
 
-const ignoreIdleClientError = (): void => undefined;
+export const ignoreIdleClientError = (): void => undefined;
 
 const asError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
 
