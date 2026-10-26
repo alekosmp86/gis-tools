@@ -42,6 +42,7 @@ const SOURCE_GEOMETRY_TEXT = "Polygon o MultiPolygon";
 const TARGET_GEOMETRY_TYPES: readonly string[] = [MULTIPOLYGON_TYPE];
 const TARGET_GEOMETRY_TEXT = "MultiPolygon";
 const GEOMETRY_TYPE_PATTERN = /^geometry(?:\(\s*([A-Za-z]+)\s*(?:,\s*(\d+)\s*)?\))?$/i;
+const GENERIC_GEOMETRY_TYPE = "GEOMETRY";
 const DIMENSION_SUFFIX = /(ZM|Z|M)$/i;
 
 const isResolved = (entry: ResolvedColumn): entry is ResolvedEntry =>
@@ -99,7 +100,7 @@ function geometryIssuesOf(
   if (!typing) {
     return [`La columna geométrica "${column}" de la tabla ${label} no es de tipo geometría.`];
   }
-  if (typing.typeName !== undefined && !allowedTypes.includes(typing.typeName)) {
+  if (typing.typeName !== undefined && typing.typeName !== GENERIC_GEOMETRY_TYPE && !allowedTypes.includes(typing.typeName)) {
     return [`La columna geométrica "${column}" de la tabla ${label} es ${typing.typeName}; debe ser ${allowedText}.`];
   }
   return [];
