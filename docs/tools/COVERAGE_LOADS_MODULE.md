@@ -4,30 +4,25 @@ Loads the monthly `IndicadoresLTE_aaaammdd.csv` LTE coverage cuts into
 `historico.h_cobertura_lte_localidad` (replace-the-cut, atomic) and produces the three report CSVs as
 browser downloads. It replaces the monthly `.bat` + GeoKettle job of CGEO-2200.
 
-Workflow: connect to PostgreSQL (HGDesa or PROD) once -> work through independent stages (today only
-"Indicadores LTE": drop one or more CSVs -> review the plan (cuts, rows, existing rows that will be
-replaced, rejected rows) -> confirm) -> combined "Resultado" step with the status of every stage and the
-report downloads.
+Workflow: choose the load type ("Cobertura" or "FTTH") -> connect to PostgreSQL (HGDesa or PROD) once -> work
+through the independent stages of that type: Cobertura = "Indicadores LTE" and "Cargas SHP", FTTH = "Capas SIGRA"
+and "Avance FTTH" -> combined "Resultado" step with the status of every stage and the report downloads. Each
+stage reviews its plan before it writes (for "Indicadores LTE": drop one or more CSVs -> review the plan (cuts,
+rows, existing rows that will be replaced, rejected rows) -> confirm).
 
 **Native TypeScript + `pg`.** There is no GeoKettle wrapper. The GeoKettle job stays as the reference
 oracle; its output is the golden fixture the tests compare against.
 
-**Plan and reports never write** (`BEGIN READ ONLY`). The one write path is `load`, behind a reviewed
-plan and an explicit `confirm`.
+**Plan and reports never write** (`BEGIN READ ONLY`). The write paths are the `load` endpoints of the
+indicators, avance-ftth and sigra-layers parts and the `shp/start` endpoint, each behind a reviewed plan and an
+explicit confirmation.
 
 It is a **module**: `src/modules/coverage-loads/`. Its deletion set is that folder, its line in
 `src/app/modules.registry.ts`, `tests/unit/modules/coverage-loads/`, and the generated
 `src/app/api/m/coverage-loads/**` and `src/app/tools/m/coverage-loads/` (regenerated, never edited).
-Since the SHP backend the set also names `tsconfig.job.json`, the `allowImportingTsExtensions` line in the
-root `tsconfig.json` and the `/data/coverage-loads/` line in `.gitignore`. They are harmless without the
-module, but `tsc -p tsconfig.job.json` fails once the folder is gone, so remove them too.
-**The deletion proof below has NOT been redone since the SHP backend** (it predates it).
-Deletion proof (before the SHP backend): done on a scratch copy on 2026-10-09. Removed `src/modules/coverage-loads/`,
-`tests/unit/modules/coverage-loads/` and the registry import + entry; `modules:routes` removed the 3 API
-routes and the page (17 -> 13 route files); routes check, lint, test (70 files / 1105 tests, exactly the
-module's 17 files / 557 tests fewer), build and doctor all green. The route table differs only by the 4
-coverage-loads routes (`/api/m/coverage-loads/indicators/{load,plan,reports}`, `/tools/m/coverage-loads`);
-no leaks; only docs remain as differences from HEAD.
+The set also includes `tsconfig.job.json`, the `allowImportingTsExtensions` line in the root
+`tsconfig.json` and the `/data/coverage-loads/` line in `.gitignore`. Without the module,
+`tsc -p tsconfig.job.json` fails, so these are removed with it.
 
 ## 1. Module layout
 
@@ -39,13 +34,13 @@ src/modules/coverage-loads/
                  contentDisposition,latin1}, the Spanish connection form. Generic constants (MAX_FILE_BYTES,
                  CSV_SEPARATOR, REJECTED_CSV_HEADER, ...) live in the module constants.ts. csvFormat/rejectedCsv
                  stay per part: indicators right-trims fields, avance-ftth does not.
-  indicators/    PART 2 (this document)
+  indicators/    indicators stage (sections 1 to 9)
     constants.ts, types.ts
     domain/      pure: fileName, csvIndicators, plan, reportCsv, rejectedCsv, loadFlow (reducer), ...
     services/    IndicatorsRepository + PgIndicatorsRepository, queries/*.ts (SQL constants)
     api/         handlers.ts (thin), uploadReaders.ts
     ui/          IndicatorsPanel (a stage) + atomic components + CSS modules
-  shp/           SHP loader: backend foundation (section 10) + the visible stage under shp/ui (section 10b)
+  shp/           SHP loader: backend (section 10), stage UI (section 10b), real pipeline (section 10c)
     domain/      pure: file name check, flow reducer, job view helpers, plan checklist, stage report
     ui/          ShpPanel (a stage) + hooks + atomic components + CSS modules
     job/         job-safe core run by the detached process (ESM scope, `.ts` imports)
@@ -75,8 +70,8 @@ src/modules/coverage-loads/
 - One shared connection step (password in memory only). Confirming it unlocks the stages.
 - `COVERAGE_STAGES` (`workflow/ui/coverageStages.ts`) is the list of stages: `{ id, label, Icon, Panel,
   ResultExtras? }`. A panel receives `{ connection, connectionRevision, onStatusChange }`. Adding a stage
-  is one entry plus its own components. The section tabs (`CoverageSectionTabs`, `coverageSections`) were
-  removed; the stepper (Conexion, one step per stage, Resultado) replaces them.
+  is one entry plus its own components. The stepper (Conexion, one step per stage, Resultado) is the
+  navigation.
 - Stages are independent: any order, each can be skipped ("Omitir") and resumed ("Retomar") unless it is
   working or done. All panels stay mounted (hidden when inactive) so progress is kept.
 - Status per stage: Pendiente, Omitido, En curso, Completado. A "Con error" status exists in the stage
@@ -91,13 +86,13 @@ src/modules/coverage-loads/
   is read-only and independent of any load), so they are available at any time after the connection is
   confirmed, whether the stage was loaded or skipped.
 
-`shared/` exists only so part 1 does not have to move code later. Modules cannot import each other, so
-the small helpers (`runInTransaction`, request readers, http responses, connection profiles) were
-copied from address-dedup, not imported.
+Code used by more than one part lives in `shared/`. Modules cannot import each other, so the small
+helpers (`runInTransaction`, request readers, http responses, connection profiles) are copies of the
+ones in address-dedup, not imports.
 
 ## 2. Endpoints
 
-All are `POST`, `nodejs`, `force-dynamic`, declared in `module.routes.json` (generated routes under
+The indicators endpoints are all `POST`, `nodejs`, `force-dynamic`, declared in `module.routes.json` (generated routes under
 `src/app/api/m/coverage-loads/indicators/`). Credentials travel in the body only, never in a query
 string, and are never stored, logged or echoed (the password is scrubbed from error text).
 
@@ -185,7 +180,7 @@ back and the previous rows stay.
 
 1. Privilege and table-existence check. Any shortfall is a 409 with **no lock taken**; the existing-row
    counts are read with a plain `SELECT` only to build the refused plan, if the history is readable.
-2. `LOCK TABLE public.indicadores_lte IN ACCESS EXCLUSIVE MODE`, **before reading the existing-row
+2. `LOCK TABLE public.indicadores_lte IN SHARE ROW EXCLUSIVE MODE`, **before reading the existing-row
    counts that decide the load**, so two simultaneous loads serialise and the second one sees the first
    one's rows when it decides replace vs shrink. With no shortfall the privilege result from step 1 is
    reused after the lock, not queried again.
@@ -236,8 +231,7 @@ a corrected file restores the full cut with no duplicates. Limits:
 `public.indicadores_lte` is emptied once (`DELETE FROM`, the role has no `TRUNCATE` privilege) and filled with
 the rows of all cuts of the run inside the same transaction, for parity with the legacy GeoKettle job (other
 consumers are unknown). The lock is `LOCK TABLE ... IN SHARE ROW EXCLUSIVE MODE`: loads serialise, readers
-are not blocked. `DELETE` leaves dead rows until the admins' vacuum. After a run staging holds the rows of all cuts (for example 5
-files -> 3075 rows).
+are not blocked. `DELETE` leaves dead rows until the admins' vacuum. After a run, staging holds the rows of all cuts.
 
 ## 5. Reports
 
@@ -275,8 +269,7 @@ shortfall (or a missing table) is a 409 with zero writes.
 | `historico.h_cobertura_lte_localidad` | `SELECT`, `INSERT`, `DELETE` |
 | `public.indicadores_lte` | `SELECT`, `INSERT`, `DELETE` |
 
-> **DELETE on the history was never needed by the old GeoKettle job.** Its role may not hold it. A DBA may
-> have to grant it, for example in PROD:
+> **The role may lack DELETE on the history table.** A DBA may have to grant it, for example in PROD:
 > `GRANT DELETE ON historico.h_cobertura_lte_localidad TO <role>;`
 > The plan shows this hint when `DELETE` is the missing privilege. `SELECT` on staging is required too,
 > because the replace statement reads it. `SELECT` on the history is needed for the existing-row count read
@@ -313,18 +306,18 @@ rejected; blank lines are skipped; only lowercase `.csv` is accepted.
 - `loadOrder.test.ts`: statement order inside the write transaction, post-lock counts, privilege check
   before the lock, simulated lock failure.
 - `bodySize.test.ts`: 413 on `Content-Length` over the cap, before the form is read.
-- React components and hooks have **no tests**.
+- Indicators components have no tests. No test renders a hook. Some SIGRA components are checked as static markup (`sigra-layers/sigraComponents.test.ts`, `sigra-layers/stageView.test.ts`, `sigra-layers/replaceWarning.test.ts`).
 
 ## 9. Unverified vs legacy
 
 - Percentage rendering of two-decimal values (`12.35`): never occurred in the golden data.
 - Real-database collation and the order of the report rows (PGlite uses C collation).
-- Real two-session contention and a real `lock_timeout` (the `ACCESS EXCLUSIVE` ordering itself is asserted
+- Real two-session contention and a real `lock_timeout` (the `SHARE ROW EXCLUSIVE` ordering itself is asserted
   in `loadOrder.test.ts`, but PGlite is single-session and cannot contend it).
 - Restricted-role privileges against a real database (PROD roles, the missing `DELETE` case).
 - The UI has not been exercised in a browser.
 
-## 10. SHP backend foundation (Phase 2)
+## 10. SHP backend
 
 Backend: the HTTP surface and services that drive the job-safe core in `shp/job/`. The real pipeline is described in section 10c. Targets:
 `NRUruguay`->`cobertura5g`, `WCDMAUruguay`->`wcdma`, `NBIoTUruguay`->`nbiot`, `LTEUruguay`->`lte`
@@ -341,7 +334,7 @@ never logged. Errors are `{ success:false, error }` in Spanish.
 | `POST shp/plan` | `{ connection, jobId }` | `200 { success, plan:{ jobId, target, defaultMode, availableModes, currentRows, leftovers[], privilegeShortfalls[], blockers[], expectedMs, canStart } }`. `404` unknown job, `409` job not READY. Read-only (`BEGIN READ ONLY` + statement timeout); writes nothing. |
 | `POST shp/start` | `{ connection, jobId, mode: "LOAD" or "TEST", confirm: true }` | `200 { success, jobId }` at once. `400` no confirm / bad mode, `404`, `409` job not READY, plan has blockers/shortfalls or the lock is taken (`plan` included), `500` spawn failure (job marked FAILED, lock released). Re-runs the plan checks first. |
 | `GET shp/status?jobId=` | - | `200 { success, status, stale }` (`status` = status.json; `stale` = looks dead but not yet swept). `400` bad id, `404`. |
-| `GET shp/jobs` | - | `200 { success, jobs:[{ jobId, target, mode, state, stage, stageFraction, overallFraction, startedAt, updatedAt, errorMessage, stale }] }`, newest first. The only endpoint the future app-wide chip polls; it also runs the cleanup sweep. |
+| `GET shp/jobs` | - | `200 { success, jobs:[{ jobId, target, mode, state, stage, stageFraction, overallFraction, startedAt, updatedAt, errorMessage, stale }] }`, newest first. The stage calls it on mount to resume a job; it also runs the cleanup sweep. |
 | `POST shp/cancel` | `{ jobId }` | `200 { success, jobId, outcome: "CANCELLED" or "REQUESTED" }`: READY -> cancelled on the spot (source removed, lock released); RUNNING -> `cancel.request` written. `409` otherwise (terminal or uploading), `404`. |
 | `GET shp/log?jobId=&tail=N` | - | `text/plain; charset=utf-8` attachment `cargar_<table>_<jobId8>.log`, `no-store`; last N lines (default 200, max 5000) read from the last 4 MiB only. `404`. |
 | `POST shp/discard` | `{ jobId }` | `200`; `409` not terminal; `404`. |
@@ -371,8 +364,7 @@ leftovers, cancelRequested, error {code,message,stage}`. Written atomically (`.t
 ### Status write retries
 
 On Windows the rename of `status.json.tmp` over `status.json` can fail (`EPERM`/`EBUSY`/`EACCES`) while a
-scanner or reader holds the file; under a stress loop (readers every 3 ms) about 1% of the writes with
-the short budget below ran out of retries. Two budgets (`shp/job/statusFile.ts`):
+scanner or reader holds the file. Two budgets (`shp/job/statusFile.ts`):
 
 - **Short** (heartbeat, progress, stage change; written through `createStatusWriter.write(status)`):
   3 retries with 25/50/75 ms backoff, then the write is dropped (logged WARN, never thrown into the
@@ -454,10 +446,10 @@ Next-side code can import job files (`../job/layout.ts`).
 
 `next dev` and `next start` bind `0.0.0.0:3000` by default in this repo, and the app has no
 authentication. `shp/upload` (writes up to 4 GiB to disk) and `shp/start` (spawns a process) are therefore
-reachable from the LAN. No auth was added; run the app on a trusted network or bind it to localhost
-(`-H 127.0.0.1`) until that is decided.
+reachable from the LAN. The endpoints have no authentication. Run the app on a trusted network or bind it to localhost
+(`-H 127.0.0.1`).
 
-## 10b. SHP UI (Phase 3A)
+## 10b. SHP UI
 
 The stage "Cargas SHP" (`workflow/ui/coverageStages.ts`, id `shp`, panel `shp/ui/ShpPanel`) follows the
 `StagePanelProps` contract. It works end to end against the backend of section 10; with
@@ -499,7 +491,7 @@ Credentials: the confirmed connection arrives as a prop and is only placed in th
 `start`. It is never stored in the flow state. `upload`, `status`, `jobs`, `log`, `cancel` and `discard`
 carry no credentials.
 
-Phase 4 (polish and app-wide visibility):
+Polish and app-wide visibility:
 
 - **Run card**: overall bar plus "Fase actual: N%, <count>" (`phaseDetail`: bytes read in READING/STAGING,
   pieces generated in SUBDIVIDING, pieces repaired in REPAIRING), elapsed and expected time, stage list.
@@ -518,13 +510,12 @@ Phase 4 (polish and app-wide visibility):
   RUNNING job in `localStorage` (`coverage-loads.shp.activeJobId`, written and cleared by `useShpJobMemory`); the
   chip polls `GET shp/status` every 5 s only while an id is remembered, shows it while the job is
   RUNNING/CANCELLING, links to `/tools/m/coverage-loads`, and forgets the id once it has seen the end.
-  `status` and `jobs` take no connection body, so the chip never needs the password. Deletion set unchanged:
-  the module folder, the registry line and `tests/unit/modules/coverage-loads/` (the slot stays in core and
-  renders nothing without a contribution).
+  `status` and `jobs` take no connection body, so the chip never needs the password. Without the module
+  the slot stays in core and renders nothing.
 
 Not exercised: the hooks and components have no tests, and nothing here has been run in a browser.
 
-## 10c. SHP real pipeline (Phase 3B)
+## 10c. SHP real pipeline
 
 `COVERAGE_LOADS_SHP_PIPELINE` unset or any value other than `fake` runs the real pipeline (the default in
 production); `fake` is dev/test only. The code is `shp/job/realPipeline.ts` (orchestrator) plus
@@ -534,8 +525,8 @@ phase, `binaryCopy.ts` (COPY framing), `copyTracking.ts` (COPY stream errors and
 (pure verdict), `batches.ts` (pure planners), `stepErrors.ts` (failure codes), `pgSession.ts` (work
 connection). Job scope: only `node:*`, `pg` and `pg-copy-streams`.
 
-Dependency: `pg-copy-streams` 7.0.0 (exact pin; MIT; last published 2025-05-27, repository
-`brianc/node-pg-copy-streams`, 3 maintainers) plus the dev dependency `@types/pg-copy-streams` 1.2.5 (MIT).
+Dependency: `pg-copy-streams` 7.0.0, pinned exactly (no semver range), plus the dev dependency
+`@types/pg-copy-streams` 1.2.5.
 
 Per run, on ONE work connection (keepalive on, `statement_timeout` set per phase: 2 min for metadata
 statements, 4 h for COPY / subdivide / repair / swap; `lock_timeout` 30 s inside the swap):
@@ -578,18 +569,16 @@ limit), `ST_Subdivide` / `ST_MakeValid` on the raw staged geometry (proven by th
 this code), `pg-copy-streams` behaviour on a server-side abort, the cancel path and the swap on
 PostgreSQL 14 / PostGIS 3.6. Stage timings are the legacy estimates, not measurements.
 
-Differences from the GeoKettle job: the gate area tolerance stays 1e-6 (the tracker proposed 1e-9, not
-applied); the work tables are the new `shp_stage_`/`shp_work_` pair; the swap copies from the repaired
-work table instead of repairing inside the swap statement; hole assignment is done in Node by the
-reader (strategy (a) of the S1 spike), not by GeoKettle.
+Differences from the GeoKettle job: the gate area tolerance is 1e-6; the work tables are the
+`shp_stage_`/`shp_work_` pair; the swap copies from the repaired work table instead of repairing inside
+the swap statement; hole assignment is done in Node by the reader, not by GeoKettle.
 
 ## 11. Not done
 
-- **Part 1, the SHP loaders**: the backend (section 10), the stage UI (10b) and the real pipeline (10c)
-  exist, but the real pipeline's SQL has **never been executed against PostgreSQL/PostGIS** (no database
-  was available while it was written; it was only exercised with fake clients). The first real run should
-  be a TEST load on HGDesa. The app-wide chip exists (Phase 4) but has never run in a browser. The endpoints have no authentication (see
-  LOCAL EXPOSURE).
+- **SHP loader (sections 10 to 10c)**: the backend, the stage UI and the real pipeline exist, but the
+  real pipeline's SQL has **not been executed against PostgreSQL/PostGIS**; it is exercised only with fake
+  clients. The first real run should be a TEST load on HGDesa. The app-wide chip has not been run in a
+  browser. The endpoints have no authentication (see LOCAL EXPOSURE).
 - An `indicators/rejected` endpoint (the rejected-rows CSV is client-side).
 - Spoon/GeoKettle integration, a unique index on the history, saving credentials, scheduling, reading the
   legacy `recibir/recibidos` folders, mail notifications.
@@ -664,7 +653,7 @@ still run. In `dryRun` they run inside the write transaction (each in a SAVEPOIN
 ### Decisions
 
 - **O1 (parity)**: `EXCLUDED_DISTRICT_STATUSES = []`. The legacy filter `situacion_distrito <> 'Proyectado/Eliminación'`
-  spelled the status with an accent HGDesa does not store, so it excluded nothing. The list is bound as a
+  spells the status with an accent that HGDesa does not store, so it excludes nothing there. The list is bound as a
   parameter (`<> ALL($1::text[])`) in the rebuild and in the two zone-matching reports; `['Proyectado/Eliminacion']`
   would be the "intent". `ELIMINATED_STATUS` is a separate constant used only for the review warning and the
   by-status breakdown. The `LEFT JOIN ... WHERE zu.situacion_distrito <> x` of `zonas_en_planilla_no_en_SIGRA` is
@@ -701,8 +690,8 @@ and a NULL in the matched set (unreachable with real data) returns nothing. No `
 ### Differences from the GeoKettle job
 
 One transaction for the whole rebuild (legacy: staging committed first); files are uploaded (no folders); no
-emails; a plan and a row-level rejection list before writing; NBSP trimmed (so a `CZONA` junk row with a leading
-space is now also deleted: 900 junk rows in the INT sample, 899 by the legacy untrimmed `LIKE`); privileges
+emails; a plan and a row-level rejection list before writing; NBSP trimmed, so a `CZONA` junk row with a leading
+space is also deleted (the legacy `LIKE` on untrimmed values does not match it); privileges
 checked first; the O2 guard; a request without `Content-Length` is refused (411).
 
 ### Unverified until a real run
@@ -710,14 +699,14 @@ checked first; the O2 guard; a request without `Content-Length` is refused (411)
 All SQL against PostgreSQL/PostGIS (no PostGIS in the test setup): the first verification is "Probar sin guardar" on
 HGDesa with the two sample CSVs. Duration of the rebuild and of `fuera_central` on HGDesa (statement timeouts
 `WRITE_STATEMENT_TIMEOUT_MS` and `REPORT_STATEMENT_TIMEOUT_MS` are guesses). Whether `NULL situacion_distrito`
-zones matter: the legacy `<>` excluded them, `<> ALL('{}')` includes them (HGDesa has 0 such zones today).
+zones matter: the legacy `<>` excluded them, `<> ALL('{}')` includes them.
 
 ## 13. SIGRA layers (WFS refresh)
 
 Migration of the Pentaho jobs in `MIGRACION_PDI_WFS` (one folder per layer): each layer is read from the SGRA
 GeoServer WFS and replaces a PostGIS table. The Avance FTTH rebuild joins to `public.area_zonas_ftth_f` and the
-`fuera_central` report reads `public.limite_central_ftth`, and nothing refreshed them before; the other layers feed
-consumers not migrated yet (the Experto FTTH KML exports) and are loaded "just in case". Acceptance criteria:
+`fuera_central` report reads `public.limite_central_ftth`; this module refreshes both. The other layers
+feed consumers not migrated yet (the Experto FTTH KML exports) and are loaded ahead of them. Acceptance criteria:
 [`docs/specifications/COVERAGE_LOADS_SIGRA_LAYERS_SPEC.md`](../specifications/COVERAGE_LOADS_SIGRA_LAYERS_SPEC.md).
 It is a part of this module (`sigra-layers/`; parts never import each other) and the stage "Capas SIGRA" of the FTTH
 load type, placed before "Avance FTTH".
@@ -765,7 +754,7 @@ Required (gate the Avance stage): `zonas-ftth` (`area_zonas_ftth_f`) and `limite
 (`limite_central_ftth`). Optional: area-cd-sr, area-cable-cobre, area-cable-ftth, area-cajitas-cobre, area-tfo,
 limite-central-cobre, limite-economico-cobre, limite-mixto-cobre (typo `LIMTE_MIXTO` is the real WFS value),
 caja-distribucion, cajitas-cobre, tfo-divisores, camaras, centrales-cobre, centrales-ftth, postes,
-zonas-inseguridad. `infra-canalizada` is dropped (the legacy job never worked). Every table, typeName, CQL, page size,
+zonas-inseguridad. `infra-canalizada` is not in the registry. Every table, typeName, CQL, page size,
 sort key and column mapping lives in `domain/layerRegistry.ts` and `domain/layerMappings.ts` only.
 
 ### Differences from the Pentaho jobs

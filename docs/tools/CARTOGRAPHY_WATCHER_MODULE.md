@@ -5,15 +5,15 @@ been downloaded, and lets the sync tools pull a departmental file straight from 
 
 It is a **module**, not a core tool: everything lives in `src/modules/cartography-watcher/`, and the
 only file outside it that names it is the composition root. Delete the folder, its registry line and
-its test folder, and the application is exactly what it was before.
+its test folder, and no other file needs changing.
 
 ---
 
 ## 1. What it does
 
-Comparing a PostGIS table against official cartography used to mean: check the portal by hand, notice
-a new release, download 20–100 MB, find the file, then open a sync tool and upload it. The watcher
-closes that loop:
+Comparing a PostGIS table with official cartography requires checking the portal by hand, noticing a
+new release, downloading 20–100 MB, finding the file, then opening a sync tool and uploading it. The
+watcher closes that loop:
 
 - **Delta detection.** Each resource published by a watched dataset is compared with the copy in the
   vault: `UP_TO_DATE`, `UPDATE_AVAILABLE` or `NOT_DOWNLOADED`.
@@ -29,7 +29,7 @@ closes that loop:
 
 ```
 src/modules/cartography-watcher/
-  module.routes.json     six endpoints and one owned page
+  module.routes.json     seven endpoints and one owned page
   manifest.ts            binds handlers, the page, and two UI contributions
   types.ts               CKAN shapes, deltas, summaries, catalogue items
   data/defaultSources.ts the two IDEuy datasets shipped with the module
@@ -70,8 +70,8 @@ Three signals, in descending order of trustworthiness:
    vault exists to prevent.
 2. **Publication timestamp**, when no usable checksum is published on both sides. Strictly newer is
    an update; equal or older is not.
-3. **File size**, consulted only when neither of the above is available. A same-length edit is common
-   enough that size alone is weak evidence.
+3. **File size**, consulted only when the remote resource publishes neither a checksum nor a timestamp.
+   A same-length edit is common, so size alone is weak evidence.
 
 `GET catalog/file` re-checks metadata on every request and re-fetches when the local copy has been
 superseded. The cheap half of the check always runs; what the vault saves is the transfer.
@@ -91,7 +91,43 @@ while serving the sync tools, which cannot see a browser's storage, so a source 
 
 The vault grows without bound. Eviction is not implemented.
 
-## 6. Editing watched sources
+## 6. Catalogue downloads and progress
+
+The server does not stream `GET catalog/file`. The handler (`api/handlers.ts`, `readCatalogFile`)
+calls `WatcherOrchestrator.getResourceFile`, which returns the vault copy when it is `UP_TO_DATE`,
+and otherwise downloads the resource from the portal and writes it to the vault. Only then is the
+complete body sent, with `Content-Length` set to its byte length. The vault write therefore finishes
+before the browser receives any byte.
+
+The browser reads that body as a stream. `fetchCatalogFile` in `ui/watcherClient.ts` reads the
+response body with a stream reader and calls an optional `onProgress(phase, current, total)` callback:
+
+- `phase` is always `"Descargando archivo..."`.
+- `current` is the number of bytes received so far.
+- `total` is the value of `Content-Length`, or `0` when the header is absent.
+- A report is sent on the first chunk, then each time at least 64 KiB
+  (`DOWNLOAD_PROGRESS_BYTE_INTERVAL`, `constants.ts`) has arrived since the last report.
+- After the body ends, a final report is sent unless the last report already showed the full total.
+  When `total` is `0`, the final report uses the received byte count as both values.
+- A response with no body stream is read in one step and reported once as complete.
+
+`CatalogTreeSelector.tsx` keeps the latest report in state and shows it on the row being downloaded
+only. The row shows `NN%` when `total > 0` and `Descargando...` otherwise. The state is cleared when
+the request settles.
+
+Failures:
+
+- A non-2xx response makes `fetchCatalogFile` throw `No se pudo obtener el archivo del catálogo
+  (HTTP <status>).`. Errors raised while reading the body propagate with their own message.
+- The message is shown in the catalogue tree's selection error (`expandedError`).
+- The portal request for the metadata has a 20 s timeout. The resource download has no timeout.
+- The vault write completes before the response is sent, so a browser-side read failure does not
+  discard the cached file.
+
+There is no cancel control. `fetchCatalogFile` accepts no `AbortSignal`, so a started download runs
+until the body ends or fails.
+
+## 7. Editing watched sources
 
 Every card on the dashboard (including the shipped defaults) offers an **"Editar"** action:
 
@@ -106,23 +142,14 @@ Every card on the dashboard (including the shipped defaults) offers an **"Editar
   another watched source is refused with an explanatory Spanish message.
 - **Vault follows slug.** On a slug change, the directory `data/vault/<oldSlug>` is renamed to
   `data/vault/<newSlug>` if the destination does not already exist, preserving previously downloaded cached
-  resources. If the destination already exists, both directories are left untouched to prevent overwriting
+  resources and rewriting their sidecar paths. If the destination already exists, both directories are left untouched to prevent overwriting
   existing files.
-
-## 7. Verified against the live portal
-
-- `catalog?format=CSV` returned both shipped sources with 19 departmental CSVs each.
-- A cold `catalog/file` fetched 1 278 337 bytes and wrote `flores.csv` plus its sidecar; the next
-  request returned the same bytes without transferring the file again.
-- `summaries` reported `NOT_DOWNLOADED, 20/21 pendientes` for a source with one file downloaded — the
-  badge agrees with its own count.
-- The dashboard, the home card and the generated page all render; deleting the module returns the
-  route table to its previous state.
 
 ## 8. Deliberately not built
 
-- **Auto-load by query parameter.** The earlier prototype let the dashboard hand a file to a sync
-  tool through `?sourceSlug=&resourceId=`, which required core uploaders to know about an extension
-  contract. The catalogue tab reaches the same outcome from inside the tool.
+- **Auto-load by query parameter.** The dashboard does not hand a file to a sync tool through a URL
+  parameter, which would require core uploaders to know about an extension contract. The catalogue
+  tab in each sync tool fetches the file directly.
 - **Vault eviction**, as above.
-- **A forced re-download endpoint.** Reads refresh themselves, so it had no caller.
+- **A forced re-download endpoint.** Reads refresh the cache themselves. No endpoint forces a
+  re-download; `WatcherOrchestrator.downloadResource` has no caller.

@@ -203,7 +203,7 @@ contributes a dashboard page, a home-grid card and a catalogue tab inside the sy
 
 | Piece | File | Note |
 |---|---|---|
-| Declaration | `module.routes.json` | six endpoints and one owned page, all `runtime: nodejs`, `dynamic: force-dynamic` |
+| Declaration | `module.routes.json` | seven endpoints and one owned page, all `runtime: nodejs`, `dynamic: force-dynamic` |
 | Manifest | `manifest.ts` | takes its `id` from the declaration, so folder, prefix and id cannot disagree |
 | Types | `types.ts` | owned by the module; nothing here belongs in core |
 | Domain | `domain/deltaEvaluation.ts`, `domain/catalogMapping.ts`, `domain/sourceNaming.ts`, `domain/formatters.ts` | pure: no `fs`, no `fetch`, no clock |

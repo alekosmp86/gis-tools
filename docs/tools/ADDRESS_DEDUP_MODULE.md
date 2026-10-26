@@ -56,15 +56,12 @@ Evaluated top to bottom, first match wins. `decision_reason` is a column on ever
 | KEEP | `HAS_INTERNAL_UNITS` | override: a removable-fuente row that would be one of the three REMOVE reasons but has at least one internal/apartment unit attached (needs review) |
 
 The lowest-urn rank is computed among removable (ANTEL/TLK) members only, ordered by the numeric
-`id:<n>` suffix of the urn. Protected rows are not ranked. (The v3 header comment said "across the
-whole group (any source)"; the code, which produced the delivered numbers, ranks ANTEL/TLK only.
-The comment was corrected, not the behaviour.)
+`id:<n>` suffix of the urn. Protected rows are not ranked.
 
 ### Internal units override (`HAS_INTERNAL_UNITS`)
 
-Found while preparing the deletion script for CGEO-2192: `carto.baja_direccion` (dev DB only) refuses to
-delete a door that has internal/apartment sub-units attached, because that orphans them. v3 never checked
-this; against Flores prod, 250 of ~1,670 removal candidates (248 TLK, 2 ANTEL) had internal units.
+`carto.baja_direccion` (dev DB only) refuses to delete a door that has internal/apartment sub-units attached,
+because that orphans them. The v3 query does not check this, so the module reclassifies such rows.
 
 A removable-fuente row that would be `REDUNDANT_WITH_MATCHED`, `REDUNDANT_NOT_LOWEST_URN` or
 `REDUNDANT_WITH_PROTECTED` and has at least one internal unit is reclassified to KEEP /
@@ -248,15 +245,15 @@ The builders are pure functions in `domain/removalPlanExport.ts`.
 ### Ids as strings
 
 The plan query emits `address_ids` and `master_ids` as `text[]` (`to_jsonb(...::text[])`), so a bigint beyond
-2^53 reaches JS exact and is bound back with `::bigint[]`. The snapshot is no longer stored, so only the
-fingerprint (computed in SQL) covers those ids.
+2^53 reaches JS exact and is bound back with `::bigint[]`. The snapshot is not stored; the
+fingerprint (computed in SQL) is what covers those ids.
 
 ### Audit table
 
 The removal logs to `carto.baja_direccion_operacion`, the audit table of `carto.baja_direccion`. The app never
 creates it and never issues DDL: the app has no write or DDL permission in prod.
 
-**Prerequisite.** The table exists today only in the dev database. An administrator must create it in
+**Prerequisite.** The table exists only in the dev database. An administrator must create it in
 prod, with this shape, before the first real run there:
 
 ```sql
@@ -319,7 +316,6 @@ never contended. The catalog scan runs, but against a toy schema.
   full, freshly computed REMOVE set. An idea for later.
 - Touching `HAS_INTERNAL_UNITS` or `KEPT_ALONGSIDE_PROTECTED` rows, now or behind a flag.
 - The infrastructure-matches stacked view (`find_infrastructure_matches.sql`).
-- FLAGGED group state (v2, superseded).
 - A map view (the GeoJSON export covers QGIS).
 - Streaming, cursors, row caps, snapshots, caching, job queues or persisted results.
 - UI to edit fuente lists or decimals.
