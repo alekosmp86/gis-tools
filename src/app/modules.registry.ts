@@ -2,6 +2,7 @@ import { createModuleRegistry } from "@/core/modules/createModuleRegistry";
 import { addressDedupModule } from "@/modules/address-dedup/manifest";
 import { cartographyWatcherModule } from "@/modules/cartography-watcher/manifest";
 import { coverageLoadsModule } from "@/modules/coverage-loads/manifest";
+import { routineJobsModule } from "@/modules/routine-jobs/manifest";
 import type { ModulePageComponent, UiContribution } from "@/ui-kit/modules/contracts";
 import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
 
@@ -17,6 +18,6 @@ import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
  *
  * An empty list is a valid, fully working application.
  */
-const activeModules: ReadonlyArray<AppModuleManifest> = [cartographyWatcherModule, addressDedupModule, coverageLoadsModule];
+const activeModules: ReadonlyArray<AppModuleManifest> = [cartographyWatcherModule, addressDedupModule, coverageLoadsModule, routineJobsModule];
 
 export const moduleRegistry = createModuleRegistry<UiContribution, ModulePageComponent>(activeModules);

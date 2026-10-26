@@ -9,6 +9,7 @@ import type {
   LoadOutput,
   LoadTotals,
   RunDeps,
+  RunProgress,
   RunSession,
   StepTiming,
   TypeReport,
@@ -21,8 +22,9 @@ import {
   repairUnmappedSequencesAfterRollback,
   resetUnmappedSequences,
 } from "./sequences";
+import { createStepTimer, plannedStepCount, STEP, type StepTimer } from "./runSteps";
 
-export type { CargarPadronesParams, CargarPadronesResult, RunDeps, RunSession } from "../types";
+export type { CargarPadronesParams, CargarPadronesResult, RunDeps, RunProgress, RunSession } from "../types";
 
 interface WriteOutcome {
   targetModified: boolean;
@@ -34,25 +36,6 @@ interface WriteOutcome {
 interface LoadProgress {
   sequencesTouched: boolean;
 }
-
-interface StepTimer {
-  timings: StepTiming[];
-  run<T>(label: string, work: () => Promise<T>): Promise<T>;
-}
-
-const STEP = {
-  VALIDATE: "Validación de tablas",
-  COUNT: "Conteo de filas",
-  PRIVILEGES: "Privilegios de vaciado",
-  CLEAR: "Vaciado de la tabla destino",
-  SEQUENCES_RESET: "Reinicio de secuencias",
-  LOAD_RURAL: "Carga rural",
-  LOAD_URBANO: "Carga urbana",
-  REPORT: "Reportes y muestras",
-  SEQUENCES_REPAIR: "Ajuste de secuencias",
-  COMMIT: "COMMIT",
-  ANALYZE: "ANALYZE",
-} as const;
 
 const BEGIN_SQL = "BEGIN";
 const COMMIT_SQL = "COMMIT";
@@ -67,19 +50,6 @@ const scrub = (message: string, password: string | undefined): string =>
 
 const sumOf = (reports: TypeReport[], pick: (report: TypeReport) => number): number =>
   reports.reduce((total, report) => total + pick(report), 0);
-
-function createStepTimer(now: () => number): StepTimer {
-  const timings: StepTiming[] = [];
-  return {
-    timings,
-    async run<T>(label: string, work: () => Promise<T>): Promise<T> {
-      const started = now();
-      const value = await work();
-      timings.push({ label, ms: now() - started });
-      return value;
-    },
-  };
-}
 
 async function openRunSession(params: CargarPadronesParams, deps: RunDeps): Promise<RunSession> {
   try {
@@ -246,9 +216,10 @@ function buildResult(
 async function runOnSession(
   session: RunSession,
   params: CargarPadronesParams,
-  deps: RunDeps
+  deps: RunDeps,
+  onProgress?: (progress: RunProgress) => void
 ): Promise<CargarPadronesResult> {
-  const timer = createStepTimer(deps.now);
+  const timer = createStepTimer({ now: deps.now, total: plannedStepCount(params), onProgress });
   const layouts = await timer.run(STEP.VALIDATE, () => resolveLayouts(session, params));
   await timer.run(STEP.COUNT, () => assertSourcesHaveRows(session, layouts));
   if (params.options.clearMode === CLEAR_MODE.TRUNCATE) {
@@ -263,12 +234,16 @@ function scrubbedFailure(error: unknown, password: string | undefined): unknown 
   return new Error(scrub(error.message, password));
 }
 
-export async function runCargarPadrones(params: CargarPadronesParams, deps: RunDeps): Promise<CargarPadronesResult> {
+export async function runCargarPadrones(
+  params: CargarPadronesParams,
+  deps: RunDeps,
+  onProgress?: (progress: RunProgress) => void
+): Promise<CargarPadronesResult> {
   assertRunAllowed(params);
   assertDistinctTables(params);
   const session = await openRunSession(params, deps);
   try {
-    return await runOnSession(session, params, deps);
+    return await runOnSession(session, params, deps, onProgress);
   } catch (error: unknown) {
     throw scrubbedFailure(error, params.config.password);
   } finally {

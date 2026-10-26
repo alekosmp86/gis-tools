@@ -3,7 +3,7 @@ import { buildCountSql, type SourceLayout, type TargetLayout } from "../domain/l
 import type { CargarPadronesParams, RunSession } from "../types";
 import type { ResolvedLayouts } from "./resolveLayouts";
 
-const CONFIRM_REQUIRED_MESSAGE =
+export const CONFIRM_REQUIRED_MESSAGE =
   "Confirme la carga para escribir en la tabla destino. Sin confirmación solo se permite la simulación.";
 
 const TRUNCATE_PRIVILEGE_SQL =

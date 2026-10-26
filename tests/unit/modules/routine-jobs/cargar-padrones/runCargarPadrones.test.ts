@@ -1205,4 +1205,210 @@ describe("runCargarPadrones", () => {
       expect(result.report.rural.rowsMerged).toBe(2);
     });
   });
+
+  /*
+   * Assumption (derived from the runner's STEP constants): the reported steps are exactly the ones the runner times, in order:
+   * validate, count, [privileges when truncate], clear, [sequence reset when resetSequences and not dry run], rural, urban, report,
+   * [sequence repair when resetSequences and not dry run], [COMMIT, ANALYZE when not dry run]. `total` is the planned count of that list.
+   */
+  describe("progress reporting (AC-27)", () => {
+    type Progress = { label: string; current: number; total: number };
+    const collector = () => {
+      const calls: Progress[] = [];
+      return { calls, onProgress: (progress: Progress) => void calls.push({ ...progress }) };
+    };
+    const expectSequence = (calls: Progress[], labels: string[]): void => {
+      expect(calls).toEqual(labels.map((label, index) => ({ label, current: index + 1, total: labels.length })));
+    };
+
+    const VALIDATE = "Validación de tablas";
+    const COUNT = "Conteo de filas";
+    const PRIVILEGES = "Privilegios de vaciado";
+    const CLEAR = "Vaciado de la tabla destino";
+    const RESET = "Reinicio de secuencias";
+    const LOAD_RURAL = "Carga rural";
+    const LOAD_URBANO = "Carga urbana";
+    const REPORT = "Reportes y muestras";
+    const REPAIR = "Ajuste de secuencias";
+
+    it("AC-27: should report every step of a real run once, in order, with a 1-based current and the real total", async () => {
+      const harness = createHarness();
+      const { calls, onProgress } = collector();
+
+      await runCargarPadrones(defaultParams(), harness.deps, onProgress);
+
+      expectSequence(calls, [VALIDATE, COUNT, CLEAR, RESET, LOAD_RURAL, LOAD_URBANO, REPORT, REPAIR, "COMMIT", "ANALYZE"]);
+    });
+
+    it("AC-27: should report the same labels, in the same order, as the step timings of the result", async () => {
+      const harness = createHarness();
+      const { calls, onProgress } = collector();
+
+      const result = await runCargarPadrones(defaultParams(), harness.deps, onProgress);
+
+      expect(calls.map((call) => call.label)).toEqual(result.stepTimings.map((timing) => timing.label));
+      expect(calls.every((call) => call.total === result.stepTimings.length)).toBe(true);
+    });
+
+    it("AC-27: should report only the steps a dry run executes (no sequences, COMMIT or ANALYZE)", async () => {
+      const harness = createHarness();
+      const { calls, onProgress } = collector();
+
+      await runCargarPadrones(defaultParams({ dryRun: true }), harness.deps, onProgress);
+
+      expectSequence(calls, [VALIDATE, COUNT, CLEAR, LOAD_RURAL, LOAD_URBANO, REPORT]);
+    });
+
+    it("AC-27: should add the privilege step to the total in truncate mode", async () => {
+      const options = defaultOptions({ clearMode: "truncate" });
+      const harness = createHarness({}, defaultParams({ options }));
+      const { calls, onProgress } = collector();
+
+      await runCargarPadrones(defaultParams({ options }), harness.deps, onProgress);
+
+      expectSequence(calls, [VALIDATE, COUNT, PRIVILEGES, CLEAR, RESET, LOAD_RURAL, LOAD_URBANO, REPORT, REPAIR, "COMMIT", "ANALYZE"]);
+    });
+
+    it("AC-27: should report a dry run in truncate mode with the privilege step and no write-only steps", async () => {
+      const options = defaultOptions({ clearMode: "truncate" });
+      const params = defaultParams({ options, dryRun: true });
+      const harness = createHarness({}, params);
+      const { calls, onProgress } = collector();
+
+      await runCargarPadrones(params, harness.deps, onProgress);
+
+      expectSequence(calls, [VALIDATE, COUNT, PRIVILEGES, CLEAR, LOAD_RURAL, LOAD_URBANO, REPORT]);
+    });
+
+    it("AC-27: should leave out the sequence steps when resetSequences is off", async () => {
+      const options = defaultOptions({ resetSequences: false });
+      const harness = createHarness({}, defaultParams({ options }));
+      const { calls, onProgress } = collector();
+
+      await runCargarPadrones(defaultParams({ options }), harness.deps, onProgress);
+
+      expectSequence(calls, [VALIDATE, COUNT, CLEAR, LOAD_RURAL, LOAD_URBANO, REPORT, "COMMIT", "ANALYZE"]);
+    });
+
+    it("AC-27: should call onProgress as each step starts, before the step's statements run", async () => {
+      const harness = createHarness();
+      const logLengthAt: Record<string, number> = {};
+      const onProgress = (progress: Progress): void => {
+        logLengthAt[progress.label] = harness.log.length;
+      };
+
+      await runCargarPadrones(defaultParams(), harness.deps, onProgress);
+
+      const { log, sql } = harness;
+      expect(log.indexOf(sql.loadRural)).toBeGreaterThanOrEqual(logLengthAt[LOAD_RURAL]);
+      expect(log.indexOf(sql.loadRural)).toBeLessThan(logLengthAt[LOAD_URBANO]);
+      expect(log.indexOf(sql.loadUrbano)).toBeGreaterThanOrEqual(logLengthAt[LOAD_URBANO]);
+      expect(log.indexOf(sql.clear)).toBeGreaterThanOrEqual(logLengthAt[CLEAR]);
+      expect(log.indexOf(sql.analyze)).toBeGreaterThanOrEqual(logLengthAt.ANALYZE);
+      expect(indexOfMatch(log, /^\s*COMMIT/i)).toBeGreaterThanOrEqual(logLengthAt.COMMIT);
+    });
+
+    it("AC-27: should report the steps reached and none after the failing one when the run fails", async () => {
+      const probe = createHarness();
+      const failing = createHarness({ failOn: (sql) => (sql === probe.sql.loadUrbano ? new Error("disk full") : undefined) });
+      const { calls, onProgress } = collector();
+
+      await expect(runCargarPadrones(defaultParams(), failing.deps, onProgress)).rejects.toThrow(/disk full/);
+
+      expect(calls.map((call) => call.label)).toEqual([VALIDATE, COUNT, CLEAR, RESET, LOAD_RURAL, LOAD_URBANO]);
+      expect(calls.every((call) => call.total === 10)).toBe(true);
+      expect(calls.map((call) => call.current)).toEqual([1, 2, 3, 4, 5, 6]);
+    });
+
+    it("AC-27: should report only the validation and count steps when a source is empty", async () => {
+      const harness = createHarness({ counts: { rural: 0 } });
+      const { calls, onProgress } = collector();
+
+      await expect(runCargarPadrones(defaultParams(), harness.deps, onProgress)).rejects.toThrow();
+
+      expect(calls.map((call) => call.label)).toEqual([VALIDATE, COUNT]);
+    });
+
+    it("AC-27: should not report any step when the run is refused before opening the session", async () => {
+      const harness = createHarness();
+      const { calls, onProgress } = collector();
+
+      await expect(runCargarPadrones(defaultParams({ confirm: false }), harness.deps, onProgress)).rejects.toThrow();
+
+      expect(calls).toEqual([]);
+    });
+
+    it("AC-27: should never fail the run when onProgress throws", async () => {
+      const harness = createHarness();
+      const onProgress = vi.fn(() => {
+        throw new Error("progress sink exploded");
+      });
+
+      const result = await runCargarPadrones(defaultParams(), harness.deps, onProgress);
+
+      expect(onProgress).toHaveBeenCalledTimes(10);
+      expect(result.targetModified).toBe(true);
+      expect(result.analyze.status).toBe(AnalyzeStatus.OK);
+      expect(indexOfMatch(harness.log, /^\s*COMMIT/i)).toBeGreaterThan(-1);
+      expect(harness.state.closed).toBe(1);
+    });
+
+    it("AC-27: should never fail a dry run when onProgress throws", async () => {
+      const harness = createHarness();
+      const onProgress = vi.fn(() => {
+        throw new Error("progress sink exploded");
+      });
+
+      const result = await runCargarPadrones(defaultParams({ dryRun: true }), harness.deps, onProgress);
+
+      expect(result.targetModified).toBe(false);
+      expect(onProgress).toHaveBeenCalledTimes(6);
+    });
+
+    it("AC-27: should not mask the run's own error when onProgress throws and the run fails", async () => {
+      const probe = createHarness();
+      const failing = createHarness({ failOn: (sql) => (sql === probe.sql.loadRural ? new Error("disk full") : undefined) });
+      const onProgress = vi.fn(() => {
+        throw new Error("progress sink exploded");
+      });
+
+      const failure = await runCargarPadrones(defaultParams(), failing.deps, onProgress).catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message).toContain("disk full");
+      expect((failure as Error).message).not.toContain("progress sink exploded");
+    });
+
+    it("AC-27: should report COMMIT as step 9 of 10, never ANALYZE, and never reach total when COMMIT throws", async () => {
+      const harness = createHarness({ failOn: (sql) => (/^\s*COMMIT/i.test(sql) ? new Error("connection lost") : undefined) });
+      const { calls, onProgress } = collector();
+
+      const result = await runCargarPadrones(defaultParams(), harness.deps, onProgress);
+
+      expect(result.outcomeUnknown).toBe(true);
+      expect(calls).toHaveLength(9);
+      expect(calls[8]).toEqual({ label: "COMMIT", current: 9, total: 10 });
+      expect(calls.map((call) => call.label)).not.toContain("ANALYZE");
+      expect(calls.every((call) => call.total === 10)).toBe(true);
+      expect(Math.max(...calls.map((call) => call.current))).toBeLessThan(10);
+    });
+
+    it("AC-27: should run normally when no onProgress is given", async () => {
+      const harness = createHarness();
+
+      const result = await runCargarPadrones(defaultParams(), harness.deps);
+
+      expect(result.targetModified).toBe(true);
+    });
+
+    it("AC-27: should keep the result identical whether or not onProgress is given", async () => {
+      const withCallback = createHarness();
+      const without = createHarness();
+
+      const reported = await runCargarPadrones(defaultParams(), withCallback.deps, () => undefined);
+      const plain = await runCargarPadrones(defaultParams(), without.deps);
+
+      expect(reported).toEqual(plain);
+    });
+  });
 });

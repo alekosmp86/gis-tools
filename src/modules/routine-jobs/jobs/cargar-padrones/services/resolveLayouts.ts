@@ -50,10 +50,12 @@ const isResolved = (entry: ResolvedColumn): entry is ResolvedEntry =>
 
 const recordOf = (pairs: Array<[string, string]>): Record<string, string> => Object.fromEntries(pairs);
 
+export const DISTINCT_TABLES_MESSAGE = "Las tablas rural, urbana y destino deben ser tres tablas distintas.";
+
 export function assertDistinctTables(params: CargarPadronesParams): void {
   const tables = [params.ruralTable, params.urbanoTable, params.targetTable];
   if (new Set(tables).size !== tables.length) {
-    throw new Error("Las tablas rural, urbana y destino deben ser tres tablas distintas.");
+    throw new Error(DISTINCT_TABLES_MESSAGE);
   }
 }
 

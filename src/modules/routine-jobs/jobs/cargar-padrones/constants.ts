@@ -94,3 +94,17 @@ export const POLYGONAL_DIMENSION = 3;
 
 export const POLYGON_TYPE = "POLYGON";
 export const MULTIPOLYGON_TYPE = "MULTIPOLYGON";
+
+export const TABLE_ROLE = {
+  RURAL: "rural",
+  URBANO: "urbano",
+  TARGET: "target",
+} as const;
+
+export type TableRole = (typeof TABLE_ROLE)[keyof typeof TABLE_ROLE];
+
+export const REQUIRED_COLUMNS_BY_ROLE: Record<TableRole, readonly string[]> = {
+  [TABLE_ROLE.RURAL]: RURAL_REQUIRED_COLUMNS,
+  [TABLE_ROLE.URBANO]: URBANO_REQUIRED_COLUMNS,
+  [TABLE_ROLE.TARGET]: TARGET_REQUIRED_COLUMNS,
+};

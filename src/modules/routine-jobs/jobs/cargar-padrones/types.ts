@@ -67,6 +67,12 @@ export interface StepTiming {
   ms: number;
 }
 
+export interface RunProgress {
+  label: string;
+  current: number;
+  total: number;
+}
+
 export interface CargarPadronesResult {
   dryRun: boolean;
   targetModified: boolean;
