@@ -16,6 +16,7 @@ import type {
 } from "../types";
 import { assertTruncatable, assertRunAllowed, assertSourcesHaveRows } from "./preflight";
 import { readLoadOutput, type InsertedCounts } from "./readReports";
+import { assertResetPrivileges } from "./sequencePreflight";
 import { assertDistinctTables, resolveLayouts, type ResolvedLayouts } from "./resolveLayouts";
 import {
   repairUnmappedSequences,
@@ -225,6 +226,7 @@ async function runOnSession(
   if (params.options.clearMode === CLEAR_MODE.TRUNCATE) {
     await timer.run(STEP.PRIVILEGES, () => assertTruncatable(session, layouts.target));
   }
+  await assertResetPrivileges(session, layouts, params);
   const { loaded, outcome } = await writeTransaction(session, params, layouts, timer);
   return buildResult(params, loaded, outcome, timer.timings);
 }

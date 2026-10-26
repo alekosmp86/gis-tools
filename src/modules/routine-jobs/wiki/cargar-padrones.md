@@ -50,7 +50,7 @@ Al elegir cada tabla, el asistente comprueba sus columnas y muestra cada una com
 
 - **Reiniciar secuencias del destino**: activada por defecto. Reinicia las secuencias de las columnas de la tabla destino que no se cargan desde las fuentes (por ejemplo, un identificador numérico que se autoincrementa). Al terminar la carga, cada secuencia queda en el máximo valor de su columna más uno, para que las próximas altas no repitan números.
 
-Con esta opción activada, el usuario necesita los privilegios **USAGE y UPDATE** sobre esas secuencias (UPDATE para reiniciarlas y USAGE para leer su último valor) y **SELECT** sobre la tabla destino, porque se lee el máximo de cada columna. Si falta alguno, la carga falla y las filas de la tabla destino se restauran, pero las secuencias pueden quedar reiniciadas por debajo del máximo de su columna: en ese caso hay que ajustarlas a mano antes de insertar filas nuevas. Si no tiene esos privilegios, desactive la opción.
+Con esta opción activada, el usuario necesita los privilegios **USAGE y UPDATE** sobre esas secuencias (UPDATE para reiniciarlas y USAGE para leer su último valor) y **SELECT** sobre la tabla destino, porque se lee el máximo de cada columna. Si falta alguno, la carga real se rechaza antes de escribir nada y el mensaje indica el objeto y el privilegio que faltan. Si no tiene esos privilegios, desactive la opción.
 
 Con la opción desactivada la carga no reinicia nada, pero al insertar, cada fila nueva toma su número de las secuencias de las columnas con valor por defecto (`nextval`). Por eso la carga sigue necesitando **USAGE** (o UPDATE) sobre esas secuencias.
 

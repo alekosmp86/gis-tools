@@ -41,8 +41,8 @@ Wizard: connection (shared) -> schema -> rural source -> urban source -> target 
 in English, no inline styles, modular CSS.
 
 ### Load rules
-- AC-5: One transaction. Rows read per source are counted first. A source that is empty, or whose geometry column is not a polygon type,
-  refuses the run before any write.
+- AC-5: One transaction. Rows read per source are counted first. A source that is empty, or whose geometry column is not a polygon type
+  (Polygon, MultiPolygon or generic GEOMETRY), refuses the run before any write.
 - AC-6: Option "Reparar geometrías inválidas", ON by default (same wording and meaning as the db-shapefile-sync repair card).
   - ON: `ST_MakeValid` on rows where `ST_IsValid(geom)` is false, keeping only the polygonal part (`ST_CollectionExtract(..., 3)`),
     before grouping. Valid geometries are left untouched. A row with a NULL geometry or an empty result after repair has no usable
@@ -78,7 +78,9 @@ in English, no inline styles, modular CSS.
 - AC-15: Option "Vaciar tabla destino": `DELETE` (default) or `TRUNCATE`. Both inside the transaction; neither is ever a `CASCADE`.
 - AC-16: `TRUNCATE` needs the privilege: it is checked with `has_table_privilege` before the transaction; a missing privilege is a Spanish
   error naming the table, with no write attempted. `TRUNCATE` is also refused when another table has a foreign key to the target.
-- AC-17: "Reiniciar secuencias del destino" (on by default): right after the clear and before the inserts, the sequences behind unmapped target
+- AC-17: "Reiniciar secuencias del destino" (on by default). Preflight before BEGIN, real run only with at least one unmapped sequence:
+  `has_sequence_privilege` UPDATE then USAGE per unmapped sequence, then `has_table_privilege` SELECT on the target (parameterized); the first
+  missing privilege refuses the run in Spanish naming the object and the privilege, before any write or `setval`. Then: right after the clear and before the inserts, the sequences behind unmapped target
   columns are reset to 1; after the inserts and before COMMIT every such sequence is repaired to max(column)+1 (same rule as shp-replace,
   `buildResetSequenceStatement` then `buildRepairSequenceStatement`). Both modes. A dry run runs NO `setval` at all (sequences are not
   transactional); its inserts still consume `nextval` values, so a dry run can leave gaps in the target ids (documented, harmless for

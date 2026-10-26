@@ -6,7 +6,7 @@ import { discoverTargetSequences, type SequenceRef } from "@/core/services/repla
 import type { RunSession } from "../types";
 import type { ResolvedLayouts } from "./resolveLayouts";
 
-function unmappedSequences(layouts: ResolvedLayouts): SequenceRef[] {
+export function unmappedSequences(layouts: ResolvedLayouts): SequenceRef[] {
   const mapped = new Set(Object.values(layouts.target.columns));
   return discoverTargetSequences(layouts.targetCatalog, [], layouts.target.schema).sequences.filter((sequence) =>
     sequence.columns.every((column) => !mapped.has(column))

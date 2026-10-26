@@ -81,9 +81,18 @@ interface Scenario {
   samples?: { rural?: unknown[]; urbano?: unknown[] };
   ambiguousCodes?: unknown[];
   privilege?: boolean;
+  targetSelect?: boolean;
+  deniedSequencePrivileges?: string[];
+  omitIdColumn?: boolean;
+  targetColumnDefaults?: Record<string, string>;
   referencingTables?: string[];
   failOn?: (sql: string) => Error | undefined;
   allColumns?: boolean;
+}
+
+interface LoggedCall {
+  sql: string;
+  values?: unknown[];
 }
 
 const defaultReport = (overrides: Partial<Report> = {}): Report => ({
@@ -153,6 +162,20 @@ function layoutColumns(required: readonly string[], names: Names | undefined): N
   return Object.fromEntries(required.map((logical) => [logical, names?.[logical] ?? logical]));
 }
 
+const PRIVILEGE_NAMES = ["UPDATE", "USAGE", "SELECT", "TRUNCATE"] as const;
+
+const privilegeOf = (sql: string, values: unknown[] | undefined): string | undefined =>
+  PRIVILEGE_NAMES.find((name) => sql.includes(`'${name}'`) || values?.includes(name));
+
+const sequencePrivilegeGranted = (sql: string, values: unknown[] | undefined, scenario: Scenario): boolean =>
+  !(scenario.deniedSequencePrivileges ?? []).includes(privilegeOf(sql, values) ?? "");
+
+const tablePrivilegeGranted = (sql: string, values: unknown[] | undefined, scenario: Scenario): boolean =>
+  privilegeOf(sql, values) === "SELECT" ? (scenario.targetSelect ?? true) : (scenario.privilege ?? true);
+
+const withColumnDefaults = (rows: ColumnRow[], defaults: Record<string, string> | undefined): ColumnRow[] =>
+  rows.map((row) => (defaults?.[row.column_name] ? { ...row, column_default: defaults[row.column_name] } : row));
+
 function createHarness(scenario: Scenario = {}, params: CargarPadronesParams = defaultParams()) {
   const geomType = {
     rural: scenario.geomType?.rural ?? GEOM_OK,
@@ -176,17 +199,21 @@ function createHarness(scenario: Scenario = {}, params: CargarPadronesParams = d
     srid: sridOf(geomType.target),
   };
   const idColumn: ColumnRow = { column_name: "id", data_type: "integer", column_default: SEQUENCE_DEFAULT };
+  const sequenceColumns: ColumnRow[] = scenario.omitIdColumn ? [] : [idColumn];
+  const targetRows = (rows: ColumnRow[]): ColumnRow[] => [
+    ...withColumnDefaults(rows, scenario.targetColumnDefaults),
+    ...sequenceColumns,
+  ];
   const union = Array.from(new Set([...RURAL_REQUIRED_COLUMNS, ...URBANO_REQUIRED_COLUMNS, ...TARGET_REQUIRED_COLUMNS]));
   const allRows = columnRows(union, undefined, undefined, GEOM_OK, undefined);
   const tables: Record<string, ColumnRow[]> = scenario.allColumns
-    ? { [RURAL]: allRows, [URBANO]: allRows, [TARGET]: [...allRows, idColumn] }
+    ? { [RURAL]: allRows, [URBANO]: allRows, [TARGET]: targetRows(allRows) }
     : {
     [RURAL]: columnRows(RURAL_REQUIRED_COLUMNS, scenario.names?.rural, scenario.omit?.rural, geomType.rural, scenario.extraColumns?.rural),
     [URBANO]: columnRows(URBANO_REQUIRED_COLUMNS, scenario.names?.urbano, scenario.omit?.urbano, geomType.urbano, scenario.extraColumns?.urbano),
-    [TARGET]: [
-      ...columnRows(TARGET_REQUIRED_COLUMNS, scenario.names?.target, scenario.omit?.target, geomType.target, scenario.extraColumns?.target),
-      idColumn,
-    ],
+    [TARGET]: targetRows(
+      columnRows(TARGET_REQUIRED_COLUMNS, scenario.names?.target, scenario.omit?.target, geomType.target, scenario.extraColumns?.target)
+    ),
   };
   const { options } = params;
   const inserted = { rural: scenario.inserted?.rural ?? 8, urbano: scenario.inserted?.urbano ?? 5 };
@@ -204,6 +231,7 @@ function createHarness(scenario: Scenario = {}, params: CargarPadronesParams = d
   ]);
 
   const log: string[] = [];
+  const calls: LoggedCall[] = [];
   const state = { closed: 0, inFlight: 0, maxBeforeBegin: 0, maxAfterBegin: 0, begun: false };
   const answer = async (sql: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount?: number }> => {
     const failure = scenario.failOn?.(sql);
@@ -212,7 +240,8 @@ function createHarness(scenario: Scenario = {}, params: CargarPadronesParams = d
     if (known) return known as { rows: Record<string, unknown>[]; rowCount?: number };
     if (/setval\(/i.test(sql)) return { rows: [{ setval: 1 }] };
     if (scenario.allColumns && /^\s*SELECT\s+count\(\*\)/i.test(sql)) return { rows: [{ count: 5 }] };
-    if (/has_table_privilege/i.test(sql)) return { rows: [{ has_privilege: scenario.privilege ?? true }] };
+    if (/has_sequence_privilege/i.test(sql)) return { rows: [{ has_privilege: sequencePrivilegeGranted(sql, values, scenario) }] };
+    if (/has_table_privilege/i.test(sql)) return { rows: [{ has_privilege: tablePrivilegeGranted(sql, values, scenario) }] };
     if (/pg_constraint|confrelid|referential_constraints/i.test(sql)) {
       return { rows: (scenario.referencingTables ?? []).map((name) => ({ referencing_table: name })) };
     }
@@ -223,6 +252,7 @@ function createHarness(scenario: Scenario = {}, params: CargarPadronesParams = d
   const session: RunSession & { close(): Promise<void> } = {
     async query(sql, values) {
       log.push(sql);
+      calls.push({ sql, values });
       if (/^\s*BEGIN/i.test(sql)) state.begun = true;
       state.inFlight += 1;
       if (state.begun) state.maxAfterBegin = Math.max(state.maxAfterBegin, state.inFlight);
@@ -250,6 +280,7 @@ function createHarness(scenario: Scenario = {}, params: CargarPadronesParams = d
   return {
     deps,
     log,
+    calls,
     state,
     openSession,
     ruralSource,
@@ -406,6 +437,49 @@ describe("runCargarPadrones", () => {
       expect(harness.log.filter(isWrite)).toEqual([]);
       expect(harness.log).not.toContain(harness.sql.clear);
     });
+
+    it.each(["rural", "urbano", "target"] as const)(
+      "AC-5: should accept a generic geometry(GEOMETRY,srid) column in the %s table and perform the writes",
+      async (side) => {
+        const harness = createHarness({ geomType: { [side]: `geometry(GEOMETRY,${SRID})` } });
+
+        const result = await runCargarPadrones(defaultParams(), harness.deps);
+
+        expect(result.targetModified).toBe(true);
+        expect(harness.log).toContain(harness.sql.clear);
+        expect(harness.log).toContain(harness.sql.loadRural);
+        expect(harness.log).toContain(harness.sql.loadUrbano);
+      }
+    );
+
+    it("AC-5: should read the target SRID from a generic geometry(GEOMETRY,srid) target column", async () => {
+      const harness = createHarness({ geomType: { target: `geometry(GEOMETRY,${SRID})` } });
+
+      const result = await runCargarPadrones(defaultParams(), harness.deps);
+
+      expect(harness.targetLayout.srid).toBe(SRID);
+      expect(result.targetModified).toBe(true);
+    });
+
+    it.each([
+      ["Geometry", "rural"],
+      ["Geometry", "urbano"],
+      ["Geometry", "target"],
+      ["geometry", "rural"],
+      ["geometry", "urbano"],
+      ["geometry", "target"],
+    ] as const)(
+      "AC-5: should accept a geometry(%s,srid) column in the %s table regardless of type-name case",
+      async (typeName, side) => {
+        const harness = createHarness({ geomType: { [side]: `geometry(${typeName},${SRID})` } });
+
+        const result = await runCargarPadrones(defaultParams(), harness.deps);
+
+        expect(result.targetModified).toBe(true);
+        expect(harness.log).toContain(harness.sql.loadRural);
+        expect(harness.log).toContain(harness.sql.loadUrbano);
+      }
+    );
   });
 
   describe("required columns", () => {
@@ -642,7 +716,11 @@ describe("runCargarPadrones", () => {
 
       expect(harness.sql.clear).toMatch(/^\s*DELETE FROM/i);
       expect(harness.log).toContain(harness.sql.clear);
-      expect(indexOfMatch(harness.log, /has_table_privilege/i)).toBe(-1);
+      expect(
+        harness.calls.filter(
+          (call) => /has_table_privilege/i.test(call.sql) && (call.sql.includes("'TRUNCATE'") || call.values?.includes("TRUNCATE"))
+        )
+      ).toEqual([]);
     });
 
     it("AC-15: should issue a TRUNCATE without CASCADE inside the transaction in truncate mode", async () => {
@@ -754,6 +832,265 @@ describe("runCargarPadrones", () => {
         expect(result.targetModified).toBe(false);
       }
     );
+  });
+
+  describe("sequence and target SELECT privilege preflight (AC-17)", () => {
+    const SEQUENCE_NAME = "padron_id_seq";
+    const OTHER_SEQUENCE_NAME = "otra_seq";
+    const OTHER_SEQUENCE_DEFAULT = `nextval('cat.${OTHER_SEQUENCE_NAME}'::regclass)`;
+    const RESET_HINT = /Reiniciar secuencias del destino/;
+    const PLAN_LABELS = [
+      "Validación de tablas",
+      "Conteo de filas",
+      "Vaciado de la tabla destino",
+      "Reinicio de secuencias",
+      "Carga rural",
+      "Carga urbana",
+      "Reportes y muestras",
+      "Ajuste de secuencias",
+      "COMMIT",
+      "ANALYZE",
+    ];
+    const CLEAR_LABEL = "Vaciado de la tabla destino";
+    const PLANNED_TOTAL = PLAN_LABELS.length;
+
+    const isSequencePrivilegeQuery = (call: LoggedCall, privilege: string): boolean =>
+      /has_sequence_privilege/i.test(call.sql) && call.sql.includes(`'${privilege}'`);
+    const isTargetSelectQuery = (call: LoggedCall): boolean =>
+      /has_table_privilege/i.test(call.sql) && call.sql.includes("'SELECT'");
+    const isTruncatePrivilegeQuery = (call: LoggedCall): boolean =>
+      /has_table_privilege/i.test(call.sql) && call.sql.includes("'TRUNCATE'");
+    const isForeignKeyQuery = (call: LoggedCall): boolean => /pg_constraint|confrelid|referential_constraints/i.test(call.sql);
+    const isBeginQuery = (call: LoggedCall): boolean => /^\s*BEGIN/i.test(call.sql);
+    const isPreflightQuery = (call: LoggedCall): boolean => /has_sequence_privilege/i.test(call.sql) || isTargetSelectQuery(call);
+    const preflightQueries = (calls: LoggedCall[]): LoggedCall[] => calls.filter(isPreflightQuery);
+    const sequenceCheckIndex = (calls: LoggedCall[], sequenceName: string, privilege: string): number =>
+      calls.findIndex(
+        (call) => isSequencePrivilegeQuery(call, privilege) && (call.values ?? []).some((value) => String(value).includes(sequenceName))
+      );
+    const selectCheckIndex = (calls: LoggedCall[]): number => calls.findIndex(isTargetSelectQuery);
+    const beginIndex = (calls: LoggedCall[]): number => calls.findIndex(isBeginQuery);
+
+    const refusalOf = async (
+      harness: ReturnType<typeof createHarness>,
+      params: CargarPadronesParams,
+      onProgress?: (progress: { label: string; current: number; total: number }) => void
+    ): Promise<Error> => {
+      const failure = await runCargarPadrones(params, harness.deps, onProgress).then(
+        () => undefined,
+        (error: unknown) => error
+      );
+      expect(failure).toBeInstanceOf(Error);
+      return failure as Error;
+    };
+
+    const expectRefusedBeforeWrite = (harness: ReturnType<typeof createHarness>): void => {
+      const { log, sql, state } = harness;
+      expect(indexOfMatch(log, /^\s*BEGIN/i)).toBe(-1);
+      expect(log.filter(isWrite)).toEqual([]);
+      expect(log).not.toContain(sql.clear);
+      expect(indexOfMatch(log, /setval\(/i)).toBe(-1);
+      expect(indexOfMatch(log, /^\s*COMMIT/i)).toBe(-1);
+      expect(indexOfMatch(log, /^\s*ANALYZE\b/i)).toBe(-1);
+      expect(state.closed).toBe(1);
+    };
+
+    it("AC-17: should check UPDATE and USAGE on the unmapped sequence and SELECT on the target, in that order, before BEGIN and then proceed", async () => {
+      const harness = createHarness();
+
+      const result = await runCargarPadrones(defaultParams(), harness.deps);
+
+      const { calls, sql } = harness;
+      const positions = [
+        sequenceCheckIndex(calls, SEQUENCE_NAME, "UPDATE"),
+        sequenceCheckIndex(calls, SEQUENCE_NAME, "USAGE"),
+        selectCheckIndex(calls),
+        beginIndex(calls),
+        calls.findIndex((call) => call.sql === sql.resetSequence),
+      ];
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect(positions).toEqual([...positions].sort((left, right) => left - right));
+      expect(result.targetModified).toBe(true);
+    });
+
+    it("AC-17: should pass the sequence and the target as query parameters and never interpolate their names into the SQL", async () => {
+      const harness = createHarness();
+
+      await runCargarPadrones(defaultParams(), harness.deps);
+
+      const sequenceQueries = harness.calls.filter((call) => /has_sequence_privilege/i.test(call.sql));
+      const selectQueries = harness.calls.filter(isTargetSelectQuery);
+      expect(sequenceQueries).toHaveLength(2);
+      expect(selectQueries).toHaveLength(1);
+      for (const call of sequenceQueries) {
+        expect(call.sql).not.toContain(SEQUENCE_NAME);
+        expect((call.values ?? []).some((value) => String(value).includes(SEQUENCE_NAME))).toBe(true);
+      }
+      expect(selectQueries[0].sql).not.toContain(TARGET);
+      expect((selectQueries[0].values ?? []).some((value) => String(value).includes(TARGET))).toBe(true);
+    });
+
+    it("AC-17: should check UPDATE and USAGE on every unmapped sequence before SELECT on the target", async () => {
+      const harness = createHarness({
+        extraColumns: { target: [{ column_name: "otro_id", data_type: "integer", column_default: OTHER_SEQUENCE_DEFAULT }] },
+      });
+
+      await runCargarPadrones(defaultParams(), harness.deps);
+
+      const { calls } = harness;
+      const select = selectCheckIndex(calls);
+      const positions = [
+        sequenceCheckIndex(calls, SEQUENCE_NAME, "UPDATE"),
+        sequenceCheckIndex(calls, SEQUENCE_NAME, "USAGE"),
+        sequenceCheckIndex(calls, OTHER_SEQUENCE_NAME, "UPDATE"),
+        sequenceCheckIndex(calls, OTHER_SEQUENCE_NAME, "USAGE"),
+      ];
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect(positions[0]).toBeLessThan(positions[1]);
+      expect(positions[2]).toBeLessThan(positions[3]);
+      expect(Math.max(...positions)).toBeLessThan(select);
+      expect(select).toBeLessThan(beginIndex(calls));
+    });
+
+    it("AC-16/AC-17: should run the TRUNCATE privilege check, the FK check, then the sequence checks, all before BEGIN, after the column validation and count", async () => {
+      const options = defaultOptions({ clearMode: "truncate" });
+      const harness = createHarness({}, defaultParams({ options }));
+
+      await runCargarPadrones(defaultParams({ options }), harness.deps);
+
+      const { calls } = harness;
+      const positions = [
+        calls.findIndex((call) => call.sql === buildCountSql(harness.ruralSource)),
+        calls.findIndex(isTruncatePrivilegeQuery),
+        calls.findIndex(isForeignKeyQuery),
+        sequenceCheckIndex(calls, SEQUENCE_NAME, "UPDATE"),
+        selectCheckIndex(calls),
+        beginIndex(calls),
+      ];
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    });
+
+    it("AC-16/AC-17: should refuse on a missing TRUNCATE privilege before any sequence privilege is checked", async () => {
+      const options = defaultOptions({ clearMode: "truncate" });
+      const harness = createHarness({ privilege: false }, defaultParams({ options }));
+
+      const failure = await refusalOf(harness, defaultParams({ options }));
+
+      expect(failure.message).toMatch(/TRUNCATE/);
+      expect(preflightQueries(harness.calls)).toEqual([]);
+      expectRefusedBeforeWrite(harness);
+    });
+
+    it("AC-17: should keep the TRUNCATE privilege check and skip the sequence checks when resetSequences is off in truncate mode", async () => {
+      const options = defaultOptions({ clearMode: "truncate", resetSequences: false });
+      const harness = createHarness({}, defaultParams({ options }));
+
+      const result = await runCargarPadrones(defaultParams({ options }), harness.deps);
+
+      expect(harness.calls.some(isTruncatePrivilegeQuery)).toBe(true);
+      expect(preflightQueries(harness.calls)).toEqual([]);
+      expect(result.targetModified).toBe(true);
+    });
+
+    it("AC-17: should refuse the run before BEGIN when UPDATE is missing on the unmapped sequence, naming the sequence and the privilege", async () => {
+      const harness = createHarness({ deniedSequencePrivileges: ["UPDATE"] });
+
+      const failure = await refusalOf(harness, defaultParams());
+
+      expect(failure.message).toContain(SEQUENCE_NAME);
+      expect(failure.message).toMatch(/UPDATE/);
+      expect(failure.message).toMatch(RESET_HINT);
+      expect(failure.message).not.toContain(PASSWORD);
+      expectRefusedBeforeWrite(harness);
+    });
+
+    it("AC-17: should refuse the run before BEGIN when USAGE is missing on the unmapped sequence, naming the sequence and the privilege", async () => {
+      const harness = createHarness({ deniedSequencePrivileges: ["USAGE"] });
+
+      const failure = await refusalOf(harness, defaultParams());
+
+      expect(failure.message).toContain(SEQUENCE_NAME);
+      expect(failure.message).toMatch(/USAGE/);
+      expect(failure.message).toMatch(RESET_HINT);
+      expect(failure.message).not.toContain(PASSWORD);
+      expectRefusedBeforeWrite(harness);
+    });
+
+    it("AC-17: should refuse the run before BEGIN when SELECT is missing on the target table, naming the table and the privilege", async () => {
+      const harness = createHarness({ targetSelect: false });
+
+      const failure = await refusalOf(harness, defaultParams());
+
+      expect(failure.message).toContain(TARGET);
+      expect(failure.message).toMatch(/SELECT/);
+      expect(failure.message).not.toContain(PASSWORD);
+      expectRefusedBeforeWrite(harness);
+    });
+
+    it("AC-17: should report the first missing privilege in the order UPDATE, USAGE, SELECT", async () => {
+      const harness = createHarness({ deniedSequencePrivileges: ["UPDATE"], targetSelect: false });
+
+      const failure = await refusalOf(harness, defaultParams());
+
+      expect(failure.message).toContain(SEQUENCE_NAME);
+      expect(failure.message).toMatch(/UPDATE/);
+      expectRefusedBeforeWrite(harness);
+    });
+
+    it.each<[string, Scenario, CargarPadronesParams]>([
+      ["resetSequences is off", {}, defaultParams({ options: defaultOptions({ resetSequences: false }) })],
+      ["the run is a dry run", {}, defaultParams({ dryRun: true })],
+      ["the target has no sequence", { omitIdColumn: true }, defaultParams()],
+      [
+        "the only sequence column is mapped to a source-required column",
+        { omitIdColumn: true, targetColumnDefaults: { unidadcat: SEQUENCE_DEFAULT } },
+        defaultParams(),
+      ],
+    ])(
+      "AC-17: should not check any sequence or target SELECT privilege when %s",
+      async (_label, scenario, params) => {
+        const harness = createHarness(scenario, params);
+
+        const result = await runCargarPadrones(params, harness.deps);
+
+        expect(preflightQueries(harness.calls)).toEqual([]);
+        expect(result.targetModified).toBe(!params.dryRun);
+      }
+    );
+
+    it("AC-17: should run no privilege preflight and no setval on a dry run even with denied sequence privileges", async () => {
+      const harness = createHarness({ deniedSequencePrivileges: ["UPDATE", "USAGE"], targetSelect: false });
+
+      const result = await runCargarPadrones(defaultParams({ dryRun: true }), harness.deps);
+
+      expect(preflightQueries(harness.calls)).toEqual([]);
+      expect(indexOfMatch(harness.log, /setval\(/i)).toBe(-1);
+      expect(result.targetModified).toBe(false);
+    });
+
+    it("AC-27: should keep the planned step total and never start the clear step when the sequence preflight refuses the run", async () => {
+      const harness = createHarness({ deniedSequencePrivileges: ["UPDATE"] });
+      const reported: { label: string; current: number; total: number }[] = [];
+
+      await refusalOf(harness, defaultParams(), (progress) => reported.push({ ...progress }));
+
+      const labels = reported.map((progress) => progress.label);
+      expect(labels.length).toBeGreaterThan(0);
+      expect(labels).toEqual(PLAN_LABELS.slice(0, labels.length));
+      expect(labels).not.toContain(CLEAR_LABEL);
+      expect(reported.every((progress) => progress.total === PLANNED_TOTAL)).toBe(true);
+    });
+
+    it("AC-27: should keep the planned step total on a real run with the preflight passing", async () => {
+      const harness = createHarness();
+      const reported: { label: string; current: number; total: number }[] = [];
+
+      await runCargarPadrones(defaultParams(), harness.deps, (progress) => reported.push({ ...progress }));
+
+      expect(reported.map((progress) => progress.label)).toEqual(PLAN_LABELS);
+      expect(reported.every((progress) => progress.total === PLANNED_TOTAL)).toBe(true);
+    });
   });
 
   describe("failure after the sequence reset (AC-17)", () => {
