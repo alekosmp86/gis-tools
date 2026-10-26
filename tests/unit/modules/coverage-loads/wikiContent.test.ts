@@ -16,6 +16,8 @@ const EXPECTED_PAGES = [
   "conexion",
   "indicadores-lte",
   "cargas-geometrias",
+  "capas-sigra",
+  "avance-ftth",
   "resultado-y-reportes",
   "preguntas-frecuentes",
 ];
@@ -33,7 +35,7 @@ describe("coverage-loads wiki content", () => {
     pages = index.findTool(TOOL)?.pages ?? [];
   });
 
-  it("should expose exactly the six real pages in reading order", () => {
+  it("should expose exactly the eight real pages in reading order", () => {
     expect(pages.map((p) => p.slug)).toEqual(EXPECTED_PAGES);
   });
 

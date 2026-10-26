@@ -5,11 +5,11 @@ order: 2
 
 # Conectar a la base de datos y estados de las etapas
 
-El primer paso de la herramienta es la **Conexión**: se indica a qué base de datos se va a cargar y recién después se habilitan las etapas.
+Después de elegir el **tipo de carga**, el paso **Conexión** indica a qué base de datos se va a cargar. Recién entonces se habilitan las etapas.
 
 ## Completar la conexión
 
-![Paso 1: tarjeta Conexión a la base de datos](images/01-conexion.png)
+![Paso Conexión: tarjeta Conexión a la base de datos](images/01-conexion.png)
 
 | Campo | Qué ingresar |
 |---|---|
@@ -40,7 +40,7 @@ Vea también cómo funcionan los perfiles en las demás herramientas: [Conectar 
 
 ## Etapas disponibles
 
-Con la conexión confirmada, el paso 1 muestra *Confirmada* y se habilitan las etapas **Indicadores LTE** y **Cargas SHP**.
+Con la conexión confirmada, el paso Conexión muestra *Confirmada* y se habilitan las etapas del tipo **Cobertura**: **Indicadores LTE** y **Cargas SHP**. Con el tipo **FTTH** se habilitan **Capas SIGRA** y **Avance FTTH**.
 
 ![Conexión confirmada y la primera etapa lista para usar](images/02-conexion-confirmada.png)
 
@@ -60,7 +60,7 @@ Con la conexión confirmada, el paso 1 muestra *Confirmada* y se habilitan las e
 
 ## Cambiar la conexión
 
-- Mientras una etapa está **en curso** no se puede editar la conexión: el paso 1 no se puede abrir.
+- Mientras una etapa está **en curso** no se puede editar la conexión: el paso Conexión no se puede abrir.
 - Si confirma una conexión **distinta**, las revisiones previas (planes) que ya había hecho se descartan y hay que revisar de nuevo, porque dependían de la base anterior. Una etapa ya completada conserva su resultado como historial.
 
 ## Siguiente

@@ -1,6 +1,6 @@
 ---
 title: "Resultado y reportes"
-order: 5
+order: 7
 ---
 
 # Resultado y reportes
