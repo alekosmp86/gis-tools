@@ -5,5 +5,8 @@
     { "path": "catalog/columns", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "cargar-padrones/start", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "cargar-padrones/status", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" }
+  ],
+  "pages": [
+    { "path": "", "title": "Trabajos de rutina" }
   ]
 }

@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { createModuleRegistry } from "@/core/modules/createModuleRegistry";
 import { ModuleHttpMethod } from "@/core/modules/contracts";
+import { UiSlot } from "@/ui-kit/modules/contracts";
 import { moduleRegistry } from "@/app/modules.registry";
 import { routineJobsModule } from "@/modules/routine-jobs/manifest";
 import routeDeclarations from "@/modules/routine-jobs/module.routes.json";
+import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/RoutineJobsDashboard";
+import { RoutineJobsHomeCard } from "@/modules/routine-jobs/ui/RoutineJobsHomeCard";
 
 const EXPECTED_ENDPOINTS = [
   "GET cargar-padrones/status",
@@ -33,10 +36,10 @@ describe("routine jobs module declaration", () => {
       }
     });
 
-    it("AC-23: should declare no pages yet (the UI is a later round)", () => {
+    it("AC-33: should declare exactly one page, the module root titled Trabajos de rutina", () => {
       const pages = (routeDeclarations as { pages?: unknown[] }).pages ?? [];
 
-      expect(pages).toHaveLength(0);
+      expect(pages).toEqual([{ path: "", title: "Trabajos de rutina" }]);
     });
 
     it("AC-23: should keep every secret out of URLs by declaring catalog and start as POST", () => {
@@ -73,8 +76,48 @@ describe("routine jobs module declaration", () => {
       expect(endpoints.every((endpoint) => endpoint.dynamic === "force-dynamic")).toBe(true);
     });
 
-    it("AC-23: should contribute no page yet", () => {
-      expect(routineJobsModule.pages ?? []).toHaveLength(0);
+    it("AC-33: should bind the module root page to the dashboard", () => {
+      const pages = routineJobsModule.pages ?? [];
+
+      expect(pages).toHaveLength(1);
+      expect(pages[0].path).toBe("");
+      expect(pages[0].title).toBe("Trabajos de rutina");
+      expect(pages[0].Component).toBe(RoutineJobsDashboard);
+    });
+
+    it("AC-33: should add one navigation entry to the module page", () => {
+      const navigation = routineJobsModule.navigation ?? [];
+
+      expect(navigation).toHaveLength(1);
+      expect(navigation[0].label).toBe("Trabajos de rutina");
+      expect(navigation[0].href).toBe("/tools/m/routine-jobs");
+      expect(typeof navigation[0].order).toBe("number");
+      expect(typeof navigation[0].iconName).toBe("string");
+      expect((navigation[0].iconName ?? "").length).toBeGreaterThan(0);
+    });
+
+    it("AC-33: should contribute only the home card, into the home tool grid", () => {
+      const contributions = routineJobsModule.ui ?? [];
+
+      expect(contributions).toHaveLength(1);
+      expect(contributions[0].slot).toBe(UiSlot.HOME_TOOL_GRID);
+      expect(contributions[0].id).toBe("routine-jobs.card");
+      expect(contributions[0].Component).toBe(RoutineJobsHomeCard);
+    });
+
+    it("AC-34: should declare the module wiki directory", () => {
+      expect(routineJobsModule.wiki).toEqual({ contentDir: "src/modules/routine-jobs/wiki" });
+    });
+
+    it("AC-33: should own the page the navigation entry and home card link to", () => {
+      const registry = createModuleRegistry([routineJobsModule]);
+
+      const page = registry.findPage("routine-jobs");
+
+      expect(page?.moduleId).toBe("routine-jobs");
+      expect(page?.page.Component).toBe(RoutineJobsDashboard);
+      expect(registry.pages()).toHaveLength(1);
+      expect(registry.navigation()).toHaveLength(1);
     });
 
     it("AC-23/AC-24/AC-25: should expose the routes the browser client will call", () => {
@@ -116,6 +159,16 @@ describe("routine jobs module declaration", () => {
   describe("composition root", () => {
     it("AC-23: should be listed in the application's module registry", () => {
       expect(moduleRegistry.modules.map((module) => module.id)).toContain("routine-jobs");
+    });
+
+    it("AC-33: should serve its page through the application's module registry", () => {
+      expect(moduleRegistry.findPage("routine-jobs")?.moduleId).toBe("routine-jobs");
+    });
+
+    it("AC-34: should expose its wiki source through the application's module registry", () => {
+      const sources = moduleRegistry.wikiSources();
+
+      expect(sources.find((source) => source.toolSlug === "routine-jobs")?.contentDir).toBe("src/modules/routine-jobs/wiki");
     });
 
     it("AC-23/AC-24/AC-25: should serve its endpoints through the application's module registry", () => {

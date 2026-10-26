@@ -92,9 +92,9 @@ describe("wiki content (real repository files)", () => {
     rawTitles = await loadRawTitles(sources, index);
   });
 
-  it("should declare all eight sources", () => {
-    expect(sources).toHaveLength(8);
-    expect(index.tools()).toHaveLength(8);
+  it("should declare all nine sources", () => {
+    expect(sources).toHaveLength(9);
+    expect(index.tools()).toHaveLength(9);
   });
 
   it("should give every tool at least one page", () => {
