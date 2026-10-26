@@ -12,6 +12,8 @@ export interface FormFieldProps {
   maxLength?: number;
   isFullWidth?: boolean;
   className?: string;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
 }
 
 export const FormField: React.FC<FormFieldProps> = ({
@@ -25,6 +27,8 @@ export const FormField: React.FC<FormFieldProps> = ({
   maxLength,
   isFullWidth = false,
   className = "",
+  onBlur,
+  onKeyDown,
 }) => {
   const generatedId = useId();
   const inputId = id || generatedId;
@@ -42,6 +46,8 @@ export const FormField: React.FC<FormFieldProps> = ({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         maxLength={maxLength}
+        onBlur={onBlur}
+        onKeyDown={onKeyDown}
       />
     </div>
   );
