@@ -133,7 +133,7 @@ Part A
   `loadTables(schema) -> TableListing`, `checkColumns(table) -> ResolvedColumn[]`, `disabled?`, `excludedTables?`, `onValidityChange?(valid, columns)`. It lists the
   schema's tables (name, with the kind of views shown), reloads when the schema changes, shows a Spanish message when the schema does not exist or has no tables, shows
   a loading and an error state, and after a table is chosen shows each required column as resolved (with the real name found) or missing / ambiguous (with the
-  suggestion). Valid = every required column resolved. A table that is in `excludedTables` cannot be chosen. The pure decision logic (`selectorStatus`, `columnRows`) is
+  suggestion). Valid = every required column resolved. A table that is in `excludedTables` cannot be chosen. The pure decision logic (`describeListing`, `columnRows`, `isSelectionValid`) is
   exported and unit tested; the component is covered by static markup.
 - AC-4b: `src/modules/routine-jobs/ui/routineJobsClient.ts` wraps the four endpoints (`listTables`, `listColumns`, `startCargarPadrones`, `readStatus`): POST JSON for the first three,
   GET with `jobId` for status; throws a typed `RoutineJobsApiError { status, message }` carrying the Spanish server message; never logs the password; a network failure becomes a
@@ -157,7 +157,7 @@ Part B
   A saved profile can be loaded and saved from step 1/2.
 - AC-33: page contribution at `/tools/m/routine-jobs` (title "Trabajos de rutina") with the job list (today only "Cargar padrones") that opens the wizard; a home card and a navigation entry in the
   module manifest; `module.routes.json` declares the page; `npm run modules:routes:check` passes.
-- AC-34: the module wiki (`src/modules/routine-jobs/wiki/`: index + "Cargar padrones", Spanish, user-facing: what it does, the four steps, the options, how to read the report, the warnings, FAQ) is
+- AC-34: the module wiki (`src/modules/routine-jobs/wiki/`: index + "Cargar padrones", Spanish, user-facing: what it does, the five steps, the options, how to read the report, the warnings, FAQ) is
   registered through `manifest.wiki`; wiki tests pass. No screenshots.
 
 ## Out of scope
