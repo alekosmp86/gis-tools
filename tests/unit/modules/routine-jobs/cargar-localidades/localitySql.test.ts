@@ -60,6 +60,33 @@ const updateSetColumnsOf = (sql: string): string[] => {
   return [...match[1].matchAll(/"([^"]+)"\s*=/g)].map((assignment) => assignment[1]);
 };
 
+const stripQuotedText = (sql: string): string => sql.replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"/g, "''");
+
+const parenthesisBalanceOf = (sql: string): { depth: number; minDepth: number } => {
+  let depth = 0;
+  let minDepth = 0;
+  for (const character of stripQuotedText(sql)) {
+    if (character === "(") depth += 1;
+    if (character === ")") depth -= 1;
+    minDepth = Math.min(minDepth, depth);
+  }
+  return { depth, minDepth };
+};
+
+const segmentBetween = (sql: string, start: string, end: string): string => {
+  const startIndex = sql.indexOf(start);
+  if (startIndex < 0) return "";
+  const endIndex = sql.indexOf(end, startIndex);
+  return sql.slice(startIndex, endIndex < 0 ? undefined : endIndex);
+};
+
+const CLASSIFY_AND_APPLY_STATEMENTS: ReadonlyArray<readonly [string, () => string]> = [
+  ["classify with geometry updates", () => buildClassifySql(sourceLayouts, targetLayout, withUpdates)],
+  ["classify without geometry updates", () => buildClassifySql(sourceLayouts, targetLayout, withoutUpdates)],
+  ["apply with geometry updates", () => buildApplySql(sourceLayouts, targetLayout, withUpdates)],
+  ["apply without geometry updates", () => buildApplySql(sourceLayouts, targetLayout, withoutUpdates)],
+];
+
 function sourceFilesUnder(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name);
@@ -102,6 +129,47 @@ describe("cargar-localidades SQL builders (MJ-13)", () => {
       const sql = buildApplySql(sourceLayouts, targetLayout, withoutUpdates);
 
       expect(sql).not.toMatch(/\bUPDATE\b/);
+    });
+  });
+
+  describe("generated SQL is syntactically well formed (regression)", () => {
+    it.each(CLASSIFY_AND_APPLY_STATEMENTS)("should have no comma directly before FROM in the %s statement", (_label, build) => {
+      expect(build()).not.toMatch(/,\s*FROM\b/i);
+    });
+
+    it.each(CLASSIFY_AND_APPLY_STATEMENTS)("should select the equal flag directly before FROM in the %s statement", (_label, build) => {
+      expect(build()).toContain('AS "equal" FROM');
+    });
+
+    it.each(CLASSIFY_AND_APPLY_STATEMENTS)("should balance parentheses in the %s statement", (_label, build) => {
+      expect(parenthesisBalanceOf(build())).toEqual({ depth: 0, minDepth: 0 });
+    });
+  });
+
+  describe("stage 2 write gating", () => {
+    const applyWithUpdates = (): string => buildApplySql(sourceLayouts, targetLayout, withUpdates);
+
+    it.each(CLASSIFY_AND_APPLY_STATEMENTS)("should join the matched target only when the target has exactly one row in the %s statement", (_label, build) => {
+      expect(build()).toContain('ON t1."id" = ct."target_id" AND ct."target_rows" = 1');
+    });
+
+    it("should insert only rows classified NEW", () => {
+      const insert = segmentBetween(applyWithUpdates(), "INSERT INTO", "RETURNING");
+
+      expect(insert).toContain(`WHERE cl."class" = 'NEW'`);
+    });
+
+    it("should update only rows classified CHANGED", () => {
+      const update = segmentBetween(applyWithUpdates(), "UPDATE ", "RETURNING");
+
+      expect(update).toContain(`WHERE cl."class" = 'CHANGED'`);
+    });
+
+    it("should never insert or update AMBIGUOUS rows", () => {
+      const sql = applyWithUpdates();
+
+      expect(segmentBetween(sql, "INSERT INTO", "RETURNING")).not.toContain("AMBIGUOUS");
+      expect(segmentBetween(sql, "UPDATE ", "RETURNING")).not.toContain("AMBIGUOUS");
     });
   });
 

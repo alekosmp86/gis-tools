@@ -1,8 +1,9 @@
 import type { DbColumnMetadata } from "@/core/types/db";
-import { GENERIC_GEOMETRY_TYPE, RELATION_FACT_KIND, RELATION_KIND, type RelationFactKind } from "../../actualizar-padron/constants";
-import type { GeometryTyping } from "../../actualizar-padron/domain/geometryType";
-import { GENERIC_SRID } from "../../actualizar-padron/constants";
-import { TARGET_GEOMETRY_TYPE } from "../constants";
+import { GENERIC_GEOMETRY_TYPE, RELATION_FACT_KIND, RELATION_KIND, type RelationFactKind } from "../actualizar-padron/constants";
+import type { GeometryTyping } from "../actualizar-padron/domain/geometryType";
+import { GENERIC_SRID } from "../actualizar-padron/constants";
+
+const TARGET_GEOMETRY_TYPE = "MULTIPOLYGON";
 
 interface TargetRelationFact {
   kind: RelationFactKind;
@@ -37,23 +38,23 @@ const METRE_PROJ4_PATTERN = /\+units=m(\s|$)/;
 const METRE_WKT_PATTERN = /UNIT\["(metre|meter)"/i;
 const ACCEPTED_GEOMETRY_TYPES: readonly string[] = [GENERIC_GEOMETRY_TYPE, TARGET_GEOMETRY_TYPE];
 
-export function relationKindIssues(label: string, relkind: string | undefined): string[] {
+export function relationKindIssues(title: string, label: string, relkind: string | undefined): string[] {
   if (relkind === undefined || WRITABLE_KINDS.includes(relkind)) return [];
   const kindText = RELATION_KIND_TEXT.get(relkind) ?? NON_TABLE_KIND_TEXT;
-  return [`La tabla de localidades ${label} es ${kindText}: debe ser una tabla regular o particionada.`];
+  return [`La tabla ${title} ${label} es ${kindText}: debe ser una tabla regular o particionada.`];
 }
 
-export function inheritanceIssues({ label, relkind, hasChildren, isChild }: TargetStructureFacts): string[] {
+export function inheritanceIssues(title: string, { label, relkind, hasChildren, isChild }: TargetStructureFacts): string[] {
   const hasUnsafeChildren = hasChildren && relkind !== RELATION_KIND.PARTITIONED;
   if (!isChild && !hasUnsafeChildren) return [];
-  return [`La tabla de localidades ${label} tiene herencia (tablas hijas o tabla padre): el proceso no puede escribir en ella con seguridad.`];
+  return [`La tabla ${title} ${label} tiene herencia (tablas hijas o tabla padre): el proceso no puede escribir en ella con seguridad.`];
 }
 
-export function relationFactIssues({ label, facts }: TargetStructureFacts): string[] {
+export function relationFactIssues(title: string, { label, facts }: TargetStructureFacts): string[] {
   return ([RELATION_FACT_KIND.TRIGGER, RELATION_FACT_KIND.RULE] as const).flatMap((kind) => {
     const names = facts.filter((fact) => fact.kind === kind).map((fact) => fact.name);
     if (names.length === 0) return [];
-    return [`La tabla de localidades ${label} tiene ${FACT_TEXT[kind]} (${names.join(", ")}): quítelos, el proceso no escribe en tablas con ellos.`];
+    return [`La tabla ${title} ${label} tiene ${FACT_TEXT[kind]} (${names.join(", ")}): quítelos, el proceso no escribe en tablas con ellos.`];
   });
 }
 

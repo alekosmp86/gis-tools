@@ -1,5 +1,4 @@
 export const FONT_TYPE_ID = 4;
-export const SNAP_GRID_M = 0.001;
 
 export const LOCALITY_SKIP_REASON = {
   SIN_GEOMETRIA: "SIN_GEOMETRIA",
@@ -10,14 +9,6 @@ export const LOCALITY_SKIP_REASON = {
 } as const;
 
 export type LocalitySkipReason = (typeof LOCALITY_SKIP_REASON)[keyof typeof LOCALITY_SKIP_REASON];
-
-export const LOCALITY_CLASS = {
-  NEW: "NEW",
-  UNCHANGED: "UNCHANGED",
-  WITHIN_TOLERANCE: "WITHIN_TOLERANCE",
-  CHANGED: "CHANGED",
-  AMBIGUOUS: "AMBIGUOUS",
-} as const;
 
 export const STAGING_PADRON_COLUMN = {
   UNIDADCAT: "unidadcat",
@@ -74,9 +65,4 @@ export const LOCALIDADES_REQUIRED_COLUMNS_BY_ROLE: Record<LocalidadesTableRole, 
 };
 
 export const MAX_TARGETS = 2;
-export const SAMPLE_LIMIT = 20;
-export const GEOMETRY_CHANGE_LIMIT = 20;
-export const INSERTED_LIST_LIMIT = 500;
 
-export const POLYGON_TYPES: readonly string[] = ["POLYGON", "MULTIPOLYGON"];
-export const TARGET_GEOMETRY_TYPE = "MULTIPOLYGON";

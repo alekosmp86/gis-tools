@@ -1,6 +1,7 @@
-import type { DbColumnMetadata, DbConfig } from "@/core/types/db";
+import type { DbConfig } from "@/core/types/db";
 import type { TableLayout } from "../actualizar-padron/domain/layouts";
 import type { StepTiming } from "../cargar-padrones/types";
+import type { WritableTargetLayout } from "../shared/tableResolution";
 import type { LocalitySkipReason } from "./constants";
 
 export interface LocalityOptions {
@@ -26,13 +27,7 @@ export interface CargarLocalidadesParams {
   confirm: boolean;
 }
 
-export interface LocalityTargetLayout extends TableLayout {
-  srid: number;
-  idColumn: string;
-  idSequence: string | null;
-  identityColumns: string[];
-  catalog: DbColumnMetadata[];
-}
+export type LocalityTargetLayout = WritableTargetLayout;
 
 export interface LocalityLayouts {
   padron: TableLayout;

@@ -8,6 +8,7 @@ import {
   readBoolean,
   readRecord,
   readRequiredText,
+  readTolerance,
   toDbConfig,
   type JsonRecord,
 } from "./requestParsing";
@@ -25,18 +26,10 @@ function assertTablesDistinct(params: CargarLocalidadesParams): void {
   }
 }
 
-function parseTolerance(options: JsonRecord): number {
-  const value = options.tolerance;
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    throw invalid("El campo tolerance debe ser un número mayor o igual que 0.");
-  }
-  return value;
-}
-
 function parseLocalityOptions(body: JsonRecord): LocalityOptions {
   const options = readRecord(body, "options");
   return {
-    tolerance: parseTolerance(options),
+    tolerance: readTolerance(options),
     updateGeometries: readBoolean(options, "updateGeometries"),
   };
 }

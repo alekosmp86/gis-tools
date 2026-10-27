@@ -6,22 +6,8 @@ import { buildWarnings } from "../domain/warnings";
 import type { CargarLocalidadesParams, CargarLocalidadesResult } from "../types";
 import { assertRunAllowed, assertSourcesReady, assertTargetsReady } from "./preflight";
 import { resolveLocalityLayouts } from "./resolveLayouts";
-import { scrubSecret, runWriteTransaction, type WriteOutcome } from "./writeSteps";
-
-const errorMessageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-
-async function openRunSession(params: CargarLocalidadesParams, deps: RunDeps): Promise<RunSession> {
-  try {
-    return await deps.openSession(params.config);
-  } catch (error: unknown) {
-    throw new Error(scrubSecret(`No se pudo abrir la conexión: ${errorMessageOf(error)}`, params.config.password));
-  }
-}
-
-function scrubbedFailure(error: unknown, secret: string | undefined): unknown {
-  if (!(error instanceof Error) || !secret || !error.message.includes(secret)) return error;
-  return new Error(scrubSecret(error.message, secret));
-}
+import { openRunSession, scrubbedFailure } from "../../shared/transaction";
+import { runWriteTransaction, type WriteOutcome } from "./writeSteps";
 
 function buildResult(
   params: CargarLocalidadesParams,
@@ -72,7 +58,7 @@ export async function runCargarLocalidades(
 ): Promise<CargarLocalidadesResult> {
   assertRunAllowed(params);
   assertDistinctTables(params);
-  const session = await openRunSession(params, deps);
+  const session = await openRunSession(params.config, deps);
   try {
     return await runOnSession(session, params, deps, onProgress);
   } catch (error: unknown) {

@@ -1,8 +1,7 @@
 import type { CatalogQuerySession } from "@/core/services/server/tableCatalog/tableCatalog";
-import { physicalColumn, qualifiedName, type TableLayout } from "../../actualizar-padron/domain/layouts";
-import { readRelationKind, readTriggerAndRuleFacts } from "../../actualizar-padron/services/catalogFacts";
-import { STAGING_LOCALITY_COLUMN } from "../constants";
-import type { SpatialRefFacts, TargetStructureFacts } from "../domain/targetIssues";
+import { physicalColumn, qualifiedName, type TableLayout } from "../actualizar-padron/domain/layouts";
+import { readRelationKind, readTriggerAndRuleFacts } from "../actualizar-padron/services/catalogFacts";
+import type { SpatialRefFacts, TargetStructureFacts } from "./targetIssues";
 
 interface TableName {
   schema: string;
@@ -45,8 +44,8 @@ export async function readSpatialRef(session: CatalogQuerySession, srid: number)
   return { srtext: textOrNull(row.srtext), proj4text: textOrNull(row.proj4text) };
 }
 
-function buildUnsupportedSridSql(staging: TableLayout): string {
-  const geometry = `l.${physicalColumn(staging, STAGING_LOCALITY_COLUMN.GEOM)}`;
+function buildUnsupportedSridSql(staging: TableLayout, geometryLogical: string): string {
+  const geometry = `l.${physicalColumn(staging, geometryLogical)}`;
   return [
     `SELECT count(*) AS "unsupported" FROM ${qualifiedName(staging)} AS l`,
     `WHERE ${geometry} IS NOT NULL AND (ST_SRID(${geometry}) = 0`,
@@ -54,8 +53,12 @@ function buildUnsupportedSridSql(staging: TableLayout): string {
   ].join(" ");
 }
 
-export async function readUnsupportedSridCount(session: CatalogQuerySession, staging: TableLayout): Promise<number> {
-  const result = await session.query(buildUnsupportedSridSql(staging));
+export async function readUnsupportedSridCount(
+  session: CatalogQuerySession,
+  staging: TableLayout,
+  geometryLogical: string
+): Promise<number> {
+  const result = await session.query(buildUnsupportedSridSql(staging, geometryLogical));
   return Number(result.rows[0]?.unsupported ?? 0);
 }
 

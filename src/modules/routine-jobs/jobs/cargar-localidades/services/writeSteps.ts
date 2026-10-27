@@ -1,8 +1,7 @@
-import { buildAnalyzeStatement, buildRepairSequenceStatement } from "@/core/services/sqlStatements";
-import { sentence } from "../../cargar-padrones/domain/warnings";
+import { buildAnalyzeStatement } from "@/core/services/sqlStatements";
 import type { StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunSession } from "../../cargar-padrones/types";
-import { parseSequenceName } from "../../actualizar-padron/domain/sequenceReference";
+import { buildSequenceRepairSql, runTransaction, type TransactionMessages } from "../../shared/transaction";
 import { applyStepLabel, classifyStepLabel, LOCALITY_STEP } from "../domain/plannedSteps";
 import { toSourceReport, toTargetApplyOutcome, toTargetClassification } from "../domain/reportMapping";
 import { buildSourceReportSql } from "../domain/sourceSql";
@@ -31,41 +30,11 @@ interface TransactionBody {
   targets: TargetReport[];
 }
 
-const BEGIN_SQL = "BEGIN ISOLATION LEVEL REPEATABLE READ";
-const COMMIT_SQL = "COMMIT";
-const ROLLBACK_SQL = "ROLLBACK";
-const REDACTED = "***";
-
-const errorMessageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-
-export const scrubSecret = (message: string, secret: string | undefined): string =>
-  secret ? message.split(secret).join(REDACTED) : message;
-
-async function rollbackQuietly(session: RunSession): Promise<boolean> {
-  try {
-    await session.query(ROLLBACK_SQL);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function rollbackFailure(error: unknown, rolledBack: boolean, secret: string | undefined): Error {
-  const reason = sentence(scrubSecret(errorMessageOf(error), secret));
-  const outcome = rolledBack
-    ? "Las tablas de localidades no fueron modificadas."
-    : "No se pudo revertir la transacción: verifique las tablas de localidades.";
-  return new Error(`No se pudo completar la carga de localidades: ${reason} ${outcome}`);
-}
-
-async function commitTransaction(session: RunSession, secret: string | undefined): Promise<string | undefined> {
-  try {
-    await session.query(COMMIT_SQL);
-    return undefined;
-  } catch (error: unknown) {
-    return scrubSecret(errorMessageOf(error), secret);
-  }
-}
+const LOCALITY_TRANSACTION: TransactionMessages = {
+  jobLabel: "carga de localidades",
+  untouched: "Las tablas de localidades no fueron modificadas.",
+  unverified: "No se pudo revertir la transacción: verifique las tablas de localidades.",
+};
 
 async function readSourceReport(session: RunSession, layouts: LocalityLayouts): Promise<SourceReport> {
   const result = await session.query(buildSourceReportSql(layouts));
@@ -90,20 +59,6 @@ async function readApply(
 ): Promise<TargetApplyOutcome> {
   const result = await session.query(buildApplySql(layouts, target, params.options));
   return toTargetApplyOutcome(result.rows[0] ?? {});
-}
-
-function buildSequenceRepairSql(target: LocalityTargetLayout): string {
-  const sequence = parseSequenceName(target.idSequence);
-  if (sequence === undefined) {
-    throw new Error(`La columna id de ${targetLabelOf(target)} no tiene secuencia: no se pueden asignar ids.`);
-  }
-  return buildRepairSequenceStatement(
-    sequence.schema ?? target.schema,
-    sequence.name,
-    target.schema,
-    target.table,
-    [target.idColumn]
-  );
 }
 
 function assertCountsMatch(
@@ -217,24 +172,16 @@ export async function runWriteTransaction(
   layouts: LocalityLayouts,
   timer: StepTimer
 ): Promise<WriteOutcome> {
-  const secret = params.config.password;
-  await session.query(BEGIN_SQL);
-  let body: TransactionBody;
-  try {
-    body = await runTransactionBody(session, params, layouts, timer);
-  } catch (error: unknown) {
-    const rolledBack = await rollbackQuietly(session);
-    throw rollbackFailure(error, rolledBack, secret);
-  }
-  if (params.dryRun) {
-    await timer.run(LOCALITY_STEP.ROLLBACK, () => session.query(ROLLBACK_SQL));
-    return { ...body, targetsModified: false, outcomeUnknown: false };
-  }
-  const commitError = await timer.run(LOCALITY_STEP.COMMIT, () => commitTransaction(session, secret));
-  return {
-    ...body,
-    targetsModified: commitError === undefined,
-    outcomeUnknown: commitError !== undefined,
-    commitError,
-  };
+  const outcome = await runTransaction(
+    session,
+    {
+      dryRun: params.dryRun,
+      secret: params.config.password,
+      timer,
+      steps: { commit: LOCALITY_STEP.COMMIT, rollback: LOCALITY_STEP.ROLLBACK },
+      messages: LOCALITY_TRANSACTION,
+    },
+    () => runTransactionBody(session, params, layouts, timer)
+  );
+  return { ...outcome.body, targetsModified: outcome.targetsModified, outcomeUnknown: outcome.outcomeUnknown, commitError: outcome.commitError };
 }

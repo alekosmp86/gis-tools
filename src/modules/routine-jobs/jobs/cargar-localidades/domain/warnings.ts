@@ -1,4 +1,4 @@
-import { INSERTED_LIST_LIMIT } from "../constants";
+import { INSERTED_LIST_LIMIT } from "../../shared/limits";
 import type { SourceTotals, TargetReport } from "../types";
 
 export interface WarningInput {

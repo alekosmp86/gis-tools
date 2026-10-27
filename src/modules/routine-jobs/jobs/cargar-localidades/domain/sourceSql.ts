@@ -2,12 +2,13 @@ import { physicalColumn, qualifiedName, type TableLayout } from "../../actualiza
 import { PADRON_UNIT } from "../../cargar-padrones/constants";
 import {
   PROVINCE_SOURCE_COLUMN,
-  SAMPLE_LIMIT,
   LOCALITY_SKIP_REASON,
   STAGING_LOCALITY_COLUMN,
   STAGING_PADRON_COLUMN,
 } from "../constants";
-import { cte, jsonArrayOf, literal, q, withClause } from "./sqlFragments";
+import { repairedGeometrySql, usableGeometrySql, wasInvalidSql } from "../../shared/geometryCompare";
+import { SAMPLE_LIMIT } from "../../shared/limits";
+import { cte, jsonArrayOf, literal, q, withClause } from "../../shared/sqlFragments";
 
 export interface SourceLayouts {
   padron: TableLayout;
@@ -58,8 +59,8 @@ const PRE_GROUPED_SQL = [
 ].join(" ");
 
 const FIXED_SQL = [
-  `SELECT v.*, CASE WHEN v."was_invalid" THEN ST_Multi(ST_CollectionExtract(ST_MakeValid(v."geom"), 3)) ELSE ST_Multi(v."geom") END AS "geom_fixed"`,
-  `FROM (SELECT p.*, (p."geom" IS NOT NULL AND NOT ST_IsValid(p."geom")) AS "was_invalid" FROM ${q(CTE.PRE_GROUPED)} AS p) AS v`,
+  `SELECT v.*, ${repairedGeometrySql('v."geom"', 'v."was_invalid"')} AS "geom_fixed"`,
+  `FROM (SELECT p.*, ${wasInvalidSql('p."geom"')} AS "was_invalid" FROM ${q(CTE.PRE_GROUPED)} AS p) AS v`,
 ].join(" ");
 
 const GROUPED_SQL = [
@@ -69,7 +70,7 @@ const GROUPED_SQL = [
   `GROUP BY f."nomdepto", f."coddepto", f."localidad", f."nomloccat", f."codloccat", f."nomofidel", f."geom_fixed"`,
 ].join(" ");
 
-const USABLE_GEOMETRY = `COALESCE(g."geom" IS NOT NULL AND NOT ST_IsEmpty(g."geom") AND ST_GeometryType(g."geom") = 'ST_MultiPolygon', false)`;
+const USABLE_GEOMETRY = usableGeometrySql('g."geom"');
 
 const LOCATED_SQL = [
   `SELECT g.*, pn."matches", CASE WHEN pn."matches" = 1 THEN pn."id" END AS "id_province",`,

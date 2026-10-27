@@ -33,7 +33,7 @@ interface Scenario {
   commitFails?: boolean;
 }
 
-const column = (name: string, dataType: string, overrides: Partial<DbColumnMetadata> = {}): DbColumnMetadata => ({
+const column = (name: string, dataType: string, overrides: Partial<DbColumnMetadata> = {}): Row => ({
   column_name: name,
   data_type: dataType,
   is_nullable: true,
@@ -41,7 +41,7 @@ const column = (name: string, dataType: string, overrides: Partial<DbColumnMetad
   ...overrides,
 });
 
-const CATALOGS: Record<string, DbColumnMetadata[]> = {
+const CATALOGS: Record<string, Row[]> = {
   [PADRON_STAGING]: [
     column("unidadcat", "text"),
     column("nomdepto", "text"),
