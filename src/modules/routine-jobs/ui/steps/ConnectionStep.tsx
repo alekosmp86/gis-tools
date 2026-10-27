@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
+import { ProfileSelect } from "@/ui-kit/components/ProfileSelect";
+import type { SavedDbProfile } from "@/core/types/db";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
@@ -12,6 +14,13 @@ import type { JobProfile } from "../jobProfileStorage";
 import styles from "./WizardSteps.module.css";
 
 const NO_PROFILE = "";
+const toSavedDbProfile = ({ name, savedAt, setup }: JobProfile): SavedDbProfile => ({
+  id: name,
+  name,
+  updatedAt: savedAt,
+  config: { host: setup.host, port: setup.port, db_name: setup.db_name, user: setup.user, schema_name: setup.schema, table_name: "" },
+});
+
 const FIELDS: ReadonlyArray<{ field: ConnectionField; label: string }> = [
   { field: "host", label: "Servidor" },
   { field: "port", label: "Puerto" },
@@ -53,21 +62,14 @@ export const ConnectionStep: React.FC<ConnectionStepProps> = ({
   return (
     <div className={styles.stack}>
       <div className={styles.row}>
-        <label className={styles.field}>
+        <div className={styles.field}>
           <span>Perfil guardado</span>
-          <select
-            className={styles.select}
-            value={activeProfile}
-            onChange={(event) => onSelectProfile(event.target.value)}
-          >
-            <option value={NO_PROFILE}>Nuevo perfil (sin cargar)</option>
-            {profiles.map((profile) => (
-              <option key={profile.name} value={profile.name}>
-                {profile.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <ProfileSelect
+            profiles={profiles.map(toSavedDbProfile)}
+            activeProfileId={activeProfile}
+            onSelectProfile={onSelectProfile}
+          />
+        </div>
         {activeProfile !== NO_PROFILE && (
           <Button variant={ButtonVariant.SECONDARY} onClick={() => onDeleteProfile(activeProfile)}>
             <Trash2 size={15} />

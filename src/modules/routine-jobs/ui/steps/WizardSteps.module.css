@@ -33,15 +33,6 @@
   flex: 1;
 }
 
-.select {
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  background: transparent;
-  color: inherit;
-  font-size: 13px;
-}
-
 .checkRow {
   display: flex;
   align-items: flex-start;

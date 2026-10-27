@@ -87,11 +87,11 @@ describe("ConnectionStep", () => {
   });
 
   describe("profiles", () => {
-    it("AC-32: should list every saved profile by name", () => {
+    it("AC-32: should show the active saved profile in the shared profile selector", () => {
       const html = render({ profiles: [profileOf("Mensual dev"), profileOf("Mensual preprod")], activeProfile: "Mensual dev" });
 
+      expect(html).toContain("Cargar perfil guardado");
       expect(html).toContain("Mensual dev");
-      expect(html).toContain("Mensual preprod");
     });
 
     it("AC-32: should offer the profile controls with an empty profile list", () => {
@@ -104,9 +104,8 @@ describe("ConnectionStep", () => {
     it("AC-32: should render a long profile list", () => {
       const profiles = Array.from({ length: 60 }, (_, index) => profileOf(`Perfil ${String(index).padStart(2, "0")}`));
 
-      const html = render({ profiles });
+      const html = render({ profiles, activeProfile: "Perfil 59" });
 
-      expect(html).toContain("Perfil 00");
       expect(html).toContain("Perfil 59");
     });
 
