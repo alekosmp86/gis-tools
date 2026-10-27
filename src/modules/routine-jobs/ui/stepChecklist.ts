@@ -1,5 +1,8 @@
 import { plannedStepLabels, STEP, type StepLabel } from "../jobs/cargar-padrones/domain/plannedSteps";
-import { CargarPadronesRunPhase, type CargarPadronesRunPlan } from "./cargarPadronesRunStore";
+import { plannedStepLabels as actualizarPlannedStepLabels } from "../jobs/actualizar-padron/domain/plannedSteps";
+import type { CargarPadronesRunPlan } from "./cargarPadronesRunStore";
+import type { ActualizarPadronRunPlan } from "./actualizarPadronRunStore";
+import { RunPhase } from "./jobRunStore";
 
 const STEP_LABEL_VALUES: ReadonlySet<string> = new Set<string>(Object.values(STEP));
 
@@ -35,42 +38,47 @@ export interface ChecklistRow {
 export interface StepChecklistInput {
   plannedLabels: readonly string[];
   currentLabel: string | null;
-  phase: CargarPadronesRunPhase;
+  phase: RunPhase;
 }
+
+export type RunPlan = CargarPadronesRunPlan | ActualizarPadronRunPlan;
 
 export interface PlannedLabelsSource {
   steps?: readonly string[];
-  plan?: CargarPadronesRunPlan;
+  plan?: RunPlan;
 }
 
 const isStepLabel = (label: string): label is StepLabel => STEP_LABEL_VALUES.has(label);
 
 const uiLabelOf = (label: string): string => (isStepLabel(label) ? STEP_UI_LABEL[label] : label);
 
+const labelsOfPlan = (plan: RunPlan): readonly string[] =>
+  "clearMode" in plan ? actualizarPlannedStepLabels(plan) : plannedStepLabels(plan);
+
 export function resolvePlannedLabels({ steps, plan }: PlannedLabelsSource): readonly string[] {
   if (steps && steps.length > 0) return steps;
-  return plan ? plannedStepLabels(plan) : [];
+  return plan ? labelsOfPlan(plan) : [];
 }
 
-function activeStatusOf(phase: CargarPadronesRunPhase): ChecklistStatus {
+function activeStatusOf(phase: RunPhase): ChecklistStatus {
   switch (phase) {
-    case CargarPadronesRunPhase.FAILED:
+    case RunPhase.FAILED:
       return ChecklistStatus.FAILED;
-    case CargarPadronesRunPhase.UNKNOWN:
+    case RunPhase.UNKNOWN:
       return ChecklistStatus.UNKNOWN;
     default:
       return ChecklistStatus.CURRENT;
   }
 }
 
-function statusAtIndex(index: number, currentIndex: number, phase: CargarPadronesRunPhase): ChecklistStatus {
+function statusAtIndex(index: number, currentIndex: number, phase: RunPhase): ChecklistStatus {
   if (index < currentIndex) return ChecklistStatus.DONE;
   if (index === currentIndex) return activeStatusOf(phase);
   return ChecklistStatus.PENDING;
 }
 
 export function buildStepChecklist({ plannedLabels, currentLabel, phase }: StepChecklistInput): ChecklistRow[] {
-  if (phase === CargarPadronesRunPhase.DONE) {
+  if (phase === RunPhase.DONE) {
     return plannedLabels.map((label) => ({ label: uiLabelOf(label), status: ChecklistStatus.DONE }));
   }
   const currentIndex = currentLabel === null ? -1 : plannedLabels.findIndex((label) => label === currentLabel);

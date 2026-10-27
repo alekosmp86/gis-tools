@@ -110,7 +110,7 @@ const isValidPort = (value: string): boolean => {
   return port >= PORT_MIN && port <= PORT_MAX;
 };
 
-function connectionBlockingReason(connection: ClientConnection): string | null {
+export function connectionBlockingReason(connection: ClientConnection): string | null {
   if (isBlank(connection.host)) return MESSAGES.host;
   if (!isValidPort(connection.port)) return MESSAGES.port;
   if (isBlank(connection.db_name)) return MESSAGES.database;

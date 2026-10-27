@@ -1,4 +1,5 @@
 import type { SafeDbConfig, SavedDbProfile } from "@/core/types/db";
+import type { ClientConnection } from "./clientTypes";
 
 const CONNECTION_FIELDS = ["host", "port", "db_name", "user"] as const;
 
@@ -38,4 +39,14 @@ export function toConnectionProfiles(profiles: ReadonlyArray<SavedDbProfile>): S
   }
 
   return connectionProfiles;
+}
+
+export function trimConnection(connection: ClientConnection): ClientConnection {
+  return {
+    host: connection.host.trim(),
+    port: connection.port.trim(),
+    db_name: connection.db_name.trim(),
+    user: connection.user.trim(),
+    password: connection.password,
+  };
 }

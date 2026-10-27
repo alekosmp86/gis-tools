@@ -1,12 +1,15 @@
 import type { ResolvedColumn, TableListing } from "@/core/types/tableCatalog";
 import type { TableRole } from "../jobs/cargar-padrones/constants";
-import type { ClientConnection, JobStatusView, StartRequest } from "./clientTypes";
+import type { ActualizarTableRole } from "../jobs/actualizar-padron/constants";
+import type { ActualizarJobStatusView, ActualizarStartRequest, ClientConnection, JobStatusView, StartRequest } from "./clientTypes";
 
 const BASE_ROUTE = "/api/m/routine-jobs";
 const CATALOG_TABLES_ROUTE = `${BASE_ROUTE}/catalog/tables`;
 const CATALOG_COLUMNS_ROUTE = `${BASE_ROUTE}/catalog/columns`;
 const START_ROUTE = `${BASE_ROUTE}/cargar-padrones/start`;
 const STATUS_ROUTE = `${BASE_ROUTE}/cargar-padrones/status`;
+const ACTUALIZAR_START_ROUTE = `${BASE_ROUTE}/actualizar-padron/start`;
+const ACTUALIZAR_STATUS_ROUTE = `${BASE_ROUTE}/actualizar-padron/status`;
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const NETWORK_MESSAGE = "No se pudo conectar con el servidor.";
 const INVALID_RESPONSE_MESSAGE = "El servidor devolvió una respuesta no válida.";
@@ -17,6 +20,8 @@ const STATUS_TIMEOUT_MESSAGE = "La consulta del estado tardó demasiado tiempo. 
 
 type JsonRecord = Record<string, unknown>;
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+export type ColumnRole = TableRole | ActualizarTableRole;
 
 export interface RoutineJobsClientDeps {
   fetch?: FetchLike;
@@ -30,14 +35,11 @@ export interface StartResult {
 
 export interface RoutineJobsClient {
   listTables(connection: ClientConnection, schema: string): Promise<TableListing>;
-  listColumns(
-    connection: ClientConnection,
-    schema: string,
-    table: string,
-    role: TableRole,
-  ): Promise<ResolvedColumn[]>;
+  listColumns(connection: ClientConnection, schema: string, table: string, role: ColumnRole): Promise<ResolvedColumn[]>;
   start(request: StartRequest): Promise<StartResult>;
   readStatus(jobId: string): Promise<JobStatusView>;
+  startActualizar(request: ActualizarStartRequest): Promise<StartResult>;
+  readActualizarStatus(jobId: string): Promise<ActualizarJobStatusView>;
 }
 
 export class RoutineJobsApiError extends Error {
@@ -105,10 +107,44 @@ function invalidResponse(): RoutineJobsApiError {
   return new RoutineJobsApiError(INVALID_RESPONSE_MESSAGE, NO_RESPONSE_STATUS);
 }
 
+async function postStart(fetchImpl: FetchLike, route: string, request: unknown): Promise<StartResult> {
+  const payload = await postJson(fetchImpl, route, request);
+  if (typeof payload.jobId !== "string") throw invalidResponse();
+  return { jobId: payload.jobId };
+}
+
+interface TimerDeps {
+  setTimer: (callback: () => void, ms: number) => unknown;
+  clearTimer: (handle: unknown) => void;
+}
+
+/** Reads one job status with a short timeout; the timer aborts the request and is always cleared. */
+async function readJobStatus<Job>(fetchImpl: FetchLike, timers: TimerDeps, route: string, jobId: string): Promise<Job> {
+  const url = `${route}?jobId=${encodeURIComponent(jobId)}`;
+  const controller = new AbortController();
+  let timedOut = false;
+  const handle = timers.setTimer(() => {
+    timedOut = true;
+    controller.abort();
+  }, STATUS_TIMEOUT_MS);
+  try {
+    const payload = await readPayload(await send(fetchImpl, url, { signal: controller.signal }));
+    if (!isRecord(payload.job)) throw invalidResponse();
+    return payload.job as unknown as Job;
+  } catch (error: unknown) {
+    if (timedOut) throw new RoutineJobsApiError(STATUS_TIMEOUT_MESSAGE, NO_RESPONSE_STATUS);
+    throw error;
+  } finally {
+    timers.clearTimer(handle);
+  }
+}
+
 export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): RoutineJobsClient {
   const fetchImpl = deps.fetch ?? defaultFetch;
-  const setTimer = deps.setTimer ?? defaultSetTimer;
-  const clearTimer = deps.clearTimer ?? defaultClearTimer;
+  const timers: TimerDeps = {
+    setTimer: deps.setTimer ?? defaultSetTimer,
+    clearTimer: deps.clearTimer ?? defaultClearTimer,
+  };
 
   return {
     async listTables(connection, schema) {
@@ -123,30 +159,13 @@ export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): Routi
       return payload.columns as ResolvedColumn[];
     },
 
-    async start(request) {
-      const payload = await postJson(fetchImpl, START_ROUTE, request);
-      if (typeof payload.jobId !== "string") throw invalidResponse();
-      return { jobId: payload.jobId };
-    },
+    start: (request) => postStart(fetchImpl, START_ROUTE, request),
 
-    async readStatus(jobId) {
-      const url = `${STATUS_ROUTE}?jobId=${encodeURIComponent(jobId)}`;
-      const controller = new AbortController();
-      let timedOut = false;
-      const handle = setTimer(() => {
-        timedOut = true;
-        controller.abort();
-      }, STATUS_TIMEOUT_MS);
-      try {
-        const payload = await readPayload(await send(fetchImpl, url, { signal: controller.signal }));
-        if (!isRecord(payload.job)) throw invalidResponse();
-        return payload.job as unknown as JobStatusView;
-      } catch (error: unknown) {
-        if (timedOut) throw new RoutineJobsApiError(STATUS_TIMEOUT_MESSAGE, NO_RESPONSE_STATUS);
-        throw error;
-      } finally {
-        clearTimer(handle);
-      }
-    },
+    readStatus: (jobId) => readJobStatus<JobStatusView>(fetchImpl, timers, STATUS_ROUTE, jobId),
+
+    startActualizar: (request) => postStart(fetchImpl, ACTUALIZAR_START_ROUTE, request),
+
+    readActualizarStatus: (jobId) =>
+      readJobStatus<ActualizarJobStatusView>(fetchImpl, timers, ACTUALIZAR_STATUS_ROUTE, jobId),
   };
 }

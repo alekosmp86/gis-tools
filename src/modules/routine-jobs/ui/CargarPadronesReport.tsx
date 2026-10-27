@@ -6,8 +6,9 @@ import {
   buildReportView,
   type CargarPadronesReportView,
   type ReportBannerKind,
-  type ReportRow,
 } from "./cargarPadronesReportView";
+import { DataTable } from "./DataTable";
+import { ReportRowList } from "./ReportRowList";
 import styles from "./CargarPadronesReport.module.css";
 
 const BANNER_CLASS: Record<ReportBannerKind, string> = {
@@ -24,43 +25,20 @@ const countText = (value: string | number | null): string => (value === null ? E
 
 const secondsText = (seconds: number): string => `${seconds.toFixed(DECIMAL_PLACES).replace(".", ",")} ${SECONDS_SUFFIX}`;
 
-function RowList({ rows }: { rows: ReportRow[] }) {
-  return (
-    <dl className={styles.rows}>
-      {rows.map((row) => (
-        <div key={row.label} className={styles.row}>
-          <dt>{row.label}</dt>
-          <dd>{row.value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 function ConflictSamples({ view }: { view: CargarPadronesReportView }) {
   return (
     <section className={styles.section}>
       <h3 className={styles.sectionTitle}>Conflictos de atributos</h3>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Tipo</th>
-            <th>Clave</th>
-            <th>Columna</th>
-            <th>Valores</th>
+      <DataTable headers={["Tipo", "Clave", "Columna", "Valores"]}>
+        {view.conflictSamples.map((sample) => (
+          <tr key={`${sample.unit}-${sample.key}-${sample.column}`}>
+            <td>{sample.unit === "rural" ? "Rural" : "Urbano"}</td>
+            <td>{sample.key}</td>
+            <td>{sample.column}</td>
+            <td>{sample.values.join(" / ")}</td>
           </tr>
-        </thead>
-        <tbody>
-          {view.conflictSamples.map((sample) => (
-            <tr key={`${sample.unit}-${sample.key}-${sample.column}`}>
-              <td>{sample.unit === "rural" ? "Rural" : "Urbano"}</td>
-              <td>{sample.key}</td>
-              <td>{sample.column}</td>
-              <td>{sample.values.join(" / ")}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        ))}
+      </DataTable>
       {view.moreConflicts > 0 && <p className={styles.hint}>{`y ${view.moreConflicts} más`}</p>}
     </section>
   );
@@ -98,15 +76,15 @@ export const CargarPadronesReport: React.FC<CargarPadronesReportProps> = ({ resu
       <div className={styles.columns}>
         <section className={styles.section}>
           <h3 className={styles.sectionTitle}>Rural</h3>
-          <RowList rows={view.rural} />
+          <ReportRowList rows={view.rural} />
         </section>
         <section className={styles.section}>
           <h3 className={styles.sectionTitle}>Urbano</h3>
-          <RowList rows={view.urbano} />
+          <ReportRowList rows={view.urbano} />
         </section>
         <section className={styles.section}>
           <h3 className={styles.sectionTitle}>Totales</h3>
-          <RowList rows={view.totals} />
+          <ReportRowList rows={view.totals} />
         </section>
       </div>
 

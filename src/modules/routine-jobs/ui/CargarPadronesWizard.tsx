@@ -26,8 +26,8 @@ import {
   type CargarPadronesRunSnapshot,
   type CargarPadronesRunStore,
 } from "./cargarPadronesRunStore";
-import type { ClientConnection, StartRequest } from "./clientTypes";
-import { changedConnectionFields } from "./connectionProfiles";
+import type { StartRequest } from "./clientTypes";
+import { changedConnectionFields, trimConnection } from "./connectionProfiles";
 import { useConnectionProfiles } from "./useConnectionProfiles";
 import { buildWizardSteps, excludedFor, stepIdOf, stepOfId } from "./wizardSteps";
 import { catalogKey } from "./schemaDraft";
@@ -56,14 +56,6 @@ const client = createRoutineJobsClient();
 const getIdleSnapshot = (): CargarPadronesRunSnapshot => IDLE_SNAPSHOT;
 const seedFromStore = (store: CargarPadronesRunStore): WizardState => initialWizardStateFor(store.getSnapshot());
 
-const trimmedConnection = (connection: ClientConnection): ClientConnection => ({
-  host: connection.host.trim(),
-  port: connection.port.trim(),
-  db_name: connection.db_name.trim(),
-  user: connection.user.trim(),
-  password: connection.password,
-});
-
 export const CargarPadronesWizard: React.FC = () => {
   const [runStore] = useState(getCargarPadronesRunStore);
   const [state, dispatch] = useReducer(wizardReducer, runStore, seedFromStore);
@@ -89,14 +81,14 @@ export const CargarPadronesWizard: React.FC = () => {
   }, [isRunActive]);
 
   const { connection } = state;
-  const requestConnection = trimmedConnection(connection);
+  const requestConnection = trimConnection(connection);
   const schema = state.schema.trim();
   const loadTables = useMemo(() => {
-    const shared = buildSharedLoadTables(client, trimmedConnection(connection));
+    const shared = buildSharedLoadTables(client, trimConnection(connection));
     return (listedSchema: string) =>
       shared(listedSchema).then((listing) => {
         setCatalogFailures((previous) =>
-          clearCatalogFailure(previous, catalogKey(trimmedConnection(connection), listedSchema.trim())),
+          clearCatalogFailure(previous, catalogKey(trimConnection(connection), listedSchema.trim())),
         );
         return listing;
       });

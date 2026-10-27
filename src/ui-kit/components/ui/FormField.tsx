@@ -6,7 +6,7 @@ export interface FormFieldProps {
   label: string;
   icon?: React.ElementType;
   type?: "text" | "password" | "number" | "email";
-  value: string;
+  value?: string;
   onChange: (value: string) => void;
   placeholder?: string;
   maxLength?: number;

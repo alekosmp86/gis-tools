@@ -2,8 +2,8 @@
 
 import React from "react";
 import { Check, Circle, CircleX, Loader2, TriangleAlert } from "lucide-react";
-import { buildStepChecklist, ChecklistStatus, resolvePlannedLabels, type ChecklistRow } from "../stepChecklist";
-import type { CargarPadronesRunPhase, CargarPadronesRunPlan } from "../cargarPadronesRunStore";
+import { buildStepChecklist, ChecklistStatus, resolvePlannedLabels, type ChecklistRow, type RunPlan } from "../stepChecklist";
+import type { RunPhase } from "../jobRunStore";
 import styles from "./WizardSteps.module.css";
 
 const CHECKLIST_LABEL = "Pasos de la carga";
@@ -35,10 +35,10 @@ const ITEM_CLASS: Record<ChecklistStatus, string> = {
 };
 
 export interface RunStepChecklistProps {
-  plan?: CargarPadronesRunPlan;
+  plan?: RunPlan;
   steps?: readonly string[];
   currentLabel: string | null;
-  phase: CargarPadronesRunPhase;
+  phase: RunPhase;
 }
 
 function ChecklistItem({ row }: { row: ChecklistRow }) {
