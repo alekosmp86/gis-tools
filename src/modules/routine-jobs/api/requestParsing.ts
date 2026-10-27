@@ -12,6 +12,10 @@ import {
 import type { LoadOptions } from "../jobs/cargar-padrones/domain/loadSql";
 import { CONFIRM_REQUIRED_MESSAGE } from "../jobs/cargar-padrones/services/preflight";
 import { DISTINCT_TABLES_MESSAGE } from "../jobs/cargar-padrones/services/resolveLayouts";
+import {
+  LOCALIDADES_REQUIRED_COLUMNS_BY_ROLE,
+  type LocalidadesTableRole,
+} from "../jobs/cargar-localidades/constants";
 import type { PgRunConnection } from "../jobs/cargar-padrones/services/openPgSession";
 import type { CargarPadronesParams } from "../jobs/cargar-padrones/types";
 
@@ -26,7 +30,7 @@ export interface CatalogRequest {
   schema: string;
 }
 
-export type ColumnsRole = TableRole | ActualizarTableRole;
+export type ColumnsRole = TableRole | ActualizarTableRole | LocalidadesTableRole;
 
 export interface ColumnsRequest extends CatalogRequest {
   table: string;
@@ -40,6 +44,7 @@ const DIGITS_PATTERN = /^\d+$/;
 const COLUMNS_BY_ROLE: Readonly<Record<string, readonly string[]>> = {
   ...REQUIRED_COLUMNS_BY_ROLE,
   ...ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE,
+  ...LOCALIDADES_REQUIRED_COLUMNS_BY_ROLE,
 };
 const ROLE_NAMES: readonly string[] = Object.keys(COLUMNS_BY_ROLE);
 const CLEAR_MODES: readonly string[] = Object.values(CLEAR_MODE);

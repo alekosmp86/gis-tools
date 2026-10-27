@@ -17,8 +17,8 @@ This job reproduces both inserts, faithfully, with the safety rules below. Lines
   2. **"Cargar localidades" (this job)** fills or maintains the locality tables that the script writes.
   3. The user's EXTERNAL process refreshes `carto.territorial_unit` from `carto.cadastral_locality`. Not part of this module.
   4. "Actualizar padrones de carto" resolves padron localities against `territorial_unit`.
-- The job maintains the two locality tables independently, for the same source set: the BDJ locality table (dev
-  `bdj_carto.cadastral_locality`) and the carto locality table (dev `carto.cadastral_locality`). Both are chosen in the wizard; no table or
+- The job maintains one or two locality tables for the same source set. The user picks them in the wizard, each with its own schema
+  (typically dev `bdj_carto.cadastral_locality` and `carto.cadastral_locality`); the same logic applies to each chosen target. No table or
   schema name is a literal in SQL or API defaults.
 - The job never creates provinces, padrones, `territorial_unit` rows or URNs. It never deletes localities.
 
@@ -32,9 +32,9 @@ and are passed as bound parameters or constants.
 ## Domain constants
 
 - `FONT_TYPE_ID = 4` (constants file of the job). The script writes the literal `4` into `id_font_type` (line 63 and line 84). It is a
-  documented domain constant, not an option. Preflight does not check `font_type` (Open questions).
+  documented domain constant, not an option. No `font_type` table is part of the request, so preflight does not check it (Open questions).
 - `SNAP_GRID_M = 0.001` (grid for the geometry comparison, CL-27). To be confirmed against the manual comparison (Open questions).
-- Default tolerance `1.0` m (CL-26).
+- Default tolerance `1.0` m (CL-26); the request carries it explicitly in `options.tolerance`.
 
 ## Layering (module_authoring.md)
 
@@ -92,22 +92,23 @@ and are passed as bound parameters or constants.
 
 ## Targets, catalog and table selection
 
-- CL-1: Two target tables, each with its own schema field: the BDJ locality table (`bdjSchema`, dev `bdj_carto.cadastral_locality`) and the
-  carto locality table (`cartoSchema`, dev `carto.cadastral_locality`). Both are written by the same run in the same transaction (CL-25).
+- CL-1: Targets are a list `targets` of one or two `{ schema, table }` entries, chosen by the user (typically `bdj_carto.cadastral_locality`
+  and `carto.cadastral_locality`). Each target has its own schema. Every target gets the same classification and writes, all in the same
+  transaction (CL-25). Zero or more than two targets, or two equal `schema.table` targets, answer `400`.
 - CL-2: Target logical columns, resolved per AC-2 of Cargar padrones: `id`, `code`, `name`, `geometry`, `id_font_type`, `id_province`.
   `id` is required to report the ids of the inserted rows (CL-37); the job never writes it.
-- CL-3: The five selected tables (padron staging, localities staging, province, carto target, BDJ target) must be distinct as `schema.table`.
-  A repetition answers `400` in Spanish naming both tables; no lock is taken and no query writes. A target is never a source.
-- CL-4: `POST catalog/columns` accepts five new roles in addition to the existing ones: `localidades-staging-padron`,
-  `localidades-staging-localidad`, `localidades-provincia`, `localidades-destino-carto`, `localidades-destino-bdj`. Unknown role -> `400
-  { success:false, error }` in Spanish. Existing roles are unchanged.
-- CL-5: Required logical columns per role (taken from the job constants, never from the request):
+- CL-3: The selected tables (padron staging, localities staging, province, and each target) must be distinct as `schema.table`. A repetition
+  answers `400` in Spanish naming both tables; no lock is taken and no query writes. A target is never a source.
+- CL-4: `POST catalog/columns` accepts four new roles in addition to the existing ones: `localidades-staging-padron`,
+  `localidades-staging-localidad`, `localidades-provincia`, `localidades-destino` (one role for every target, since targets are chosen by
+  the user). Unknown role -> `400 { success:false, error }` in Spanish. Existing roles are unchanged.
+- CL-5: Required logical columns per role (taken from the job constants, never from the request). The padron and localities staging
+  tables share one schema (`stagingSchema`); the province table has its own schema (`provinceSchema`):
   - `localidades-staging-padron` (`stagingSchema`): `unidadcat`, `nomdepto`, `coddepto`, `nomofidel`, `nomloccat`, `codloccat`, `padron`.
     `padron` is in the user's selection but is not referenced by lines 60-101 (Open questions).
   - `localidades-staging-localidad` (`stagingSchema`): `localidad`, `coddepto`, `geom`.
   - `localidades-provincia` (`cartoSchema`): `id`, `name`.
-  - `localidades-destino-carto` (`cartoSchema`) and `localidades-destino-bdj` (`bdjSchema`): `id`, `code`, `name`, `geometry`,
-    `id_font_type`, `id_province`.
+  - `localidades-destino` (the schema of each target): `id`, `code`, `name`, `geometry`, `id_font_type`, `id_province`.
 - CL-6: Missing or ambiguous required columns of any selected role are reported in Spanish on the Tables step and at `start` (AC-3 and
   AC-4 of Cargar padrones). A selection with unresolved required columns cannot be started.
 
@@ -167,49 +168,55 @@ and are passed as bound parameters or constants.
 - CL-28: `dryRun` performs the whole run (CL-19 to CL-26, the INSERTs and UPDATEs, the ANALYZE and the report), then `ROLLBACK`. The report
   carries `targetsModified: false`. A dry run consumes `nextval` values of the target id sequences (CL-29).
 - CL-29: A real run performs the same, then `COMMIT`; `targetsModified: true` is reported only when the commit succeeded. In both modes no
-  row of the staging, province, padron or any table other than the two targets is written.
-  Sequences: the job never calls `setval` and never resets a sequence. `nextval` is not transactional, so ids consumed by a dry run or by a
-  rolled-back real run are lost (gaps). This is documented and harmless for uniqueness. If a target sequence is behind `max(id)`, the
-  INSERT fails with a unique violation: the run rolls back and the Spanish error names the table and suggests checking its id sequence (no
-  automatic reset in this version).
+  row of the staging, province, padron or any table other than the targets is written.
+  Sequences (user delta, replaces the former "never calls setval"): step "Ajustar secuencias de destino" runs before the applies, for every
+  target, the core repair statement (`setval` to `max(id) + 1` or to the sequence's own next value, whichever is greater). It only raises a
+  sequence; it never resets it and never renumbers ids. The id sequence must exist (preflight, CL-10) and the role needs `UPDATE` on it.
+  `setval` and `nextval` are not transactional, so values consumed by a dry run or by a rolled-back real run stay consumed (gaps). This is
+  harmless for uniqueness. No sequence reset option exists in this version.
 - CL-30: A real run needs `confirm: true`, the password again, and the carto target table name typed again in the wizard (CL-47). The option
   "Actualizar geometrías" (`updateGeometries`, default ON) turns off the geometry UPDATE only; the INSERTs still run in a real run.
 - CL-31: Any failure before `COMMIT` rolls back both targets: both are left as they were before the run. A `COMMIT` that throws gives
   `outcomeUnknown: true`; the UI asks the user to verify both target tables before retrying (AC-21 of Cargar padrones).
-- CL-32: The per-target lock is keyed on the carto target table only: `host:port|db|cartoSchema|cartoTable` (host trimmed and lowercased,
-  port normalised, as AC-24 of Cargar padrones). A second run on the same carto target answers `409`. The BDJ target is not part of the key
-  (Open questions).
+- CL-32: The per-target lock: one lock key per target, `host:port|db|schema|table` (host trimmed and lowercased, port normalised, as AC-24
+  of Cargar padrones). A job holds the keys of all its targets; a start whose targets overlap any RUNNING job's targets answers `409`.
+  The shared job store takes a list of lock keys for this (`tryStart(lockKeys, ...)`; a single string still works as before).
 
 ## Shared job store and HTTP
 
 - CL-33: The shared job store (module helper, AP-26 of Actualizar padrones) is used with namespace `cargar-localidades`: the lock key is
   `cargar-localidades|<lockKey>`, so it never collides with another job's key. `tryStart`, `progress`, `finish`, `fail`, `get`,
   `sweep(maxAgeMs)` as AC-26 of Cargar padrones; the lock is always released, and a background throw marks the job FAILED.
-- CL-34: `POST cargar-localidades/start` body = `{ connection, stagingSchema, padronTable, localityStagingTable, cartoSchema, provinceTable,
-  cartoLocalityTable, bdjSchema, bdjLocalityTable, options: { tolerance, updateGeometries }, dryRun, confirm }`. Validated (CL-4 to CL-10,
-  booleans, tolerance, `options` shape). Answers `200 { success, jobId }` at once; the run continues in the background.
+- CL-34: `POST cargar-localidades/start` body = `{ connection, stagingSchema, padronTable, localityStagingTable, provinceSchema,
+  provinceTable, targets: [{ schema, table }], options: { tolerance, updateGeometries }, dryRun, confirm }`. `tolerance` is a finite number
+  `>= 0` and `updateGeometries` a boolean, both required. Validated (CL-4 to CL-10, booleans, tolerance, `options` shape, 1 to 2 targets).
+  Answers `200 { success, jobId }` at once; the run continues in the background.
   Errors: `400` for an invalid body, repeated tables (CL-3), missing or ambiguous columns (CL-6), a failed preflight (CL-7 to CL-10), or a real
-  run without `confirm`; `409` with `Ya hay una carga de localidades en curso para esta tabla.` when a job is RUNNING for the same carto target.
+  run without `confirm`; `409` with `Ya hay una carga de localidades en curso para esta tabla.` when a job is RUNNING for any of the targets.
 - CL-35: `GET cargar-localidades/status?jobId=...` -> `200 { success, job }` with `{ jobId, state, step, current, total, dryRun, startedAt,
   finishedAt, result?, error?, outcomeUnknown? }` as AC-25 of Cargar padrones. `400` without `jobId`, `404` for an unknown id. Passwords
   are scrubbed from every field.
-- CL-36: `plannedStepLabels({ dryRun })` is a pure function returning the Spanish step labels for the checklist; the server sends them in the
-  status. `runCargarLocalidades` calls `onProgress({ label, current, total })` once per step, in order, 1-based; a throwing `onProgress` never
-  fails the run. A real run ends with the step "confirmar cambios"; a dry run ends with "revertir cambios". The labels do not depend on
-  `updateGeometries`. Planned steps: validar tablas y columnas; validar tablas de destino; contar filas de origen; resolver provincias y
-  localidades; clasificar localidades (BDJ); clasificar localidades (carto); aplicar cambios en tabla BDJ; aplicar cambios en tabla carto;
-  analizar tablas de destino; generar informe; confirmar cambios (real run) or revertir cambios (dry run).
+- CL-36: `plannedStepLabels({ dryRun, tables })` is a pure function returning the Spanish step labels for the checklist; the server sends
+  them in the status. `runCargarLocalidades` calls `onProgress({ label, current, total })` once per step, in order, 1-based; a throwing
+  `onProgress` never fails the run. A real run ends with the step "Confirmar cambios"; a dry run ends with "Revertir cambios de la
+  simulación". The labels do not depend on `updateGeometries`. Planned steps, in order (user delta: targets are generic, so the per-target
+  steps carry the table label; the sequence step is added):
+  validar tablas y columnas; validar tablas de destino; contar filas de origen; resolver provincias y localidades;
+  clasificar localidades: <table> (one per target); ajustar secuencias de destino; aplicar cambios: <table> (one per target);
+  analizar tablas de destino; generar informe; confirmar cambios (real run) or revertir cambios de la simulación (dry run).
 
 ## Report
 
-- CL-37: Report, built after the ANALYZE and returned in the job result. Totals: source rows read ("filas leídas", before grouping), grouped
-  source rows, candidates, repaired geometries, skipped candidates by reason.
-  Per target (`bdj`, `carto`):
+- CL-37: Report, built after the ANALYZE and returned in the job result. Totals: source rows read ("filas leídas" = rows of the INNER JOIN
+  before grouping), grouped source rows ("filas de origen"), repaired geometries (grouped rows whose geometry was invalid), distinct
+  accepted candidates, and skipped rows by reason. Skip counts are per grouped source row, each row counted once under its first reason;
+  `CLAVE_DUPLICADA` applies to every grouped row of a key that has more than one distinct candidate.
+  Per target (`table` = `schema.table` label; one entry per chosen target):
   - `inserted` (count) and `insertedList`: all inserted localities with `id`, name and department (capped at 500 with a warning if there are more);
-  - `updated` (CHANGED count) and `updateApplied` (boolean);
+  - `updated` (CHANGED count) and `updateApplied` (boolean); `changed` (CHANGED count, also when not applied);
   - `unchanged` (equal after CL-26 step 1) and `unchangedWithinTolerance`;
   - `missing` (count) with up to 20 sample keys;
-  - `ambiguous` (target keys with several rows) with up to 20 samples;
+  - `ambiguous` (candidate keys whose target key has several rows) with up to 20 samples;
   - `codeDiffers` (existing rows whose `code` differs from the candidate code; informational, nothing is changed) with up to 20 samples;
   - `geometryChanges`: top 20 CHANGED rows by distance, each with key (department, name), distance in metres and area ratio.
   Skipped candidates / source rows: `skipped.byReason` with all five reasons (`PROVINCIA_NO_ENCONTRADA`, `PROVINCIA_AMBIGUA`, `SIN_GEOMETRIA`,
@@ -217,9 +224,12 @@ and are passed as bound parameters or constants.
 - CL-38: Step timings (elapsed ms per planned step, CL-36), warnings in Spanish (skipped rows present, repaired geometries present, ambiguous
   targets present, MISSING present, geometry changes present, option off, dry run: targets not modified / outcome unknown), `targetsModified`,
   and `outcomeUnknown` when set.
-- CL-39: The report is built with a set-based classification chain, computed once (PostgreSQL 11 materializes each CTE): the source set, the
-  candidates and the classification per target are each one statement; the report reads them in one statement. No row-by-row loop and no
-  per-row round trip. Every report field is capped (20 samples, top 20, the 500 cap of CL-37), so the status payload is bounded.
+- CL-39: The report is built with set-based statements, no row-by-row loop and no per-row round trip. Each target has two statements that
+  share the same source chain (PostgreSQL 11 materializes each CTE): a read-only classification statement (the report counts and samples),
+  and an apply statement (INSERT of NEW rows and, when the option is on, the UPDATE of CHANGED rows, with `RETURNING`, in one data-modifying
+  statement). Both run in the same transaction snapshot, so the apply uses the classification of that snapshot. The geometry comparison
+  therefore runs twice for CHANGED rows; the cost is measured on dev (Open questions). Every report field is capped (20 samples, top 20,
+  the 500 cap of CL-37), so the status payload is bounded.
 - CL-40: Session settings as shp-replace (`statement_timeout`, `lock_timeout`, `client_encoding = 'UTF8'`, memory settings; reuse of the exported
   helpers of `src/core/services/server/shpReplace/pgShpSession.ts` where they fit), `connect` errors scrubbed of the password, a `close()` that
   never throws, `REPEATABLE READ` (CL-25). The password never appears in logs, statuses, results or messages.
@@ -278,16 +288,21 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 1. Column `padron` of the padron staging table is in the user's selection but not referenced by lines 60-101. It is kept as a required column
    (to validate the padron staging table); drop it if it is not wanted.
 2. `FONT_TYPE_ID = 4` must exist in the target `font_type` table. Verify on dev (a foreign key would refuse the insert and roll back).
+   The preflight check for it is NOT implemented: the request has no font type table and the spec does not require the check (user
+   decision, this round). Add it only if a font type table is added to the request.
 3. The id default of the two locality tables (sequence behind `id`) must be in step with `max(id)`; verify on dev. The job does not reset it.
 4. `SNAP_GRID_M = 0.001` and the prefilter form are assumed to match the manual padron comparison; confirm the value.
-5. Lock scope: the lock key is the carto target only (decided). The BDJ target is not locked, so a concurrent run on the BDJ target alone
-   is not refused. Decide whether to key a second lock on the BDJ target as well.
+5. Lock scope: resolved (user delta): one lock key per target; a job holds all of its target keys. The lock lives in one process (the
+   shared job store), as for the other jobs.
 6. CLAVE_DUPLICADA compares codes too: two codes for one locality name in one province, even with the same geometry, make the key duplicate.
    Confirm this is wanted (the script would insert both).
 7. The `geometry` column of the targets is assumed MULTIPOLYGON or generic. Verify the typmod on dev before the first run.
-8. `statement_timeout` and the cost of ST_HausdorffDistance on the full locality set are to be measured on dev; the report returns the step timings.
+8. `statement_timeout` and the cost of ST_HausdorffDistance on the full locality set are to be measured on dev; the report returns the step timings. The geometry comparison runs twice for CHANGED rows (classification statement and apply statement, CL-39).
 9. The single-process in-memory job store (same as the existing jobs) is the lock; a second server process would not see it.
+10. A NULL geometry on an existing target row with a source candidate is classified CHANGED (distance and area ratio NULL), so the geometry is filled when the option is on. The area ratio uses `ST_MakeValid` on both sides, so a self-intersecting manual geometry does not abort the run.
 
 ## Acceptance criteria count
 
 CL-1 to CL-52 (52 criteria). CL-41 is the golden source check; CL-7 to CL-10 are the preflight checks.
+This round builds the backend and HTTP only (CL-1 to CL-41, CL-34 and CL-35). CL-42 to CL-52 (wizard, run store, report view, dashboard
+entry) are for the next round.

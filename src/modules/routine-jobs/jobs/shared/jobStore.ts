@@ -35,7 +35,7 @@ export interface JobSnapshot<Result> {
 }
 
 export interface JobStore<Result extends JobResult> {
-  tryStart(tableKey: string, dryRun?: boolean, steps?: readonly string[]): JobSnapshot<Result> | null;
+  tryStart(lockKeys: string | readonly string[], dryRun?: boolean, steps?: readonly string[]): JobSnapshot<Result> | null;
   progress(jobId: string, progress: JobProgress): void;
   finish(jobId: string, result: Result): void;
   fail(jobId: string, error: string): void;
@@ -54,8 +54,20 @@ interface RegistryHolder {
 const isStaleFinished = (job: JobSnapshot<unknown>, now: number, maxAgeMs: number): boolean =>
   job.finishedAt !== undefined && now - job.finishedAt > maxAgeMs;
 
+const keysOf = (lockKeys: string | readonly string[]): readonly string[] =>
+  typeof lockKeys === "string" ? [lockKeys] : lockKeys;
+
 export function createJobStore<Result extends JobResult>(now: Clock = Date.now): JobStore<Result> {
   const jobs = new Map<string, JobSnapshot<Result>>();
+  const lockKeysByJob = new Map<string, readonly string[]>();
+
+  const isBusyFor = (keys: readonly string[]): boolean => {
+    const requested = new Set(keys);
+    return Array.from(jobs.values()).some(
+      (job) =>
+        job.state === JobState.RUNNING && (lockKeysByJob.get(job.jobId) ?? []).some((key) => requested.has(key))
+    );
+  };
 
   const update = (jobId: string, changes: Partial<JobSnapshot<Result>>): void => {
     const job = jobs.get(jobId);
@@ -66,14 +78,12 @@ export function createJobStore<Result extends JobResult>(now: Clock = Date.now):
     update(jobId, { ...changes, finishedAt: now() });
 
   return {
-    tryStart(tableKey, dryRun = false, steps = []) {
-      const busy = Array.from(jobs.values()).some(
-        (job) => job.tableKey === tableKey && job.state === JobState.RUNNING
-      );
-      if (busy) return null;
+    tryStart(lockKeys, dryRun = false, steps = []) {
+      const keys = keysOf(lockKeys);
+      if (isBusyFor(keys)) return null;
       const job: JobSnapshot<Result> = {
         jobId: randomUUID(),
-        tableKey,
+        tableKey: keys.join(" + "),
         state: JobState.RUNNING,
         step: null,
         dryRun,
@@ -81,6 +91,7 @@ export function createJobStore<Result extends JobResult>(now: Clock = Date.now):
         startedAt: now(),
       };
       jobs.set(job.jobId, job);
+      lockKeysByJob.set(job.jobId, keys);
       return { ...job };
     },
     progress(jobId, progress) {
@@ -105,6 +116,7 @@ export function createJobStore<Result extends JobResult>(now: Clock = Date.now):
       for (const [jobId, job] of jobs) {
         if (isStaleFinished(job, now(), maxAgeMs)) {
           jobs.delete(jobId);
+          lockKeysByJob.delete(jobId);
           removed += 1;
         }
       }

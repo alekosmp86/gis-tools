@@ -5,6 +5,7 @@ import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
 import routeDeclarations from "./module.routes.json";
 import { createRoutineJobsHandlers } from "./api/handlers";
 import { createActualizarPadronHandlers } from "./api/actualizarPadronHandlers";
+import { createCargarLocalidadesHandlers } from "./api/cargarLocalidadesHandlers";
 import { RoutineJobsDashboard } from "./ui/RoutineJobsDashboard";
 import { RoutineJobsHomeCard } from "./ui/RoutineJobsHomeCard";
 
@@ -16,6 +17,7 @@ import { RoutineJobsHomeCard } from "./ui/RoutineJobsHomeCard";
  */
 const handlers = createRoutineJobsHandlers();
 const actualizarHandlers = createActualizarPadronHandlers();
+const localidadesHandlers = createCargarLocalidadesHandlers();
 
 export const routineJobsModule: AppModuleManifest = {
   id: routeDeclarations.moduleId,
@@ -30,6 +32,8 @@ export const routineJobsModule: AppModuleManifest = {
     "GET cargar-padrones/status": handlers.readCargarPadronesStatus,
     "POST actualizar-padron/start": actualizarHandlers.startActualizarPadron,
     "GET actualizar-padron/status": actualizarHandlers.readActualizarPadronStatus,
+    "POST cargar-localidades/start": localidadesHandlers.startCargarLocalidades,
+    "GET cargar-localidades/status": localidadesHandlers.readCargarLocalidadesStatus,
   }),
   pages: definePageContributions(routeDeclarations, {
     "": RoutineJobsDashboard,
