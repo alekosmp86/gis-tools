@@ -3,6 +3,7 @@ import type { LoadOptions } from "../jobs/cargar-padrones/domain/loadSql";
 import type { CargarPadronesResult } from "../jobs/cargar-padrones/types";
 import type { ActualizarPadronResult } from "../jobs/actualizar-padron/types";
 import type { CargarLocalidadesResult, LocalityOptions, LocalityTableRef } from "../jobs/cargar-localidades/types";
+import type { UnitOptions, UnitResult } from "../jobs/unidad-territorial/types";
 
 export type JobOptions = LoadOptions;
 
@@ -86,3 +87,20 @@ export interface LocalidadesStartRequest {
 }
 
 export type LocalidadesJobStatusView = JobStatusBase<CargarLocalidadesResult>;
+
+export type UnitClientOptions = UnitOptions;
+
+export interface UnidadStartRequest {
+  connection: ClientConnection;
+  localitySchema: string;
+  localityTable: string;
+  typeSchema: string;
+  typeTable: string;
+  targetSchema: string;
+  targetTable: string;
+  options: UnitClientOptions;
+  dryRun: boolean;
+  confirm: boolean;
+}
+
+export type UnidadJobStatusView = JobStatusBase<UnitResult>;

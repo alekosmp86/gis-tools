@@ -1,13 +1,13 @@
 "use client";
 
 import React from "react";
-import { DatabaseZap, Search } from "lucide-react";
+import { DatabaseZap, Search, type LucideIcon } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
-import type { LocalidadesConfirmation } from "../cargarLocalidadesWizardState";
-import { GEOMETRY_OVERWRITE_WARNING } from "../cargarLocalidadesWizardState";
+import type { LocalidadesConfirmation, LocalidadesIncludedTarget } from "../cargarLocalidadesWizardState";
+import { DESTINATION_TITLE, GEOMETRY_OVERWRITE_WARNING } from "../cargarLocalidadesWizardState";
 import type { LocalidadesStartRequest } from "../clientTypes";
 import styles from "./WizardSteps.module.css";
 
@@ -16,12 +16,13 @@ const DRY_RUN_HINT = "Analizar sin cargar cuenta y clasifica las localidades, y 
 const RUN_HINT =
   "Cargar localidades modifica las tablas de localidades destino. Hace falta escribir de nuevo la contraseña y el nombre de cada tabla destino.";
 const PASSWORD_LABEL = "Contraseña de la base de datos";
-const TYPED_TABLE_LABEL = (position: number): string => `Vuelva a escribir el nombre de la tabla destino ${position}`;
+const TYPED_TABLE_LABEL = (destinationTitle: string): string => `Vuelva a escribir el nombre de la tabla (${destinationTitle})`;
 const YES = "Sí";
 const NO = "No";
 
 export interface LocalidadesReviewStepProps {
   request: LocalidadesStartRequest;
+  targets: LocalidadesIncludedTarget[];
   confirmation: LocalidadesConfirmation;
   canDryRun: boolean;
   canRun: boolean;
@@ -32,13 +33,19 @@ export interface LocalidadesReviewStepProps {
   onRun: () => void;
 }
 
-const typedAt = (typedTables: readonly string[], index: number): string => typedTables[index] ?? "";
+const ActionLabel: React.FC<{ icon: LucideIcon; text: string }> = ({ icon: Icon, text }) => (
+  <>
+    <Icon size={15} />
+    <span>{text}</span>
+  </>
+);
 
-const withTypedAt = (typedTables: readonly string[], index: number, value: string, count: number): string[] =>
-  Array.from({ length: count }, (_slot, slotIndex) => (slotIndex === index ? value : typedAt(typedTables, slotIndex)));
+const routeOf = (source: string, target: LocalidadesIncludedTarget): string =>
+  `Lee de ${source} · Escribe en ${target.schema}.${target.table}`;
 
 export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
   request,
+  targets,
   confirmation,
   canDryRun,
   canRun,
@@ -48,8 +55,9 @@ export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
   onDryRun,
   onRun,
 }) => {
-  const { connection, options, targets } = request;
+  const { connection, options } = request;
   const blocked = busy || runBlockedReason !== null;
+  const source = `${request.stagingSchema}.${request.localityStagingTable}`;
 
   return (
     <div className={styles.stack}>
@@ -70,10 +78,10 @@ export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
         <dd>{request.provinceSchema}</dd>
         <dt>Tabla de provincias</dt>
         <dd>{request.provinceTable}</dd>
-        {targets.map((target, index) => (
-          <React.Fragment key={`${target.schema}.${target.table}`}>
-            <dt>{`Tabla de localidades destino ${index + 1}`}</dt>
-            <dd>{`${target.schema}.${target.table}`}</dd>
+        {targets.map((target) => (
+          <React.Fragment key={target.destination}>
+            <dt>{DESTINATION_TITLE[target.destination]}</dt>
+            <dd>{routeOf(source, target)}</dd>
           </React.Fragment>
         ))}
         <dt>Tolerancia (m)</dt>
@@ -86,13 +94,13 @@ export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
 
       <div className={styles.gridAligned}>
         <FormField label={PASSWORD_LABEL} type="password" onChange={(password) => onConfirmationChange({ password })} />
-        {targets.map((target, index) => (
+        {targets.map((target) => (
           <FormField
-            key={`${target.schema}.${target.table}`}
-            label={TYPED_TABLE_LABEL(index + 1)}
-            value={typedAt(confirmation.typedTables, index)}
+            key={target.destination}
+            label={TYPED_TABLE_LABEL(DESTINATION_TITLE[target.destination])}
+            value={confirmation.typedTables[target.destination]}
             onChange={(value) =>
-              onConfirmationChange({ typedTables: withTypedAt(confirmation.typedTables, index, value, targets.length) })
+              onConfirmationChange({ typedTables: { ...confirmation.typedTables, [target.destination]: value } })
             }
           />
         ))}
@@ -105,12 +113,10 @@ export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
       {runBlockedReason !== null && <AlertMessage type={AlertType.WARNING} text={runBlockedReason} />}
       <div className={styles.actions}>
         <Button variant={ButtonVariant.SECONDARY} isDisabled={blocked || !canDryRun} onClick={onDryRun}>
-          <Search size={15} />
-          <span>Analizar sin cargar</span>
+          <ActionLabel icon={Search} text="Analizar sin cargar" />
         </Button>
         <Button isDisabled={blocked || !canRun} onClick={onRun}>
-          <DatabaseZap size={15} />
-          <span>Cargar localidades</span>
+          <ActionLabel icon={DatabaseZap} text="Cargar localidades" />
         </Button>
       </div>
     </div>

@@ -13,7 +13,7 @@ const STEP_DEFS: readonly StepDef[] = [
   {
     step: LocalidadesStep.TABLES,
     title: "Tablas",
-    subtitle: "Padrones y localidades de origen, provincias y una o dos tablas de localidades destino.",
+    subtitle: "Origen, provincias y uno o dos destinos de localidades.",
     icon: Table2,
   },
   {

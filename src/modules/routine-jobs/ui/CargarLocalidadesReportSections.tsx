@@ -2,119 +2,20 @@
 
 import React from "react";
 import type { CodeDifference, GeometryChange, InsertedLocality, LocalityKey, LocalitySkippedSample } from "../jobs/cargar-localidades/types";
-import type { ReportBanner, ReportKpi, SkipReasonRow, TargetView, TimingView } from "./cargarLocalidadesReportView";
+import type { TargetView } from "./cargarLocalidadesReportView";
 import { skipReasonLabelOf } from "./cargarLocalidadesReportView";
 import { CollapsibleSection } from "./ActualizarReportSections";
-import { DataTable } from "./DataTable";
-import { keyedRowsOf } from "./keyedRows";
 import { ReportRowList } from "./ReportRowList";
+import { RowsTable, SectionTitle, type TableColumn } from "./ReportParts";
+import { NO_DATA_TEXT, textOrNoData } from "./reportFormat";
 import sharedStyles from "./CargarPadronesReport.module.css";
-import styles from "./ActualizarPadronReport.module.css";
 
 const DECIMAL_PLACES = 2;
 const AREA_DECIMAL_PLACES = 3;
-const SECONDS_SUFFIX = "s";
-const NO_DATA_TEXT = "sin dato";
-
-const BANNER_CLASS: Record<ReportBanner["kind"], string> = {
-  unknown: sharedStyles.bannerUnknown,
-  dryRun: sharedStyles.bannerDryRun,
-  done: sharedStyles.bannerDone,
-};
-
-const secondsText = (seconds: number): string => `${seconds.toFixed(DECIMAL_PLACES).replace(".", ",")} ${SECONDS_SUFFIX}`;
-
-const textOrNoData = (value: string | null): string => value ?? NO_DATA_TEXT;
 
 const localityNameOf = (key: LocalityKey): string => textOrNoData(key.name);
 
 const localityKeyOf = (key: LocalityKey): string => `${key.department}|${key.name}`;
-
-function SectionTitle({ children }: { children: string }) {
-  return <h3 className={sharedStyles.sectionTitle}>{children}</h3>;
-}
-
-export function OutcomeBanners({ banners }: { banners: ReportBanner[] }) {
-  return (
-    <>
-      {banners.map((banner) => (
-        <div key={banner.kind} className={`${sharedStyles.banner} ${BANNER_CLASS[banner.kind]}`}>
-          <p className={sharedStyles.bannerText}>{banner.text}</p>
-        </div>
-      ))}
-    </>
-  );
-}
-
-export function KpiCards({ kpis }: { kpis: ReportKpi[] }) {
-  return (
-    <section className={styles.kpis}>
-      {kpis.map((kpi) => (
-        <div key={kpi.label} className={styles.kpi}>
-          <span className={styles.kpiLabel}>{kpi.label}</span>
-          <strong className={styles.kpiValue}>{kpi.value}</strong>
-        </div>
-      ))}
-    </section>
-  );
-}
-
-function ReasonRow({ row }: { row: SkipReasonRow }) {
-  return (
-    <tr>
-      <td>
-        <div className={styles.reasonCell}>
-          <span>{row.label}</span>
-          <p className={styles.reasonHint}>{row.explanation}</p>
-        </div>
-      </td>
-      <td>{row.value}</td>
-      <td>{`${row.percent}%`}</td>
-    </tr>
-  );
-}
-
-export function SkippedReasonsSection({ rows, zeroReasonCount }: { rows: SkipReasonRow[]; zeroReasonCount: number }) {
-  return (
-    <section className={sharedStyles.section}>
-      <SectionTitle>Filas omitidas por motivo</SectionTitle>
-      {rows.length === 0 ? (
-        <p className={sharedStyles.hint}>Ninguna fila fue omitida.</p>
-      ) : (
-        <div className={styles.tableWrap}>
-          <DataTable headers={["Motivo", "Filas", "Porcentaje"]}>
-            {rows.map((row) => (
-              <ReasonRow key={row.reason} row={row} />
-            ))}
-          </DataTable>
-        </div>
-      )}
-      {zeroReasonCount > 0 && <p className={styles.zeroNote}>{`Sin filas: ${zeroReasonCount} motivos`}</p>}
-    </section>
-  );
-}
-
-interface TableColumn<Row> {
-  header: string;
-  cell: (row: Row) => string;
-}
-
-/** Column headers are unique within a table, so they key the cells of each row. */
-function RowsTable<Row>({ columns, rows, rowKey }: { columns: TableColumn<Row>[]; rows: Row[]; rowKey: (row: Row) => string }) {
-  return (
-    <div className={styles.tableWrap}>
-      <DataTable headers={columns.map((column) => column.header)}>
-        {keyedRowsOf(rows, rowKey).map(({ key, row }) => (
-          <tr key={key}>
-            {columns.map((column) => (
-              <td key={column.header}>{column.cell(row)}</td>
-            ))}
-          </tr>
-        ))}
-      </DataTable>
-    </div>
-  );
-}
 
 const SAMPLE_COLUMNS: TableColumn<LocalitySkippedSample>[] = [
   { header: "Departamento", cell: (sample) => textOrNoData(sample.department) },
@@ -225,32 +126,5 @@ export function TargetSection({ target }: { target: TargetView }) {
       <AmbiguousDetails target={target} />
       <CodeDifferDetails target={target} />
     </section>
-  );
-}
-
-export function WarningsSection({ warnings }: { warnings: string[] }) {
-  if (warnings.length === 0) return null;
-  return (
-    <section className={sharedStyles.section}>
-      <SectionTitle>Advertencias</SectionTitle>
-      <ul className={sharedStyles.list}>
-        {warnings.map((warning, index) => (
-          <li key={`${index}-${warning}`}>{warning}</li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-export function TimingsSection({ timings, totalSeconds }: { timings: TimingView[]; totalSeconds: number }) {
-  return (
-    <CollapsibleSection summary="Tiempos por paso">
-      <ul className={sharedStyles.list}>
-        {timings.map((timing, index) => (
-          <li key={`${index}-${timing.label}`}>{`${timing.label}: ${secondsText(timing.seconds)}`}</li>
-        ))}
-        <li className={sharedStyles.total}>{`Total: ${secondsText(totalSeconds)}`}</li>
-      </ul>
-    </CollapsibleSection>
   );
 }

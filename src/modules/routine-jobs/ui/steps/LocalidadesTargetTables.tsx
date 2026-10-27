@@ -1,130 +1,125 @@
 "use client";
 
 import React from "react";
-import { Plus, Trash2 } from "lucide-react";
 import type { ResolvedColumn, TableListing } from "@/core/types/tableCatalog";
-import { Button } from "@/ui-kit/components/ui/Button";
 import { TableSelector } from "@/ui-kit/components/TableSelector";
-import { ButtonVariant } from "@/ui-kit/types/ui";
-import { LOCALIDADES_TABLE_ROLE, MAX_TARGETS, type LocalidadesTableRole } from "../../jobs/cargar-localidades/constants";
-import type { LocalidadesTargetDraft } from "../cargarLocalidadesWizardState";
+import { LOCALIDADES_TABLE_ROLE, type LocalidadesTableRole } from "../../jobs/cargar-localidades/constants";
+import {
+  DESTINATION_ORDER,
+  DESTINATION_TITLE,
+  type LocalidadesDestination,
+  type LocalidadesTargetDraft,
+} from "../cargarLocalidadesWizardState";
+import { SchemaTableCard } from "../SchemaTableCard";
+import { SchemaTableSection } from "../SchemaTableSection";
 import { SchemaDraftField } from "./SchemaDraftField";
 import styles from "./WizardSteps.module.css";
 
-const ADD_LABEL = "Añadir tabla destino";
-const REMOVE_LABEL = "Quitar";
-const TARGET_TITLE = (position: number): string => `Destino ${position}`;
-const SCHEMA_LABEL = (position: number): string => `Esquema del destino ${position}`;
-const TABLE_LABEL = (position: number): string => `Tabla de localidades destino ${position}`;
-const TARGETS_HINT = `Cada tabla destino recibe la misma carga, en la misma transacción. Puede elegir hasta ${MAX_TARGETS}.`;
-
-const isBlank = (value: string): boolean => value.trim() === "";
+const TARGETS_TITLE = "Destinos";
+const TARGETS_NOTE = "Elija al menos uno. Cada destino incluido recibe la misma carga, en la misma transacción.";
+const CARD_NOTE = "Tabla donde se escriben las localidades.";
+const EXCLUDED_NOTE = "Este destino no se envía en la carga.";
+const INCLUDE_LABEL = "Incluir este destino";
+const SCHEMA_LABEL = "Esquema";
+const TABLE_LABEL = "Tabla de localidades";
 
 export interface LocalidadesTargetTablesProps {
-  targets: LocalidadesTargetDraft[];
-  excluded: string[][];
-  onSchemaChange: (index: number, schema: string) => void;
-  onTableChange: (index: number, table: string, valid: boolean) => void;
-  onAdd: () => void;
-  onRemove: (index: number) => void;
+  targets: Record<LocalidadesDestination, LocalidadesTargetDraft>;
+  excluded: Record<LocalidadesDestination, string[]>;
+  onSchemaChange: (destination: LocalidadesDestination, schema: string) => void;
+  onTableChange: (destination: LocalidadesDestination, table: string, valid: boolean) => void;
+  onIncludedChange: (destination: LocalidadesDestination, included: boolean) => void;
   loadTables: (schema: string) => Promise<TableListing>;
   checkColumns: (role: LocalidadesTableRole, schema: string, table: string) => Promise<ResolvedColumn[]>;
   hideListError: boolean;
 }
 
-interface TargetRowProps extends Omit<LocalidadesTargetTablesProps, "targets" | "excluded" | "onAdd"> {
+interface DestinationCardProps extends Omit<LocalidadesTargetTablesProps, "targets" | "excluded"> {
+  destination: LocalidadesDestination;
   target: LocalidadesTargetDraft;
-  index: number;
   excludedNames: string[];
-  canRemove: boolean;
 }
 
-const TargetRow: React.FC<TargetRowProps> = ({
+const DestinationCard: React.FC<DestinationCardProps> = ({
+  destination,
   target,
-  index,
   excludedNames,
-  canRemove,
   onSchemaChange,
   onTableChange,
-  onRemove,
+  onIncludedChange,
   loadTables,
   checkColumns,
   hideListError,
-}) => {
-  const position = index + 1;
-  return (
-    <div className={styles.stack}>
-      <div className={styles.schemaPair}>
+}) => (
+  <SchemaTableCard
+    title={DESTINATION_TITLE[destination]}
+    note={CARD_NOTE}
+    headerAction={
+      <label className={styles.checkRow}>
+        <input
+          type="checkbox"
+          checked={target.included}
+          onChange={(event) => onIncludedChange(destination, event.target.checked)}
+        />
+        <span>{INCLUDE_LABEL}</span>
+      </label>
+    }
+    schema={
+      target.included ? (
         <SchemaDraftField
-          label={SCHEMA_LABEL(position)}
+          label={SCHEMA_LABEL}
           initial={target.schema}
           committed={target.schema}
-          onCommit={(schema) => onSchemaChange(index, schema)}
+          onCommit={(schema) => onSchemaChange(destination, schema)}
         />
-      </div>
-      <div className={styles.tablesGrid}>
+      ) : undefined
+    }
+    table={
+      target.included ? (
         <TableSelector
-          label={TABLE_LABEL(position)}
+          label={TABLE_LABEL}
           schema={target.schema}
           value={target.table}
-          onChange={(table) => onTableChange(index, table, false)}
+          onChange={(table) => onTableChange(destination, table, false)}
           loadTables={loadTables}
           checkColumns={(table) => checkColumns(LOCALIDADES_TABLE_ROLE.TARGET, target.schema.trim(), table)}
-          disabled={isBlank(target.schema)}
+          disabled={target.schema.trim() === ""}
           excludedTables={excludedNames}
-          onValidityChange={(valid) => onTableChange(index, target.table, valid)}
+          onValidityChange={(valid) => onTableChange(destination, target.table, valid)}
           hideListError={hideListError}
+          bare
         />
-      </div>
-      {canRemove && (
-        <div className={styles.actions}>
-          <Button variant={ButtonVariant.GHOST} onClick={() => onRemove(index)}>
-            <Trash2 size={15} />
-            <span>{REMOVE_LABEL}</span>
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-};
+      ) : (
+        <p className={styles.hint}>{EXCLUDED_NOTE}</p>
+      )
+    }
+  />
+);
 
 export const LocalidadesTargetTables: React.FC<LocalidadesTargetTablesProps> = ({
   targets,
   excluded,
   onSchemaChange,
   onTableChange,
-  onAdd,
-  onRemove,
+  onIncludedChange,
   loadTables,
   checkColumns,
   hideListError,
 }) => (
-  <section className={styles.stack}>
-    {targets.map((target, index) => (
-      <React.Fragment key={target.key}>
-        <h4 className={styles.hint}>{TARGET_TITLE(index + 1)}</h4>
-        <TargetRow
-          target={target}
-          index={index}
-          excludedNames={excluded[index] ?? []}
-          canRemove={targets.length > 1}
-          onSchemaChange={onSchemaChange}
-          onTableChange={onTableChange}
-          onRemove={onRemove}
-          loadTables={loadTables}
-          checkColumns={checkColumns}
-          hideListError={hideListError}
-        />
-      </React.Fragment>
+  <SchemaTableSection title={TARGETS_TITLE} note={TARGETS_NOTE}>
+    {DESTINATION_ORDER.map((destination) => (
+      <DestinationCard
+        key={destination}
+        destination={destination}
+        target={targets[destination]}
+        excludedNames={excluded[destination]}
+        onSchemaChange={onSchemaChange}
+        onTableChange={onTableChange}
+        onIncludedChange={onIncludedChange}
+        loadTables={loadTables}
+        checkColumns={checkColumns}
+        hideListError={hideListError}
+      />
     ))}
-    <p className={styles.hint}>{TARGETS_HINT}</p>
-    {targets.length < MAX_TARGETS && (
-      <div className={styles.actions}>
-        <Button variant={ButtonVariant.SECONDARY} onClick={onAdd}>
-          <Plus size={15} />
-          <span>{ADD_LABEL}</span>
-        </Button>
-      </div>
-    )}
-  </section>
+  </SchemaTableSection>
 );

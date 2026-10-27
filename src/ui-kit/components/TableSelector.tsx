@@ -35,6 +35,7 @@ export interface TableSelectorProps {
   onValidityChange?: (valid: boolean, columns: ResolvedColumn[]) => void;
   onLoadError?: (error: unknown) => void;
   hideListError?: boolean;
+  bare?: boolean;
 }
 
 const messageOf = (error: unknown, fallback: string): string =>
@@ -65,6 +66,7 @@ export const TableSelector: React.FC<TableSelectorProps> = ({
   onValidityChange,
   onLoadError,
   hideListError,
+  bare = false,
 }) => {
   const selectId = useId();
   const [listAnswer, setListAnswer] = useState<ListAnswer | null>(null);
@@ -123,7 +125,7 @@ export const TableSelector: React.FC<TableSelectorProps> = ({
   const showListMessage = listState.phase === "error" ? shouldShowListError(listState.phase, hideListError) : true;
 
   return (
-    <div className={styles.container}>
+    <div className={bare ? styles.bare : styles.container}>
       <label className={styles.label} htmlFor={selectId}>
         {label}
       </label>

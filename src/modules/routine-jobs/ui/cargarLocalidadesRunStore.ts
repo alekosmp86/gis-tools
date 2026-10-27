@@ -1,4 +1,6 @@
 import type { LocalidadesJobStatusView, LocalidadesStartRequest } from "./clientTypes";
+import type { LocalityTableRef } from "../jobs/cargar-localidades/types";
+import type { LocalidadesDestination } from "./localidadesDestination";
 import { createRoutineJobsClient } from "./routineJobsClient";
 import {
   createJobRunStore,
@@ -9,17 +11,27 @@ import {
   type RunStoreDeps,
 } from "./jobRunStore";
 
+export interface LocalidadesRunTarget extends LocalityTableRef {
+  destination: LocalidadesDestination;
+}
+
+export interface LocalidadesRunRequest {
+  request: LocalidadesStartRequest;
+  targets: LocalidadesRunTarget[];
+}
+
 export interface CargarLocalidadesRunPlan {
   dryRun: boolean;
   tables: string[];
+  targets: LocalidadesRunTarget[];
 }
 
 export type CargarLocalidadesRunSnapshot = RunSnapshot<LocalidadesJobStatusView, CargarLocalidadesRunPlan>;
 
-export type CargarLocalidadesRunStore = RunStore<LocalidadesStartRequest, LocalidadesJobStatusView, CargarLocalidadesRunPlan>;
+export type CargarLocalidadesRunStore = RunStore<LocalidadesRunRequest, LocalidadesJobStatusView, CargarLocalidadesRunPlan>;
 
 type CargarLocalidadesRunStoreDeps = Omit<
-  RunStoreDeps<LocalidadesStartRequest, LocalidadesJobStatusView, CargarLocalidadesRunPlan>,
+  RunStoreDeps<LocalidadesRunRequest, LocalidadesJobStatusView, CargarLocalidadesRunPlan>,
   "planOf" | "messages"
 >;
 
@@ -32,9 +44,10 @@ const MESSAGES: RunMessages = {
     `No se pudo confirmar el resultado del trabajo ${jobId}. Revise las tablas de localidades antes de volver a cargar.`,
 };
 
-const planOf = (request: LocalidadesStartRequest): CargarLocalidadesRunPlan => ({
-  dryRun: request.dryRun,
-  tables: request.targets.map((target) => `${target.schema}.${target.table}`),
+const planOf = (run: LocalidadesRunRequest): CargarLocalidadesRunPlan => ({
+  dryRun: run.request.dryRun,
+  tables: run.targets.map((target) => `${target.schema}.${target.table}`),
+  targets: run.targets,
 });
 
 function createCargarLocalidadesRunStore(deps: CargarLocalidadesRunStoreDeps): CargarLocalidadesRunStore {
@@ -46,7 +59,7 @@ export function getCargarLocalidadesRunStore(): CargarLocalidadesRunStore {
     const client = createRoutineJobsClient();
     return createCargarLocalidadesRunStore({
       client: {
-        start: (request) => client.startLocalidades(request),
+        start: (run) => client.startLocalidades(run.request),
         readStatus: (jobId) => client.readLocalidadesStatus(jobId),
       },
     });

@@ -31,8 +31,8 @@ export const MONTHLY_STAGES: readonly MonthlyStageDef[] = [
   {
     id: MonthlyStage.UNIDAD_TERRITORIAL,
     title: "Actualizar unidades territoriales",
-    description: "Inserta y actualiza las unidades territoriales desde las localidades catastrales.",
-    available: false,
+    description: "Inserta las unidades territoriales nuevas y actualiza su fuente y geometría desde las localidades catastrales.",
+    available: true,
   },
   {
     id: MonthlyStage.ACTUALIZAR_PADRON,

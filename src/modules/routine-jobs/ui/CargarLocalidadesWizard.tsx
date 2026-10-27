@@ -10,10 +10,12 @@ import {
   blockingReason,
   canRunNow,
   excludedTablesOf,
+  includedTargetsOf,
   initialWizardStateFor,
   LocalidadesStep,
   localidadesWizardReducer,
   runBlockedReason,
+  toRunRequest,
   toStartRequest,
   type LocalidadesWizardSeed,
 } from "./cargarLocalidadesWizardState";
@@ -26,8 +28,9 @@ import {
   getCargarLocalidadesRunStore,
   type CargarLocalidadesRunSnapshot,
   type CargarLocalidadesRunStore,
+  type LocalidadesRunRequest,
 } from "./cargarLocalidadesRunStore";
-import type { ClientConnection, LocalidadesStartRequest, StagingSelection } from "./clientTypes";
+import type { ClientConnection, StagingSelection } from "./clientTypes";
 import { trimConnection } from "./connectionProfiles";
 import { RunPhase } from "./jobRunStore";
 import { createRoutineJobsClient, RoutineJobsApiError } from "./routineJobsClient";
@@ -112,11 +115,11 @@ export const CargarLocalidadesWizard: React.FC<CargarLocalidadesWizardProps> = (
   const catalogError = firstCatalogError([
     currentCatalogError(catalogFailures, catalogKeyOf(connection, state.stagingSchema)),
     currentCatalogError(catalogFailures, catalogKeyOf(connection, state.provinceSchema)),
-    ...state.targets.map((target) => currentCatalogError(catalogFailures, catalogKeyOf(connection, target.schema))),
+    ...includedTargetsOf(state).map((target) => currentCatalogError(catalogFailures, catalogKeyOf(connection, target.schema))),
   ]);
 
-  const startRun = (request: LocalidadesStartRequest) => {
-    void runStore.start(request);
+  const startRun = (run: LocalidadesRunRequest) => {
+    void runStore.start(run);
     dispatch({ type: "runStarted" });
   };
 
@@ -139,10 +142,9 @@ export const CargarLocalidadesWizard: React.FC<CargarLocalidadesWizardProps> = (
             onStagingSchemaChange={(schema) => dispatch({ type: "stagingSchemaChanged", schema })}
             onProvinceSchemaChange={(schema) => dispatch({ type: "provinceSchemaChanged", schema })}
             onTableChange={(key, table, valid) => dispatch({ type: "tableChosen", key, table, valid })}
-            onTargetSchemaChange={(index, schema) => dispatch({ type: "targetSchemaChanged", index, schema })}
-            onTargetTableChange={(index, table, valid) => dispatch({ type: "targetChosen", index, table, valid })}
-            onTargetAdd={() => dispatch({ type: "targetAdded" })}
-            onTargetRemove={(index) => dispatch({ type: "targetRemoved", index })}
+            onTargetSchemaChange={(destination, schema) => dispatch({ type: "targetSchemaChanged", destination, schema })}
+            onTargetTableChange={(destination, table, valid) => dispatch({ type: "targetChosen", destination, table, valid })}
+            onTargetIncludedChange={(destination, included) => dispatch({ type: "targetIncludedChanged", destination, included })}
             loadTables={loadTables}
             checkColumns={checkColumns}
             blockingReason={blockingReason(state)}
@@ -161,6 +163,7 @@ export const CargarLocalidadesWizard: React.FC<CargarLocalidadesWizardProps> = (
         return (
           <LocalidadesReviewStep
             request={toStartRequest(state, REAL_RUN)}
+            targets={includedTargetsOf(state)}
             confirmation={state.confirmation}
             canDryRun={canRunNow(state, DRY_RUN)}
             canRun={canRunNow(state, REAL_RUN)}
@@ -168,10 +171,10 @@ export const CargarLocalidadesWizard: React.FC<CargarLocalidadesWizardProps> = (
             runBlockedReason={runBlockedReason(state)}
             onConfirmationChange={(patch) => dispatch({ type: "confirmationChanged", patch })}
             onDryRun={() => {
-              if (canRunNow(state, DRY_RUN)) startRun(toStartRequest(state, DRY_RUN));
+              if (canRunNow(state, DRY_RUN)) startRun(toRunRequest(state, DRY_RUN));
             }}
             onRun={() => {
-              if (canRunNow(state, REAL_RUN)) startRun(toStartRequest(state, REAL_RUN));
+              if (canRunNow(state, REAL_RUN)) startRun(toRunRequest(state, REAL_RUN));
             }}
           />
         );

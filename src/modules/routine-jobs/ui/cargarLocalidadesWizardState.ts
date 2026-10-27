@@ -1,8 +1,10 @@
-import { MAX_TARGETS } from "../jobs/cargar-localidades/constants";
 import type { ClientConnection, LocalidadesStartRequest, StagingSelection } from "./clientTypes";
-import type { CargarLocalidadesRunSnapshot } from "./cargarLocalidadesRunStore";
+import type { CargarLocalidadesRunSnapshot, LocalidadesRunRequest } from "./cargarLocalidadesRunStore";
 import { trimConnection } from "./connectionProfiles";
 import { RunPhase } from "./jobRunStore";
+import { LocalidadesDestination } from "./localidadesDestination";
+
+export type { LocalidadesDestination };
 
 export const LocalidadesStep = {
   TABLES: "tables",
@@ -22,15 +24,30 @@ export const FixedTable = {
 
 export type FixedTable = (typeof FixedTable)[keyof typeof FixedTable];
 
+export const DESTINATION_ORDER: readonly LocalidadesDestination[] = [LocalidadesDestination.BDJ_CARTO, LocalidadesDestination.CARTO];
+
+export const DESTINATION_TITLE: Record<LocalidadesDestination, string> = {
+  [LocalidadesDestination.BDJ_CARTO]: "Localidades en bdj_carto",
+  [LocalidadesDestination.CARTO]: "Localidades en carto",
+};
+
+type LocalidadesSlotKey = FixedTable | LocalidadesDestination;
+
 const DEFAULT_TOLERANCE_M = "1.0";
 
 const FIXED_ORDER: readonly FixedTable[] = [FixedTable.PADRON, FixedTable.LOCALITY, FixedTable.PROVINCE];
 
 export interface LocalidadesTargetDraft {
-  key: number;
   schema: string;
   table: string;
   valid: boolean;
+  included: boolean;
+}
+
+export interface LocalidadesIncludedTarget {
+  destination: LocalidadesDestination;
+  schema: string;
+  table: string;
 }
 
 export interface LocalidadesOptionsDraft {
@@ -38,10 +55,10 @@ export interface LocalidadesOptionsDraft {
   updateGeometries: boolean;
 }
 
-/** Typed table names are aligned with the targets by index: one typed name per target. */
+/** Typed table names are keyed by destination; only the included destinations ask for one. */
 export interface LocalidadesConfirmation {
   password: string;
-  typedTables: string[];
+  typedTables: Record<LocalidadesDestination, string>;
 }
 
 export interface LocalidadesWizardState {
@@ -51,7 +68,7 @@ export interface LocalidadesWizardState {
   provinceSchema: string;
   tables: Record<FixedTable, string>;
   validity: Record<FixedTable, boolean>;
-  targets: LocalidadesTargetDraft[];
+  targets: Record<LocalidadesDestination, LocalidadesTargetDraft>;
   options: LocalidadesOptionsDraft;
   confirmation: LocalidadesConfirmation;
 }
@@ -66,10 +83,9 @@ export type LocalidadesWizardAction =
   | { type: "stagingSchemaChanged"; schema: string }
   | { type: "provinceSchemaChanged"; schema: string }
   | { type: "tableChosen"; key: FixedTable; table: string; valid: boolean }
-  | { type: "targetSchemaChanged"; index: number; schema: string }
-  | { type: "targetChosen"; index: number; table: string; valid: boolean }
-  | { type: "targetAdded" }
-  | { type: "targetRemoved"; index: number }
+  | { type: "targetSchemaChanged"; destination: LocalidadesDestination; schema: string }
+  | { type: "targetChosen"; destination: LocalidadesDestination; table: string; valid: boolean }
+  | { type: "targetIncludedChanged"; destination: LocalidadesDestination; included: boolean }
   | { type: "optionsChanged"; patch: Partial<LocalidadesOptionsDraft> }
   | { type: "confirmationChanged"; patch: Partial<LocalidadesConfirmation> }
   | { type: "next" }
@@ -90,9 +106,9 @@ const MESSAGES = {
   stagingSchema: "Indique el esquema de la tabla de padrones y de la tabla de localidades de origen.",
   provinceSchema: "Indique el esquema de la tabla de provincias.",
   sourceTables: "Elija la tabla de padrones, la de localidades de origen y la de provincias.",
-  targetsMissing: "Añada al menos una tabla de localidades destino.",
-  targetSchema: "Indique el esquema de cada tabla de localidades destino.",
-  targetTable: "Elija la tabla de cada destino.",
+  noDestination: "Incluya al menos un destino: Localidades en bdj_carto o Localidades en carto.",
+  targetSchema: "Indique el esquema de cada destino incluido.",
+  targetTable: "Elija la tabla de cada destino incluido.",
   tablesDistinct: "Las tablas elegidas deben ser distintas: no repita el mismo esquema y nombre.",
   tablesInvalid: "Alguna tabla tiene columnas faltantes o ambiguas.",
   tolerance: "La tolerancia debe ser un número mayor o igual que 0.",
@@ -109,15 +125,14 @@ const isToleranceValid = (text: string): boolean => {
   return Number.isFinite(value) && value >= 0;
 };
 
-const FIRST_TARGET_KEY = 1;
+const emptyTarget = (included: boolean): LocalidadesTargetDraft => ({ schema: "", table: "", valid: false, included });
 
-const emptyTarget = (key: number): LocalidadesTargetDraft => ({ key, schema: "", table: "", valid: false });
+const emptyTypedTables = (): Record<LocalidadesDestination, string> => ({
+  [LocalidadesDestination.BDJ_CARTO]: "",
+  [LocalidadesDestination.CARTO]: "",
+});
 
-/** Keys stay stable while a target is kept, so the rows of the list never inherit another row's draft. */
-const nextTargetKeyOf = (targets: readonly LocalidadesTargetDraft[]): number =>
-  targets.reduce((highest, target) => Math.max(highest, target.key), 0) + 1;
-
-const emptyConfirmation = (): LocalidadesConfirmation => ({ password: "", typedTables: [] });
+const emptyConfirmation = (): LocalidadesConfirmation => ({ password: "", typedTables: emptyTypedTables() });
 
 function initialWizardState(seed: LocalidadesWizardSeed): LocalidadesWizardState {
   return {
@@ -127,7 +142,10 @@ function initialWizardState(seed: LocalidadesWizardSeed): LocalidadesWizardState
     provinceSchema: "",
     tables: { padron: seed.staging?.table ?? "", locality: "", province: "" },
     validity: { padron: false, locality: false, province: false },
-    targets: [emptyTarget(FIRST_TARGET_KEY)],
+    targets: {
+      [LocalidadesDestination.BDJ_CARTO]: emptyTarget(true),
+      [LocalidadesDestination.CARTO]: emptyTarget(false),
+    },
     options: { tolerance: DEFAULT_TOLERANCE_M, updateGeometries: true },
     confirmation: emptyConfirmation(),
   };
@@ -142,40 +160,54 @@ export function initialWizardStateFor(
   return snapshot.phase === RunPhase.IDLE ? seeded : { ...seeded, step: LocalidadesStep.RUN };
 }
 
+const includedDestinationsOf = (state: LocalidadesWizardState): LocalidadesDestination[] =>
+  DESTINATION_ORDER.filter((destination) => state.targets[destination].included);
+
+export function includedTargetsOf(state: LocalidadesWizardState): LocalidadesIncludedTarget[] {
+  return includedDestinationsOf(state).map((destination) => ({
+    destination,
+    schema: state.targets[destination].schema.trim(),
+    table: state.targets[destination].table.trim(),
+  }));
+}
+
 interface TableSlot {
+  key: LocalidadesSlotKey;
   schema: string;
   table: string;
   valid: boolean;
 }
 
-/** Fixed tables first (padron, locality, province), then the targets, in the order the wizard shows them. */
+/** Fixed tables first (padron, locality, province), then the included destinations, in the order the wizard shows them. */
 const slotsOf = (state: LocalidadesWizardState): TableSlot[] => [
-  { schema: state.stagingSchema, table: state.tables.padron, valid: state.validity.padron },
-  { schema: state.stagingSchema, table: state.tables.locality, valid: state.validity.locality },
-  { schema: state.provinceSchema, table: state.tables.province, valid: state.validity.province },
-  ...state.targets,
+  { key: FixedTable.PADRON, schema: state.stagingSchema, table: state.tables.padron, valid: state.validity.padron },
+  { key: FixedTable.LOCALITY, schema: state.stagingSchema, table: state.tables.locality, valid: state.validity.locality },
+  { key: FixedTable.PROVINCE, schema: state.provinceSchema, table: state.tables.province, valid: state.validity.province },
+  ...includedDestinationsOf(state).map((destination) => ({
+    key: destination,
+    schema: state.targets[destination].schema,
+    table: state.targets[destination].table,
+    valid: state.targets[destination].valid,
+  })),
 ];
 
-export interface LocalidadesExcludedTables {
-  fixed: Record<FixedTable, string[]>;
-  targets: string[][];
-}
+export type LocalidadesExcludedTables = Record<LocalidadesSlotKey, string[]>;
 
 /** Names already chosen in the same schema by another slot: a table cannot repeat them. */
+const namesInSameSchemaOf = (slots: readonly TableSlot[], key: LocalidadesSlotKey): string[] => {
+  const own = slots.find((slot) => slot.key === key);
+  if (own === undefined) return [];
+  const names = slots
+    .filter((slot) => slot.key !== key && slot.schema.trim() === own.schema.trim())
+    .map((slot) => slot.table.trim())
+    .filter((name) => name !== "");
+  return [...new Set(names)];
+};
+
 export function excludedTablesOf(state: LocalidadesWizardState): LocalidadesExcludedTables {
   const slots = slotsOf(state);
-  const excludedAt = (ownIndex: number): string[] => {
-    const own = slots[ownIndex];
-    const names = slots
-      .filter((slot, index) => index !== ownIndex && slot.schema.trim() === own.schema.trim())
-      .map((slot) => slot.table.trim())
-      .filter((name) => name !== "");
-    return [...new Set(names)];
-  };
-  return {
-    fixed: Object.fromEntries(FIXED_ORDER.map((key, index) => [key, excludedAt(index)])) as Record<FixedTable, string[]>,
-    targets: state.targets.map((_target, index) => excludedAt(FIXED_ORDER.length + index)),
-  };
+  const keys: LocalidadesSlotKey[] = [...FIXED_ORDER, ...DESTINATION_ORDER];
+  return Object.fromEntries(keys.map((key) => [key, namesInSameSchemaOf(slots, key)])) as LocalidadesExcludedTables;
 }
 
 const sourceTablesBlockingReason = (state: LocalidadesWizardState): string | null => {
@@ -185,12 +217,19 @@ const sourceTablesBlockingReason = (state: LocalidadesWizardState): string | nul
   return null;
 };
 
+function destinationsBlockingReason(state: LocalidadesWizardState): string | null {
+  const included = includedDestinationsOf(state);
+  if (included.length === 0) return MESSAGES.noDestination;
+  if (included.some((destination) => isBlank(state.targets[destination].schema))) return MESSAGES.targetSchema;
+  if (included.some((destination) => isBlank(state.targets[destination].table))) return MESSAGES.targetTable;
+  return null;
+}
+
 function tablesBlockingReason(state: LocalidadesWizardState): string | null {
   const sourceReason = sourceTablesBlockingReason(state);
   if (sourceReason !== null) return sourceReason;
-  if (state.targets.length === 0) return MESSAGES.targetsMissing;
-  if (state.targets.some((target) => isBlank(target.schema))) return MESSAGES.targetSchema;
-  if (state.targets.some((target) => isBlank(target.table))) return MESSAGES.targetTable;
+  const destinationReason = destinationsBlockingReason(state);
+  if (destinationReason !== null) return destinationReason;
   const slots = slotsOf(state);
   const names = slots.map((slot) => `${slot.schema.trim()}.${slot.table.trim()}`);
   if (new Set(names).size !== names.length) return MESSAGES.tablesDistinct;
@@ -227,7 +266,9 @@ const isPasswordTyped = (state: LocalidadesWizardState): boolean =>
 function isRealRunConfirmed(state: LocalidadesWizardState): boolean {
   return (
     isPasswordTyped(state) &&
-    state.targets.every((target, index) => !isBlank(target.table) && state.confirmation.typedTables[index].trim() === target.table.trim())
+    includedTargetsOf(state).every(
+      (target) => target.table !== "" && state.confirmation.typedTables[target.destination].trim() === target.table,
+    )
   );
 }
 
@@ -244,11 +285,15 @@ export function toStartRequest(state: LocalidadesWizardState, flags: { dryRun: b
     localityStagingTable: state.tables.locality.trim(),
     provinceSchema: state.provinceSchema.trim(),
     provinceTable: state.tables.province.trim(),
-    targets: state.targets.map((target) => ({ schema: target.schema.trim(), table: target.table.trim() })),
+    targets: includedTargetsOf(state).map(({ schema, table }) => ({ schema, table })),
     options: { tolerance: Number(state.options.tolerance.trim()), updateGeometries: state.options.updateGeometries },
     dryRun: flags.dryRun,
     confirm: !flags.dryRun,
   };
+}
+
+export function toRunRequest(state: LocalidadesWizardState, flags: { dryRun: boolean }): LocalidadesRunRequest {
+  return { request: toStartRequest(state, flags), targets: includedTargetsOf(state) };
 }
 
 const indexOfStep = (step: LocalidadesStep): number => STEP_ORDER.indexOf(step);
@@ -275,13 +320,19 @@ function moveTo(state: LocalidadesWizardState, step: LocalidadesStep): Localidad
 
 const stepAfter = (step: LocalidadesStep, delta: number): LocalidadesStep => STEP_ORDER[indexOfStep(step) + delta] ?? step;
 
-const clearTypedAt = (typedTables: readonly string[], index: number): string[] =>
-  typedTables.map((typed, typedIndex) => (typedIndex === index ? "" : typed));
+const clearTypedFor = (confirmation: LocalidadesConfirmation, destination: LocalidadesDestination): LocalidadesConfirmation => ({
+  ...confirmation,
+  typedTables: { ...confirmation.typedTables, [destination]: "" },
+});
 
-function updateTarget(state: LocalidadesWizardState, index: number, patch: Partial<LocalidadesTargetDraft>): LocalidadesWizardState {
+function updateTarget(
+  state: LocalidadesWizardState,
+  destination: LocalidadesDestination,
+  patch: Partial<LocalidadesTargetDraft>,
+): LocalidadesWizardState {
   return {
     ...state,
-    targets: state.targets.map((target, targetIndex) => (targetIndex === index ? { ...target, ...patch } : target)),
+    targets: { ...state.targets, [destination]: { ...state.targets[destination], ...patch } },
   };
 }
 
@@ -298,37 +349,30 @@ function provinceSchemaReducer(state: LocalidadesWizardState, schema: string): L
   return { ...state, provinceSchema: schema, tables: { ...state.tables, province: "" }, validity: { ...state.validity, province: false } };
 }
 
-function targetSchemaReducer(state: LocalidadesWizardState, index: number, schema: string): LocalidadesWizardState {
-  const next = updateTarget(state, index, { schema, table: "", valid: false });
-  return { ...next, confirmation: { ...next.confirmation, typedTables: clearTypedAt(next.confirmation.typedTables, index) } };
+function targetSchemaReducer(state: LocalidadesWizardState, destination: LocalidadesDestination, schema: string): LocalidadesWizardState {
+  const next = updateTarget(state, destination, { schema, table: "", valid: false });
+  return { ...next, confirmation: clearTypedFor(next.confirmation, destination) };
 }
 
-function targetChosenReducer(state: LocalidadesWizardState, index: number, table: string, valid: boolean): LocalidadesWizardState {
-  const changed = table !== state.targets[index]?.table;
-  const next = updateTarget(state, index, { table, valid });
+function targetChosenReducer(
+  state: LocalidadesWizardState,
+  destination: LocalidadesDestination,
+  table: string,
+  valid: boolean,
+): LocalidadesWizardState {
+  const changed = table !== state.targets[destination].table;
+  const next = updateTarget(state, destination, { table, valid });
   if (!changed) return next;
-  return { ...next, confirmation: { ...next.confirmation, typedTables: clearTypedAt(next.confirmation.typedTables, index) } };
+  return { ...next, confirmation: clearTypedFor(next.confirmation, destination) };
 }
 
-function targetAddedReducer(state: LocalidadesWizardState): LocalidadesWizardState {
-  if (state.targets.length >= MAX_TARGETS) return state;
-  return {
-    ...state,
-    targets: [...state.targets, emptyTarget(nextTargetKeyOf(state.targets))],
-    confirmation: { ...state.confirmation, typedTables: [...state.confirmation.typedTables, ""] },
-  };
-}
-
-function targetRemovedReducer(state: LocalidadesWizardState, index: number): LocalidadesWizardState {
-  if (state.targets.length <= 1) return state;
-  return {
-    ...state,
-    targets: state.targets.filter((_target, targetIndex) => targetIndex !== index),
-    confirmation: {
-      ...state.confirmation,
-      typedTables: state.confirmation.typedTables.filter((_typed, typedIndex) => typedIndex !== index),
-    },
-  };
+function targetIncludedReducer(
+  state: LocalidadesWizardState,
+  destination: LocalidadesDestination,
+  included: boolean,
+): LocalidadesWizardState {
+  const next = updateTarget(state, destination, { included });
+  return { ...next, confirmation: clearTypedFor(next.confirmation, destination) };
 }
 
 export function localidadesWizardReducer(state: LocalidadesWizardState, action: LocalidadesWizardAction): LocalidadesWizardState {
@@ -344,13 +388,11 @@ export function localidadesWizardReducer(state: LocalidadesWizardState, action: 
         validity: { ...state.validity, [action.key]: action.valid },
       };
     case "targetSchemaChanged":
-      return targetSchemaReducer(state, action.index, action.schema);
+      return targetSchemaReducer(state, action.destination, action.schema);
     case "targetChosen":
-      return targetChosenReducer(state, action.index, action.table, action.valid);
-    case "targetAdded":
-      return targetAddedReducer(state);
-    case "targetRemoved":
-      return targetRemovedReducer(state, action.index);
+      return targetChosenReducer(state, action.destination, action.table, action.valid);
+    case "targetIncludedChanged":
+      return targetIncludedReducer(state, action.destination, action.included);
     case "optionsChanged":
       return { ...state, options: { ...state.options, ...action.patch } };
     case "confirmationChanged":

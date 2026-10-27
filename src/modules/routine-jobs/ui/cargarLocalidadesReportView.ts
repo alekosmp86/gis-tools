@@ -18,17 +18,17 @@ const ReportBannerKind = {
 
 type ReportBannerKind = (typeof ReportBannerKind)[keyof typeof ReportBannerKind];
 
-export interface ReportBanner {
+interface ReportBanner {
   kind: ReportBannerKind;
   text: string;
 }
 
-export interface ReportKpi {
+interface ReportKpi {
   label: string;
   value: number;
 }
 
-export interface SkipReasonRow {
+interface SkipReasonRow {
   reason: LocalitySkipReason;
   label: string;
   explanation: string;
@@ -52,7 +52,7 @@ export interface TargetView {
   codeDiffers: CodeDifference[];
 }
 
-export interface TimingView {
+interface TimingView {
   label: string;
   seconds: number;
 }

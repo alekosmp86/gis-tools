@@ -3,15 +3,8 @@
 import React from "react";
 import type { CargarLocalidadesResult } from "../jobs/cargar-localidades/types";
 import { buildCargarLocalidadesReportView } from "./cargarLocalidadesReportView";
-import {
-  KpiCards,
-  OutcomeBanners,
-  SkippedReasonsSection,
-  SkippedSamplesDetails,
-  TargetSection,
-  TimingsSection,
-  WarningsSection,
-} from "./CargarLocalidadesReportSections";
+import { SkippedSamplesDetails, TargetSection } from "./CargarLocalidadesReportSections";
+import { KpiCards, OutcomeBanners, SkippedReasonsSection, TimingsSection, WarningsSection } from "./ReportParts";
 import sharedStyles from "./CargarPadronesReport.module.css";
 
 export interface CargarLocalidadesReportProps {
