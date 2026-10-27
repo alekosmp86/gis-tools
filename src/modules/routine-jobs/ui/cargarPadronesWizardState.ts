@@ -1,7 +1,6 @@
 import type { TableRole } from "../jobs/cargar-padrones/constants";
 import { TABLE_ROLE } from "../jobs/cargar-padrones/constants";
 import type { ClientConnection, JobOptions, StartRequest } from "./clientTypes";
-import type { JobSetup } from "./jobProfileStorage";
 import type { CargarPadronesRunSnapshot } from "./cargarPadronesRunStore";
 
 export const WizardStep = {
@@ -48,7 +47,6 @@ export type WizardAction =
   | { type: "next" }
   | { type: "back" }
   | { type: "goTo"; step: WizardStep }
-  | { type: "loadSetup"; setup: JobSetup }
   | { type: "runStarted" }
   | { type: "reset" };
 
@@ -226,22 +224,6 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return moveTo(state, stepAfter(state.step, -1));
     case "goTo":
       return moveTo(state, action.step);
-    case "loadSetup":
-      return {
-        ...state,
-        connection: {
-          ...state.connection,
-          host: action.setup.host,
-          port: action.setup.port,
-          db_name: action.setup.db_name,
-          user: action.setup.user,
-        },
-        schema: action.setup.schema,
-        tables: { rural: action.setup.ruralTable, urbano: action.setup.urbanoTable, target: action.setup.targetTable },
-        tableValidity: noTableValidity(),
-        options: { ...action.setup.options },
-        confirmation: { password: "", targetLabel: "" },
-      };
     case "runStarted":
       return { ...state, step: WizardStep.RESULT, confirmation: emptyConfirmation() };
     case "reset":

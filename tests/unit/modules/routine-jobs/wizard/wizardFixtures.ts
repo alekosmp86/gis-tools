@@ -1,6 +1,6 @@
 import type { ClientConnection, JobStatusView, StartRequest } from "@/modules/routine-jobs/ui/clientTypes";
 import type { CargarPadronesRunSnapshot } from "@/modules/routine-jobs/ui/cargarPadronesRunStore";
-import type { JobProfile } from "@/modules/routine-jobs/ui/jobProfileStorage";
+import type { SavedDbProfile } from "@/core/types/db";
 import type { CargarPadronesResult, TypeReport } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
 
 export const SECRET = "s3cr3t-pw-9";
@@ -9,22 +9,12 @@ export function connectionOf(overrides: Partial<ClientConnection> = {}): ClientC
   return { host: "db.example.test", port: "5432", db_name: "gis_dev", user: "carto", password: SECRET, ...overrides };
 }
 
-export function profileOf(name: string, overrides: Partial<JobProfile["setup"]> = {}): JobProfile {
+export function profileOf(name: string, overrides: Partial<SavedDbProfile["config"]> = {}): SavedDbProfile {
   return {
+    id: name,
     name,
-    savedAt: 1,
-    setup: {
-      host: "db.example.test",
-      port: "5432",
-      db_name: "gis_dev",
-      user: "carto",
-      schema: "catastro",
-      ruralTable: "padron_rural",
-      urbanoTable: "padron_urbano",
-      targetTable: "padron",
-      options: { repair: true, clearMode: "delete", resetSequences: true },
-      ...overrides,
-    },
+    updatedAt: 1,
+    config: { host: "db.example.test", port: "5432", db_name: "gis_dev", user: "carto", schema_name: "", table_name: "", ...overrides },
   };
 }
 

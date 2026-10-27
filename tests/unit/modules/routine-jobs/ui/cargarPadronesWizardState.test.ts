@@ -14,7 +14,6 @@ import {
   type ConnectionField,
   type WizardState,
 } from "@/modules/routine-jobs/ui/cargarPadronesWizardState";
-import type { JobSetup } from "@/modules/routine-jobs/ui/jobProfileStorage";
 
 const PASSWORD = "s3cret-pw";
 
@@ -258,36 +257,6 @@ describe("cargarPadronesWizardState", () => {
       expect(next.confirmation).toEqual({ password: "", targetLabel: "" });
     });
 
-    it("AC-30: should keep a loaded setup through a password change and clear it on a later host change", () => {
-      const loaded: JobSetup = {
-        host: "db.local",
-        port: "5432",
-        db_name: "gis",
-        user: "carto",
-        schema: "carto",
-        ruralTable: "rural",
-        urbanoTable: "urbano",
-        targetTable: "destino",
-        options: { repair: false, clearMode: "truncate", resetSequences: false },
-      };
-      let state = wizardReducer(initialWizardState(), { type: "loadSetup", setup: loaded });
-      state = wizardReducer(state, { type: "tableChosen", role: "rural", table: "rural", valid: true });
-      state = wizardReducer(state, { type: "tableChosen", role: "urbano", table: "urbano", valid: true });
-      state = wizardReducer(state, { type: "tableChosen", role: "target", table: "destino", valid: true });
-
-      const afterPassword = wizardReducer(state, { type: "connectionChanged", field: "password", value: PASSWORD });
-
-      expect(afterPassword.schema).toBe("carto");
-      expect(afterPassword.tables).toEqual({ rural: "rural", urbano: "urbano", target: "destino" });
-      expect(afterPassword.tableValidity).toEqual({ rural: true, urbano: true, target: true });
-
-      const afterHost = wizardReducer(afterPassword, { type: "connectionChanged", field: "host", value: "otro" });
-
-      expect(afterHost.tables).toEqual({ rural: "", urbano: "", target: "" });
-      expect(afterHost.tableValidity).toEqual({ rural: false, urbano: false, target: false });
-      expect(afterHost.schema).toBe("carto");
-    });
-
     it("AC-30: should clear the three tables and their validity when the schema changes", () => {
       const next = wizardReducer(withTables(), { type: "schemaChanged", schema: "otro" });
 
@@ -412,41 +381,7 @@ describe("cargarPadronesWizardState", () => {
     });
   });
 
-  describe("wizardReducer: loadSetup and reset", () => {
-    const loaded: JobSetup = {
-      host: "otro.host",
-      port: "6543",
-      db_name: "otra",
-      user: "otro",
-      schema: "s2",
-      ruralTable: "r2",
-      urbanoTable: "u2",
-      targetTable: "t2",
-      options: { repair: false, clearMode: "truncate", resetSequences: false },
-    };
-
-    it("AC-30: should apply the setup to connection, schema, tables and options", () => {
-      const next = wizardReducer(initialWizardState(), { type: "loadSetup", setup: loaded });
-
-      expect(next.connection).toMatchObject({ host: "otro.host", port: "6543", db_name: "otra", user: "otro" });
-      expect(next.schema).toBe("s2");
-      expect(next.tables).toEqual({ rural: "r2", urbano: "u2", target: "t2" });
-      expect(next.options).toEqual(loaded.options);
-    });
-
-    it("AC-30: should keep the password typed before loading the setup", () => {
-      const next = wizardReducer(withConnection({ password: PASSWORD }), { type: "loadSetup", setup: loaded });
-
-      expect(next.connection.password).toBe(PASSWORD);
-    });
-
-    it("AC-30: should clear validity until the tables are checked again", () => {
-      const next = wizardReducer(withTables(), { type: "loadSetup", setup: loaded });
-
-      expect(next.tableValidity).toEqual({ rural: false, urbano: false, target: false });
-      expect(canContinue({ ...next, step: WizardStep.TABLES })).toBe(false);
-    });
-
+  describe("wizardReducer: reset", () => {
     it("AC-30: should return to the initial state on reset", () => {
       const next = wizardReducer(
         { ...withTables(), step: WizardStep.RESULT, confirmation: { password: PASSWORD, targetLabel: "destino" } },

@@ -10,7 +10,7 @@ function render(overrides: Partial<Props> = {}): string {
   const props: Props = {
     connection: connectionOf(),
     profiles: [],
-    activeProfile: "",
+    activeProfileId: "",
     onFieldChange: vi.fn(),
     onSelectProfile: vi.fn(),
     onSaveProfile: vi.fn(),
@@ -88,7 +88,7 @@ describe("ConnectionStep", () => {
 
   describe("profiles", () => {
     it("AC-32: should show the active saved profile in the shared profile selector", () => {
-      const html = render({ profiles: [profileOf("Mensual dev"), profileOf("Mensual preprod")], activeProfile: "Mensual dev" });
+      const html = render({ profiles: [profileOf("Mensual dev"), profileOf("Mensual preprod")], activeProfileId: "Mensual dev" });
 
       expect(html).toContain("Cargar perfil guardado");
       expect(html).toContain("Mensual dev");
@@ -104,13 +104,13 @@ describe("ConnectionStep", () => {
     it("AC-32: should render a long profile list", () => {
       const profiles = Array.from({ length: 60 }, (_, index) => profileOf(`Perfil ${String(index).padStart(2, "0")}`));
 
-      const html = render({ profiles, activeProfile: "Perfil 59" });
+      const html = render({ profiles, activeProfileId: "Perfil 59" });
 
       expect(html).toContain("Perfil 59");
     });
 
     it("AC-32: should offer to delete the active profile", () => {
-      const html = render({ profiles: [profileOf("Mensual dev")], activeProfile: "Mensual dev" });
+      const html = render({ profiles: [profileOf("Mensual dev")], activeProfileId: "Mensual dev" });
 
       expect(html).toMatch(/eliminar|borrar/i);
     });

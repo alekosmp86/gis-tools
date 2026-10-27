@@ -10,16 +10,9 @@ import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
 import type { ConnectionField } from "../cargarPadronesWizardState";
 import type { ClientConnection } from "../clientTypes";
-import type { JobProfile } from "../jobProfileStorage";
 import styles from "./WizardSteps.module.css";
 
 const NO_PROFILE = "";
-const toSavedDbProfile = ({ name, savedAt, setup }: JobProfile): SavedDbProfile => ({
-  id: name,
-  name,
-  updatedAt: savedAt,
-  config: { host: setup.host, port: setup.port, db_name: setup.db_name, user: setup.user, schema_name: setup.schema, table_name: "" },
-});
 
 const FIELDS: ReadonlyArray<{ field: ConnectionField; label: string }> = [
   { field: "host", label: "Servidor" },
@@ -31,19 +24,19 @@ const FIELDS: ReadonlyArray<{ field: ConnectionField; label: string }> = [
 
 export interface ConnectionStepProps {
   connection: ClientConnection;
-  profiles: JobProfile[];
-  activeProfile: string;
+  profiles: SavedDbProfile[];
+  activeProfileId: string;
   onFieldChange: (field: ConnectionField, value: string) => void;
-  onSelectProfile: (name: string) => void;
+  onSelectProfile: (profileId: string) => void;
   onSaveProfile: (name: string) => void;
-  onDeleteProfile: (name: string) => void;
+  onDeleteProfile: (profileId: string) => void;
   blockingReason: string | null;
 }
 
 export const ConnectionStep: React.FC<ConnectionStepProps> = ({
   connection,
   profiles,
-  activeProfile,
+  activeProfileId,
   onFieldChange,
   onSelectProfile,
   onSaveProfile,
@@ -65,13 +58,13 @@ export const ConnectionStep: React.FC<ConnectionStepProps> = ({
         <div className={styles.field}>
           <span>Perfil guardado</span>
           <ProfileSelect
-            profiles={profiles.map(toSavedDbProfile)}
-            activeProfileId={activeProfile}
+            profiles={profiles}
+            activeProfileId={activeProfileId}
             onSelectProfile={onSelectProfile}
           />
         </div>
-        {activeProfile !== NO_PROFILE && (
-          <Button variant={ButtonVariant.SECONDARY} onClick={() => onDeleteProfile(activeProfile)}>
+        {activeProfileId !== NO_PROFILE && (
+          <Button variant={ButtonVariant.SECONDARY} onClick={() => onDeleteProfile(activeProfileId)}>
             <Trash2 size={15} />
             <span>Eliminar perfil</span>
           </Button>
@@ -96,7 +89,7 @@ export const ConnectionStep: React.FC<ConnectionStepProps> = ({
           <span>Guardar perfil</span>
         </Button>
       </div>
-      <p className={styles.hint}>El perfil guarda el servidor, la base, el usuario y las tablas. La contraseña se escribe en cada carga.</p>
+      <p className={styles.hint}>El perfil guarda el servidor, la base y el usuario. La contraseña se escribe en cada carga.</p>
 
       {blockingReason !== null && <AlertMessage type={AlertType.WARNING} text={blockingReason} />}
     </div>

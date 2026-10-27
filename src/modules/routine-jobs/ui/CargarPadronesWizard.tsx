@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useReducer, useState, useSyncExternalStore } from "react";
+import type { SafeDbConfig } from "@/core/types/db";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 import { isConnectionFailure } from "@/ui-kit/components/tableSelectorLogic";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
@@ -25,8 +26,9 @@ import {
   type CargarPadronesRunSnapshot,
   type CargarPadronesRunStore,
 } from "./cargarPadronesRunStore";
-import { browserJobProfileStorage, createJobProfileStorage, type JobProfile, type JobSetup } from "./jobProfileStorage";
 import type { ClientConnection, StartRequest } from "./clientTypes";
+import { changedConnectionFields } from "./connectionProfiles";
+import { useConnectionProfiles } from "./useConnectionProfiles";
 import { buildWizardSteps, excludedFor, stepIdOf, stepOfId } from "./wizardSteps";
 import { catalogKey } from "./schemaDraft";
 import { buildSharedLoadTables } from "./sharedCatalog";
@@ -50,13 +52,8 @@ const REVIEW_STEP_ID = stepIdOf(WizardStep.REVIEW);
 const RESULT_STEP_ID = stepIdOf(WizardStep.RESULT);
 const DRY_RUN = { dryRun: true };
 const REAL_RUN = { dryRun: false };
-const NO_PROFILES: JobProfile[] = [];
-
 const client = createRoutineJobsClient();
 const getIdleSnapshot = (): CargarPadronesRunSnapshot => IDLE_SNAPSHOT;
-const subscribeNever = () => () => undefined;
-const clientSnapshot = (): boolean => true;
-const serverSnapshot = (): boolean => false;
 const seedFromStore = (store: CargarPadronesRunStore): WizardState => initialWizardStateFor(store.getSnapshot());
 
 const trimmedConnection = (connection: ClientConnection): ClientConnection => ({
@@ -67,27 +64,17 @@ const trimmedConnection = (connection: ClientConnection): ClientConnection => ({
   password: connection.password,
 });
 
-const setupOf = (state: WizardState): JobSetup => ({
-  host: state.connection.host,
-  port: state.connection.port,
-  db_name: state.connection.db_name,
-  user: state.connection.user,
-  schema: state.schema,
-  ruralTable: state.tables.rural,
-  urbanoTable: state.tables.urbano,
-  targetTable: state.tables.target,
-  options: { ...state.options },
-});
-
 export const CargarPadronesWizard: React.FC = () => {
   const [runStore] = useState(getCargarPadronesRunStore);
   const [state, dispatch] = useReducer(wizardReducer, runStore, seedFromStore);
   const snapshot = useSyncExternalStore(runStore.subscribe, runStore.getSnapshot, getIdleSnapshot);
-  const [profileStorage] = useState(() => createJobProfileStorage(browserJobProfileStorage()));
-  const [storedProfiles, setStoredProfiles] = useState<JobProfile[]>(() => profileStorage.list());
-  const isBrowserReady = useSyncExternalStore(subscribeNever, clientSnapshot, serverSnapshot);
-  const profiles = isBrowserReady ? storedProfiles : NO_PROFILES;
-  const [activeProfile, setActiveProfile] = useState("");
+  const {
+    profiles,
+    activeProfileId,
+    selectProfile: pickProfile,
+    saveProfile: saveConnectionProfile,
+    deleteProfile,
+  } = useConnectionProfiles();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [catalogFailures, setCatalogFailures] = useState<CatalogFailures>(emptyCatalogFailures);
 
@@ -133,25 +120,13 @@ export const CargarPadronesWizard: React.FC = () => {
 
   const commitSchema = (next: string) => dispatch({ type: "schemaChanged", schema: next });
 
-  const selectProfile = (name: string) => {
-    setActiveProfile(name);
-    const profile = profiles.find((candidate) => candidate.name === name);
-    if (profile) {
-      setCatalogFailures(emptyCatalogFailures());
-      dispatch({ type: "loadSetup", setup: profile.setup });
-    }
+  const selectProfile = (profileId: string) => {
+    const config: SafeDbConfig | null = pickProfile(profileId);
+    if (config === null) return;
+    for (const field of changedConnectionFields(connection, config)) changeConnectionField(field, config[field]);
   };
 
-  const saveProfile = (name: string) => {
-    if (name.trim() === "") return;
-    setStoredProfiles(profileStorage.save(name, setupOf(state)));
-    setActiveProfile(name.trim());
-  };
-
-  const deleteProfile = (name: string) => {
-    setStoredProfiles(profileStorage.remove(name));
-    if (activeProfile === name) setActiveProfile("");
-  };
+  const saveProfile = (name: string) => saveConnectionProfile(name, connection);
 
   const startRun = (request: StartRequest) => {
     void runStore.start(request);
@@ -171,7 +146,7 @@ export const CargarPadronesWizard: React.FC = () => {
           <ConnectionStep
             connection={state.connection}
             profiles={profiles}
-            activeProfile={activeProfile}
+            activeProfileId={activeProfileId}
             onFieldChange={changeConnectionField}
             onSelectProfile={selectProfile}
             onSaveProfile={saveProfile}

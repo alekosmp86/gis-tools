@@ -25,7 +25,7 @@ El asistente tiene cinco pasos, que se ven en la barra superior: **Conexión**, 
 
 Complete el servidor (host), el puerto, la base de datos, el usuario y la contraseña.
 
-Un **perfil** guarda el servidor, el puerto, la base, el usuario, el esquema, las tres tablas y las opciones, para no volver a escribirlos cada mes. Para guardar un perfil escriba su nombre y pulse **Guardar perfil**. Para cargarlo, elíjalo en la lista **Perfil guardado**. **La contraseña nunca se guarda en el perfil**: hay que escribirla en cada carga. Los perfiles se guardan en el navegador de esta computadora. Si guarda un perfil con el mismo nombre que otro existente, el nuevo reemplaza (sobrescribe) al anterior. Para borrar un perfil, elíjalo en la lista **Perfil guardado** y pulse **Eliminar perfil**.
+Un **perfil** guarda el servidor, el puerto, la base y el usuario, para no volver a escribirlos cada mes. Los perfiles son las conexiones guardadas que comparten las herramientas de base de datos de esta aplicación: una conexión guardada en otra herramienta aparece aquí, y una guardada aquí aparece en ellas. Para guardar un perfil escriba su nombre y pulse **Guardar perfil**: si escribe el mismo nombre del perfil elegido en la lista, lo actualiza (lo sobrescribe); con otro nombre crea un perfil nuevo. Nunca se modifica un perfil que no haya elegido. Para cargarlo, elíjalo en la lista **Perfil guardado**; el esquema, las tablas y las opciones no se guardan en el perfil y se mantienen como estén. **La contraseña nunca se guarda en el perfil**: hay que escribirla en cada carga. Los perfiles se guardan en el navegador de esta computadora. Para borrar un perfil, elíjalo en la lista **Perfil guardado** y pulse **Eliminar perfil**.
 
 ### 2. Tablas
 

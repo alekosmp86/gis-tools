@@ -143,8 +143,9 @@ Part A
 - AC-29: run store `ui/cargarPadronesRunStore.ts` (the shp `shpReplaceRunStore` pattern): holds the active job id, polls status every 2 s (timer injected), stops on DONE/FAILED,
   survives in-app navigation (module-level store, subscribe/getSnapshot), gives up only after consecutive poll failures span 60 s and then reports an unknown outcome with the job id,
   exposes `start(params)`, `reset()`, and never keeps the password in its snapshot.
-- AC-22: setup profiles (`ui/jobProfileStorage.ts`): save / list / delete named profiles of `{ host, port, db_name, user, schema, ruralTable, urbanoTable, targetTable, options }`
-  in `localStorage`; the password is never stored; every read and write is wrapped in try/catch and the UI works without storage; corrupt JSON is ignored; the stored shape is versioned.
+- AC-22: connection profiles reuse the core shared store (`core/services/localStorageDbConfig.ts`, the same profiles the other DB tools use): the step lists them through the
+  ui-kit `ProfileSelect`, selecting one fills host, port, database and user, saving writes a connection-only profile (schema and table empty), deleting removes the selected one;
+  profiles are never overwritten unless selected; the password is never stored; the wizard does not store schema, tables or options.
 - AC-30: wizard state is a pure reducer (`ui/cargarPadronesWizardState.ts`): steps `connection -> tables -> options -> review -> result`, `canContinue(state)` rules (connection
   fields valid; schema chosen and the three tables chosen, distinct and all valid; options valid; confirmation matches), reset of dependent fields when the schema or connection changes.
 - AC-31: report view-model (`ui/cargarPadronesReportView.ts`): turns `CargarPadronesResult` into display rows (per type: rows read, repaired / inserted invalid / repaired in union,
