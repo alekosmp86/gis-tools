@@ -17,6 +17,7 @@ export interface JobSnapshot {
   current?: number;
   total?: number;
   dryRun: boolean;
+  steps: readonly string[];
   startedAt: number;
   finishedAt?: number;
   result?: CargarPadronesResult;
@@ -25,7 +26,7 @@ export interface JobSnapshot {
 }
 
 export interface CargarPadronesJobStore {
-  tryStart(tableKey: string, dryRun?: boolean): JobSnapshot | null;
+  tryStart(tableKey: string, dryRun?: boolean, steps?: readonly string[]): JobSnapshot | null;
   progress(jobId: string, progress: RunProgress): void;
   finish(jobId: string, result: CargarPadronesResult): void;
   fail(jobId: string, error: string): void;
@@ -56,7 +57,7 @@ export function createCargarPadronesJobStore(now: Clock = Date.now): CargarPadro
     update(jobId, { ...changes, finishedAt: now() });
 
   return {
-    tryStart(tableKey, dryRun = false) {
+    tryStart(tableKey, dryRun = false, steps = []) {
       const busy = Array.from(jobs.values()).some(
         (job) => job.tableKey === tableKey && job.state === JobState.RUNNING
       );
@@ -67,6 +68,7 @@ export function createCargarPadronesJobStore(now: Clock = Date.now): CargarPadro
         state: JobState.RUNNING,
         step: null,
         dryRun,
+        steps,
         startedAt: now(),
       };
       jobs.set(job.jobId, job);

@@ -57,6 +57,16 @@ describe("ResultStep", () => {
       expect(currentRow).toMatch(/checkItemCurrent/);
     });
 
+    it("AC-32: should render every planned row from the job's steps when no client plan is known", () => {
+      const steps = [STEP.VALIDATE, STEP.COUNT, STEP.LOAD_RURAL, STEP.REPORT, STEP.COMMIT];
+      const html = render(running({ job: jobOf({ step: STEP.REPORT, steps, startedAt: START_MS }) }));
+      const rows = listItemsOf(html);
+
+      expect(rows).toHaveLength(steps.length);
+      expect(rows.find((item) => item.includes("Generar informe y muestras"))).toMatch(/checkItemCurrent/);
+      expect(html).not.toContain(">Reportes y muestras<");
+    });
+
     it("AC-32: should show the elapsed time computed from nowMs and the start instant", () => {
       const html = render(running());
 

@@ -5,6 +5,7 @@ import {
   type CargarPadronesJobStore,
   type JobSnapshot,
 } from "../jobs/cargar-padrones/services/jobStore";
+import { plannedStepLabels } from "../jobs/cargar-padrones/domain/plannedSteps";
 import { openPgRunSession, type PgRunConnection } from "../jobs/cargar-padrones/services/openPgSession";
 import { runCargarPadrones } from "../jobs/cargar-padrones/services/runCargarPadrones";
 import type {
@@ -87,6 +88,7 @@ function toStatusView(job: JobSnapshot) {
     current: job.current,
     total: job.total,
     dryRun: job.dryRun,
+    steps: job.steps,
     startedAt: job.startedAt,
     finishedAt: job.finishedAt,
     result: job.result,
@@ -170,7 +172,7 @@ export function createRoutineJobsHandlers(overrides: Partial<RoutineJobsHandlerD
     try {
       const params = parseStartRequest(await readJsonRecord(request));
       deps.store.sweep(JOB_MAX_AGE_MS);
-      const job = deps.store.tryStart(tableKeyOf(params), params.dryRun);
+      const job = deps.store.tryStart(tableKeyOf(params), params.dryRun, plannedStepLabels(params));
       if (!job) return failure(HTTP_STATUS.CONFLICT, CONFLICT_MESSAGE);
       deps.track(executeJob(deps, params, job.jobId));
       return jsonResponse({ success: true, jobId: job.jobId });

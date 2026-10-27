@@ -2,8 +2,7 @@
 
 import React from "react";
 import { Check, Circle, CircleX, Loader2, TriangleAlert } from "lucide-react";
-import { plannedStepLabels } from "../../jobs/cargar-padrones/domain/plannedSteps";
-import { buildStepChecklist, ChecklistStatus, type ChecklistRow } from "../stepChecklist";
+import { buildStepChecklist, ChecklistStatus, resolvePlannedLabels, type ChecklistRow } from "../stepChecklist";
 import type { CargarPadronesRunPhase, CargarPadronesRunPlan } from "../cargarPadronesRunStore";
 import styles from "./WizardSteps.module.css";
 
@@ -37,6 +36,7 @@ const ITEM_CLASS: Record<ChecklistStatus, string> = {
 
 export interface RunStepChecklistProps {
   plan?: CargarPadronesRunPlan;
+  steps?: readonly string[];
   currentLabel: string | null;
   phase: CargarPadronesRunPhase;
 }
@@ -51,9 +51,9 @@ function ChecklistItem({ row }: { row: ChecklistRow }) {
   );
 }
 
-export const RunStepChecklist: React.FC<RunStepChecklistProps> = ({ plan, currentLabel, phase }) => {
+export const RunStepChecklist: React.FC<RunStepChecklistProps> = ({ plan, steps, currentLabel, phase }) => {
   const rows = buildStepChecklist({
-    plannedLabels: plan ? plannedStepLabels(plan) : [],
+    plannedLabels: resolvePlannedLabels({ steps, plan }),
     currentLabel,
     phase,
   });

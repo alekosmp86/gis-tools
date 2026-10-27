@@ -57,14 +57,19 @@ function RunProgress({ snapshot, nowMs }: { snapshot: CargarPadronesRunSnapshot;
           <span className={styles.statusCounter}>{`Tiempo transcurrido ${formatElapsed(nowMs - startedAt)}`}</span>
         )}
       </div>
-      <RunStepChecklist plan={snapshot.plan} currentLabel={currentLabel} phase={snapshot.phase} />
+      <RunStepChecklist plan={snapshot.plan} steps={snapshot.job?.steps} currentLabel={currentLabel} phase={snapshot.phase} />
     </div>
   );
 }
 
 function RunOutcomeChecklist({ snapshot }: { snapshot: CargarPadronesRunSnapshot }) {
   return (
-    <RunStepChecklist plan={snapshot.plan} currentLabel={snapshot.job?.step || null} phase={snapshot.phase} />
+    <RunStepChecklist
+      plan={snapshot.plan}
+      steps={snapshot.job?.steps}
+      currentLabel={snapshot.job?.step || null}
+      phase={snapshot.phase}
+    />
   );
 }
 

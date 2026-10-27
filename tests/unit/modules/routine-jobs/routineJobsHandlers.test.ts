@@ -14,6 +14,7 @@ import {
   URBANO_REQUIRED_COLUMNS,
 } from "@/modules/routine-jobs/jobs/cargar-padrones/constants";
 import type { CargarPadronesResult, TypeReport } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
+import { STEP } from "@/modules/routine-jobs/jobs/cargar-padrones/domain/plannedSteps";
 import { AnalyzeStatus } from "@/core/types/replace";
 
 const PASSWORD = "S3cr3t!pw";
@@ -572,7 +573,7 @@ describe("createRoutineJobsHandlers", () => {
       await harness.settle();
 
       expect(harness.tryStart).toHaveBeenCalledTimes(1);
-      expect(harness.tryStart).toHaveBeenCalledWith(TABLE_KEY, false);
+      expect(harness.tryStart).toHaveBeenCalledWith(TABLE_KEY, false, expect.any(Array));
     });
 
     it("AC-24/AC-19: should take the lock with dryRun true on a dry run", async () => {
@@ -581,7 +582,7 @@ describe("createRoutineJobsHandlers", () => {
       await harness.start(mutated(startBody, (b) => (b.dryRun = true)));
       await harness.settle();
 
-      expect(harness.tryStart).toHaveBeenCalledWith(TABLE_KEY, true);
+      expect(harness.tryStart).toHaveBeenCalledWith(TABLE_KEY, true, expect.any(Array));
     });
 
     it("AC-24: should feed the store with every progress report of the run", async () => {
@@ -1007,6 +1008,34 @@ describe("createRoutineJobsHandlers", () => {
       const body = await bodyOf(await harness.status(`?jobId=${jobId}`));
 
       expect(body.job).toMatchObject({ state: "RUNNING", step: "Carga rural", current: 5, total: 10 });
+      gate.resolve(resultFixture());
+      await harness.settle();
+    });
+
+    it("AC-25: should expose the planned steps of the started job in the order they will run", async () => {
+      const gate = deferred<CargarPadronesResult>();
+      const started = deferred<void>();
+      const harness = createStatusHarness(async () => {
+        started.resolve();
+        return gate.promise;
+      });
+      const jobId = await harness.start();
+      await started.promise;
+
+      const body = await bodyOf(await harness.status(`?jobId=${jobId}`));
+
+      expect(body.job.steps).toEqual([
+        STEP.VALIDATE,
+        STEP.COUNT,
+        STEP.CLEAR,
+        STEP.SEQUENCES_RESET,
+        STEP.LOAD_RURAL,
+        STEP.LOAD_URBANO,
+        STEP.REPORT,
+        STEP.SEQUENCES_REPAIR,
+        STEP.COMMIT,
+        STEP.ANALYZE,
+      ]);
       gate.resolve(resultFixture());
       await harness.settle();
     });

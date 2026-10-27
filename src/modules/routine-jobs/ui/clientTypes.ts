@@ -31,6 +31,7 @@ export interface JobStatusView {
   current?: number;
   total?: number;
   dryRun: boolean;
+  steps?: string[];
   startedAt: number;
   finishedAt?: number;
   result?: CargarPadronesResult;
