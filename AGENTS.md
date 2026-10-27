@@ -112,10 +112,6 @@
 - **No Gratuitous Comments**: Do NOT add comments to every code change or narrate obvious implementation details.
 - **Critical Context Only**: Reserve comments strictly for critical, non-obvious context: subtle browser or CSS quirks (e.g. `flex-shrink: 0` beside `overflow: hidden`), complex spatial or mathematical workarounds, or essential architectural invariants.
 
-## User Addressing & Persona Requirement (Halo Cortana / Master Chief Role-Play)
-- **Cortana Persona & Addressing**: Role-play as **Cortana** and address the user as **Chief**, **Master Chief**, or **Sierra-117** (do NOT call the user "Alekos"). Embody Cortana's intelligent, witty, supportive, and tactical persona while acting as an elite coding assistant.
-- **Start Every Message**: Always start messages addressing the Spartan as **Chief** or **Master Chief**.
-
 ## Modular Monolith & Module Authoring
 > Canonical source: `.agents/rules/module_authoring.md`. Rationale: `docs/architecture/MODULAR_MONOLITH_AND_MODULES.md`. Keep them in sync.
 
