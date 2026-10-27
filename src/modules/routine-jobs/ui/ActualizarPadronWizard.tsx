@@ -6,12 +6,13 @@ import type { SafeDbConfig } from "@/core/types/db";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 import { isConnectionFailure } from "@/ui-kit/components/tableSelectorLogic";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
-import type { ActualizarTableKey } from "./actualizarPadronWizardState";
+import type { ActualizarTableKey } from "./actualizarPadronTables";
 import {
   actualizarExcludedFor,
   blockingReason,
   canRunNow,
   initialWizardStateFor,
+  isTypeTableChosen,
   roleOfTableKey,
   runBlockedReason,
   schemaFieldOf,
@@ -109,11 +110,17 @@ export default function ActualizarPadronWizard(): React.ReactElement {
   }, [connection, catalogFailures]);
 
   const checkColumns = (key: ActualizarTableKey, table: string): Promise<ResolvedColumn[]> =>
-    client.listColumns(requestConnection, state[schemaFieldOf(key)].trim(), table, roleOfTableKey(key));
+    client.listColumns(
+      requestConnection,
+      state[schemaFieldOf(key)].trim(),
+      table,
+      roleOfTableKey(key, { withType: isTypeTableChosen(state) }),
+    );
 
   const catalogError = firstCatalogError([
     currentCatalogError(catalogFailures, catalogKeyOf(connection, state.stagingSchema)),
     currentCatalogError(catalogFailures, catalogKeyOf(connection, state.workSchema)),
+    currentCatalogError(catalogFailures, catalogKeyOf(connection, state.cartoSchema)),
   ]);
 
   const changeConnectionField = (field: ConnectionField, value: string) => {
@@ -160,6 +167,7 @@ export default function ActualizarPadronWizard(): React.ReactElement {
           <ActualizarTablesStep
             stagingSchema={state.stagingSchema}
             workSchema={state.workSchema}
+            cartoSchema={state.cartoSchema}
             tables={state.tables}
             excluded={actualizarExcludedFor(state)}
             onSchemaChange={(field, value) => dispatch({ type: "schemaChanged", field, value })}
@@ -172,7 +180,12 @@ export default function ActualizarPadronWizard(): React.ReactElement {
         );
       case WizardStep.OPTIONS:
         return (
-          <ActualizarOptionsStep options={state.options} onChange={(patch) => dispatch({ type: "optionsChanged", patch })} />
+          <ActualizarOptionsStep
+            options={state.options}
+            typeTableChosen={isTypeTableChosen(state)}
+            onChange={(patch) => dispatch({ type: "optionsChanged", patch })}
+            blockingReason={blockingReason(state)}
+          />
         );
       case WizardStep.REVIEW:
         return (

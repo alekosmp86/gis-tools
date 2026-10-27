@@ -11,6 +11,9 @@ import { actualizarResultOf } from "./actualizarFixtures";
 const render = (result: ActualizarPadronResult): string =>
   renderToStaticMarkup(React.createElement(ActualizarPadronReport, { result }));
 
+const HTML_ENTITIES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#x27;" };
+const escapeHtml = (text: string): string => text.replace(/[&<>"']/g, (char) => HTML_ENTITIES[char]);
+
 describe("ActualizarPadronReport", () => {
   it("AP-34: should render the first banner of the view", () => {
     const result = actualizarResultOf({ dryRun: true, tempModified: false });
@@ -24,14 +27,92 @@ describe("ActualizarPadronReport", () => {
     expect(html).toMatch(/verific/i);
   });
 
-  it("AP-34: should render every skip reason label with its count", () => {
+  it("AP-32b: should render the label and count of every non-zero skip reason and collapse the zero ones", () => {
     const view = buildActualizarReportView(actualizarResultOf());
     const html = render(actualizarResultOf());
 
-    for (const row of view.skippedByReason) {
+    for (const row of view.skippedRows) {
       expect(html, row.reason).toContain(row.label);
     }
+    expect(html).toContain(`Sin filas: ${view.zeroReasonCount} motivos`);
     expect(html).toContain("15");
+  });
+
+  it("AP-32b: should render each shown reason with its one-line hint and a bar marker in 5 percent steps", () => {
+    const view = buildActualizarReportView(actualizarResultOf());
+    const html = render(actualizarResultOf());
+
+    for (const row of view.skippedRows) {
+      expect(html, row.reason).toContain(escapeHtml(row.hint));
+    }
+    expect(html).toContain(`data-bar-step="${view.skippedRows[0].barStep}"`);
+  });
+
+  it("AP-32b: should render the four KPI labels and values in order", () => {
+    const view = buildActualizarReportView(actualizarResultOf());
+    const html = render(actualizarResultOf());
+    const positions = view.kpis.map((kpi) => html.indexOf(kpi.label));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    for (const kpi of view.kpis) {
+      expect(html).toContain(String(kpi.value));
+    }
+  });
+
+  it("AP-32b: should render the outcome banner before the KPI cards", () => {
+    const result = actualizarResultOf({ dryRun: true, tempModified: false });
+    const html = render(result);
+    const bannerAt = html.indexOf(buildActualizarReportView(result).banners[0].text);
+
+    expect(bannerAt).toBeGreaterThan(-1);
+    expect(bannerAt).toBeLessThan(html.indexOf(buildActualizarReportView(result).kpis[0].label));
+  });
+
+  it("AP-32b: should render Ver todo with the rest count only when there are more than ten departments", () => {
+    const groups = Array.from({ length: 25 }, (_, index) => ({ name: `G${index}`, count: 25 - index }));
+    const many = render(actualizarResultOf({ skipped: { ...actualizarResultOf().skipped, byDepartment: groups } }));
+    const few = render(actualizarResultOf({ skipped: { ...actualizarResultOf().skipped, byDepartment: groups.slice(0, 3) } }));
+
+    expect(many).toContain("Ver todo (10)");
+    expect(few).not.toContain("Ver todo");
+  });
+
+  it("AP-32b: should render the localities not found section only when that reason has locality groups", () => {
+    const withGroups = render(
+      actualizarResultOf({
+        skipped: {
+          ...actualizarResultOf().skipped,
+          byLocalityAndReason: [{ department: "LA PAZ", locality: "VILLA NUEVA", reason: SKIP_REASON.LOCALIDAD_NO_ENCONTRADA, count: 7 }],
+        },
+      }),
+    );
+
+    expect(withGroups).toContain("Localidades no encontradas");
+    expect(withGroups).toContain("VILLA NUEVA");
+    expect(render(actualizarResultOf())).not.toContain("Localidades no encontradas");
+  });
+
+  it("AP-32b: should render the localities ambiguous section only when that reason has locality groups", () => {
+    const withGroups = render(
+      actualizarResultOf({
+        skipped: {
+          ...actualizarResultOf().skipped,
+          byLocalityAndReason: [{ department: "ORURO", locality: "CENTRO", reason: SKIP_REASON.LOCALIDAD_AMBIGUA, count: 2 }],
+        },
+      }),
+    );
+
+    expect(withGroups).toContain("Localidades ambiguas");
+    expect(withGroups).toContain("CENTRO");
+    expect(render(actualizarResultOf())).not.toContain("Localidades ambiguas");
+  });
+
+  it("AP-32b: should put the samples and the step timings inside collapsible details", () => {
+    const html = render(actualizarResultOf());
+
+    expect(html).toMatch(/<details[^>]*>(?:(?!<\/details>)[\s\S])*?1234(?:(?!<\/details>)[\s\S])*?<\/details>/);
+    expect(html).toMatch(/<details[^>]*>(?:(?!<\/details>)[\s\S])*?Cargar tabla de trabajo(?:(?!<\/details>)[\s\S])*?<\/details>/);
   });
 
   it("AP-34: should render the samples with their department, locality and padron", () => {
@@ -91,7 +172,7 @@ describe("ActualizarPadronReport", () => {
     expect(html).not.toMatch(/NaN|undefined|>null</);
   });
 
-  it("AP-34: should render no progress bar and no inline styles", () => {
+  it("AP-34: should render no progress element, no inline styles and no input", () => {
     const html = render(actualizarResultOf());
 
     expect(html).not.toContain("<progress");

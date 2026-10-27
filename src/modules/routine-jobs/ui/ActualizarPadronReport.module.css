@@ -1,0 +1,121 @@
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+}
+
+.kpiLabel {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.kpiValue {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.tableWrap table,
+.tableWrap div {
+  font-size: 14px;
+}
+
+.tableWrap tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tableWrap th,
+.tableWrap td {
+  padding: 6px 10px;
+}
+
+.reasonCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reasonHint {
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.75;
+  margin: 0;
+}
+
+.barTrack {
+  width: 100%;
+  min-width: 80px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #38bdf8;
+}
+
+.fill0 { width: 0%; }
+.fill5 { width: 5%; }
+.fill10 { width: 10%; }
+.fill15 { width: 15%; }
+.fill20 { width: 20%; }
+.fill25 { width: 25%; }
+.fill30 { width: 30%; }
+.fill35 { width: 35%; }
+.fill40 { width: 40%; }
+.fill45 { width: 45%; }
+.fill50 { width: 50%; }
+.fill55 { width: 55%; }
+.fill60 { width: 60%; }
+.fill65 { width: 65%; }
+.fill70 { width: 70%; }
+.fill75 { width: 75%; }
+.fill80 { width: 80%; }
+.fill85 { width: 85%; }
+.fill90 { width: 90%; }
+.fill95 { width: 95%; }
+.fill100 { width: 100%; }
+
+.details {
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.detailsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.zeroNote {
+  font-size: 13px;
+  opacity: 0.75;
+  margin: 0;
+}

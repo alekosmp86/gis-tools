@@ -69,8 +69,18 @@ export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
         <dd>{request.padronTable}</dd>
         <dt>Tabla de provincias</dt>
         <dd>{request.provinceTable}</dd>
+        <dt>Esquema de carto</dt>
+        <dd>{request.cartoSchema}</dd>
         <dt>Tabla de localidades</dt>
         <dd>{request.localityTable}</dd>
+        {request.typeTable !== undefined && (
+          <>
+            <dt>Tabla de tipos de unidad</dt>
+            <dd>{request.typeTable}</dd>
+            <dt>Tipo de localidad</dt>
+            <dd>{options.localityType ?? ""}</dd>
+          </>
+        )}
         <dt>Vaciar tabla de trabajo</dt>
         <dd>{clearName}</dd>
       </dl>

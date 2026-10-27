@@ -19,7 +19,7 @@ const STEP_DEFS: readonly StepDef[] = [
   {
     step: WizardStep.TABLES,
     title: "Tablas",
-    subtitle: "Esquemas y las cinco tablas: origen, trabajo, padrón, provincias y localidades.",
+    subtitle: "Tres esquemas y las tablas: origen, trabajo, padrón, provincias, localidades y tipos (opcional).",
     icon: Table2,
   },
   {

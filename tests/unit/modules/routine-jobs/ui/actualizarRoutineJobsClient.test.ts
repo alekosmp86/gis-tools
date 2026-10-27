@@ -27,6 +27,8 @@ const ACTUALIZAR_ROLES: readonly ActualizarTableRole[] = [
   "actualizar-padron",
   "actualizar-provincia",
   "actualizar-localidad",
+  "actualizar-localidad-tipada",
+  "actualizar-tipo",
 ];
 
 const jsonResponse = (body: unknown, status = 200): Response =>

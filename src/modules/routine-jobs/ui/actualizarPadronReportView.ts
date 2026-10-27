@@ -1,7 +1,13 @@
 import { SKIP_REASON, type SkipReason } from "../jobs/actualizar-padron/constants";
-import type { ActualizarPadronResult, CollidingKey, SkippedGroup, SkippedSample } from "../jobs/actualizar-padron/types";
+import type {
+  ActualizarPadronResult,
+  CollidingKey,
+  SkippedGroup,
+  SkippedLocalityGroup,
+  SkippedSample,
+} from "../jobs/actualizar-padron/types";
 
-export interface ReportRow {
+export interface KpiView {
   label: string;
   value: number;
 }
@@ -12,8 +18,26 @@ export interface SkipReasonRow {
   value: number;
 }
 
+export interface SkippedReasonRow extends SkipReasonRow {
+  percent: number;
+  barStep: number;
+  hint: string;
+}
+
 export interface GroupRow {
   name: string;
+  count: number;
+}
+
+export interface GroupSplit {
+  top: GroupRow[];
+  rest: GroupRow[];
+  restCount: number;
+}
+
+export interface LocalityRow {
+  department: string;
+  locality: string;
   count: number;
 }
 
@@ -49,10 +73,13 @@ export interface ActualizarBanner {
 
 export interface ActualizarReportView {
   banners: ActualizarBanner[];
-  totals: ReportRow[];
-  skippedByReason: SkipReasonRow[];
-  byDepartment: GroupRow[];
-  byLocality: GroupRow[];
+  kpis: KpiView[];
+  skippedRows: SkippedReasonRow[];
+  zeroReasonCount: number;
+  byDepartmentSplit: GroupSplit;
+  byLocalitySplit: GroupSplit;
+  localitiesNotFound: LocalityRow[];
+  localitiesAmbiguous: LocalityRow[];
   samples: SampleView[];
   collidingKeys: CollidingKeyView[];
   collidingKeyCount: number;
@@ -63,9 +90,12 @@ export interface ActualizarReportView {
 }
 
 const LIMIT = 20;
+const TOP_LIMIT = 10;
 const EMPTY_VALUE = "sin dato";
 const MS_PER_SECOND = 1000;
 const HUNDREDTHS_PER_UNIT = 100;
+const PERCENT_SCALE = 100;
+const BAR_STEP_PERCENT = 5;
 
 const REASON_LABEL: Record<SkipReason, string> = {
   [SKIP_REASON.PROVINCIA_NO_ENCONTRADA]: "Provincia no encontrada",
@@ -77,6 +107,16 @@ const REASON_LABEL: Record<SkipReason, string> = {
   [SKIP_REASON.CLAVE_DUPLICADA]: "Clave duplicada",
 };
 
+const REASON_HINT: Record<SkipReason, string> = {
+  [SKIP_REASON.PROVINCIA_NO_ENCONTRADA]: "La coincidencia de provincia es por nombre: el departamento del padrón no coincide con ningún nombre de la tabla de provincias.",
+  [SKIP_REASON.PROVINCIA_AMBIGUA]: "El nombre de la provincia coincide con más de una. Revise la tabla de provincias.",
+  [SKIP_REASON.LOCALIDAD_NO_ENCONTRADA]: "La localidad no existe en su provincia. Vea la lista de localidades no encontradas.",
+  [SKIP_REASON.LOCALIDAD_AMBIGUA]: "La localidad coincide con más de una en su provincia. Revise la tabla de localidades.",
+  [SKIP_REASON.CLAVE_NULA]: "Falta el tipo de unidad (unidadcat), el departamento, la localidad (en urbano) o el número. Corrija la tabla de origen.",
+  [SKIP_REASON.SIN_GEOMETRIA]: "La fila no tiene una geometría utilizable. Corrija la geometría en la tabla de origen.",
+  [SKIP_REASON.CLAVE_DUPLICADA]: "Varias filas comparten la misma clave y todas se omiten. Revise la tabla de origen.",
+};
+
 const ANALYZE_LABELS: Record<ActualizarPadronResult["analyze"]["status"], string> = {
   ok: "Estadísticas actualizadas",
   failed: "No se pudieron actualizar las estadísticas",
@@ -85,7 +125,7 @@ const ANALYZE_LABELS: Record<ActualizarPadronResult["analyze"]["status"], string
 
 const BANNER_TEXT = {
   unknown: "Resultado incierto: hay que verificar la tabla de trabajo antes de volver a actualizar.",
-  dryRun: "Análisis sin cargar: la tabla de trabajo no se modificó.",
+  dryRun: "Análisis: la tabla de trabajo no fue modificada.",
   warning: "La actualización terminó con advertencias. Revise el informe.",
   done: "Actualización terminada: la tabla de trabajo se ha cargado.",
 } as const;
@@ -102,14 +142,20 @@ const roundSeconds = (ms: number): number =>
 const reasonLabelOf = (reason: string): string =>
   (SKIP_REASONS as string[]).includes(reason) ? REASON_LABEL[reason as SkipReason] : reason;
 
-function totalsOf(result: ActualizarPadronResult): ReportRow[] {
+const shareOf = (value: number, total: number): number => (total === 0 ? 0 : (value * PERCENT_SCALE) / total);
+
+const percentOf = (value: number, total: number): number => Math.round(shareOf(value, total));
+
+const barStepOf = (value: number, total: number): number =>
+  Math.round(shareOf(value, total) / BAR_STEP_PERCENT) * BAR_STEP_PERCENT;
+
+function kpisOf(result: ActualizarPadronResult): KpiView[] {
   const { totals } = result;
   return [
-    { label: "Filas leídas de staging", value: totals.rowsRead },
-    { label: "Filas aceptadas", value: totals.accepted },
+    { label: "Filas leídas", value: totals.rowsRead },
     { label: "Filas escritas", value: totals.written },
-    { label: "Geometrías reparadas", value: totals.repaired },
     { label: "Filas omitidas", value: totals.skipped },
+    { label: "Geometrías reparadas", value: totals.repaired },
   ];
 }
 
@@ -121,8 +167,34 @@ function skippedByReasonOf(result: ActualizarPadronResult): SkipReasonRow[] {
   }));
 }
 
+function skippedRowsOf(rows: SkipReasonRow[]): SkippedReasonRow[] {
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  return rows
+    .filter((row) => row.value > 0)
+    .sort((first, second) => second.value - first.value)
+    .map((row) => ({
+      ...row,
+      percent: percentOf(row.value, total),
+      barStep: barStepOf(row.value, total),
+      hint: REASON_HINT[row.reason],
+    }));
+}
+
 const groupsOf = (groups: SkippedGroup[]): GroupRow[] =>
   groups.slice(0, LIMIT).map((group) => ({ name: textOf(group.name), count: group.count }));
+
+const splitOf = (groups: GroupRow[]): GroupSplit => ({
+  top: groups.slice(0, TOP_LIMIT),
+  rest: groups.slice(TOP_LIMIT),
+  restCount: Math.max(0, groups.length - TOP_LIMIT),
+});
+
+const localityRowsOf = (groups: SkippedLocalityGroup[], reason: SkipReason): LocalityRow[] =>
+  groups
+    .filter((group) => group.reason === reason)
+    .sort((first, second) => second.count - first.count)
+    .slice(0, LIMIT)
+    .map((group) => ({ department: textOf(group.department), locality: textOf(group.locality), count: group.count }));
 
 const samplesOf = (samples: SkippedSample[]): SampleView[] =>
   samples.slice(0, LIMIT).map((sample) => ({
@@ -166,12 +238,18 @@ function analyzeOf(result: ActualizarPadronResult): AnalyzeView {
 }
 
 export function buildActualizarReportView(result: ActualizarPadronResult): ActualizarReportView {
+  const skippedByReason = skippedByReasonOf(result);
+  const byDepartment = groupsOf(result.skipped.byDepartment);
+  const byLocality = groupsOf(result.skipped.byLocality);
   return {
     banners: bannersOf(result),
-    totals: totalsOf(result),
-    skippedByReason: skippedByReasonOf(result),
-    byDepartment: groupsOf(result.skipped.byDepartment),
-    byLocality: groupsOf(result.skipped.byLocality),
+    kpis: kpisOf(result),
+    skippedRows: skippedRowsOf(skippedByReason),
+    zeroReasonCount: skippedByReason.filter((row) => row.value === 0).length,
+    byDepartmentSplit: splitOf(byDepartment),
+    byLocalitySplit: splitOf(byLocality),
+    localitiesNotFound: localityRowsOf(result.skipped.byLocalityAndReason, SKIP_REASON.LOCALIDAD_NO_ENCONTRADA),
+    localitiesAmbiguous: localityRowsOf(result.skipped.byLocalityAndReason, SKIP_REASON.LOCALIDAD_AMBIGUA),
     samples: samplesOf(result.skipped.samples),
     collidingKeys: collidingKeysOf(result.skipped.collidingKeys),
     collidingKeyCount: result.skipped.collidingKeyCount,

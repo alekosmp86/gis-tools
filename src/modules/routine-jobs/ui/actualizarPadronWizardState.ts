@@ -1,6 +1,6 @@
 // Same wizard API names as cargarPadronesWizardState: both jobs expose the reducer contract the tests fix.
 // fallow-ignore-file duplicate-export
-import { ACTUALIZAR_TABLE_ROLE, type ActualizarTableRole } from "../jobs/actualizar-padron/constants";
+import { DEFAULT_LOCALITY_TYPE } from "../jobs/actualizar-padron/constants";
 import { CLEAR_MODE } from "../jobs/cargar-padrones/constants";
 import type { ActualizarJobOptions, ActualizarStartRequest, ClientConnection } from "./clientTypes";
 import type { ActualizarPadronRunSnapshot } from "./actualizarPadronRunStore";
@@ -11,32 +11,26 @@ import {
 } from "./cargarPadronesWizardState";
 import { trimConnection } from "./connectionProfiles";
 import { RunPhase } from "./jobRunStore";
+import {
+  ActualizarTableKey,
+  REQUIRED_TABLE_KEYS,
+  schemaFieldOf,
+  TABLE_KEYS,
+  type ActualizarTableSelection,
+  type SchemaField,
+} from "./actualizarPadronTables";
 
 export { WizardStep } from "./cargarPadronesWizardState";
-
-export const ActualizarTableKey = {
-  STAGING: "staging",
-  WORK: "work",
-  PADRON: "padron",
-  PROVINCE: "province",
-  LOCALITY: "locality",
-} as const;
-
-export type ActualizarTableKey = (typeof ActualizarTableKey)[keyof typeof ActualizarTableKey];
-
-export type SchemaField = "stagingSchema" | "workSchema";
+export { actualizarExcludedFor, ActualizarTableKey, roleOfTableKey, schemaFieldOf } from "./actualizarPadronTables";
 
 export interface ActualizarWizardConfirmation {
   password: string;
   workTableLabel: string;
 }
 
-export interface ActualizarWizardState {
+export interface ActualizarWizardState extends ActualizarTableSelection {
   step: WizardStep;
   connection: ClientConnection;
-  stagingSchema: string;
-  workSchema: string;
-  tables: Record<ActualizarTableKey, string>;
   tableValidity: Record<ActualizarTableKey, boolean>;
   options: ActualizarJobOptions;
   confirmation: ActualizarWizardConfirmation;
@@ -63,41 +57,35 @@ const STEP_ORDER: readonly WizardStep[] = [
 ];
 const RUN_START_STEP = WizardStep.RESULT;
 const RUN_GATE_STEP = WizardStep.REVIEW;
-const TABLE_KEYS: readonly ActualizarTableKey[] = Object.values(ActualizarTableKey);
+const SCHEMA_FIELDS: readonly SchemaField[] = ["stagingSchema", "workSchema", "cartoSchema"];
 
 const MESSAGES = {
   stagingSchema: "Indique el esquema de la tabla de origen.",
   workSchema: "Indique el esquema de la tabla de trabajo.",
-  tablesMissing: "Elija las cinco tablas del trabajo.",
-  tablesDistinct: "Las cinco tablas deben ser distintas dentro de su esquema.",
+  cartoSchema: "Indique el esquema de carto: padrón, provincias, localidades y tipos.",
+  tablesMissing: "Elija las cinco tablas obligatorias.",
+  tablesDistinct: "Las tablas elegidas deben ser distintas dentro de su esquema.",
   tablesInvalid: "Alguna tabla tiene columnas faltantes o ambiguas.",
+  localityType: "Indique el tipo de localidad o quite la tabla de tipos de unidad.",
 } as const;
 
-const ROLE_OF_KEY: Record<ActualizarTableKey, ActualizarTableRole> = {
-  [ActualizarTableKey.STAGING]: ACTUALIZAR_TABLE_ROLE.STAGING,
-  [ActualizarTableKey.WORK]: ACTUALIZAR_TABLE_ROLE.TEMP,
-  [ActualizarTableKey.PADRON]: ACTUALIZAR_TABLE_ROLE.PADRON,
-  [ActualizarTableKey.PROVINCE]: ACTUALIZAR_TABLE_ROLE.PROVINCE,
-  [ActualizarTableKey.LOCALITY]: ACTUALIZAR_TABLE_ROLE.LOCALITY,
+const DEPENDENT_KEYS: Record<SchemaField, readonly ActualizarTableKey[]> = {
+  stagingSchema: [ActualizarTableKey.STAGING],
+  workSchema: [ActualizarTableKey.WORK],
+  cartoSchema: [ActualizarTableKey.PADRON, ActualizarTableKey.PROVINCE, ActualizarTableKey.LOCALITY, ActualizarTableKey.TYPE],
 };
 
-const emptyTables = (): Record<ActualizarTableKey, string> => ({ staging: "", work: "", padron: "", province: "", locality: "" });
-const noTableValidity = (): Record<ActualizarTableKey, boolean> => ({
-  staging: false,
-  work: false,
-  padron: false,
-  province: false,
-  locality: false,
-});
+const recordOfEveryKey = <Value>(value: Value): Record<ActualizarTableKey, Value> =>
+  Object.fromEntries(TABLE_KEYS.map((key) => [key, value])) as Record<ActualizarTableKey, Value>;
+
+const clearedFor = <Value>(
+  keys: readonly ActualizarTableKey[],
+  cleared: Value,
+  record: Record<ActualizarTableKey, Value>,
+): Record<ActualizarTableKey, Value> =>
+  Object.fromEntries(TABLE_KEYS.map((key) => [key, keys.includes(key) ? cleared : record[key]])) as Record<ActualizarTableKey, Value>;
+
 const emptyConfirmation = (): ActualizarWizardConfirmation => ({ password: "", workTableLabel: "" });
-
-export function roleOfTableKey(key: ActualizarTableKey): ActualizarTableRole {
-  return ROLE_OF_KEY[key];
-}
-
-export function schemaFieldOf(key: ActualizarTableKey): SchemaField {
-  return key === ActualizarTableKey.STAGING ? "stagingSchema" : "workSchema";
-}
 
 export function initialWizardState(): ActualizarWizardState {
   return {
@@ -105,9 +93,10 @@ export function initialWizardState(): ActualizarWizardState {
     connection: { host: "", port: "5432", db_name: "", user: "", password: "" },
     stagingSchema: "",
     workSchema: "",
-    tables: emptyTables(),
-    tableValidity: noTableValidity(),
-    options: { clearMode: CLEAR_MODE.DELETE },
+    cartoSchema: "",
+    tables: recordOfEveryKey<string>(""),
+    tableValidity: recordOfEveryKey(false),
+    options: { clearMode: CLEAR_MODE.DELETE, localityType: DEFAULT_LOCALITY_TYPE },
     confirmation: emptyConfirmation(),
   };
 }
@@ -118,23 +107,35 @@ export function initialWizardStateFor(snapshot: ActualizarPadronRunSnapshot): Ac
 
 const isBlank = (value: string): boolean => value.trim() === "";
 
+export const isTypeTableChosen = (state: ActualizarWizardState): boolean => !isBlank(state.tables[ActualizarTableKey.TYPE]);
+
+const localityTypeOf = (state: ActualizarWizardState): string => state.options.localityType ?? "";
+
 const schemaBlockingReason = (state: ActualizarWizardState): string | null => {
-  if (isBlank(state.stagingSchema)) return MESSAGES.stagingSchema;
-  if (isBlank(state.workSchema)) return MESSAGES.workSchema;
-  return null;
+  const blankField = SCHEMA_FIELDS.find((field) => isBlank(state[field]));
+  return blankField === undefined ? null : MESSAGES[blankField];
 };
 
 const qualifiedNameOf = (state: ActualizarWizardState, key: ActualizarTableKey): string =>
   `${state[schemaFieldOf(key)].trim()}.${state.tables[key].trim()}`;
 
+const chosenKeysOf = (state: ActualizarWizardState): ActualizarTableKey[] =>
+  TABLE_KEYS.filter((key) => !isBlank(state.tables[key]));
+
 function tablesBlockingReason(state: ActualizarWizardState): string | null {
   const schemaReason = schemaBlockingReason(state);
   if (schemaReason !== null) return schemaReason;
-  if (TABLE_KEYS.some((key) => isBlank(state.tables[key]))) return MESSAGES.tablesMissing;
-  const names = TABLE_KEYS.map((key) => qualifiedNameOf(state, key));
+  if (REQUIRED_TABLE_KEYS.some((key) => isBlank(state.tables[key]))) return MESSAGES.tablesMissing;
+  const chosen = chosenKeysOf(state);
+  const names = chosen.map((key) => qualifiedNameOf(state, key));
   if (new Set(names).size !== names.length) return MESSAGES.tablesDistinct;
-  if (TABLE_KEYS.some((key) => !state.tableValidity[key])) return MESSAGES.tablesInvalid;
+  if (chosen.some((key) => !state.tableValidity[key])) return MESSAGES.tablesInvalid;
   return null;
+}
+
+function optionsBlockingReason(state: ActualizarWizardState): string | null {
+  if (!isTypeTableChosen(state)) return null;
+  return isBlank(localityTypeOf(state)) ? MESSAGES.localityType : null;
 }
 
 export function blockingReason(state: ActualizarWizardState): string | null {
@@ -143,23 +144,24 @@ export function blockingReason(state: ActualizarWizardState): string | null {
       return connectionBlockingReason(state.connection);
     case WizardStep.TABLES:
       return tablesBlockingReason(state);
+    case WizardStep.OPTIONS:
+      return optionsBlockingReason(state);
     default:
       return null;
   }
 }
 
-/** The run cannot start whatever the step: the connection reason wins over the tables reason. */
+/** The run cannot start whatever the step: the connection reason wins, then the tables, then the options. */
 export function runBlockedReason(state: ActualizarWizardState): string | null {
-  return connectionBlockingReason(state.connection) ?? tablesBlockingReason(state);
+  return connectionBlockingReason(state.connection) ?? tablesBlockingReason(state) ?? optionsBlockingReason(state);
 }
 
 export function canContinue(state: ActualizarWizardState): boolean {
   switch (state.step) {
     case WizardStep.CONNECTION:
     case WizardStep.TABLES:
-      return blockingReason(state) === null;
     case WizardStep.OPTIONS:
-      return true;
+      return blockingReason(state) === null;
     default:
       return false;
   }
@@ -179,77 +181,94 @@ export function canRunNow(state: ActualizarWizardState, flags: { dryRun: boolean
 }
 
 export function toStartRequest(state: ActualizarWizardState, flags: { dryRun: boolean }): ActualizarStartRequest {
-  return {
+  const request: ActualizarStartRequest = {
     connection: trimConnection(state.connection),
     stagingSchema: state.stagingSchema.trim(),
     stagingTable: state.tables.staging.trim(),
     workSchema: state.workSchema.trim(),
     workTable: state.tables.work.trim(),
+    cartoSchema: state.cartoSchema.trim(),
     padronTable: state.tables.padron.trim(),
     provinceTable: state.tables.province.trim(),
     localityTable: state.tables.locality.trim(),
-    options: { ...state.options },
+    options: { clearMode: state.options.clearMode },
     dryRun: flags.dryRun,
     confirm: !flags.dryRun,
+  };
+  if (!isTypeTableChosen(state)) return request;
+  return {
+    ...request,
+    typeTable: state.tables.type.trim(),
+    options: { clearMode: state.options.clearMode, localityType: localityTypeOf(state).trim() },
   };
 }
 
 const indexOfStep = (step: WizardStep): number => STEP_ORDER.indexOf(step);
 
-function canReach(state: ActualizarWizardState, target: WizardStep): boolean {
+/** A forward jump stops at the first step that cannot be left; a backward jump always lands on its target. */
+function landingStepOf(state: ActualizarWizardState, target: WizardStep): WizardStep {
   const from = indexOfStep(state.step);
   const to = indexOfStep(target);
-  if (to <= from) return true;
   for (let index = from; index < to; index++) {
     const step = STEP_ORDER[index];
     if (step === RUN_GATE_STEP && target === RUN_START_STEP) continue;
-    if (!canContinue({ ...state, step })) return false;
+    if (!canContinue({ ...state, step })) return step;
   }
-  return true;
+  return target;
 }
-
-const withoutDependents = (state: ActualizarWizardState): ActualizarWizardState => ({
-  ...state,
-  tables: emptyTables(),
-  tableValidity: noTableValidity(),
-  confirmation: emptyConfirmation(),
-});
 
 /** The typed confirmation lives only while the review is on screen, so it never outlives that step. */
 function moveTo(state: ActualizarWizardState, step: WizardStep): ActualizarWizardState {
-  if (!canReach(state, step)) return state;
-  const leavesReview = state.step === RUN_GATE_STEP && step !== RUN_GATE_STEP;
-  return { ...state, step, confirmation: leavesReview ? emptyConfirmation() : state.confirmation };
+  const landing = landingStepOf(state, step);
+  const leavesReview = state.step === RUN_GATE_STEP && landing !== RUN_GATE_STEP;
+  return { ...state, step: landing, confirmation: leavesReview ? emptyConfirmation() : state.confirmation };
 }
 
 function stepAfter(step: WizardStep, delta: number): WizardStep {
   return STEP_ORDER[indexOfStep(step) + delta] ?? step;
 }
 
-export function actualizarExcludedFor(state: ActualizarWizardState): Record<ActualizarTableKey, string[]> {
-  const excludedFor = (key: ActualizarTableKey): string[] => {
-    const others = TABLE_KEYS.filter((other) => other !== key && schemaFieldOf(other) === schemaFieldOf(key));
-    const names = others.map((other) => state.tables[other].trim()).filter((name) => name !== "");
-    return [...new Set(names)];
-  };
-  return Object.fromEntries(TABLE_KEYS.map((key) => [key, excludedFor(key)])) as Record<ActualizarTableKey, string[]>;
-}
-
 function connectionReducer(state: ActualizarWizardState, field: ConnectionField, value: string): ActualizarWizardState {
   if (field === "password") {
     return { ...state, connection: { ...state.connection, password: value }, confirmation: emptyConfirmation() };
   }
-  return withoutDependents({ ...state, connection: { ...state.connection, [field]: value } });
+  return {
+    ...state,
+    connection: { ...state.connection, [field]: value },
+    stagingSchema: "",
+    workSchema: "",
+    cartoSchema: "",
+    tables: recordOfEveryKey<string>(""),
+    tableValidity: recordOfEveryKey(false),
+    confirmation: emptyConfirmation(),
+  };
+}
+
+function schemaReducer(state: ActualizarWizardState, field: SchemaField, value: string): ActualizarWizardState {
+  const keys = DEPENDENT_KEYS[field];
+  return {
+    ...state,
+    [field]: value,
+    tables: clearedFor(keys, "", state.tables),
+    tableValidity: clearedFor(keys, false, state.tableValidity),
+    confirmation: field === "workSchema" ? { ...state.confirmation, workTableLabel: "" } : state.confirmation,
+  };
 }
 
 function tableReducer(state: ActualizarWizardState, key: ActualizarTableKey, table: string, valid: boolean): ActualizarWizardState {
-  const workChanged = key === ActualizarTableKey.WORK && table !== state.tables.work;
+  const changed = table !== state.tables[key];
   const next: ActualizarWizardState = {
     ...state,
     tables: { ...state.tables, [key]: table },
     tableValidity: { ...state.tableValidity, [key]: valid },
   };
-  return workChanged ? { ...next, confirmation: { ...next.confirmation, workTableLabel: "" } } : next;
+  if (key === ActualizarTableKey.WORK && changed) {
+    return { ...next, confirmation: { ...next.confirmation, workTableLabel: "" } };
+  }
+  if (key === ActualizarTableKey.TYPE && changed) {
+    return { ...next, tableValidity: { ...next.tableValidity, [ActualizarTableKey.LOCALITY]: false } };
+  }
+  return next;
 }
 
 export function wizardReducer(state: ActualizarWizardState, action: ActualizarWizardAction): ActualizarWizardState {
@@ -257,9 +276,7 @@ export function wizardReducer(state: ActualizarWizardState, action: ActualizarWi
     case "connectionChanged":
       return connectionReducer(state, action.field, action.value);
     case "schemaChanged":
-      return action.field === "stagingSchema"
-        ? { ...withoutDependents(state), stagingSchema: action.value }
-        : { ...withoutDependents(state), workSchema: action.value };
+      return schemaReducer(state, action.field, action.value);
     case "tableChosen":
       return tableReducer(state, action.key, action.table, action.valid);
     case "optionsChanged":

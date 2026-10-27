@@ -29,8 +29,9 @@ describe("ActualizarTablesStep", () => {
     const props: Props = {
       stagingSchema: "bdj_carto",
       workSchema: "carto",
-      tables: { staging: "", work: "", padron: "", province: "", locality: "" },
-      excluded: { staging: [], work: [], padron: [], province: [], locality: [] },
+      cartoSchema: "carto_cat",
+      tables: { staging: "", work: "", padron: "", province: "", locality: "", type: "" },
+      excluded: { staging: [], work: [], padron: [], province: [], locality: [], type: [] },
       onSchemaChange: vi.fn(),
       onTableChange: vi.fn(),
       loadTables: vi.fn().mockResolvedValue({ schemaExists: true, tables: [] }),
@@ -61,13 +62,34 @@ describe("ActualizarTablesStep", () => {
     expect(html).toContain("Tabla de localidades");
   });
 
+  it("AP-29: should render the optional type table selector with its Spanish label", () => {
+    expect(render()).toContain("Tabla de tipos de unidad (opcional)");
+  });
+
+  it("AP-29: should render the three schema fields with their Spanish labels and the carto value", () => {
+    const html = render({ stagingSchema: "bdj_carto", workSchema: "carto_test", cartoSchema: "carto_cat" });
+
+    expect(html).toContain("Esquema de origen");
+    expect(html).toContain("Esquema de trabajo");
+    expect(html).toContain("Esquema de carto");
+    expect(html).toContain('value="carto_cat"');
+  });
+
+  it("AP-29: should show one hint paragraph after the schema fields and before the table selectors", () => {
+    const html = render();
+    const beforeSelectors = html.slice(0, html.indexOf("<select"));
+
+    expect(beforeSelectors).toMatch(/<p[^>]*>[^<]{20,}<\/p>/);
+    expect(beforeSelectors).toContain("Esquema de carto");
+  });
+
   it("AP-29: should render exactly one table selector per table", () => {
-    expect(render().split("<select").length - 1).toBe(5);
+    expect(render().split("<select").length - 1).toBe(6);
   });
 
   it("AP-29: should keep the chosen tables visible in their selectors", () => {
     const html = render({
-      tables: { staging: "stg", work: "padron_trabajo", padron: "padron", province: "province", locality: "cadastral_locality" },
+      tables: { staging: "stg", work: "padron_trabajo", padron: "padron", province: "province", locality: "cadastral_locality", type: "tipo_loc" },
     });
 
     expect(html).toContain('value="stg"');
@@ -97,9 +119,38 @@ describe("ActualizarOptionsStep", () => {
   type Props = React.ComponentProps<typeof ActualizarOptionsStep>;
 
   function render(overrides: Partial<Props> = {}): string {
-    const props: Props = { options: { clearMode: "delete" }, onChange: vi.fn(), ...overrides };
+    const props: Props = { options: { clearMode: "delete" }, typeTableChosen: false, onChange: vi.fn(), ...overrides };
     return renderToStaticMarkup(React.createElement(ActualizarOptionsStep, props));
   }
+
+  const nonChoiceInputsOf = (html: string): string[] =>
+    openingTags(html, "input").filter((tag) => !/type="(radio|checkbox)"/.test(tag));
+
+  it("AP-30: should show the Tipo de localidad text field only when a type table is chosen", () => {
+    expect(render({ typeTableChosen: true })).toContain("Tipo de localidad");
+    expect(render({ typeTableChosen: false })).not.toContain("Tipo de localidad");
+  });
+
+  it("AP-30: should show the default LOCALIDAD CATASTRAL when the locality type is not set", () => {
+    const html = render({ options: { clearMode: "delete" }, typeTableChosen: true });
+
+    expect(html).toContain('value="LOCALIDAD CATASTRAL"');
+  });
+
+  it("AP-30: should show the locality type chosen in the options", () => {
+    const html = render({ options: { clearMode: "delete", localityType: "LOCALIDAD RURAL" }, typeTableChosen: true });
+
+    expect(html).toContain('value="LOCALIDAD RURAL"');
+    expect(html).not.toContain('value="LOCALIDAD CATASTRAL"');
+  });
+
+  it("AP-30: should render the locality type as the only free-text input", () => {
+    expect(nonChoiceInputsOf(render({ typeTableChosen: true }))).toHaveLength(1);
+  });
+
+  it("AP-30: should not render the locality type input when no type table is chosen", () => {
+    expect(nonChoiceInputsOf(render({ typeTableChosen: false }))).toHaveLength(0);
+  });
 
   it("AP-30: should offer the DELETE and TRUNCATE clear modes as radio choices", () => {
     const radios = openingTags(render(), "input").filter((tag) => tag.includes('type="radio"'));
@@ -190,6 +241,34 @@ describe("ActualizarReviewStep", () => {
 
       expect(html).toContain("t_trabajo");
       expect(html).toMatch(/no se modifica/i);
+    });
+
+    it("AP-31: should list the carto schema next to the staging and work schemas", () => {
+      const html = render({ request: actualizarRequestOf({ cartoSchema: "carto_cat" }) });
+
+      for (const schema of ["bdj_carto", "carto", "carto_cat"]) {
+        expect(html, schema).toContain(schema);
+      }
+    });
+
+    it("AP-31: should list the type table and the locality type when a type table is selected", () => {
+      const html = render({
+        request: actualizarRequestOf({
+          typeTable: "t_tipo",
+          options: { clearMode: "delete", localityType: "LOCALIDAD RURAL" },
+        }),
+      });
+
+      expect(html).toContain("t_tipo");
+      expect(html).toContain("LOCALIDAD RURAL");
+    });
+
+    it("AP-31: should not list a type table or a locality type when no type table is selected", () => {
+      const html = render({
+        request: actualizarRequestOf({ options: { clearMode: "delete", localityType: "LOCALIDAD RURAL" } }),
+      });
+
+      expect(html).not.toContain("LOCALIDAD RURAL");
     });
 
     it("AP-24: should never print the password in the summary", () => {
@@ -334,7 +413,7 @@ describe("ActualizarResultStep", () => {
 
       expect(html).toContain(view.banners[0].text);
       expect(html).toContain("Hay 3 padrones sin geometría.");
-      expect(html).toContain(view.skippedByReason.find((row) => row.value > 0)?.label ?? "");
+      expect(html).toContain(view.skippedRows[0]?.label ?? "");
     });
 
     it("AP-17: should show the dry-run banner for an analysis", () => {

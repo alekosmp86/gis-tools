@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { buildActualizarReportView } from "@/modules/routine-jobs/ui/actualizarPadronReportView";
 import { SKIP_REASON, type SkipReason } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
-import type { ActualizarPadronResult, CollidingKey, SkippedSample } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
+import type {
+  ActualizarPadronResult,
+  CollidingKey,
+  SkippedLocalityGroup,
+  SkippedReport,
+  SkippedSample,
+} from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import { actualizarResultOf } from "../wizard/actualizarFixtures";
 
 const ALL_REASONS = Object.values(SKIP_REASON) as SkipReason[];
 const LIMIT = 20;
+const TOP_LIMIT = 10;
 
 const zeroReasons = (): Record<SkipReason, number> =>
   Object.fromEntries(ALL_REASONS.map((reason) => [reason, 0])) as Record<SkipReason, number>;
@@ -29,68 +36,74 @@ const keysOf = (count: number): CollidingKey[] =>
 
 const bannerKinds = (view: ReturnType<typeof buildActualizarReportView>): string[] => view.banners.map((banner) => banner.kind);
 
-describe("actualizarPadronReportView", () => {
-  describe("totals", () => {
-    it("AP-34: should list the five totals in the documented order", () => {
-      const view = buildActualizarReportView(actualizarResultOf());
+const skippedOf = (overrides: Partial<SkippedReport> = {}): SkippedReport => ({ ...actualizarResultOf().skipped, ...overrides });
 
-      expect(view.totals.map((row) => row.value)).toEqual([1000, 950, 950, 4, 50]);
-    });
-
-    it("AP-34: should give every total a non-empty Spanish label", () => {
-      const view = buildActualizarReportView(actualizarResultOf());
-
-      for (const row of view.totals) {
-        expect(row.label.trim().length).toBeGreaterThan(0);
-      }
-    });
+const resultWithSkipped = (overrides: Partial<SkippedReport>, skippedTotal = 50): ActualizarPadronResult =>
+  actualizarResultOf({
+    totals: { rowsRead: 1000, accepted: 950, written: 950, repaired: 4, skipped: skippedTotal },
+    skipped: skippedOf(overrides),
   });
 
+const oneEachReason = (): Record<SkipReason, number> =>
+  Object.fromEntries(ALL_REASONS.map((reason) => [reason, 1])) as Record<SkipReason, number>;
+
+const countsOf = (byReason: Partial<Record<SkipReason, number>>): Record<SkipReason, number> =>
+  Object.fromEntries(ALL_REASONS.map((reason) => [reason, byReason[reason] ?? 0])) as Record<SkipReason, number>;
+
+const groupsNamed = (count: number): { name: string; count: number }[] =>
+  Array.from({ length: count }, (_, index) => ({ name: `G${index}`, count: count - index }));
+
+const localityGroup = (
+  department: string | null,
+  locality: string | null,
+  reason: SkipReason,
+  count: number,
+): SkippedLocalityGroup => ({ department, locality, reason, count });
+
+describe("actualizarPadronReportView", () => {
   describe("skipped rows by reason", () => {
-    it("AP-34: should list one row for every skip reason", () => {
-      const view = buildActualizarReportView(actualizarResultOf());
-
-      expect(view.skippedByReason.map((row) => row.reason).sort()).toEqual([...ALL_REASONS].sort());
-    });
-
-    it("AP-34: should zero-fill the reasons that skipped nothing", () => {
-      const view = buildActualizarReportView(actualizarResultOf());
-
-      expect(view.skippedByReason.find((row) => row.reason === SKIP_REASON.PROVINCIA_AMBIGUA)?.value).toBe(0);
-    });
-
     it("AP-34: should carry the counts of the reasons that skipped rows", () => {
       const view = buildActualizarReportView(actualizarResultOf());
 
-      expect(view.skippedByReason.find((row) => row.reason === SKIP_REASON.CLAVE_DUPLICADA)?.value).toBe(15);
-      expect(view.skippedByReason.find((row) => row.reason === SKIP_REASON.LOCALIDAD_NO_ENCONTRADA)?.value).toBe(20);
+      expect(view.skippedRows.find((row) => row.reason === SKIP_REASON.CLAVE_DUPLICADA)?.value).toBe(15);
+      expect(view.skippedRows.find((row) => row.reason === SKIP_REASON.LOCALIDAD_NO_ENCONTRADA)?.value).toBe(20);
+    });
+
+    it("AP-34: should leave out the reasons that skipped nothing and count them as zero", () => {
+      const view = buildActualizarReportView(actualizarResultOf());
+
+      expect(view.skippedRows.find((row) => row.reason === SKIP_REASON.PROVINCIA_AMBIGUA)).toBeUndefined();
+      expect(view.zeroReasonCount).toBe(ALL_REASONS.length - view.skippedRows.length);
     });
 
     it("AP-34: should give every reason a distinct Spanish label that is not its code", () => {
-      const view = buildActualizarReportView(actualizarResultOf());
-      const labels = view.skippedByReason.map((row) => row.label);
+      const view = buildActualizarReportView(resultWithSkipped({ byReason: oneEachReason() }, ALL_REASONS.length));
+      const labels = view.skippedRows.map((row) => row.label);
 
       expect(new Set(labels).size).toBe(ALL_REASONS.length);
-      for (const row of view.skippedByReason) {
+      for (const row of view.skippedRows) {
         expect(row.label.trim().length, row.reason).toBeGreaterThan(0);
         expect(row.label, row.reason).not.toBe(row.reason);
       }
     });
 
-    it("AP-34: should show zero rows for every reason when nothing was skipped", () => {
+    it("AP-34: should show no reason rows when nothing was skipped", () => {
       const result = actualizarResultOf({
         totals: { rowsRead: 10, accepted: 10, written: 10, repaired: 0, skipped: 0 },
         skipped: { ...actualizarResultOf().skipped, byReason: zeroReasons(), collidingKeys: [], collidingKeyCount: 0 },
       });
 
-      expect(buildActualizarReportView(result).skippedByReason.every((row) => row.value === 0)).toBe(true);
+      const view = buildActualizarReportView(result);
+
+      expect(view.skippedRows).toEqual([]);
+      expect(view.zeroReasonCount).toBe(ALL_REASONS.length);
     });
   });
 
   describe("departments, localities and samples", () => {
     it("AP-34: should map a null department name to a non-empty text, never to null", () => {
       const view = buildActualizarReportView(actualizarResultOf());
-      const unnamed = view.byDepartment.find((group) => group.count === 20);
+      const unnamed = view.byDepartmentSplit.top.find((group) => group.count === 20);
 
       expect(unnamed?.name.trim().length).toBeGreaterThan(0);
       expect(unnamed?.name).not.toMatch(/null|undefined/);
@@ -99,8 +112,8 @@ describe("actualizarPadronReportView", () => {
     it("AP-34: should keep the named department groups and their counts", () => {
       const view = buildActualizarReportView(actualizarResultOf());
 
-      expect(view.byDepartment[0]).toMatchObject({ name: "LA PAZ", count: 30 });
-      expect(view.byLocality[0]).toMatchObject({ name: "VILLA", count: 12 });
+      expect(view.byDepartmentSplit.top[0]).toMatchObject({ name: "LA PAZ", count: 30 });
+      expect(view.byLocalitySplit.top[0]).toMatchObject({ name: "VILLA", count: 12 });
     });
 
     it("AP-34: should cap the department and locality groups at 20 rows", () => {
@@ -109,8 +122,8 @@ describe("actualizarPadronReportView", () => {
         actualizarResultOf({ skipped: { ...actualizarResultOf().skipped, byDepartment: groups, byLocality: groups } }),
       );
 
-      expect(view.byDepartment).toHaveLength(LIMIT);
-      expect(view.byLocality).toHaveLength(LIMIT);
+      expect(view.byDepartmentSplit.top.length + view.byDepartmentSplit.rest.length).toBe(LIMIT);
+      expect(view.byLocalitySplit.top.length + view.byLocalitySplit.rest.length).toBe(LIMIT);
     });
 
     it("AP-34: should show the samples with the Spanish reason label", () => {
@@ -146,7 +159,7 @@ describe("actualizarPadronReportView", () => {
       );
 
       expect(view.samples).toEqual([]);
-      expect(view.byDepartment).toEqual([]);
+      expect(view.byDepartmentSplit.top).toEqual([]);
     });
   });
 
@@ -224,6 +237,199 @@ describe("actualizarPadronReportView", () => {
       );
 
       expect(new Set(labels).size).toBe(3);
+    });
+  });
+
+  describe("KPI cards", () => {
+    it("AP-32b: should give four KPI cards in the order read, written, skipped, repaired", () => {
+      const view = buildActualizarReportView(actualizarResultOf());
+
+      expect(view.kpis.map((kpi) => kpi.value)).toEqual([1000, 950, 50, 4]);
+    });
+
+    it("AP-32b: should give each KPI card a distinct non-empty Spanish label", () => {
+      const labels = buildActualizarReportView(actualizarResultOf()).kpis.map((kpi) => kpi.label);
+
+      expect(new Set(labels).size).toBe(4);
+      for (const label of labels) {
+        expect(label.trim().length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe("skipped reasons with share, bar step and hint", () => {
+    it("AP-32b: should list only the non-zero reasons, largest count first", () => {
+      const view = buildActualizarReportView(actualizarResultOf());
+
+      expect(view.skippedRows.map((row) => row.reason)).toEqual([
+        SKIP_REASON.LOCALIDAD_NO_ENCONTRADA,
+        SKIP_REASON.CLAVE_DUPLICADA,
+        SKIP_REASON.SIN_GEOMETRIA,
+        SKIP_REASON.CLAVE_NULA,
+      ]);
+    });
+
+    it("AP-32b: should count the zero reasons in zeroReasonCount", () => {
+      expect(buildActualizarReportView(actualizarResultOf()).zeroReasonCount).toBe(3);
+    });
+
+    it("AP-32b: should give each shown reason its whole-percent share of the skipped rows", () => {
+      const view = buildActualizarReportView(actualizarResultOf());
+
+      expect(view.skippedRows.map((row) => row.percent)).toEqual([40, 30, 20, 10]);
+    });
+
+    it("AP-32b: should give each shown reason a bar step in 5 percent units equal to its share", () => {
+      const view = buildActualizarReportView(actualizarResultOf());
+
+      expect(view.skippedRows.map((row) => row.barStep)).toEqual([40, 30, 20, 10]);
+    });
+
+    it("AP-32b: should round the share and the bar step of a one-third and two-thirds split", () => {
+      const view = buildActualizarReportView(
+        resultWithSkipped({ byReason: countsOf({ LOCALIDAD_NO_ENCONTRADA: 2, CLAVE_NULA: 1 }) }, 3),
+      );
+
+      expect(view.skippedRows.map((row) => [row.percent, row.barStep])).toEqual([
+        [67, 65],
+        [33, 35],
+      ]);
+    });
+
+    it("AP-32b: should give a full bar when one reason holds every skipped row", () => {
+      const view = buildActualizarReportView(
+        resultWithSkipped({ byReason: countsOf({ SIN_GEOMETRIA: 7 }) }, 7),
+      );
+
+      expect(view.skippedRows).toHaveLength(1);
+      expect(view.skippedRows[0]).toMatchObject({ percent: 100, barStep: 100 });
+    });
+
+    it("AP-32b: should keep every bar step a multiple of 5 within 0 to 100", () => {
+      const view = buildActualizarReportView(actualizarResultOf());
+
+      for (const row of view.skippedRows) {
+        expect(row.barStep % 5, row.reason).toBe(0);
+        expect(row.barStep, row.reason).toBeGreaterThanOrEqual(0);
+        expect(row.barStep, row.reason).toBeLessThanOrEqual(100);
+      }
+    });
+
+    it("AP-32b: should show no reason rows and zero share when nothing was skipped", () => {
+      const view = buildActualizarReportView(
+        resultWithSkipped({ byReason: countsOf({}), collidingKeys: [], collidingKeyCount: 0 }, 0),
+      );
+
+      expect(view.skippedRows).toEqual([]);
+      expect(view.zeroReasonCount).toBe(ALL_REASONS.length);
+    });
+
+    it("AP-32b: should give every reason a one-line Spanish hint that differs from its label and code", () => {
+      const everyReason = countsOf(Object.fromEntries(ALL_REASONS.map((reason) => [reason, 1])));
+      const view = buildActualizarReportView(resultWithSkipped({ byReason: everyReason }, ALL_REASONS.length));
+
+      expect(view.skippedRows).toHaveLength(ALL_REASONS.length);
+      expect(new Set(view.skippedRows.map((row) => row.hint)).size).toBe(ALL_REASONS.length);
+      for (const row of view.skippedRows) {
+        expect(row.hint.trim().length, row.reason).toBeGreaterThan(0);
+        expect(row.hint, row.reason).not.toMatch(/[\r\n]/);
+        expect(row.hint, row.reason).not.toBe(row.label);
+        expect(row.hint, row.reason).not.toBe(row.reason);
+      }
+    });
+  });
+
+  describe("department and locality top lists", () => {
+    it("AP-32b: should keep the first ten departments as top and report the other rows as the rest", () => {
+      const view = buildActualizarReportView(
+        actualizarResultOf({ skipped: skippedOf({ byDepartment: groupsNamed(25), byLocality: groupsNamed(25) }) }),
+      );
+
+      expect(view.byDepartmentSplit.top).toHaveLength(TOP_LIMIT);
+      expect(view.byDepartmentSplit.restCount).toBe(LIMIT - TOP_LIMIT);
+      expect(view.byDepartmentSplit.rest.map((row) => row.name)).toEqual(groupsNamed(20).slice(TOP_LIMIT).map((row) => row.name));
+    });
+
+    it("AP-32b: should apply the same top and rest split to the localities", () => {
+      const view = buildActualizarReportView(
+        actualizarResultOf({ skipped: skippedOf({ byDepartment: groupsNamed(25), byLocality: groupsNamed(25) }) }),
+      );
+
+      expect(view.byLocalitySplit.top).toHaveLength(TOP_LIMIT);
+      expect(view.byLocalitySplit.restCount).toBe(LIMIT - TOP_LIMIT);
+    });
+
+    it("AP-32b: should report no rest when there are ten or fewer groups", () => {
+      const view = buildActualizarReportView(
+        actualizarResultOf({ skipped: skippedOf({ byDepartment: groupsNamed(TOP_LIMIT), byLocality: [] }) }),
+      );
+
+      expect(view.byDepartmentSplit.top).toHaveLength(TOP_LIMIT);
+      expect(view.byDepartmentSplit.restCount).toBe(0);
+      expect(view.byDepartmentSplit.rest).toEqual([]);
+      expect(view.byLocalitySplit).toEqual({ top: [], rest: [], restCount: 0 });
+    });
+  });
+
+  describe("localities not found and ambiguous", () => {
+    it("AP-32b: should list the localities not found with department, locality and count, largest first", () => {
+      const view = buildActualizarReportView(
+        resultWithSkipped({
+          byLocalityAndReason: [
+            localityGroup("LA PAZ", "VILLA", SKIP_REASON.LOCALIDAD_NO_ENCONTRADA, 3),
+            localityGroup(null, "SAN JOSE", SKIP_REASON.LOCALIDAD_NO_ENCONTRADA, 9),
+            localityGroup("ORURO", "X", SKIP_REASON.LOCALIDAD_AMBIGUA, 4),
+          ],
+        }),
+      );
+
+      expect(view.localitiesNotFound.map((row) => [row.locality, row.count])).toEqual([
+        ["SAN JOSE", 9],
+        ["VILLA", 3],
+      ]);
+      expect(view.localitiesNotFound[1]).toMatchObject({ department: "LA PAZ", locality: "VILLA", count: 3 });
+    });
+
+    it("AP-32b: should list the ambiguous localities apart from the not found ones", () => {
+      const view = buildActualizarReportView(
+        resultWithSkipped({
+          byLocalityAndReason: [
+            localityGroup("LA PAZ", "VILLA", SKIP_REASON.LOCALIDAD_NO_ENCONTRADA, 3),
+            localityGroup("ORURO", "X", SKIP_REASON.LOCALIDAD_AMBIGUA, 4),
+          ],
+        }),
+      );
+
+      expect(view.localitiesAmbiguous).toEqual([expect.objectContaining({ department: "ORURO", locality: "X", count: 4 })]);
+    });
+
+    it("AP-32b: should show a non-empty text for an unnamed department or locality", () => {
+      const view = buildActualizarReportView(
+        resultWithSkipped({
+          byLocalityAndReason: [localityGroup(null, null, SKIP_REASON.LOCALIDAD_AMBIGUA, 2)],
+        }),
+      );
+
+      for (const field of [view.localitiesAmbiguous[0].department, view.localitiesAmbiguous[0].locality]) {
+        expect(field.trim().length).toBeGreaterThan(0);
+        expect(field).not.toMatch(/null|undefined/);
+      }
+    });
+
+    it("AP-32b: should cap each locality list at twenty groups", () => {
+      const groups = Array.from({ length: 25 }, (_, index) =>
+        localityGroup("LA PAZ", `LOC ${index}`, SKIP_REASON.LOCALIDAD_NO_ENCONTRADA, 25 - index),
+      );
+      const view = buildActualizarReportView(resultWithSkipped({ byLocalityAndReason: groups }));
+
+      expect(view.localitiesNotFound).toHaveLength(LIMIT);
+    });
+
+    it("AP-32b: should give empty lists when no locality group has the reason", () => {
+      const view = buildActualizarReportView(actualizarResultOf());
+
+      expect(view.localitiesNotFound).toEqual([]);
+      expect(view.localitiesAmbiguous).toEqual([]);
     });
   });
 

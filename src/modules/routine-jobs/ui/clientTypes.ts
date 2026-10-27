@@ -45,6 +45,7 @@ export type JobStatusView = JobStatusBase<CargarPadronesResult>;
 
 export interface ActualizarJobOptions {
   clearMode: ClearMode;
+  localityType?: string;
 }
 
 export interface ActualizarStartRequest {
@@ -53,9 +54,11 @@ export interface ActualizarStartRequest {
   stagingTable: string;
   workSchema: string;
   workTable: string;
+  cartoSchema: string;
   padronTable: string;
   provinceTable: string;
   localityTable: string;
+  typeTable?: string;
   options: ActualizarJobOptions;
   dryRun: boolean;
   confirm: boolean;
