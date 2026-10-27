@@ -3,15 +3,19 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { buildReportView } from "@/modules/routine-jobs/ui/cargarPadronesReportView";
 import { ResultStep } from "@/modules/routine-jobs/ui/steps/ResultStep";
+import { STEP } from "@/modules/routine-jobs/jobs/cargar-padrones/domain/plannedSteps";
 import { buttonAttributes, jobOf, openingTags, resultOf, snapshotOf } from "./wizardFixtures";
-import type { CargarPadronesRunSnapshot } from "@/modules/routine-jobs/ui/cargarPadronesRunStore";
+import type { CargarPadronesRunPlan, CargarPadronesRunSnapshot } from "@/modules/routine-jobs/ui/cargarPadronesRunStore";
 
 const START_MS = 1_000_000;
 const ELAPSED_125_SECONDS = START_MS + 125_000;
+const PLAN: CargarPadronesRunPlan = { dryRun: false, options: { repair: true, clearMode: "delete", resetSequences: false } };
 
 function render(snapshot: CargarPadronesRunSnapshot, nowMs = ELAPSED_125_SECONDS): string {
   return renderToStaticMarkup(React.createElement(ResultStep, { snapshot, nowMs, onNewRun: vi.fn(), onBackToReview: vi.fn() }));
 }
+
+const listItemsOf = (html: string): string[] => html.match(/<li\b[^>]*>[\s\S]*?<\/li>/g) ?? [];
 
 const running = (overrides: Partial<CargarPadronesRunSnapshot> = {}): CargarPadronesRunSnapshot =>
   snapshotOf({
@@ -35,22 +39,22 @@ describe("ResultStep", () => {
   });
 
   describe("starting", () => {
-    it("AC-32: should show an indeterminate progress bar before the job id is known", () => {
+    it("AC-32: should show a waiting label before the job id is known", () => {
       const html = render(snapshotOf({ phase: "starting", startedAt: START_MS }));
 
-      expect(html).toContain("<progress");
+      expect(html).toContain("Iniciando la carga...");
       expect(html).not.toMatch(/NaN|undefined/);
     });
   });
 
   describe("running", () => {
-    it("AC-32: should show the step label, the current / total counter and a progress bar", () => {
-      const html = render(running());
+    it("AC-32: should show the current step as a checked-off row in the planned checklist", () => {
+      const html = render({ ...running(), plan: PLAN, job: jobOf({ step: STEP.LOAD_RURAL, current: 2, total: 5, startedAt: START_MS }) });
+      const currentRow = listItemsOf(html).find((item) => item.includes("Cargar padrones rurales"));
 
-      expect(html).toContain("Leyendo tablas");
-      expect(html).toMatch(/2\s*\/\s*5/);
-      expect(html).toMatch(/<progress[^>]*\svalue="2"/);
-      expect(html).toMatch(/<progress[^>]*\smax="5"/);
+      expect(html).toContain("Cargar padrones rurales");
+      expect(currentRow, "current row").toBeDefined();
+      expect(currentRow).toMatch(/checkItemCurrent/);
     });
 
     it("AC-32: should show the elapsed time computed from nowMs and the start instant", () => {
@@ -71,7 +75,6 @@ describe("ResultStep", () => {
       const html = render(running({ job: jobOf({ step: null, current: undefined, total: undefined, startedAt: START_MS }) }));
 
       expect(html).not.toMatch(/NaN|undefined/);
-      expect(html).toContain("<progress");
     });
 
     it("AC-32: should not print NaN when the run has no start instant", () => {
@@ -94,17 +97,17 @@ describe("ResultStep", () => {
   });
 
   describe("progress accessibility", () => {
-    it("AC-32: should label the progress element and not repeat its implicit role", () => {
-      const html = render(running());
-      const tag = openingTags(html, "progress")[0] ?? "";
+    it("AC-32: should label the step checklist and not repeat its implicit role", () => {
+      const html = render({ ...running(), plan: PLAN });
+      const tag = openingTags(html, "ol")[0] ?? "";
 
       expect(tag).toMatch(/\saria-label="[^"]+"/);
       expect(tag).not.toContain("role=");
       expect(html).not.toContain('role="progressbar"');
     });
 
-    it("AC-32: should label the indeterminate progress element too", () => {
-      const tag = openingTags(render(snapshotOf({ phase: "starting", startedAt: START_MS })), "progress")[0] ?? "";
+    it("AC-32: should label the checklist while the run is starting too", () => {
+      const tag = openingTags(render({ ...snapshotOf({ phase: "starting", startedAt: START_MS }), plan: PLAN }), "ol")[0] ?? "";
 
       expect(tag).toMatch(/\saria-label="[^"]+"/);
       expect(tag).not.toContain("role=");

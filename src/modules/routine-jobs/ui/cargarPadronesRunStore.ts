@@ -1,7 +1,7 @@
 import type { JobStatusView, StartRequest } from "./clientTypes";
 import { createRoutineJobsClient } from "./routineJobsClient";
 
-const CargarPadronesRunPhase = {
+export const CargarPadronesRunPhase = {
   IDLE: "idle",
   STARTING: "starting",
   RUNNING: "running",
@@ -12,12 +12,15 @@ const CargarPadronesRunPhase = {
 
 export type CargarPadronesRunPhase = (typeof CargarPadronesRunPhase)[keyof typeof CargarPadronesRunPhase];
 
+export type CargarPadronesRunPlan = Pick<StartRequest, "dryRun" | "options">;
+
 export interface CargarPadronesRunSnapshot {
   phase: CargarPadronesRunPhase;
   jobId?: string;
   job?: JobStatusView;
   error?: string;
   startedAt?: number;
+  plan?: CargarPadronesRunPlan;
 }
 
 export interface CargarPadronesRunClient {
@@ -58,6 +61,8 @@ interface RunStoreHolder {
 const defaultSetTimer = (callback: () => void, ms: number): unknown => setTimeout(callback, ms);
 const defaultClearTimer = (handle: unknown): void => clearTimeout(handle as ReturnType<typeof setTimeout>);
 
+const planOf = (request: StartRequest): CargarPadronesRunPlan => ({ dryRun: request.dryRun, options: request.options });
+
 const messageOf = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message.trim() !== "" ? error.message : fallback;
 
@@ -94,6 +99,7 @@ export function createCargarPadronesRunStore(deps: CargarPadronesRunStoreDeps): 
       jobId,
       job: snapshot.job,
       startedAt: snapshot.startedAt,
+      plan: snapshot.plan,
       error: unknownOutcomeMessage(jobId),
     });
   };
@@ -109,7 +115,7 @@ export function createCargarPadronesRunStore(deps: CargarPadronesRunStoreDeps): 
 
   const applyJob = (current: number, jobId: string, job: JobStatusView): void => {
     failingSince = null;
-    const base = { jobId, job, startedAt: snapshot.startedAt };
+    const base = { jobId, job, startedAt: snapshot.startedAt, plan: snapshot.plan };
     if (job.state === "DONE") {
       publish({ ...base, phase: CargarPadronesRunPhase.DONE });
       return;
@@ -148,7 +154,7 @@ export function createCargarPadronesRunStore(deps: CargarPadronesRunStoreDeps): 
     const current = generation;
     cancelTimer();
     failingSince = null;
-    publish({ phase: CargarPadronesRunPhase.STARTING, startedAt: now() });
+    publish({ phase: CargarPadronesRunPhase.STARTING, startedAt: now(), plan: planOf(request) });
 
     let jobId: string;
     try {
@@ -160,7 +166,7 @@ export function createCargarPadronesRunStore(deps: CargarPadronesRunStoreDeps): 
       return;
     }
     if (current !== generation) return;
-    publish({ phase: CargarPadronesRunPhase.RUNNING, jobId, startedAt: snapshot.startedAt });
+    publish({ phase: CargarPadronesRunPhase.RUNNING, jobId, startedAt: snapshot.startedAt, plan: snapshot.plan });
     schedulePoll(current, jobId);
   }
 

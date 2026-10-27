@@ -89,10 +89,64 @@
   word-break: break-word;
 }
 
-.progress {
-  width: 100%;
-  height: 10px;
-  accent-color: var(--accent-cyan, #06b6d4);
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.checkItemCurrent {
+  font-weight: 600;
+}
+
+.checkItemPending {
+  color: var(--text-muted);
+}
+
+.checkIcon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.iconDone {
+  color: var(--accent-emerald);
+}
+
+.iconCurrent {
+  color: var(--accent-cyan);
+}
+
+.iconPending {
+  color: var(--text-muted);
+}
+
+.iconFailed {
+  color: var(--accent-rose);
+}
+
+.iconUnknown {
+  color: var(--accent-amber);
+}
+
+.spin {
+  animation: stepSpin 1s linear infinite;
+}
+
+@keyframes stepSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .statusRow {

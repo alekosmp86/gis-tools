@@ -23,7 +23,8 @@ import {
   repairUnmappedSequencesAfterRollback,
   resetUnmappedSequences,
 } from "./sequences";
-import { createStepTimer, plannedStepCount, STEP, type StepTimer } from "./runSteps";
+import { STEP } from "../domain/plannedSteps";
+import { createStepTimer, plannedStepCount, type StepTimer } from "./runSteps";
 
 export type { CargarPadronesParams, CargarPadronesResult, RunDeps, RunProgress, RunSession } from "../types";
 

@@ -4,9 +4,9 @@ import React from "react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
-import type { CargarPadronesRunSnapshot } from "../cargarPadronesRunStore";
-import type { JobStatusView } from "../clientTypes";
+import { CargarPadronesRunPhase, type CargarPadronesRunSnapshot } from "../cargarPadronesRunStore";
 import { CargarPadronesReport } from "../CargarPadronesReport";
+import { RunStepChecklist } from "./RunStepChecklist";
 import styles from "./WizardSteps.module.css";
 
 const IDLE_HINT = "Todavía no hay una carga. Complete los pasos anteriores y pulse Analizar sin cargar o Cargar ahora.";
@@ -18,7 +18,6 @@ const UNKNOWN_TITLE = "No se pudo confirmar el resultado de la carga.";
 const UNKNOWN_ADVICE = "Revise la tabla destino antes de volver a cargar.";
 const NEW_RUN_LABEL = "Nueva carga";
 const BACK_TO_REVIEW_LABEL = "Volver a Revisar";
-const PROGRESS_LABEL = "Avance de la carga";
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 3600;
@@ -45,33 +44,27 @@ function formatElapsed(ms: number): string {
 const textOr = (value: string | undefined, fallback: string): string =>
   value !== undefined && value.trim() !== "" ? value : fallback;
 
-function countsOf(job: JobStatusView | undefined): { current: number; total: number } | null {
-  if (!job || job.current === undefined || job.total === undefined || job.total <= 0) return null;
-  return { current: job.current, total: job.total };
-}
-
 function RunProgress({ snapshot, nowMs }: { snapshot: CargarPadronesRunSnapshot; nowMs: number }) {
-  const job = snapshot.job;
-  const counts = countsOf(job);
-  const startedAt = snapshot.startedAt ?? job?.startedAt;
-  const step = job?.step ?? (snapshot.phase === "starting" ? STARTING_LABEL : PREPARING_LABEL);
+  const startedAt = snapshot.startedAt ?? snapshot.job?.startedAt;
+  const currentLabel = snapshot.job?.step || null;
+  const waitingLabel = snapshot.phase === CargarPadronesRunPhase.STARTING ? STARTING_LABEL : PREPARING_LABEL;
 
   return (
     <div className={styles.stack}>
       <div className={styles.statusRow}>
-        <span className={styles.statusStep}>{step}</span>
-        {counts !== null && <span className={styles.statusCounter}>{`${counts.current} / ${counts.total}`}</span>}
+        {currentLabel === null && <span className={styles.statusStep}>{waitingLabel}</span>}
         {startedAt !== undefined && (
           <span className={styles.statusCounter}>{`Tiempo transcurrido ${formatElapsed(nowMs - startedAt)}`}</span>
         )}
       </div>
-      <progress
-        className={styles.progress}
-        aria-label={PROGRESS_LABEL}
-        value={counts?.current}
-        max={counts?.total}
-      />
+      <RunStepChecklist plan={snapshot.plan} currentLabel={currentLabel} phase={snapshot.phase} />
     </div>
+  );
+}
+
+function RunOutcomeChecklist({ snapshot }: { snapshot: CargarPadronesRunSnapshot }) {
+  return (
+    <RunStepChecklist plan={snapshot.plan} currentLabel={snapshot.job?.step || null} phase={snapshot.phase} />
   );
 }
 
@@ -112,6 +105,7 @@ export const ResultStep: React.FC<ResultStepProps> = ({ snapshot, nowMs, onNewRu
       return (
         <div className={styles.stack}>
           <AlertMessage type={AlertType.ERROR} text={textOr(snapshot.error, FAILED_FALLBACK)} />
+          <RunOutcomeChecklist snapshot={snapshot} />
           <NewRunAction onNewRun={onNewRun} onBackToReview={onBackToReview} />
         </div>
       );
@@ -120,6 +114,7 @@ export const ResultStep: React.FC<ResultStepProps> = ({ snapshot, nowMs, onNewRu
         <div className={styles.stack}>
           <AlertMessage type={AlertType.ERROR} text={UNKNOWN_TITLE} />
           <p className={styles.hint}>{`Identificador del trabajo: ${snapshot.jobId ?? "no disponible"}. ${UNKNOWN_ADVICE}`}</p>
+          <RunOutcomeChecklist snapshot={snapshot} />
           <NewRunAction onNewRun={onNewRun} onBackToReview={onBackToReview} />
         </div>
       );

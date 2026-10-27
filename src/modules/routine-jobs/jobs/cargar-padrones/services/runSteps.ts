@@ -1,19 +1,5 @@
-import { CLEAR_MODE } from "../constants";
-import type { CargarPadronesParams, RunProgress, StepTiming } from "../types";
-
-export const STEP = {
-  VALIDATE: "Validación de tablas",
-  COUNT: "Conteo de filas",
-  PRIVILEGES: "Privilegios de vaciado",
-  CLEAR: "Vaciado de la tabla destino",
-  SEQUENCES_RESET: "Reinicio de secuencias",
-  LOAD_RURAL: "Carga rural",
-  LOAD_URBANO: "Carga urbana",
-  REPORT: "Reportes y muestras",
-  SEQUENCES_REPAIR: "Ajuste de secuencias",
-  COMMIT: "COMMIT",
-  ANALYZE: "ANALYZE",
-} as const;
+import type { RunProgress, StepTiming } from "../types";
+import { plannedStepLabels, type PlannedStepsInput } from "../domain/plannedSteps";
 
 export interface StepTimer {
   timings: StepTiming[];
@@ -26,17 +12,8 @@ export interface StepTimerOptions {
   onProgress?: (progress: RunProgress) => void;
 }
 
-const CORE_STEP_COUNT = 6;
-const PRIVILEGE_STEP_COUNT = 1;
-const SEQUENCE_STEP_COUNT = 2;
-const COMMIT_STEP_COUNT = 2;
-
-export function plannedStepCount(params: CargarPadronesParams): number {
-  const { options, dryRun } = params;
-  const privileges = options.clearMode === CLEAR_MODE.TRUNCATE ? PRIVILEGE_STEP_COUNT : 0;
-  const sequences = options.resetSequences && !dryRun ? SEQUENCE_STEP_COUNT : 0;
-  const commit = dryRun ? 0 : COMMIT_STEP_COUNT;
-  return CORE_STEP_COUNT + privileges + sequences + commit;
+export function plannedStepCount(params: PlannedStepsInput): number {
+  return plannedStepLabels(params).length;
 }
 
 function notify(onProgress: StepTimerOptions["onProgress"], progress: RunProgress): void {
