@@ -10,6 +10,7 @@ export type WorkCatalogColumn = DbColumnMetadata & { is_identity: boolean };
 
 export interface ActualizarPadronOptions {
   clearMode: ClearMode;
+  localityType?: string;
 }
 
 export interface ActualizarPadronParams {
@@ -18,9 +19,11 @@ export interface ActualizarPadronParams {
   stagingTable: string;
   workSchema: string;
   workTable: string;
+  cartoSchema: string;
   padronTable: string;
   provinceTable: string;
   localityTable: string;
+  typeTable?: string;
   options: ActualizarPadronOptions;
   dryRun: boolean;
   confirm: boolean;
@@ -28,6 +31,13 @@ export interface ActualizarPadronParams {
 
 export interface SkippedGroup {
   name: string | null;
+  count: number;
+}
+
+export interface SkippedLocalityGroup {
+  department: string | null;
+  locality: string | null;
+  reason: string;
   count: number;
 }
 
@@ -50,6 +60,7 @@ export interface SkippedReport {
   byReason: Record<SkipReason, number>;
   byDepartment: SkippedGroup[];
   byLocality: SkippedGroup[];
+  byLocalityAndReason: SkippedLocalityGroup[];
   samples: SkippedSample[];
   collidingKeys: CollidingKey[];
   collidingKeyCount: number;

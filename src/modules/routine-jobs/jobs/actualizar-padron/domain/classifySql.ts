@@ -1,7 +1,16 @@
 import { quoteIdentifier } from "@/core/services/sqlStatements";
 import { PADRON_UNIT } from "../../cargar-padrones/constants";
-import { LOCALITY_COLUMN, PROVINCE_COLUMN, SKIP_REASON, STAGING_COLUMN, STAGING_GEOMETRY_TYPES, WORK_COLUMN } from "../constants";
+import {
+  LOCALITY_COLUMN,
+  LOCALITY_TYPE_COLUMN,
+  PROVINCE_COLUMN,
+  SKIP_REASON,
+  STAGING_COLUMN,
+  STAGING_GEOMETRY_TYPES,
+  WORK_COLUMN,
+} from "../constants";
 import { assertTargetSrid, physicalColumn, qualifiedName, type PopulateLayouts, type TableLayout } from "./layouts";
+import { unitTypeIdSubquery } from "./unitTypeSql";
 
 export type ClassifyMode = "populate" | "report";
 
@@ -71,9 +80,20 @@ function provinceSourceSql({ province }: PopulateLayouts): string {
   return `SELECT ${columns} FROM ${qualifiedName(province)}`;
 }
 
-function localitySourceSql({ locality }: PopulateLayouts): string {
-  const columns = projection(locality, [LOCALITY_COLUMN.ID, LOCALITY_COLUMN.NAME, LOCALITY_COLUMN.ID_PROVINCE]);
+function localitySourceSql({ locality, unitType }: PopulateLayouts): string {
+  const logicals = [
+    LOCALITY_COLUMN.ID,
+    LOCALITY_COLUMN.NAME,
+    LOCALITY_COLUMN.ID_PROVINCE,
+    ...(unitType ? [LOCALITY_TYPE_COLUMN.ID_TERRITORIAL_UNIT_TYPE] : []),
+  ];
+  const columns = projection(locality, logicals);
   return `SELECT ${columns} FROM ${qualifiedName(locality)}`;
+}
+
+function localityTypeFilterSql({ unitType }: PopulateLayouts): string[] {
+  if (!unitType) return [];
+  return [`AND ${col("loc", LOCALITY_TYPE_COLUMN.ID_TERRITORIAL_UNIT_TYPE)} = ${unitTypeIdSubquery(unitType)}`];
 }
 
 function provincePickSql(layouts: PopulateLayouts): string {
@@ -106,6 +126,7 @@ function localityPickSql(layouts: PopulateLayouts): string {
     `ON ${col("loc", LOCALITY_COLUMN.ID_PROVINCE)} = ${col("wp", "id")}`,
     `AND ${col("wp", STAGING_COLUMN.UNIDADCAT)} = ${URBANO}`,
     `AND upper(${q(STAGING_COLUMN.NOMLOCCAT)}) = upper(${q(LOCALITY_COLUMN.NAME)})`,
+    ...localityTypeFilterSql(layouts),
     `GROUP BY ${col("wp", ROW_ID_COLUMN)}`,
   ].join(" ");
 }

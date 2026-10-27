@@ -2,10 +2,13 @@ import { describe, it, expect } from "vitest";
 import { parseActualizarStartRequest } from "@/modules/routine-jobs/api/actualizarRequestParsing";
 import { parseColumnsRequest, RequestInvalidError } from "@/modules/routine-jobs/api/requestParsing";
 import {
+  DEFAULT_LOCALITY_TYPE,
   LOCALITY_REQUIRED_COLUMNS,
+  LOCALITY_TYPED_REQUIRED_COLUMNS,
   PADRON_REQUIRED_COLUMNS,
   PROVINCE_REQUIRED_COLUMNS,
   STAGING_REQUIRED_COLUMNS,
+  TYPE_REQUIRED_COLUMNS,
   WORK_REQUIRED_COLUMNS,
 } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import {
@@ -34,6 +37,7 @@ const startBody = (): Body => ({
   stagingTable: "catastro_paispadron_stg",
   workSchema: "cat",
   workTable: "padron_trabajo",
+  cartoSchema: "cat",
   padronTable: "catastro_paispadron",
   provinceTable: "province",
   localityTable: "cadastral_locality",
@@ -72,6 +76,7 @@ const TEXT_FIELDS = [
   "stagingTable",
   "workSchema",
   "workTable",
+  "cartoSchema",
   "padronTable",
   "provinceTable",
   "localityTable",
@@ -331,6 +336,141 @@ describe("parseActualizarStartRequest", () => {
 
       expect(() => parseActualizarStartRequest(body)).toThrow(RequestInvalidError);
     });
+  });
+});
+
+describe("parseActualizarStartRequest: three schemas and the unit type table (AP-3, AP-20)", () => {
+  it("should carry cartoSchema into the params as the schema of the padron, province, locality and type tables", () => {
+    const body = startBody();
+    body.cartoSchema = "carto";
+
+    expect(parseActualizarStartRequest(body)).toMatchObject({ cartoSchema: "carto" });
+  });
+
+  it("should accept the staging, work and carto schemas as three different schemas", () => {
+    const body = startBody();
+    body.stagingSchema = "stg";
+    body.workSchema = "wrk";
+    body.cartoSchema = "carto";
+
+    expect(parseActualizarStartRequest(body)).toMatchObject({ stagingSchema: "stg", workSchema: "wrk", cartoSchema: "carto" });
+  });
+
+  it("should answer 400 naming the repeated table when the padron table repeats the staging table through cartoSchema", () => {
+    const body = startBody();
+    body.cartoSchema = "stg";
+    body.padronTable = body.stagingTable;
+
+    expectRejected(body, "catastro_paispadron_stg");
+  });
+
+  it("should leave typeTable and localityType undefined when no type table is sent", () => {
+    const params = parseActualizarStartRequest(startBody());
+
+    expect(params.typeTable).toBeUndefined();
+    expect(params.options.localityType).toBeUndefined();
+  });
+
+  it.each([
+    ["omitted", undefined],
+    ["empty", ""],
+    ["whitespace only", "   "],
+  ])("should treat a type table that is %s as no type table", (_label, typeTable) => {
+    const body = startBody();
+    body.typeTable = typeTable;
+
+    const params = parseActualizarStartRequest(body);
+
+    expect(params.typeTable).toBeUndefined();
+    expect(params.options).toEqual({ clearMode: "delete" });
+  });
+
+  it("should carry the type table and default the locality type when the option is absent", () => {
+    const body = startBody();
+    body.typeTable = "territorial_unit_type";
+
+    const params = parseActualizarStartRequest(body);
+
+    expect(params.typeTable).toBe("territorial_unit_type");
+    expect(params.options).toEqual({ clearMode: "delete", localityType: DEFAULT_LOCALITY_TYPE });
+  });
+
+  it.each([
+    ["an empty text", ""],
+    ["a whitespace only text", "   "],
+  ])("should reject the locality type as a 400 when it is %s", (_label, localityType) => {
+    const body = startBody();
+    body.typeTable = "territorial_unit_type";
+    body.options.localityType = localityType;
+
+    expect(() => parseActualizarStartRequest(body)).toThrow(RequestInvalidError);
+  });
+
+  it("should trim the locality type text and keep it as the domain value sent", () => {
+    const body = startBody();
+    body.typeTable = "territorial_unit_type";
+    body.options.localityType = "  TIPO DE LOCALIDAD  ";
+
+    expect(parseActualizarStartRequest(body).options.localityType).toBe("TIPO DE LOCALIDAD");
+  });
+
+  it("should ignore the locality type when no type table is selected, even when it is not text", () => {
+    const body = startBody();
+    body.options.localityType = 42;
+
+    expect(() => parseActualizarStartRequest(body)).not.toThrow();
+    expect(parseActualizarStartRequest(body).options.localityType).toBeUndefined();
+  });
+
+  it("should answer 400 naming localityType when a type table is selected and the locality type is not text", () => {
+    const body = startBody();
+    body.typeTable = "territorial_unit_type";
+    body.options.localityType = 42;
+
+    expectRejected(body, "localityType");
+  });
+
+  it("should answer 400 naming typeTable when it is not text", () => {
+    const body = startBody();
+    body.typeTable = 7;
+
+    expectRejected(body, "typeTable");
+  });
+
+  it.each([
+    ["the locality table", "cadastral_locality"],
+    ["the padron table", "catastro_paispadron"],
+    ["the staging table in the same schema", "catastro_paispadron_stg"],
+  ])("should answer 400 naming the repeated table when typeTable repeats %s", (_label, repeated) => {
+    const body = startBody();
+    body.cartoSchema = "stg";
+    body.typeTable = repeated;
+
+    expectRejected(body, repeated);
+  });
+});
+
+describe("parseColumnsRequest for the unit type and typed locality roles (AP-1, AP-2, AP-2b, AP-10b)", () => {
+  it.each([
+    ["actualizar-tipo", TYPE_REQUIRED_COLUMNS],
+    ["actualizar-localidad-tipada", LOCALITY_TYPED_REQUIRED_COLUMNS],
+  ])("should take the required columns of role %s from the job constants", (role, expected) => {
+    const request = parseColumnsRequest(columnsBody(role));
+
+    expect(request.role).toBe(role);
+    expect(request.required).toEqual([...expected]);
+  });
+
+  it("should keep the untyped locality role free of id_territorial_unit_type (AP-10b)", () => {
+    const request = parseColumnsRequest(columnsBody("actualizar-localidad"));
+
+    expect(request.required).not.toContain("id_territorial_unit_type");
+  });
+
+  it("should ignore a required list sent in the request for the type role", () => {
+    const request = parseColumnsRequest(columnsBody("actualizar-tipo", { required: ["evil_column"] }));
+
+    expect(request.required).toEqual([...TYPE_REQUIRED_COLUMNS]);
   });
 });
 

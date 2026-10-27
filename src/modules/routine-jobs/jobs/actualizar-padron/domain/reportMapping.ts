@@ -1,5 +1,12 @@
-import { COLLIDING_KEY_LIMIT, SKIP_REASON, SKIPPED_GROUP_LIMIT, SKIPPED_SAMPLE_LIMIT, type SkipReason } from "../constants";
-import type { CollidingKey, SkippedGroup, SkippedReport, SkippedSample } from "../types";
+import {
+  COLLIDING_KEY_LIMIT,
+  LOCALITY_REASON_GROUP_LIMIT,
+  SKIP_REASON,
+  SKIPPED_GROUP_LIMIT,
+  SKIPPED_SAMPLE_LIMIT,
+  type SkipReason,
+} from "../constants";
+import type { CollidingKey, SkippedGroup, SkippedLocalityGroup, SkippedReport, SkippedSample } from "../types";
 
 export type ReportRow = Record<string, unknown>;
 
@@ -40,6 +47,16 @@ const toSkippedGroups = (value: unknown): SkippedGroup[] =>
     .slice(0, SKIPPED_GROUP_LIMIT)
     .map((row) => ({ name: textOf(row.name), count: countOf(row.count) }));
 
+const toLocalityGroups = (value: unknown): SkippedLocalityGroup[] =>
+  rowsOf(value)
+    .slice(0, LOCALITY_REASON_GROUP_LIMIT)
+    .map((row) => ({
+      department: textOf(row.department),
+      locality: textOf(row.locality),
+      reason: textOf(row.reason) ?? "",
+      count: countOf(row.count),
+    }));
+
 const toSkippedSamples = (value: unknown): SkippedSample[] =>
   rowsOf(value)
     .slice(0, SKIPPED_SAMPLE_LIMIT)
@@ -76,6 +93,7 @@ export function toReportView(row: ReportRow | undefined): ReportView {
       byReason: toByReason(report.byReason),
       byDepartment: toSkippedGroups(report.byDepartment),
       byLocality: toSkippedGroups(report.byLocality),
+      byLocalityAndReason: toLocalityGroups(report.byLocalityAndReason),
       samples: toSkippedSamples(report.samples),
       collidingKeys: toCollidingKeys(report.collidingKeyList),
       collidingKeyCount: totals.collidingKeys,

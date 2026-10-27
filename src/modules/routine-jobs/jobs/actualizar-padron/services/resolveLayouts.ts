@@ -7,27 +7,29 @@ import {
 import type { DbColumnMetadata } from "@/core/types/db";
 import { ColumnStatus, type ResolvedColumn } from "@/core/types/tableCatalog";
 import {
+  DEFAULT_LOCALITY_TYPE,
   GENERIC_GEOMETRY_TYPE,
   GENERIC_SRID,
   LOCALITY_REQUIRED_COLUMNS,
+  LOCALITY_TYPED_REQUIRED_COLUMNS,
   NUMERIC_TYPE_NAMES,
   PADRON_COLUMN,
   PADRON_REQUIRED_COLUMNS,
   PROVINCE_REQUIRED_COLUMNS,
-  RELATION_FACT_KIND,
-  RELATION_KIND,
   STAGING_COLUMN,
   STAGING_GEOMETRY_TYPES,
   STAGING_REQUIRED_COLUMNS,
   TABLE_LABEL,
+  TYPE_REQUIRED_COLUMNS,
   WORK_COLUMN,
   WORK_GEOMETRY_TYPES,
   WORK_REQUIRED_COLUMNS,
 } from "../constants";
 import { parseGeometryType } from "../domain/geometryType";
 import type { PopulateLayouts, TableLayout } from "../domain/layouts";
+import { relationFactIssues, relationKindIssues } from "../domain/workTableIssues";
 import type { ActualizarPadronParams, WorkCatalogColumn } from "../types";
-import { readIdentityColumns, readPadronIdSequence, readRelationKind, readTriggerAndRuleFacts, type RelationFact } from "./catalogFacts";
+import { readIdentityColumns, readPadronIdSequence, readRelationKind, readTriggerAndRuleFacts } from "./catalogFacts";
 
 export interface ResolvedActualizarLayouts extends PopulateLayouts {
   padron: TableLayout;
@@ -66,31 +68,25 @@ const STAGING_GEOMETRY_RULE: GeometryRule = {
 const WORK_GEOMETRY_RULE: GeometryRule = { allowedTypes: WORK_GEOMETRY_TYPES, allowedText: "MultiPolygon", requireSrid: false };
 const PADRON_GEOMETRY_RULE: GeometryRule = { allowedText: "", requireSrid: true };
 
-const RELATION_KIND_TEXT: ReadonlyMap<string, string> = new Map([
-  ["v", "una vista"],
-  ["m", "una vista materializada"],
-  ["f", "una tabla foránea"],
-]);
-const NON_TABLE_KIND_TEXT = "un objeto que no es una tabla";
-const FACT_ISSUE_TEXT = {
-  [RELATION_FACT_KIND.TRIGGER]: "triggers",
-  [RELATION_FACT_KIND.RULE]: "reglas de reescritura",
-} as const;
-const WORK_TABLE_KINDS: readonly string[] = [RELATION_KIND.TABLE, RELATION_KIND.PARTITIONED];
-
 const isResolved = (entry: ResolvedColumn): entry is ResolvedEntry =>
   entry.status === ColumnStatus.RESOLVED && entry.column !== undefined;
 
 const recordOf = (pairs: Array<[string, string]>): Record<string, string> => Object.fromEntries(pairs);
 
+const selectedTypeTable = (params: ActualizarPadronParams): string | undefined =>
+  params.typeTable?.trim() ? params.typeTable : undefined;
+
 export function assertDistinctTables(params: ActualizarPadronParams): void {
+  const cartoLabel = (table: string): string => buildQualifiedTableLabel(params.cartoSchema, table);
   const roles: Array<[string, string]> = [
     [TABLE_LABEL.STAGING, buildQualifiedTableLabel(params.stagingSchema, params.stagingTable)],
     [TABLE_LABEL.WORK, buildQualifiedTableLabel(params.workSchema, params.workTable)],
-    [TABLE_LABEL.PADRON, buildQualifiedTableLabel(params.workSchema, params.padronTable)],
-    [TABLE_LABEL.PROVINCE, buildQualifiedTableLabel(params.workSchema, params.provinceTable)],
-    [TABLE_LABEL.LOCALITY, buildQualifiedTableLabel(params.workSchema, params.localityTable)],
+    [TABLE_LABEL.PADRON, cartoLabel(params.padronTable)],
+    [TABLE_LABEL.PROVINCE, cartoLabel(params.provinceTable)],
+    [TABLE_LABEL.LOCALITY, cartoLabel(params.localityTable)],
   ];
+  const typeTable = selectedTypeTable(params);
+  if (typeTable !== undefined) roles.push([TABLE_LABEL.TYPE, cartoLabel(typeTable)]);
   const seen = new Map<string, string>();
   for (const [role, label] of roles) {
     const earlier = seen.get(label);
@@ -135,7 +131,14 @@ function resolveTable(label: string, spec: TableSpec, catalog: DbColumnMetadata[
   };
 }
 
-type ActualizarSpecs = Record<keyof PopulateLayouts | "padron", TableSpec>;
+interface ActualizarSpecs {
+  staging: TableSpec;
+  work: TableSpec;
+  padron: TableSpec;
+  province: TableSpec;
+  locality: TableSpec;
+  type?: TableSpec;
+}
 
 interface SourceTables {
   staging: ResolvedTable;
@@ -146,6 +149,7 @@ interface ReferenceTables {
   padron: ResolvedTable;
   province: ResolvedTable;
   locality: ResolvedTable;
+  type?: ResolvedTable;
 }
 
 const labelOfSpec = (spec: TableSpec): string => buildQualifiedTableLabel(spec.schema, spec.table);
@@ -162,6 +166,12 @@ async function readSourceTables(session: CatalogQuerySession, specs: ActualizarS
   };
 }
 
+async function readTypeTable(session: CatalogQuerySession, spec: TableSpec | undefined): Promise<ResolvedTable | undefined> {
+  if (!spec) return undefined;
+  const catalog = await fetchCatalogColumns(session, spec.schema, spec.table);
+  return resolveTable(labelOfSpec(spec), spec, catalog);
+}
+
 async function readReferenceTables(session: CatalogQuerySession, specs: ActualizarSpecs): Promise<ReferenceTables> {
   // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
   const padronCatalog = await fetchCatalogColumns(session, specs.padron.schema, specs.padron.table);
@@ -169,10 +179,13 @@ async function readReferenceTables(session: CatalogQuerySession, specs: Actualiz
   const provinceCatalog = await fetchCatalogColumns(session, specs.province.schema, specs.province.table);
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const localityCatalog = await fetchCatalogColumns(session, specs.locality.schema, specs.locality.table);
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const type = await readTypeTable(session, specs.type);
   return {
     padron: resolveTable(labelOfSpec(specs.padron), specs.padron, padronCatalog),
     province: resolveTable(labelOfSpec(specs.province), specs.province, provinceCatalog),
     locality: resolveTable(labelOfSpec(specs.locality), specs.locality, localityCatalog),
+    type,
   };
 }
 
@@ -203,42 +216,31 @@ function stagingPadronTypeIssues(staging: ResolvedTable): string[] {
   return [`La columna "${column}" de la tabla ${staging.label} debe ser numérica (numeric), pero es ${dataType}.`];
 }
 
-function relationKindIssues(label: string, relkind: string | undefined): string[] {
-  if (relkind === undefined || WORK_TABLE_KINDS.includes(relkind)) return [];
-  const kindText = RELATION_KIND_TEXT.get(relkind) ?? NON_TABLE_KIND_TEXT;
-  return [`La tabla de trabajo ${label} es ${kindText}: debe ser una tabla regular o partitionada.`];
-}
-
-function factIssueOf(label: string, facts: RelationFact[], kind: RelationFact["kind"]): string[] {
-  const names = facts.filter((fact) => fact.kind === kind).map((fact) => fact.name);
-  if (names.length === 0) return [];
-  return [
-    `La tabla de trabajo ${label} tiene ${FACT_ISSUE_TEXT[kind]} (${names.join(", ")}): quítelos antes de actualizar, el proceso no escribe en tablas con ellos.`,
-  ];
-}
-
-function relationFactIssues(label: string, facts: RelationFact[]): string[] {
-  return [...factIssueOf(label, facts, RELATION_FACT_KIND.TRIGGER), ...factIssueOf(label, facts, RELATION_FACT_KIND.RULE)];
-}
-
 function specsOf(params: ActualizarPadronParams): ActualizarSpecs {
+  const typeTable = selectedTypeTable(params);
   return {
     staging: { schema: params.stagingSchema, table: params.stagingTable, required: STAGING_REQUIRED_COLUMNS },
     work: { schema: params.workSchema, table: params.workTable, required: WORK_REQUIRED_COLUMNS },
-    padron: { schema: params.workSchema, table: params.padronTable, required: PADRON_REQUIRED_COLUMNS },
-    province: { schema: params.workSchema, table: params.provinceTable, required: PROVINCE_REQUIRED_COLUMNS },
-    locality: { schema: params.workSchema, table: params.localityTable, required: LOCALITY_REQUIRED_COLUMNS },
+    padron: { schema: params.cartoSchema, table: params.padronTable, required: PADRON_REQUIRED_COLUMNS },
+    province: { schema: params.cartoSchema, table: params.provinceTable, required: PROVINCE_REQUIRED_COLUMNS },
+    locality: {
+      schema: params.cartoSchema,
+      table: params.localityTable,
+      required: typeTable === undefined ? LOCALITY_REQUIRED_COLUMNS : LOCALITY_TYPED_REQUIRED_COLUMNS,
+    },
+    type: typeTable === undefined ? undefined : { schema: params.cartoSchema, table: typeTable, required: TYPE_REQUIRED_COLUMNS },
   };
 }
 
 function structuralIssues(tables: SourceTables & ReferenceTables, workRelkind: string | undefined): string[] {
-  const { staging, work, padron, province, locality } = tables;
+  const { staging, work, padron, province, locality, type } = tables;
   return [
     ...staging.issues,
     ...work.issues,
     ...padron.issues,
     ...province.issues,
     ...locality.issues,
+    ...(type?.issues ?? []),
     ...relationKindIssues(work.label, workRelkind),
     ...stagingPadronTypeIssues(staging),
     ...geometryIssuesOf(staging, STAGING_COLUMN.GEOM, STAGING_GEOMETRY_RULE),
@@ -256,12 +258,12 @@ export async function resolveActualizarLayouts(
   // react-doctor-disable-next-line react-doctor/async-parallel
   const { staging, work } = await readSourceTables(session, specs);
   // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
-  const { padron, province, locality } = await readReferenceTables(session, specs);
+  const { padron, province, locality, type } = await readReferenceTables(session, specs);
   const workRelkind = await readRelationKind(session, specs.work);
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const workFacts = await readTriggerAndRuleFacts(session, specs.work);
   const issues = [
-    ...structuralIssues({ staging, work, padron, province, locality }, workRelkind),
+    ...structuralIssues({ staging, work, padron, province, locality, type }, workRelkind),
     ...relationFactIssues(labelOfSpec(specs.work), workFacts),
   ];
   if (issues.length > 0) {
@@ -279,5 +281,6 @@ export async function resolveActualizarLayouts(
     padronIdSequence,
     workCatalog: work.catalog.map((entry) => ({ ...entry, is_identity: identityColumns.has(entry.column_name) })),
     padronCatalog: padron.catalog,
+    unitType: type ? { layout: type.layout, localityType: params.options.localityType ?? DEFAULT_LOCALITY_TYPE } : undefined,
   };
 }

@@ -1,13 +1,20 @@
 import { describe, it, expect } from "vitest";
 import {
+  ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE,
+  ACTUALIZAR_TABLE_ROLE,
   COLLIDING_KEY_LIMIT,
+  DEFAULT_LOCALITY_TYPE,
+  LOCALITY_REASON_GROUP_LIMIT,
   LOCALITY_REQUIRED_COLUMNS,
+  LOCALITY_TYPE_COLUMN,
+  LOCALITY_TYPED_REQUIRED_COLUMNS,
   PADRON_REQUIRED_COLUMNS,
   PROVINCE_REQUIRED_COLUMNS,
   SKIP_REASON,
   SKIPPED_GROUP_LIMIT,
   SKIPPED_SAMPLE_LIMIT,
   STAGING_REQUIRED_COLUMNS,
+  TYPE_REQUIRED_COLUMNS,
   WORK_REQUIRED_COLUMNS,
 } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 
@@ -76,7 +83,53 @@ describe("actualizar-padron constants", () => {
     });
   });
 
+  describe("unit type table and typed locality role (AP-1, AP-2, AP-2b, AP-10b)", () => {
+    it("should declare exactly the id and name columns of the unit type table", () => {
+      expect(sorted(TYPE_REQUIRED_COLUMNS)).toEqual(sorted(["id", "name"]));
+    });
+
+    it("should declare the typed locality columns as the locality columns plus id_territorial_unit_type", () => {
+      expect(sorted(LOCALITY_TYPED_REQUIRED_COLUMNS)).toEqual(
+        sorted(["id", "name", "id_province", "id_territorial_unit_type"])
+      );
+    });
+
+    it("should name the id_territorial_unit_type column of the locality table", () => {
+      expect(LOCALITY_TYPE_COLUMN.ID_TERRITORIAL_UNIT_TYPE).toBe("id_territorial_unit_type");
+    });
+
+    it("should keep the untyped locality role free of id_territorial_unit_type (AP-10b)", () => {
+      expect(ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE[ACTUALIZAR_TABLE_ROLE.LOCALITY]).not.toContain("id_territorial_unit_type");
+    });
+
+    it("should name the type role actualizar-tipo and the typed locality role actualizar-localidad-tipada", () => {
+      expect(ACTUALIZAR_TABLE_ROLE.TYPE).toBe("actualizar-tipo");
+      expect(ACTUALIZAR_TABLE_ROLE.LOCALITY_TYPED).toBe("actualizar-localidad-tipada");
+    });
+
+    it("should map the type role and the typed locality role to their required columns", () => {
+      expect(ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE[ACTUALIZAR_TABLE_ROLE.TYPE]).toEqual([...TYPE_REQUIRED_COLUMNS]);
+      expect(ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE[ACTUALIZAR_TABLE_ROLE.LOCALITY_TYPED]).toEqual([
+        ...LOCALITY_TYPED_REQUIRED_COLUMNS,
+      ]);
+    });
+
+    it("should not contain duplicates in the type and typed locality lists", () => {
+      for (const list of [TYPE_REQUIRED_COLUMNS, LOCALITY_TYPED_REQUIRED_COLUMNS]) {
+        expect(new Set(list).size).toBe(list.length);
+      }
+    });
+
+    it("should default the locality type to LOCALIDAD CATASTRAL, a domain value and not an identifier", () => {
+      expect(DEFAULT_LOCALITY_TYPE).toBe("LOCALIDAD CATASTRAL");
+    });
+  });
+
   describe("report caps (AP-16, AP-25)", () => {
+    it("should cap the skipped groups by locality and reason at 20", () => {
+      expect(LOCALITY_REASON_GROUP_LIMIT).toBe(20);
+    });
+
     it("should cap the skipped samples at 20", () => {
       expect(SKIPPED_SAMPLE_LIMIT).toBe(20);
     });

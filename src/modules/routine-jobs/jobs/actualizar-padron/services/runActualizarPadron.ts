@@ -11,7 +11,15 @@ import type {
   RunSession,
   StepTiming,
 } from "../types";
-import { assertRunAllowed, assertStagingHasRows, assertStagingSridSupported, assertTruncatable, assertWorkTableSafe, assertWorkWritePrivileges } from "./preflight";
+import {
+  assertRunAllowed,
+  assertStagingHasRows,
+  assertStagingSridSupported,
+  assertTruncatable,
+  assertUnitTypeUnique,
+  assertWorkTableSafe,
+  assertWorkWritePrivileges,
+} from "./preflight";
 import { assertDistinctTables, resolveActualizarLayouts, type ResolvedActualizarLayouts } from "./resolveLayouts";
 import { runWriteTransaction, scrubSecret, type LoadOutcome } from "./writeSteps";
 
@@ -32,6 +40,7 @@ async function validateLayouts(session: RunSession, params: ActualizarPadronPara
   const layouts = await resolveActualizarLayouts(session, params);
   assertWorkTableSafe(layouts);
   await assertWorkWritePrivileges(session, layouts.work);
+  await assertUnitTypeUnique(session, layouts.unitType);
   return layouts;
 }
 

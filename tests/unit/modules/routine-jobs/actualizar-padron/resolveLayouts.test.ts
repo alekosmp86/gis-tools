@@ -89,6 +89,7 @@ const paramsWith = (overrides: Partial<ActualizarPadronParams> = {}): Actualizar
   stagingTable: "stg_padron",
   workSchema: SCHEMA,
   workTable: "padron_trabajo",
+  cartoSchema: SCHEMA,
   padronTable: "padron",
   provinceTable: "province",
   localityTable: "cadastral_locality",
@@ -204,6 +205,161 @@ describe("resolveActualizarLayouts", () => {
       const params = paramsWith(overrides);
 
       expect(() => assertDistinctTables(params)).toThrow(repeated);
+    });
+  });
+
+  describe("three schemas: staging, work and carto (AP-3, AP-20)", () => {
+    const threeSchemas = (overrides: Partial<ActualizarPadronParams> = {}): ActualizarPadronParams =>
+      paramsWith({ stagingSchema: "stg", workSchema: "wrk", cartoSchema: "carto", ...overrides });
+
+    it("should read the staging and work catalogs in their own schemas and the reference catalogs in cartoSchema", async () => {
+      const session = withCatalogs({});
+
+      await resolveActualizarLayouts(session, threeSchemas());
+
+      const schemaOf = (table: string) => session.state.reads.find((read) => read.table === table)?.schema;
+      expect(schemaOf("stg_padron")).toBe("stg");
+      expect(schemaOf(WORK_TABLE)).toBe("wrk");
+      expect(schemaOf("padron")).toBe("carto");
+      expect(schemaOf("province")).toBe("carto");
+      expect(schemaOf("cadastral_locality")).toBe("carto");
+    });
+
+    it("should qualify each layout with the schema of its own table", async () => {
+      const layouts = await resolveActualizarLayouts(withCatalogs({}), threeSchemas());
+
+      expect(layouts.staging).toMatchObject({ schema: "stg", table: "stg_padron" });
+      expect(layouts.work).toMatchObject({ schema: "wrk", table: WORK_TABLE });
+      expect(layouts.padron).toMatchObject({ schema: "carto", table: "padron" });
+      expect(layouts.province).toMatchObject({ schema: "carto", table: "province" });
+      expect(layouts.locality).toMatchObject({ schema: "carto", table: "cadastral_locality" });
+    });
+
+    it("should bind the padron id sequence lookup to cartoSchema, the schema of the padron table", async () => {
+      const session = withCatalogs({});
+
+      await resolveActualizarLayouts(session, threeSchemas());
+
+      expect(session.state.sequenceCalls[0].values).toEqual(["carto", "padron", "id"]);
+    });
+
+    it("should read the relation kind, identity columns and triggers of the work table in workSchema", async () => {
+      const session = withCatalogs({});
+
+      await resolveActualizarLayouts(session, threeSchemas());
+
+      expect(session.state.identityCalls[0].values).toEqual(["wrk", WORK_TABLE]);
+      expect(session.state.factsCalls[0].values).toEqual(["wrk", WORK_TABLE]);
+      expect(session.state.relkindCalls.find((call) => call.values?.[1] === WORK_TABLE)?.values).toEqual(["wrk", WORK_TABLE]);
+    });
+
+    it("should accept the same table name in staging, work and carto when the three schemas differ", () => {
+      const params = threeSchemas({ stagingTable: "padron", workTable: "padron", padronTable: "padron" });
+
+      expect(() => assertDistinctTables(params)).not.toThrow();
+    });
+
+    it("should refuse a carto table that is the same schema.table as the staging table, naming it", () => {
+      const params = threeSchemas({ stagingSchema: "carto", stagingTable: "padron" });
+
+      expect(() => assertDistinctTables(params)).toThrow("carto.padron");
+    });
+
+    it("should refuse the work table when it is the same schema.table as the province table, naming it", () => {
+      const params = threeSchemas({ workSchema: "carto", workTable: "province" });
+
+      expect(() => assertDistinctTables(params)).toThrow("carto.province");
+    });
+  });
+
+  describe("unit type table and typed locality role (AP-2b, AP-7b, AP-10b)", () => {
+    const TYPE_TABLE = "territorial_unit_type";
+    const typeColumns = (): DbColumnMetadata[] => [column("id", "integer"), column("name")];
+    const typedLocalityColumns = (): DbColumnMetadata[] => [...localityColumns(), column("id_territorial_unit_type", "integer")];
+    const typedParams = (overrides: Partial<ActualizarPadronParams> = {}): ActualizarPadronParams =>
+      paramsWith({
+        typeTable: TYPE_TABLE,
+        options: { clearMode: "delete", localityType: "LOCALIDAD CATASTRAL" },
+        ...overrides,
+      });
+
+    it("should resolve the id and name columns of the type table and expose the locality type with its layout", async () => {
+      const session = withCatalogs({ cadastral_locality: typedLocalityColumns(), [TYPE_TABLE]: typeColumns() });
+
+      const layouts = await resolveActualizarLayouts(session, typedParams());
+
+      expect(layouts.unitType).toEqual({
+        layout: { schema: SCHEMA, table: TYPE_TABLE, columns: { id: "id", name: "name" } },
+        localityType: "LOCALIDAD CATASTRAL",
+      });
+    });
+
+    it("should add id_territorial_unit_type to the locality layout when a type table is selected", async () => {
+      const session = withCatalogs({ cadastral_locality: typedLocalityColumns(), [TYPE_TABLE]: typeColumns() });
+
+      const layouts = await resolveActualizarLayouts(session, typedParams());
+
+      expect(layouts.locality.columns.id_territorial_unit_type).toBe("id_territorial_unit_type");
+    });
+
+    it("should leave the type layout undefined and the locality layout without the type column when no type table is selected", async () => {
+      const layouts = await resolveActualizarLayouts(withCatalogs({}), paramsWith());
+
+      expect(layouts.unitType).toBeUndefined();
+      expect(layouts.locality.columns).not.toHaveProperty("id_territorial_unit_type");
+    });
+
+    it("should resolve a locality table without id_territorial_unit_type when no type table is selected (AP-10b)", async () => {
+      await expect(resolveActualizarLayouts(withCatalogs({}), paramsWith())).resolves.toBeDefined();
+    });
+
+    it("should not read the type table catalog when no type table is selected", async () => {
+      const session = withCatalogs({ [TYPE_TABLE]: typeColumns() });
+
+      await resolveActualizarLayouts(session, paramsWith());
+
+      expect(session.state.reads.map((read) => read.table)).not.toContain(TYPE_TABLE);
+    });
+
+    it("should read the type table catalog in cartoSchema when it is selected", async () => {
+      const session = withCatalogs({ cadastral_locality: typedLocalityColumns(), [TYPE_TABLE]: typeColumns() });
+
+      await resolveActualizarLayouts(session, typedParams({ cartoSchema: "carto", stagingSchema: "stg", workSchema: "wrk" }));
+
+      expect(session.state.reads.find((read) => read.table === TYPE_TABLE)?.schema).toBe("carto");
+    });
+
+    it("should refuse a locality table without id_territorial_unit_type when a type table is selected, naming the column", async () => {
+      const session = withCatalogs({ cadastral_locality: localityColumns(), [TYPE_TABLE]: typeColumns() });
+
+      await expect(resolveActualizarLayouts(session, typedParams())).rejects.toThrow(/"id_territorial_unit_type"/);
+    });
+
+    it("should refuse a type table that does not exist, naming it in Spanish", async () => {
+      const session = withCatalogs({ cadastral_locality: typedLocalityColumns() });
+
+      await expect(resolveActualizarLayouts(session, typedParams())).rejects.toThrow(/cat\.territorial_unit_type.*no existe/);
+    });
+
+    it("should refuse a type table without a name column, naming the column", async () => {
+      const session = withCatalogs({
+        cadastral_locality: typedLocalityColumns(),
+        [TYPE_TABLE]: [column("id", "integer")],
+      });
+
+      await expect(resolveActualizarLayouts(session, typedParams())).rejects.toThrow(/"name"/);
+    });
+
+    it("should refuse a type table that is the same schema.table as the locality table, naming it", () => {
+      const params = paramsWith({ typeTable: "cadastral_locality" });
+
+      expect(() => assertDistinctTables(params)).toThrow("cat.cadastral_locality");
+    });
+
+    it("should accept a type table with the same name as the work table in another schema", () => {
+      const params = paramsWith({ cartoSchema: "carto", typeTable: "padron_trabajo" });
+
+      expect(() => assertDistinctTables(params)).not.toThrow();
     });
   });
 

@@ -5,9 +5,11 @@ import {
 } from "@/modules/routine-jobs/api/handlers";
 import {
   LOCALITY_REQUIRED_COLUMNS,
+  LOCALITY_TYPED_REQUIRED_COLUMNS,
   PADRON_REQUIRED_COLUMNS,
   PROVINCE_REQUIRED_COLUMNS,
   STAGING_REQUIRED_COLUMNS,
+  TYPE_REQUIRED_COLUMNS,
   WORK_REQUIRED_COLUMNS,
 } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 
@@ -114,6 +116,33 @@ describe("catalog columns for the actualizar-padron roles (AP-1, AP-2, AP-4)", (
     const catalogCalls = harness.session.query.mock.calls.filter((call) => /a\.attname/.test(call[0]));
     expect(catalogCalls.length).toBeGreaterThan(0);
     expect(catalogCalls[0][1]).toEqual(expect.arrayContaining(["stg", "padron_stg"]));
+  });
+
+  it.each([
+    ["actualizar-tipo", TYPE_REQUIRED_COLUMNS],
+    ["actualizar-localidad-tipada", LOCALITY_TYPED_REQUIRED_COLUMNS],
+  ])("should answer 200 with the resolved job constants columns of the %s role (AP-1, AP-2b)", async (role, required) => {
+    const harness = createCatalogHarness(columnRowsFor(required));
+
+    const response = await harness.handlers.listColumns(jsonRequest("catalog/columns", columnsBody(role)));
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.columns.map((column: { logical: string }) => column.logical)).toEqual([...required]);
+    expect(body.columns.every((column: { status: string }) => column.status === "resolved")).toBe(true);
+  });
+
+  it("should report id_territorial_unit_type as missing for the typed locality role when the table lacks it (AP-2b, AP-4)", async () => {
+    const present = LOCALITY_TYPED_REQUIRED_COLUMNS.filter((name) => name !== "id_territorial_unit_type");
+    const harness = createCatalogHarness(columnRowsFor(present));
+
+    const response = await harness.handlers.listColumns(
+      jsonRequest("catalog/columns", columnsBody("actualizar-localidad-tipada"))
+    );
+
+    const body = await response.json();
+    const typeColumn = body.columns.find((column: { logical: string }) => column.logical === "id_territorial_unit_type");
+    expect(typeColumn.status).toBe("missing");
   });
 
   it("should answer 400 in Spanish for an unknown actualizar role and never open the catalog", async () => {

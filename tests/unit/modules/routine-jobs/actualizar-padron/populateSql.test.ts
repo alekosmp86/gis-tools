@@ -43,6 +43,21 @@ const layoutsWith = (
   };
 };
 
+const typedLayoutsWith = (localityType = "LOCALIDAD CATASTRAL", typeSchema = "cat"): PopulateLayouts => {
+  const base = layoutsWith();
+  return {
+    ...base,
+    locality: {
+      ...base.locality,
+      columns: { ...base.locality.columns, id_territorial_unit_type: "id_territorial_unit_type" },
+    },
+    unitType: {
+      layout: { schema: typeSchema, table: "territorial_unit_type", columns: { id: "id", name: "name" } },
+      localityType,
+    },
+  };
+};
+
 const flat = (sql: string): string => sql.replace(/\s+/g, " ").trim();
 
 const WRITE_STATEMENT = /^\s*(INSERT|UPDATE|DELETE|TRUNCATE|ALTER|DROP|CREATE)\b/i;
@@ -312,6 +327,85 @@ describe("actualizar-padron populate SQL builders", () => {
       const layouts = layoutsWith();
 
       expect(buildPopulateSql(layouts)).toContain(buildClassifyWith(layouts));
+    });
+  });
+
+  describe("buildPopulateSql: three schemas (AP-20)", () => {
+    it("should qualify the staging, work, province and locality tables with their own schema", () => {
+      const layouts: PopulateLayouts = {
+        staging: { schema: "stg", table: "stg_padron", columns: identity(STAGING_REQUIRED_COLUMNS) },
+        work: { schema: "wrk", table: "padron_trabajo", columns: identity(WORK_REQUIRED_COLUMNS), srid: SRID },
+        province: { schema: "carto", table: "province", columns: identity(PROVINCE_REQUIRED_COLUMNS) },
+        locality: { schema: "carto", table: "cadastral_locality", columns: identity(LOCALITY_REQUIRED_COLUMNS) },
+      };
+
+      const sql = buildPopulateSql(layouts);
+
+      expect(sql).toContain('"stg"."stg_padron"');
+      expect(sql).toContain('"wrk"."padron_trabajo"');
+      expect(sql).toContain('"carto"."province"');
+      expect(sql).toContain('"carto"."cadastral_locality"');
+      expect(sql).not.toContain('"cat"');
+    });
+  });
+
+  describe("buildPopulateSql: unit type filter (AP-2b, AP-7b, AP-10, AP-10b)", () => {
+    const typed = typedLayoutsWith();
+    const localityPickOf = (sql: string): string => flat(stageOf(chainOf(sql), "locality_pick").body);
+
+    it("should carry no type table and no type column reference when no type table is selected (AP-10b)", () => {
+      expect(buildPopulateSql(layoutsWith())).not.toContain("territorial_unit_type");
+      expect(buildPopulateSql(layoutsWith())).not.toMatch(/id_territorial_unit_type/);
+    });
+
+    it("should carry no type table and no type column reference in the report when no type table is selected", () => {
+      expect(buildReportSql(layoutsWith())).not.toContain("territorial_unit_type");
+      expect(buildReportSql(layoutsWith())).not.toMatch(/id_territorial_unit_type/);
+    });
+
+    it("should read the type table qualified with cartoSchema", () => {
+      expect(buildPopulateSql(typed)).toContain('"cat"."territorial_unit_type"');
+    });
+
+    it("should match the type row by upper(name) = upper(the locality type literal)", () => {
+      expect(flat(buildPopulateSql(typed))).toMatch(/upper\(\s*"name"\s*\)\s*=\s*upper\(\s*'LOCALIDAD CATASTRAL'\s*\)/i);
+    });
+
+    it("should keep only the locality rows whose id_territorial_unit_type equals the id of that type row, inside the locality pick", () => {
+      expect(localityPickOf(buildPopulateSql(typed))).toMatch(
+        /"id_territorial_unit_type"\s*=\s*\(\s*SELECT[\s\S]*FROM "cat"\."territorial_unit_type"/i
+      );
+    });
+
+    it("should compare the type ids with equality, so a NULL id_territorial_unit_type never matches", () => {
+      expect(localityPickOf(buildPopulateSql(typed))).not.toMatch(/id_territorial_unit_type"\s+IS NULL|IS NOT DISTINCT FROM/i);
+    });
+
+    it("should take the locality type from the params as an escaped literal, never a hardcoded one", () => {
+      const sql = buildPopulateSql(typedLayoutsWith("O'Brien TIPO"));
+
+      expect(sql).toContain("'O''Brien TIPO'");
+      expect(sql).not.toContain("LOCALIDAD CATASTRAL");
+    });
+
+    it("should build a different chain for a different locality type", () => {
+      expect(buildPopulateSql(typedLayoutsWith("TIPO A"))).not.toBe(buildPopulateSql(typedLayoutsWith("TIPO B")));
+    });
+
+    it("should look the type table up once in the populate chain (performance, resolved once)", () => {
+      expect(countMatches(buildPopulateSql(typed), /"cat"\."territorial_unit_type"/g)).toBe(1);
+    });
+
+    it("should apply the same locality filter in the report chain as in the populate chain", () => {
+      expect(localityPickOf(buildReportSql(typed))).toBe(localityPickOf(buildPopulateSql(typed)));
+    });
+
+    it("should build the typed populate from buildClassifyWith of the same layouts and keep one INSERT with the five write columns", () => {
+      const sql = buildPopulateSql(typed);
+
+      expect(sql).toContain(buildClassifyWith(typed));
+      expect(countMatches(sql, /INSERT INTO/gi)).toBe(1);
+      expect(insertColumnsOf(sql).sort()).toEqual([...quotedWorkColumns()].sort());
     });
   });
 
@@ -612,6 +706,56 @@ describe("actualizar-padron populate SQL builders", () => {
     it("should not write in either probe", () => {
       expect(buildStagingCountSql(staging)).not.toMatch(WRITE_STATEMENT);
       expect(buildStagingSridProbeSql(staging, SRID)).not.toMatch(WRITE_STATEMENT);
+    });
+  });
+
+  describe("buildReportSql: skipped groups by department, locality and reason (AP-16, AP-25)", () => {
+    const layouts = layoutsWith();
+    const groupsSegmentOf = (sql: string): string => {
+      const text = flat(sql);
+      const at = text.indexOf('"byLocalityAndReason"');
+      return at < 0 ? "" : text.slice(text.lastIndexOf("COALESCE", at), text.indexOf("'[]'::json", at));
+    };
+
+    it("should return the groups under the list alias byLocalityAndReason", () => {
+      expect(buildReportSql(layouts)).toContain('AS "byLocalityAndReason"');
+    });
+
+    it("should group the skipped rows by the department, locality and reason decided columns, in that order", () => {
+      expect(groupsSegmentOf(buildReportSql(layouts))).toMatch(
+        /GROUP BY\s+"decided"\."nomdepto",\s*"decided"\."nomloccat",\s*"decided"\."skip_reason"/
+      );
+    });
+
+    it("should select the groups under the aliases department, locality, reason and count", () => {
+      const segment = groupsSegmentOf(buildReportSql(layouts));
+
+      for (const alias of ["department", "locality", "reason", "count"]) {
+        expect(segment, alias).toContain(`AS "${alias}"`);
+      }
+    });
+
+    it("should count only the skipped rows in the groups", () => {
+      expect(groupsSegmentOf(buildReportSql(layouts))).toMatch(/"decided"\."skip_reason" IS NOT NULL/);
+    });
+
+    it("should keep the groups whose department or locality is NULL, without filtering them out", () => {
+      expect(groupsSegmentOf(buildReportSql(layouts))).not.toMatch(/"decided"\."nomdepto" IS NOT NULL|"decided"\."nomloccat" IS NOT NULL/);
+    });
+
+    it("should rank the groups by count DESC within each reason and keep the top 20 per reason", () => {
+      expect(groupsSegmentOf(buildReportSql(layouts))).toMatch(
+        /PARTITION BY "decided"\."skip_reason" ORDER BY count\(\*\) DESC.*"rank" <= 20\b/
+      );
+    });
+
+    it("should carry the groups inside the one report statement after the shared chain, with no geometry column", () => {
+      const sql = buildReportSql(layouts);
+      const reportPart = sql.slice(buildClassifyWith(layouts, "report").length);
+
+      expect(reportPart).toContain('"byLocalityAndReason"');
+      expect(groupsSegmentOf(sql)).not.toMatch(/geometry|ST_/i);
+      expect(sql.split(";").filter((part) => part.trim().length > 0)).toHaveLength(1);
     });
   });
 

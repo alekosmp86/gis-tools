@@ -1,7 +1,7 @@
 import { buildQualifiedTableLabel, resolveSchemaName } from "@/core/services/sqlStatements";
 import { GENERIC_SRID, PADRON_COLUMN, PRIVILEGE, WORK_COLUMN } from "../constants";
 import { parseGeometryType } from "../domain/geometryType";
-import type { TableLayout } from "../domain/layouts";
+import type { TableLayout, UnitTypeLayout } from "../domain/layouts";
 import { buildStagingCountSql, buildStagingSridProbeSql } from "../domain/populateSql";
 import {
   isSameSequence,
@@ -10,6 +10,7 @@ import {
   sequenceReferenceOf,
   type SequenceReference,
 } from "../domain/sequenceReference";
+import { buildUnitTypeMatchSql } from "../domain/unitTypeSql";
 import type { ActualizarPadronParams, RunSession } from "../types";
 import type { ResolvedActualizarLayouts } from "./resolveLayouts";
 
@@ -117,6 +118,22 @@ async function assertNoReferencingTables(session: RunSession, work: TableLayout)
       `No se puede usar TRUNCATE en ${labelOf(work)}: otras tablas tienen claves foráneas hacia ella (${names}). Use la opción DELETE.`
     );
   }
+}
+
+export async function assertUnitTypeUnique(session: RunSession, unitType: UnitTypeLayout | undefined): Promise<void> {
+  if (!unitType) return;
+  const { localityType, layout } = unitType;
+  if (localityType.trim() === "") {
+    throw new Error(`Indique el tipo de localidad: no puede estar vacío para la tabla de tipos ${labelOf(layout)}.`);
+  }
+  const result = await session.query(buildUnitTypeMatchSql(unitType), [localityType]);
+  const matches = result.rows.length;
+  if (matches === 1) return;
+  const detail =
+    matches === 0
+      ? `No se encontró el tipo de localidad "${localityType}" en ${labelOf(layout)}`
+      : `Se encontraron ${matches} filas para el tipo de localidad "${localityType}" en ${labelOf(layout)}`;
+  throw new Error(`${detail}: debe existir exactamente una vez.`);
 }
 
 export async function assertTruncatable(session: RunSession, work: TableLayout): Promise<void> {

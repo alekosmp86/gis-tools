@@ -29,6 +29,7 @@ const emptySkippedReport = (): SkippedReport => ({
   byReason: Object.fromEntries(Object.values(SKIP_REASON).map((reason) => [reason, 0])) as SkippedReport["byReason"],
   byDepartment: [],
   byLocality: [],
+  byLocalityAndReason: [],
   samples: [],
   collidingKeys: [],
   collidingKeyCount: 0,
@@ -80,6 +81,7 @@ const startBody = (): Body => ({
   stagingTable: "catastro_paispadron_stg",
   workSchema: "cat",
   workTable: "padron_trabajo",
+  cartoSchema: "cat",
   padronTable: "catastro_paispadron",
   provinceTable: "province",
   localityTable: "cadastral_locality",
@@ -180,6 +182,51 @@ describe("createActualizarPadronHandlers", () => {
       expect(params.options).toEqual({ clearMode: CLEAR_MODE.DELETE });
       expect(params.dryRun).toBe(false);
       expect(typeof onProgress).toBe("function");
+    });
+
+    it("should hand run the carto schema, the type table and the trimmed locality type when a type table is sent", async () => {
+      const wiring = createWiring();
+
+      await wiring.start(
+        mutated((body) => {
+          body.cartoSchema = "carto";
+          body.typeTable = "territorial_unit_type";
+          body.options.localityType = "  TIPO X  ";
+        })
+      );
+      await wiring.settle();
+
+      expect(wiring.run.mock.calls[0][0]).toMatchObject({
+        cartoSchema: "carto",
+        typeTable: "territorial_unit_type",
+        options: { clearMode: CLEAR_MODE.DELETE, localityType: "TIPO X" },
+      });
+    });
+
+    it("should hand run the default locality type when a type table is sent without one", async () => {
+      const wiring = createWiring();
+
+      await wiring.start(mutated((body) => (body.typeTable = "territorial_unit_type")));
+      await wiring.settle();
+
+      expect(wiring.run.mock.calls[0][0].options.localityType).toBe("LOCALIDAD CATASTRAL");
+    });
+
+    it("should hand run no type table when none is sent", async () => {
+      const wiring = createWiring();
+
+      await wiring.start();
+      await wiring.settle();
+
+      expect(wiring.run.mock.calls[0][0].typeTable).toBeUndefined();
+    });
+
+    it("should keep the lock key on the host, db, work schema and work table when cartoSchema differs", async () => {
+      const wiring = createWiring({ run: gated().run });
+
+      await wiring.start(mutated((body) => (body.cartoSchema = "carto")));
+
+      expect(wiring.tryStart.mock.calls[0][0]).toBe(LOCK_KEY);
     });
 
     it("should hand run the truncate clear mode when the request sends it", async () => {
@@ -447,6 +494,10 @@ describe("createActualizarPadronHandlers", () => {
       { name: "the work table is repeated as the province table", body: mutated((body) => (body.provinceTable = body.workTable)) },
       { name: "the staging table is repeated as the work table", body: mutated((body) => ((body.stagingSchema = "cat"), (body.stagingTable = body.workTable))) },
       { name: "the connection is missing", body: mutated((body) => delete body.connection) },
+      { name: "cartoSchema is missing", body: mutated((body) => delete body.cartoSchema) },
+      { name: "cartoSchema is blank", body: mutated((body) => (body.cartoSchema = "  ")) },
+      { name: "typeTable is not text", body: mutated((body) => (body.typeTable = 7)) },
+      { name: "typeTable repeats the locality table", body: mutated((body) => (body.typeTable = body.localityTable)) },
     ];
 
     it.each(invalidCases)("should answer 400 in Spanish, without the lock or run, when $name", async ({ body }) => {

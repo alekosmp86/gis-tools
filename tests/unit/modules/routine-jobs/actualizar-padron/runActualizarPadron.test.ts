@@ -7,7 +7,6 @@ import {
   buildStagingCountSql,
   buildStagingSridProbeSql,
   type PopulateLayouts,
-  type TableLayout,
   type WorkLayout,
 } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/populateSql";
 import { plannedStepLabels, STEP } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/plannedSteps";
@@ -77,8 +76,12 @@ interface Scenario {
   byReason?: ListColumn;
   byDepartment?: ListColumn;
   byLocality?: ListColumn;
+  byLocalityAndReason?: ListColumn;
   samples?: ListColumn;
   collidingKeys?: ListColumn;
+  schemas?: SchemaChoice;
+  withUnitType?: boolean;
+  typeMatches?: number;
   deniedPrivileges?: string[];
   referencingTables?: string[];
   workIdDefault?: string;
@@ -106,16 +109,43 @@ const ROLLBACK_SQL = "ROLLBACK";
 const identity = (columns: readonly string[]): Record<string, string> =>
   Object.fromEntries(columns.map((column) => [column, column]));
 
-const stagingLayout: TableLayout = { schema: SCHEMA, table: STAGING, columns: identity(STAGING_REQUIRED_COLUMNS) };
-const workLayout: WorkLayout = { schema: SCHEMA, table: WORK, columns: identity(WORK_REQUIRED_COLUMNS), srid: SRID };
-const provinceLayout: TableLayout = { schema: SCHEMA, table: PROVINCE, columns: identity(PROVINCE_REQUIRED_COLUMNS) };
-const localityLayout: TableLayout = { schema: SCHEMA, table: LOCALITY, columns: identity(LOCALITY_REQUIRED_COLUMNS) };
-const populateLayouts: PopulateLayouts = {
-  staging: stagingLayout,
-  work: workLayout,
-  province: provinceLayout,
-  locality: localityLayout,
-};
+const TYPE_TABLE = "territorial_unit_type";
+const LOCALITY_TYPE = "LOCALIDAD CATASTRAL";
+const TYPE_ID_COLUMN = "id";
+const TYPE_NAME_COLUMN = "name";
+const LOCALITY_TYPE_COLUMN = "id_territorial_unit_type";
+
+interface SchemaChoice {
+  staging: string;
+  work: string;
+  carto: string;
+}
+const DEFAULT_SCHEMAS: SchemaChoice = { staging: SCHEMA, work: SCHEMA, carto: SCHEMA };
+
+/* The layouts the runner resolves from the catalogs of a scenario: the default is the one-schema run of these tests. */
+function layoutsFor(schemas: SchemaChoice = DEFAULT_SCHEMAS, typed = false): PopulateLayouts {
+  const localityColumns = identity(LOCALITY_REQUIRED_COLUMNS);
+  const layouts: PopulateLayouts = {
+    staging: { schema: schemas.staging, table: STAGING, columns: identity(STAGING_REQUIRED_COLUMNS) },
+    work: { schema: schemas.work, table: WORK, columns: identity(WORK_REQUIRED_COLUMNS), srid: SRID },
+    province: { schema: schemas.carto, table: PROVINCE, columns: identity(PROVINCE_REQUIRED_COLUMNS) },
+    locality: {
+      schema: schemas.carto,
+      table: LOCALITY,
+      columns: typed ? { ...localityColumns, [LOCALITY_TYPE_COLUMN]: LOCALITY_TYPE_COLUMN } : localityColumns,
+    },
+  };
+  if (typed) {
+    layouts.unitType = {
+      layout: { schema: schemas.carto, table: TYPE_TABLE, columns: { id: TYPE_ID_COLUMN, name: TYPE_NAME_COLUMN } },
+      localityType: LOCALITY_TYPE,
+    };
+  }
+  return layouts;
+}
+
+const populateLayouts: PopulateLayouts = layoutsFor();
+const workLayout: WorkLayout = populateLayouts.work;
 
 const defaultConfig = () => ({
   host: "db.local",
@@ -133,6 +163,7 @@ const defaultParams = (overrides: Partial<ActualizarPadronParams> = {}): Actuali
   stagingTable: STAGING,
   workSchema: SCHEMA,
   workTable: WORK,
+  cartoSchema: SCHEMA,
   padronTable: PADRON,
   provinceTable: PROVINCE,
   localityTable: LOCALITY,
@@ -175,7 +206,11 @@ function buildCatalogs(scenario: Scenario): Record<string, DbColumnMetadata[]> {
       columnOf("geometry", scenario.padronGeometryType ?? GEOMETRY_TYPE),
     ],
     [PROVINCE]: catalogOf(PROVINCE_REQUIRED_COLUMNS),
-    [LOCALITY]: catalogOf(LOCALITY_REQUIRED_COLUMNS),
+    [LOCALITY]: [
+      ...catalogOf(LOCALITY_REQUIRED_COLUMNS),
+      ...(scenario.withUnitType ? [columnOf(LOCALITY_TYPE_COLUMN, "integer")] : []),
+    ],
+    [TYPE_TABLE]: [columnOf(TYPE_ID_COLUMN, "integer"), columnOf(TYPE_NAME_COLUMN, "text")],
   };
 }
 
@@ -206,6 +241,7 @@ function reportRowOf(scenario: Scenario): Row {
     byReason: listOf(scenario.byReason),
     byDepartment: listOf(scenario.byDepartment),
     byLocality: listOf(scenario.byLocality),
+    byLocalityAndReason: listOf(scenario.byLocalityAndReason),
     samples: listOf(scenario.samples),
     collidingKeyList: listOf(scenario.collidingKeys),
   };
@@ -213,17 +249,19 @@ function reportRowOf(scenario: Scenario): Row {
 
 function createHarness(scenario: Scenario = {}) {
   const catalogs = buildCatalogs(scenario);
+  const layouts = layoutsFor(scenario.schemas ?? DEFAULT_SCHEMAS, scenario.withUnitType === true);
   const written = scenario.written ?? Number(scenario.accepted ?? DEFAULT_ACCEPTED);
   const exact = new Map<string, { rows: Row[]; rowCount?: number }>([
-    [buildStagingCountSql(stagingLayout), { rows: [{ count: scenario.stagingRows ?? 25 }] }],
-    [buildStagingSridProbeSql(stagingLayout, SRID), { rows: [{ unsupported: scenario.unsupportedSrid ?? 0 }] }],
-    [buildClearStatement(workLayout, "delete"), { rows: [] }],
-    [buildClearStatement(workLayout, "truncate"), { rows: [] }],
-    [buildPopulateSql(populateLayouts), { rows: [], rowCount: written }],
-    [buildAnalyzeStatement(SCHEMA, WORK), { rows: [] }],
+    [buildStagingCountSql(layouts.staging), { rows: [{ count: scenario.stagingRows ?? 25 }] }],
+    [buildStagingSridProbeSql(layouts.staging, SRID), { rows: [{ unsupported: scenario.unsupportedSrid ?? 0 }] }],
+    [buildClearStatement(layouts.work, "delete"), { rows: [] }],
+    [buildClearStatement(layouts.work, "truncate"), { rows: [] }],
+    [buildPopulateSql(layouts), { rows: [], rowCount: written }],
+    [buildAnalyzeStatement(layouts.work.schema, layouts.work.table), { rows: [] }],
   ]);
 
   const log: string[] = [];
+  const reads: Array<{ schema: unknown; table: unknown }> = [];
   const state = { closed: 0, inFlight: 0, maxInFlight: 0, begun: false };
 
   const answer = async (sql: string, values?: unknown[]): Promise<{ rows: Row[]; rowCount?: number }> => {
@@ -250,6 +288,9 @@ function createHarness(scenario: Scenario = {}) {
     if (/AS "collidingKeyList"/.test(sql)) {
       return { rows: [reportRowOf(scenario)] };
     }
+    if (/^\s*SELECT/i.test(sql) && /upper\(/i.test(sql) && (sql.includes(TYPE_TABLE) || values?.includes(TYPE_TABLE))) {
+      return { rows: Array.from({ length: scenario.typeMatches ?? 1 }, () => ({ id: 7 })) };
+    }
     if (/relkind/i.test(sql) && !/attname/i.test(sql)) {
       return { rows: [{ relkind: values?.[1] === WORK ? (scenario.workRelkind ?? "r") : "r" }] };
     }
@@ -260,7 +301,9 @@ function createHarness(scenario: Scenario = {}) {
       const sequence = scenario.padronIdSequence === undefined ? DEFAULT_PADRON_SEQUENCE : scenario.padronIdSequence;
       return { rows: [{ sequence_name: sequence }] };
     }
-    return catalogRowsOf(catalogs, values) ?? { rows: [] };
+    const catalogRead = catalogRowsOf(catalogs, values);
+    if (catalogRead) reads.push({ schema: values?.[0], table: values?.[1] });
+    return catalogRead ?? { rows: [] };
   };
 
   const session = {
@@ -294,7 +337,7 @@ function createHarness(scenario: Scenario = {}) {
       return clock;
     },
   };
-  return { deps, log, state, openSession };
+  return { deps, log, state, openSession, reads };
 }
 
 const indexOfMatch = (log: string[], pattern: RegExp): number => log.findIndex((sql) => pattern.test(sql));
@@ -1052,6 +1095,191 @@ describe("runActualizarPadron", () => {
 
       expect(real.padronModified).toBe(false);
       expect(dry.padronModified).toBe(false);
+    });
+  });
+
+  describe("locality type filter (AP-2b, AP-7b, AP-10, AP-10b)", () => {
+    const typedParams = (overrides: Partial<ActualizarPadronParams> = {}): ActualizarPadronParams =>
+      defaultParams({
+        typeTable: TYPE_TABLE,
+        options: { clearMode: "delete", localityType: LOCALITY_TYPE },
+        ...overrides,
+      });
+    const typedPopulateSql = buildPopulateSql(layoutsFor(DEFAULT_SCHEMAS, true));
+    const typedReportSql = buildReportSql(layoutsFor(DEFAULT_SCHEMAS, true));
+    const typeCheckIndex = (log: string[]): number =>
+      log.findIndex((sql) => /^\s*SELECT/i.test(sql) && /upper\(/i.test(sql) && sql.includes(TYPE_TABLE));
+
+    it("should run no unit type query and no type column reference when no type table is selected (AP-10b)", async () => {
+      const harness = createHarness();
+
+      await runActualizarPadron(defaultParams(), harness.deps);
+
+      expect(harness.log.some((sql) => /territorial_unit_type|id_territorial_unit_type/.test(sql))).toBe(false);
+    });
+
+    it("should check the type table before BEGIN, with no write before the check (AP-7b)", async () => {
+      const harness = createHarness({ withUnitType: true });
+
+      await runActualizarPadron(typedParams(), harness.deps);
+
+      const check = typeCheckIndex(harness.log);
+      expect(check).toBeGreaterThanOrEqual(0);
+      expect(check).toBeLessThan(indexOfMatch(harness.log, /^\s*BEGIN/i));
+      expect(harness.log.slice(0, check).filter(isWrite)).toEqual([]);
+    });
+
+    it("should run the populate and the report with the typed chain, in the same transaction shape", async () => {
+      const harness = createHarness({ withUnitType: true });
+
+      const result = await runActualizarPadron(typedParams(), harness.deps);
+
+      const begin = indexOfMatch(harness.log, /^\s*BEGIN/i);
+      expect(harness.log.slice(begin)).toEqual([BEGIN_SQL, clearSql("delete"), typedPopulateSql, analyzeSql, typedReportSql, COMMIT_SQL]);
+      expect(harness.log.find((sql) => /^\s*INSERT INTO/i.test(sql))).toContain(TYPE_TABLE);
+      expect(result.tempModified).toBe(true);
+    });
+
+    it("should refuse zero matching types before BEGIN, naming the locality type and the type table, and close the session", async () => {
+      const harness = createHarness({ withUnitType: true, typeMatches: 0 });
+
+      const failure = await failureOf(runActualizarPadron(typedParams(), harness.deps));
+
+      expect(failure.message).toContain(LOCALITY_TYPE);
+      expect(failure.message).toContain(`${SCHEMA}.${TYPE_TABLE}`);
+      expect(indexOfMatch(harness.log, /^\s*BEGIN/i)).toBe(-1);
+      expect(harness.log.filter(isWrite)).toEqual([]);
+      expect(harness.state.closed).toBe(1);
+    });
+
+    it("should refuse several matching types before BEGIN, naming the count", async () => {
+      const harness = createHarness({ withUnitType: true, typeMatches: 2 });
+
+      const failure = await failureOf(runActualizarPadron(typedParams(), harness.deps));
+
+      expect(failure.message).toMatch(/\b2\b/);
+      expect(indexOfMatch(harness.log, /^\s*BEGIN/i)).toBe(-1);
+      expect(harness.log.filter(isWrite)).toEqual([]);
+    });
+
+    it("should refuse an empty locality type before BEGIN and write nothing", async () => {
+      const harness = createHarness({ withUnitType: true });
+
+      await expect(
+        runActualizarPadron(typedParams({ options: { clearMode: "delete", localityType: "   " } }), harness.deps)
+      ).rejects.toThrow();
+
+      expect(indexOfMatch(harness.log, /^\s*BEGIN/i)).toBe(-1);
+      expect(harness.log.filter(isWrite)).toEqual([]);
+    });
+
+    it("should report only the validation step when the type check refuses", async () => {
+      const harness = createHarness({ withUnitType: true, typeMatches: 0 });
+      const { calls, onProgress } = collector();
+
+      await expect(runActualizarPadron(typedParams(), harness.deps, onProgress)).rejects.toThrow();
+
+      expect(calls.map((call) => call.label)).toEqual([STEP.VALIDATE]);
+    });
+
+    it("should run a typed dry run that ends with ROLLBACK and never COMMIT", async () => {
+      const harness = createHarness({ withUnitType: true });
+
+      const result = await runActualizarPadron(typedParams({ dryRun: true, confirm: false }), harness.deps);
+
+      expect(harness.log).toContain(typedPopulateSql);
+      expect(harness.log.find((sql) => /^\s*INSERT INTO/i.test(sql))).toContain(TYPE_TABLE);
+      expect(harness.log[harness.log.length - 1]).toBe(ROLLBACK_SQL);
+      expect(indexOfMatch(harness.log, /^\s*COMMIT/i)).toBe(-1);
+      expect(result.tempModified).toBe(false);
+    });
+  });
+
+  describe("three schemas at run time (AP-3, AP-20)", () => {
+    const threeSchemas: SchemaChoice = { staging: "stg", work: "wrk", carto: "carto" };
+    const threeParams = (overrides: Partial<ActualizarPadronParams> = {}): ActualizarPadronParams =>
+      defaultParams({
+        stagingSchema: "stg",
+        workSchema: "wrk",
+        cartoSchema: "carto",
+        typeTable: TYPE_TABLE,
+        options: { clearMode: "delete", localityType: LOCALITY_TYPE },
+        ...overrides,
+      });
+
+    it("should read the staging and work catalogs in their own schemas and the reference catalogs in cartoSchema", async () => {
+      const harness = createHarness({ schemas: threeSchemas, withUnitType: true });
+
+      await runActualizarPadron(threeParams(), harness.deps).catch(() => undefined);
+
+      const schemaOf = (table: string) => harness.reads.find((read) => read.table === table)?.schema;
+      expect(schemaOf(STAGING)).toBe("stg");
+      expect(schemaOf(WORK)).toBe("wrk");
+      expect(schemaOf(PADRON)).toBe("carto");
+      expect(schemaOf(PROVINCE)).toBe("carto");
+      expect(schemaOf(LOCALITY)).toBe("carto");
+      expect(schemaOf(TYPE_TABLE)).toBe("carto");
+    });
+
+    it("should populate with each table qualified by its own schema and never touch the default schema", async () => {
+      const harness = createHarness({ schemas: threeSchemas, withUnitType: true });
+
+      await runActualizarPadron(threeParams(), harness.deps).catch(() => undefined);
+
+      expect(harness.log).toContain(buildPopulateSql(layoutsFor(threeSchemas, true)));
+      expect(harness.log.join("\n")).not.toContain(`"${SCHEMA}"`);
+    });
+
+    it("should refuse a carto table that repeats the staging table before opening a session, naming it", async () => {
+      const harness = createHarness();
+
+      await expect(runActualizarPadron(defaultParams({ stagingSchema: "carto", stagingTable: PADRON, cartoSchema: "carto", padronTable: PADRON }), harness.deps)).rejects.toThrow(
+        /carto\.padron/
+      );
+
+      expect(harness.openSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("skipped groups by department, locality and reason (AP-16, AP-25)", () => {
+    it("should map each group to department, locality, reason and count, with counts as numbers and the query order kept", async () => {
+      const harness = createHarness({
+        byLocalityAndReason: [
+          { department: "ROCHA", locality: "CHUY", reason: SKIP_REASON.LOCALIDAD_NO_ENCONTRADA, count: "4" },
+          { department: "SALTO", locality: null, reason: SKIP_REASON.LOCALIDAD_AMBIGUA, count: 2 },
+        ],
+      });
+
+      const result = await runActualizarPadron(defaultParams(), harness.deps);
+
+      expect(result.skipped.byLocalityAndReason).toEqual([
+        { department: "ROCHA", locality: "CHUY", reason: SKIP_REASON.LOCALIDAD_NO_ENCONTRADA, count: 4 },
+        { department: "SALTO", locality: null, reason: SKIP_REASON.LOCALIDAD_AMBIGUA, count: 2 },
+      ]);
+    });
+
+    it("should answer an empty list when the query gives null for the groups (zero-safe)", async () => {
+      const harness = createHarness({ byLocalityAndReason: null });
+
+      const result = await runActualizarPadron(defaultParams(), harness.deps);
+
+      expect(result.skipped.byLocalityAndReason).toEqual([]);
+    });
+
+    it("should cap the groups at 20 even when the query returns more", async () => {
+      const harness = createHarness({
+        byLocalityAndReason: Array.from({ length: 25 }, (_entry, index) => ({
+          department: "D",
+          locality: `L${index}`,
+          reason: SKIP_REASON.LOCALIDAD_NO_ENCONTRADA,
+          count: 25 - index,
+        })),
+      });
+
+      const result = await runActualizarPadron(defaultParams(), harness.deps);
+
+      expect(result.skipped.byLocalityAndReason).toHaveLength(20);
+      expect(result.skipped.byLocalityAndReason[0]).toMatchObject({ locality: "L0", count: 25 });
     });
   });
 

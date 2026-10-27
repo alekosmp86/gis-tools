@@ -4,6 +4,7 @@ import {
   assertStagingHasRows,
   assertStagingSridSupported,
   assertTruncatable,
+  assertUnitTypeUnique,
   assertWorkTableSafe,
   assertWorkWritePrivileges,
 } from "@/modules/routine-jobs/jobs/actualizar-padron/services/preflight";
@@ -138,6 +139,7 @@ const paramsWith = (overrides: Partial<ActualizarPadronParams> = {}): Actualizar
   stagingTable: "stg_padron",
   workSchema: SCHEMA,
   workTable: WORK,
+  cartoSchema: SCHEMA,
   padronTable: "padron",
   provinceTable: "province",
   localityTable: "cadastral_locality",
@@ -150,6 +152,85 @@ const paramsWith = (overrides: Partial<ActualizarPadronParams> = {}): Actualizar
 const isWrite = (sql: string): boolean => /^\s*(INSERT|DELETE|TRUNCATE|UPDATE)\b/i.test(sql);
 
 describe("actualizar-padron preflight", () => {
+  describe("assertUnitTypeUnique (AP-7b)", () => {
+    const TYPE_LAYOUT: TableLayout = { schema: SCHEMA, table: "territorial_unit_type", columns: { id: "id", name: "name" } };
+    const LOCALITY_TYPE = "LOCALIDAD CATASTRAL";
+    const unitTypeOf = (localityType = LOCALITY_TYPE) => ({ layout: TYPE_LAYOUT, localityType });
+    const typeSessionWith = (matches: number) => {
+      const log: Array<{ sql: string; values?: unknown[] }> = [];
+      return {
+        log,
+        async query(sql: string, values?: unknown[]) {
+          log.push({ sql, values });
+          await Promise.resolve();
+          return { rows: Array.from({ length: matches }, (_entry, index) => ({ id: index + 1 })) };
+        },
+        async close() {
+          return undefined;
+        },
+      };
+    };
+
+    it("should run no query when no type table is selected", async () => {
+      const session = typeSessionWith(1);
+
+      await assertUnitTypeUnique(session, undefined);
+
+      expect(session.log).toEqual([]);
+    });
+
+    it("should accept exactly one type row whose name matches the locality type", async () => {
+      await expect(assertUnitTypeUnique(typeSessionWith(1), unitTypeOf())).resolves.toBeUndefined();
+    });
+
+    it("should match the type name with upper() on both sides, against the type table qualified with cartoSchema", async () => {
+      const session = typeSessionWith(1);
+
+      await assertUnitTypeUnique(session, unitTypeOf());
+
+      expect(session.log).toHaveLength(1);
+      expect(session.log[0].sql).toContain(`"${SCHEMA}"."territorial_unit_type"`);
+      expect(session.log[0].sql).toMatch(/upper\(\s*"name"\s*\)\s*=\s*upper\(\s*\$1/i);
+    });
+
+    it("should bind the locality type as a parameter and never put it in the SQL text", async () => {
+      const session = typeSessionWith(1);
+
+      await assertUnitTypeUnique(session, unitTypeOf("O'Brien TIPO"));
+
+      expect(session.log[0].values).toEqual(["O'Brien TIPO"]);
+      expect(session.log[0].sql).not.toContain("O'Brien");
+    });
+
+    it("should refuse zero matching type rows, naming the locality type and the type table in Spanish", async () => {
+      const failure = await assertUnitTypeUnique(typeSessionWith(0), unitTypeOf()).catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message).toContain(LOCALITY_TYPE);
+      expect((failure as Error).message).toContain(`${SCHEMA}.territorial_unit_type`);
+      expect((failure as Error).message).toMatch(/\b(el|la|no|de|en)\b/i);
+    });
+
+    it("should refuse more than one matching type row, naming the count, the locality type and the type table", async () => {
+      const failure = await assertUnitTypeUnique(typeSessionWith(2), unitTypeOf()).catch((error: unknown) => error);
+
+      expect((failure as Error).message).toMatch(/\b2\b/);
+      expect((failure as Error).message).toContain(LOCALITY_TYPE);
+      expect((failure as Error).message).toContain(`${SCHEMA}.territorial_unit_type`);
+    });
+
+    it.each([
+      ["an empty", ""],
+      ["a whitespace only", "   "],
+    ])("should refuse %s locality type before any query", async (_label, localityType) => {
+      const session = typeSessionWith(1);
+
+      await expect(assertUnitTypeUnique(session, unitTypeOf(localityType))).rejects.toThrow();
+
+      expect(session.log).toEqual([]);
+    });
+  });
+
   describe("assertRunAllowed", () => {
     it("should refuse a real run without confirm", () => {
       expect(() => assertRunAllowed(paramsWith({ confirm: false }))).toThrow();

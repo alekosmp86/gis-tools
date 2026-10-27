@@ -10,11 +10,17 @@ export interface WorkLayout extends TableLayout {
   srid: number;
 }
 
+export interface UnitTypeLayout {
+  layout: TableLayout;
+  localityType: string;
+}
+
 export interface PopulateLayouts {
   staging: TableLayout;
   work: WorkLayout;
   province: TableLayout;
   locality: TableLayout;
+  unitType?: UnitTypeLayout;
 }
 
 export const qualifiedName = (layout: TableLayout): string =>

@@ -42,14 +42,31 @@ export const LOCALITY_COLUMN = {
   ID_PROVINCE: "id_province",
 } as const;
 
+export const LOCALITY_TYPE_COLUMN = {
+  ID_TERRITORIAL_UNIT_TYPE: "id_territorial_unit_type",
+} as const;
+
+export const TYPE_COLUMN = {
+  ID: "id",
+  NAME: "name",
+} as const;
+
 export const STAGING_REQUIRED_COLUMNS: readonly string[] = Object.values(STAGING_COLUMN);
 export const WORK_REQUIRED_COLUMNS: readonly string[] = Object.values(WORK_COLUMN);
 export const PADRON_REQUIRED_COLUMNS: readonly string[] = Object.values(PADRON_COLUMN);
 export const PROVINCE_REQUIRED_COLUMNS: readonly string[] = Object.values(PROVINCE_COLUMN);
 export const LOCALITY_REQUIRED_COLUMNS: readonly string[] = Object.values(LOCALITY_COLUMN);
+export const LOCALITY_TYPED_REQUIRED_COLUMNS: readonly string[] = [
+  ...LOCALITY_REQUIRED_COLUMNS,
+  LOCALITY_TYPE_COLUMN.ID_TERRITORIAL_UNIT_TYPE,
+];
+export const TYPE_REQUIRED_COLUMNS: readonly string[] = Object.values(TYPE_COLUMN);
+
+export const DEFAULT_LOCALITY_TYPE = "LOCALIDAD CATASTRAL";
 
 export const SKIPPED_SAMPLE_LIMIT = 20;
 export const SKIPPED_GROUP_LIMIT = 20;
+export const LOCALITY_REASON_GROUP_LIMIT = 20;
 export const COLLIDING_KEY_LIMIT = 20;
 
 export const GENERIC_SRID = 0;
@@ -95,6 +112,7 @@ export const TABLE_LABEL = {
   PADRON: "padrón",
   PROVINCE: "provincias",
   LOCALITY: "localidades",
+  TYPE: "tipos de unidad",
 } as const;
 
 export const ACTUALIZAR_TABLE_ROLE = {
@@ -103,6 +121,8 @@ export const ACTUALIZAR_TABLE_ROLE = {
   PADRON: "actualizar-padron",
   PROVINCE: "actualizar-provincia",
   LOCALITY: "actualizar-localidad",
+  LOCALITY_TYPED: "actualizar-localidad-tipada",
+  TYPE: "actualizar-tipo",
 } as const;
 
 export type ActualizarTableRole = (typeof ACTUALIZAR_TABLE_ROLE)[keyof typeof ACTUALIZAR_TABLE_ROLE];
@@ -113,4 +133,6 @@ export const ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE: Record<ActualizarTableRole, re
   [ACTUALIZAR_TABLE_ROLE.PADRON]: PADRON_REQUIRED_COLUMNS,
   [ACTUALIZAR_TABLE_ROLE.PROVINCE]: PROVINCE_REQUIRED_COLUMNS,
   [ACTUALIZAR_TABLE_ROLE.LOCALITY]: LOCALITY_REQUIRED_COLUMNS,
+  [ACTUALIZAR_TABLE_ROLE.LOCALITY_TYPED]: LOCALITY_TYPED_REQUIRED_COLUMNS,
+  [ACTUALIZAR_TABLE_ROLE.TYPE]: TYPE_REQUIRED_COLUMNS,
 };
