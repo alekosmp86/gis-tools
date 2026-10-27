@@ -2,7 +2,7 @@
 // fallow-ignore-file duplicate-export
 import { DEFAULT_LOCALITY_TYPE } from "../jobs/actualizar-padron/constants";
 import { CLEAR_MODE } from "../jobs/cargar-padrones/constants";
-import type { ActualizarJobOptions, ActualizarStartRequest, ClientConnection } from "./clientTypes";
+import type { ActualizarJobOptions, ActualizarStartRequest, ClientConnection, StagingSelection } from "./clientTypes";
 import type { ActualizarPadronRunSnapshot } from "./actualizarPadronRunStore";
 import {
   connectionBlockingReason,
@@ -28,6 +28,12 @@ export interface ActualizarWizardConfirmation {
   workTableLabel: string;
 }
 
+/** Hub-validated connection and the staging table chosen in stage 1: both are fixed when the wizard opens or resets. */
+export interface ActualizarWizardSeed {
+  connection?: ClientConnection;
+  staging?: StagingSelection;
+}
+
 export interface ActualizarWizardState extends ActualizarTableSelection {
   step: WizardStep;
   connection: ClientConnection;
@@ -46,7 +52,7 @@ export type ActualizarWizardAction =
   | { type: "back" }
   | { type: "goTo"; step: WizardStep }
   | { type: "runStarted" }
-  | { type: "reset" };
+  | { type: "reset"; seed?: ActualizarWizardSeed };
 
 const STEP_ORDER: readonly WizardStep[] = [
   WizardStep.CONNECTION,
@@ -87,7 +93,14 @@ const clearedFor = <Value>(
 
 const emptyConfirmation = (): ActualizarWizardConfirmation => ({ password: "", workTableLabel: "" });
 
-export function initialWizardState(): ActualizarWizardState {
+const seedFieldsOf = (seed: ActualizarWizardSeed): Partial<ActualizarWizardState> => ({
+  ...(seed.connection === undefined ? {} : { connection: seed.connection, step: WizardStep.TABLES }),
+  ...(seed.staging === undefined
+    ? {}
+    : { stagingSchema: seed.staging.schema, tables: { ...recordOfEveryKey<string>(""), [ActualizarTableKey.STAGING]: seed.staging.table } }),
+});
+
+export function initialWizardState(seed: ActualizarWizardSeed = {}): ActualizarWizardState {
   return {
     step: WizardStep.CONNECTION,
     connection: { host: "", port: "5432", db_name: "", user: "", password: "" },
@@ -98,11 +111,13 @@ export function initialWizardState(): ActualizarWizardState {
     tableValidity: recordOfEveryKey(false),
     options: { clearMode: CLEAR_MODE.DELETE, localityType: DEFAULT_LOCALITY_TYPE },
     confirmation: emptyConfirmation(),
+    ...seedFieldsOf(seed),
   };
 }
 
-export function initialWizardStateFor(snapshot: ActualizarPadronRunSnapshot): ActualizarWizardState {
-  return { ...initialWizardState(), step: snapshot.phase === RunPhase.IDLE ? WizardStep.CONNECTION : WizardStep.RESULT };
+export function initialWizardStateFor(snapshot: ActualizarPadronRunSnapshot, seed: ActualizarWizardSeed = {}): ActualizarWizardState {
+  const seeded = initialWizardState(seed);
+  return snapshot.phase === RunPhase.IDLE ? seeded : { ...seeded, step: WizardStep.RESULT };
 }
 
 const isBlank = (value: string): boolean => value.trim() === "";
@@ -292,6 +307,6 @@ export function wizardReducer(state: ActualizarWizardState, action: ActualizarWi
     case "runStarted":
       return { ...state, step: WizardStep.RESULT, confirmation: emptyConfirmation() };
     case "reset":
-      return initialWizardState();
+      return initialWizardState(action.seed);
   }
 }

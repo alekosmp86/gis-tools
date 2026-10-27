@@ -1,0 +1,109 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.hint {
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.75;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.stageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stageList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stageRow {
+  display: grid;
+  grid-template-columns: 32px 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.stageNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.stageText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stageTitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.stageDescription {
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.7;
+  margin: 0;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.statusPending {
+  opacity: 0.6;
+}
+
+.statusDone {
+  color: var(--accent-cyan);
+}
+
+.statusFailed {
+  color: #f87171;
+}
+
+@media (max-width: 640px) {
+  .stageRow {
+    grid-template-columns: 32px 1fr;
+  }
+}

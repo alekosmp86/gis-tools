@@ -105,15 +105,35 @@ export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
       {busy && <AlertMessage type={AlertType.WARNING} text={BUSY_NOTE} />}
       {runBlockedReason !== null && <AlertMessage type={AlertType.WARNING} text={runBlockedReason} />}
       <div className={styles.actions}>
-        <Button variant={ButtonVariant.SECONDARY} isDisabled={blocked || !canDryRun} onClick={onDryRun}>
-          <Search size={15} />
-          <span>Analizar sin cargar</span>
-        </Button>
-        <Button isDisabled={blocked || !canRun} onClick={onRun}>
-          <DatabaseZap size={15} />
-          <span>Actualizar tabla de trabajo</span>
-        </Button>
+        <ReviewActionButton
+          variant={ButtonVariant.SECONDARY}
+          icon={<Search size={15} />}
+          label="Analizar sin cargar"
+          isDisabled={blocked || !canDryRun}
+          onClick={onDryRun}
+        />
+        <ReviewActionButton
+          icon={<DatabaseZap size={15} />}
+          label="Actualizar tabla de trabajo"
+          isDisabled={blocked || !canRun}
+          onClick={onRun}
+        />
       </div>
     </div>
   );
 };
+
+interface ReviewActionButtonProps {
+  icon: React.ReactNode;
+  label: string;
+  variant?: ButtonVariant;
+  isDisabled: boolean;
+  onClick: () => void;
+}
+
+const ReviewActionButton: React.FC<ReviewActionButtonProps> = ({ icon, label, variant, isDisabled, onClick }) => (
+  <Button variant={variant} isDisabled={isDisabled} onClick={onClick}>
+    {icon}
+    <span>{label}</span>
+  </Button>
+);

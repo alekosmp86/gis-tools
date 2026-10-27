@@ -1,7 +1,9 @@
 import { plannedStepLabels, STEP, type StepLabel } from "../jobs/cargar-padrones/domain/plannedSteps";
 import { plannedStepLabels as actualizarPlannedStepLabels } from "../jobs/actualizar-padron/domain/plannedSteps";
+import { plannedLocalityStepLabels as localidadesPlannedStepLabels } from "../jobs/cargar-localidades/domain/plannedSteps";
 import type { CargarPadronesRunPlan } from "./cargarPadronesRunStore";
 import type { ActualizarPadronRunPlan } from "./actualizarPadronRunStore";
+import type { CargarLocalidadesRunPlan } from "./cargarLocalidadesRunStore";
 import { RunPhase } from "./jobRunStore";
 
 const STEP_LABEL_VALUES: ReadonlySet<string> = new Set<string>(Object.values(STEP));
@@ -41,7 +43,7 @@ export interface StepChecklistInput {
   phase: RunPhase;
 }
 
-export type RunPlan = CargarPadronesRunPlan | ActualizarPadronRunPlan;
+export type RunPlan = CargarPadronesRunPlan | ActualizarPadronRunPlan | CargarLocalidadesRunPlan;
 
 export interface PlannedLabelsSource {
   steps?: readonly string[];
@@ -52,8 +54,11 @@ const isStepLabel = (label: string): label is StepLabel => STEP_LABEL_VALUES.has
 
 const uiLabelOf = (label: string): string => (isStepLabel(label) ? STEP_UI_LABEL[label] : label);
 
-const labelsOfPlan = (plan: RunPlan): readonly string[] =>
-  "clearMode" in plan ? actualizarPlannedStepLabels(plan) : plannedStepLabels(plan);
+const labelsOfPlan = (plan: RunPlan): readonly string[] => {
+  if ("clearMode" in plan) return actualizarPlannedStepLabels(plan);
+  if ("tables" in plan) return localidadesPlannedStepLabels(plan);
+  return plannedStepLabels(plan);
+};
 
 export function resolvePlannedLabels({ steps, plan }: PlannedLabelsSource): readonly string[] {
   if (steps && steps.length > 0) return steps;

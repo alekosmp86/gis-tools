@@ -1,6 +1,6 @@
 import type { TableRole } from "../jobs/cargar-padrones/constants";
 import { TABLE_ROLE } from "../jobs/cargar-padrones/constants";
-import type { ClientConnection, JobOptions, StartRequest } from "./clientTypes";
+import type { ClientConnection, JobOptions, StagingSelection, StartRequest } from "./clientTypes";
 import type { CargarPadronesRunSnapshot } from "./cargarPadronesRunStore";
 
 export const WizardStep = {
@@ -26,6 +26,11 @@ export interface WizardConfirmation {
   targetLabel: string;
 }
 
+/** A connection validated by the hub: the wizard then starts on the tables step and never shows its own connection step. */
+export interface WizardSeed {
+  connection?: ClientConnection;
+}
+
 export interface WizardState {
   step: WizardStep;
   connection: ClientConnection;
@@ -48,7 +53,7 @@ export type WizardAction =
   | { type: "back" }
   | { type: "goTo"; step: WizardStep }
   | { type: "runStarted" }
-  | { type: "reset" };
+  | { type: "reset"; seed?: WizardSeed };
 
 const PORT_MIN = 1;
 const PORT_MAX = 65535;
@@ -74,7 +79,10 @@ const emptyTables = (): Record<TableRole, string> => ({ rural: "", urbano: "", t
 const noTableValidity = (): Record<TableRole, boolean> => ({ rural: false, urbano: false, target: false });
 const emptyConfirmation = (): WizardConfirmation => ({ password: "", targetLabel: "" });
 
-export function initialWizardState(): WizardState {
+const seedFieldsOf = (seed: WizardSeed): Partial<WizardState> =>
+  seed.connection === undefined ? {} : { connection: seed.connection, step: WizardStep.TABLES };
+
+export function initialWizardState(seed: WizardSeed = {}): WizardState {
   return {
     step: WizardStep.CONNECTION,
     connection: { host: "", port: DEFAULT_PORT, db_name: "", user: "", password: "" },
@@ -83,6 +91,7 @@ export function initialWizardState(): WizardState {
     tableValidity: noTableValidity(),
     options: { repair: true, clearMode: "delete", resetSequences: true },
     confirmation: { password: "", targetLabel: "" },
+    ...seedFieldsOf(seed),
   };
 }
 
@@ -90,8 +99,10 @@ export function initialWizardState(): WizardState {
 export const initialStepFor = (snapshot: CargarPadronesRunSnapshot): WizardStep =>
   snapshot.phase === "idle" ? WizardStep.CONNECTION : WizardStep.RESULT;
 
-export function initialWizardStateFor(snapshot: CargarPadronesRunSnapshot): WizardState {
-  return { ...initialWizardState(), step: initialStepFor(snapshot) };
+export function initialWizardStateFor(snapshot: CargarPadronesRunSnapshot, seed: WizardSeed = {}): WizardState {
+  const step = initialStepFor(snapshot);
+  const seeded = initialWizardState(seed);
+  return step === WizardStep.CONNECTION ? seeded : { ...seeded, step };
 }
 
 /** Every connection field changes the server or the credentials, so it invalidates the catalog failures. */
@@ -227,8 +238,14 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case "runStarted":
       return { ...state, step: WizardStep.RESULT, confirmation: emptyConfirmation() };
     case "reset":
-      return initialWizardState();
+      return initialWizardState(action.seed);
   }
+}
+
+export function stagingSelectionOf(state: WizardState): StagingSelection | null {
+  const schema = state.schema.trim();
+  const table = state.tables.target.trim();
+  return schema === "" || table === "" ? null : { schema, table };
 }
 
 export function isRealRunConfirmed(state: WizardState): boolean {

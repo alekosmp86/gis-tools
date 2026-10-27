@@ -14,12 +14,10 @@ const renderDashboard = (props: { selectedJobId?: string } = {}): string =>
 const countOf = (html: string, needle: string): number => html.split(needle).length - 1;
 
 describe("ROUTINE_JOBS", () => {
-  it("AP-35: should list Cargar padrones and Actualizar padrones de carto, in that order", () => {
-    expect(ROUTINE_JOBS).toHaveLength(2);
-    expect(ROUTINE_JOBS[0].id).toBe("cargar-padrones");
-    expect(ROUTINE_JOBS[0].title).toBe("Cargar padrones");
-    expect(ROUTINE_JOBS[1].id).toBe("actualizar-padron");
-    expect(ROUTINE_JOBS[1].title).toBe("Actualizar padrones de carto");
+  it("AP-35: should list the single Actualización mensual de carto job", () => {
+    expect(ROUTINE_JOBS).toHaveLength(1);
+    expect(ROUTINE_JOBS[0].id).toBe("actualizacion-mensual-carto");
+    expect(ROUTINE_JOBS[0].title).toBe("Actualización mensual de carto");
   });
 
   it("AC-33: should give every job a non-empty Spanish description and a unique id", () => {
@@ -59,15 +57,7 @@ describe("RoutineJobsDashboard", () => {
   });
 
   it("AC-33: should show the wizard instead of the list when a job is selected", () => {
-    const html = renderDashboard({ selectedJobId: "cargar-padrones" });
-
-    expect(html).toContain("Servidor");
-    expect(html).toContain("Conexión");
-    expect(html).not.toContain("Abrir");
-  });
-
-  it("AP-35: should show the Actualizar padrones wizard instead of the list when that job is selected", () => {
-    const html = renderDashboard({ selectedJobId: "actualizar-padron" });
+    const html = renderDashboard({ selectedJobId: "actualizacion-mensual-carto" });
 
     expect(html).toContain("Servidor");
     expect(html).toContain("Conexión");
@@ -89,7 +79,7 @@ describe("RoutineJobsDashboard", () => {
 
   it("AC-33: should not use inline styles", () => {
     expect(renderDashboard()).not.toMatch(/\sstyle=/);
-    expect(renderDashboard({ selectedJobId: "cargar-padrones" })).not.toMatch(/\sstyle=/);
+    expect(renderDashboard({ selectedJobId: "actualizacion-mensual-carto" })).not.toMatch(/\sstyle=/);
   });
 });
 

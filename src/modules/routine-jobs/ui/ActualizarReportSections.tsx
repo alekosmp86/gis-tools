@@ -9,6 +9,7 @@ import type {
   SkippedReasonRow,
 } from "./actualizarPadronReportView";
 import { DataTable } from "./DataTable";
+import { keyedRowsOf } from "./keyedRows";
 import { ReportRowList } from "./ReportRowList";
 import styles from "./ActualizarPadronReport.module.css";
 import sharedStyles from "./CargarPadronesReport.module.css";
@@ -19,21 +20,6 @@ const SECONDS_SUFFIX = "s";
 const secondsText = (seconds: number): string => `${seconds.toFixed(DECIMAL_PLACES).replace(".", ",")} ${SECONDS_SUFFIX}`;
 
 const barClassOf = (barStep: number): string => styles[`fill${barStep}`];
-
-interface KeyedRow<Row> {
-  key: string;
-  row: Row;
-}
-
-function keyedRowsOf<Row>(rows: Row[], contentOf: (row: Row) => string): KeyedRow<Row>[] {
-  const occurrences = new Map<string, number>();
-  return rows.map((row) => {
-    const content = contentOf(row);
-    const occurrence = occurrences.get(content) ?? 0;
-    occurrences.set(content, occurrence + 1);
-    return { key: `${content}#${occurrence}`, row };
-  });
-}
 
 const groupRowsOf = (groups: GroupRow[]) => groups.map((group) => ({ label: group.name, value: group.count }));
 

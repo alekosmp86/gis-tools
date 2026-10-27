@@ -5,9 +5,8 @@ import { ArrowLeft } from "lucide-react";
 import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLayout";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { ButtonVariant } from "@/ui-kit/types/ui";
-import { CargarPadronesWizard } from "./CargarPadronesWizard";
-import ActualizarPadronWizard from "./ActualizarPadronWizard";
-import { ROUTINE_JOBS } from "./jobs";
+import { MonthlyCartoUpdate } from "./MonthlyCartoUpdate";
+import { MONTHLY_CARTO_JOB_ID, ROUTINE_JOBS } from "./jobs";
 import styles from "./RoutineJobsDashboard.module.css";
 
 const PAGE_TITLE = "Trabajos de rutina";
@@ -19,8 +18,7 @@ const NO_JOB = "";
 
 /** The wizard behind each job id. A job without an entry here shows only its list row. */
 const JOB_VIEWS: Partial<Record<string, React.FC>> = {
-  "cargar-padrones": CargarPadronesWizard,
-  "actualizar-padron": ActualizarPadronWizard,
+  [MONTHLY_CARTO_JOB_ID]: MonthlyCartoUpdate,
 };
 
 export interface RoutineJobsDashboardProps {

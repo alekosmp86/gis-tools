@@ -9,7 +9,7 @@ import { ActualizarTableKey, schemaFieldOf, type SchemaField } from "../actualiz
 import { SchemaDraftField } from "./SchemaDraftField";
 import styles from "./WizardSteps.module.css";
 
-const CATALOG_ERROR_MESSAGE = "No se pudo consultar la base. Revise servidor, puerto, usuario y contraseña en el paso 1.";
+const CATALOG_ERROR_MESSAGE = "No se pudo consultar la base. Revise la conexión.";
 const STAGING_SCHEMA_LABEL = "Esquema de origen";
 const WORK_SCHEMA_LABEL = "Esquema de trabajo";
 const CARTO_SCHEMA_LABEL = "Esquema de carto";

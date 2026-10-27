@@ -2,6 +2,7 @@ import type { ClearMode } from "../jobs/cargar-padrones/constants";
 import type { LoadOptions } from "../jobs/cargar-padrones/domain/loadSql";
 import type { CargarPadronesResult } from "../jobs/cargar-padrones/types";
 import type { ActualizarPadronResult } from "../jobs/actualizar-padron/types";
+import type { CargarLocalidadesResult, LocalityOptions, LocalityTableRef } from "../jobs/cargar-localidades/types";
 
 export type JobOptions = LoadOptions;
 
@@ -11,6 +12,11 @@ export interface ClientConnection {
   db_name: string;
   user: string;
   password: string;
+}
+
+export interface StagingSelection {
+  schema: string;
+  table: string;
 }
 
 export interface StartRequest {
@@ -65,3 +71,18 @@ export interface ActualizarStartRequest {
 }
 
 export type ActualizarJobStatusView = JobStatusBase<ActualizarPadronResult>;
+
+export interface LocalidadesStartRequest {
+  connection: ClientConnection;
+  stagingSchema: string;
+  padronTable: string;
+  localityStagingTable: string;
+  provinceSchema: string;
+  provinceTable: string;
+  targets: LocalityTableRef[];
+  options: LocalityOptions;
+  dryRun: boolean;
+  confirm: boolean;
+}
+
+export type LocalidadesJobStatusView = JobStatusBase<CargarLocalidadesResult>;

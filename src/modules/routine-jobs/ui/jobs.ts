@@ -4,17 +4,13 @@ export interface RoutineJob {
   description: string;
 }
 
+export const MONTHLY_CARTO_JOB_ID = "actualizacion-mensual-carto";
+
 export const ROUTINE_JOBS: readonly RoutineJob[] = [
   {
-    id: "cargar-padrones",
-    title: "Cargar padrones",
+    id: MONTHLY_CARTO_JOB_ID,
+    title: "Actualización mensual de carto",
     description:
-      "Carga mensual del padrón a partir de las tablas catastrales rural y urbana ya cargadas con la sincronización de shapefiles.",
-  },
-  {
-    id: "actualizar-padron",
-    title: "Actualizar padrones de carto",
-    description:
-      "Rellena una tabla de trabajo con los padrones de la tabla de staging, con provincias y localidades resueltas. No modifica carto.padron.",
+      "Carga mensual de padrones y actualización de carto, en etapas ordenadas. Abra cada etapa y revise su informe antes de seguir.",
   },
 ];

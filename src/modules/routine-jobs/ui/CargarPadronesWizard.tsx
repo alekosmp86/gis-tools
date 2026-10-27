@@ -18,6 +18,9 @@ import {
   WizardStep,
   wizardReducer,
   type ConnectionField,
+  stagingSelectionOf,
+  type WizardAction,
+  type WizardSeed,
   type WizardState,
 } from "./cargarPadronesWizardState";
 import { createRoutineJobsClient, RoutineJobsApiError } from "./routineJobsClient";
@@ -26,7 +29,7 @@ import {
   type CargarPadronesRunSnapshot,
   type CargarPadronesRunStore,
 } from "./cargarPadronesRunStore";
-import type { StartRequest } from "./clientTypes";
+import type { ClientConnection, StagingSelection, StartRequest } from "./clientTypes";
 import { changedConnectionFields, trimConnection } from "./connectionProfiles";
 import { useConnectionProfiles } from "./useConnectionProfiles";
 import { buildWizardSteps, excludedFor, stepIdOf, stepOfId } from "./wizardSteps";
@@ -48,17 +51,29 @@ import { ResultStep } from "./steps/ResultStep";
 const IDLE_SNAPSHOT: CargarPadronesRunSnapshot = { phase: "idle" };
 const ELAPSED_TICK_MS = 1000;
 const FIRST_STEP_ID = stepIdOf(WizardStep.CONNECTION);
+const TABLES_STEP_ID = stepIdOf(WizardStep.TABLES);
 const REVIEW_STEP_ID = stepIdOf(WizardStep.REVIEW);
 const RESULT_STEP_ID = stepIdOf(WizardStep.RESULT);
 const DRY_RUN = { dryRun: true };
 const REAL_RUN = { dryRun: false };
 const client = createRoutineJobsClient();
 const getIdleSnapshot = (): CargarPadronesRunSnapshot => IDLE_SNAPSHOT;
-const seedFromStore = (store: CargarPadronesRunStore): WizardState => initialWizardStateFor(store.getSnapshot());
+const seedFromStore = (store: CargarPadronesRunStore, seed: WizardSeed): WizardState =>
+  initialWizardStateFor(store.getSnapshot(), seed);
 
-export const CargarPadronesWizard: React.FC = () => {
+export interface CargarPadronesWizardProps {
+  connection?: ClientConnection;
+  onStagingChosen?: (staging: StagingSelection | null) => void;
+}
+
+export const CargarPadronesWizard: React.FC<CargarPadronesWizardProps> = ({
+  connection: lockedConnection,
+  onStagingChosen,
+}) => {
+  const seed: WizardSeed = { connection: lockedConnection };
+  const connectionLocked = lockedConnection !== undefined;
   const [runStore] = useState(getCargarPadronesRunStore);
-  const [state, dispatch] = useReducer(wizardReducer, runStore, seedFromStore);
+  const [state, dispatch] = useReducer(wizardReducer, runStore, (store) => seedFromStore(store, seed));
   const snapshot = useSyncExternalStore(runStore.subscribe, runStore.getSnapshot, getIdleSnapshot);
   const {
     profiles,
@@ -110,7 +125,14 @@ export const CargarPadronesWizard: React.FC = () => {
     if (connectionFieldInvalidatesCatalog(field)) setCatalogFailures(emptyCatalogFailures());
   };
 
-  const commitSchema = (next: string) => dispatch({ type: "schemaChanged", schema: next });
+  const dispatchWizard = (action: WizardAction) => {
+    dispatch(action);
+    if (action.type === "schemaChanged" || action.type === "tableChosen") {
+      onStagingChosen?.(stagingSelectionOf(wizardReducer(state, action)));
+    }
+  };
+
+  const commitSchema = (next: string) => dispatchWizard({ type: "schemaChanged", schema: next });
 
   const selectProfile = (profileId: string) => {
     const config: SafeDbConfig | null = pickProfile(profileId);
@@ -128,7 +150,7 @@ export const CargarPadronesWizard: React.FC = () => {
   const newRun = () => {
     runStore.reset();
     setCatalogFailures(emptyCatalogFailures());
-    dispatch({ type: "reset" });
+    dispatch({ type: "reset", seed });
   };
 
   const renderCurrentStep = (): React.ReactNode => {
@@ -154,7 +176,7 @@ export const CargarPadronesWizard: React.FC = () => {
             tables={state.tables}
             excluded={excludedFor(state)}
             onSchemaCommit={commitSchema}
-            onTableChange={(role, table, valid) => dispatch({ type: "tableChosen", role, table, valid })}
+            onTableChange={(role, table, valid) => dispatchWizard({ type: "tableChosen", role, table, valid })}
             loadTables={loadTables}
             checkColumns={checkColumns}
             blockingReason={blockingReason(state)}
@@ -204,14 +226,16 @@ export const CargarPadronesWizard: React.FC = () => {
     ...def,
     content: def.id === currentId ? content : null,
     onNext: def.id >= FIRST_STEP_ID && def.id < REVIEW_STEP_ID ? goNext : undefined,
-    onBack: def.id > FIRST_STEP_ID && def.id < RESULT_STEP_ID ? goBack : undefined,
+    onBack: def.id > FIRST_STEP_ID && def.id < RESULT_STEP_ID && !(connectionLocked && def.id === TABLES_STEP_ID) ? goBack : undefined,
   }));
 
   return (
     <WizardOrchestrator
       steps={steps}
       currentStep={currentId}
-      onStepClick={(id) => dispatch({ type: "goTo", step: stepOfId(id) })}
+      onStepClick={(id) => {
+        if (!(connectionLocked && id === FIRST_STEP_ID)) dispatch({ type: "goTo", step: stepOfId(id) });
+      }}
     />
   );
 };
