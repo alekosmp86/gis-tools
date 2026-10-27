@@ -17,6 +17,13 @@
   gap: 14px;
 }
 
+.gridAligned {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  align-items: end;
+  gap: 14px;
+}
+
 .hint {
   font-size: 12px;
   line-height: 1.5;
@@ -104,4 +111,24 @@
 .statusCounter {
   font-variant-numeric: tabular-nums;
   opacity: 0.8;
+}
+
+.schemaBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 320px;
+}
+
+.schemaHint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.tablesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
 }

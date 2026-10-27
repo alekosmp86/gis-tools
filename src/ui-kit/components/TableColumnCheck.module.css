@@ -1,0 +1,173 @@
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.chipOk,
+.chipBad {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid;
+}
+
+.chipOk {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.chipBad {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.problems {
+  list-style: none;
+  margin: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.problemIcon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #fbbf24;
+}
+
+.problemBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.problemHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.problemName {
+  font-weight: 600;
+  color: var(--text-main);
+  overflow-wrap: anywhere;
+}
+
+.problemDetail {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.pill {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.details {
+  font-size: 0.8rem;
+}
+
+.detailsSummary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 2px 0;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.detailsSummary:hover {
+  color: var(--text-main);
+}
+
+.detailsSummary:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.columns {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 4px 16px;
+}
+
+.column {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 3px 0;
+}
+
+.iconOk,
+.iconBad {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.iconOk {
+  color: #34d399;
+}
+
+.iconBad {
+  color: #fbbf24;
+}
+
+.columnName {
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.realName {
+  margin-left: auto;
+  min-width: 0;
+  text-align: right;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.columnPill {
+  margin-left: auto;
+}

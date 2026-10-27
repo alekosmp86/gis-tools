@@ -4,13 +4,12 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import type { ResolvedColumn, TableListing } from "@/core/types/tableCatalog";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
+import { TableColumnCheck } from "./TableColumnCheck";
 import {
-  columnRows,
   describeListing,
   isCurrentAnswer,
   isSelectionValid,
   shouldShowListError,
-  type ColumnRow,
   type SelectorLoadState,
   type TableOption,
 } from "./tableSelectorLogic";
@@ -128,20 +127,22 @@ export const TableSelector: React.FC<TableSelectorProps> = ({
       <label className={styles.label} htmlFor={selectId}>
         {label}
       </label>
-      <select
-        id={selectId}
-        className={styles.select}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">{PLACEHOLDER_LABEL}</option>
-        {options.map((option) => (
-          <option key={option.name} value={option.name} disabled={option.disabled}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <div className={styles.selectWrap}>
+        <select
+          id={selectId}
+          className={styles.select}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="">{PLACEHOLDER_LABEL}</option>
+          {options.map((option) => (
+            <option key={option.name} value={option.name} disabled={option.disabled}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
       {listView.message !== null &&
         showListMessage &&
         (isListBlocking ? (
@@ -168,19 +169,5 @@ function ColumnCheck({ answer, table }: { answer: ColumnAnswer | null; table: st
     );
   }
   if ("error" in answer) return <AlertMessage type={AlertType.ERROR} text={answer.error} />;
-  return <ColumnList rows={columnRows(answer.columns)} />;
-}
-
-function ColumnList({ rows }: { rows: ColumnRow[] }) {
-  return (
-    <ul className={styles.columns}>
-      {rows.map((row) => (
-        <li key={row.logical} className={styles.column}>
-          <span className={styles.columnName}>{row.logical}</span>
-          <span className={row.ok ? styles.badgeOk : styles.badgeBad}>{row.statusLabel}</span>
-          <span className={styles.columnDetail}>{row.detail}</span>
-        </li>
-      ))}
-    </ul>
-  );
+  return <TableColumnCheck columns={answer.columns} />;
 }

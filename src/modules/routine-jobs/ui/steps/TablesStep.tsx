@@ -69,7 +69,7 @@ export const TablesStep: React.FC<TablesStepProps> = ({
 
   return (
     <div className={styles.stack}>
-      <div className={styles.row}>
+      <div className={styles.schemaBlock}>
         <FormField
           label={SCHEMA_LABEL}
           value={draft}
@@ -79,10 +79,10 @@ export const TablesStep: React.FC<TablesStepProps> = ({
             if (event.key === KeyboardKey.ENTER) commitDraft();
           }}
         />
+        <p className={styles.schemaHint}>{SCHEMA_HINT}</p>
       </div>
-      <p className={styles.hint}>{SCHEMA_HINT}</p>
 
-      <div className={styles.grid}>
+      <div className={styles.tablesGrid}>
         {SELECTORS.map(({ role, label }) => (
           <TableSelector
             key={role}

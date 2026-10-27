@@ -96,6 +96,27 @@ export function isSelectionValid(columns: readonly ResolvedColumn[]): boolean {
   return columns.length > 0 && columns.every((column) => column.status === "resolved");
 }
 
+export interface ColumnSummary {
+  complete: boolean;
+  label: string;
+  rows: ColumnRow[];
+  problems: ColumnRow[];
+}
+
+const COMPLETE_LABEL = "Todas las columnas requeridas";
+const NO_COLUMNS_LABEL = "No hay columnas requeridas que comprobar";
+const missingLabel = (count: number): string => (count === 1 ? "Falta 1 columna" : `Faltan ${count} columnas`);
+
+export function summarizeColumns(columns: readonly ResolvedColumn[]): ColumnSummary {
+  const rows = columnRows(columns);
+  const problems = rows.filter((row) => !row.ok);
+  if (columns.length === 0) return { complete: false, label: NO_COLUMNS_LABEL, rows, problems };
+  if (problems.length === 0) {
+    return { complete: true, label: `${COMPLETE_LABEL} (${rows.length})`, rows, problems };
+  }
+  return { complete: false, label: missingLabel(problems.length), rows, problems };
+}
+
 const NO_RESPONSE_STATUS = 0;
 const SERVER_ERROR_STATUS = 500;
 

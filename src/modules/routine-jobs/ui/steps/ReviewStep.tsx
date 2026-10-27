@@ -78,7 +78,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
         text={`La tabla destino ${request.targetTable} se vaciará con ${clearName} antes de cargar. Si la carga falla antes de confirmarse, la tabla queda como estaba.`}
       />
 
-      <div className={styles.grid}>
+      <div className={styles.gridAligned}>
         <FormField
           label="Contraseña de la base de datos"
           type="password"
