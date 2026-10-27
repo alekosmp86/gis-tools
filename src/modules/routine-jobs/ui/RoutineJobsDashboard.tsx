@@ -6,6 +6,7 @@ import { ToolWorkspaceLayout } from "@/ui-kit/components/layout/ToolWorkspaceLay
 import { Button } from "@/ui-kit/components/ui/Button";
 import { ButtonVariant } from "@/ui-kit/types/ui";
 import { CargarPadronesWizard } from "./CargarPadronesWizard";
+import ActualizarPadronWizard from "./ActualizarPadronWizard";
 import { ROUTINE_JOBS } from "./jobs";
 import styles from "./RoutineJobsDashboard.module.css";
 
@@ -19,6 +20,7 @@ const NO_JOB = "";
 /** The wizard behind each job id. A job without an entry here shows only its list row. */
 const JOB_VIEWS: Partial<Record<string, React.FC>> = {
   "cargar-padrones": CargarPadronesWizard,
+  "actualizar-padron": ActualizarPadronWizard,
 };
 
 export interface RoutineJobsDashboardProps {

@@ -97,7 +97,7 @@ export const TABLE_LABEL = {
   LOCALITY: "localidades",
 } as const;
 
-const ACTUALIZAR_TABLE_ROLE = {
+export const ACTUALIZAR_TABLE_ROLE = {
   STAGING: "actualizar-staging",
   TEMP: "actualizar-temp",
   PADRON: "actualizar-padron",

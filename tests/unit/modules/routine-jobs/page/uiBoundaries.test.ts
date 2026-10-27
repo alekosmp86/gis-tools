@@ -36,6 +36,15 @@ describe("routine-jobs UI boundaries", () => {
       "steps/OptionsStep.tsx",
       "steps/ReviewStep.tsx",
       "steps/ResultStep.tsx",
+      "ActualizarPadronWizard.tsx",
+      "ActualizarPadronReport.tsx",
+      "actualizarPadronWizardState.ts",
+      "actualizarPadronRunStore.ts",
+      "actualizarPadronReportView.ts",
+      "steps/ActualizarTablesStep.tsx",
+      "steps/ActualizarOptionsStep.tsx",
+      "steps/ActualizarReviewStep.tsx",
+      "steps/ActualizarResultStep.tsx",
     ]) {
       expect(names, expected).toContain(expected);
     }

@@ -1,3 +1,5 @@
+// Same planned-step API names as cargar-padrones/domain/plannedSteps.ts: each job imports its own module by path.
+// fallow-ignore-file duplicate-export
 import { CLEAR_MODE, type ClearMode } from "../../cargar-padrones/constants";
 
 export const STEP = {
