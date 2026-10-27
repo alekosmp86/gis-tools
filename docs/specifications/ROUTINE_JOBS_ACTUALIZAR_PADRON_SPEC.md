@@ -32,7 +32,8 @@ selection; column names come from the job's declared logical columns (below) and
 domain data (`RURAL`, `URBANO`) are not identifiers and are allowed.
 
 ## Layering (module_authoring.md)
-- `src/core/`: unchanged. `TableCatalogService` and its types are reused.
+- `src/core/`: `TableCatalogService` and its types are reused. One backward-compatible change: the single-geometry-column fallback of the
+  column resolver applies to the logical names `geom` and `geometry` (covered by a core unit test).
 - `src/ui-kit/`: `TableSelector` and `ProfileSelect` are reused as they are.
 - `src/modules/routine-jobs/`: the new job folder `jobs/actualizar-padron/` (constants, domain SQL builders, planned steps, runner, session
   wiring, types), the new routes in `module.routes.json`, the new wizard under `ui/`. Imports `core`, `ui-kit` and its own folder only.
@@ -76,19 +77,24 @@ makes the run refuse (AP-5).
 ## Preflight (before BEGIN; no write)
 
 - AP-5: Work table checks, all in Spanish, all refusing before any write:
-  - the `id` column, if present, must not default to the sequence that the `id` column of `carto.padron` uses (the sequence is read from
-    the catalog default of the padron `id`, not named in code). A work table that uses it is refused;
-  - no column outside the resolved logical columns may be NOT NULL without default (`id` included, since it is never written);
+  - the work table must be a regular or partitioned table (`pg_class.relkind` `r` or `p`); a view, materialized view or foreign table is
+    refused, because a DELETE or INSERT through it could reach another table such as `carto.padron`;
+  - no column of the work table (`id` or any other) may default to the sequence that backs `carto.padron.id`. That sequence is resolved with
+    `pg_get_serial_sequence` (serial and identity columns), not named in code. A work table that uses it is refused;
+  - no column outside the resolved logical columns may be NOT NULL without default (`id` included, since it is never written); an identity
+    column counts as having a default;
   - the resolved geometry column must be a geometry column whose SRID is the padron SRID or 0 (generic).
 - AP-6: Staging checks: staging geometry column is a polygon type (Polygon, MultiPolygon or generic GEOMETRY), as in AC-5 of Cargar
-  padrones; the staging table has at least one row; every staging geometry SRID is either the padron SRID or can be transformed (SRID 0
-  refuses the run). Empty or wrong staging -> refused before any write.
+  padrones; the staging `padron` column has a numeric data type; the staging table has at least one row; every staging geometry SRID is
+  either the padron SRID or exists in `spatial_ref_sys` (SRID 0 or an unknown SRID refuses the run). Empty or wrong staging -> refused
+  before any write, in Spanish.
 - AP-7: The target SRID is read from the catalog typmod of the `carto.padron` geometry column (the same rule as AC-8 of Cargar padrones).
   A generic (typmod 0) padron geometry column refuses the run.
 
 ## Stage A: populate the work table
 
-- AP-8: One transaction for the whole run. Clearing option: `DELETE` (default) or `TRUNCATE`, as in AC-15/AC-16 of Cargar padrones
+- AP-8: One transaction for the whole run, started with `BEGIN ISOLATION LEVEL REPEATABLE READ` so the populate and the report read the same
+  staging snapshot. Clearing option: `DELETE` (default) or `TRUNCATE`, as in AC-15/AC-16 of Cargar padrones
   (privilege checked with `has_table_privilege` before BEGIN; TRUNCATE refused when another table has a foreign key to the work table; never
   `CASCADE`). The `carto.padron` table is never cleared or written.
 - AP-9: Province resolution: a staging row maps to the `carto.province` row where `upper(nomdepto) = upper(name)`. Zero matches -> row
@@ -100,8 +106,9 @@ makes the run refuse (AP-5).
   `unidadcat` other than `RURAL` / `URBANO`, a NULL `nomdepto`, or an URBANO row with a NULL `nomloccat` -> skipped with reason
   `CLAVE_NULA`. A `number` that does not fit the work table column rolls back the run with a Spanish error.
 - AP-12: Geometry: a NULL or empty geometry -> skipped `SIN_GEOMETRIA`. A geometry that is not valid is repaired with `ST_MakeValid`, keeping
-  only the polygonal part (`ST_CollectionExtract(..., 3)`), then `ST_Multi`; a repair that leaves nothing -> skipped `SIN_GEOMETRIA`. Valid
-  geometries are untouched. A geometry with a SRID other than the target SRID is transformed with `ST_Transform`. The stored geometry is
+  only the polygonal part (`ST_CollectionExtract(..., 3)`), then `ST_Multi`; a repair that leaves nothing -> skipped `SIN_GEOMETRIA`. A valid
+  geometry that is not Polygon or MultiPolygon (generic staging column holding a point or a line) goes through the same polygonal
+  extraction and is skipped `SIN_GEOMETRIA` when nothing polygonal remains. Valid polygonal geometries are untouched. A geometry with a SRID other than the target SRID is transformed with `ST_Transform`. The stored geometry is
   `ST_Multi`. Repair always runs (no option in this version); repaired rows are counted in the report (AP-16).
 - AP-13: Natural-key collisions: after resolution, the natural key of a row is `(type_padron, id_province, id_cadastral_locality, number)`.
   When several rows share a key, **every** row of that key is skipped with reason `CLAVE_DUPLICADA` (keeping one would be arbitrary). Each
@@ -188,6 +195,10 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 ## Performance expectation
 
 - The whole job is set-based SQL. No row-by-row loops, no per-row round trips.
+- PostgreSQL 11 materializes every CTE, so the classification chain must run as few times as possible: `ST_IsValid` is computed once per
+  staging row; the populate is one statement; the report is ONE statement over one chain (totals plus the bounded top lists, samples and
+  colliding keys) that carries no geometry columns; there is no separate "accepted count" chain: the written count is compared with
+  `rowsRead - skipped` of the report (same snapshot, AP-8).
 - Stage A: one `INSERT ... SELECT` from the staging table with hash joins to the province and locality tables (both small).
   `ST_MakeValid` runs only on invalid rows (`CASE`), and `ST_Transform` only on rows whose SRID differs from the target, so valid
   geometries cost one check each.
