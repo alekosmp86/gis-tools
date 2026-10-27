@@ -235,6 +235,36 @@ describe("tableCatalog", () => {
       expect(result[0]).toMatchObject({ logical: "gid", status: "missing" });
     });
 
+    it("should resolve a missing logical geometry to the only geometry-typed column of the table, whatever its name", async () => {
+      const { session } = createSession({ columns: [col("gid", "integer"), col("the_geom", "geometry(MultiPolygon,32721)")] });
+
+      const result = await resolveColumns(session, "cat", "padron_trabajo", ["geometry"]);
+
+      expect(result[0]).toMatchObject({ logical: "geometry", status: "resolved", column: "the_geom", dataType: "geometry(MultiPolygon,32721)" });
+    });
+
+    it("should not resolve a missing logical geometry when the table has several geometry-typed columns", async () => {
+      const { session } = createSession({
+        columns: [col("geom_a", "geometry(Polygon,32721)"), col("geom_b", "geometry(Point,32721)")],
+      });
+
+      const result = await resolveColumns(session, "cat", "padron_trabajo", ["geometry"]);
+
+      expect(result[0].status).not.toBe("resolved");
+      expect(result[0].column).toBeUndefined();
+    });
+
+    it("should never fall back to the single geometry column for a logical name other than geom or geometry", async () => {
+      const { session } = createSession({ columns: [col("the_geom", "geometry(MultiPolygon,32721)")] });
+
+      const result = await resolveColumns(session, "cat", "padron_trabajo", ["geog", "geometria"]);
+
+      expect(result.map((entry) => [entry.logical, entry.status])).toEqual([
+        ["geog", "missing"],
+        ["geometria", "missing"],
+      ]);
+    });
+
     it("AC-2: should restrict the column query to real relations through pg_class relkind and keep parameters", async () => {
       const { session, queries } = createSession({ columns: [col("gid")] });
 

@@ -29,7 +29,7 @@ const EXACT_MATCH_KINDS: ReadonlySet<MatchKind> = new Set([
 ]);
 
 const RELATION_KINDS_SQL = "('r', 'p', 'v', 'm', 'f')";
-const GEOMETRY_LOGICAL_NAME = "geom";
+const GEOMETRY_LOGICAL_NAMES: ReadonlySet<string> = new Set(["geom", "geometry"]);
 const GEOMETRY_DATA_TYPE = /^geometry(?:\(|$)/i;
 
 const SCHEMA_EXISTS_SQL = "SELECT n.nspname AS schema_name FROM pg_catalog.pg_namespace n WHERE n.nspname = $1";
@@ -94,7 +94,7 @@ const dataTypeOf = (catalog: readonly DbColumnMetadata[], column: string): strin
 const isGeometryColumn = (column: DbColumnMetadata): boolean => GEOMETRY_DATA_TYPE.test(column.data_type.trim());
 
 function geometryFallbackOf(logical: string, catalog: readonly DbColumnMetadata[]): ResolvedColumn | undefined {
-  if (logical !== GEOMETRY_LOGICAL_NAME) return undefined;
+  if (!GEOMETRY_LOGICAL_NAMES.has(logical)) return undefined;
   const geometryColumns = catalog.filter(isGeometryColumn);
   if (geometryColumns.length !== 1) return undefined;
   const [only] = geometryColumns;
