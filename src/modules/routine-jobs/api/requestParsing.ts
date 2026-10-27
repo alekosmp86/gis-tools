@@ -1,8 +1,11 @@
 import type { DbConfig } from "@/core/types/db";
 import {
+  ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE,
+  type ActualizarTableRole,
+} from "../jobs/actualizar-padron/constants";
+import {
   CLEAR_MODE,
   REQUIRED_COLUMNS_BY_ROLE,
-  TABLE_ROLE,
   type ClearMode,
   type TableRole,
 } from "../jobs/cargar-padrones/constants";
@@ -16,31 +19,37 @@ export class RequestInvalidError extends Error {
   override readonly name = "RequestInvalidError";
 }
 
-type JsonRecord = Record<string, unknown>;
+export type JsonRecord = Record<string, unknown>;
 
 export interface CatalogRequest {
   connection: PgRunConnection;
   schema: string;
 }
 
+export type ColumnsRole = TableRole | ActualizarTableRole;
+
 export interface ColumnsRequest extends CatalogRequest {
   table: string;
-  role: TableRole;
+  role: ColumnsRole;
   required: readonly string[];
 }
 
 const MIN_PORT = 1;
 const MAX_PORT = 65535;
 const DIGITS_PATTERN = /^\d+$/;
-const TABLE_ROLES: readonly string[] = Object.values(TABLE_ROLE);
+const COLUMNS_BY_ROLE: Readonly<Record<string, readonly string[]>> = {
+  ...REQUIRED_COLUMNS_BY_ROLE,
+  ...ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE,
+};
+const ROLE_NAMES: readonly string[] = Object.keys(COLUMNS_BY_ROLE);
 const CLEAR_MODES: readonly string[] = Object.values(CLEAR_MODE);
 
-const invalid = (message: string): RequestInvalidError => new RequestInvalidError(message);
+export const invalid = (message: string): RequestInvalidError => new RequestInvalidError(message);
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-function readRequiredText(body: JsonRecord, key: string): string {
+export function readRequiredText(body: JsonRecord, key: string): string {
   const value = body[key];
   if (typeof value !== "string" || value.trim() === "") {
     throw invalid(`El campo ${key} es obligatorio.`);
@@ -54,13 +63,13 @@ function readText(body: JsonRecord, key: string): string {
   return value;
 }
 
-function readBoolean(body: JsonRecord, key: string): boolean {
+export function readBoolean(body: JsonRecord, key: string): boolean {
   const value = body[key];
   if (typeof value !== "boolean") throw invalid(`El campo ${key} debe ser verdadero o falso.`);
   return value;
 }
 
-function readRecord(body: JsonRecord, key: string): JsonRecord {
+export function readRecord(body: JsonRecord, key: string): JsonRecord {
   const value = body[key];
   if (!isRecord(value)) throw invalid(`El campo ${key} debe ser un objeto.`);
   return value;
@@ -76,7 +85,7 @@ function readPort(connection: JsonRecord): string {
   return String(port);
 }
 
-function parseConnection(body: JsonRecord): PgRunConnection {
+export function parseConnection(body: JsonRecord): PgRunConnection {
   const connection = readRecord(body, "connection");
   return {
     host: readRequiredText(connection, "host"),
@@ -87,7 +96,7 @@ function parseConnection(body: JsonRecord): PgRunConnection {
   };
 }
 
-const isTableRole = (value: string): value is TableRole => TABLE_ROLES.includes(value);
+const isColumnsRole = (value: string): value is ColumnsRole => ROLE_NAMES.includes(value);
 
 const isClearMode = (value: string): value is ClearMode => CLEAR_MODES.includes(value);
 
@@ -113,14 +122,19 @@ export function parseColumnsRequest(body: JsonRecord): ColumnsRequest {
   const catalog = parseCatalogRequest(body);
   const table = readRequiredText(body, "table");
   const role = readRequiredText(body, "role");
-  if (!isTableRole(role)) throw invalid(`El campo role debe ser ${TABLE_ROLES.join(", ")}.`);
-  return { ...catalog, table, role, required: REQUIRED_COLUMNS_BY_ROLE[role] };
+  if (!isColumnsRole(role)) throw invalid(`El campo role debe ser ${ROLE_NAMES.join(", ")}.`);
+  return { ...catalog, table, role, required: COLUMNS_BY_ROLE[role] };
+}
+
+export function parseClearMode(options: JsonRecord): ClearMode {
+  const clearMode = readRequiredText(options, "clearMode");
+  if (!isClearMode(clearMode)) throw invalid(`El campo clearMode debe ser ${CLEAR_MODES.join(" o ")}.`);
+  return clearMode;
 }
 
 function parseOptions(value: unknown): LoadOptions {
   if (!isRecord(value)) throw invalid("El campo options debe ser un objeto.");
-  const clearMode = readRequiredText(value, "clearMode");
-  if (!isClearMode(clearMode)) throw invalid(`El campo clearMode debe ser ${CLEAR_MODES.join(" o ")}.`);
+  const clearMode = parseClearMode(value);
   return {
     repair: readBoolean(value, "repair"),
     clearMode,
@@ -128,7 +142,7 @@ function parseOptions(value: unknown): LoadOptions {
   };
 }
 
-function toDbConfig(connection: PgRunConnection): DbConfig {
+export function toDbConfig(connection: PgRunConnection): DbConfig {
   return {
     host: connection.host,
     port: String(connection.port),

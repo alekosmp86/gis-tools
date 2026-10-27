@@ -1,10 +1,6 @@
 import type { ModuleEndpointHandler } from "@/core/modules/contracts";
 import { listTables, resolveColumns } from "@/core/services/server/tableCatalog/tableCatalog";
-import {
-  getCargarPadronesJobStore,
-  type CargarPadronesJobStore,
-  type JobSnapshot,
-} from "../jobs/cargar-padrones/services/jobStore";
+import { getCargarPadronesJobStore, type CargarPadronesJobStore } from "../jobs/cargar-padrones/services/jobStore";
 import { plannedStepLabels } from "../jobs/cargar-padrones/domain/plannedSteps";
 import { openPgRunSession, type PgRunConnection } from "../jobs/cargar-padrones/services/openPgSession";
 import { runCargarPadrones } from "../jobs/cargar-padrones/services/runCargarPadrones";
@@ -15,12 +11,20 @@ import type {
   RunSession,
 } from "../jobs/cargar-padrones/types";
 import {
+  executeJob,
+  failure,
+  failureResponse,
+  HTTP_STATUS,
+  jsonResponse,
+  JOB_MAX_AGE_MS,
+  statusResponse,
+  tableLockKey,
+} from "./jobHttp";
+import {
   parseCatalogRequest,
   parseColumnsRequest,
   parseStartRequest,
-  parseStatusJobId,
   readJsonRecord,
-  RequestInvalidError,
 } from "./requestParsing";
 
 export interface RoutineJobsHandlerDeps {
@@ -37,65 +41,7 @@ export interface RoutineJobsHandlers {
   readonly readCargarPadronesStatus: ModuleEndpointHandler;
 }
 
-const HTTP_STATUS = {
-  OK: 200,
-  BAD_REQUEST: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  SERVER_ERROR: 500,
-} as const;
-
-const HOUR_MS = 60 * 60 * 1000;
-const JOB_MAX_AGE_MS = HOUR_MS;
-const REDACTION = "***";
-const INTERNAL_ERROR_MESSAGE = "Error interno al procesar la solicitud.";
 const CONFLICT_MESSAGE = "Ya hay una carga en curso para esta tabla.";
-const JOB_NOT_FOUND_MESSAGE = "No existe un trabajo con ese identificador.";
-
-const jsonResponse = (body: object, status: number = HTTP_STATUS.OK): Response => Response.json(body, { status });
-
-const failure = (status: number, message: string): Response => jsonResponse({ success: false, error: message }, status);
-
-function failureResponse(error: unknown): Response {
-  if (error instanceof RequestInvalidError) return failure(HTTP_STATUS.BAD_REQUEST, error.message);
-  return failure(HTTP_STATUS.SERVER_ERROR, INTERNAL_ERROR_MESSAGE);
-}
-
-const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-
-const scrubText = (text: string, secret: string): string => (secret ? text.split(secret).join(REDACTION) : text);
-
-function scrubDeep<T>(value: T, secret: string): T {
-  if (!secret) return value;
-  if (typeof value === "string") return scrubText(value, secret) as T;
-  if (Array.isArray(value)) return value.map((entry: unknown) => scrubDeep(entry, secret)) as T;
-  if (typeof value === "object" && value !== null) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]: [string, unknown]) => [key, scrubDeep(entry, secret)])
-    ) as T;
-  }
-  return value;
-}
-
-const tableKeyOf = (params: CargarPadronesParams): string =>
-  `${params.config.host.trim().toLowerCase()}:${params.config.port}|${params.config.db_name}|${params.schema}|${params.targetTable}`;
-
-function toStatusView(job: JobSnapshot) {
-  return {
-    jobId: job.jobId,
-    state: job.state,
-    step: job.step,
-    current: job.current,
-    total: job.total,
-    dryRun: job.dryRun,
-    steps: job.steps,
-    startedAt: job.startedAt,
-    finishedAt: job.finishedAt,
-    result: job.result,
-    error: job.error,
-    outcomeUnknown: job.outcomeUnknown,
-  };
-}
 
 async function closeQuietly(session: RunSession): Promise<void> {
   try {
@@ -115,23 +61,6 @@ async function withCatalogSession<T>(
     return await work(session);
   } finally {
     await closeQuietly(session);
-  }
-}
-
-async function executeJob(deps: RoutineJobsHandlerDeps, params: CargarPadronesParams, jobId: string): Promise<void> {
-  const secret = params.config.password ?? "";
-  const onProgress = (progress: RunProgress): void => {
-    try {
-      deps.store.progress(jobId, { ...progress, label: scrubText(progress.label, secret) });
-    } catch {
-      // A progress write never fails the run.
-    }
-  };
-  try {
-    const result = await deps.run(params, onProgress);
-    deps.store.finish(jobId, scrubDeep(result, secret));
-  } catch (error: unknown) {
-    deps.store.fail(jobId, scrubText(messageOf(error), secret));
   }
 }
 
@@ -172,22 +101,16 @@ export function createRoutineJobsHandlers(overrides: Partial<RoutineJobsHandlerD
     try {
       const params = parseStartRequest(await readJsonRecord(request));
       deps.store.sweep(JOB_MAX_AGE_MS);
-      const job = deps.store.tryStart(tableKeyOf(params), params.dryRun, plannedStepLabels(params));
+      const job = deps.store.tryStart(
+        tableLockKey(params.config, params.schema, params.targetTable),
+        params.dryRun,
+        plannedStepLabels(params)
+      );
       if (!job) return failure(HTTP_STATUS.CONFLICT, CONFLICT_MESSAGE);
-      deps.track(executeJob(deps, params, job.jobId));
+      deps.track(
+        executeJob(deps.store, job.jobId, params.config.password ?? "", (onProgress) => deps.run(params, onProgress))
+      );
       return jsonResponse({ success: true, jobId: job.jobId });
-    } catch (error: unknown) {
-      return failureResponse(error);
-    }
-  }
-
-  function statusHandler(request: Request): Response {
-    try {
-      const jobId = parseStatusJobId(new URL(request.url).searchParams);
-      deps.store.sweep(JOB_MAX_AGE_MS);
-      const job = deps.store.get(jobId);
-      if (!job) return failure(HTTP_STATUS.NOT_FOUND, JOB_NOT_FOUND_MESSAGE);
-      return jsonResponse({ success: true, job: toStatusView(job) });
     } catch (error: unknown) {
       return failureResponse(error);
     }
@@ -197,6 +120,6 @@ export function createRoutineJobsHandlers(overrides: Partial<RoutineJobsHandlerD
     listTables: listTablesHandler,
     listColumns: listColumnsHandler,
     startCargarPadrones: startHandler,
-    readCargarPadronesStatus: statusHandler,
+    readCargarPadronesStatus: (request) => statusResponse(deps.store, request),
   };
 }

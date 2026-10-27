@@ -4,6 +4,7 @@ import { UiSlot } from "@/ui-kit/modules/contracts";
 import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
 import routeDeclarations from "./module.routes.json";
 import { createRoutineJobsHandlers } from "./api/handlers";
+import { createActualizarPadronHandlers } from "./api/actualizarPadronHandlers";
 import { RoutineJobsDashboard } from "./ui/RoutineJobsDashboard";
 import { RoutineJobsHomeCard } from "./ui/RoutineJobsHomeCard";
 
@@ -14,6 +15,7 @@ import { RoutineJobsHomeCard } from "./ui/RoutineJobsHomeCard";
  * the wizard), a card in the home grid, a navigation entry and its wiki.
  */
 const handlers = createRoutineJobsHandlers();
+const actualizarHandlers = createActualizarPadronHandlers();
 
 export const routineJobsModule: AppModuleManifest = {
   id: routeDeclarations.moduleId,
@@ -26,6 +28,8 @@ export const routineJobsModule: AppModuleManifest = {
     "POST catalog/columns": handlers.listColumns,
     "POST cargar-padrones/start": handlers.startCargarPadrones,
     "GET cargar-padrones/status": handlers.readCargarPadronesStatus,
+    "POST actualizar-padron/start": actualizarHandlers.startActualizarPadron,
+    "GET actualizar-padron/status": actualizarHandlers.readActualizarPadronStatus,
   }),
   pages: definePageContributions(routeDeclarations, {
     "": RoutineJobsDashboard,

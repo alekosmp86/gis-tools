@@ -96,3 +96,21 @@ export const TABLE_LABEL = {
   PROVINCE: "provincias",
   LOCALITY: "localidades",
 } as const;
+
+const ACTUALIZAR_TABLE_ROLE = {
+  STAGING: "actualizar-staging",
+  TEMP: "actualizar-temp",
+  PADRON: "actualizar-padron",
+  PROVINCE: "actualizar-provincia",
+  LOCALITY: "actualizar-localidad",
+} as const;
+
+export type ActualizarTableRole = (typeof ACTUALIZAR_TABLE_ROLE)[keyof typeof ACTUALIZAR_TABLE_ROLE];
+
+export const ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE: Record<ActualizarTableRole, readonly string[]> = {
+  [ACTUALIZAR_TABLE_ROLE.STAGING]: STAGING_REQUIRED_COLUMNS,
+  [ACTUALIZAR_TABLE_ROLE.TEMP]: WORK_REQUIRED_COLUMNS,
+  [ACTUALIZAR_TABLE_ROLE.PADRON]: PADRON_REQUIRED_COLUMNS,
+  [ACTUALIZAR_TABLE_ROLE.PROVINCE]: PROVINCE_REQUIRED_COLUMNS,
+  [ACTUALIZAR_TABLE_ROLE.LOCALITY]: LOCALITY_REQUIRED_COLUMNS,
+};

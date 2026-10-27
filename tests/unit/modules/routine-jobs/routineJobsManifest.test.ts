@@ -9,7 +9,9 @@ import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/RoutineJobsDashb
 import { RoutineJobsHomeCard } from "@/modules/routine-jobs/ui/RoutineJobsHomeCard";
 
 const EXPECTED_ENDPOINTS = [
+  "GET actualizar-padron/status",
   "GET cargar-padrones/status",
+  "POST actualizar-padron/start",
   "POST cargar-padrones/start",
   "POST catalog/columns",
   "POST catalog/tables",
@@ -23,7 +25,7 @@ describe("routine jobs module declaration", () => {
       expect(routeDeclarations.moduleId).toBe("routine-jobs");
     });
 
-    it("AC-23/AC-24/AC-25: should declare exactly the four endpoints of the wiring round", () => {
+    it("AC-23/AC-24/AC-25: should declare exactly the six endpoints of the two jobs", () => {
       const declared = routeDeclarations.endpoints.map(keyOf).sort();
 
       expect(declared).toEqual([...EXPECTED_ENDPOINTS].sort());

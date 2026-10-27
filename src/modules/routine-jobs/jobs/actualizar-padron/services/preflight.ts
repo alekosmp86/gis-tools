@@ -13,7 +13,7 @@ import {
 import type { ActualizarPadronParams, RunSession } from "../types";
 import type { ResolvedActualizarLayouts } from "./resolveLayouts";
 
-const CONFIRM_REQUIRED_MESSAGE =
+export const CONFIRM_REQUIRED_MESSAGE =
   "Confirme la actualización para escribir en la tabla de trabajo. Sin confirmación solo se permite el análisis sin cargar.";
 
 const PRIVILEGE_SQL =
