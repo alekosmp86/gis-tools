@@ -5,6 +5,7 @@ import {
   changeCsvOf,
   orderedChangesOf,
   type ChangeRecord,
+  type ListCut,
 } from "./reportCsvRows";
 
 const insertedChangesOf = (target: UnitTargetReport): ChangeRecord[] =>
@@ -32,4 +33,10 @@ const geometryChangesOf = (target: UnitTargetReport, changes: UnitGeometryChange
 const targetChangesOf = (target: UnitTargetReport): ChangeRecord[] =>
   orderedChangesOf([...insertedChangesOf(target), ...geometryChangesOf(target, target.geometryChanges)]);
 
-export const buildUnidadTerritorialCsv = (result: UnitResult): string => changeCsvOf(targetChangesOf(result.target));
+const targetCutsOf = (target: UnitTargetReport): ListCut[] => [
+  { table: target.table, shown: target.insertedList.length, total: target.inserted, noun: "unidades insertadas" },
+  { table: target.table, shown: target.geometryChanges.length, total: target.changed, noun: "geometrías que cambian" },
+];
+
+export const buildUnidadTerritorialCsv = (result: UnitResult): string =>
+  changeCsvOf(targetChangesOf(result.target), targetCutsOf(result.target));

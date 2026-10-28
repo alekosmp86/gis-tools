@@ -2,6 +2,7 @@ import { CONFIRM_REQUIRED_MESSAGE } from "../jobs/unidad-territorial/services/pr
 import { assertDistinctUnitTables } from "../jobs/unidad-territorial/domain/tableRoles";
 import type { UnitParams } from "../jobs/unidad-territorial/types";
 import {
+  assertTablesDistinct,
   invalid,
   parseConnection,
   readBoolean,
@@ -11,16 +12,6 @@ import {
   toDbConfig,
   type JsonRecord,
 } from "./requestParsing";
-
-const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-
-function assertTablesDistinct(params: UnitParams): void {
-  try {
-    assertDistinctUnitTables(params);
-  } catch (error: unknown) {
-    throw invalid(messageOf(error));
-  }
-}
 
 export function parseUnidadTerritorialStartRequest(body: JsonRecord): UnitParams {
   const options = readRecord(body, "options");
@@ -41,6 +32,6 @@ export function parseUnidadTerritorialStartRequest(body: JsonRecord): UnitParams
     confirm: readBoolean(body, "confirm"),
   };
   if (!params.dryRun && !params.confirm) throw invalid(CONFIRM_REQUIRED_MESSAGE);
-  assertTablesDistinct(params);
+  assertTablesDistinct(params, assertDistinctUnitTables);
   return params;
 }

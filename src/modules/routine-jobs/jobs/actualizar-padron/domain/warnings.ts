@@ -1,5 +1,6 @@
 import { sentence } from "../../cargar-padrones/domain/warnings";
 import type { ActualizarTotals } from "../types";
+import { plural } from "../../shared/text";
 
 export interface WarningInput {
   dryRun: boolean;
@@ -11,9 +12,6 @@ export interface WarningInput {
 const DRY_RUN_WARNING =
   "Simulación: la tabla de trabajo no fue modificada. La carga se revierte al final y el informe describe la carga simulada.";
 const COMMIT_UNKNOWN_WARNING = "No se pudo confirmar el COMMIT: verifique la tabla de trabajo antes de reintentar.";
-
-const plural = (count: number, singular: string, pluralForm: string): string =>
-  `${count} ${count === 1 ? singular : pluralForm}`;
 
 export function buildRunWarnings({ dryRun, totals, collidingKeyCount, commitError }: WarningInput): string[] {
   const warnings: string[] = [];

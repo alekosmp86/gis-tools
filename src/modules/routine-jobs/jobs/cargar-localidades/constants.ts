@@ -65,3 +65,4 @@ export const LOCALIDADES_REQUIRED_COLUMNS_BY_ROLE: Record<LocalidadesTableRole, 
 
 export const MAX_TARGETS = 2;
 
+export const TARGET_TITLE = "de localidades";

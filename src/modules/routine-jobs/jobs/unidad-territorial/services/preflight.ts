@@ -1,25 +1,13 @@
+// fallow-ignore-file duplicate-export
 import type { CatalogQuerySession } from "@/core/services/server/tableCatalog/tableCatalog";
 import { physicalColumn, qualifiedName, type TableLayout } from "../../actualizar-padron/domain/layouts";
-import {
-  hasRows,
-  labelOf,
-  READ_PRIVILEGES,
-  tablePrivilegeIssues,
-  targetStructureIssuesOf,
-  writeTargetPrivilegeIssues,
-} from "../../shared/targetPreflight";
-import { readUnsupportedSridCount } from "../../shared/tableFacts";
+import { labelOf } from "../../shared/targetPreflight";
+import type { SourceTablesSpec, WriteTargetsSpec } from "../../shared/preflightAsserts";
 import { UNIT_SOURCE_COLUMN, UNIT_TARGET_TITLE, UNIT_TARGET_WRITTEN_COLUMNS, UNIT_TYPE_COLUMN } from "../constants";
-import type { UnitLayouts, UnitParams } from "../types";
+import type { UnitLayouts } from "../types";
 
 export const CONFIRM_REQUIRED_MESSAGE =
   "Confirme la actualización de unidades territoriales para escribir en la tabla de destino. Sin confirmación solo se permite el análisis sin cargar.";
-
-export function assertRunAllowed(params: UnitParams): void {
-  if (!params.dryRun && !params.confirm) {
-    throw new Error(CONFIRM_REQUIRED_MESSAGE);
-  }
-}
 
 export async function resolveUnitTypeId(
   session: CatalogQuerySession,
@@ -44,30 +32,14 @@ export async function resolveUnitTypeId(
   return unitTypeId;
 }
 
-export async function assertTargetsReady(session: CatalogQuerySession, layouts: UnitLayouts): Promise<void> {
-  const issues = [
-    ...(await targetStructureIssuesOf(session, layouts.target, UNIT_TARGET_WRITTEN_COLUMNS, UNIT_TARGET_TITLE)),
-    ...(await writeTargetPrivilegeIssues(session, layouts.target)),
-    ...(await tablePrivilegeIssues(session, layouts.locality, READ_PRIVILEGES)),
-    ...(await tablePrivilegeIssues(session, layouts.type, READ_PRIVILEGES)),
-  ];
-  if (issues.length > 0) {
-    throw new Error(issues.join(" "));
-  }
-}
+export const writeTargetsSpecOf = (layouts: UnitLayouts): WriteTargetsSpec => ({
+  targets: [layouts.target],
+  writtenColumns: UNIT_TARGET_WRITTEN_COLUMNS,
+  title: UNIT_TARGET_TITLE,
+  readTables: [layouts.locality, layouts.type],
+});
 
-export async function assertSourcesReady(session: CatalogQuerySession, layouts: UnitLayouts): Promise<void> {
-  const issues: string[] = [];
-  if (!(await hasRows(session, layouts.locality))) {
-    issues.push(`La tabla ${labelOf(layouts.locality)} no tiene filas: no hay localidades de origen.`);
-  }
-  const unsupported = await readUnsupportedSridCount(session, layouts.locality, UNIT_SOURCE_COLUMN.GEOMETRY);
-  if (unsupported > 0) {
-    issues.push(
-      `La tabla ${labelOf(layouts.locality)} tiene ${unsupported} geometrías con SRID 0 o desconocido: no se pueden transformar al SRID de destino.`
-    );
-  }
-  if (issues.length > 0) {
-    throw new Error(issues.join(" "));
-  }
-}
+export const sourceTablesSpecOf = (layouts: UnitLayouts): SourceTablesSpec => ({
+  withRows: [{ layout: layouts.locality, description: "localidades" }],
+  geometry: { layout: layouts.locality, column: UNIT_SOURCE_COLUMN.GEOMETRY },
+});

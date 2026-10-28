@@ -1,14 +1,13 @@
 "use client";
 
 import React from "react";
-import { DatabaseZap, Search } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
-import { Button } from "@/ui-kit/components/ui/Button";
 import { FormField } from "@/ui-kit/components/ui/FormField";
-import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
+import { AlertType } from "@/ui-kit/types/ui";
 import { CLEAR_MODE, type ClearMode } from "../../jobs/cargar-padrones/constants";
 import type { WizardConfirmation } from "../cargarPadronesWizardState";
 import type { StartRequest } from "../clientTypes";
+import { PASSWORD_LABEL, ReviewRunActions } from "./reviewParts";
 import styles from "./WizardSteps.module.css";
 
 const YES = "Sí";
@@ -46,7 +45,6 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
 }) => {
   const { connection, options } = request;
   const clearName = CLEAR_MODE_NAME[options.clearMode];
-  const blocked = busy || runBlockedReason !== null;
 
   return (
     <div className={styles.stack}>
@@ -80,7 +78,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
 
       <div className={styles.gridAligned}>
         <FormField
-          label="Contraseña de la base de datos"
+          label={PASSWORD_LABEL}
           type="password"
           value={confirmation.password}
           onChange={(password) => onConfirmationChange({ password })}
@@ -92,21 +90,18 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
         />
       </div>
 
-      <p className={styles.hint}>{DRY_RUN_HINT}</p>
-      <p className={styles.hint}>{RUN_HINT}</p>
-
-      {busy && <AlertMessage type={AlertType.WARNING} text={BUSY_NOTE} />}
-      {runBlockedReason !== null && <AlertMessage type={AlertType.WARNING} text={runBlockedReason} />}
-      <div className={styles.actions}>
-        <Button variant={ButtonVariant.SECONDARY} isDisabled={blocked} onClick={onDryRun}>
-          <Search size={15} />
-          <span>Analizar sin cargar</span>
-        </Button>
-        <Button isDisabled={blocked || !confirmed} onClick={onRun}>
-          <DatabaseZap size={15} />
-          <span>Cargar ahora</span>
-        </Button>
-      </div>
+      <ReviewRunActions
+        dryRunHint={DRY_RUN_HINT}
+        runHint={RUN_HINT}
+        busyNote={BUSY_NOTE}
+        runLabel="Cargar ahora"
+        busy={busy}
+        runBlockedReason={runBlockedReason}
+        canDryRun={true}
+        canRun={confirmed}
+        onDryRun={onDryRun}
+        onRun={onRun}
+      />
     </div>
   );
 };

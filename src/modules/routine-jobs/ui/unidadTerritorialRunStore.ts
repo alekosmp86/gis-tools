@@ -12,6 +12,8 @@ import {
 export interface UnidadRunPlan {
   dryRun: boolean;
   target: string;
+  targetSchema: string;
+  targetTable: string;
 }
 
 export type UnidadRunSnapshot = RunSnapshot<UnidadJobStatusView, UnidadRunPlan>;
@@ -32,6 +34,8 @@ const MESSAGES: RunMessages = {
 const planOf = (request: UnidadStartRequest): UnidadRunPlan => ({
   dryRun: request.dryRun,
   target: `${request.targetSchema}.${request.targetTable}`,
+  targetSchema: request.targetSchema,
+  targetTable: request.targetTable,
 });
 
 function createUnidadRunStore(deps: UnidadRunStoreDeps): UnidadRunStore {

@@ -19,6 +19,10 @@ import {
 import type { PgRunConnection } from "../jobs/cargar-padrones/services/openPgSession";
 import type { CargarPadronesParams } from "../jobs/cargar-padrones/types";
 import { UNIT_REQUIRED_COLUMNS_BY_ROLE, type UnitTableRole } from "../jobs/unidad-territorial/constants";
+import {
+  COMPLETAR_REQUIRED_COLUMNS_BY_ROLE,
+  type CompletarTableRole,
+} from "../jobs/completar-unidad-territorial/constants";
 
 export class RequestInvalidError extends Error {
   override readonly name = "RequestInvalidError";
@@ -31,7 +35,7 @@ export interface CatalogRequest {
   schema: string;
 }
 
-export type ColumnsRole = TableRole | ActualizarTableRole | LocalidadesTableRole | UnitTableRole;
+export type ColumnsRole = TableRole | ActualizarTableRole | LocalidadesTableRole | UnitTableRole | CompletarTableRole;
 
 export interface ColumnsRequest extends CatalogRequest {
   table: string;
@@ -47,11 +51,23 @@ const COLUMNS_BY_ROLE: Readonly<Record<string, readonly string[]>> = {
   ...ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE,
   ...LOCALIDADES_REQUIRED_COLUMNS_BY_ROLE,
   ...UNIT_REQUIRED_COLUMNS_BY_ROLE,
+  ...COMPLETAR_REQUIRED_COLUMNS_BY_ROLE,
 };
 const ROLE_NAMES: readonly string[] = Object.keys(COLUMNS_BY_ROLE);
 const CLEAR_MODES: readonly string[] = Object.values(CLEAR_MODE);
 
 export const invalid = (message: string): RequestInvalidError => new RequestInvalidError(message);
+
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** Runs a domain check on the parsed params and reports its failure as an invalid request. */
+export function assertTablesDistinct<Params>(params: Params, check: (params: Params) => void): void {
+  try {
+    check(params);
+  } catch (error: unknown) {
+    throw invalid(messageOf(error));
+  }
+}
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);

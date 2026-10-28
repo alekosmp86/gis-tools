@@ -4,9 +4,10 @@ import { plannedLocalityStepLabels, LOCALITY_STEP } from "../domain/plannedSteps
 import { assertDistinctTables, targetLabelsOf } from "../domain/tableRoles";
 import { buildWarnings } from "../domain/warnings";
 import type { CargarLocalidadesParams, CargarLocalidadesResult } from "../types";
-import { assertRunAllowed, assertSourcesReady, assertTargetsReady } from "./preflight";
+import { CONFIRM_REQUIRED_MESSAGE, sourceTablesSpecOf, writeTargetsSpecOf } from "./preflight";
 import { resolveLocalityLayouts } from "./resolveLayouts";
-import { openRunSession, scrubbedFailure } from "../../shared/transaction";
+import { assertConfirmedOrDryRun, assertSourceTablesReady, assertWriteTargetsReady } from "../../shared/preflightAsserts";
+import { withRunSession } from "../../shared/transaction";
 import { runWriteTransaction, type WriteOutcome } from "./writeSteps";
 
 function buildResult(
@@ -45,8 +46,8 @@ async function runOnSession(
     onProgress,
   });
   const layouts = await timer.run(LOCALITY_STEP.VALIDATE, () => resolveLocalityLayouts(session, params));
-  await timer.run(LOCALITY_STEP.TARGETS, () => assertTargetsReady(session, layouts));
-  await timer.run(LOCALITY_STEP.COUNT, () => assertSourcesReady(session, layouts));
+  await timer.run(LOCALITY_STEP.TARGETS, () => assertWriteTargetsReady(session, writeTargetsSpecOf(layouts)));
+  await timer.run(LOCALITY_STEP.COUNT, () => assertSourceTablesReady(session, sourceTablesSpecOf(layouts)));
   const outcome = await runWriteTransaction(session, params, layouts, timer);
   return buildResult(params, outcome, timer.timings);
 }
@@ -56,14 +57,7 @@ export async function runCargarLocalidades(
   deps: RunDeps,
   onProgress?: (progress: RunProgress) => void
 ): Promise<CargarLocalidadesResult> {
-  assertRunAllowed(params);
+  assertConfirmedOrDryRun(params, CONFIRM_REQUIRED_MESSAGE);
   assertDistinctTables(params);
-  const session = await openRunSession(params.config, deps);
-  try {
-    return await runOnSession(session, params, deps, onProgress);
-  } catch (error: unknown) {
-    throw scrubbedFailure(error, params.config.password);
-  } finally {
-    await session.close().catch(() => undefined);
-  }
+  return withRunSession(params.config, deps, (session) => runOnSession(session, params, deps, onProgress));
 }

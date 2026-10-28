@@ -3,6 +3,7 @@ import { assertDistinctTables } from "../jobs/cargar-localidades/domain/tableRol
 import { CONFIRM_REQUIRED_MESSAGE } from "../jobs/cargar-localidades/services/preflight";
 import type { CargarLocalidadesParams, LocalityOptions, LocalityTableRef } from "../jobs/cargar-localidades/types";
 import {
+  assertTablesDistinct,
   invalid,
   parseConnection,
   readBoolean,
@@ -13,18 +14,8 @@ import {
   type JsonRecord,
 } from "./requestParsing";
 
-const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-function assertTablesDistinct(params: CargarLocalidadesParams): void {
-  try {
-    assertDistinctTables(params);
-  } catch (error: unknown) {
-    throw invalid(messageOf(error));
-  }
-}
 
 function parseLocalityOptions(body: JsonRecord): LocalityOptions {
   const options = readRecord(body, "options");
@@ -61,6 +52,6 @@ export function parseCargarLocalidadesStartRequest(body: JsonRecord): CargarLoca
     confirm: readBoolean(body, "confirm"),
   };
   if (!params.dryRun && !params.confirm) throw invalid(CONFIRM_REQUIRED_MESSAGE);
-  assertTablesDistinct(params);
+  assertTablesDistinct(params, assertDistinctTables);
   return params;
 }

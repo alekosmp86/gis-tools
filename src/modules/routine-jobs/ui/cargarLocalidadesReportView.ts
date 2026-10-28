@@ -9,20 +9,9 @@ import type {
   LocalitySkippedSample,
   TargetReport,
 } from "../jobs/cargar-localidades/types";
+import type { ReportBannerView } from "./ReportParts";
+import { outcomeBannersOf, timingsViewOf, type OutcomeTexts } from "./reportViewParts";
 import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
-
-const ReportBannerKind = {
-  UNKNOWN: "unknown",
-  DRY_RUN: "dryRun",
-  DONE: "done",
-} as const;
-
-type ReportBannerKind = (typeof ReportBannerKind)[keyof typeof ReportBannerKind];
-
-interface ReportBanner {
-  kind: ReportBannerKind;
-  text: string;
-}
 
 interface ReportKpi {
   label: string;
@@ -60,7 +49,7 @@ interface TimingView {
 }
 
 interface CargarLocalidadesReportView {
-  banners: ReportBanner[];
+  banners: ReportBannerView[];
   kpis: ReportKpi[];
   skippedRows: SkipReasonRow[];
   zeroReasonCount: number;
@@ -71,10 +60,12 @@ interface CargarLocalidadesReportView {
   totalSeconds: number;
 }
 
-const MS_PER_SECOND = 1000;
 const PERCENT_SCALE = 100;
-const UNKNOWN_TEXT = "No se pudo confirmar el COMMIT. Verifique las dos tablas de localidades antes de volver a cargar.";
-const DONE_TEXT = "Carga confirmada: las tablas de localidades fueron modificadas.";
+const OUTCOME_TEXTS: OutcomeTexts = {
+  unknown: "No se pudo confirmar el COMMIT. Verifique las dos tablas de localidades antes de volver a cargar.",
+  dryRun: DRY_RUN_WARNING,
+  done: "Carga confirmada: las tablas de localidades fueron modificadas.",
+};
 
 const REASON_TEXT: Record<LocalitySkipReason, { label: string; explanation: string }> = {
   [LOCALITY_SKIP_REASON.SIN_GEOMETRIA]: {
@@ -104,14 +95,6 @@ const SKIP_REASONS: readonly LocalitySkipReason[] = Object.values(LOCALITY_SKIP_
 export const skipReasonLabelOf = (reason: LocalitySkipReason): string => REASON_TEXT[reason].label;
 
 const percentOf = (value: number, total: number): number => (total === 0 ? 0 : Math.round((value * PERCENT_SCALE) / total));
-
-const reportBannersOf = (result: CargarLocalidadesResult): ReportBanner[] => {
-  const banners: ReportBanner[] = [];
-  if (result.outcomeUnknown) banners.push({ kind: ReportBannerKind.UNKNOWN, text: UNKNOWN_TEXT });
-  if (result.dryRun) banners.push({ kind: ReportBannerKind.DRY_RUN, text: DRY_RUN_WARNING });
-  else if (result.targetsModified) banners.push({ kind: ReportBannerKind.DONE, text: DONE_TEXT });
-  return banners;
-};
 
 const sumChanged = (targets: readonly TargetReport[]): number => targets.reduce((total, target) => total + target.changed, 0);
 
@@ -170,13 +153,10 @@ const targetViewOf = (target: TargetReport): TargetView => ({
   codeDiffers: target.codeDiffersSamples,
 });
 
-const timingsOf = (result: CargarLocalidadesResult): TimingView[] =>
-  result.stepTimings.map((timing) => ({ label: timing.label, seconds: timing.ms / MS_PER_SECOND }));
-
 export function buildCargarLocalidadesReportView(result: CargarLocalidadesResult): CargarLocalidadesReportView {
-  const timings = timingsOf(result);
+  const { timings, totalSeconds } = timingsViewOf(result.stepTimings);
   return {
-    banners: reportBannersOf(result),
+    banners: outcomeBannersOf({ ...result, modified: result.targetsModified }, OUTCOME_TEXTS),
     kpis: kpisOf(result),
     skippedRows: skipRowsOf(result),
     zeroReasonCount: zeroReasonCountOf(result),
@@ -184,6 +164,6 @@ export function buildCargarLocalidadesReportView(result: CargarLocalidadesResult
     warnings: result.warnings.filter((warning) => warning !== DRY_RUN_WARNING && warning !== COMMIT_UNKNOWN_WARNING),
     targets: result.targets.map(targetViewOf),
     timings,
-    totalSeconds: timings.reduce((total, timing) => total + timing.seconds, 0),
+    totalSeconds,
   };
 }

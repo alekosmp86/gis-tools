@@ -1,11 +1,12 @@
 import { createStepTimer, type StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunDeps, RunProgress, RunSession } from "../../cargar-padrones/types";
-import { openRunSession, scrubbedFailure } from "../../shared/transaction";
+import { assertConfirmedOrDryRun, assertSourceTablesReady, assertWriteTargetsReady } from "../../shared/preflightAsserts";
+import { withRunSession } from "../../shared/transaction";
 import { plannedUnitStepLabels, UNIT_STEP } from "../domain/plannedSteps";
 import { assertDistinctUnitTables } from "../domain/tableRoles";
 import { buildUnitWarnings } from "../domain/warnings";
 import type { UnitParams, UnitResult } from "../types";
-import { assertRunAllowed, assertSourcesReady, assertTargetsReady } from "./preflight";
+import { CONFIRM_REQUIRED_MESSAGE, sourceTablesSpecOf, writeTargetsSpecOf } from "./preflight";
 import { resolveUnitLayouts } from "./resolveLayouts";
 import { runUnitWriteTransaction, type UnitWriteOutcome } from "./writeSteps";
 
@@ -41,8 +42,8 @@ async function runOnSession(
     onProgress,
   });
   const layouts = await timer.run(UNIT_STEP.VALIDATE, () => resolveUnitLayouts(session, params));
-  await timer.run(UNIT_STEP.TARGET, () => assertTargetsReady(session, layouts));
-  await timer.run(UNIT_STEP.COUNT, () => assertSourcesReady(session, layouts));
+  await timer.run(UNIT_STEP.TARGET, () => assertWriteTargetsReady(session, writeTargetsSpecOf(layouts)));
+  await timer.run(UNIT_STEP.COUNT, () => assertSourceTablesReady(session, sourceTablesSpecOf(layouts)));
   const outcome = await runUnitWriteTransaction(session, params, layouts, timer);
   return buildResult(params, outcome, timer.timings);
 }
@@ -52,14 +53,7 @@ export async function runUnidadTerritorial(
   deps: RunDeps,
   onProgress?: (progress: RunProgress) => void
 ): Promise<UnitResult> {
-  assertRunAllowed(params);
+  assertConfirmedOrDryRun(params, CONFIRM_REQUIRED_MESSAGE);
   assertDistinctUnitTables(params);
-  const session = await openRunSession(params.config, deps);
-  try {
-    return await runOnSession(session, params, deps, onProgress);
-  } catch (error: unknown) {
-    throw scrubbedFailure(error, params.config.password);
-  } finally {
-    await session.close().catch(() => undefined);
-  }
+  return withRunSession(params.config, deps, (session) => runOnSession(session, params, deps, onProgress));
 }

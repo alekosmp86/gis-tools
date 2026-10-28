@@ -93,7 +93,7 @@ export async function runTransaction<Body>(
   };
 }
 
-export async function openRunSession(config: DbConfig, deps: RunDeps): Promise<RunSession> {
+async function openRunSession(config: DbConfig, deps: RunDeps): Promise<RunSession> {
   try {
     return await deps.openSession(config);
   } catch (error: unknown) {
@@ -101,7 +101,7 @@ export async function openRunSession(config: DbConfig, deps: RunDeps): Promise<R
   }
 }
 
-export function scrubbedFailure(error: unknown, secret: string | undefined): unknown {
+function scrubbedFailure(error: unknown, secret: string | undefined): unknown {
   if (!(error instanceof Error) || !secret || !error.message.includes(secret)) return error;
   return new Error(scrubSecret(error.message, secret));
 }
@@ -119,4 +119,19 @@ export function buildSequenceRepairSql(target: SequenceRepairTarget): string {
     target.table,
     [target.idColumn]
   );
+}
+
+export async function withRunSession<T>(
+  config: DbConfig,
+  deps: RunDeps,
+  work: (session: RunSession) => Promise<T>
+): Promise<T> {
+  const session = await openRunSession(config, deps);
+  try {
+    return await work(session);
+  } catch (error: unknown) {
+    throw scrubbedFailure(error, config.password);
+  } finally {
+    await session.close().catch(() => undefined);
+  }
 }

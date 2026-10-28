@@ -1,5 +1,6 @@
 import { DETAIL_LIST_LIMIT } from "../../shared/limits";
 import type { SourceTotals, TargetReport } from "../types";
+import { plural } from "../../shared/text";
 
 export interface WarningInput {
   dryRun: boolean;
@@ -11,9 +12,6 @@ export interface WarningInput {
 
 export const DRY_RUN_WARNING = "Análisis: las tablas de localidades no fueron modificadas.";
 export const COMMIT_UNKNOWN_WARNING = "No se pudo confirmar el COMMIT: verifique las tablas de localidades antes de reintentar.";
-
-const plural = (count: number, singular: string, pluralForm: string): string =>
-  `${count} ${count === 1 ? singular : pluralForm}`;
 
 function sourceWarnings({ skipped, repaired }: SourceTotals): string[] {
   const warnings: string[] = [];

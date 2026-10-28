@@ -9,16 +9,7 @@ import type {
   TargetApplyOutcome,
   TargetClassification,
 } from "../types";
-
-type Row = Record<string, unknown>;
-
-const numberOf = (value: unknown): number => Number(value ?? 0);
-
-const nullableNumber = (value: unknown): number | null => (value === null || value === undefined ? null : Number(value));
-
-const textOf = (value: unknown): string | null => (value === null || value === undefined ? null : String(value));
-
-const listOf = (value: unknown): Row[] => (Array.isArray(value) ? (value as Row[]) : []);
+import { numberOf, nullableNumber, textOf, listOf, type Row } from "../../shared/rowMapping";
 
 const SKIP_REASONS: readonly LocalitySkipReason[] = Object.values(LOCALITY_SKIP_REASON);
 

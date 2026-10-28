@@ -1,21 +1,19 @@
 "use client";
 
 import React from "react";
-import { DatabaseZap, Search, type LucideIcon } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
-import { Button } from "@/ui-kit/components/ui/Button";
 import { FormField } from "@/ui-kit/components/ui/FormField";
-import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
+import { AlertType } from "@/ui-kit/types/ui";
 import type { LocalidadesConfirmation, LocalidadesIncludedTarget } from "../cargarLocalidadesWizardState";
 import { DESTINATION_TITLE, GEOMETRY_OVERWRITE_WARNING } from "../cargarLocalidadesWizardState";
 import type { LocalidadesStartRequest } from "../clientTypes";
+import { PASSWORD_LABEL, ReviewRunActions } from "./reviewParts";
 import styles from "./WizardSteps.module.css";
 
 const BUSY_NOTE = "Hay una carga de localidades en curso. Espere a que termine para iniciar otra.";
 const DRY_RUN_HINT = "Analizar sin cargar cuenta y clasifica las localidades, y revierte todo: las tablas de localidades no cambian.";
 const RUN_HINT =
   "Cargar localidades modifica las tablas de localidades destino. Hace falta escribir de nuevo la contraseña y el nombre de cada tabla destino.";
-const PASSWORD_LABEL = "Contraseña de la base de datos";
 const TYPED_TABLE_LABEL = (destinationTitle: string): string => `Vuelva a escribir el nombre de la tabla (${destinationTitle})`;
 const YES = "Sí";
 const NO = "No";
@@ -33,13 +31,6 @@ export interface LocalidadesReviewStepProps {
   onRun: () => void;
 }
 
-const ActionLabel: React.FC<{ icon: LucideIcon; text: string }> = ({ icon: Icon, text }) => (
-  <>
-    <Icon size={15} />
-    <span>{text}</span>
-  </>
-);
-
 const routeOf = (target: LocalidadesIncludedTarget): string => `${target.schema}.${target.table}`;
 
 export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
@@ -55,7 +46,6 @@ export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
   onRun,
 }) => {
   const { connection, options } = request;
-  const blocked = busy || runBlockedReason !== null;
 
   return (
     <div className={styles.stack}>
@@ -104,19 +94,18 @@ export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
         ))}
       </div>
 
-      <p className={styles.hint}>{DRY_RUN_HINT}</p>
-      <p className={styles.hint}>{RUN_HINT}</p>
-
-      {busy && <AlertMessage type={AlertType.WARNING} text={BUSY_NOTE} />}
-      {runBlockedReason !== null && <AlertMessage type={AlertType.WARNING} text={runBlockedReason} />}
-      <div className={styles.actions}>
-        <Button variant={ButtonVariant.SECONDARY} isDisabled={blocked || !canDryRun} onClick={onDryRun}>
-          <ActionLabel icon={Search} text="Analizar sin cargar" />
-        </Button>
-        <Button isDisabled={blocked || !canRun} onClick={onRun}>
-          <ActionLabel icon={DatabaseZap} text="Cargar localidades" />
-        </Button>
-      </div>
+      <ReviewRunActions
+        dryRunHint={DRY_RUN_HINT}
+        runHint={RUN_HINT}
+        busyNote={BUSY_NOTE}
+        runLabel="Cargar localidades"
+        busy={busy}
+        runBlockedReason={runBlockedReason}
+        canDryRun={canDryRun}
+        canRun={canRun}
+        onDryRun={onDryRun}
+        onRun={onRun}
+      />
     </div>
   );
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useReducer, useState, useSyncExternalStore } from "react";
+import React, { useMemo, useReducer, useState, useSyncExternalStore } from "react";
 import type { ResolvedColumn } from "@/core/types/tableCatalog";
 import type { SafeDbConfig } from "@/core/types/db";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
@@ -28,6 +28,7 @@ import {
   type ActualizarPadronRunSnapshot,
   type ActualizarPadronRunStore,
 } from "./actualizarPadronRunStore";
+import { useElapsedTick } from "./useElapsedTick";
 import { RunPhase } from "./jobRunStore";
 import { createRoutineJobsClient, RoutineJobsApiError } from "./routineJobsClient";
 import type { ActualizarStartRequest, ClientConnection, StagingSelection } from "./clientTypes";
@@ -50,7 +51,6 @@ import { ActualizarReviewStep } from "./steps/ActualizarReviewStep";
 import { ActualizarResultStep } from "./steps/ActualizarResultStep";
 
 const IDLE_SNAPSHOT: ActualizarPadronRunSnapshot = { phase: RunPhase.IDLE };
-const ELAPSED_TICK_MS = 1000;
 const FIRST_STEP_ID = actualizarStepIdOf(WizardStep.CONNECTION);
 const TABLES_STEP_ID = actualizarStepIdOf(WizardStep.TABLES);
 const REVIEW_STEP_ID = actualizarStepIdOf(WizardStep.REVIEW);
@@ -89,18 +89,10 @@ export default function ActualizarPadronWizard({
     saveProfile: saveConnectionProfile,
     deleteProfile,
   } = useConnectionProfiles();
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [catalogFailures, setCatalogFailures] = useState<CatalogFailures>(emptyCatalogFailures);
 
   const isRunActive = snapshot.phase === RunPhase.STARTING || snapshot.phase === RunPhase.RUNNING;
-
-  useEffect(() => {
-    if (!isRunActive) return;
-    const tick = () => setNowMs(Date.now());
-    tick();
-    const handle = setInterval(tick, ELAPSED_TICK_MS);
-    return () => clearInterval(handle);
-  }, [isRunActive]);
+  const nowMs = useElapsedTick(isRunActive);
 
   const { connection } = state;
   const requestConnection = trimConnection(connection);

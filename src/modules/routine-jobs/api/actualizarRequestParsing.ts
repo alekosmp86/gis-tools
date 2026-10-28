@@ -3,6 +3,7 @@ import { CONFIRM_REQUIRED_MESSAGE } from "../jobs/actualizar-padron/services/pre
 import { assertDistinctTables } from "../jobs/actualizar-padron/services/resolveLayouts";
 import type { ActualizarPadronOptions, ActualizarPadronParams } from "../jobs/actualizar-padron/types";
 import {
+  assertTablesDistinct,
   invalid,
   parseClearMode,
   parseConnection,
@@ -12,16 +13,6 @@ import {
   toDbConfig,
   type JsonRecord,
 } from "./requestParsing";
-
-const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-
-function assertTablesDistinct(params: ActualizarPadronParams): void {
-  try {
-    assertDistinctTables(params);
-  } catch (error: unknown) {
-    throw invalid(messageOf(error));
-  }
-}
 
 function readOptionalTypeTable(body: JsonRecord): string | undefined {
   const value = body.typeTable;
@@ -63,6 +54,6 @@ export function parseActualizarStartRequest(body: JsonRecord): ActualizarPadronP
     confirm: readBoolean(body, "confirm"),
   };
   if (!params.dryRun && !params.confirm) throw invalid(CONFIRM_REQUIRED_MESSAGE);
-  assertTablesDistinct(params);
+  assertTablesDistinct(params, assertDistinctTables);
   return params;
 }

@@ -53,5 +53,22 @@ const changeRowOf = (record: ChangeRecord): CsvRow => [
   record.areaRatio,
 ];
 
-export const changeCsvOf = (records: readonly ChangeRecord[]): string =>
-  toCsv([CHANGE_HEADER, ...records.map(changeRowOf)]);
+export interface ListCut {
+  table: string;
+  shown: number;
+  total: number;
+  noun: string;
+}
+
+const cutRowOf = (cut: ListCut, width: number): CsvRow => [
+  cut.table,
+  `Lista incompleta: se muestran las primeras ${cut.shown} de ${cut.total} ${cut.noun}`,
+  ...Array.from({ length: width - 2 }, () => null),
+];
+
+/** One closing row per list the report cut, so the CSV never hides rows silently. */
+export const cutRowsOf = (cuts: readonly ListCut[], width: number): CsvRow[] =>
+  cuts.filter((cut) => cut.total > cut.shown).map((cut) => cutRowOf(cut, width));
+
+export const changeCsvOf = (records: readonly ChangeRecord[], cuts: readonly ListCut[] = []): string =>
+  toCsv([CHANGE_HEADER, ...records.map(changeRowOf), ...cutRowsOf(cuts, CHANGE_HEADER.length)]);

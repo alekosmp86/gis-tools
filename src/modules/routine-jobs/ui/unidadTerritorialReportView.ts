@@ -9,11 +9,14 @@ import type {
   UnitTargetReport,
 } from "../jobs/unidad-territorial/types";
 import type { ReportBannerView, ReportKpiView, SkipReasonView, TimingItemView } from "./ReportParts";
+import { outcomeBannersOf, timingsViewOf, type OutcomeTexts } from "./reportViewParts";
 import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
 
-const UNKNOWN_TEXT = "No se pudo confirmar el COMMIT. Verifique la tabla de unidades territoriales antes de volver a cargar.";
-const DONE_TEXT = "Actualización confirmada: la tabla de unidades territoriales fue modificada.";
-const MS_PER_SECOND = 1000;
+const OUTCOME_TEXTS: OutcomeTexts = {
+  unknown: "No se pudo confirmar el COMMIT. Verifique la tabla de unidades territoriales antes de volver a cargar.",
+  dryRun: DRY_RUN_WARNING,
+  done: "Actualización confirmada: la tabla de unidades territoriales fue modificada.",
+};
 const PERCENT_SCALE = 100;
 
 const REASON_TEXT: Record<UnitSkipReason, { label: string; explanation: string }> = {
@@ -71,14 +74,6 @@ export interface UnitReportView {
 
 const percentOf = (value: number, total: number): number => (total === 0 ? 0 : Math.round((value * PERCENT_SCALE) / total));
 
-const bannersOf = (result: UnitResult): ReportBannerView[] => {
-  const banners: ReportBannerView[] = [];
-  if (result.outcomeUnknown) banners.push({ kind: "unknown", text: UNKNOWN_TEXT });
-  if (result.dryRun) banners.push({ kind: "dryRun", text: DRY_RUN_WARNING });
-  else if (result.targetModified) banners.push({ kind: "done", text: DONE_TEXT });
-  return banners;
-};
-
 const kpisOf = (result: UnitResult): ReportKpiView[] => [
   { label: "Filas leídas", value: result.totals.rowsRead },
   { label: "Candidatas", value: result.totals.candidates },
@@ -135,13 +130,10 @@ const targetViewOf = (target: UnitTargetReport): UnitReportTargetView => ({
   ambiguous: target.ambiguousSamples,
 });
 
-const timingsOf = (result: UnitResult): TimingItemView[] =>
-  result.stepTimings.map((timing) => ({ label: timing.label, seconds: timing.ms / MS_PER_SECOND }));
-
 export function buildUnitReportView(result: UnitResult): UnitReportView {
-  const timings = timingsOf(result);
+  const { timings, totalSeconds } = timingsViewOf(result.stepTimings);
   return {
-    banners: bannersOf(result),
+    banners: outcomeBannersOf({ ...result, modified: result.targetModified }, OUTCOME_TEXTS),
     kpis: kpisOf(result),
     skippedRows: skipRowsOf(result),
     zeroReasonCount: zeroReasonCountOf(result),
@@ -149,7 +141,7 @@ export function buildUnitReportView(result: UnitResult): UnitReportView {
     warnings: result.warnings.filter((warning) => warning !== DRY_RUN_WARNING && warning !== COMMIT_UNKNOWN_WARNING),
     target: targetViewOf(result.target),
     timings,
-    totalSeconds: timings.reduce((total, timing) => total + timing.seconds, 0),
+    totalSeconds,
   };
 }
 

@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useReducer, useState, useSyncExternalStore } from "react";
+import React, { useReducer, useState, useSyncExternalStore } from "react";
 import type { ResolvedColumn } from "@/core/types/tableCatalog";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
-import { isConnectionFailure } from "@/ui-kit/components/tableSelectorLogic";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
 import type { LocalidadesTableRole } from "../jobs/cargar-localidades/constants";
 import {
@@ -32,17 +31,10 @@ import {
 } from "./cargarLocalidadesRunStore";
 import type { ClientConnection, StagingSelection } from "./clientTypes";
 import { trimConnection } from "./connectionProfiles";
+import { useCatalogLoader } from "./useCatalogLoader";
+import { useElapsedTick } from "./useElapsedTick";
 import { RunPhase } from "./jobRunStore";
-import { createRoutineJobsClient, RoutineJobsApiError } from "./routineJobsClient";
-import { catalogKey } from "./schemaDraft";
-import { buildSharedLoadTables, firstCatalogError } from "./sharedCatalog";
-import {
-  clearCatalogFailure,
-  currentCatalogError,
-  emptyCatalogFailures,
-  recordCatalogFailure,
-  type CatalogFailures,
-} from "./catalogErrors";
+import { createRoutineJobsClient } from "./routineJobsClient";
 import { LocalidadesTablesStep } from "./steps/LocalidadesTablesStep";
 import { LocalidadesOptionsStep } from "./steps/LocalidadesOptionsStep";
 import { LocalidadesReviewStep } from "./steps/LocalidadesReviewStep";
@@ -50,7 +42,6 @@ import { LocalidadesRunStep } from "./steps/LocalidadesRunStep";
 import { LocalidadesReportStep } from "./steps/LocalidadesReportStep";
 
 const IDLE_SNAPSHOT: CargarLocalidadesRunSnapshot = { phase: RunPhase.IDLE };
-const ELAPSED_TICK_MS = 1000;
 const TABLES_STEP_ID = localidadesStepIdOf(LocalidadesStep.TABLES);
 const OPTIONS_STEP_ID = localidadesStepIdOf(LocalidadesStep.OPTIONS);
 const REVIEW_STEP_ID = localidadesStepIdOf(LocalidadesStep.REVIEW);
@@ -58,12 +49,6 @@ const DRY_RUN = { dryRun: true };
 const REAL_RUN = { dryRun: false };
 const client = createRoutineJobsClient();
 const getIdleSnapshot = (): CargarLocalidadesRunSnapshot => IDLE_SNAPSHOT;
-
-const catalogKeyOf = (connection: ClientConnection, schema: string): string =>
-  catalogKey(trimConnection(connection), schema.trim());
-
-const connectionFailureOf = (error: unknown): string | null =>
-  error instanceof RoutineJobsApiError && isConnectionFailure(error.status) ? error.message : null;
 
 export interface CargarLocalidadesWizardProps {
   connection: ClientConnection;
@@ -77,45 +62,20 @@ export const CargarLocalidadesWizard: React.FC<CargarLocalidadesWizardProps> = (
     initialWizardStateFor(store.getSnapshot(), seed),
   );
   const snapshot = useSyncExternalStore(runStore.subscribe, runStore.getSnapshot, getIdleSnapshot);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const [catalogFailures, setCatalogFailures] = useState<CatalogFailures>(emptyCatalogFailures);
 
   const isRunActive = snapshot.phase === RunPhase.STARTING || snapshot.phase === RunPhase.RUNNING;
-
-  useEffect(() => {
-    if (!isRunActive) return;
-    const tick = () => setNowMs(Date.now());
-    tick();
-    const handle = setInterval(tick, ELAPSED_TICK_MS);
-    return () => clearInterval(handle);
-  }, [isRunActive]);
+  const nowMs = useElapsedTick(isRunActive);
 
   const { connection } = state;
-  const loadTables = useMemo(() => {
-    const shared = buildSharedLoadTables(client, trimConnection(connection));
-    return (schema: string) => {
-      const key = catalogKeyOf(connection, schema);
-      return shared(schema.trim()).then(
-        (listing) => {
-          setCatalogFailures(clearCatalogFailure(catalogFailures, key));
-          return listing;
-        },
-        (error: unknown) => {
-          const message = connectionFailureOf(error);
-          if (message !== null) setCatalogFailures(recordCatalogFailure(catalogFailures, key, message));
-          throw error;
-        },
-      );
-    };
-  }, [connection, catalogFailures]);
+  const { loadTables, reset: resetCatalog, catalogErrorFor } = useCatalogLoader(client, connection);
 
   const checkColumns = (role: LocalidadesTableRole, schema: string, table: string): Promise<ResolvedColumn[]> =>
     client.listColumns(trimConnection(connection), schema, table, role);
 
-  const catalogError = firstCatalogError([
-    currentCatalogError(catalogFailures, catalogKeyOf(connection, state.stagingSchema)),
-    currentCatalogError(catalogFailures, catalogKeyOf(connection, state.provinceSchema)),
-    ...includedTargetsOf(state).map((target) => currentCatalogError(catalogFailures, catalogKeyOf(connection, target.schema))),
+  const catalogError = catalogErrorFor([
+    state.stagingSchema,
+    state.provinceSchema,
+    ...includedTargetsOf(state).map((target) => target.schema),
   ]);
 
   const startRun = (run: LocalidadesRunRequest) => {
@@ -125,7 +85,7 @@ export const CargarLocalidadesWizard: React.FC<CargarLocalidadesWizardProps> = (
 
   const newRun = () => {
     runStore.reset();
-    setCatalogFailures(emptyCatalogFailures());
+    resetCatalog();
     dispatch({ type: "reset", seed });
   };
 

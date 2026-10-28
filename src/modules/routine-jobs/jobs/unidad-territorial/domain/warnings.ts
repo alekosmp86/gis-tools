@@ -1,5 +1,6 @@
 import { DETAIL_LIST_LIMIT } from "../../shared/limits";
 import type { UnitOptions, UnitSourceTotals, UnitTargetReport } from "../types";
+import { plural } from "../../shared/text";
 
 export interface UnitWarningInput {
   dryRun: boolean;
@@ -12,9 +13,6 @@ export interface UnitWarningInput {
 export const DRY_RUN_WARNING = "Análisis: la tabla de unidades territoriales no fue modificada.";
 export const COMMIT_UNKNOWN_WARNING =
   "No se pudo confirmar el COMMIT: verifique la tabla de unidades territoriales antes de reintentar.";
-
-const plural = (count: number, singular: string, pluralForm: string): string =>
-  `${count} ${count === 1 ? singular : pluralForm}`;
 
 function sourceWarnings({ skipped }: UnitSourceTotals): string[] {
   if (skipped === 0) return [];

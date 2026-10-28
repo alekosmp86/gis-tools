@@ -1,6 +1,7 @@
 import { AMBIGUOUS_LOCALITY_LIMIT, CONFLICT_SAMPLE_LIMIT, PADRON_UNIT, type PadronUnit } from "../constants";
 import { UNIT_SPECS } from "./loadSql";
 import type { LoadOutput, TypeReport } from "../types";
+import { plural } from "../../shared/text";
 
 const UNIT_NAME: Record<PadronUnit, string> = {
   [PADRON_UNIT.RURAL]: "rural",
@@ -9,9 +10,6 @@ const UNIT_NAME: Record<PadronUnit, string> = {
 
 const COMMIT_UNKNOWN_WARNING =
   "No se pudo confirmar el COMMIT: verifique la tabla destino antes de reintentar.";
-
-const plural = (count: number, singular: string, pluralForm: string): string =>
-  `${count} ${count === 1 ? singular : pluralForm}`;
 
 export const sentence = (text: string): string => (/[.!?]$/.test(text) ? text : `${text}.`);
 

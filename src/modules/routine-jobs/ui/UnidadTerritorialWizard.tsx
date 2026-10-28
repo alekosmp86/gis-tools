@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useReducer, useState, useSyncExternalStore } from "react";
+import React, { useReducer, useState, useSyncExternalStore } from "react";
 import type { ResolvedColumn } from "@/core/types/tableCatalog";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
-import { isConnectionFailure } from "@/ui-kit/components/tableSelectorLogic";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
 import type { UnitTableRole } from "../jobs/unidad-territorial/constants";
 import {
@@ -28,17 +27,10 @@ import { getCargarLocalidadesRunStore } from "./cargarLocalidadesRunStore";
 import { LocalidadesDestination } from "./localidadesDestination";
 import type { ClientConnection, UnidadStartRequest } from "./clientTypes";
 import { trimConnection } from "./connectionProfiles";
+import { useCatalogLoader } from "./useCatalogLoader";
+import { useElapsedTick } from "./useElapsedTick";
 import { RunPhase } from "./jobRunStore";
-import { createRoutineJobsClient, RoutineJobsApiError } from "./routineJobsClient";
-import { catalogKey } from "./schemaDraft";
-import { buildSharedLoadTables, firstCatalogError } from "./sharedCatalog";
-import {
-  clearCatalogFailure,
-  currentCatalogError,
-  emptyCatalogFailures,
-  recordCatalogFailure,
-  type CatalogFailures,
-} from "./catalogErrors";
+import { createRoutineJobsClient } from "./routineJobsClient";
 import { UnidadTablesStep } from "./steps/UnidadTablesStep";
 import { UnidadOptionsStep } from "./steps/UnidadOptionsStep";
 import { UnidadReviewStep } from "./steps/UnidadReviewStep";
@@ -46,7 +38,6 @@ import { UnidadRunStep } from "./steps/UnidadRunStep";
 import { UnidadReportStep } from "./steps/UnidadReportStep";
 
 const IDLE_SNAPSHOT: UnidadRunSnapshot = { phase: RunPhase.IDLE };
-const ELAPSED_TICK_MS = 1000;
 const TABLES_STEP_ID = unidadStepIdOf(UnidadStep.TABLES);
 const OPTIONS_STEP_ID = unidadStepIdOf(UnidadStep.OPTIONS);
 const REVIEW_STEP_ID = unidadStepIdOf(UnidadStep.REVIEW);
@@ -55,12 +46,6 @@ const REAL_RUN = { dryRun: false };
 const SLOT_KEYS: readonly UnitSlot[] = [UnitSlot.LOCALITY, UnitSlot.TYPE, UnitSlot.TARGET];
 const client = createRoutineJobsClient();
 const getIdleSnapshot = (): UnidadRunSnapshot => IDLE_SNAPSHOT;
-
-const catalogKeyOf = (connection: ClientConnection, schema: string): string =>
-  catalogKey(trimConnection(connection), schema.trim());
-
-const connectionFailureOf = (error: unknown): string | null =>
-  error instanceof RoutineJobsApiError && isConnectionFailure(error.status) ? error.message : null;
 
 /** The locality table prefills from the CARTO target of the last stage 2 run, else its first target, when there is one. */
 function seedFrom(connection: ClientConnection): UnidadWizardSeed {
@@ -83,44 +68,17 @@ export const UnidadTerritorialWizard: React.FC<UnidadTerritorialWizardProps> = (
     initialUnidadWizardStateFor(store.getSnapshot(), seed)
   );
   const snapshot = useSyncExternalStore(runStore.subscribe, runStore.getSnapshot, getIdleSnapshot);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const [catalogFailures, setCatalogFailures] = useState<CatalogFailures>(emptyCatalogFailures);
 
   const isRunActive = snapshot.phase === RunPhase.STARTING || snapshot.phase === RunPhase.RUNNING;
-
-  useEffect(() => {
-    if (!isRunActive) return;
-    const tick = () => setNowMs(Date.now());
-    tick();
-    const handle = setInterval(tick, ELAPSED_TICK_MS);
-    return () => clearInterval(handle);
-  }, [isRunActive]);
+  const nowMs = useElapsedTick(isRunActive);
 
   const { connection } = state;
-  const loadTables = useMemo(() => {
-    const shared = buildSharedLoadTables(client, trimConnection(connection));
-    return (schema: string) => {
-      const key = catalogKeyOf(connection, schema);
-      return shared(schema.trim()).then(
-        (listing) => {
-          setCatalogFailures(clearCatalogFailure(catalogFailures, key));
-          return listing;
-        },
-        (error: unknown) => {
-          const message = connectionFailureOf(error);
-          if (message !== null) setCatalogFailures(recordCatalogFailure(catalogFailures, key, message));
-          throw error;
-        }
-      );
-    };
-  }, [connection, catalogFailures]);
+  const { loadTables, reset: resetCatalog, catalogErrorFor } = useCatalogLoader(client, connection);
 
   const checkColumns = (role: UnitTableRole, schema: string, table: string): Promise<ResolvedColumn[]> =>
     client.listColumns(trimConnection(connection), schema, table, role);
 
-  const catalogError = firstCatalogError(
-    SLOT_KEYS.map((key) => currentCatalogError(catalogFailures, catalogKeyOf(connection, state.slots[key].schema)))
-  );
+  const catalogError = catalogErrorFor(SLOT_KEYS.map((key) => state.slots[key].schema));
 
   const startRun = (request: UnidadStartRequest) => {
     void runStore.start(request);
@@ -129,7 +87,7 @@ export const UnidadTerritorialWizard: React.FC<UnidadTerritorialWizardProps> = (
 
   const newRun = () => {
     runStore.reset();
-    setCatalogFailures(emptyCatalogFailures());
+    resetCatalog();
     dispatch({ type: "reset", seed });
   };
 

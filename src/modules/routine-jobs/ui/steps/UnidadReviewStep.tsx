@@ -1,13 +1,12 @@
 "use client";
 
 import React from "react";
-import { DatabaseZap, Search, type LucideIcon } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
-import { Button } from "@/ui-kit/components/ui/Button";
 import { FormField } from "@/ui-kit/components/ui/FormField";
-import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
+import { AlertType } from "@/ui-kit/types/ui";
 import type { UnidadStartRequest } from "../clientTypes";
 import { UNIT_GEOMETRY_OVERWRITE_WARNING, type UnidadConfirmation } from "../unidadTerritorialWizardState";
+import { PASSWORD_LABEL, ReviewRunActions } from "./reviewParts";
 import styles from "./WizardSteps.module.css";
 
 const BUSY_NOTE = "Hay una actualización de unidades territoriales en curso. Espere a que termine para iniciar otra.";
@@ -15,17 +14,9 @@ const DRY_RUN_HINT =
   "Analizar sin cargar cuenta y clasifica las unidades, y revierte todo: la tabla de unidades territoriales no cambia.";
 const RUN_HINT =
   "Actualizar unidades territoriales modifica la tabla destino. Hace falta escribir de nuevo la contraseña y el nombre de la tabla destino.";
-const PASSWORD_LABEL = "Contraseña de la base de datos";
 const TYPED_TABLE_LABEL = "Vuelva a escribir el nombre de la tabla de unidades territoriales";
 const YES = "Sí";
 const NO = "No";
-
-const ActionLabel: React.FC<{ icon: LucideIcon; text: string }> = ({ icon: Icon, text }) => (
-  <>
-    <Icon size={15} />
-    <span>{text}</span>
-  </>
-);
 
 export interface UnidadReviewStepProps {
   request: UnidadStartRequest;
@@ -51,7 +42,6 @@ export const UnidadReviewStep: React.FC<UnidadReviewStepProps> = ({
   onRun,
 }) => {
   const { connection, options } = request;
-  const blocked = busy || runBlockedReason !== null;
 
   return (
     <div className={styles.stack}>
@@ -87,19 +77,18 @@ export const UnidadReviewStep: React.FC<UnidadReviewStepProps> = ({
         />
       </div>
 
-      <p className={styles.hint}>{DRY_RUN_HINT}</p>
-      <p className={styles.hint}>{RUN_HINT}</p>
-
-      {busy && <AlertMessage type={AlertType.WARNING} text={BUSY_NOTE} />}
-      {runBlockedReason !== null && <AlertMessage type={AlertType.WARNING} text={runBlockedReason} />}
-      <div className={styles.actions}>
-        <Button variant={ButtonVariant.SECONDARY} isDisabled={blocked || !canDryRun} onClick={onDryRun}>
-          <ActionLabel icon={Search} text="Analizar sin cargar" />
-        </Button>
-        <Button isDisabled={blocked || !canRun} onClick={onRun}>
-          <ActionLabel icon={DatabaseZap} text="Actualizar unidades territoriales" />
-        </Button>
-      </div>
+      <ReviewRunActions
+        dryRunHint={DRY_RUN_HINT}
+        runHint={RUN_HINT}
+        busyNote={BUSY_NOTE}
+        runLabel="Actualizar unidades territoriales"
+        busy={busy}
+        runBlockedReason={runBlockedReason}
+        canDryRun={canDryRun}
+        canRun={canRun}
+        onDryRun={onDryRun}
+        onRun={onRun}
+      />
     </div>
   );
 };

@@ -1,29 +1,11 @@
 "use client";
 
 import React from "react";
-import type { ResolvedColumn, TableListing } from "@/core/types/tableCatalog";
-import { AlertMessage } from "@/ui-kit/components/AlertMessage";
-import { TableSelector } from "@/ui-kit/components/TableSelector";
-import { AlertType } from "@/ui-kit/types/ui";
 import { UNIT_TABLE_ROLE, type UnitTableRole } from "../../jobs/unidad-territorial/constants";
-import { UnitSlot, type UnitSlotDraft } from "../unidadTerritorialWizardState";
-import { SchemaTableCard } from "../SchemaTableCard";
-import { SchemaTableSection } from "../SchemaTableSection";
-import { SchemaDraftField } from "./SchemaDraftField";
-import styles from "./WizardSteps.module.css";
+import { UnitSlot } from "../unidadTerritorialWizardState";
+import { SlotTablesStep, type SlotCopy, type SlotTablesStepProps } from "./SlotTablesStep";
 
-const CATALOG_ERROR_MESSAGE = "No se pudo consultar la base. Revise la conexión.";
-const SCHEMA_LABEL = "Esquema";
-
-interface SlotCopy {
-  key: UnitSlot;
-  role: UnitTableRole;
-  title: string;
-  note: string;
-  tableLabel: string;
-}
-
-const SLOTS: readonly SlotCopy[] = [
+const COPIES: readonly SlotCopy<UnitSlot, UnitTableRole>[] = [
   {
     key: UnitSlot.LOCALITY,
     role: UNIT_TABLE_ROLE.SOURCE,
@@ -47,70 +29,6 @@ const SLOTS: readonly SlotCopy[] = [
   },
 ];
 
-export interface UnidadTablesStepProps {
-  slots: Record<UnitSlot, UnitSlotDraft>;
-  excluded: Record<UnitSlot, string[]>;
-  onSchemaChange: (key: UnitSlot, schema: string) => void;
-  onTableChange: (key: UnitSlot, table: string, valid: boolean) => void;
-  loadTables: (schema: string) => Promise<TableListing>;
-  checkColumns: (role: UnitTableRole, schema: string, table: string) => Promise<ResolvedColumn[]>;
-  blockingReason: string | null;
-  catalogError: string | null;
-}
+export type UnidadTablesStepProps = Omit<SlotTablesStepProps<UnitSlot, UnitTableRole>, "copies">;
 
-const isBlank = (value: string): boolean => value.trim() === "";
-
-export const UnidadTablesStep: React.FC<UnidadTablesStepProps> = ({
-  slots,
-  excluded,
-  onSchemaChange,
-  onTableChange,
-  loadTables,
-  checkColumns,
-  blockingReason,
-  catalogError,
-}) => (
-  <div className={styles.stack}>
-    <SchemaTableSection>
-      {SLOTS.map(({ key, role, title, note, tableLabel }) => {
-        const slot = slots[key];
-        return (
-          <SchemaTableCard
-            key={key}
-            title={title}
-            note={note}
-            schema={
-              <SchemaDraftField
-                label={SCHEMA_LABEL}
-                initial={slot.schema}
-                committed={slot.schema}
-                onCommit={(schema) => onSchemaChange(key, schema)}
-              />
-            }
-            table={
-              <TableSelector
-                label={tableLabel}
-                schema={slot.schema}
-                value={slot.table}
-                onChange={(table) => onTableChange(key, table, false)}
-                loadTables={loadTables}
-                checkColumns={(table) => checkColumns(role, slot.schema.trim(), table)}
-                disabled={isBlank(slot.schema)}
-                excludedTables={excluded[key]}
-                onValidityChange={(valid) => onTableChange(key, slot.table, valid)}
-                hideListError={catalogError !== null}
-                bare
-              />
-            }
-          />
-        );
-      })}
-    </SchemaTableSection>
-    {catalogError !== null && (
-      <div role="alert">
-        <AlertMessage type={AlertType.ERROR} text={`${CATALOG_ERROR_MESSAGE} ${catalogError}`} />
-      </div>
-    )}
-    {blockingReason !== null && <AlertMessage type={AlertType.WARNING} text={blockingReason} />}
-  </div>
-);
+export const UnidadTablesStep: React.FC<UnidadTablesStepProps> = (props) => <SlotTablesStep {...props} copies={COPIES} />;

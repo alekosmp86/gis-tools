@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useReducer, useState, useSyncExternalStore } from "react";
+import React, { useMemo, useReducer, useState, useSyncExternalStore } from "react";
 import type { SafeDbConfig } from "@/core/types/db";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 import { isConnectionFailure } from "@/ui-kit/components/tableSelectorLogic";
@@ -23,6 +23,7 @@ import {
   type WizardSeed,
   type WizardState,
 } from "./cargarPadronesWizardState";
+import { useElapsedTick } from "./useElapsedTick";
 import { createRoutineJobsClient, RoutineJobsApiError } from "./routineJobsClient";
 import {
   getCargarPadronesRunStore,
@@ -49,7 +50,6 @@ import { ReviewStep } from "./steps/ReviewStep";
 import { ResultStep } from "./steps/ResultStep";
 
 const IDLE_SNAPSHOT: CargarPadronesRunSnapshot = { phase: "idle" };
-const ELAPSED_TICK_MS = 1000;
 const FIRST_STEP_ID = stepIdOf(WizardStep.CONNECTION);
 const TABLES_STEP_ID = stepIdOf(WizardStep.TABLES);
 const REVIEW_STEP_ID = stepIdOf(WizardStep.REVIEW);
@@ -82,18 +82,10 @@ export const CargarPadronesWizard: React.FC<CargarPadronesWizardProps> = ({
     saveProfile: saveConnectionProfile,
     deleteProfile,
   } = useConnectionProfiles();
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [catalogFailures, setCatalogFailures] = useState<CatalogFailures>(emptyCatalogFailures);
 
   const isRunActive = snapshot.phase === "starting" || snapshot.phase === "running";
-
-  useEffect(() => {
-    if (!isRunActive) return;
-    const tick = () => setNowMs(Date.now());
-    tick();
-    const handle = setInterval(tick, ELAPSED_TICK_MS);
-    return () => clearInterval(handle);
-  }, [isRunActive]);
+  const nowMs = useElapsedTick(isRunActive);
 
   const { connection } = state;
   const requestConnection = trimConnection(connection);
