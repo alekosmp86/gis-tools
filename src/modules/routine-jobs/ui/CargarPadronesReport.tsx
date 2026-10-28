@@ -7,8 +7,11 @@ import {
   type CargarPadronesReportView,
   type ReportBannerKind,
 } from "./cargarPadronesReportView";
+import { buildCargarPadronesCsv } from "./reportCsv/cargarPadronesCsv";
 import { DataTable } from "./DataTable";
+import { ReportDownloadButton } from "./ReportDownloadButton";
 import { ReportRowList } from "./ReportRowList";
+import { MonthlyStage } from "./monthlyCartoStages";
 import styles from "./CargarPadronesReport.module.css";
 
 const BANNER_CLASS: Record<ReportBannerKind, string> = {
@@ -69,6 +72,11 @@ export const CargarPadronesReport: React.FC<CargarPadronesReportProps> = ({ resu
 
   return (
     <div className={styles.report}>
+      <ReportDownloadButton
+        stageSlug={MonthlyStage.CARGAR_PADRONES}
+        dryRun={result.dryRun}
+        buildCsv={() => buildCargarPadronesCsv(result)}
+      />
       <div className={`${styles.banner} ${BANNER_CLASS[view.banner.kind]}`}>
         <p className={styles.bannerText}>{view.banner.text}</p>
       </div>

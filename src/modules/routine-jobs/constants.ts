@@ -1,0 +1,1 @@
+export const DOWNLOAD_URL_REVOKE_DELAY_MS = 1000;

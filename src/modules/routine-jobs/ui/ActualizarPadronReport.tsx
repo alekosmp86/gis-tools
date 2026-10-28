@@ -18,6 +18,9 @@ import {
 } from "./ActualizarReportSections";
 import styles from "./ActualizarPadronReport.module.css";
 import sharedStyles from "./CargarPadronesReport.module.css";
+import { ReportDownloadButton } from "./ReportDownloadButton";
+import { buildActualizarPadronCsv } from "./reportCsv/actualizarPadronCsv";
+import { MonthlyStage } from "./monthlyCartoStages";
 
 const BANNER_CLASS: Record<ActualizarBannerKind, string> = {
   unknown: sharedStyles.bannerUnknown,
@@ -111,6 +114,11 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
 
   return (
     <div className={sharedStyles.report}>
+      <ReportDownloadButton
+        stageSlug={MonthlyStage.ACTUALIZAR_PADRON}
+        dryRun={result.dryRun}
+        buildCsv={() => buildActualizarPadronCsv(result)}
+      />
       <OutcomeBanners view={view} />
       <KpiCards view={view} />
       <SkippedReasonsTable view={view} />

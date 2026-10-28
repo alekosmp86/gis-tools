@@ -15,6 +15,9 @@ import {
   type TableColumn,
 } from "./ReportParts";
 import { NO_DATA_TEXT, textOrNoData } from "./reportFormat";
+import { ReportDownloadButton } from "./ReportDownloadButton";
+import { buildUnidadTerritorialCsv } from "./reportCsv/unidadTerritorialCsv";
+import { MonthlyStage } from "./monthlyCartoStages";
 import { buildUnitReportView, unitSkipReasonLabelOf, type UnitReportTargetView } from "./unidadTerritorialReportView";
 import sharedStyles from "./CargarPadronesReport.module.css";
 
@@ -104,6 +107,11 @@ export const UnidadTerritorialReport: React.FC<UnidadTerritorialReportProps> = (
   const view = buildUnitReportView(result);
   return (
     <div className={sharedStyles.report}>
+      <ReportDownloadButton
+        stageSlug={MonthlyStage.UNIDAD_TERRITORIAL}
+        dryRun={result.dryRun}
+        buildCsv={() => buildUnidadTerritorialCsv(result)}
+      />
       <OutcomeBanners banners={view.banners} />
       <KpiCards kpis={view.kpis} />
       <SkippedReasonsSection rows={view.skippedRows} zeroReasonCount={view.zeroReasonCount} />
