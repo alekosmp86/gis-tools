@@ -9,7 +9,6 @@ import { MonthlyCartoConnection } from "./MonthlyCartoConnection";
 import { MonthlyCartoStageList } from "./MonthlyCartoStageList";
 import { MonthlyCartoStagePanel } from "./MonthlyCartoStagePanel";
 import { MONTHLY_STAGES, type MonthlyStage } from "./monthlyCartoStages";
-import { useStageOutcomes } from "./useStageOutcomes";
 import styles from "./MonthlyCartoUpdate.module.css";
 
 const CONNECTION_TITLE = "Conexión";
@@ -25,7 +24,6 @@ const connectionSummaryOf = (connection: ClientConnection): string =>
 export const MonthlyCartoUpdate: React.FC = () => {
   const [connection, setConnection] = useState<ClientConnection | null>(null);
   const [openedStage, setOpenedStage] = useState<MonthlyStage | null>(null);
-  const outcomes = useStageOutcomes();
   const [staging, setStaging] = useState<StagingSelection | null>(null);
 
   const changeConnection = () => {
@@ -72,7 +70,7 @@ export const MonthlyCartoUpdate: React.FC = () => {
         </Button>
       </div>
       <h3 className={styles.sectionTitle}>{STAGES_TITLE}</h3>
-      <MonthlyCartoStageList outcomes={outcomes} onOpen={setOpenedStage} />
+      <MonthlyCartoStageList onOpen={setOpenedStage} />
     </div>
   );
 };

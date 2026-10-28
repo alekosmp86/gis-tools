@@ -41,7 +41,7 @@
 
 .stageRow {
   display: grid;
-  grid-template-columns: 32px 1fr auto auto;
+  grid-template-columns: 32px 1fr auto;
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
@@ -79,27 +79,6 @@
   line-height: 1.5;
   opacity: 0.7;
   margin: 0;
-}
-
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.statusPending {
-  opacity: 0.6;
-}
-
-.statusDone {
-  color: var(--accent-cyan);
-}
-
-.statusFailed {
-  color: #f87171;
 }
 
 @media (max-width: 640px) {
