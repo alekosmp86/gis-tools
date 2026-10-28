@@ -1,24 +1,64 @@
 ---
-title: "Trabajos de rutina"
+title: "Actualización mensual de carto"
 order: 1
 ---
 
-# Trabajos de rutina
+# Actualización mensual de carto
 
-Esta herramienta reúne los trabajos de base de datos que se repiten, como la carga mensual de un padrón. Cada trabajo tiene su propio asistente de pasos: usted configura la carga, revisa el resumen y, al terminar, recibe un informe.
+Esta herramienta reúne los trabajos de base de datos que se repiten cada mes. Hoy tiene un solo trabajo, **Actualización mensual de carto**, que lleva los datos del catastro a las tablas de carto en **etapas ordenadas**. Cada etapa tiene su propio asistente y su propio informe.
 
-Se abre desde el portal, en la tarjeta **Trabajos de rutina**, o desde el menú como **Trabajos de rutina**. La página lista los trabajos disponibles; con **Abrir** se entra al asistente del trabajo y con **Volver a la lista** se regresa.
+Se abre desde el portal, en la tarjeta **Trabajos de rutina**, o desde el menú. La página lista los trabajos; con **Abrir** se entra al trabajo y con **Volver a la lista** se regresa.
 
-## Trabajos disponibles
+## El orden del mes
 
-| Trabajo | Qué hace |
+| Orden | Qué se hace | Dónde |
+|---|---|---|
+| Antes | Cargar los shapefiles `pais*` en la base | Herramienta de sincronización de shapefiles (**fuera** de este trabajo) |
+| Etapa 1 | [Cargar padrones](cargar-padrones.md) | Este trabajo |
+| Etapa 2 | [Cargar localidades](cargar-localidades.md) | Este trabajo |
+| Etapa 3 | [Actualizar unidades territoriales](unidad-territorial.md) | Este trabajo |
+| Etapa 4 | [Completar unidades territoriales](completar-unidad-territorial.md) | Este trabajo |
+| Etapa 5 | [Actualizar padrones](actualizar-padron.md) | Este trabajo |
+| Después | Comparar a mano la tabla de trabajo con el padrón | Fuera de este trabajo |
+| Etapa 6 | Aplicar padrones | **Todavía no está construida** |
+
+La etapa 6, **Aplicar padrones**, aparece en la lista con el botón **Próximamente** deshabilitado. Hasta que exista, el paso final del mes se hace por fuera de esta herramienta.
+
+Las etapas no se encadenan solas: usted abre cada una, revisa su informe y recién entonces pasa a la siguiente.
+
+## Cómo se usa
+
+1. Complete la **Conexión** (servidor, puerto, base, usuario y contraseña) y pulse **Continuar a las etapas**. Se pide **una sola vez** y se usa en todas las etapas. Para cambiarla, use **Cambiar conexión**.
+2. En **Etapas** elija una con **Abrir**. Cada etapa pide sus propias tablas cuando se abre, no antes.
+3. En cada etapa recorra los pasos, haga primero **Analizar sin cargar** y revise el informe.
+4. Si el informe es el esperado, haga la carga real.
+5. Con **Volver a las etapas** regresa a la lista.
+
+Los perfiles guardan el servidor, el puerto, la base y el usuario; **la contraseña nunca se guarda** y hay que escribirla en cada carga real. Las tablas que elige en una etapa se proponen de nuevo en las siguientes, y puede cambiarlas.
+
+## Analizar sin cargar y carga real
+
+Todas las etapas tienen los mismos dos botones en el paso **Revisar**:
+
+| Botón | Qué hace |
 |---|---|
-| [Cargar padrones](cargar-padrones.md) | Carga el padrón a partir de las tablas rural y urbana, ya cargadas con la sincronización de shapefiles. |
+| **Analizar sin cargar** | Hace todo el trabajo, cuenta y clasifica, y después revierte. No cambia ninguna tabla. Pide la contraseña. |
+| Botón de carga (**Cargar ahora**, **Cargar localidades**, **Actualizar unidades territoriales**, **Completar unidades territoriales** o **Actualizar tabla de trabajo**, según la etapa) | Escribe los datos. Pide escribir de nuevo la contraseña y el nombre de la tabla destino. |
 
-## Antes de empezar
+Conviene hacer siempre el análisis antes de la carga real: muestra qué se insertaría y qué cambiaría, sin tocar nada.
 
-Las tablas de origen (rural y urbana) tienen que estar cargadas en la base antes de ejecutar un trabajo. Para eso se usa la herramienta de sincronización de shapefiles en modo de reemplazo.
+## Regla de oro: los ids no se tocan
 
-## Cómo se usa un trabajo
+Ninguna etapa reemplaza, borra ni renumera los ids de `carto.padron`, de las unidades territoriales ni de las localidades.
 
-Todos los trabajos siguen los mismos cinco pasos: **Conexión**, **Tablas**, **Opciones**, **Revisar** y **Resultado**. Puede volver a un paso anterior en cualquier momento haciendo clic en su número en la barra superior, o con el botón **Volver al Paso** del pie de cada paso. Antes de cargar datos, el paso **Revisar** le muestra el resumen completo y le permite hacer un análisis sin modificar nada.
+- Las filas nuevas toman su id de la secuencia de la tabla.
+- Las actualizaciones nunca cambian el id.
+- Las filas que existen en el destino pero no en el origen **solo se informan**: nunca se borran.
+
+Esto importa porque otras tablas y las URN dependen de esos ids.
+
+## Descargar el informe
+
+Cada informe tiene un botón **Descargar CSV** con los cambios que se hicieron en la base. Sirve como historial mensual. Vea [Descargar el informe](descargar-informe.md).
+
+Si algo falla, vea [Solución de problemas](solucion-de-problemas.md).

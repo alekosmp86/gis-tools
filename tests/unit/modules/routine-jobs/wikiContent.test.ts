@@ -5,8 +5,19 @@ import { nodeWikiFileSystem } from "@/core/wiki/nodeWikiFileSystem";
 import type { WikiPage } from "@/core/wiki/types";
 
 const TOOL = "routine-jobs";
-const EXPECTED_PAGES = ["index", "cargar-padrones"];
+const EXPECTED_PAGES = [
+  "index",
+  "cargar-padrones",
+  "cargar-localidades",
+  "unidad-territorial",
+  "completar-unidad-territorial",
+  "actualizar-padron",
+  "descargar-informe",
+  "solucion-de-problemas",
+];
+const TOPIC_PAGES = EXPECTED_PAGES.slice(1);
 const INDEX_LINK = /\]\(([a-z0-9-]+)\.md\)/g;
+const RELATIVE_MD_LINK = /\]\((?!https?:\/\/)([^)\s#]+\.md)(?:#[^)\s]*)?\)/g;
 const STEP_NAMES = ["Conexión", "Tablas", "Opciones", "Revisar", "Resultado"];
 const UI_LABELS = [
   "Reparar geometrías inválidas",
@@ -26,13 +37,12 @@ describe("routine-jobs wiki content", () => {
 
   const page = (slug: string): WikiPage | undefined => pages.find((candidate) => candidate.slug === slug);
 
-  it("AC-34: should expose index plus the Cargar padrones topic in reading order", () => {
+  it("AC-34: should expose the index plus every topic page in reading order", () => {
     expect(pages.map((candidate) => candidate.slug)).toEqual(EXPECTED_PAGES);
   });
 
-  it("AC-34: should give the index order 1 and the topic order 2", () => {
-    expect(page("index")?.order).toBe(1);
-    expect(page("cargar-padrones")?.order).toBe(2);
+  it("AC-34: should give each page its position in reading order as its order, starting at 1", () => {
+    expect(pages.map((candidate) => candidate.order)).toEqual(EXPECTED_PAGES.map((_, index) => index + 1));
   });
 
   it("AC-34: should give every page a non-empty title and a numeric order", () => {
@@ -58,8 +68,31 @@ describe("routine-jobs wiki content", () => {
     }
   });
 
-  it("AC-34: should link the index to the Cargar padrones topic", () => {
-    expect(page("index")?.body).toContain("(cargar-padrones.md)");
+  it("AC-34: should link the index to every topic page", () => {
+    const body = page("index")?.body ?? "";
+
+    for (const topic of TOPIC_PAGES) {
+      expect(body, topic).toContain(`(${topic}.md)`);
+    }
+  });
+
+  it("AC-34: should resolve every relative Markdown link in every page to an existing page", () => {
+    const slugs = new Set(pages.map((candidate) => candidate.slug));
+    const links = pages.flatMap((candidate) =>
+      [...candidate.body.matchAll(RELATIVE_MD_LINK)].map((match) => ({ from: candidate.slug, target: match[1] })),
+    );
+
+    expect(links.length).toBeGreaterThan(0);
+    for (const { from, target } of links) {
+      expect(slugs.has(target.replace(/\.md$/, "")), `${from} -> ${target}`).toBe(true);
+    }
+  });
+
+  it("AC-34: should name the CSV file pattern and the Cambio header in the download topic", () => {
+    const body = page("descargar-informe")?.body ?? "";
+
+    expect(body).toContain("carto-");
+    expect(body).toContain("Cambio");
   });
 
   it("AC-34: should contain no En construcción placeholder in any page", () => {
