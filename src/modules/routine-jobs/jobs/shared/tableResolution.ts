@@ -104,7 +104,8 @@ export async function resolveWritableTarget(session: CatalogQuerySession, spec: 
   const geometryIssues =
     column === undefined || dataType === undefined ? [] : geometryColumnIssues(spec.label, column, typing, spatialRef);
   const idColumn = resolved.layout.columns.id ?? "";
-  const idSequence = idColumn === "" ? null : await readIdSequence(session, resolved.layout, idColumn);
+  const idDefault = resolved.catalog.find((entry) => entry.column_name === idColumn)?.column_default ?? null;
+  const idSequence = idColumn === "" ? null : await readIdSequence(session, resolved.layout, idColumn, idDefault);
   const identityColumns = resolved.catalog.length === 0 ? [] : await readIdentityColumns(session, resolved.layout);
   return {
     target: {

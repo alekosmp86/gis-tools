@@ -1,5 +1,7 @@
 import type { CatalogQuerySession } from "@/core/services/server/tableCatalog/tableCatalog";
+import { quoteIdentifier } from "@/core/services/sqlStatements";
 import { physicalColumn, qualifiedName, type TableLayout } from "../actualizar-padron/domain/layouts";
+import { sequenceReferenceOf, type SequenceReference } from "../actualizar-padron/domain/sequenceReference";
 import { readRelationKind, readTriggerAndRuleFacts } from "../actualizar-padron/services/catalogFacts";
 import type { SpatialRefFacts, TargetStructureFacts } from "./targetIssues";
 
@@ -11,6 +13,11 @@ interface TableName {
 const ID_SEQUENCE_SQL =
   "SELECT pg_catalog.pg_get_serial_sequence(format('%I.%I', $1::text, $2::text), $3::text) AS sequence_name";
 
+const DEFAULT_SEQUENCE_SQL = `SELECT format('%I.%I', n.nspname, c.relname) AS sequence_name
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE c.oid = to_regclass($1::text) AND c.relkind = 'S'`;
+
 const INHERITANCE_SQL = `SELECT
   EXISTS (SELECT 1 FROM pg_catalog.pg_inherits WHERE inhparent = format('%I.%I', $1::text, $2::text)::regclass) AS has_children,
   EXISTS (SELECT 1 FROM pg_catalog.pg_inherits WHERE inhrelid = format('%I.%I', $1::text, $2::text)::regclass) AS is_child`;
@@ -19,13 +26,30 @@ const SPATIAL_REF_SQL = "SELECT srtext, proj4text FROM spatial_ref_sys WHERE sri
 
 const textOrNull = (value: unknown): string | null => (value === null || value === undefined ? null : String(value));
 
+const quotedSequenceOf = (reference: SequenceReference): string =>
+  reference.schema === undefined
+    ? quoteIdentifier(reference.name)
+    : `${quoteIdentifier(reference.schema)}.${quoteIdentifier(reference.name)}`;
+
+async function readOwnedSequence(session: CatalogQuerySession, layout: TableName, idColumn: string): Promise<string | null> {
+  const result = await session.query(ID_SEQUENCE_SQL, [layout.schema, layout.table, idColumn]);
+  return textOrNull(result.rows[0]?.sequence_name);
+}
+
+async function readDefaultSequence(session: CatalogQuerySession, columnDefault: string | null): Promise<string | null> {
+  const reference = sequenceReferenceOf(columnDefault);
+  if (reference === undefined) return null;
+  const result = await session.query(DEFAULT_SEQUENCE_SQL, [quotedSequenceOf(reference)]);
+  return textOrNull(result.rows[0]?.sequence_name);
+}
+
 export async function readIdSequence(
   session: CatalogQuerySession,
   layout: TableName,
-  idColumn: string
+  idColumn: string,
+  columnDefault: string | null
 ): Promise<string | null> {
-  const result = await session.query(ID_SEQUENCE_SQL, [layout.schema, layout.table, idColumn]);
-  return textOrNull(result.rows[0]?.sequence_name);
+  return (await readOwnedSequence(session, layout, idColumn)) ?? (await readDefaultSequence(session, columnDefault));
 }
 
 async function readInheritance(

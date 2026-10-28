@@ -27,7 +27,7 @@ export function sequenceReferenceOf(columnDefault: string | null | undefined): S
   if (!columnDefault) return undefined;
   const match = NEXTVAL_PATTERN.exec(columnDefault.trim());
   if (!match) return undefined;
-  return parseSequenceName(match[1]);
+  return parseSequenceName(match[1].replace(/''/g, "'"));
 }
 
 export function isSameSequence(left: SequenceReference, right: SequenceReference): boolean {

@@ -31,6 +31,8 @@ interface Scenario {
   appliedInserts?: number;
   appliedUpdates?: number;
   commitFails?: boolean;
+  unowned?: boolean;
+  idDefault?: string | null;
 }
 
 const column = (name: string, dataType: string, overrides: Partial<DbColumnMetadata> = {}): Row => ({
@@ -90,13 +92,24 @@ function applyRowOf(scenario: Scenario): Row {
   };
 }
 
+function catalogOf(scenario: Scenario, table: string): Row[] {
+  const catalog = CATALOGS[table] ?? [];
+  if (table !== TARGET || scenario.idDefault === undefined) return catalog;
+  return catalog.map((entry) => (entry.column_name === "id" ? { ...entry, column_default: scenario.idDefault } : entry));
+}
+
+function regclassRowOf(values: unknown[] | undefined): Row[] {
+  return values?.[0] === `"${SCHEMA_CARTO}"."${TARGET}_id_seq"` ? [{ sequence_name: TARGET_SEQUENCE }] : [];
+}
+
 function answerOf(scenario: Scenario, sql: string, values: unknown[] | undefined): Row[] {
   if (sql === COMMIT_SQL && scenario.commitFails) throw new Error("commit rechazado por el servidor");
-  if (sql.includes("pg_attrdef")) return CATALOGS[String(values?.[1])] ?? [];
+  if (sql.includes("pg_attrdef")) return catalogOf(scenario, String(values?.[1]));
   if (sql.includes("relkind::text")) return [{ relkind: "r" }];
   if (sql.includes("pg_inherits")) return [{ has_children: false, is_child: false }];
   if (sql.includes("pg_trigger") || sql.includes("pg_rewrite") || sql.includes("attidentity")) return [];
-  if (sql.includes("pg_get_serial_sequence")) return [{ sequence_name: TARGET_SEQUENCE }];
+  if (sql.includes("pg_get_serial_sequence")) return scenario.unowned ? [{ sequence_name: null }] : [{ sequence_name: TARGET_SEQUENCE }];
+  if (sql.includes("to_regclass")) return regclassRowOf(values);
   if (sql.includes("has_table_privilege") || sql.includes("has_sequence_privilege")) return [{ has_privilege: true }];
   if (sql.includes("AS present")) return [{ present: true }];
   if (sql.includes('AS "unsupported"')) return [{ unsupported: 0 }];
@@ -161,6 +174,31 @@ const failureOf = async (work: Promise<unknown>): Promise<Error> => {
 };
 
 const endsWith = (log: string[], sql: string): boolean => log[log.length - 1] === sql;
+
+describe("runUnidadTerritorial id sequence resolved from the column default", () => {
+  it("should run to COMMIT and repair the sequence named by the default when the target has no owned sequence", async () => {
+    const harness = createHarness({ unowned: true });
+
+    const result = await runUnidadTerritorial(defaultParams(), harness.deps);
+
+    expect(harness.log.some((sql) => sql.includes(`setval('"${SCHEMA_CARTO}"."${TARGET}_id_seq"'::regclass`))).toBe(true);
+    expect(endsWith(harness.log, COMMIT_SQL)).toBe(true);
+    expect(result.targetModified).toBe(true);
+    expect(result.outcomeUnknown).toBe(false);
+  });
+
+  it("should refuse the run with no tiene secuencia before any write when the target has no owned sequence and no default", async () => {
+    const harness = createHarness({ unowned: true, idDefault: null });
+
+    const failure = await failureOf(runUnidadTerritorial(defaultParams(), harness.deps));
+
+    expect(failure.message).toMatch(/no tiene secuencia/);
+    expect(harness.log.some((sql) => sql.includes("setval"))).toBe(false);
+    expect(harness.log).not.toContain(COMMIT_SQL);
+    expect(harness.log).not.toContain(ROLLBACK_SQL);
+    expect(harness.state.closed).toBe(1);
+  });
+});
 
 describe("runUnidadTerritorial transaction end (MJ-13)", () => {
   describe("dry run", () => {
