@@ -49,7 +49,7 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -62,30 +62,25 @@
 .rows {
   display: flex;
   flex-direction: column;
+  gap: 4px;
   margin: 0;
   width: 100%;
   max-width: 28rem;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  border-radius: 10px;
-  overflow: hidden;
 }
 
 .row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 12px;
-  padding: 6px 12px;
+  gap: 16px;
+  padding: 0.5rem 0.875rem;
   font-size: 13px;
   border-left: 3px solid transparent;
-}
-
-.row:nth-child(even) {
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
 }
 
 .row:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .row dd {
@@ -118,9 +113,12 @@
 .table th,
 .table td {
   text-align: left;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  padding: 0.5rem 0.75rem;
   word-break: break-word;
+}
+
+.table th {
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
 }
 
 .list {

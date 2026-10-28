@@ -39,11 +39,6 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
-.tableWrap th,
-.tableWrap td {
-  padding: 6px 10px;
-}
-
 .reasonCell {
   display: flex;
   flex-direction: column;
@@ -96,22 +91,24 @@
 .fill100 { width: 100%; }
 
 .details {
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  border-radius: 12px;
-  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  padding: 0.5rem 0.875rem;
 }
 
 .summary {
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
+  padding: 0.25rem 0;
 }
 
 .detailsBody {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 0.5rem;
+  padding-bottom: 0.25rem;
 }
 
 .zeroNote {
