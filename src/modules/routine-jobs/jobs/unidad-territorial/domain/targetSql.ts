@@ -6,7 +6,7 @@ import {
   matchClassSql,
   MATCH_CLASS,
 } from "../../shared/geometryCompare";
-import { GEOMETRY_CHANGE_LIMIT, INSERTED_LIST_LIMIT, SAMPLE_LIMIT } from "../../shared/limits";
+import { DETAIL_LIST_LIMIT, SAMPLE_LIMIT } from "../../shared/limits";
 import { cte, jsonArrayOf, literal, q, withClause } from "../../shared/sqlFragments";
 import type { WritableTargetLayout } from "../../shared/tableResolution";
 import { UNIT_TARGET_COLUMN } from "../constants";
@@ -136,7 +136,7 @@ function geometryChangesSql(): string {
     `${classifiedOf("candidate_geometry")} AS "candidate_geometry"`,
     `FROM ${q(CTE_TARGET.CLASSIFIED)} AS ${CLASSIFIED_ALIAS}`,
     `WHERE ${classIs(MATCH_CLASS.CHANGED)}`,
-    `ORDER BY ${classifiedOf("distance")} DESC NULLS FIRST, ${classifiedOf("name")} LIMIT ${GEOMETRY_CHANGE_LIMIT}) AS top`,
+    `ORDER BY ${classifiedOf("distance")} DESC NULLS FIRST, ${classifiedOf("name")} LIMIT ${DETAIL_LIST_LIMIT}) AS top`,
     `ORDER BY top."distance" DESC NULLS FIRST, top."name"`,
   ].join(" ");
 }
@@ -215,7 +215,7 @@ function updateCte(target: WritableTargetLayout, options: UnitOptions): string {
 const INSERTED_LIST_SQL = [
   `SELECT ir."id", ir."name", ir."id_province"::text AS "provinceId"`,
   `FROM ${q(CTE_TARGET.INSERTED)} AS ir`,
-  `ORDER BY ir."id_province", ir."name", ir."id" LIMIT ${INSERTED_LIST_LIMIT}`,
+  `ORDER BY ir."id_province", ir."name", ir."id" LIMIT ${DETAIL_LIST_LIMIT}`,
 ].join(" ");
 
 export function buildUnitApplySql(layouts: UnitLayouts, options: UnitOptions): string {

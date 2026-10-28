@@ -1,6 +1,6 @@
 import { physicalColumn, qualifiedName } from "../../actualizar-padron/domain/layouts";
 import { FONT_TYPE_ID, TARGET_COLUMN } from "../constants";
-import { GEOMETRY_CHANGE_LIMIT, INSERTED_LIST_LIMIT, SAMPLE_LIMIT } from "../../shared/limits";
+import { DETAIL_LIST_LIMIT, SAMPLE_LIMIT } from "../../shared/limits";
 import type { LocalityOptions, LocalityTargetLayout } from "../types";
 import { CTE as SOURCE, sourceCtes, type SourceLayouts } from "./sourceSql";
 import {
@@ -117,7 +117,7 @@ function geometryChangesSql(): string {
     `${classifiedOf("candidate_geometry")} AS "candidate_geometry"`,
     `FROM ${q(CTE_TARGET.CLASSIFIED)} AS ${CLASSIFIED_ALIAS}`,
     `WHERE ${classIs(MATCH_CLASS.CHANGED)}`,
-    `ORDER BY ${classifiedOf("distance")} DESC NULLS FIRST, ${classifiedOf("localidad")} LIMIT ${GEOMETRY_CHANGE_LIMIT}) AS top`,
+    `ORDER BY ${classifiedOf("distance")} DESC NULLS FIRST, ${classifiedOf("localidad")} LIMIT ${DETAIL_LIST_LIMIT}) AS top`,
     `ORDER BY top."distance" DESC NULLS FIRST, top."name"`,
   ].join(" ");
 }
@@ -211,7 +211,7 @@ const INSERTED_LIST_SQL = [
   `SELECT ir."id", ir."name", pv."name" AS "department"`,
   `FROM ${q(CTE_TARGET.INSERTED)} AS ir`,
   `LEFT JOIN ${q(SOURCE.PROVINCES)} AS pv ON pv."id" = ir."id_province"`,
-  `ORDER BY "department", ir."name", ir."id" LIMIT ${INSERTED_LIST_LIMIT}`,
+  `ORDER BY "department", ir."name", ir."id" LIMIT ${DETAIL_LIST_LIMIT}`,
 ].join(" ");
 
 export function buildApplySql(layouts: SourceLayouts, target: LocalityTargetLayout, options: LocalityOptions): string {

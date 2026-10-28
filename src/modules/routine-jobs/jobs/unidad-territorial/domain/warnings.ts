@@ -1,4 +1,4 @@
-import { INSERTED_LIST_LIMIT } from "../../shared/limits";
+import { DETAIL_LIST_LIMIT } from "../../shared/limits";
 import type { UnitOptions, UnitSourceTotals, UnitTargetReport } from "../types";
 
 export interface UnitWarningInput {
@@ -34,8 +34,11 @@ function targetWarnings(target: UnitTargetReport, updateGeometries: boolean): st
       `${plural(target.changed, "geometría cambia", "geometrías cambian")} en ${target.table} y no se aplicó (Actualizar geometrías desactivado).`
     );
   }
-  if (target.inserted > INSERTED_LIST_LIMIT) {
-    warnings.push(`Se listan las primeras ${INSERTED_LIST_LIMIT} unidades insertadas en ${target.table}.`);
+  if (target.inserted > DETAIL_LIST_LIMIT) {
+    warnings.push(`Se listan las primeras ${DETAIL_LIST_LIMIT} unidades insertadas en ${target.table}.`);
+  }
+  if (target.changed > DETAIL_LIST_LIMIT) {
+    warnings.push(`Se listan las primeras ${DETAIL_LIST_LIMIT} geometrías que cambian en ${target.table}.`);
   }
   return warnings;
 }

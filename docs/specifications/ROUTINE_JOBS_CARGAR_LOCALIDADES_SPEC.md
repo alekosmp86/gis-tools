@@ -221,7 +221,7 @@ and are passed as bound parameters or constants.
   - `missing` (count) with up to 20 sample keys;
   - `ambiguous` (candidate keys whose target key has several rows) with up to 20 samples;
   - `codeDiffers` (existing rows whose `code` differs from the candidate code; informational, nothing is changed) with up to 20 samples;
-  - `geometryChanges`: top 20 CHANGED rows by distance, each with key (department, name), distance in metres and area ratio.
+  - `geometryChanges`: top 500 CHANGED rows by distance, each with key (department, name), distance in metres and area ratio (capped at 500 with a warning if there are more).
   Skipped candidates / source rows: `skipped.byReason` with all five reasons (`PROVINCIA_NO_ENCONTRADA`, `PROVINCIA_AMBIGUA`, `SIN_GEOMETRIA`,
   `CODIGO_NULO`, `CLAVE_DUPLICADA`), zero counts included, and up to 20 samples per reason (department, name, code, reason).
 - CL-38: Step timings (elapsed ms per planned step, CL-36), warnings in Spanish (skipped rows present, repaired geometries present, ambiguous
@@ -231,8 +231,8 @@ and are passed as bound parameters or constants.
   share the same source chain (PostgreSQL 11 materializes each CTE): a read-only classification statement (the report counts and samples),
   and an apply statement (INSERT of NEW rows and, when the option is on, the UPDATE of CHANGED rows, with `RETURNING`, in one data-modifying
   statement). Both run in the same transaction snapshot, so the apply uses the classification of that snapshot. The geometry comparison
-  therefore runs twice for CHANGED rows; the cost is measured on dev (Open questions). Every report field is capped (20 samples, top 20,
-  the 500 cap of CL-37), so the status payload is bounded.
+  therefore runs twice for CHANGED rows; the cost is measured on dev (Open questions). Every report field is capped (20 samples, 500 inserted
+  localities and 500 geometry changes, CL-37), so the status payload is bounded.
 - CL-40: Session settings as shp-replace (`statement_timeout`, `lock_timeout`, `client_encoding = 'UTF8'`, memory settings; reuse of the exported
   helpers of `src/core/services/server/shpReplace/pgShpSession.ts` where they fit), `connect` errors scrubbed of the password, a `close()` that
   never throws, `REPEATABLE READ` (CL-25). The password never appears in logs, statuses, results or messages.
