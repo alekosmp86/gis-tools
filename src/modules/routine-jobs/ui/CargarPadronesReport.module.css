@@ -62,21 +62,51 @@
 .rows {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   margin: 0;
+  width: 100%;
+  max-width: 28rem;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
   gap: 12px;
+  padding: 6px 12px;
   font-size: 13px;
+  border-left: 3px solid transparent;
+}
+
+.row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.row:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .row dd {
   margin: 0;
+  min-width: 3ch;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+}
+
+.row[data-tone="attention"] {
+  border-left-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.row[data-tone="attention"] dd {
+  font-weight: 700;
+}
+
+.row[data-tone="zero"] {
+  opacity: 0.5;
 }
 
 .table {

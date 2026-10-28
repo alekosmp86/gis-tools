@@ -9,6 +9,7 @@ import type {
   UnitTargetReport,
 } from "../jobs/unidad-territorial/types";
 import type { ReportBannerView, ReportKpiView, SkipReasonView, TimingItemView } from "./ReportParts";
+import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
 
 const UNKNOWN_TEXT = "No se pudo confirmar el COMMIT. Verifique la tabla de unidades territoriales antes de volver a cargar.";
 const DONE_TEXT = "Actualización confirmada: la tabla de unidades territoriales fue modificada.";
@@ -43,6 +44,7 @@ const SKIP_REASONS: readonly UnitSkipReason[] = Object.values(UNIT_SKIP_REASON);
 export interface UnitReportCountRow {
   label: string;
   value: number;
+  tone: ReportRowTone;
 }
 
 export interface UnitReportTargetView {
@@ -108,17 +110,23 @@ const targetNotesOf = (target: UnitTargetReport): string[] =>
     ? [`Las geometrías que cambian no se aplicaron en ${target.table} (Actualizar geometrías desactivado).`]
     : [];
 
+const countRowOf = (label: string, value: number, isNeutral = false): UnitReportCountRow => ({
+  label,
+  value,
+  tone: reportRowToneOf(value, isNeutral),
+});
+
 const targetViewOf = (target: UnitTargetReport): UnitReportTargetView => ({
   table: target.table,
   counts: [
-    { label: "Insertadas", value: target.inserted },
-    { label: "Actualizadas", value: target.updated },
-    { label: "Geometrías que cambian", value: target.changed },
-    { label: "Cambio de fuente", value: target.fontDiffers },
-    { label: "Sin cambios", value: target.unchanged },
-    { label: "Sin cambios dentro de tolerancia", value: target.unchangedWithinTolerance },
-    { label: "Faltantes en origen", value: target.missing },
-    { label: "Ambiguas", value: target.ambiguous },
+    countRowOf("Insertadas", target.inserted),
+    countRowOf("Actualizadas", target.updated),
+    countRowOf("Geometrías que cambian", target.changed),
+    countRowOf("Cambio de fuente", target.fontDiffers),
+    countRowOf("Sin cambios", target.unchanged, true),
+    countRowOf("Sin cambios dentro de tolerancia", target.unchangedWithinTolerance, true),
+    countRowOf("Faltantes en origen", target.missing),
+    countRowOf("Ambiguas", target.ambiguous),
   ],
   notes: targetNotesOf(target),
   inserted: target.insertedList,

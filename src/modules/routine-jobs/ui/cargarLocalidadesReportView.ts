@@ -9,6 +9,7 @@ import type {
   LocalitySkippedSample,
   TargetReport,
 } from "../jobs/cargar-localidades/types";
+import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
 
 const ReportBannerKind = {
   UNKNOWN: "unknown",
@@ -39,6 +40,7 @@ interface SkipReasonRow {
 interface CountRow {
   label: string;
   value: number;
+  tone: ReportRowTone;
 }
 
 export interface TargetView {
@@ -142,17 +144,23 @@ const targetNotesOf = (target: TargetReport): string[] =>
     ? [`Las geometrías que cambian no se aplicaron en ${target.table} (Actualizar geometrías desactivado).`]
     : [];
 
+const countRowOf = (label: string, value: number, isNeutral = false): CountRow => ({
+  label,
+  value,
+  tone: reportRowToneOf(value, isNeutral),
+});
+
 const targetViewOf = (target: TargetReport): TargetView => ({
   table: target.table,
   counts: [
-    { label: "Insertadas", value: target.inserted },
-    { label: "Actualizadas", value: target.updated },
-    { label: "Geometrías que cambian", value: target.changed },
-    { label: "Sin cambios", value: target.unchanged },
-    { label: "Sin cambios dentro de tolerancia", value: target.unchangedWithinTolerance },
-    { label: "Faltantes en origen", value: target.missing },
-    { label: "Ambiguas", value: target.ambiguous },
-    { label: "Código distinto", value: target.codeDiffers },
+    countRowOf("Insertadas", target.inserted),
+    countRowOf("Actualizadas", target.updated),
+    countRowOf("Geometrías que cambian", target.changed),
+    countRowOf("Sin cambios", target.unchanged, true),
+    countRowOf("Sin cambios dentro de tolerancia", target.unchangedWithinTolerance, true),
+    countRowOf("Faltantes en origen", target.missing),
+    countRowOf("Ambiguas", target.ambiguous),
+    countRowOf("Código distinto", target.codeDiffers),
   ],
   notes: targetNotesOf(target),
   inserted: target.insertedList,
