@@ -173,6 +173,14 @@ describe("cargar-localidades SQL builders (MJ-13)", () => {
     });
   });
 
+  describe("source set filter", () => {
+    it("should not reference nomofidel in the generated source SQL, since the new PaisUrbano shapefile lacks the field", () => {
+      const sql = buildSourceReportSql(sourceLayouts);
+
+      expect(sql).not.toMatch(/nomofidel/i);
+    });
+  });
+
   describe("generated SQL never deletes or truncates (MJ-13)", () => {
     it.each([
       ["classify", () => buildClassifySql(sourceLayouts, targetLayout, withUpdates)],

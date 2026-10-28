@@ -53,7 +53,7 @@ and are passed as bound parameters or constants.
 | 62 / 82: target columns `code, name, geometry, id_font_type, id_province` | Same columns written by the INSERT (`id` is never written, CL-17). |
 | 63 / 84: `ST_TRANSFORM(aa.geom,32721)` | Target SRID read from the target geometry typmod, per target (CL-18, CL-7). The literal 32721 is not used. |
 | 63 / 84: literal `4` | `FONT_TYPE_ID` (CL-17). |
-| 64-73 / 86-97: source subquery, `bdp.unidadcat = 'URBANO' AND bdp.nomofidel IS NOT NULL` | Source set (CL-11). |
+| 64-73 / 86-97: source subquery, `bdp.unidadcat = 'URBANO' AND bdp.nomofidel IS NOT NULL` | Source set (CL-11). **Deliberate deviation:** the `nomofidel IS NOT NULL` predicate is dropped (CL-11). |
 | 70 / 93: `INNER JOIN ... ON bdpl.coddepto = bdp.coddepto AND bdpl.localidad = bdp.nomloccat` | Same join, exact equality, no `upper()` (CL-11). |
 | 72-73 / 96-97: `GROUP BY` of the source subquery | Same grouping (CL-11). |
 | 74-75 / 98-99: `LEFT JOIN carto.province prov ON nomdepto_padron = prov.name` | Province lookup on exact name; no match is skipped, not inserted with NULL `id_province` (CL-13). **Deliberate deviation.** |
@@ -62,12 +62,14 @@ and are passed as bound parameters or constants.
 
 ## Source query (faithful to lines 60-101)
 
-- CL-11: Source set, built from the padron staging table (selected columns: `unidadcat`, `nomdepto`, `coddepto`, `nomofidel`, `nomloccat`,
+- CL-11: Source set, built from the padron staging table (selected columns: `unidadcat`, `nomdepto`, `coddepto`, `nomloccat`,
   `codloccat`, `padron`) and the localities staging table (selected columns: `localidad`, `coddepto`, `geom`):
-  - rows of the padron staging table `WHERE unidadcat = 'URBANO' AND nomofidel IS NOT NULL` (`'URBANO'` as a bound parameter);
+  - rows of the padron staging table `WHERE unidadcat = 'URBANO'` (`'URBANO'` as a bound parameter). The script's `nomofidel IS NOT NULL`
+    predicate is **dropped**: the new PaisUrbano shapefile has no `NOMOFIDEL` column, so the padron staging table holds it NULL on every
+    urban row and the predicate would exclude every row. No other filter is applied;
   - `INNER JOIN` the localities staging table `ON coddepto = coddepto AND localidad = nomloccat` (exact equality, no `upper()`, no
     accent normalisation, as the script);
-  - `GROUP BY (coddepto, localidad, nomdepto, nomofidel, nomloccat, codloccat, geom)` as lines 72-73.
+  - `GROUP BY (coddepto, localidad, nomdepto, nomloccat, codloccat, geom)` (lines 72-73 without `nomofidel`, which is no longer read).
   The grouped rows are the "filas de origen". The rows before grouping are the "filas leídas" (report, CL-37).
 - CL-12: Repair happens before grouping, so the grouping compares repaired geometries. A NULL, empty or unusable localities geometry is not a
   candidate (`SIN_GEOMETRIA`, CL-15 reasons). An invalid geometry is repaired with `ST_MakeValid`, keeping only the polygonal part
@@ -104,7 +106,8 @@ and are passed as bound parameters or constants.
   the user). Unknown role -> `400 { success:false, error }` in Spanish. Existing roles are unchanged.
 - CL-5: Required logical columns per role (taken from the job constants, never from the request). The padron and localities staging
   tables share one schema (`stagingSchema`); the province table has its own schema (`provinceSchema`):
-  - `localidades-staging-padron` (`stagingSchema`): `unidadcat`, `nomdepto`, `coddepto`, `nomofidel`, `nomloccat`, `codloccat`, `padron`.
+  - `localidades-staging-padron` (`stagingSchema`): `unidadcat`, `nomdepto`, `coddepto`, `nomloccat`, `codloccat`, `padron`. `nomofidel` is
+    not required: the new PaisUrbano shapefile lacks the field (see CL-11).
     `padron` is in the user's selection but is not referenced by lines 60-101 (Open questions).
   - `localidades-staging-localidad` (`stagingSchema`): `localidad`, `coddepto`, `geom`.
   - `localidades-provincia` (`cartoSchema`): `id`, `name`.

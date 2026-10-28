@@ -40,8 +40,7 @@ const ActionLabel: React.FC<{ icon: LucideIcon; text: string }> = ({ icon: Icon,
   </>
 );
 
-const routeOf = (source: string, target: LocalidadesIncludedTarget): string =>
-  `Lee de ${source} · Escribe en ${target.schema}.${target.table}`;
+const routeOf = (target: LocalidadesIncludedTarget): string => `${target.schema}.${target.table}`;
 
 export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
   request,
@@ -57,7 +56,6 @@ export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
 }) => {
   const { connection, options } = request;
   const blocked = busy || runBlockedReason !== null;
-  const source = `${request.stagingSchema}.${request.localityStagingTable}`;
 
   return (
     <div className={styles.stack}>
@@ -81,7 +79,7 @@ export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
         {targets.map((target) => (
           <React.Fragment key={target.destination}>
             <dt>{DESTINATION_TITLE[target.destination]}</dt>
-            <dd>{routeOf(source, target)}</dd>
+            <dd>{routeOf(target)}</dd>
           </React.Fragment>
         ))}
         <dt>Tolerancia (m)</dt>

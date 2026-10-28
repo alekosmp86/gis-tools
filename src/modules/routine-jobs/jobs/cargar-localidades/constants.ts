@@ -14,7 +14,6 @@ export const STAGING_PADRON_COLUMN = {
   UNIDADCAT: "unidadcat",
   NOMDEPTO: "nomdepto",
   CODDEPTO: "coddepto",
-  NOMOFIDEL: "nomofidel",
   NOMLOCCAT: "nomloccat",
   CODLOCCAT: "codloccat",
   PADRON: "padron",

@@ -46,7 +46,6 @@ const CATALOGS: Record<string, Row[]> = {
     column("unidadcat", "text"),
     column("nomdepto", "text"),
     column("coddepto", "text"),
-    column("nomofidel", "text"),
     column("nomloccat", "text"),
     column("codloccat", "integer"),
     column("padron", "numeric"),

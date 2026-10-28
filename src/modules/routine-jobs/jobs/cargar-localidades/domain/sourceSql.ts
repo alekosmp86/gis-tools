@@ -40,7 +40,6 @@ function joinedSql({ padron, localities }: SourceLayouts): string {
     `${padronOf(STAGING_PADRON_COLUMN.CODDEPTO)} AS "coddepto",`,
     `${padronOf(STAGING_PADRON_COLUMN.NOMLOCCAT)} AS "nomloccat",`,
     `${padronOf(STAGING_PADRON_COLUMN.CODLOCCAT)} AS "codloccat",`,
-    `${padronOf(STAGING_PADRON_COLUMN.NOMOFIDEL)} AS "nomofidel",`,
     `${localityOf(STAGING_LOCALITY_COLUMN.LOCALIDAD)} AS "localidad",`,
     `${localityOf(STAGING_LOCALITY_COLUMN.GEOM)} AS "geom"`,
     `FROM ${qualifiedName(padron)} AS p`,
@@ -48,14 +47,13 @@ function joinedSql({ padron, localities }: SourceLayouts): string {
     `ON ${localityOf(STAGING_LOCALITY_COLUMN.CODDEPTO)} = ${padronOf(STAGING_PADRON_COLUMN.CODDEPTO)}`,
     `AND ${localityOf(STAGING_LOCALITY_COLUMN.LOCALIDAD)} = ${padronOf(STAGING_PADRON_COLUMN.NOMLOCCAT)}`,
     `WHERE ${padronOf(STAGING_PADRON_COLUMN.UNIDADCAT)} = ${literal(PADRON_UNIT.URBANO)}`,
-    `AND ${padronOf(STAGING_PADRON_COLUMN.NOMOFIDEL)} IS NOT NULL`,
   ].join(" ");
 }
 
 const PRE_GROUPED_SQL = [
-  `SELECT j."nomdepto", j."coddepto", j."localidad", j."nomloccat", j."codloccat", j."nomofidel", j."geom"`,
+  `SELECT j."nomdepto", j."coddepto", j."localidad", j."nomloccat", j."codloccat", j."geom"`,
   `FROM ${q(CTE.JOINED)} AS j`,
-  `GROUP BY j."nomdepto", j."coddepto", j."localidad", j."nomloccat", j."codloccat", j."nomofidel", j."geom"`,
+  `GROUP BY j."nomdepto", j."coddepto", j."localidad", j."nomloccat", j."codloccat", j."geom"`,
 ].join(" ");
 
 const FIXED_SQL = [
@@ -64,10 +62,10 @@ const FIXED_SQL = [
 ].join(" ");
 
 const GROUPED_SQL = [
-  `SELECT f."nomdepto", f."coddepto", f."localidad", f."nomloccat", f."codloccat", f."nomofidel",`,
+  `SELECT f."nomdepto", f."coddepto", f."localidad", f."nomloccat", f."codloccat",`,
   `f."geom_fixed" AS "geom", bool_or(f."was_invalid") AS "repaired"`,
   `FROM ${q(CTE.FIXED)} AS f`,
-  `GROUP BY f."nomdepto", f."coddepto", f."localidad", f."nomloccat", f."codloccat", f."nomofidel", f."geom_fixed"`,
+  `GROUP BY f."nomdepto", f."coddepto", f."localidad", f."nomloccat", f."codloccat", f."geom_fixed"`,
 ].join(" ");
 
 const USABLE_GEOMETRY = usableGeometrySql('g."geom"');
