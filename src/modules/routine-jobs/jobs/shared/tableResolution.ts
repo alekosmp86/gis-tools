@@ -12,6 +12,7 @@ import { readIdentityColumns } from "../actualizar-padron/services/catalogFacts"
 import { readIdSequence, readSpatialRef } from "./tableFacts";
 import { geometryColumnIssues } from "./targetIssues";
 
+const DEFAULT_ID_LOGICAL = "id";
 const POLYGON_TYPES: readonly string[] = ["POLYGON", "MULTIPOLYGON"];
 
 export interface TableSpec {
@@ -19,6 +20,7 @@ export interface TableSpec {
   schema: string;
   table: string;
   required: readonly string[];
+  idLogical?: string;
 }
 
 export interface ResolvedTable {
@@ -103,7 +105,7 @@ export async function resolveWritableTarget(session: CatalogQuerySession, spec: 
     typing === undefined || typing.srid === GENERIC_SRID ? undefined : await readSpatialRef(session, typing.srid);
   const geometryIssues =
     column === undefined || dataType === undefined ? [] : geometryColumnIssues(spec.label, column, typing, spatialRef);
-  const idColumn = resolved.layout.columns.id ?? "";
+  const idColumn = resolved.layout.columns[spec.idLogical ?? DEFAULT_ID_LOGICAL] ?? "";
   const idDefault = resolved.catalog.find((entry) => entry.column_name === idColumn)?.column_default ?? null;
   const idSequence = idColumn === "" ? null : await readIdSequence(session, resolved.layout, idColumn, idDefault);
   const identityColumns = resolved.catalog.length === 0 ? [] : await readIdentityColumns(session, resolved.layout);

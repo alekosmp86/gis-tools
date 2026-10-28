@@ -2,6 +2,7 @@ export const MonthlyStage = {
   CARGAR_PADRONES: "cargar-padrones",
   CARGAR_LOCALIDADES: "cargar-localidades",
   UNIDAD_TERRITORIAL: "unidad-territorial",
+  COMPLETAR_UNIDAD_TERRITORIAL: "completar-unidad-territorial",
   ACTUALIZAR_PADRON: "actualizar-padron",
   APLICAR_PADRON: "aplicar-padron",
 } as const;
@@ -32,6 +33,12 @@ export const MONTHLY_STAGES: readonly MonthlyStageDef[] = [
     id: MonthlyStage.UNIDAD_TERRITORIAL,
     title: "Actualizar unidades territoriales",
     description: "Inserta las unidades territoriales nuevas y actualiza su fuente y geometría desde las localidades catastrales.",
+    available: true,
+  },
+  {
+    id: MonthlyStage.COMPLETAR_UNIDAD_TERRITORIAL,
+    title: "Completar unidades territoriales",
+    description: "Crea el registro de dirección maestra de cada unidad territorial y lo enlaza con la unidad.",
     available: true,
   },
   {

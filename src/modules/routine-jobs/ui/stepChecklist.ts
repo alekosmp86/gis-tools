@@ -5,6 +5,8 @@ import type { CargarPadronesRunPlan } from "./cargarPadronesRunStore";
 import type { ActualizarPadronRunPlan } from "./actualizarPadronRunStore";
 import { plannedUnitStepLabels } from "../jobs/unidad-territorial/domain/plannedSteps";
 import type { CargarLocalidadesRunPlan } from "./cargarLocalidadesRunStore";
+import { plannedCompletarStepLabels } from "../jobs/completar-unidad-territorial/domain/plannedSteps";
+import type { CompletarRunPlan } from "./completarUnidadTerritorialRunStore";
 import type { UnidadRunPlan } from "./unidadTerritorialRunStore";
 import { RunPhase } from "./jobRunStore";
 
@@ -45,7 +47,7 @@ export interface StepChecklistInput {
   phase: RunPhase;
 }
 
-export type RunPlan = CargarPadronesRunPlan | ActualizarPadronRunPlan | CargarLocalidadesRunPlan | UnidadRunPlan;
+export type RunPlan = CargarPadronesRunPlan | ActualizarPadronRunPlan | CargarLocalidadesRunPlan | UnidadRunPlan | CompletarRunPlan;
 
 export interface PlannedLabelsSource {
   steps?: readonly string[];
@@ -59,6 +61,7 @@ const uiLabelOf = (label: string): string => (isStepLabel(label) ? STEP_UI_LABEL
 const labelsOfPlan = (plan: RunPlan): readonly string[] => {
   if ("clearMode" in plan) return actualizarPlannedStepLabels(plan);
   if ("tables" in plan) return localidadesPlannedStepLabels(plan);
+  if ("unitTable" in plan) return plannedCompletarStepLabels(plan);
   if ("target" in plan) return plannedUnitStepLabels(plan);
   return plannedStepLabels(plan);
 };

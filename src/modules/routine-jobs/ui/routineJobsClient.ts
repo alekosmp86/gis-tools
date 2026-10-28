@@ -3,10 +3,13 @@ import type { TableRole } from "../jobs/cargar-padrones/constants";
 import type { ActualizarTableRole } from "../jobs/actualizar-padron/constants";
 import type { LocalidadesTableRole } from "../jobs/cargar-localidades/constants";
 import type { UnitTableRole } from "../jobs/unidad-territorial/constants";
+import type { CompletarTableRole } from "../jobs/completar-unidad-territorial/constants";
 import type {
   ActualizarJobStatusView,
   ActualizarStartRequest,
   ClientConnection,
+  CompletarJobStatusView,
+  CompletarStartRequest,
   JobStatusView,
   LocalidadesJobStatusView,
   LocalidadesStartRequest,
@@ -26,6 +29,8 @@ const LOCALIDADES_START_ROUTE = `${BASE_ROUTE}/cargar-localidades/start`;
 const LOCALIDADES_STATUS_ROUTE = `${BASE_ROUTE}/cargar-localidades/status`;
 const UNIDAD_START_ROUTE = `${BASE_ROUTE}/unidad-territorial/start`;
 const UNIDAD_STATUS_ROUTE = `${BASE_ROUTE}/unidad-territorial/status`;
+const COMPLETAR_START_ROUTE = `${BASE_ROUTE}/completar-unidad-territorial/start`;
+const COMPLETAR_STATUS_ROUTE = `${BASE_ROUTE}/completar-unidad-territorial/status`;
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const NETWORK_MESSAGE = "No se pudo conectar con el servidor.";
 const INVALID_RESPONSE_MESSAGE = "El servidor devolvió una respuesta no válida.";
@@ -37,7 +42,7 @@ const STATUS_TIMEOUT_MESSAGE = "La consulta del estado tardó demasiado tiempo. 
 type JsonRecord = Record<string, unknown>;
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-export type ColumnRole = TableRole | ActualizarTableRole | LocalidadesTableRole | UnitTableRole;
+export type ColumnRole = TableRole | ActualizarTableRole | LocalidadesTableRole | UnitTableRole | CompletarTableRole;
 
 export interface RoutineJobsClientDeps {
   fetch?: FetchLike;
@@ -60,6 +65,8 @@ export interface RoutineJobsClient {
   readLocalidadesStatus(jobId: string): Promise<LocalidadesJobStatusView>;
   startUnidad(request: UnidadStartRequest): Promise<StartResult>;
   readUnidadStatus(jobId: string): Promise<UnidadJobStatusView>;
+  startCompletar(request: CompletarStartRequest): Promise<StartResult>;
+  readCompletarStatus(jobId: string): Promise<CompletarJobStatusView>;
 }
 
 export class RoutineJobsApiError extends Error {
@@ -196,5 +203,10 @@ export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): Routi
     startUnidad: (request) => postStart(fetchImpl, UNIDAD_START_ROUTE, request),
 
     readUnidadStatus: (jobId) => readJobStatus<UnidadJobStatusView>(fetchImpl, timers, UNIDAD_STATUS_ROUTE, jobId),
+
+    startCompletar: (request) => postStart(fetchImpl, COMPLETAR_START_ROUTE, request),
+
+    readCompletarStatus: (jobId) =>
+      readJobStatus<CompletarJobStatusView>(fetchImpl, timers, COMPLETAR_STATUS_ROUTE, jobId),
   };
 }

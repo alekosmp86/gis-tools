@@ -18,20 +18,30 @@ export const labelOf = (layout: TableLayout): string => buildQualifiedTableLabel
 const writtenPhysicalColumns = (target: WritableTargetLayout, logicalColumns: readonly string[]): string[] =>
   logicalColumns.map((logical) => target.columns[logical]).filter((column): column is string => column !== undefined);
 
+export async function tableStructureIssuesOf(
+  session: CatalogQuerySession,
+  layout: TableLayout,
+  title: string
+): Promise<string[]> {
+  const label = labelOf(layout);
+  const structure = await readTargetStructure(session, layout, label);
+  return [
+    ...relationKindIssues(title, label, structure.relkind),
+    ...inheritanceIssues(title, structure),
+    ...relationFactIssues(title, structure),
+  ];
+}
+
 export async function targetStructureIssuesOf(
   session: CatalogQuerySession,
   target: WritableTargetLayout,
   writtenLogical: readonly string[],
   title: string
 ): Promise<string[]> {
-  const label = labelOf(target);
-  const structure = await readTargetStructure(session, target, label);
   return [
-    ...relationKindIssues(title, label, structure.relkind),
-    ...inheritanceIssues(title, structure),
-    ...relationFactIssues(title, structure),
-    ...idSequenceIssues(label, target.idColumn, target.idSequence),
-    ...notNullIssues(label, target.catalog, target.identityColumns, writtenPhysicalColumns(target, writtenLogical)),
+    ...(await tableStructureIssuesOf(session, target, title)),
+    ...idSequenceIssues(labelOf(target), target.idColumn, target.idSequence),
+    ...notNullIssues(labelOf(target), target.catalog, target.identityColumns, writtenPhysicalColumns(target, writtenLogical)),
   ];
 }
 
@@ -54,7 +64,7 @@ export async function tablePrivilegeIssues(
   return issues;
 }
 
-async function sequenceIssuesOf(session: CatalogQuerySession, target: WritableTargetLayout): Promise<string[]> {
+export async function sequenceIssuesOf(session: CatalogQuerySession, target: WritableTargetLayout): Promise<string[]> {
   if (target.idSequence === null) return [];
   const result = await session.query(SEQUENCE_PRIVILEGE_SQL, [target.idSequence]);
   if (result.rows[0]?.has_privilege) return [];

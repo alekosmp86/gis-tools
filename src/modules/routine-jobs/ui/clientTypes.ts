@@ -4,6 +4,7 @@ import type { CargarPadronesResult } from "../jobs/cargar-padrones/types";
 import type { ActualizarPadronResult } from "../jobs/actualizar-padron/types";
 import type { CargarLocalidadesResult, LocalityOptions, LocalityTableRef } from "../jobs/cargar-localidades/types";
 import type { UnitOptions, UnitResult } from "../jobs/unidad-territorial/types";
+import type { CompletarResult } from "../jobs/completar-unidad-territorial/types";
 
 export type JobOptions = LoadOptions;
 
@@ -104,3 +105,15 @@ export interface UnidadStartRequest {
 }
 
 export type UnidadJobStatusView = JobStatusBase<UnitResult>;
+
+export interface CompletarStartRequest {
+  connection: ClientConnection;
+  unitSchema: string;
+  unitTable: string;
+  addressMasterSchema: string;
+  addressMasterTable: string;
+  dryRun: boolean;
+  confirm: boolean;
+}
+
+export type CompletarJobStatusView = JobStatusBase<CompletarResult>;

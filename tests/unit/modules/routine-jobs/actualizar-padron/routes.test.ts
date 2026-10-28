@@ -8,6 +8,7 @@ const ACTUALIZAR_ENDPOINTS = ["POST actualizar-padron/start", "GET actualizar-pa
 const CARGAR_ENDPOINTS = ["POST cargar-padrones/start", "GET cargar-padrones/status"];
 const LOCALIDADES_ENDPOINTS = ["POST cargar-localidades/start", "GET cargar-localidades/status"];
 const UNIDAD_ENDPOINTS = ["POST unidad-territorial/start", "GET unidad-territorial/status"];
+const COMPLETAR_ENDPOINTS = ["POST completar-unidad-territorial/start", "GET completar-unidad-territorial/status"];
 const CATALOG_ENDPOINTS = ["POST catalog/tables", "POST catalog/columns"];
 const BASE_URL = "http://localhost/api/modules/routine-jobs";
 
@@ -41,7 +42,14 @@ describe("routine jobs actualizar-padron routes", () => {
       const declared = routeDeclarations.endpoints.map(keyOf).sort();
 
       expect(declared).toEqual(
-        [...ACTUALIZAR_ENDPOINTS, ...CARGAR_ENDPOINTS, ...LOCALIDADES_ENDPOINTS, ...UNIDAD_ENDPOINTS, ...CATALOG_ENDPOINTS].sort()
+        [
+          ...ACTUALIZAR_ENDPOINTS,
+          ...CARGAR_ENDPOINTS,
+          ...LOCALIDADES_ENDPOINTS,
+          ...UNIDAD_ENDPOINTS,
+          ...COMPLETAR_ENDPOINTS,
+          ...CATALOG_ENDPOINTS,
+        ].sort()
       );
     });
 
@@ -68,7 +76,14 @@ describe("routine jobs actualizar-padron routes", () => {
       const endpoints = routineJobsModule.endpoints ?? [];
 
       expect(endpoints.map(keyOf).sort()).toEqual(
-        [...ACTUALIZAR_ENDPOINTS, ...CARGAR_ENDPOINTS, ...LOCALIDADES_ENDPOINTS, ...UNIDAD_ENDPOINTS, ...CATALOG_ENDPOINTS].sort()
+        [
+          ...ACTUALIZAR_ENDPOINTS,
+          ...CARGAR_ENDPOINTS,
+          ...LOCALIDADES_ENDPOINTS,
+          ...UNIDAD_ENDPOINTS,
+          ...COMPLETAR_ENDPOINTS,
+          ...CATALOG_ENDPOINTS,
+        ].sort()
       );
     });
 
