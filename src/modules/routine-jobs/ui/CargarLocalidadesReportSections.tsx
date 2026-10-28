@@ -17,6 +17,9 @@ const localityNameOf = (key: LocalityKey): string => textOrNoData(key.name);
 
 const localityKeyOf = (key: LocalityKey): string => `${key.department}|${key.name}`;
 
+const summaryOf = (base: string, target: TargetView, labelled: boolean): string =>
+  labelled ? `${base} — ${target.table}` : base;
+
 const SAMPLE_COLUMNS: TableColumn<LocalitySkippedSample>[] = [
   { header: "Departamento", cell: (sample) => textOrNoData(sample.department) },
   { header: "Localidad", cell: (sample) => textOrNoData(sample.locality) },
@@ -65,52 +68,52 @@ export function SkippedSamplesDetails({ samples }: { samples: LocalitySkippedSam
   );
 }
 
-function InsertedDetails({ target }: { target: TargetView }) {
+function InsertedDetails({ target, labelled }: { target: TargetView; labelled: boolean }) {
   if (target.inserted.length === 0) return null;
   return (
-    <CollapsibleSection summary={`Localidades insertadas (${target.inserted.length})`}>
+    <CollapsibleSection summary={summaryOf(`Localidades insertadas (${target.inserted.length})`, target, labelled)}>
       <RowsTable columns={INSERTED_COLUMNS} rows={target.inserted} rowKey={(locality) => `${locality.id}`} />
     </CollapsibleSection>
   );
 }
 
-function GeometryDetails({ target }: { target: TargetView }) {
+function GeometryDetails({ target, labelled }: { target: TargetView; labelled: boolean }) {
   if (target.geometryChanges.length === 0) return null;
   return (
-    <CollapsibleSection summary={`Geometrías que cambian (${target.geometryChanges.length})`}>
+    <CollapsibleSection summary={summaryOf(`Geometrías que cambian (${target.geometryChanges.length})`, target, labelled)}>
       <RowsTable columns={GEOMETRY_COLUMNS} rows={target.geometryChanges} rowKey={localityKeyOf} />
     </CollapsibleSection>
   );
 }
 
-function MissingDetails({ target }: { target: TargetView }) {
+function MissingDetails({ target, labelled }: { target: TargetView; labelled: boolean }) {
   if (target.missing.length === 0) return null;
   return (
-    <CollapsibleSection summary={`Faltantes en origen (${target.missing.length} muestras)`}>
+    <CollapsibleSection summary={summaryOf(`Faltantes en origen (${target.missing.length} muestras)`, target, labelled)}>
       <RowsTable columns={LOCALITY_COLUMNS} rows={target.missing} rowKey={localityKeyOf} />
     </CollapsibleSection>
   );
 }
 
-function AmbiguousDetails({ target }: { target: TargetView }) {
+function AmbiguousDetails({ target, labelled }: { target: TargetView; labelled: boolean }) {
   if (target.ambiguous.length === 0) return null;
   return (
-    <CollapsibleSection summary={`Ambiguas (${target.ambiguous.length} muestras)`}>
+    <CollapsibleSection summary={summaryOf(`Ambiguas (${target.ambiguous.length} muestras)`, target, labelled)}>
       <RowsTable columns={LOCALITY_COLUMNS} rows={target.ambiguous} rowKey={localityKeyOf} />
     </CollapsibleSection>
   );
 }
 
-function CodeDifferDetails({ target }: { target: TargetView }) {
+function CodeDifferDetails({ target, labelled }: { target: TargetView; labelled: boolean }) {
   if (target.codeDiffers.length === 0) return null;
   return (
-    <CollapsibleSection summary={`Código distinto (${target.codeDiffers.length} muestras)`}>
+    <CollapsibleSection summary={summaryOf(`Código distinto (${target.codeDiffers.length} muestras)`, target, labelled)}>
       <RowsTable columns={CODE_COLUMNS} rows={target.codeDiffers} rowKey={localityKeyOf} />
     </CollapsibleSection>
   );
 }
 
-export function TargetSection({ target }: { target: TargetView }) {
+function TargetCounts({ target }: { target: TargetView }) {
   return (
     <section className={sharedStyles.section}>
       <SectionTitle>{target.table}</SectionTitle>
@@ -120,11 +123,34 @@ export function TargetSection({ target }: { target: TargetView }) {
         </p>
       ))}
       <ReportRowList rows={target.counts} />
-      <InsertedDetails target={target} />
-      <GeometryDetails target={target} />
-      <MissingDetails target={target} />
-      <AmbiguousDetails target={target} />
-      <CodeDifferDetails target={target} />
     </section>
+  );
+}
+
+function TargetDetails({ target, labelled }: { target: TargetView; labelled: boolean }) {
+  return (
+    <>
+      <InsertedDetails target={target} labelled={labelled} />
+      <GeometryDetails target={target} labelled={labelled} />
+      <MissingDetails target={target} labelled={labelled} />
+      <AmbiguousDetails target={target} labelled={labelled} />
+      <CodeDifferDetails target={target} labelled={labelled} />
+    </>
+  );
+}
+
+export function TargetBlocks({ targets }: { targets: TargetView[] }) {
+  const labelled = targets.length > 1;
+  return (
+    <div className={sharedStyles.targets}>
+      <div className={sharedStyles.targetGrid}>
+        {targets.map((target) => (
+          <TargetCounts key={target.table} target={target} />
+        ))}
+      </div>
+      {targets.map((target) => (
+        <TargetDetails key={target.table} target={target} labelled={labelled} />
+      ))}
+    </div>
   );
 }

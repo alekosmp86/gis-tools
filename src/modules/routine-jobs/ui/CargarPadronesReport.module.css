@@ -53,6 +53,22 @@
   min-width: 0;
 }
 
+.targets {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.targetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: 16px;
+}
+
+.targetGrid .rows {
+  max-width: none;
+}
+
 .sectionTitle {
   font-size: 14px;
   font-weight: 600;
