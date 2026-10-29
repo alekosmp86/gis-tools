@@ -8,6 +8,7 @@ import type {
   LocalityKey,
   LocalitySkippedSample,
   TargetReport,
+  UnmatchedPadron,
 } from "../jobs/cargar-localidades/types";
 import type { ReportBannerView } from "./ReportParts";
 import { outcomeBannersOf, timingsViewOf, type OutcomeTexts } from "./reportViewParts";
@@ -54,6 +55,8 @@ interface CargarLocalidadesReportView {
   skippedRows: SkipReasonRow[];
   zeroReasonCount: number;
   skippedSamples: LocalitySkippedSample[];
+  unmatchedPadrons: UnmatchedPadron[];
+  unmatchedPadronTotal: number;
   warnings: string[];
   targets: TargetView[];
   timings: TimingView[];
@@ -161,6 +164,8 @@ export function buildCargarLocalidadesReportView(result: CargarLocalidadesResult
     skippedRows: skipRowsOf(result),
     zeroReasonCount: zeroReasonCountOf(result),
     skippedSamples: result.skipped.samples,
+    unmatchedPadrons: result.unmatchedPadrons,
+    unmatchedPadronTotal: result.unmatchedPadronTotal,
     warnings: result.warnings.filter((warning) => warning !== DRY_RUN_WARNING && warning !== COMMIT_UNKNOWN_WARNING),
     targets: result.targets.map(targetViewOf),
     timings,

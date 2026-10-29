@@ -1,8 +1,15 @@
-import type { CargarLocalidadesResult, GeometryChange, TargetReport } from "../../jobs/cargar-localidades/types";
+import type {
+  CargarLocalidadesResult,
+  GeometryChange,
+  TargetReport,
+  UnmatchedPadron,
+} from "../../jobs/cargar-localidades/types";
 import { textOrNoData } from "../reportFormat";
+import type { CsvRow } from "./csvFormat";
 import {
   CHANGE_KIND,
   changeCsvOf,
+  listCsvOf,
   orderedChangesOf,
   type ChangeRecord,
   type ListCut,
@@ -46,3 +53,21 @@ export const buildCargarLocalidadesCsv = (result: CargarLocalidadesResult): stri
     result.targets.flatMap((target) => targetChangesOf(target)),
     result.targets.flatMap(targetCutsOf)
   );
+
+const INCONSISTENCY_HEADER: CsvRow = ["Departamento", "Localidad", "Padrón"];
+
+const unmatchedPadronRowOf = (padron: UnmatchedPadron): CsvRow => [
+  textOrNoData(padron.department),
+  textOrNoData(padron.locality),
+  textOrNoData(padron.number),
+];
+
+export const buildCargarLocalidadesInconsistenciasCsv = (result: CargarLocalidadesResult): string =>
+  listCsvOf(INCONSISTENCY_HEADER, unmatchedPadronRowOf, result.unmatchedPadrons, [
+    {
+      table: "",
+      shown: result.unmatchedPadrons.length,
+      total: result.unmatchedPadronTotal,
+      noun: "padrones sin localidad en el origen",
+    },
+  ]);

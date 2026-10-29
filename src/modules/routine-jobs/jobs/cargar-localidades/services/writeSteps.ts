@@ -4,7 +4,7 @@ import type { RunSession } from "../../cargar-padrones/types";
 import { buildSequenceRepairSql, runTransaction, type TransactionMessages } from "../../shared/transaction";
 import { applyStepLabel, classifyStepLabel, LOCALITY_STEP } from "../domain/plannedSteps";
 import { toSourceReport, toTargetApplyOutcome, toTargetClassification } from "../domain/reportMapping";
-import { buildSourceReportSql } from "../domain/sourceSql";
+import { buildSourceReportSql, buildUnmatchedPadronsSql } from "../domain/sourceSql";
 import { buildTargetReport, expectedUpdateCount, targetLabelOf } from "../domain/targetReport";
 import { buildApplySql, buildClassifySql } from "../domain/targetSql";
 import type {
@@ -38,7 +38,10 @@ const LOCALITY_TRANSACTION: TransactionMessages = {
 
 async function readSourceReport(session: RunSession, layouts: LocalityLayouts): Promise<SourceReport> {
   const result = await session.query(buildSourceReportSql(layouts));
-  return toSourceReport(result.rows[0] ?? {});
+  // One pg client: report queries must not overlap.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const unmatched = await session.query(buildUnmatchedPadronsSql(layouts));
+  return toSourceReport(result.rows[0] ?? {}, unmatched.rows);
 }
 
 async function readClassification(

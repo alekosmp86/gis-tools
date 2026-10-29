@@ -8,6 +8,8 @@ import type {
   SourceReport,
   TargetApplyOutcome,
   TargetClassification,
+  UnmatchedPadron,
+  UnmatchedPadronReport,
 } from "../types";
 import { numberOf, nullableNumber, textOf, listOf, type Row } from "../../shared/rowMapping";
 
@@ -44,7 +46,20 @@ const insertedLocalityOf = (entry: Row): InsertedLocality => ({
   ...localityKeyOf(entry),
 });
 
-export function toSourceReport(row: Row): SourceReport {
+const unmatchedPadronOf = (entry: Row): UnmatchedPadron => ({
+  department: textOf(entry.department),
+  locality: textOf(entry.locality),
+  number: textOf(entry.number),
+});
+
+function toUnmatchedPadronReport(rows: Row[]): UnmatchedPadronReport {
+  return {
+    padrones: rows.map(unmatchedPadronOf),
+    total: numberOf(rows[0]?.total),
+  };
+}
+
+export function toSourceReport(row: Row, unmatchedRows: Row[]): SourceReport {
   const skippedByReason = skippedCountsOf(row.by_reason);
   const skipped = Object.values(skippedByReason).reduce((total, count) => total + count, 0);
   return {
@@ -57,6 +72,7 @@ export function toSourceReport(row: Row): SourceReport {
     },
     skippedByReason,
     skippedSamples: listOf(row.samples).map(skippedSampleOf),
+    unmatchedPadrons: toUnmatchedPadronReport(unmatchedRows),
   };
 }
 

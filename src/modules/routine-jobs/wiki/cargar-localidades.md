@@ -69,4 +69,6 @@ Por cada tabla destino hay un bloque con estas filas: **Insertadas**, **Actualiz
 
 Debajo hay listas desplegables: **Localidades insertadas**, **Geometrías que cambian** (con la distancia en metros y la proporción de área), **Faltantes en origen**, **Ambiguas**, **Código distinto** y **Muestras de filas omitidas**. Las listas de insertadas y de geometrías que cambian muestran **hasta 500 filas**; si hay más, una advertencia lo avisa ("Se listan las primeras 500 ..."). Las demás son muestras de hasta 20.
 
+Si algún padrón urbano no encuentra su localidad en el origen (mismo departamento y mismo nombre), el informe lista esos **padrones urbanos sin localidad en el origen**, con su departamento, localidad y número. Esos padrones no se cargan en ninguna localidad: revise si la localidad está cargada con otro departamento. La lista muestra **hasta 500 padrones**; si hay más, una advertencia lo avisa ("Se listan los primeros 500 ..."). Aparece el botón **Descargar inconsistencias** para exportarlos.
+
 Para tener todos los cambios en una planilla, use **Descargar CSV**: vea [Descargar el informe](descargar-informe.md).

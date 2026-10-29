@@ -26,7 +26,13 @@ const targetWithChanges = (changed: number): TargetReport => ({
 });
 
 const warningsOf = (changed: number): string[] =>
-  buildWarnings({ dryRun: false, updateGeometries: true, totals: TOTALS, targets: [targetWithChanges(changed)] });
+  buildWarnings({
+    dryRun: false,
+    updateGeometries: true,
+    totals: TOTALS,
+    unmatchedPadronTotal: 0,
+    targets: [targetWithChanges(changed)],
+  });
 
 describe("buildWarnings geometry change truncation", () => {
   it("should not warn when the geometry changes fit the list limit", () => {

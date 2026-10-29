@@ -6,6 +6,7 @@ export interface WarningInput {
   dryRun: boolean;
   updateGeometries: boolean;
   totals: SourceTotals;
+  unmatchedPadronTotal: number;
   targets: readonly TargetReport[];
   commitError?: string;
 }
@@ -20,6 +21,17 @@ function sourceWarnings({ skipped, repaired }: SourceTotals): string[] {
   }
   if (repaired > 0) {
     warnings.push(`${plural(repaired, "geometría de origen reparada", "geometrías de origen reparadas")} con ST_MakeValid.`);
+  }
+  return warnings;
+}
+
+function unmatchedPadronWarnings(total: number): string[] {
+  if (total === 0) return [];
+  const warnings = [
+    `${plural(total, "padrón urbano sin fila de localidad en el origen de localidades", "padrones urbanos sin fila de localidad en el origen de localidades")}: no se cargan en ninguna localidad (ver Descargar inconsistencias).`,
+  ];
+  if (total > DETAIL_LIST_LIMIT) {
+    warnings.push(`Se listan los primeros ${DETAIL_LIST_LIMIT} padrones urbanos sin fila de localidad en el origen de localidades.`);
   }
   return warnings;
 }
@@ -50,10 +62,11 @@ function targetWarnings(target: TargetReport, updateGeometries: boolean): string
   return warnings;
 }
 
-export function buildWarnings({ dryRun, updateGeometries, totals, targets, commitError }: WarningInput): string[] {
+export function buildWarnings({ dryRun, updateGeometries, totals, unmatchedPadronTotal, targets, commitError }: WarningInput): string[] {
   return [
     ...(dryRun ? [DRY_RUN_WARNING] : []),
     ...sourceWarnings(totals),
+    ...unmatchedPadronWarnings(unmatchedPadronTotal),
     ...targets.flatMap((target) => targetWarnings(target, updateGeometries)),
     ...(commitError === undefined ? [] : [COMMIT_UNKNOWN_WARNING]),
   ];

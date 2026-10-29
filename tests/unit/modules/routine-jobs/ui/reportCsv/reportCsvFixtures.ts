@@ -174,6 +174,8 @@ export function cargarLocalidadesResultOf(overrides: Partial<CargarLocalidadesRe
       [LOCALITY_SKIP_REASON.CLAVE_DUPLICADA]: 9,
       samples: localitySkippedSamplesOf(25),
     },
+    unmatchedPadrons: [],
+    unmatchedPadronTotal: 0,
     targets: [
       targetReportOf("localidades_norte", {
         inserted: 25,

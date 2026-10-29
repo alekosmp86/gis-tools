@@ -91,7 +91,7 @@ Si una lista del informe se corta en 500 filas, el CSV termina con una fila que 
 
 ## Descargar inconsistencias
 
-Los informes de **Cargar padrones** y **Actualizar padrones** muestran un segundo botón, **Descargar inconsistencias**, solo cuando hay datos de origen que revisar. Ese archivo no contiene cambios en la base: lista los datos que el proceso no pudo usar.
+Los informes de **Cargar padrones**, **Cargar localidades** y **Actualizar padrones** muestran un segundo botón, **Descargar inconsistencias**, solo cuando hay datos de origen que revisar. Ese archivo no contiene cambios en la base: lista los datos que el proceso no pudo usar.
 
 ### Cargar padrones
 
@@ -102,6 +102,16 @@ Una fila por cada par departamento y código de localidad que aparece con nombre
 | Departamento | El nombre del departamento. Si falta, el código. |
 | Código de localidad | El código de localidad ambiguo. |
 | Nombres | Los nombres distintos de esa localidad, separados por ` / `. |
+
+### Cargar localidades
+
+Una fila por cada padrón urbano que no tiene localidad en el origen (mismo departamento y mismo nombre).
+
+| Columna | Contenido |
+|---|---|
+| Departamento | El departamento del padrón. Si falta, `sin dato`. |
+| Localidad | La localidad del padrón. Si falta, `sin dato`. |
+| Padrón | El número de padrón. Si falta, `sin dato`. |
 
 ### Actualizar padrones
 

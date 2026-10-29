@@ -7,7 +7,7 @@ import {
   STAGING_PADRON_COLUMN,
 } from "../constants";
 import { repairedGeometrySql, usableGeometrySql, wasInvalidSql } from "../../shared/geometryCompare";
-import { SAMPLE_LIMIT } from "../../shared/limits";
+import { DETAIL_LIST_LIMIT, SAMPLE_LIMIT } from "../../shared/limits";
 import { cte, jsonArrayOf, literal, q, withClause } from "../../shared/sqlFragments";
 
 export interface SourceLayouts {
@@ -31,9 +31,21 @@ export const CTE = {
   SOURCE_KEYS: "source_keys",
 } as const;
 
-function joinedSql({ padron, localities }: SourceLayouts): string {
-  const padronOf = (logical: string): string => `p.${physicalColumn(padron, logical)}`;
-  const localityOf = (logical: string): string => `l.${physicalColumn(localities, logical)}`;
+const padronColumnOf = (padron: TableLayout, logical: string): string => `p.${physicalColumn(padron, logical)}`;
+
+const localityColumnOf = (localities: TableLayout, logical: string): string => `l.${physicalColumn(localities, logical)}`;
+
+function localityMatchSql({ padron, localities }: SourceLayouts): string {
+  return [
+    `${localityColumnOf(localities, STAGING_LOCALITY_COLUMN.CODDEPTO)} = ${padronColumnOf(padron, STAGING_PADRON_COLUMN.CODDEPTO)}`,
+    `AND ${localityColumnOf(localities, STAGING_LOCALITY_COLUMN.LOCALIDAD)} = ${padronColumnOf(padron, STAGING_PADRON_COLUMN.NOMLOCCAT)}`,
+  ].join(" ");
+}
+
+function joinedSql(layouts: SourceLayouts): string {
+  const { padron, localities } = layouts;
+  const padronOf = (logical: string): string => padronColumnOf(padron, logical);
+  const localityOf = (logical: string): string => localityColumnOf(localities, logical);
   return [
     "SELECT",
     `${padronOf(STAGING_PADRON_COLUMN.NOMDEPTO)} AS "nomdepto",`,
@@ -44,8 +56,7 @@ function joinedSql({ padron, localities }: SourceLayouts): string {
     `${localityOf(STAGING_LOCALITY_COLUMN.GEOM)} AS "geom"`,
     `FROM ${qualifiedName(padron)} AS p`,
     `INNER JOIN ${qualifiedName(localities)} AS l`,
-    `ON ${localityOf(STAGING_LOCALITY_COLUMN.CODDEPTO)} = ${padronOf(STAGING_PADRON_COLUMN.CODDEPTO)}`,
-    `AND ${localityOf(STAGING_LOCALITY_COLUMN.LOCALIDAD)} = ${padronOf(STAGING_PADRON_COLUMN.NOMLOCCAT)}`,
+    `ON ${localityMatchSql(layouts)}`,
     `WHERE ${padronOf(STAGING_PADRON_COLUMN.UNIDADCAT)} = ${literal(PADRON_UNIT.URBANO)}`,
   ].join(" ");
 }
@@ -139,6 +150,20 @@ const SAMPLES_SQL = [
   `FROM ${q(CTE.DECIDED)} AS d WHERE d."skip_reason" IS NOT NULL) AS ranked`,
   `WHERE ranked."position" <= ${SAMPLE_LIMIT} ORDER BY ranked."reason", ranked."position"`,
 ].join(" ");
+
+export function buildUnmatchedPadronsSql(layouts: SourceLayouts): string {
+  const { padron, localities } = layouts;
+  const numberSql = padronColumnOf(padron, STAGING_PADRON_COLUMN.PADRON);
+  return [
+    `SELECT ${padronColumnOf(padron, STAGING_PADRON_COLUMN.NOMDEPTO)} AS "department",`,
+    `${padronColumnOf(padron, STAGING_PADRON_COLUMN.NOMLOCCAT)} AS "locality",`,
+    `trunc(${numberSql})::text AS "number", count(*) OVER () AS "total"`,
+    `FROM ${qualifiedName(padron)} AS p`,
+    `WHERE ${padronColumnOf(padron, STAGING_PADRON_COLUMN.UNIDADCAT)} = ${literal(PADRON_UNIT.URBANO)}`,
+    `AND NOT EXISTS (SELECT 1 FROM ${qualifiedName(localities)} AS l WHERE ${localityMatchSql(layouts)})`,
+    `ORDER BY "department", "locality", ${numberSql} LIMIT ${DETAIL_LIST_LIMIT}`,
+  ].join(" ");
+}
 
 export function buildSourceReportSql(layouts: SourceLayouts): string {
   return [

@@ -239,6 +239,13 @@ and are passed as bound parameters or constants.
 - CL-41: Golden check of the source (testable with no database): on a fixture where no candidate is skipped, the job's source set and
   candidate rows (`id_province, name, code, geometry`) equal the rows of the script's SELECT (lines 64-77) run on the same fixture, with the
   SRID literal replaced by the target SRID and `4` by `FONT_TYPE_ID`.
+- CL-53: Unmatched padrones (report only; no effect on what is loaded). Each urban padron staging row with no locality row under the
+  join keys of CL-11 (`coddepto` and `nomloccat` against `coddepto` and `localidad`, exact equality) is one listed padron, with
+  `nomdepto`, `nomloccat` and its padron number (`trunc(padron)::text`), NULLs kept. The list is ordered by `nomdepto, nomloccat`, then
+  padron number, capped at 500 padrones, with `unmatchedPadronTotal` = the number of unmatched padrones (`count(*) OVER ()`, before the cap).
+  It is computed in dry run and real run, read-only, by a query that does not touch the INSERT or UPDATE statements. A warning gives the
+  count and points to "Descargar inconsistencias", which exports the list as the only content of that CSV, with the columns Departamento,
+  Localidad and Padrón and no metadata rows beyond the cut marker.
 
 ## Client (UI)
 
@@ -306,6 +313,6 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 
 ## Acceptance criteria count
 
-CL-1 to CL-52 (52 criteria). CL-41 is the golden source check; CL-7 to CL-10 are the preflight checks.
+CL-1 to CL-53 (53 criteria). CL-41 is the golden source check; CL-7 to CL-10 are the preflight checks; CL-53 is the unmatched padron report.
 This round builds the backend and HTTP only (CL-1 to CL-41, CL-34 and CL-35). CL-42 to CL-52 (wizard, run store, report view, dashboard
 entry) are for the next round.

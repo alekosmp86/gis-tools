@@ -1,7 +1,14 @@
 "use client";
 
 import React from "react";
-import type { CodeDifference, GeometryChange, InsertedLocality, LocalityKey, LocalitySkippedSample } from "../jobs/cargar-localidades/types";
+import type {
+  CodeDifference,
+  GeometryChange,
+  InsertedLocality,
+  LocalityKey,
+  LocalitySkippedSample,
+  UnmatchedPadron,
+} from "../jobs/cargar-localidades/types";
 import type { TargetView } from "./cargarLocalidadesReportView";
 import { skipReasonLabelOf } from "./cargarLocalidadesReportView";
 import { CollapsibleSection } from "./ActualizarReportSections";
@@ -43,6 +50,12 @@ const GEOMETRY_COLUMNS: TableColumn<GeometryChange>[] = [
   },
 ];
 
+const UNMATCHED_COLUMNS: TableColumn<UnmatchedPadron>[] = [
+  { header: "Departamento", cell: (padron) => textOrNoData(padron.department) },
+  { header: "Localidad", cell: (padron) => textOrNoData(padron.locality) },
+  { header: "Padrón", cell: (padron) => textOrNoData(padron.number) },
+];
+
 const LOCALITY_COLUMNS: TableColumn<LocalityKey>[] = [
   { header: "Departamento", cell: (locality) => textOrNoData(locality.department) },
   { header: "Localidad", cell: localityNameOf },
@@ -64,6 +77,24 @@ export function SkippedSamplesDetails({ samples }: { samples: LocalitySkippedSam
         rows={samples}
         rowKey={(sample) => `${sample.department}|${sample.locality}|${sample.code}|${sample.reason}`}
       />
+    </CollapsibleSection>
+  );
+}
+
+export function UnmatchedPadronDetails({ padrones, total }: { padrones: UnmatchedPadron[]; total: number }) {
+  if (padrones.length === 0) return null;
+  return (
+    <CollapsibleSection summary={`Padrones urbanos sin localidad en el origen (${total})`}>
+      <RowsTable
+        columns={UNMATCHED_COLUMNS}
+        rows={padrones}
+        rowKey={(padron) => `${padron.department}|${padron.locality}|${padron.number}`}
+      />
+      {total > padrones.length && (
+        <p className={sharedStyles.hint}>
+          {`Lista incompleta: se muestran los primeros ${padrones.length} de ${total}. Descargue las inconsistencias para verlos todos.`}
+        </p>
+      )}
     </CollapsibleSection>
   );
 }

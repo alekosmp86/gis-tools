@@ -51,10 +51,22 @@ export interface SourceTotals {
   skipped: number;
 }
 
+export interface UnmatchedPadron {
+  department: string | null;
+  locality: string | null;
+  number: string | null;
+}
+
+export interface UnmatchedPadronReport {
+  padrones: UnmatchedPadron[];
+  total: number;
+}
+
 export interface SourceReport {
   totals: SourceTotals;
   skippedByReason: Record<LocalitySkipReason, number>;
   skippedSamples: LocalitySkippedSample[];
+  unmatchedPadrons: UnmatchedPadronReport;
 }
 
 export interface LocalityKey {
@@ -124,6 +136,8 @@ export interface CargarLocalidadesResult {
   outcomeUnknown: boolean;
   totals: SourceTotals;
   skipped: Record<LocalitySkipReason, number> & { samples: LocalitySkippedSample[] };
+  unmatchedPadrons: UnmatchedPadron[];
+  unmatchedPadronTotal: number;
   targets: TargetReport[];
   warnings: string[];
   stepTimings: StepTiming[];
