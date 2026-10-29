@@ -6,23 +6,6 @@ export interface TableLayout {
   columns: Record<string, string>;
 }
 
-export interface WorkLayout extends TableLayout {
-  srid: number;
-}
-
-export interface UnitTypeLayout {
-  layout: TableLayout;
-  localityType: string;
-}
-
-export interface PopulateLayouts {
-  staging: TableLayout;
-  work: WorkLayout;
-  province: TableLayout;
-  locality: TableLayout;
-  unitType?: UnitTypeLayout;
-}
-
 export const qualifiedName = (layout: TableLayout): string =>
   `${quoteIdentifier(resolveSchemaName(layout.schema))}.${quoteIdentifier(layout.table)}`;
 
@@ -36,6 +19,6 @@ export function physicalColumn(layout: TableLayout, logical: string): string {
 
 export function assertTargetSrid(srid: number): void {
   if (!Number.isSafeInteger(srid) || srid <= 0) {
-    throw new Error(`El SRID de destino de la tabla de trabajo no es válido: ${srid}.`);
+    throw new Error(`El SRID de destino de la tabla de padrones no es válido: ${srid}.`);
   }
 }

@@ -1,11 +1,19 @@
 import { SKIP_REASON, type SkipReason } from "../jobs/actualizar-padron/constants";
+import { COMMIT_UNKNOWN_WARNING, DRY_RUN_WARNING } from "../jobs/actualizar-padron/domain/warnings";
 import type {
+  ActualizarAddressMasterReport,
   ActualizarPadronResult,
+  ActualizarTargetReport,
   CollidingKey,
+  PadronGeometryChange,
+  PadronInserted,
+  PadronKey,
   SkippedGroup,
   SkippedLocalityGroup,
   SkippedSample,
 } from "../jobs/actualizar-padron/types";
+import type { AddressMasterAmbiguous, AddressMasterLinked } from "../jobs/shared/addressMasterLinkPass";
+import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
 
 export interface KpiView {
   label: string;
@@ -58,10 +66,33 @@ export interface TimingView {
   seconds: number;
 }
 
-export interface AnalyzeView {
-  status: ActualizarPadronResult["analyze"]["status"];
+export interface TargetCountRow {
   label: string;
-  message?: string;
+  value: number;
+  tone: ReportRowTone;
+}
+
+export interface TargetView {
+  table: string;
+  counts: TargetCountRow[];
+  notes: string[];
+  inserted: PadronInserted[];
+  insertedSummary: string;
+  geometryChanges: PadronGeometryChange[];
+  geometryChangesSummary: string;
+  missing: PadronKey[];
+  missingSummary: string;
+  ambiguous: PadronKey[];
+  ambiguousSummary: string;
+}
+
+export interface AddressMasterView {
+  table: string;
+  counts: TargetCountRow[];
+  linked: AddressMasterLinked[];
+  linkedSummary: string;
+  ambiguous: AddressMasterAmbiguous[];
+  ambiguousSummary: string;
 }
 
 export type ActualizarBannerKind = "unknown" | "dryRun" | "warning" | "done";
@@ -83,10 +114,11 @@ export interface ActualizarReportView {
   samples: SampleView[];
   collidingKeys: CollidingKeyView[];
   collidingKeyCount: number;
+  target: TargetView;
+  addressMaster: AddressMasterView | null;
   warnings: string[];
   timings: TimingView[];
   totalSeconds: number;
-  analyze: AnalyzeView;
 }
 
 const LIMIT = 20;
@@ -117,17 +149,11 @@ const REASON_HINT: Record<SkipReason, string> = {
   [SKIP_REASON.CLAVE_DUPLICADA]: "Varias filas comparten la misma clave y todas se omiten. Revise la tabla de origen.",
 };
 
-const ANALYZE_LABELS: Record<ActualizarPadronResult["analyze"]["status"], string> = {
-  ok: "Estadísticas actualizadas",
-  failed: "No se pudieron actualizar las estadísticas",
-  skipped: "No se actualizaron las estadísticas",
-};
-
 const BANNER_TEXT = {
-  unknown: "Resultado incierto: hay que verificar la tabla de trabajo antes de volver a actualizar.",
-  dryRun: "Análisis: la tabla de trabajo no fue modificada.",
+  unknown: "Resultado incierto: hay que verificar la tabla de destino antes de volver a actualizar.",
+  dryRun: "Análisis: la tabla de destino no fue modificada.",
   warning: "La actualización terminó con advertencias. Revise el informe.",
-  done: "Actualización terminada: la tabla de trabajo se ha cargado.",
+  done: "Actualización confirmada: la tabla de destino fue modificada.",
 } as const;
 
 const SKIP_REASONS = Object.values(SKIP_REASON) as SkipReason[];
@@ -139,7 +165,7 @@ const numberTextOf = (value: number | null): string => (value === null ? EMPTY_V
 const roundSeconds = (ms: number): number =>
   Math.round((ms / MS_PER_SECOND) * HUNDREDTHS_PER_UNIT) / HUNDREDTHS_PER_UNIT;
 
-const reasonLabelOf = (reason: string): string =>
+export const reasonLabelOf = (reason: string): string =>
   (SKIP_REASONS as string[]).includes(reason) ? REASON_LABEL[reason as SkipReason] : reason;
 
 const shareOf = (value: number, total: number): number => (total === 0 ? 0 : (value * PERCENT_SCALE) / total);
@@ -150,12 +176,14 @@ const barStepOf = (value: number, total: number): number =>
   Math.round(shareOf(value, total) / BAR_STEP_PERCENT) * BAR_STEP_PERCENT;
 
 function kpisOf(result: ActualizarPadronResult): KpiView[] {
-  const { totals } = result;
+  const { totals, target } = result;
   return [
     { label: "Filas leídas", value: totals.rowsRead },
-    { label: "Filas escritas", value: totals.written },
-    { label: "Filas omitidas", value: totals.skipped },
-    { label: "Geometrías reparadas", value: totals.repaired },
+    { label: "Candidatas", value: totals.candidates },
+    { label: "Omitidas", value: totals.skipped },
+    { label: "Insertadas", value: target.inserted },
+    { label: "Actualizadas", value: target.updated },
+    { label: "Geometrías que cambian", value: target.changed },
   ];
 }
 
@@ -226,15 +254,70 @@ function outcomeBannerOf(result: ActualizarPadronResult): ActualizarBanner {
 
 function bannersOf(result: ActualizarPadronResult): ActualizarBanner[] {
   const outcome = outcomeBannerOf(result);
-  if (result.warnings.length === 0) return [outcome];
+  if (visibleWarningsOf(result).length === 0) return [outcome];
   return [outcome, { kind: "warning", text: BANNER_TEXT.warning }];
 }
 
-function analyzeOf(result: ActualizarPadronResult): AnalyzeView {
-  const { status, message } = result.analyze;
-  return message === undefined
-    ? { status, label: ANALYZE_LABELS[status] }
-    : { status, label: ANALYZE_LABELS[status], message };
+const visibleWarningsOf = (result: ActualizarPadronResult): string[] =>
+  result.warnings.filter((warning) => warning !== DRY_RUN_WARNING && warning !== COMMIT_UNKNOWN_WARNING);
+
+const targetCountRowOf = (label: string, value: number, isNeutral = false): TargetCountRow => ({
+  label,
+  value,
+  tone: reportRowToneOf(value, isNeutral),
+});
+
+const targetNotesOf = (target: ActualizarTargetReport): string[] =>
+  target.changed > 0 && !target.updateApplied
+    ? [`Las geometrías que cambian no se aplicaron en ${target.table} (Actualizar geometrías desactivado).`]
+    : [];
+
+/** The list summary shows the real count and says when the list shows only its first rows. */
+const listSummaryOf = (label: string, shown: number, total: number): string =>
+  shown < total ? `${label} (primeras ${shown} de ${total})` : `${label} (${total})`;
+
+function targetViewOf(target: ActualizarTargetReport): TargetView {
+  return {
+    table: target.table,
+    counts: [
+      targetCountRowOf("Insertadas", target.inserted),
+      targetCountRowOf("Actualizadas", target.updated),
+      targetCountRowOf("Geometrías que cambian", target.changed),
+      targetCountRowOf("Sin cambios", target.unchanged, true),
+      targetCountRowOf("Sin cambios dentro de tolerancia", target.unchangedWithinTolerance, true),
+      targetCountRowOf("Faltantes en destino", target.missing),
+      targetCountRowOf("Ambiguas", target.ambiguous),
+    ],
+    notes: targetNotesOf(target),
+    inserted: target.insertedList,
+    insertedSummary: listSummaryOf("Padrones insertados", target.insertedList.length, target.inserted),
+    geometryChanges: target.geometryChanges,
+    geometryChangesSummary: listSummaryOf("Geometrías que cambian", target.geometryChanges.length, target.changed),
+    missing: target.missingSamples,
+    missingSummary: listSummaryOf("Faltantes en destino", target.missingSamples.length, target.missing),
+    ambiguous: target.ambiguousSamples,
+    ambiguousSummary: listSummaryOf("Ambiguas", target.ambiguousSamples.length, target.ambiguous),
+  };
+}
+
+function addressMasterViewOf(addressMaster: ActualizarAddressMasterReport): AddressMasterView {
+  const { counts } = addressMaster;
+  return {
+    table: addressMaster.table,
+    counts: [
+      targetCountRowOf("Padrones sin dirección maestra", counts.withoutAddressMaster, true),
+      targetCountRowOf("Registros por crear", counts.toCreate),
+      targetCountRowOf("Registros creados", counts.created),
+      targetCountRowOf("Padrones enlazados", counts.linked),
+      targetCountRowOf("Ya tenían registro", counts.alreadyHadRecord, true),
+      targetCountRowOf("Ambiguos", counts.ambiguous),
+      targetCountRowOf("Sin dirección maestra después del enlace", counts.remaining),
+    ],
+    linked: addressMaster.linkedList,
+    linkedSummary: listSummaryOf("Padrones enlazados", addressMaster.linkedList.length, counts.linked),
+    ambiguous: addressMaster.ambiguousSamples,
+    ambiguousSummary: listSummaryOf("Ambiguos", addressMaster.ambiguousSamples.length, counts.ambiguous),
+  };
 }
 
 export function buildActualizarReportView(result: ActualizarPadronResult): ActualizarReportView {
@@ -253,9 +336,10 @@ export function buildActualizarReportView(result: ActualizarPadronResult): Actua
     samples: samplesOf(result.skipped.samples),
     collidingKeys: collidingKeysOf(result.skipped.collidingKeys),
     collidingKeyCount: result.skipped.collidingKeyCount,
-    warnings: [...result.warnings],
+    target: targetViewOf(result.target),
+    addressMaster: result.addressMaster === undefined ? null : addressMasterViewOf(result.addressMaster),
+    warnings: visibleWarningsOf(result),
     timings: timingsOf(result),
     totalSeconds: roundSeconds(result.stepTimings.reduce((sum, timing) => sum + timing.ms, 0)),
-    analyze: analyzeOf(result),
   };
 }

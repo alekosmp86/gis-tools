@@ -19,13 +19,13 @@ const STEP_DEFS: readonly StepDef[] = [
   {
     step: WizardStep.TABLES,
     title: "Tablas",
-    subtitle: "Tres esquemas y las tablas: origen, trabajo, padrón, provincias, localidades y tipos (opcional).",
+    subtitle: "Dos esquemas y las tablas: origen, destino, provincias, localidades, tipos y direcciones maestras (opcionales).",
     icon: Table2,
   },
   {
     step: WizardStep.OPTIONS,
     title: "Opciones",
-    subtitle: "Cómo se vacía la tabla de trabajo antes de cargarla.",
+    subtitle: "Tipo de localidad, tolerancia y si se actualizan las geometrías existentes.",
     icon: SlidersHorizontal,
   },
   {

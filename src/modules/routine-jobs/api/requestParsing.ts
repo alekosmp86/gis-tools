@@ -157,7 +157,7 @@ export function parseColumnsRequest(body: JsonRecord): ColumnsRequest {
   return { ...catalog, table, role, required: COLUMNS_BY_ROLE[role] };
 }
 
-export function parseClearMode(options: JsonRecord): ClearMode {
+function parseClearMode(options: JsonRecord): ClearMode {
   const clearMode = readRequiredText(options, "clearMode");
   if (!isClearMode(clearMode)) throw invalid(`El campo clearMode debe ser ${CLEAR_MODES.join(" o ")}.`);
   return clearMode;

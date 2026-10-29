@@ -1,4 +1,3 @@
-import type { ClearMode } from "../jobs/cargar-padrones/constants";
 import type { LoadOptions } from "../jobs/cargar-padrones/domain/loadSql";
 import type { CargarPadronesResult } from "../jobs/cargar-padrones/types";
 import type { ActualizarPadronResult } from "../jobs/actualizar-padron/types";
@@ -52,21 +51,22 @@ export interface JobStatusBase<Result> {
 export type JobStatusView = JobStatusBase<CargarPadronesResult>;
 
 export interface ActualizarJobOptions {
-  clearMode: ClearMode;
   localityType?: string;
+  tolerance: number;
+  updateGeometries: boolean;
+  linkAddressMaster: boolean;
 }
 
 export interface ActualizarStartRequest {
   connection: ClientConnection;
   stagingSchema: string;
   stagingTable: string;
-  workSchema: string;
-  workTable: string;
   cartoSchema: string;
-  padronTable: string;
+  targetTable: string;
   provinceTable: string;
   localityTable: string;
   typeTable?: string;
+  addressMasterTable?: string;
   options: ActualizarJobOptions;
   dryRun: boolean;
   confirm: boolean;

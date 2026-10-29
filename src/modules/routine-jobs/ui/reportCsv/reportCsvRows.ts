@@ -9,7 +9,7 @@ export const CHANGE_KIND = {
   DETECTED: "Geometría detectada (no aplicada)",
 } as const;
 
-type ChangeKind = (typeof CHANGE_KIND)[keyof typeof CHANGE_KIND];
+export type ChangeKind = (typeof CHANGE_KIND)[keyof typeof CHANGE_KIND];
 
 interface CountRecord {
   label: string;
@@ -31,13 +31,15 @@ export const countCsvOf = (counts: readonly CountRecord[]): string =>
 
 const kindRankOf = (kind: ChangeKind): number => (kind === CHANGE_KIND.INSERTED ? 0 : 1);
 
+export const compareChangeKinds = (first: ChangeKind, second: ChangeKind): number => kindRankOf(first) - kindRankOf(second);
+
 const compareProvinces = (first: string, second: string): number =>
   first.localeCompare(second, "es", { numeric: true });
 
 const compareNames = (first: string, second: string): number => first.localeCompare(second, "es");
 
 const compareChanges = (first: ChangeRecord, second: ChangeRecord): number =>
-  kindRankOf(first.kind) - kindRankOf(second.kind) ||
+  compareChangeKinds(first.kind, second.kind) ||
   compareProvinces(first.province, second.province) ||
   compareNames(first.name, second.name);
 
@@ -70,5 +72,13 @@ const cutRowOf = (cut: ListCut, width: number): CsvRow => [
 export const cutRowsOf = (cuts: readonly ListCut[], width: number): CsvRow[] =>
   cuts.filter((cut) => cut.total > cut.shown).map((cut) => cutRowOf(cut, width));
 
+/** A flat CSV of one header, one row per record, and the cut markers of the lists the report shortened. */
+export const listCsvOf = <Item>(
+  header: CsvRow,
+  rowOf: (item: Item) => CsvRow,
+  items: readonly Item[],
+  cuts: readonly ListCut[]
+): string => toCsv([header, ...items.map(rowOf), ...cutRowsOf(cuts, header.length)]);
+
 export const changeCsvOf = (records: readonly ChangeRecord[], cuts: readonly ListCut[] = []): string =>
-  toCsv([CHANGE_HEADER, ...records.map(changeRowOf), ...cutRowsOf(cuts, CHANGE_HEADER.length)]);
+  listCsvOf(CHANGE_HEADER, changeRowOf, records, cuts);

@@ -16,10 +16,13 @@ import {
   SkippedReasonsTable,
   TimingList,
 } from "./ActualizarReportSections";
+import { ActualizarAddressMasterSection } from "./ActualizarAddressMasterSection";
+import { ActualizarTargetSection } from "./ActualizarTargetSection";
 import styles from "./ActualizarPadronReport.module.css";
 import sharedStyles from "./CargarPadronesReport.module.css";
 import { ReportDownloadButton } from "./ReportDownloadButton";
-import { buildActualizarPadronCsv } from "./reportCsv/actualizarPadronCsv";
+import { buildActualizarPadronCsv, buildActualizarPadronInconsistenciasCsv } from "./reportCsv/actualizarPadronCsv";
+import { REPORT_CSV_KIND } from "./reportCsv/filename";
 import { MonthlyStage } from "./monthlyCartoStages";
 
 const BANNER_CLASS: Record<ActualizarBannerKind, string> = {
@@ -34,7 +37,6 @@ const SECTION_TITLES = {
   notFound: "Localidades no encontradas",
   ambiguous: "Localidades ambiguas",
   warnings: "Advertencias",
-  analyze: "Estadísticas",
 } as const;
 
 function OutcomeBanners({ view }: { view: ActualizarReportView }) {
@@ -96,11 +98,6 @@ function ClosingSections({ view }: { view: ActualizarReportView }) {
       <CollapsibleSection summary="Tiempos por paso">
         <TimingList view={view} />
       </CollapsibleSection>
-      <section className={sharedStyles.section}>
-        <h3 className={sharedStyles.sectionTitle}>{SECTION_TITLES.analyze}</h3>
-        <p className={sharedStyles.hint}>{view.analyze.label}</p>
-        {view.analyze.message !== undefined && <p className={sharedStyles.hint}>{view.analyze.message}</p>}
-      </section>
     </>
   );
 }
@@ -119,9 +116,19 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
         dryRun={result.dryRun}
         buildCsv={() => buildActualizarPadronCsv(result)}
       />
+      {result.skipped.skippedRows.length > 0 && (
+        <ReportDownloadButton
+          stageSlug={MonthlyStage.ACTUALIZAR_PADRON}
+          dryRun={result.dryRun}
+          kind={REPORT_CSV_KIND.INCONSISTENCIES}
+          buildCsv={() => buildActualizarPadronInconsistenciasCsv(result)}
+        />
+      )}
       <OutcomeBanners view={view} />
       <KpiCards view={view} />
       <SkippedReasonsTable view={view} />
+      <ActualizarTargetSection target={view.target} />
+      {view.addressMaster !== null && <ActualizarAddressMasterSection view={view.addressMaster} />}
       <div className={sharedStyles.columns}>
         <GroupTopList title={SECTION_TITLES.department} split={view.byDepartmentSplit} />
         <GroupTopList title={SECTION_TITLES.locality} split={view.byLocalitySplit} />

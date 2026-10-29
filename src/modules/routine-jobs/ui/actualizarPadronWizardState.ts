@@ -1,8 +1,8 @@
 // Same wizard API names as cargarPadronesWizardState: both jobs expose the reducer contract the tests fix.
 // fallow-ignore-file duplicate-export
 import { DEFAULT_LOCALITY_TYPE } from "../jobs/actualizar-padron/constants";
-import { CLEAR_MODE } from "../jobs/cargar-padrones/constants";
-import type { ActualizarJobOptions, ActualizarStartRequest, ClientConnection, StagingSelection } from "./clientTypes";
+import { DEFAULT_ADDRESS_MASTER_TABLE } from "../jobs/shared/addressMasterLinkSpec";
+import type { ActualizarStartRequest, ClientConnection, StagingSelection } from "./clientTypes";
 import type { ActualizarPadronRunSnapshot } from "./actualizarPadronRunStore";
 import {
   connectionBlockingReason,
@@ -10,6 +10,7 @@ import {
   type ConnectionField,
 } from "./cargarPadronesWizardState";
 import { trimConnection } from "./connectionProfiles";
+import { DEFAULT_TOLERANCE_TEXT, DEFAULT_UPDATE_GEOMETRIES, isToleranceValid, toleranceOf, type GeometryOptionsDraft } from "./geometryOptions";
 import { RunPhase } from "./jobRunStore";
 import {
   ActualizarTableKey,
@@ -23,10 +24,18 @@ import {
 export { WizardStep } from "./cargarPadronesWizardState";
 export { actualizarExcludedFor, ActualizarTableKey, roleOfTableKey, schemaFieldOf } from "./actualizarPadronTables";
 
+export interface ActualizarOptionsDraft extends GeometryOptionsDraft {
+  localityType: string;
+  linkAddressMaster: boolean;
+}
+
 export interface ActualizarWizardConfirmation {
   password: string;
-  workTableLabel: string;
+  typedTable: string;
 }
+
+export const GEOMETRY_OVERWRITE_WARNING =
+  "Actualizar geometrías reemplaza la geometría de los padrones existentes por la del catastro cuando cambió. Si corregiste geometrías a mano en la tabla de destino, esas correcciones se perderán. El análisis lista cada geometría que cambiaría: revísala antes de cargar, o desactiva la opción.";
 
 /** Hub-validated connection and the staging table chosen in stage 1: both are fixed when the wizard opens or resets. */
 export interface ActualizarWizardSeed {
@@ -38,7 +47,7 @@ export interface ActualizarWizardState extends ActualizarTableSelection {
   step: WizardStep;
   connection: ClientConnection;
   tableValidity: Record<ActualizarTableKey, boolean>;
-  options: ActualizarJobOptions;
+  options: ActualizarOptionsDraft;
   confirmation: ActualizarWizardConfirmation;
 }
 
@@ -46,7 +55,7 @@ export type ActualizarWizardAction =
   | { type: "connectionChanged"; field: ConnectionField; value: string }
   | { type: "schemaChanged"; field: SchemaField; value: string }
   | { type: "tableChosen"; key: ActualizarTableKey; table: string; valid: boolean }
-  | { type: "optionsChanged"; patch: Partial<ActualizarJobOptions> }
+  | { type: "optionsChanged"; patch: Partial<ActualizarOptionsDraft> }
   | { type: "confirmationChanged"; patch: Partial<ActualizarWizardConfirmation> }
   | { type: "next" }
   | { type: "back" }
@@ -63,22 +72,28 @@ const STEP_ORDER: readonly WizardStep[] = [
 ];
 const RUN_START_STEP = WizardStep.RESULT;
 const RUN_GATE_STEP = WizardStep.REVIEW;
-const SCHEMA_FIELDS: readonly SchemaField[] = ["stagingSchema", "workSchema", "cartoSchema"];
+const SCHEMA_FIELDS: readonly SchemaField[] = ["stagingSchema", "cartoSchema"];
 
 const MESSAGES = {
   stagingSchema: "Indique el esquema de la tabla de origen.",
-  workSchema: "Indique el esquema de la tabla de trabajo.",
-  cartoSchema: "Indique el esquema de carto: padrón, provincias, localidades y tipos.",
-  tablesMissing: "Elija las cinco tablas obligatorias.",
+  cartoSchema: "Indique el esquema de carto: destino, provincias, localidades y tipos.",
+  tablesMissing: "Elija las tablas obligatorias: origen, destino, provincias y localidades.",
   tablesDistinct: "Las tablas elegidas deben ser distintas dentro de su esquema.",
   tablesInvalid: "Alguna tabla tiene columnas faltantes o ambiguas.",
   localityType: "Indique el tipo de localidad o quite la tabla de tipos de unidad.",
+  addressMaster: "Elija la tabla de direcciones maestras o desactive el enlace de padrones.",
+  tolerance: "La tolerancia debe ser un número mayor o igual que 0.",
 } as const;
 
 const DEPENDENT_KEYS: Record<SchemaField, readonly ActualizarTableKey[]> = {
   stagingSchema: [ActualizarTableKey.STAGING],
-  workSchema: [ActualizarTableKey.WORK],
-  cartoSchema: [ActualizarTableKey.PADRON, ActualizarTableKey.PROVINCE, ActualizarTableKey.LOCALITY, ActualizarTableKey.TYPE],
+  cartoSchema: [
+    ActualizarTableKey.TARGET,
+    ActualizarTableKey.PROVINCE,
+    ActualizarTableKey.LOCALITY,
+    ActualizarTableKey.TYPE,
+    ActualizarTableKey.ADDRESS_MASTER,
+  ],
 };
 
 const recordOfEveryKey = <Value>(value: Value): Record<ActualizarTableKey, Value> =>
@@ -91,7 +106,14 @@ const clearedFor = <Value>(
 ): Record<ActualizarTableKey, Value> =>
   Object.fromEntries(TABLE_KEYS.map((key) => [key, keys.includes(key) ? cleared : record[key]])) as Record<ActualizarTableKey, Value>;
 
-const emptyConfirmation = (): ActualizarWizardConfirmation => ({ password: "", workTableLabel: "" });
+const emptyConfirmation = (): ActualizarWizardConfirmation => ({ password: "", typedTable: "" });
+
+const defaultOptions = (): ActualizarOptionsDraft => ({
+  localityType: DEFAULT_LOCALITY_TYPE,
+  tolerance: DEFAULT_TOLERANCE_TEXT,
+  updateGeometries: DEFAULT_UPDATE_GEOMETRIES,
+  linkAddressMaster: false,
+});
 
 const seedFieldsOf = (seed: ActualizarWizardSeed): Partial<ActualizarWizardState> => ({
   ...(seed.connection === undefined ? {} : { connection: seed.connection, step: WizardStep.TABLES }),
@@ -105,11 +127,10 @@ export function initialWizardState(seed: ActualizarWizardSeed = {}): ActualizarW
     step: WizardStep.CONNECTION,
     connection: { host: "", port: "5432", db_name: "", user: "", password: "" },
     stagingSchema: "",
-    workSchema: "",
     cartoSchema: "",
     tables: recordOfEveryKey<string>(""),
     tableValidity: recordOfEveryKey(false),
-    options: { clearMode: CLEAR_MODE.DELETE, localityType: DEFAULT_LOCALITY_TYPE },
+    options: defaultOptions(),
     confirmation: emptyConfirmation(),
     ...seedFieldsOf(seed),
   };
@@ -123,8 +144,6 @@ export function initialWizardStateFor(snapshot: ActualizarPadronRunSnapshot, see
 const isBlank = (value: string): boolean => value.trim() === "";
 
 export const isTypeTableChosen = (state: ActualizarWizardState): boolean => !isBlank(state.tables[ActualizarTableKey.TYPE]);
-
-const localityTypeOf = (state: ActualizarWizardState): string => state.options.localityType ?? "";
 
 const schemaBlockingReason = (state: ActualizarWizardState): string | null => {
   const blankField = SCHEMA_FIELDS.find((field) => isBlank(state[field]));
@@ -141,6 +160,7 @@ function tablesBlockingReason(state: ActualizarWizardState): string | null {
   const schemaReason = schemaBlockingReason(state);
   if (schemaReason !== null) return schemaReason;
   if (REQUIRED_TABLE_KEYS.some((key) => isBlank(state.tables[key]))) return MESSAGES.tablesMissing;
+  if (state.options.linkAddressMaster && isBlank(state.tables.addressMaster)) return MESSAGES.addressMaster;
   const chosen = chosenKeysOf(state);
   const names = chosen.map((key) => qualifiedNameOf(state, key));
   if (new Set(names).size !== names.length) return MESSAGES.tablesDistinct;
@@ -149,8 +169,8 @@ function tablesBlockingReason(state: ActualizarWizardState): string | null {
 }
 
 function optionsBlockingReason(state: ActualizarWizardState): string | null {
-  if (!isTypeTableChosen(state)) return null;
-  return isBlank(localityTypeOf(state)) ? MESSAGES.localityType : null;
+  if (isTypeTableChosen(state) && isBlank(state.options.localityType)) return MESSAGES.localityType;
+  return isToleranceValid(state.options.tolerance) ? null : MESSAGES.tolerance;
 }
 
 export function blockingReason(state: ActualizarWizardState): string | null {
@@ -186,8 +206,8 @@ const isPasswordTyped = (state: ActualizarWizardState): boolean =>
   state.confirmation.password !== "" && state.confirmation.password === state.connection.password;
 
 export function isRealRunConfirmed(state: ActualizarWizardState): boolean {
-  const workTable = state.tables.work.trim();
-  return workTable !== "" && state.confirmation.workTableLabel === workTable && isPasswordTyped(state);
+  const targetTable = state.tables.target.trim();
+  return targetTable !== "" && state.confirmation.typedTable === targetTable && isPasswordTyped(state);
 }
 
 export function canRunNow(state: ActualizarWizardState, flags: { dryRun: boolean }): boolean {
@@ -195,27 +215,38 @@ export function canRunNow(state: ActualizarWizardState, flags: { dryRun: boolean
   return flags.dryRun ? isPasswordTyped(state) : isRealRunConfirmed(state);
 }
 
-export function toStartRequest(state: ActualizarWizardState, flags: { dryRun: boolean }): ActualizarStartRequest {
-  const request: ActualizarStartRequest = {
+function baseStartRequest(state: ActualizarWizardState, flags: { dryRun: boolean }): ActualizarStartRequest {
+  return {
     connection: trimConnection(state.connection),
     stagingSchema: state.stagingSchema.trim(),
     stagingTable: state.tables.staging.trim(),
-    workSchema: state.workSchema.trim(),
-    workTable: state.tables.work.trim(),
     cartoSchema: state.cartoSchema.trim(),
-    padronTable: state.tables.padron.trim(),
+    targetTable: state.tables.target.trim(),
     provinceTable: state.tables.province.trim(),
     localityTable: state.tables.locality.trim(),
-    options: { clearMode: state.options.clearMode },
+    options: {
+      tolerance: toleranceOf(state.options.tolerance),
+      updateGeometries: state.options.updateGeometries,
+      linkAddressMaster: state.options.linkAddressMaster,
+    },
     dryRun: flags.dryRun,
     confirm: !flags.dryRun,
   };
+}
+
+function withTypeTable(request: ActualizarStartRequest, state: ActualizarWizardState): ActualizarStartRequest {
   if (!isTypeTableChosen(state)) return request;
   return {
     ...request,
     typeTable: state.tables.type.trim(),
-    options: { clearMode: state.options.clearMode, localityType: localityTypeOf(state).trim() },
+    options: { ...request.options, localityType: state.options.localityType.trim() },
   };
+}
+
+export function toStartRequest(state: ActualizarWizardState, flags: { dryRun: boolean }): ActualizarStartRequest {
+  const request = withTypeTable(baseStartRequest(state, flags), state);
+  if (!state.options.linkAddressMaster) return request;
+  return { ...request, addressMasterTable: state.tables.addressMaster.trim() };
 }
 
 const indexOfStep = (step: WizardStep): number => STEP_ORDER.indexOf(step);
@@ -251,7 +282,6 @@ function connectionReducer(state: ActualizarWizardState, field: ConnectionField,
     ...state,
     connection: { ...state.connection, [field]: value },
     stagingSchema: "",
-    workSchema: "",
     cartoSchema: "",
     tables: recordOfEveryKey<string>(""),
     tableValidity: recordOfEveryKey(false),
@@ -266,7 +296,7 @@ function schemaReducer(state: ActualizarWizardState, field: SchemaField, value: 
     [field]: value,
     tables: clearedFor(keys, "", state.tables),
     tableValidity: clearedFor(keys, false, state.tableValidity),
-    confirmation: field === "workSchema" ? { ...state.confirmation, workTableLabel: "" } : state.confirmation,
+    confirmation: field === "cartoSchema" ? { ...state.confirmation, typedTable: "" } : state.confirmation,
   };
 }
 
@@ -277,13 +307,37 @@ function tableReducer(state: ActualizarWizardState, key: ActualizarTableKey, tab
     tables: { ...state.tables, [key]: table },
     tableValidity: { ...state.tableValidity, [key]: valid },
   };
-  if (key === ActualizarTableKey.WORK && changed) {
-    return { ...next, confirmation: { ...next.confirmation, workTableLabel: "" } };
+  if (key === ActualizarTableKey.TARGET && changed) {
+    return { ...next, confirmation: { ...next.confirmation, typedTable: "" } };
   }
   if (key === ActualizarTableKey.TYPE && changed) {
     return { ...next, tableValidity: { ...next.tableValidity, [ActualizarTableKey.LOCALITY]: false } };
   }
   return next;
+}
+
+/** Turning the link on suggests the default address master table; turning it off drops that table, so a table nobody reads is never sent. */
+/** The target's role depends on the link, so its validity is re-checked against the new role. */
+function optionsReducer(state: ActualizarWizardState, patch: Partial<ActualizarOptionsDraft>): ActualizarWizardState {
+  const linkChanged = patch.linkAddressMaster !== undefined && patch.linkAddressMaster !== state.options.linkAddressMaster;
+  const next: ActualizarWizardState = {
+    ...state,
+    options: { ...state.options, ...patch },
+    tableValidity: linkChanged ? { ...state.tableValidity, [ActualizarTableKey.TARGET]: false } : state.tableValidity,
+  };
+  return withAddressMasterTableFor(next, patch.linkAddressMaster);
+}
+
+function withAddressMasterTableFor(state: ActualizarWizardState, linkAddressMaster: boolean | undefined): ActualizarWizardState {
+  if (linkAddressMaster === true && isBlank(state.tables.addressMaster)) {
+    return { ...state, tables: { ...state.tables, [ActualizarTableKey.ADDRESS_MASTER]: DEFAULT_ADDRESS_MASTER_TABLE } };
+  }
+  if (linkAddressMaster !== false) return state;
+  return {
+    ...state,
+    tables: { ...state.tables, [ActualizarTableKey.ADDRESS_MASTER]: "" },
+    tableValidity: { ...state.tableValidity, [ActualizarTableKey.ADDRESS_MASTER]: false },
+  };
 }
 
 export function wizardReducer(state: ActualizarWizardState, action: ActualizarWizardAction): ActualizarWizardState {
@@ -295,7 +349,7 @@ export function wizardReducer(state: ActualizarWizardState, action: ActualizarWi
     case "tableChosen":
       return tableReducer(state, action.key, action.table, action.valid);
     case "optionsChanged":
-      return { ...state, options: { ...state.options, ...action.patch } };
+      return optionsReducer(state, action.patch);
     case "confirmationChanged":
       return { ...state, confirmation: { ...state.confirmation, ...action.patch } };
     case "next":

@@ -9,10 +9,6 @@ describe("monthly carto hub stage list", () => {
       expect(stageOf(MonthlyStage.UNIDAD_TERRITORIAL)).toBeDefined();
     });
 
-    it("should mark the unidad-territorial stage as available rather than Próximamente", () => {
-      expect(stageOf(MonthlyStage.UNIDAD_TERRITORIAL)?.available).toBe(true);
-    });
-
     it("should keep the unidad-territorial stage after the cargar-localidades stage", () => {
       const ids = MONTHLY_STAGES.map((stage) => stage.id);
 

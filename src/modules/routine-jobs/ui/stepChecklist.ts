@@ -59,7 +59,7 @@ const isStepLabel = (label: string): label is StepLabel => STEP_LABEL_VALUES.has
 const uiLabelOf = (label: string): string => (isStepLabel(label) ? STEP_UI_LABEL[label] : label);
 
 const labelsOfPlan = (plan: RunPlan): readonly string[] => {
-  if ("clearMode" in plan) return actualizarPlannedStepLabels(plan);
+  if ("destinationTable" in plan) return actualizarPlannedStepLabels(plan);
   if ("tables" in plan) return localidadesPlannedStepLabels(plan);
   if ("unitTable" in plan) return plannedCompletarStepLabels(plan);
   if ("target" in plan) return plannedUnitStepLabels(plan);

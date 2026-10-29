@@ -36,6 +36,7 @@ export interface TableSelectorProps {
   onLoadError?: (error: unknown) => void;
   hideListError?: boolean;
   bare?: boolean;
+  hint?: string;
 }
 
 const messageOf = (error: unknown, fallback: string): string =>
@@ -67,6 +68,7 @@ export const TableSelector: React.FC<TableSelectorProps> = ({
   onLoadError,
   hideListError,
   bare = false,
+  hint,
 }) => {
   const selectId = useId();
   const [listAnswer, setListAnswer] = useState<ListAnswer | null>(null);
@@ -145,6 +147,7 @@ export const TableSelector: React.FC<TableSelectorProps> = ({
           ))}
         </select>
       </div>
+      {hint !== undefined && <p className={styles.hint}>{hint}</p>}
       {listView.message !== null &&
         showListMessage &&
         (isListBlocking ? (

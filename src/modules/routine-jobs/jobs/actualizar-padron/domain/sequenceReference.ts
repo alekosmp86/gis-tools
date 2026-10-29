@@ -29,10 +29,3 @@ export function sequenceReferenceOf(columnDefault: string | null | undefined): S
   if (!match) return undefined;
   return parseSequenceName(match[1].replace(/''/g, "'"));
 }
-
-export function isSameSequence(left: SequenceReference, right: SequenceReference): boolean {
-  return left.name === right.name && (left.schema === undefined || right.schema === undefined || left.schema === right.schema);
-}
-
-export const sequenceLabelOf = (sequence: SequenceReference): string =>
-  sequence.schema === undefined ? sequence.name : `${sequence.schema}.${sequence.name}`;

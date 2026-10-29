@@ -7,7 +7,6 @@ import { MONTHLY_STAGES, type MonthlyStage, type MonthlyStageDef } from "./month
 import styles from "./MonthlyCartoUpdate.module.css";
 
 const OPEN_LABEL = "Abrir";
-const SOON_LABEL = "Próximamente";
 
 export interface MonthlyCartoStageListProps {
   onOpen: (stage: MonthlyStage) => void;
@@ -24,15 +23,9 @@ const StageRow: React.FC<{ def: MonthlyStageDef; index: number; onOpen: (stage: 
       <h3 className={styles.stageTitle}>{def.title}</h3>
       <p className={styles.stageDescription}>{def.description}</p>
     </div>
-    {def.available ? (
-      <Button variant={ButtonVariant.SECONDARY} onClick={() => onOpen(def.id)}>
-        <span>{OPEN_LABEL}</span>
-      </Button>
-    ) : (
-      <Button variant={ButtonVariant.GHOST} isDisabled>
-        <span>{SOON_LABEL}</span>
-      </Button>
-    )}
+    <Button variant={ButtonVariant.SECONDARY} onClick={() => onOpen(def.id)}>
+      <span>{OPEN_LABEL}</span>
+    </Button>
   </li>
 );
 

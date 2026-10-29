@@ -36,9 +36,6 @@ const TRIGGER_AND_RULE_FACTS_SQL = `${TRIGGER_FACTS_SQL}
 UNION ALL
 ${RULE_FACTS_SQL}`;
 
-const PADRON_ID_SEQUENCE_SQL =
-  "SELECT pg_catalog.pg_get_serial_sequence(format('%I.%I', $1::text, $2::text), $3::text) AS sequence_name";
-
 export async function readRelationKind(session: CatalogQuerySession, layout: TableName): Promise<string | undefined> {
   const result = await session.query(RELATION_KIND_SQL, [layout.schema, layout.table]);
   const relkind = result.rows[0]?.relkind;
@@ -48,16 +45,6 @@ export async function readRelationKind(session: CatalogQuerySession, layout: Tab
 export async function readIdentityColumns(session: CatalogQuerySession, layout: TableName): Promise<string[]> {
   const result = await session.query(IDENTITY_COLUMNS_SQL, [layout.schema, layout.table]);
   return result.rows.map((row) => String(row.column_name));
-}
-
-export async function readPadronIdSequence(
-  session: CatalogQuerySession,
-  layout: TableName,
-  idColumn: string
-): Promise<string | null> {
-  const result = await session.query(PADRON_ID_SEQUENCE_SQL, [layout.schema, layout.table, idColumn]);
-  const sequence = result.rows[0]?.sequence_name;
-  return sequence === undefined || sequence === null ? null : String(sequence);
 }
 
 export async function readTriggerAndRuleFacts(session: CatalogQuerySession, layout: TableName): Promise<RelationFact[]> {

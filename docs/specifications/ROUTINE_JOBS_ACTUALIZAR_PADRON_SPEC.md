@@ -1,300 +1,381 @@
-# Routine Jobs — "Actualizar carto.padron" (user-facing: "Actualizar padrones de carto"): acceptance criteria
+# Routine Jobs — "Actualizar padrones de carto": acceptance criteria
 
-Second job of the `routine-jobs` module (`src/modules/routine-jobs/`, id `routine-jobs`). It sits next to the first job, "Cargar padrones"
-(`ROUTINE_JOBS_CARGAR_PADRONES_SPEC.md`), and reuses its conventions: one wizard per job, shared connection selector, job store, per-target
-lock, progress checklist, Spanish messages, scrubbed passwords.
-
-Job id: `actualizar-padron`. Spanish name: "Actualizar padrones de carto". Acceptance criteria ids use the prefix `AP-` to avoid clashing with
-the `AC-` ids of the Cargar padrones spec.
+Stage 5 of the monthly carto update job (`ROUTINE_JOBS_MONTHLY_CARTO_UPDATE_SPEC.md`) in the `routine-jobs` module (`src/modules/routine-jobs/`).
+Stage id `actualizar-padron`, Spanish name "Actualizar padrones". It reuses the conventions of the other stages: one wizard per stage, hub
+connection, `TableSelector`, shared job store, per-target lock, planned-step checklist, Spanish messages, scrubbed passwords, shared report
+components and CSV download. Acceptance criteria ids use the prefix `AP-`. Numbers of criteria that still apply are kept; `AP-8` is removed;
+criteria added by the in-place design are `AP-37` and up.
 
 ## Context
 
-The padron staging table is refreshed monthly by "Cargar padrones" (one unified row per padron, in the staging table, dev example
-`bdj_carto.catastro_paispadron_stg`, that is, a schema other than `carto`). The job of this spec populates a user-created work table from
-that staging table.
+- `carto.padron.id` is a stable identifier. It feeds the URNs `cgeo:padron:id:<id>` (addresses_master) and `access_point.id_padron` /
+  `addresses_2_0_edit.id_padron`, which have no foreign keys. **Existing ids never change** (MJ-13).
+- The staging table (`bdj_carto.catastro_paispadron_stg` in dev, a schema other than `carto`) is refreshed monthly by stage 1.
+- This stage applies the staging padrones **in place** to one destination table chosen by the user:
+  - a padron with no destination row of its key is inserted, and its id comes from the destination sequence;
+  - a padron whose geometry moved beyond the tolerance gets its geometry updated, and only the geometry;
+  - nothing else is written. Nothing is deleted, truncated, re-inserted or renumbered. Destination rows that the staging table no longer
+    carries are counted and listed, never touched.
+- The destination can be a scratch table (for example `carto.padron_tmp_actualizacion`) or `carto.padron` itself. Both are safe because the
+  stage never removes or renumbers rows. Applying to `carto.padron` is the user's decision after the dry run.
+- Dev finding (first real dry run): the locality table the user selects is `carto.territorial_unit` (`padron.id_cadastral_locality` points at
+  it), which holds 8 unit types. 337 of 496 `LOCALIDAD CATASTRAL` names are shared with another unit type in the same province, so name-only
+  resolution made 914,709 urban rows `LOCALIDAD_AMBIGUA`. The optional unit-type table and the locality type filter (AP-2b, AP-7b, AP-10,
+  AP-10b) resolve this.
 
-Comparison of the work table with the live `carto.padron` (NEW / MISSING / CHANGED / AMBIGUOUS, distances, histograms) is NOT part of the
-job. The user and the assistant do it by hand with queries on dev, to get context before the destination table is finally written.
-
-`carto.padron.id` is a stable identifier: it feeds the URNs `cgeo:padron:id:<id>` (addresses_master) and `access_point.id_padron` /
-`addresses_2_0_edit.id_padron` (no foreign keys). **Existing ids never change.** Nothing in this job deletes, re-inserts or re-numbers rows
-of `carto.padron`.
-
-Dev finding (first real dry run): the locality table the user selects is `carto.territorial_unit` (`padron.id_cadastral_locality` points at
-it), which holds 8 unit types. 337 of 496 `LOCALIDAD CATASTRAL` names are shared with another unit type in the same province, so name-only
-resolution made 914,709 urban rows `LOCALIDAD_AMBIGUA`. The optional unit-type table and the locality type filter (AP-2b, AP-7b, AP-10, AP-10b)
-resolve this.
-
-Scope of this version:
-- **Stage A (populate):** the job fills a user-created work table (the "temporary table") from the staging table. This is the whole job.
-- **Comparison with `carto.padron`:** manual, outside the job (see above).
-- **Stage C (apply to `carto.padron`: insert new rows, update geometry in place, never touch missing rows) is FUTURE.** It is listed under
-  "Out of scope" and will be specified after the manual comparison.
-
-Precondition: the staging table has been loaded by "Cargar padrones" (`unidadcat`, `nomdepto`, `nomloccat`, `padron`, `geom` present).
+Precondition: the staging table has been loaded by stage 1 (`unidadcat`, `nomdepto`, `nomloccat`, `padron`, `geom` present).
 
 Nothing in the module names a schema, table or column as a literal in SQL or API defaults. Table and schema names come from the user's
-selection; column names come from the job's declared logical columns (below) and are resolved against the catalog. String VALUES that are
-domain data (`RURAL`, `URBANO`, `LOCALIDAD CATASTRAL`) are not identifiers and are allowed; they are passed as bound parameters.
+selection; column names come from the job's declared logical columns and are resolved against the catalog. String VALUES that are domain
+data (`RURAL`, `URBANO`, `LOCALIDAD CATASTRAL`) are not identifiers; they are passed as bound parameters or literals.
 
 ## Layering (module_authoring.md)
-- `src/core/`: `TableCatalogService` and its types are reused. One backward-compatible change: the single-geometry-column fallback of the
-  column resolver applies to the logical names `geom` and `geometry` (covered by a core unit test).
-- `src/ui-kit/`: `TableSelector` and `ProfileSelect` are reused as they are.
-- `src/modules/routine-jobs/`: the new job folder `jobs/actualizar-padron/` (constants, domain SQL builders, planned steps, runner, session
-  wiring, types), the new routes in `module.routes.json`, the new wizard under `ui/`. Imports `core`, `ui-kit` and its own folder only.
-- The job store helper is shared inside the module (see AP-26), not copied.
 
-## Work table (user-owned)
+- `src/core/`: `TableCatalogService` and its types are reused as they are.
+- `src/ui-kit/`: `TableSelector` (with its optional `hint` line) and `ProfileSelect` are reused.
+- `src/modules/routine-jobs/`: the job folder `jobs/actualizar-padron/`, the shared helpers in `jobs/shared/` (table resolution, destination
+  preflight, geometry comparison, sequence repair, transaction, limits), the routes in `module.routes.json`, the wizard under `ui/`.
+- The padron job and stage 3 (`unidad-territorial`) use the same shared helpers. The CSV list writer (`listCsvOf`) is shared by the stages
+  that write change lists.
 
-The user creates the work table in the work schema, with a name of their choice. The job never creates, alters or drops it. Its columns:
+## Destination table (user-owned)
+
+The user creates the destination table in `cartoSchema`, with any name. The job never creates, alters or drops it. Logical columns:
 
 | Logical column | Type | Rule |
 |---|---|---|
-| `number` | varchar (up to 10) | Written by stage A. |
-| `type_padron` | varchar (up to 30) | Written by stage A (`RURAL` / `URBANO`). |
-| `id_cadastral_locality` | integer, nullable | Written by stage A; NULL for rural. |
-| `id_province` | integer | Written by stage A. |
-| `geometry` | geometry (MultiPolygon, SRID of `carto.padron`, or generic) | Written by stage A. |
-| `id` | integer | Optional. The job **never writes `id`** (see AP-5). |
+| `id` | integer | Filled only by the sequence default on insert. Never in an INSERT list or an UPDATE (AP-46). |
+| `number` | varchar (up to 10) | Written by insert. Part of the key. |
+| `type_padron` | varchar (up to 30) | Written by insert (`RURAL` / `URBANO`). Part of the key. |
+| `id_cadastral_locality` | integer, nullable | Written by insert; NULL for rural. Part of the key. |
+| `id_province` | integer | Written by insert. Part of the key. |
+| `geometry` | geometry (MultiPolygon, metric SRID) | Written by insert; updated in place for changed geometries (AP-44). |
 
-Any other column of the work table is either nullable or has a default; a NOT NULL column without default that the job does not write
-makes the run refuse (AP-5).
+`id_address_master` and every other column keep their defaults (NULL on insert).
 
 ## Schemas
 
-The wizard and the request carry three schema fields (AP-20, AP-27):
+The wizard and the request carry two schema fields:
 - `stagingSchema`: the schema of the staging table.
-- `workSchema`: the schema of the work table only.
-- `cartoSchema`: the schema of the padron, province, locality and (optional) unit-type tables (`carto` in dev).
+- `cartoSchema`: the schema of the destination, province, locality and (optional) unit-type tables (`carto` in dev).
 
 ## Catalog and table selection
 
-- AP-1: `POST catalog/columns` accepts seven new roles in addition to the existing `rural | urbano | target`: `actualizar-staging`,
-  `actualizar-temp`, `actualizar-padron`, `actualizar-provincia`, `actualizar-localidad`, `actualizar-localidad-tipada` (the locality table
-  read with `id_territorial_unit_type`, used only when a type table is selected), `actualizar-tipo` (the unit-type table, optional).
-  The required logical columns of each role are taken from the job constants, never from the request. An unknown role -> `400 { success:false,
-  error }` in Spanish. Existing roles are unchanged.
-- AP-2: Required logical columns per role, resolved per the catalog rules of the Cargar padrones spec (AC-2 tiers, generic `geom`
-  exception applied to the logical geometry column of every role):
-  - staging: `unidadcat`, `nomdepto`, `nomloccat`, `padron`, `geom`.
-  - temp: `number`, `type_padron`, `id_cadastral_locality`, `id_province`, `geometry`.
-  - padron (`carto.padron`, in `cartoSchema`): `id`, `geometry`. The padron table is used only for the two catalog reads of AP-5 and AP-7; no
-    row of it is read or written.
-  - province (`carto.province`, in `cartoSchema`): `id`, `name`.
-  - locality (`carto.cadastral_locality`, or `carto.territorial_unit` in dev, in `cartoSchema`): `id`, `name`, `id_province`. Plus `id_territorial_unit_type`
-    when a type table is selected (AP-2b).
-  - type (optional, `actualizar-tipo`, in `cartoSchema`): `id`, `name`. Selected or not, it is never required.
-- AP-2b: When a type table is selected, the locality table is checked under the role `actualizar-localidad-tipada` (AP-1), which additionally
-  requires the logical column `id_territorial_unit_type`, resolved like the others (for example `id_territorial_unit_type`). A missing or ambiguous `id_territorial_unit_type` is reported by AP-4 and the run cannot be started. When no type table
-  is selected, `id_territorial_unit_type` is neither required nor read.
-- AP-3: The selected tables must be distinct as `schema.table` across the three schemas: staging, work, and the padron, province, locality and
-  type tables (in `cartoSchema`). Five distinct tables when no type table is selected, six when it is. A repetition -> `400` in Spanish naming
-  the two tables; the lock is not taken and no query writes.
+- AP-1: `POST catalog/columns` accepts six roles: `actualizar-staging`, `actualizar-destino`, `actualizar-provincia`, `actualizar-localidad`,
+  `actualizar-localidad-tipada` (the locality table read with `id_territorial_unit_type`, used only when a type table is selected) and
+  `actualizar-tipo` (the unit-type table, optional). The required logical columns of each role come from the job constants. An unknown role
+  answers `400 { success:false, error }` in Spanish. The role `actualizar-padron` of the previous version is removed.
+- AP-2: Required logical columns per role, resolved with the catalog rules of the Cargar padrones spec (AC-2 tiers, generic `geom` exception):
+  - staging: `unidadcat`, `nomdepto`, `nomloccat`, `padron`, `geom`;
+  - destination: `id`, `number`, `type_padron`, `id_cadastral_locality`, `id_province`, `geometry`;
+  - province (`cartoSchema`): `id`, `name`;
+  - locality (`cartoSchema`): `id`, `name`, `id_province`, plus `id_territorial_unit_type` when a type table is selected (AP-2b);
+  - type (optional, `cartoSchema`): `id`, `name`. Never required.
+- AP-2b: When a type table is selected, the locality table is checked under `actualizar-localidad-tipada`, which additionally requires
+  `id_territorial_unit_type`. A missing or ambiguous column is reported by AP-4 and the run cannot start. Without a type table,
+  `id_territorial_unit_type` is neither required nor read.
+- AP-3: The selected tables must be distinct as `schema.table`: staging, and the destination, province, locality and type tables in
+  `cartoSchema`. Four distinct tables without a type table, five with one. A repetition answers `400` in Spanish naming the two tables; the
+  lock is not taken and no query writes.
 - AP-4: `POST actualizar-padron/start` (and the wizard's Tables step) report missing or ambiguous required columns of each selected role in
-  Spanish; a selection with unresolved required columns cannot be started.
+  Spanish. A selection with unresolved required columns cannot be started.
 
 ## Preflight (before BEGIN; no write)
 
-- AP-5: Work table checks, all in Spanish, all refusing before any write:
-  - the work table must be a regular or partitioned table (`pg_class.relkind` `r` or `p`); a view, materialized view or foreign table is
-    refused, because a DELETE or INSERT through it could reach another table such as `carto.padron`;
-  - no column of the work table (`id` or any other) may default to the sequence that backs the padron table's `id` (`carto.padron.id` in
-    dev). That sequence is resolved with `pg_get_serial_sequence` (serial and identity columns), not named in code. A work table that uses it
-    is refused;
-  - no column outside the resolved logical columns may be NOT NULL without default (`id` included, since it is never written); an identity
-    column counts as having a default;
-  - the resolved geometry column must be a geometry column whose SRID is the padron SRID or 0 (generic).
-- AP-6: Staging checks: staging geometry column is a polygon type (Polygon, MultiPolygon or generic GEOMETRY), as in AC-5 of Cargar
-  padrones; the staging `padron` column has a numeric data type; the staging table has at least one row; every staging geometry SRID is
-  either the padron SRID or exists in `spatial_ref_sys` (SRID 0 or an unknown SRID refuses the run). Empty or wrong staging -> refused
-  before any write, in Spanish.
-- AP-7: The target SRID is read from the catalog typmod of the padron table's geometry column in `cartoSchema` (`carto.padron` in dev; the
-  same rule as AC-8 of Cargar padrones). A generic (typmod 0) padron geometry column refuses the run.
-- AP-7b: Type table check (only when a type table is selected; before BEGIN; no write): the type table must contain exactly one row where
-  `upper(name) = upper(localityType)`. Zero or more than one -> refused in Spanish, naming the type (the `localityType` value) and the table
-  (`schema.table`). `localityType` is embedded in the populate SQL as a quote-escaped SQL literal and is validated by preflight against the
-  type table. The type id found here is the one used by AP-10. An absent `localityType` defaults to `LOCALIDAD CATASTRAL`; a blank
-  one is refused with `400` at parse time (AP-20), before any catalog read.
+- AP-5: Destination checks, all in Spanish, all refusing before any write:
+  - the destination is a regular or partitioned table without inheritance (children or parent), triggers or rewrite rules (`relkind` `r`
+    or `p`); a view, materialized view or foreign table is refused;
+  - the destination has a sequence for `id` (serial, identity or a `nextval` default). The sequence is resolved with
+    `pg_get_serial_sequence` or from the default, never named in code. Without one the run is refused, because inserts need ids;
+  - no column outside the written logical columns may be NOT NULL without default (`id` included; an identity column counts as having a
+    default);
+  - the connecting role has INSERT, UPDATE and SELECT on the destination and UPDATE on its sequence. No DELETE or TRUNCATE privilege is
+    requested, because neither is used.
+- AP-6: Staging checks: the staging geometry column is a polygon type (Polygon, MultiPolygon or generic GEOMETRY); the staging `padron` column
+  has a numeric data type; the staging table has at least one row; every staging geometry SRID exists in `spatial_ref_sys` (a geometry with
+  SRID 0 or an unknown SRID refuses the run).
+- AP-50: Destination key format (in the target check, before BEGIN, in dry run and real run alike): every row of the destination must have
+  the key the stage generates, or the run is refused, so it never inserts a padron stored under another spelling of its key. One read-only
+  query counts the rows that break any of: (a) `type_padron` is not exactly `RURAL` or `URBANO` (NULL included); (b) a `RURAL` row has a
+  non-NULL `id_cadastral_locality`; (c) `number` is NULL or does not match `^(0|[1-9][0-9]*)$` (`0` is valid). The refusal is one Spanish
+  message naming the count and one example row (`id`, `type_padron`, `id_cadastral_locality`, `number`). When the `number` column is not a
+  text type (`text`, `character varying`, `character`), the refusal names the column and its type, and check (c) is not run.
+- AP-7: The target SRID is read from the typmod of the destination geometry column (`geometry(MultiPolygon, <srid>)`). A generic (typmod 0)
+  column refuses the run. The SRID must be metric, because the tolerance and the Hausdorff distance are in metres (the rule of stage 3).
+- AP-7b: Locality type check (only when a type table is selected; before BEGIN): the type table must contain exactly one row where
+  `upper(name) = upper(localityType)`. Zero or more than one refuses the run in Spanish, naming the type and the table. The id of that row is
+  used as an equality on the locality join (AP-10). An absent `localityType` defaults to `LOCALIDAD CATASTRAL`; a blank one answers `400` at
+  parse time (AP-20).
 
-## Stage A: populate the work table
+## Candidates (staging rows)
 
-- AP-8: One transaction for the whole run, started with `BEGIN ISOLATION LEVEL REPEATABLE READ` so the populate and the report read the same
-  staging snapshot. Clearing option: `DELETE` (default) or `TRUNCATE`, as in AC-15/AC-16 of Cargar padrones
-  (privilege checked with `has_table_privilege` before BEGIN; TRUNCATE refused when another table has a foreign key to the work table; never
-  `CASCADE`). The padron table is never cleared or written.
-- AP-9: Province resolution: a staging row maps to the province row (`carto.province` in dev) where `upper(nomdepto) = upper(name)`. Zero
-  matches -> row skipped with reason `PROVINCIA_NO_ENCONTRADA`; more than one match -> skipped with `PROVINCIA_AMBIGUA`. The job never creates
-  provinces.
-- AP-10: Locality resolution (URBANO rows only): the locality row where `id_province` equals the resolved province id and
-  `upper(nomloccat) = upper(name)`. When a type table is selected (AP-2b), only locality rows whose `id_territorial_unit_type` equals the type id found by
-  AP-7b are considered. Zero matches -> skipped with `LOCALIDAD_NO_ENCONTRADA`; more than one -> `LOCALIDAD_AMBIGUA`. RURAL rows never look up
-  a locality and get `id_cadastral_locality` NULL. The job never creates localities.
-- AP-10b: Without a type table the type filter is not applied: every locality row of the locality table is a candidate, and `id_territorial_unit_type` is
-  neither required nor read, so `carto.cadastral_locality` keeps working. With a type table, locality rows whose `id_territorial_unit_type` is NULL never
-  match.
-- AP-11: Values: `number` = `trunc(padron)::text` (no decimals). `type_padron` = `unidadcat`. A NULL `padron`, a NULL `unidadcat`, a
-  `unidadcat` other than `RURAL` / `URBANO`, a NULL `nomdepto`, or an URBANO row with a NULL `nomloccat` -> skipped with reason
-  `CLAVE_NULA`. A `number` that does not fit the work table column rolls back the run with a Spanish error.
-- AP-12: Geometry: a NULL or empty geometry -> skipped `SIN_GEOMETRIA`. A geometry that is not valid is repaired with `ST_MakeValid`, keeping
-  only the polygonal part (`ST_CollectionExtract(..., 3)`), then `ST_Multi`; a repair that leaves nothing -> skipped `SIN_GEOMETRIA`. A valid
-  geometry that is not Polygon or MultiPolygon (generic staging column holding a point or a line) goes through the same polygonal
-  extraction and is skipped `SIN_GEOMETRIA` when nothing polygonal remains. Valid polygonal geometries are untouched. A geometry with a SRID
-  other than the target SRID is transformed with `ST_Transform`. The stored geometry is `ST_Multi`. Repair always runs (no option in this
-  version); repaired rows are counted in the report (AP-16).
-- AP-13: Natural-key collisions: after resolution, the natural key of a row is `(type_padron, id_province, id_cadastral_locality, number)`.
-  When several rows share a key, **every** row of that key is skipped with reason `CLAVE_DUPLICADA` (keeping one would be arbitrary). Each
-  colliding key is counted and listed in the report as a sample (AP-16).
-- AP-14: Skipped rows are never written. Written rows are exactly the accepted rows; a count mismatch between accepted rows and the rows
-  actually inserted rolls back the run with a Spanish error.
-- AP-15: After the insert the job runs `ANALYZE` on the work table, inside the transaction, in both modes. Its failure rolls back the run.
-- AP-16: Result report (built after the ANALYZE, returned in the job result):
-  - totals: staging rows read, rows accepted, rows written (must equal accepted), rows repaired (AP-12), rows skipped;
-  - skipped rows by reason (`skipped.byReason`: all seven reasons, zero counts included, so the UI can collapse them);
-  - skipped rows by department name (`skipped.byDepartment`) and by locality name (`skipped.byLocality`), top 20 by count each;
-  - `skipped.byLocalityAndReason`: groups by (department, locality, reason) with their counts, restricted to the two locality reasons
-    (`LOCALIDAD_NO_ENCONTRADA`, `LOCALIDAD_AMBIGUA`) and capped at 20 per reason (`row_number() OVER (PARTITION BY skip_reason ORDER BY count DESC)`,
-    PG11 compatible; no global LIMIT). It feeds the UI lists of localities not found and ambiguous with their padron counts (AP-32b);
-  - up to 20 sample skipped rows (department, locality, padron, reason), and up to 20 colliding keys (AP-13);
-  - step timings: elapsed ms per step, labelled as the planned steps of AP-23;
-  - warnings in Spanish (for example: skipped rows present, repaired geometries present, rows of a colliding key present, dry run: work
-    table not modified, outcome unknown).
+- AP-9: Province resolution: the province row where `upper(nomdepto) = upper(name)`. Zero matches -> skipped `PROVINCIA_NO_ENCONTRADA`; more
+  than one -> `PROVINCIA_AMBIGUA`. The job never creates provinces.
+- AP-10: Locality resolution (URBANO rows only): the locality row where `id_province` equals the province id and `upper(nomloccat) =
+  upper(name)`. When a type table is selected, only locality rows whose `id_territorial_unit_type` equals the id of AP-7b count. Zero matches
+  -> `LOCALIDAD_NO_ENCONTRADA`; more than one -> `LOCALIDAD_AMBIGUA`. RURAL rows never look up a locality and get `id_cadastral_locality`
+  NULL. The job never creates localities.
+- AP-10b: Without a type table, every locality row is a candidate. With a type table, locality rows whose `id_territorial_unit_type` is NULL
+  never match.
+- AP-11: Values: `number` = `trunc(padron)::text`; `type_padron` = `unidadcat`. A NULL `padron`, a NULL `unidadcat`, a `unidadcat` other than
+  `RURAL` / `URBANO`, a NULL `nomdepto`, or an URBANO row with a NULL `nomloccat` -> skipped `CLAVE_NULA`. A `number` that does not fit the
+  destination column rolls back the run with a Spanish error.
+- AP-12: Geometry: a NULL or empty geometry -> skipped `SIN_GEOMETRIA`. An invalid geometry is repaired with `ST_MakeValid`, keeping only the
+  polygonal part (`ST_CollectionExtract(..., 3)`), then `ST_Multi`; a repair that leaves nothing -> `SIN_GEOMETRIA`. A valid geometry that is
+  not Polygon or MultiPolygon goes through the same polygonal extraction. A geometry with another SRID is transformed with `ST_Transform`.
+  The candidate geometry is 2D and `ST_Multi`. Repair always runs; repaired rows are counted in the report (AP-16).
+- AP-13: Natural-key collisions: after resolution the key of a row is `(type_padron, id_province, id_cadastral_locality, number)`, where two
+  NULL localities are the same key. When several staging rows share a key, **every** row of that key is skipped with `CLAVE_DUPLICADA`.
+  Each colliding key is counted and listed (AP-16).
+- AP-14: Only accepted rows (candidates) are classified and written. Skipped rows are never candidates, never inserted and never update a
+  destination row.
 
 ## Run control
 
-- AP-17: `dryRun` performs stage A, `ANALYZE`, the report, then `ROLLBACK`. The report carries `tempModified: false`. A real run performs the
-  same, then `COMMIT`; `tempModified: true` is reported only when the commit succeeded. In both modes `padronModified` is `false`.
-- AP-18: A real run needs `confirm: true` and the password again. It also needs the work table name typed again in the wizard (AP-31). The
-  per-target lock is keyed on the work table: `host:port|db|workSchema|workTable` (host trimmed and lowercased, port normalised, as in
-  AC-24 of Cargar padrones). A second run on the same work table answers `409`.
-- AP-19: Any failure before `COMMIT` rolls back: the work table is left as it was before the run. A `COMMIT` that throws gives
-  `outcomeUnknown: true`; the UI asks the user to verify the work table before retrying (as AC-21 of Cargar padrones).
-- AP-20: The job runs in the background. `POST actualizar-padron/start` body = `{ connection, stagingSchema, stagingTable, workSchema,
-  workTable, cartoSchema, padronTable, provinceTable, localityTable, typeTable?, options: { clearMode, localityType? }, dryRun, confirm }`.
-  `stagingSchema` covers the staging table; `workSchema` covers the work table only; `cartoSchema` covers the padron, province, locality and
-  type tables. `typeTable` is optional (omitted or empty = no type table). `options.localityType` (text) applies when
-  `typeTable` is present: an absent (undefined) `localityType` defaults to `LOCALIDAD CATASTRAL`, a present blank (empty or whitespace-only)
-  one is refused with `400`, and a non-blank one is trimmed. It is ignored when no type table is given. Validated (AP-1..AP-7b, booleans, enum values).
-  Answers `200 { success, jobId }` at once. Errors: `400` for invalid body, repeated tables (AP-3), an unknown or ambiguous type (AP-7b) or
-  an empty `localityType` with a type table, `400` for `confirm` missing on a real run, `409` with `Ya hay una actualización en curso para
-  esta tabla.` when a job is RUNNING for the same work table.
+- AP-15: After the apply, the job runs `ANALYZE` on the destination, inside the transaction, in both modes. Its failure rolls back the run.
+- AP-16: Result report (built after the ANALYZE, returned in the job result):
+  - totals: staging rows read, candidates (accepted rows), rows repaired (AP-12), rows skipped;
+  - skipped rows by reason (`skipped.byReason`: all seven reasons, zero counts included);
+  - skipped rows by department name and by locality name, top 20 by count each;
+  - `skipped.byLocalityAndReason`: groups by (department, locality, reason), restricted to the two locality reasons and capped at 20 per
+    reason (PG11 compatible; no global LIMIT). It feeds the UI lists of localities not found and ambiguous (AP-32b);
+  - up to 20 sample skipped rows, and up to 20 colliding keys (AP-13);
+  - the target report of AP-37 to AP-45 (inserted rows, geometry changes, missing and ambiguous samples, counts);
+  - step timings: elapsed ms per step, labelled as the planned steps of AP-23;
+  - warnings in Spanish (AP-40 to AP-45, skipped rows, repaired geometries, colliding keys, dry run, outcome unknown).
+- AP-17: `dryRun` performs the whole stage, then `ROLLBACK`. The report carries `targetModified: false`. A real run performs the same, then
+  `COMMIT`; `targetModified: true` is reported only when the commit succeeded. The rollback undoes the rows only: `nextval` (the inserts)
+  and `setval` (AP-47) are not transactional, so a dry run leaves the destination id sequence advanced and the ids of the next real run
+  show gaps (as CU-10a of Completar unidades territoriales).
+- AP-18: A real run needs `confirm: true` and the password again. It also needs the destination table name typed again in the wizard (AP-31).
+  The per-target lock is keyed on the destination: `host:port|db|cartoSchema|targetTable` (host trimmed and lowercased, port normalised, as in
+  AC-24 of Cargar padrones). A second run on the same destination answers `409`.
+- AP-19: Any failure before `COMMIT` rolls back: the destination is left as it was before the run. A `COMMIT` that throws gives
+  `outcomeUnknown: true`; the UI asks the user to verify the destination table before retrying (as AC-21 of Cargar padrones).
+- AP-20: The job runs in the background. `POST actualizar-padron/start` body = `{ connection, stagingSchema, stagingTable, cartoSchema,
+  targetTable, provinceTable, localityTable, typeTable?, options: { tolerance, updateGeometries, localityType? }, dryRun, confirm }`.
+  `stagingSchema` covers the staging table; `cartoSchema` covers the destination, province, locality and type tables. `typeTable` is optional
+  (omitted or empty = no type table). `options.localityType` applies only when `typeTable` is present: an absent value defaults to
+  `LOCALIDAD CATASTRAL`, a present blank value is refused with `400`, and a non-blank one is trimmed. `options.tolerance` is a number greater
+  than or equal to 0 (`400` otherwise, AP-40). `options.updateGeometries` is a boolean. Answers `200 { success, jobId }` at once. Errors: `400`
+  for an invalid body, repeated tables (AP-3), an unknown or ambiguous type (AP-7b), a blank `localityType` with a type table, a missing
+  `confirm` on a real run; `409` with `Ya hay una actualización en curso para esta tabla.` when a job is running for the same destination.
 - AP-21: `GET actualizar-padron/status?jobId=...` -> `200 { success, job }` with the fields of AC-25 of Cargar padrones (`jobId`, `state`,
-  `step`, `current`, `total`, `dryRun`, `startedAt`, `finishedAt`, `result?`, `error?`, `outcomeUnknown?`). `400` without `jobId`,
-  `404` for an unknown id. A `result` with `outcomeUnknown` is DONE with that flag.
-- AP-22: `runActualizarPadron` takes injected dependencies (session, store, clock) and calls `onProgress({ label, current, total })` once per
-  step in order, 1-based. A throwing `onProgress` never fails the run. The planned steps come from a pure function,
-  `plannedStepLabels({ dryRun, clearMode })`, so the UI checklist shows the steps before the run starts; a dry run has no COMMIT step, a
-  real run has it.
-- AP-23: Planned steps (labels in Spanish): validar tablas y columnas (includes the type check of AP-7b), contar filas de staging, vaciar
-  tabla de trabajo, resolver provincias y localidades, cargar tabla de trabajo (includes repairing and validating geometries, AP-12), analizar
-  tabla de trabajo, generar informe, confirmar cambios (real run) or revertir (dry run).
+  `step`, `current`, `total`, `dryRun`, `startedAt`, `finishedAt`, `result?`, `error?`, `outcomeUnknown?`). `400` without `jobId`, `404` for
+  an unknown id. A `result` with `outcomeUnknown` is DONE with that flag.
+- AP-22: `runActualizarPadron` takes injected dependencies (session, clock) and calls `onProgress({ label, current, total })` once per step, in
+  order, 1-based. A throwing `onProgress` never fails the run. The planned steps come from the pure function `plannedStepLabels({ dryRun })`, so
+  the UI checklist shows them before the run starts. A dry run has no COMMIT step; a real run has it.
+- AP-23: Planned steps (labels in Spanish): validar tablas y columnas (includes the type check of AP-7b), validar tabla de destino (structure,
+  privileges, sequence), contar filas de staging, resolver provincias y localidades (candidates and the skip report), clasificar padrones,
+  ajustar secuencias de destino, aplicar cambios de padrones, analizar tabla de destino, generar informe, then confirmar cambios (real run) or
+  revertir cambios de la simulación (dry run).
 - AP-24: Session: the real session reuses the settings of shp-replace (`statement_timeout`, `lock_timeout`, `client_encoding = 'UTF8'`,
   memory settings) as in AC-28 of Cargar padrones. `connect` errors are scrubbed of the password; `close()` never throws. The password never
   appears in logs, statuses, results or error messages.
-- AP-25: Sample and payload caps (AP-14, AP-16, including the 20 groups per locality reason of `skipped.byLocalityAndReason`) hold for every report field, so the
-  status payload stays bounded regardless of table size.
+- AP-25: Sample and payload caps hold for every report field, so the status payload stays bounded whatever the table size: samples (skipped,
+  missing, ambiguous) and colliding keys at `SAMPLE_LIMIT` (20); skipped groups at 20; locality-and-reason groups at 20 per reason; the
+  inserted list and the geometry change list at `DETAIL_LIST_LIMIT` (500).
+- AP-26: The job store is the shared helper of the module (AC-26 of Cargar padrones): namespace `actualizar-padron`, `tryStart` per destination
+  key, `progress`, `finish`, `fail`, `get`, `sweep`. The lock is always released; a background throw marks the job FAILED.
+
+## Classification and apply (in place)
+
+- AP-37: A candidate matches the destination rows with the same key `(type_padron, id_province, id_cadastral_locality, number)`. The
+  locality equality is NULL-safe (a rural row has no locality). The match is by key only: names never take part.
+- AP-38: Every candidate gets exactly one class, and every destination row with no candidate gets `MISSING`:
+  - `NEW`: no destination row has the key;
+  - `AMBIGUOUS`: two or more destination rows have the key;
+  - `UNCHANGED`: one destination row whose geometry is equal after snapping to 0.001 m and normalising;
+  - `WITHIN_TOLERANCE`: one destination row, geometries differ, Hausdorff distance <= tolerance (AP-40);
+  - `CHANGED`: one destination row, Hausdorff distance > tolerance;
+  - `MISSING` (destination rows only): the key has no candidate.
+- AP-39: The geometry comparison is cheap first: an equality test on the snapped and normalised geometries; the Hausdorff distance is computed
+  only for candidates whose geometries differ and whose destination row exists. The area ratio (symmetric difference over union) is computed
+  only for the listed geometry changes.
+- AP-40: Tolerance option `Tolerancia (m)`: a number greater than or equal to 0, default 1.0, in metres. The request validates it as stage 3
+  does (`readTolerance`). The wizard blocks Siguiente on an invalid value.
+- AP-41: `MISSING` rows are only counted and sampled (up to 20, ordered by province and number). They are never deleted, updated or renumbered.
+  A key that exists in staging only as a skipped row (AP-12, AP-13) has no candidate and so counts as `MISSING`; the skip reasons of the report
+  show why.
+- AP-42: `NEW` candidates are inserted with the list `(type_padron, id_cadastral_locality, id_province, number, geometry)`. The id comes from
+  the destination sequence (its `nextval` default). The insert order is deterministic (`id_province`, `number`, `type_padron`,
+  `id_cadastral_locality`). `id_address_master` stays NULL.
+- AP-43: `UNCHANGED` and `WITHIN_TOLERANCE` candidates: nothing is written.
+- AP-44: `CHANGED` candidates: an UPDATE of the `geometry` column only, and only when `Actualizar geometrías` is on. When it is off, the changes
+  are counted and listed as detected, not applied (`Geometría detectada (no aplicada)`).
+- AP-45: `AMBIGUOUS` candidates: untouched and reported (count and up to 20 samples). The stage never guesses which destination row is right.
+- AP-46: The only writes of the stage are the INSERT of AP-42 and the UPDATE of AP-44. No statement writes `id`, `id_address_master` or any
+  other column, and the stage issues no DELETE and no TRUNCATE (a unit test greps the stage's SQL for both).
+- AP-47: The sequence repair (`Ajustar secuencias de destino`) runs after the classification and before the insert, in the same transaction:
+  `setval` to the maximum id plus one, or to the current sequence position when that is higher. Its privilege is checked by AP-5.
+- AP-48: Count checks roll back the whole transaction on mismatch, with a Spanish error: inserted rows equal the `NEW` count; updated rows equal
+  the `CHANGED` count when `Actualizar geometrías` is on (zero otherwise).
 
 ## Shared job store
 
-- AP-26: The job store is a helper of the module, shared by both jobs: the `globalThis` singleton of AC-26 of Cargar padrones
-  (`tryStart(tableKey, dryRun)` returns null while RUNNING for that key, `progress`, `finish`, `fail`, `get`, `sweep(maxAgeMs)` with
-  finished jobs older than 1 h swept on the next start or status). The Cargar padrones job switches to the shared helper without behaviour
-  change, and its tests keep passing. The lock is always released: a background throw marks the job FAILED.
+- AP-26 (above) is the only store criterion; the Cargar padrones job uses the same helper without behaviour change.
 
 ## Client (UI)
 
 Everything user-facing is Spanish; code is English; modular CSS, no inline styles, Lucide icons only.
 
 - AP-27: Wizard (`ui/ActualizarPadronWizard.tsx`), five steps with `WizardOrchestrator`: (1) Conexión, (2) Tablas, (3) Opciones, (4) Revisar,
-  (5) Resultado. The reducer is pure (`ui/actualizarPadronWizardState.ts`); `canContinue` requires: connection fields valid; the three schemas
-  chosen; the required tables chosen, distinct and all valid (the type table is optional); when a type table is selected, a non-empty
-  locality type; options valid; for a real run the typed work table name and password match.
-  Changing the connection resets the schemas and table choices. Changing a schema resets only the table choices that live in that schema
-  (`stagingSchema`: staging table; `workSchema`: work table; `cartoSchema`: padron, province, locality and type tables).
+  (5) Resultado. The reducer is pure (`ui/actualizarPadronWizardState.ts`). `canContinue` requires: connection fields valid; the two schemas
+  chosen; the required tables chosen, distinct and valid (the type table is optional); when a type table is selected, a non-blank locality
+  type; a valid tolerance; for a real run, the typed destination table name and the password match. Changing the connection resets the schemas
+  and table choices. Changing a schema resets only the table choices that live in that schema (`stagingSchema`: staging table; `cartoSchema`:
+  destination, province, locality and type tables).
 - AP-28: Connection step uses the shared saved-connection selector (`ProfileSelect` over `core/services/localStorageDbConfig.ts`), as the
   Cargar padrones step. Profiles are connection-only (host, port, database, user; never the password). The wizard does not store schemas,
   tables or options in profiles.
-- AP-29: Tables step: three schema fields (staging schema, work schema, carto schema), then the `TableSelector` instances: staging table, work
-  table, padron, province, locality, and an optional "Tabla de tipos de unidad" (may be left empty). Each shows the Spanish required-column
-  status of AP-2 and AP-2b. A distinctness violation (AP-3) is shown in Spanish and blocks Siguiente.
-- AP-30: Options step: clear mode `DELETE` / `TRUNCATE` with the privilege note of AP-8, and a "Tipo de localidad" text field (default
-  `LOCALIDAD CATASTRAL`, domain value, not an identifier). The text field is shown only when a type table is selected and must not be empty
-  (AP-7b). No tolerance, no repair toggle and no sequence option.
-- AP-31: Review step: summary of the selected tables (the type table and the locality type only when a type table is selected) and the clear
-  mode; "Analizar sin cargar" = dry run (password required); "Actualizar tabla de trabajo" = real run (password and the work table name typed
-  again, plus a warning that the work table is overwritten and that `carto.padron` is not modified).
+- AP-29: Tables step: two schema fields (staging schema, carto schema), then the `TableSelector` instances: "Tabla de origen" (staging),
+  "Tabla de destino" (the table that receives the data), "Tabla de provincias", "Tabla de localidades", and "Tabla de tipos de unidad
+  (opcional)". There is no padron selector. The Tables step also holds the link option of AP-51 (a checkbox, off by default) and, only when it is on, the "Tabla de direcciones maestras" selector of AP-53. The destination shows the hint that it receives inserts and geometry updates, that it never loses
+  rows and never changes ids, and that a scratch table such as `padron_tmp_actualizacion` is the way to test. Each selector shows the
+  Spanish required-column status of AP-2 and AP-2b. A distinctness violation (AP-3) is shown in Spanish and blocks Siguiente.
+- AP-30: Options step: a "Tipo de localidad" text field (default `LOCALIDAD CATASTRAL`, a domain value, not an identifier), shown only when a
+  type table is selected and not empty (AP-7b). `Tolerancia (m)` (default `1,0`, same validation and hint as stage 3) and `Actualizar
+  geometrías` (default on, with the warning that it replaces the destination geometry by the cadastre polygon, and the hint that inserts are
+  applied either way). No clear mode, no repair toggle and no sequence option.
+- AP-31: Review step: summary of the selected tables (the type table and the locality type only when a type table is selected), the tolerance
+  and the geometry option. The info line "Inserta los padrones nuevos y actualiza la geometría de los existentes. Nunca borra filas ni cambia
+  ids." is always shown. When `Actualizar geometrías` is on, the overwrite warning is shown. "Analizar sin cargar" = dry run (password required).
+  "Actualizar padrones" = real run (password and destination table name typed again). With the link option on, the review also shows
+  the option and the address master table, and the warning of AP-59 when the destination is not named `padron`.
 - AP-32: Result step: planned-step checklist (every planned step listed at once, done / current / pending, planned steps sent by the server in
-  the job status, no raw `current / total` counter) and elapsed time from the run store while running; the report afterwards (AP-16), laid out
-  as AP-32b. A dry run shows a banner that the work table was not modified. An `outcomeUnknown` result shows the verify-before-retry banner.
-- AP-32b: Report layout (readability; the first real report was hard to read: long full-width label/value lists, tiny text, a very long
-  department list):
-  - summary header with four KPI cards: staging rows read, rows written, rows skipped, rows repaired; below them one banner: dry run ("Análisis:
-    la tabla de trabajo no fue modificada") or real run done ("Tabla de trabajo actualizada");
-  - skipped by reason: a compact table with one row per non-zero reason, a proportional bar and the percentage. Zero reasons are collapsed
-    into one line ("Sin filas: n motivos") or hidden. Each shown reason has a one-line Spanish explanation of what it means and what to do;
-  - skipped by department and by locality: compact two-column tables limited to the top 10, with a "Ver todo (n)" collapsible for the rest;
-  - "Localidades no encontradas" (locality, department, padron count, top 20 from `skipped.byLocalityAndReason`) shown when
-    `LOCALIDAD_NO_ENCONTRADA` > 0, and "Localidades ambiguas" likewise for `LOCALIDAD_AMBIGUA`;
-  - samples and colliding keys in collapsible tables; step timings in a collapsible;
-  - warnings and banners as in AP-32; consistent spacing scale, body text at least 14 px, nothing below 12 px, zebra rows in every table.
-- AP-33: Run store (`ui/actualizarPadronRunStore.ts`) follows AC-29 of Cargar padrones: holds the active job id, polls status every 2 s
-  (timer injected), stops on DONE/FAILED, survives in-app navigation, gives up only after consecutive poll failures span 60 s and then
-  reports an unknown outcome with the job id; never keeps the password in its snapshot.
-- AP-34: Report view-model (`ui/actualizarPadronReportView.ts`): pure and unit tested. It turns the result into display data: KPI values,
-  the percentage per reason (share of the skipped rows, that is of the sum of `skipped.byReason`; 0 when nothing was skipped), the non-zero reasons sorted by count with their explanation, the
-  top 10 lists per department and locality with a `rest` count (`n` minus 10 when positive), the localities-not-found and ambiguous
-  aggregations taken from `skipped.byLocalityAndReason` (filtered by reason, sorted by count), samples, warnings and banners.
-- AP-35: Dashboard: the routine-jobs job list (`RoutineJobsDashboard`) shows "Actualizar padrones de carto" next to "Cargar padrones"; both open
-  their wizard. The module page (`/tools/m/routine-jobs`), the home card and the manifest need no new entry point.
-- AP-36: Routes: `module.routes.json` declares the two new endpoints (`actualizar-padron/start`, `actualizar-padron/status`) and the new
-  catalog roles (`actualizar-localidad-tipada` and `actualizar-tipo` included); the generated routes are regenerated with `npm run modules:routes`, never hand-edited;
-  `npm run modules:routes:check` passes.
+  the job status), elapsed time from the run store while running; the report afterwards (AP-16), laid out as AP-32b. A dry run shows the
+  banner that the destination was not modified. An `outcomeUnknown` result shows the verify-before-retry banner.
+- AP-32b: Report layout:
+  - a KPI row: rows read, candidates, skipped, inserted, updated, geometry changes; below it the outcome banner (dry run "Análisis: la tabla de
+    destino no fue modificada", or confirmed "Actualización confirmada: la tabla de destino fue modificada", or unknown);
+  - skipped by reason: a compact table with one row per non-zero reason, a proportional bar and the percentage; zero reasons collapsed into
+    one line ("Sin filas: n motivos"). Each shown reason has a one-line Spanish explanation;
+  - the target section (destination table name): counts "Insertadas", "Actualizadas", "Geometrías que cambian", "Sin cambios", "Sin cambios
+    dentro de tolerancia", "Faltantes en destino", "Ambiguas", a note when geometry changes were detected but not applied, and collapsible
+    lists (inserted, geometry changes, missing, ambiguous) whose summary says "primeras N de M" when cut;
+  - skipped by department and by locality: top 10 with "Ver todo (n)" for the rest;
+  - "Localidades no encontradas" and "Localidades ambiguas" (AP-16), shown when non-empty;
+  - skipped samples and colliding keys in collapsible tables; step timings in a collapsible;
+  - warnings as a list; body text at least 14 px, nothing below 12 px, zebra rows in every table.
+- AP-33: Run store (`ui/actualizarPadronRunStore.ts`) follows AC-29 of Cargar padrones: holds the active job id, polls status every 2 s (timer
+  injected), stops on DONE/FAILED, survives in-app navigation, gives up only after consecutive poll failures span 60 s and then reports an
+  unknown outcome with the job id; never keeps the password in its snapshot. Its plan is `{ dryRun, destinationTable }`.
+- AP-34: Report view-model (`ui/actualizarPadronReportView.ts`): pure and unit tested. It turns the result into display data: KPI values, the
+  percentage per reason (share of the skipped rows; 0 when nothing was skipped), the non-zero reasons sorted by count, the top 10 lists per
+  department and locality with a `rest` count, the localities-not-found and ambiguous aggregations from `skipped.byLocalityAndReason`, the
+  target counts and lists with their summaries, samples, warnings (without the dry-run and unknown-outcome texts, which are banners) and banners.
+- AP-35: Dashboard: the routine-jobs job list shows "Actualizar padrones" as stage 5 of the monthly update; its wizard opens from there. The module
+  page, the home card and the manifest need no new entry point.
+- AP-36: Routes: `module.routes.json` declares the two endpoints (`actualizar-padron/start`, `actualizar-padron/status`) and the catalog roles
+  travel with `catalog/columns`. The generated routes are regenerated with `npm run modules:routes`, never hand-edited; `npm run
+  modules:routes:check` passes.
+
+## Change list (CSV)
+
+- AP-49: "Descargar CSV" exports the database changes only, as a flat table with the header
+  `Tabla,Cambio,Tipo,Provincia,Localidad,Padrón,Distancia (m),Relación de área,Id`. The `Id` column is empty for the rows below; only the
+  AP-58 rows fill it, so the ids of inserted padrones are still not exported. One row per inserted padron (`Insertada`) and one per
+  geometry change (`Geometría modificada` when applied, `Geometría detectada (no aplicada)` when not). The rows are ordered by kind, then
+  department (Provincia), locality (Localidad), padrón. `Provincia` and `Localidad` are the staging names, empty cells are "sin dato". The
+  formula guard and the escaping of the shared CSV helper apply. When a list is cut at its cap (the real count is greater than the list length)
+  the CSV ends with one marker row per cut list (MJ-14): Tabla = destination table, Cambio = `Lista incompleta: se muestran las primeras 500 de N
+  padrones insertados` or `... de N geometrías que cambian`, other cells empty. The filename follows the convention of the other stages with the
+  slug `actualizar-padron`.
+
+## Inconsistencies list (CSV)
+
+- AP-61: "Descargar inconsistencias" appears only when the report has skipped rows (`skipped.skippedRows` non-empty) and exports the skipped
+  staging rows, not database changes: a flat table with the header `Motivo,Departamento,Localidad,Padrón`, one row per skipped row. `Motivo`
+  is the Spanish label of the skip reason (the same labels as the report), `Departamento`, `Localidad` and `Padrón` are the staging values
+  (empty cells are "sin dato"). The rows come from the report SQL, capped at `DETAIL_LIST_LIMIT` (500), ordered by skip reason, department,
+  locality and padrón. The total comes from the counts. When the list is cut, the CSV ends with one marker row: the `Lista incompleta: se
+  muestran las primeras 500 de N filas omitidas` text in the second cell, the other cells empty. The formula guard and the escaping of the
+  shared CSV helper apply. The filename is `carto-actualizar-padron-<simulacion|real>-inconsistencias-<stamp>.csv`. The 20-sample table of
+  the report is unchanged, and the database-changes CSV (AP-49) does not change.
+
+## Address master links (option)
+
+The padrones this stage inserts have no address master record (`id_address_master` is NULL). The option below links them, in the same
+transaction. The rules are the legacy `addressMaster.sql` PADRON block (URN `cgeo:padron:id:<id>`, insert with latitude and longitude 0,
+link where NULL), with the MJ-13 invariants: exact URN equality (never `SPLIT_PART`), no id is written, no DELETE or TRUNCATE. The SQL is the
+shared one of `jobs/shared/addressMasterLink*` that stage 4 also uses, so both stages apply the same rules.
+
+- AP-51: Option `Enlazar direcciones maestras de los padrones` (`options.linkAddressMaster`, a boolean parsed strictly, as the other boolean
+  options; the wizard sends it, default off). Off: the stage behaves exactly as above, and the request carries no `addressMasterTable`. On:
+  the request must carry `addressMasterTable` (in the carto schema, distinct from the destination, province, locality and type tables) and
+  the stage links the destination padrones to their address master records as AP-52 describes.
+- AP-52: The linking pass runs inside the same `REPEATABLE READ` transaction, after the upsert of AP-42 and AP-44 and its count check
+  (AP-48), before ANALYZE. Candidates: every destination row with `id_address_master IS NULL`, that is the rows just inserted and any older
+  row still unlinked. Each candidate's URN is `cgeo:padron:id:` followed by its id, matched by exact equality. No record with that URN: a
+  new record `(urn, latitud, longitud) = (urn, 0, 0)`, ordered by padron id, its id from the table sequence. Exactly one record: only
+  linked. Two or more: AMBIGUOUS, neither created nor linked, reported (count and up to 20 samples). The only write is `UPDATE <destination>
+  SET id_address_master = ... WHERE id_address_master IS NULL`; the address master table receives only `urn`, `latitud` and `longitud`.
+- AP-53: Preflight, before BEGIN and refusing with Spanish messages like AP-5, when the option is on: the address master table is a
+  regular or partitioned table without inheritance, triggers or rules; the user has SELECT and INSERT on it and UPDATE on its sequence; its
+  `addresses_master_id` has a sequence and `urn`, `latitud` and `longitud` resolve. The destination resolves `id` and `id_address_master`
+  (the latter only when the option is on); a missing column is named in the block.
+- AP-54: The address master sequence is repaired (`Ajustar secuencia de direcciones maestras`) once, before the first address master
+  insert of the transaction, after the destination's own repair (AP-47). The lock key set of the run includes the address master table when
+  the option is on, so the lock prevents another stage-5 run on the same tables. The job stores are per stage, so a stage-4 run and a
+  stage-5 run on `addresses_master` do not block each other. That is harmless: the URN prefixes differ and the sequence repair never
+  lowers the sequence.
+- AP-55: Count checks roll back the whole transaction on mismatch, in Spanish: records created equal the classification's `toCreate`
+  ("Los registros de dirección maestra creados para padrones (X) no coinciden con los esperados (Y) en T."); padrones linked equal
+  `toCreate + alreadyHadRecord` ("Los padrones enlazados (X) no coinciden con los esperados (Y) en T."); padrones still without address
+  master after the link equal the ambiguous count ("Los padrones sin dirección maestra después del enlace (X) no coinciden con los
+  ambiguos (Y) en T.").
+- AP-56: A dry run rolls back both passes; the report says the destination was not modified. A real run commits both or neither. The
+  result carries the address master section only when the option is on (AP-57).
+- AP-57: Result section `addressMaster` (present only when the option is on): counts (padrones sin dirección maestra, registros por crear,
+  registros creados, padrones enlazados, ya tenían registro, ambiguos, sin dirección maestra después del enlace), the linked list (up to
+  `DETAIL_LIST_LIMIT`, with id, address master id and created or existing), and the ambiguous samples (up to `SAMPLE_LIMIT`). The report
+  shows it as a section of its own after the destination section, with the list cut markers of AP-58.
+- AP-58: The stage CSV (AP-49) appends, when the option is on, one row `Dirección maestra creada para padrón` (Tabla = address master table,
+  Id = padron id) per created record and one row `Padrón enlazado` (Tabla = destination table, Id = padron id) per linked padron. A cut list
+  gets its marker (MJ-14) for the created and for the linked lists. No metadata rows.
+- AP-59: Safety warning: when the option is on and the destination table name is not `padron`, the review step shows a visible warning,
+  in Spanish: "La tabla de destino no es «padron»: se crearán direcciones maestras reales para los ids de esa tabla." It does not block
+  the run; the typed confirmation of AP-18 is unchanged.
+- AP-60: Legacy script rules, noted for review: the link never renumbers, never deletes, never writes the address master id, and never
+  overwrites a non-null `id_address_master`. A second run finds nothing to link except the ambiguous padrones.
 
 ## Performance expectation
 
-- The whole job is set-based SQL. No row-by-row loops, no per-row round trips.
-- PostgreSQL 11 materializes every CTE, so the classification chain must run as few times as possible: `ST_IsValid` is computed once per
-  staging row; the populate is one statement; the report is ONE statement over one chain (totals plus the bounded top lists, the
-  locality-and-reason groups, samples and colliding keys) that carries no geometry columns; there is no separate "accepted count" chain: the
-  written count is compared with `rowsRead - skipped` of the report (same snapshot, AP-8).
-- Stage A: one `INSERT ... SELECT` from the staging table with hash joins to the province and locality tables (both small). The type id of
-  AP-7b is resolved once and applied as an equality on the locality join; no subquery per row.
-  `ST_MakeValid` runs only on invalid rows (`CASE`), and `ST_Transform` only on rows whose SRID differs from the target, so valid
-  geometries cost one check each.
-- The job requires no index on the work table or on the padron table. It runs `ANALYZE` on the work table after populate (AP-15). The padron
-  table is read only for catalog metadata, so no index is needed on it.
-- No hard time budget is set yet. The report returns elapsed ms per step (AP-16) so real dev runs produce the figures for the next spec.
+- The whole stage is set-based SQL. No row-by-row loops, no per-row round trips.
+- PostgreSQL 11 materialises every CTE. The candidate chain runs once per statement: once for the classification and once inside the apply
+  statement, so that the write is a single data-modifying statement (as in stage 3). `ST_IsValid` is computed once per staging row inside the
+  chain. `ST_MakeValid` runs only on invalid rows and `ST_Transform` only on rows whose SRID differs from the target.
+- Keys are matched by hash joins on `(type_padron, id_province, number)` plus the NULL-safe locality. The geometry comparison is cheap first
+  (AP-39).
+- **The first real dry run on dev must measure it**: about 1.3 million staging rows, and a first run into an empty destination inserts about
+  1.2 million rows (the CSV is then capped and the marker line matters). Record the elapsed ms per step (AP-16) and the database time. No index is
+  created by the job; an index on the destination key would speed the joins, and is a decision for the DBA after the measurement.
+- No hard time budget is set yet.
 
 ## Out of scope
 
-- Comparison of the work table with `carto.padron` (NEW, MISSING, CHANGED, AMBIGUOUS, Hausdorff distances, histograms, per-department
-  comparison counts, comparison samples). Done manually by the user and the assistant with queries on dev, not by this job.
-- Stage C: inserting new rows into `carto.padron`, updating geometry in place, reporting the new ids, and never touching missing rows.
-  FUTURE: specified after the manual comparison.
-- Any write to `carto.padron`, its sequence, or any table other than the work table.
-- Creating or dropping the work table, provinces or localities. Creating missing localities (for example `ALFREDO MONES QUINTELA`) is NOT
-  done by this job; the user will decide whether a separate "Cargar localidades" job is needed. Rows of such localities stay skipped
-  (`LOCALIDAD_NO_ENCONTRADA`) and are listed in the report (AP-32b).
-- Tolerance option, repair toggle, sequence reset options, wiki page for this job, preprod/prod runs, index creation.
+- Deleting, truncating, re-inserting or renumbering destination rows. Missing rows are counted and listed only (AP-41).
+- Comparison histograms and per-department comparison counts. The user and the assistant compare by hand with queries on dev.
+- Creating or dropping the destination table, provinces or localities. Creating missing localities is a separate decision (see the monthly spec).
+- Accent-insensitive name matching, repair toggles, sequence reset options, preprod/prod runs, index creation, wiki pages beyond the user guide.
 
 ## Open questions / assumptions
 
-1. Work table DDL is owned by the user: the job does not create it. It is a regular table in the work schema (not `pg_temp`), so the wizard
-   can list it. The user drops or empties it when done.
-2. Privileges: SELECT on the province, locality and (when selected) type tables in `cartoSchema`; the catalog metadata of the padron table
-   (column default and typmod) readable by the connecting role, with no row read; SELECT, INSERT, DELETE (and TRUNCATE when chosen) plus
-   ANALYZE on the work table; SELECT on the staging table. The job checks the work-table privileges before BEGIN; read privileges on the
-   others are assumed and fail with a database error if missing.
-3. The locality table links to the province through a column named `id_province`, and the type filter assumes a column `id_territorial_unit_type` on the
-   locality table (assumed; verify both on dev before the first run, `carto.territorial_unit` included).
-4. Name matching is `upper()` on both sides, with no accent or whitespace normalisation. Accent mismatches appear as skipped rows with
-   samples; an accent-insensitive match is a later decision.
-5. `statement_timeout` for the populate statements on the staging volume is taken from shp-replace settings; it is to be measured on dev.
-6. Stage C design (insert policy for NEW, in-place geometry update for CHANGED, handling of MISSING and AMBIGUOUS) is deliberately left open
-   until the manual comparison has been done on dev.
-7. Whether a separate "Cargar localidades" job is needed for localities missing from the locality table (see Out of scope) is the user's
-   decision; this spec does not create them.
+1. Decision: stage 6 "Aplicar padrones" of the monthly spec is removed. Stage 5 inserts and updates in place in the chosen destination table
+   (a test table first, then `carto.padron`), so no separate apply stage is needed.
+2. A key present in staging only as a skipped row (`SIN_GEOMETRIA`, `CLAVE_DUPLICADA`) counts as `MISSING` in the destination, because
+   `MISSING` is defined on accepted candidates. Confirm this reading with the user.
+3. The destination needs UPDATE on its table and its sequence even when `Actualizar geometrías` is off, as in stage 3. Confirm with dev roles.
+4. The destination geometry must have a metric SRID (AP-7). The previous version only required a non-zero SRID. Confirm that `carto.padron`
+   has a metric SRID before the first real run.
+5. Performance on dev is unmeasured (see Performance expectation). The timeout and the lock settings of AP-24 apply to this stage too.
+6. The locality table links to the province through `id_province`, and the type filter assumes `id_territorial_unit_type` on the locality
+   table (assumed; verify both on dev, `carto.territorial_unit` included).
+7. Name matching is `upper()` on both sides, with no accent or whitespace normalisation (as before).
 
 ## Acceptance criteria count
 
-AP-1 to AP-36 plus AP-2b, AP-7b, AP-10b and AP-32b (40 criteria).
+AP-1 to AP-7b, AP-9 to AP-14 (AP-8 removed), AP-15 to AP-36, AP-37 to AP-49, with AP-2b, AP-7b, AP-10b and AP-32b. AP-50 is the
+destination key-format check. AP-51 to AP-60 are the address master link option. Criteria AP-26 and AP-49 are the shared-store and CSV
+criteria. AP-61 is the inconsistencies list.

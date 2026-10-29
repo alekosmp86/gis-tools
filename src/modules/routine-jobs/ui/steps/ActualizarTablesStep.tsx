@@ -11,28 +11,37 @@ import styles from "./WizardSteps.module.css";
 
 const CATALOG_ERROR_MESSAGE = "No se pudo consultar la base. Revise la conexión.";
 const STAGING_SCHEMA_LABEL = "Esquema de origen";
-const WORK_SCHEMA_LABEL = "Esquema de trabajo";
 const CARTO_SCHEMA_LABEL = "Esquema de carto";
 const SCHEMA_HINT =
-  "El esquema de origen contiene la tabla de staging. El de trabajo contiene la tabla de trabajo. El de carto contiene padrón, provincias, localidades y, si se elige, tipos de unidad.";
+  "El esquema de origen contiene la tabla de origen. El de carto contiene la tabla de destino, las provincias, las localidades, y si se elige, los tipos de unidad y las direcciones maestras.";
 
-const SELECTORS: ReadonlyArray<{ key: ActualizarTableKey; label: string }> = [
+const TARGET_HINT =
+  "Recibe los datos: inserta los padrones nuevos y actualiza las geometrías cambiadas. Nunca borra filas ni cambia ids. Para probar, use una tabla de prueba como padron_tmp_actualizacion.";
+const LINK_LABEL = "Enlazar direcciones maestras de los padrones";
+const LINK_HINT =
+  "Crea la dirección maestra de cada padrón que no tiene una y la enlaza con el padrón, en la misma transacción. Desactivado por defecto: solo se activa si el padrón debe tener dirección maestra.";
+const ADDRESS_MASTER_HINT =
+  "Donde se crean los registros de dirección maestra de los padrones. Debe ser distinta de la tabla de destino.";
+
+const SELECTORS: ReadonlyArray<{ key: ActualizarTableKey; label: string; hint?: string }> = [
   { key: ActualizarTableKey.STAGING, label: "Tabla de origen" },
-  { key: ActualizarTableKey.WORK, label: "Tabla de trabajo" },
-  { key: ActualizarTableKey.PADRON, label: "Tabla padrón" },
+  { key: ActualizarTableKey.TARGET, label: "Tabla de destino", hint: TARGET_HINT },
   { key: ActualizarTableKey.PROVINCE, label: "Tabla de provincias" },
   { key: ActualizarTableKey.LOCALITY, label: "Tabla de localidades" },
   { key: ActualizarTableKey.TYPE, label: "Tabla de tipos de unidad (opcional)" },
 ];
 
+const ADDRESS_MASTER_SELECTOR = { key: ActualizarTableKey.ADDRESS_MASTER, label: "Tabla de direcciones maestras", hint: ADDRESS_MASTER_HINT };
+
 const isBlank = (value: string): boolean => value.trim() === "";
 
 export interface ActualizarTablesStepProps {
   stagingSchema: string;
-  workSchema: string;
   cartoSchema: string;
   tables: Record<ActualizarTableKey, string>;
   excluded: Record<ActualizarTableKey, string[]>;
+  linkAddressMaster: boolean;
+  onLinkAddressMasterChange: (linkAddressMaster: boolean) => void;
   onSchemaChange: (field: SchemaField, schema: string) => void;
   onTableChange: (key: ActualizarTableKey, table: string, valid: boolean) => void;
   loadTables: (schema: string) => Promise<TableListing>;
@@ -41,16 +50,24 @@ export interface ActualizarTablesStepProps {
   catalogError: string | null;
 }
 
-/** TableSelector re-checks columns only when its own value changes, so the locality selector is remounted when the type table changes. */
-const selectorKeyOf = (key: ActualizarTableKey, tables: Record<ActualizarTableKey, string>): string =>
-  key === ActualizarTableKey.LOCALITY ? `${key}:${tables[ActualizarTableKey.TYPE]}` : key;
+/** TableSelector re-checks columns only when its own value changes, so the selectors whose role depends on another choice are remounted when it changes. */
+const selectorKeyOf = (
+  key: ActualizarTableKey,
+  tables: Record<ActualizarTableKey, string>,
+  linkAddressMaster: boolean
+): string => {
+  if (key === ActualizarTableKey.LOCALITY) return `${key}:${tables[ActualizarTableKey.TYPE]}`;
+  if (key === ActualizarTableKey.TARGET) return `${key}:${linkAddressMaster}`;
+  return key;
+};
 
 export const ActualizarTablesStep: React.FC<ActualizarTablesStepProps> = ({
   stagingSchema,
-  workSchema,
   cartoSchema,
   tables,
   excluded,
+  linkAddressMaster,
+  onLinkAddressMasterChange,
   onSchemaChange,
   onTableChange,
   loadTables,
@@ -58,8 +75,9 @@ export const ActualizarTablesStep: React.FC<ActualizarTablesStepProps> = ({
   blockingReason,
   catalogError,
 }) => {
-  const schemas: Record<SchemaField, string> = { stagingSchema, workSchema, cartoSchema };
+  const schemas: Record<SchemaField, string> = { stagingSchema, cartoSchema };
   const schemaOf = (key: ActualizarTableKey): string => schemas[schemaFieldOf(key)];
+  const selectors = linkAddressMaster ? [...SELECTORS, ADDRESS_MASTER_SELECTOR] : SELECTORS;
 
   return (
     <div className={styles.stack}>
@@ -72,12 +90,6 @@ export const ActualizarTablesStep: React.FC<ActualizarTablesStepProps> = ({
             onCommit={(schema) => onSchemaChange("stagingSchema", schema)}
           />
           <SchemaDraftField
-            label={WORK_SCHEMA_LABEL}
-            initial={workSchema}
-            committed={workSchema}
-            onCommit={(schema) => onSchemaChange("workSchema", schema)}
-          />
-          <SchemaDraftField
             label={CARTO_SCHEMA_LABEL}
             initial={cartoSchema}
             committed={cartoSchema}
@@ -88,10 +100,11 @@ export const ActualizarTablesStep: React.FC<ActualizarTablesStepProps> = ({
       </div>
 
       <div className={styles.tablesGrid}>
-        {SELECTORS.map(({ key, label }) => (
+        {selectors.map(({ key, label, hint }) => (
           <TableSelector
-            key={selectorKeyOf(key, tables)}
+            key={selectorKeyOf(key, tables, linkAddressMaster)}
             label={label}
+            hint={hint}
             schema={schemaOf(key)}
             value={tables[key]}
             onChange={(table) => onTableChange(key, table, false)}
@@ -104,6 +117,12 @@ export const ActualizarTablesStep: React.FC<ActualizarTablesStepProps> = ({
           />
         ))}
       </div>
+
+      <label className={styles.checkRow}>
+        <input type="checkbox" checked={linkAddressMaster} onChange={(event) => onLinkAddressMasterChange(event.target.checked)} />
+        <span>{LINK_LABEL}</span>
+      </label>
+      <p className={styles.hint}>{LINK_HINT}</p>
 
       {catalogError !== null && (
         <div role="alert">

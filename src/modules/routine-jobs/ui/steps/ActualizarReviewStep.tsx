@@ -4,20 +4,21 @@ import React from "react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType } from "@/ui-kit/types/ui";
-import { CLEAR_MODE, type ClearMode } from "../../jobs/cargar-padrones/constants";
-import type { ActualizarWizardConfirmation } from "../actualizarPadronWizardState";
+import { DEFAULT_PADRON_TARGET_TABLE } from "../../jobs/actualizar-padron/constants";
+import { GEOMETRY_OVERWRITE_WARNING, type ActualizarWizardConfirmation } from "../actualizarPadronWizardState";
 import type { ActualizarStartRequest } from "../clientTypes";
 import { PASSWORD_LABEL, ReviewRunActions } from "./reviewParts";
 import styles from "./WizardSteps.module.css";
 
-const CLEAR_MODE_NAME: Record<ClearMode, string> = {
-  [CLEAR_MODE.DELETE]: "DELETE",
-  [CLEAR_MODE.TRUNCATE]: "TRUNCATE",
-};
 const BUSY_NOTE = "Hay una actualización en curso. Espere a que termine para iniciar otra.";
-const DRY_RUN_HINT = "Analizar sin cargar ejecuta la carga, cuenta las filas y revierte todo: la tabla de trabajo no cambia.";
-const RUN_HINT = "Actualizar tabla de trabajo modifica la tabla de trabajo. Hace falta escribir de nuevo la contraseña y el nombre de la tabla de trabajo.";
-const WORK_TABLE_LABEL = "Vuelva a escribir el nombre de la tabla de trabajo";
+const CONTENT_NOTE = "Inserta los padrones nuevos y actualiza la geometría de los existentes. Nunca borra filas ni cambia ids.";
+const DRY_RUN_HINT = "Analizar sin cargar clasifica los padrones y revierte todo: la tabla de destino no cambia.";
+const RUN_HINT = "Actualizar padrones modifica la tabla de destino. Hace falta escribir de nuevo la contraseña y el nombre de la tabla de destino.";
+const NON_PADRON_TARGET_WARNING =
+  "La tabla de destino no es «padron»: se crearán direcciones maestras reales para los ids de esa tabla.";
+const TYPED_TABLE_LABEL = "Vuelva a escribir el nombre de la tabla de destino";
+const YES = "Sí";
+const NO = "No";
 
 export interface ActualizarReviewStepProps {
   request: ActualizarStartRequest;
@@ -43,7 +44,6 @@ export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
   onRun,
 }) => {
   const { connection, options } = request;
-  const clearName = CLEAR_MODE_NAME[options.clearMode];
 
   return (
     <div className={styles.stack}>
@@ -58,16 +58,12 @@ export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
         <dd>{request.stagingSchema}</dd>
         <dt>Tabla de origen</dt>
         <dd>{request.stagingTable}</dd>
-        <dt>Esquema de trabajo</dt>
-        <dd>{request.workSchema}</dd>
-        <dt>Tabla de trabajo</dt>
-        <dd>{request.workTable}</dd>
-        <dt>Tabla padrón</dt>
-        <dd>{request.padronTable}</dd>
-        <dt>Tabla de provincias</dt>
-        <dd>{request.provinceTable}</dd>
         <dt>Esquema de carto</dt>
         <dd>{request.cartoSchema}</dd>
+        <dt>Tabla de destino</dt>
+        <dd>{request.targetTable}</dd>
+        <dt>Tabla de provincias</dt>
+        <dd>{request.provinceTable}</dd>
         <dt>Tabla de localidades</dt>
         <dd>{request.localityTable}</dd>
         {request.typeTable !== undefined && (
@@ -78,21 +74,32 @@ export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
             <dd>{options.localityType ?? ""}</dd>
           </>
         )}
-        <dt>Vaciar tabla de trabajo</dt>
-        <dd>{clearName}</dd>
+        <dt>Tolerancia (m)</dt>
+        <dd>{String(options.tolerance)}</dd>
+        <dt>Actualizar geometrías</dt>
+        <dd>{options.updateGeometries ? YES : NO}</dd>
+        <dt>Enlazar direcciones maestras de padrones</dt>
+        <dd>{options.linkAddressMaster ? YES : NO}</dd>
+        {request.addressMasterTable !== undefined && (
+          <>
+            <dt>Tabla de direcciones maestras</dt>
+            <dd>{request.addressMasterTable}</dd>
+          </>
+        )}
       </dl>
 
-      <AlertMessage
-        type={AlertType.ERROR}
-        text={`La tabla de trabajo ${request.workTable} se sobrescribe con ${clearName} antes de cargar. La tabla padrón no se modifica.`}
-      />
+      <AlertMessage type={AlertType.INFO} text={CONTENT_NOTE} />
+      {options.updateGeometries && <AlertMessage type={AlertType.WARNING} text={GEOMETRY_OVERWRITE_WARNING} />}
+      {options.linkAddressMaster && request.targetTable !== DEFAULT_PADRON_TARGET_TABLE && (
+        <AlertMessage type={AlertType.WARNING} text={NON_PADRON_TARGET_WARNING} />
+      )}
 
       <div className={styles.gridAligned}>
         <FormField label={PASSWORD_LABEL} type="password" onChange={(password) => onConfirmationChange({ password })} />
         <FormField
-          label={WORK_TABLE_LABEL}
-          value={confirmation.workTableLabel}
-          onChange={(workTableLabel) => onConfirmationChange({ workTableLabel })}
+          label={TYPED_TABLE_LABEL}
+          value={confirmation.typedTable}
+          onChange={(typedTable) => onConfirmationChange({ typedTable })}
         />
       </div>
 
@@ -100,7 +107,7 @@ export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
         dryRunHint={DRY_RUN_HINT}
         runHint={RUN_HINT}
         busyNote={BUSY_NOTE}
-        runLabel="Actualizar tabla de trabajo"
+        runLabel="Actualizar padrones"
         busy={busy}
         runBlockedReason={runBlockedReason}
         canDryRun={canDryRun}

@@ -1,4 +1,3 @@
-import type { ClearMode } from "../jobs/cargar-padrones/constants";
 import type { ActualizarJobStatusView, ActualizarStartRequest } from "./clientTypes";
 import { createRoutineJobsClient } from "./routineJobsClient";
 import {
@@ -12,14 +11,15 @@ import {
 
 export interface ActualizarPadronRunPlan {
   dryRun: boolean;
-  clearMode: ClearMode;
+  destinationTable: string;
+  linkAddressMaster: boolean;
 }
 
 export type ActualizarPadronRunSnapshot = RunSnapshot<ActualizarJobStatusView, ActualizarPadronRunPlan>;
 
 export type ActualizarPadronRunStore = RunStore<ActualizarStartRequest, ActualizarJobStatusView, ActualizarPadronRunPlan>;
 
-export type ActualizarPadronRunStoreDeps = Omit<
+type ActualizarPadronRunStoreDeps = Omit<
   RunStoreDeps<ActualizarStartRequest, ActualizarJobStatusView, ActualizarPadronRunPlan>,
   "planOf" | "messages"
 >;
@@ -30,15 +30,16 @@ const MESSAGES: RunMessages = {
   startFallback: "No se pudo iniciar la actualización.",
   jobFailed: "La actualización terminó con error en el servidor.",
   unknownOutcome: (jobId) =>
-    `No se pudo confirmar el resultado del trabajo ${jobId}. Revise la tabla de trabajo antes de volver a actualizar.`,
+    `No se pudo confirmar el resultado del trabajo ${jobId}. Revise la tabla de destino antes de volver a actualizar.`,
 };
 
 const planOf = (request: ActualizarStartRequest): ActualizarPadronRunPlan => ({
   dryRun: request.dryRun,
-  clearMode: request.options.clearMode,
+  destinationTable: request.targetTable,
+  linkAddressMaster: request.options.linkAddressMaster,
 });
 
-export function createActualizarPadronRunStore(deps: ActualizarPadronRunStoreDeps): ActualizarPadronRunStore {
+function createActualizarPadronRunStore(deps: ActualizarPadronRunStoreDeps): ActualizarPadronRunStore {
   return createJobRunStore({ ...deps, planOf, messages: MESSAGES });
 }
 

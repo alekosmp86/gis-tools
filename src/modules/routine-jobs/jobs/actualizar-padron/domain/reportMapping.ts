@@ -1,12 +1,24 @@
-import {
-  COLLIDING_KEY_LIMIT,
-  LOCALITY_REASON_GROUP_LIMIT,
-  SKIP_REASON,
-  SKIPPED_GROUP_LIMIT,
-  SKIPPED_SAMPLE_LIMIT,
-  type SkipReason,
-} from "../constants";
-import type { CollidingKey, SkippedGroup, SkippedLocalityGroup, SkippedReport, SkippedSample } from "../types";
+import { buildQualifiedTableLabel } from "@/core/services/sqlStatements";
+import { DETAIL_LIST_LIMIT, SAMPLE_LIMIT } from "../../shared/limits";
+import type { WritableTargetLayout } from "../../shared/tableResolution";
+import { LOCALITY_REASON_GROUP_LIMIT, SKIP_REASON, SKIPPED_GROUP_LIMIT, type SkipReason } from "../constants";
+import type { AddressMasterPassBody } from "../../shared/addressMasterLinkPass";
+import type { TableLayout } from "./layouts";
+import type {
+  ActualizarAddressMasterReport,
+  ActualizarTargetReport,
+  CollidingKey,
+  PadronApplyOutcome,
+  PadronClassification,
+  PadronGeometryChange,
+  PadronInserted,
+  PadronKey,
+  PadronNamedKey,
+  SkippedGroup,
+  SkippedLocalityGroup,
+  SkippedReport,
+  SkippedSample,
+} from "../types";
 
 export type ReportRow = Record<string, unknown>;
 
@@ -57,9 +69,9 @@ const toLocalityGroups = (value: unknown): SkippedLocalityGroup[] =>
       count: countOf(row.count),
     }));
 
-const toSkippedSamples = (value: unknown): SkippedSample[] =>
+const toSkippedSamples = (value: unknown, limit: number): SkippedSample[] =>
   rowsOf(value)
-    .slice(0, SKIPPED_SAMPLE_LIMIT)
+    .slice(0, limit)
     .map((row) => ({
       department: textOf(row.department),
       locality: textOf(row.locality),
@@ -69,7 +81,7 @@ const toSkippedSamples = (value: unknown): SkippedSample[] =>
 
 const toCollidingKeys = (value: unknown): CollidingKey[] =>
   rowsOf(value)
-    .slice(0, COLLIDING_KEY_LIMIT)
+    .slice(0, SAMPLE_LIMIT)
     .map((row) => ({
       typePadron: textOf(row.typePadron),
       idProvince: numberOf(row.idProvince),
@@ -94,9 +106,98 @@ export function toReportView(row: ReportRow | undefined): ReportView {
       byDepartment: toSkippedGroups(report.byDepartment),
       byLocality: toSkippedGroups(report.byLocality),
       byLocalityAndReason: toLocalityGroups(report.byLocalityAndReason),
-      samples: toSkippedSamples(report.samples),
+      samples: toSkippedSamples(report.samples, SAMPLE_LIMIT),
+      skippedRows: toSkippedSamples(report.skippedList, DETAIL_LIST_LIMIT),
       collidingKeys: toCollidingKeys(report.collidingKeyList),
       collidingKeyCount: totals.collidingKeys,
     },
+  };
+}
+
+const keyOf = (entry: ReportRow): PadronKey => ({
+  typePadron: textOf(entry.typePadron),
+  provinceId: numberOf(entry.provinceId),
+  localityId: numberOf(entry.localityId),
+  number: textOf(entry.number),
+});
+
+const namedKeyOf = (entry: ReportRow): PadronNamedKey => ({
+  ...keyOf(entry),
+  department: textOf(entry.department),
+  locality: textOf(entry.locality),
+});
+
+const insertedOf = (entry: ReportRow): PadronInserted => ({ id: countOf(entry.id), ...namedKeyOf(entry) });
+
+const geometryChangeOf = (entry: ReportRow): PadronGeometryChange => ({
+  ...namedKeyOf(entry),
+  distance: numberOf(entry.distance),
+  areaRatio: numberOf(entry.areaRatio),
+});
+
+const listOf = (value: unknown): ReportRow[] => rowsOf(value);
+
+export function toPadronClassification(row: ReportRow): PadronClassification {
+  return {
+    counts: {
+      inserted: countOf(row.new),
+      unchanged: countOf(row.unchanged),
+      withinTolerance: countOf(row.within_tolerance),
+      changed: countOf(row.changed),
+      ambiguous: countOf(row.ambiguous),
+      missing: countOf(row.missing),
+      updates: countOf(row.updates),
+    },
+    missingSamples: listOf(row.missing_samples).map(keyOf),
+    ambiguousSamples: listOf(row.ambiguous_samples).map(keyOf),
+    geometryChanges: listOf(row.geometry_changes).map(geometryChangeOf),
+  };
+}
+
+export function toPadronApplyOutcome(row: ReportRow): PadronApplyOutcome {
+  return {
+    inserted: countOf(row.inserted),
+    updated: countOf(row.updated),
+    insertedList: listOf(row.inserted_list).map(insertedOf),
+  };
+}
+
+interface PadronTargetReportInput {
+  target: WritableTargetLayout;
+  classification: PadronClassification;
+  apply: PadronApplyOutcome;
+  updateGeometries: boolean;
+}
+
+export function buildPadronTargetReport({
+  target,
+  classification,
+  apply,
+  updateGeometries,
+}: PadronTargetReportInput): ActualizarTargetReport {
+  const { counts } = classification;
+  return {
+    table: buildQualifiedTableLabel(target.schema, target.table),
+    inserted: apply.inserted,
+    insertedList: apply.insertedList,
+    updated: apply.updated,
+    updateApplied: updateGeometries,
+    unchanged: counts.unchanged,
+    unchangedWithinTolerance: counts.withinTolerance,
+    changed: counts.changed,
+    missing: counts.missing,
+    missingSamples: classification.missingSamples,
+    ambiguous: counts.ambiguous,
+    ambiguousSamples: classification.ambiguousSamples,
+    geometryChanges: classification.geometryChanges,
+  };
+}
+
+export function buildAddressMasterReport(addressMaster: TableLayout, pass: AddressMasterPassBody): ActualizarAddressMasterReport {
+  return {
+    table: buildQualifiedTableLabel(addressMaster.schema, addressMaster.table),
+    counts: { ...pass.counts, toCreate: pass.toCreate, remaining: pass.remaining },
+    linkedList: pass.linkedList,
+    ambiguousSamples: pass.ambiguousSamples,
   };
 }

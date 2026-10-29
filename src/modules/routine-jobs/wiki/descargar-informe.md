@@ -21,9 +21,11 @@ carto-<etapa>-<simulacion|real>-AAAAMMDD-HHmmss.csv
 
 Ejemplo: `carto-cargar-localidades-simulacion-20261028-143005.csv`.
 
+El archivo de inconsistencias usa el mismo nombre con `inconsistencias` antes de la fecha: `carto-<etapa>-<simulacion|real>-inconsistencias-AAAAMMDD-HHmmss.csv`.
+
 ## Qué contiene
 
-**Solo se exportan los cambios en la base de datos.** Las filas omitidas, los faltantes, las muestras y las advertencias no van en el CSV.
+**Solo se exportan los cambios en la base de datos.** Las filas omitidas, los faltantes, las muestras y las advertencias no van en el CSV de cambios; las inconsistencias tienen su propio archivo (ver más abajo).
 
 ### Cargar localidades y Unidades territoriales
 
@@ -60,16 +62,63 @@ Una fila por cambio, con estas columnas: **Tabla**, **Cambio**, **Provincia**, *
 
 Una unidad nueva genera dos filas (la creada y la enlazada); una que ya tenía registro, solo la enlazada. Solo se exportan las filas que el informe lista, es decir, **hasta 500** unidades.
 
-### Cargar padrones y Actualizar padrones
+### Cargar padrones
 
-Un resumen de dos columnas: **Cambio** y **Cantidad**.
+Un resumen de dos columnas: **Cambio** y **Cantidad**, con los padrones rurales insertados, los urbanos insertados y el total.
 
-| Etapa | Filas del CSV |
+### Actualizar padrones
+
+Una fila por cambio, con estas columnas: **Tabla**, **Cambio**, **Tipo**, **Provincia**, **Localidad**, **Padrón**, **Distancia (m)**, **Relación de área** y **Id**. La columna **Id** queda vacía en las filas de padrones insertados y de cambios de geometría; solo las filas de direcciones maestras la llenan.
+
+| Valor de Cambio | Significado |
 |---|---|
-| Cargar padrones | Padrones rurales insertados, Padrones urbanos insertados, Total insertados |
-| Actualizar padrones | Filas escritas |
+| Insertada | El padrón es nuevo y se insertó en la tabla de destino, con un id nuevo. |
+| Geometría modificada | La geometría cambió y se reemplazó (con **Actualizar geometrías** activada). |
+| Geometría detectada (no aplicada) | La geometría cambió, pero no se reemplazó porque **Actualizar geometrías** estaba desactivada. |
+
+**Tipo** es `RURAL` o `URBANO`. **Provincia**, **Localidad** y **Padrón** son los nombres y el número del padrón en la tabla de origen; la localidad queda vacía en los rurales. Las filas están ordenadas: primero las insertadas, después los cambios de geometría, y dentro de cada grupo por provincia, localidad y padrón. Solo se exportan las filas que el informe lista, es decir, **hasta 500** padrones insertados y 500 cambios de geometría.
+
+Si la opción **Enlazar direcciones maestras de los padrones** está activada, el CSV tiene además estas filas, con el id del padrón en **Id**:
+
+| Cambio | Tabla | Qué significa |
+|---|---|---|
+| Dirección maestra creada para padrón | La tabla de direcciones maestras | Se creó un registro en la tabla de direcciones maestras para ese padrón. |
+| Padrón enlazado | La tabla de destino | Se escribió el id de la dirección maestra en el padrón. |
+
+Un padrón nuevo genera dos filas (la creada y la enlazada); uno que ya tenía registro, solo la enlazada. Solo se exportan las filas que el informe lista: **hasta 500** de cada una.
 
 Si una lista del informe se corta en 500 filas, el CSV termina con una fila que lo avisa: en la columna **Tabla** va la tabla y en **Cambio** un texto como `Lista incompleta: se muestran las primeras 500 de 730 unidades enlazadas`. Así no queda nada oculto. Las demás columnas de esa fila quedan vacías.
+
+## Descargar inconsistencias
+
+Los informes de **Cargar padrones** y **Actualizar padrones** muestran un segundo botón, **Descargar inconsistencias**, solo cuando hay datos de origen que revisar. Ese archivo no contiene cambios en la base: lista los datos que el proceso no pudo usar.
+
+### Cargar padrones
+
+Una fila por cada par departamento y código de localidad que aparece con nombres distintos en la fuente urbana.
+
+| Columna | Contenido |
+|---|---|
+| Departamento | El nombre del departamento. Si falta, el código. |
+| Código de localidad | El código de localidad ambiguo. |
+| Nombres | Los nombres distintos de esa localidad, separados por ` / `. |
+
+### Actualizar padrones
+
+Una fila por cada fila de origen omitida.
+
+| Columna | Contenido |
+|---|---|
+| Motivo | Por qué se omitió: `Provincia no encontrada`, `Provincia ambigua`, `Localidad no encontrada`, `Localidad ambigua`, `Clave nula`, `Sin geometría` o `Clave duplicada`. |
+| Departamento | El departamento de la fila de origen. |
+| Localidad | La localidad de la fila de origen. |
+| Padrón | El número de padrón de la fila de origen. |
+
+Las filas están ordenadas por motivo, departamento, localidad y padrón. Los valores vacíos aparecen como `sin dato`.
+
+### Límite de filas
+
+Cada archivo tiene **hasta 500** filas. Si hay más, la última fila indica cuántas hay en total, por ejemplo `Lista incompleta: se muestran las primeras 500 de 730 filas omitidas`. El total real aparece también en el informe.
 
 ## Abrirlo en Excel
 

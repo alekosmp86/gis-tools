@@ -1,5 +1,5 @@
-import { quoteIdentifier } from "@/core/services/sqlStatements";
 import { PADRON_UNIT } from "../../cargar-padrones/constants";
+import { cte, literal, q, withClause } from "../../shared/sqlFragments";
 import {
   LOCALITY_COLUMN,
   LOCALITY_TYPE_COLUMN,
@@ -7,24 +7,24 @@ import {
   SKIP_REASON,
   STAGING_COLUMN,
   STAGING_GEOMETRY_TYPES,
-  WORK_COLUMN,
+  DESTINATION_COLUMN,
 } from "../constants";
-import { assertTargetSrid, physicalColumn, qualifiedName, type PopulateLayouts, type TableLayout } from "./layouts";
-import { unitTypeIdSubquery } from "./unitTypeSql";
+import { assertTargetSrid, physicalColumn, qualifiedName, type TableLayout } from "./layouts";
+import type { PadronLayouts } from "../types";
 
 export type ClassifyMode = "populate" | "report";
 
 export const DECIDED_CTE = "decided";
-const ROW_ID_COLUMN = "row_id";
 export const SKIP_REASON_COLUMN = "skip_reason";
 export const REPAIRED_COLUMN = "repaired";
+const ROW_ID_COLUMN = "row_id";
 const REASON_COLUMN = "reason";
 const PRE_REASON_COLUMN = "pre_reason";
 const KEY_ROWS_COLUMN = "key_rows";
 const NO_GEOMETRY_COLUMN = "no_geometry";
 const GEOM_COLUMN = STAGING_COLUMN.GEOM;
 const GEOM_FIXED_COLUMN = "geom_fixed";
-const GEOMETRY_COLUMN = WORK_COLUMN.GEOMETRY;
+const GEOMETRY_COLUMN = DESTINATION_COLUMN.GEOMETRY;
 
 const STAGED = "staged";
 const PROVINCE_PICK = "province_pick";
@@ -42,8 +42,8 @@ const LOCATED_ATTRIBUTES = [
   STAGING_COLUMN.NOMDEPTO,
   STAGING_COLUMN.NOMLOCCAT,
   STAGING_COLUMN.PADRON,
-  WORK_COLUMN.ID_PROVINCE,
-  WORK_COLUMN.ID_CADASTRAL_LOCALITY,
+  DESTINATION_COLUMN.ID_PROVINCE,
+  DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY,
   REASON_COLUMN,
 ];
 const VALIDATED_ATTRIBUTES = [...LOCATED_ATTRIBUTES, REPAIRED_COLUMN];
@@ -51,15 +51,13 @@ const CLASSIFIED_ATTRIBUTES = [
   STAGING_COLUMN.NOMDEPTO,
   STAGING_COLUMN.NOMLOCCAT,
   STAGING_COLUMN.PADRON,
-  WORK_COLUMN.ID_PROVINCE,
-  WORK_COLUMN.ID_CADASTRAL_LOCALITY,
+  DESTINATION_COLUMN.ID_PROVINCE,
+  DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY,
   REPAIRED_COLUMN,
 ];
-const NATURAL_KEY_COLUMNS = [WORK_COLUMN.TYPE_PADRON, WORK_COLUMN.NUMBER];
+const NATURAL_KEY_COLUMNS = [DESTINATION_COLUMN.TYPE_PADRON, DESTINATION_COLUMN.NUMBER];
 
-const q = (identifier: string): string => quoteIdentifier(identifier);
 const col = (alias: string, column: string): string => `${q(alias)}.${q(column)}`;
-const literal = (value: string): string => `'${value}'`;
 const carried = (alias: string, columns: readonly string[]): string[] => columns.map((column) => col(alias, column));
 
 const projection = (layout: TableLayout, logicals: readonly string[]): string =>
@@ -70,33 +68,33 @@ const RURAL = literal(PADRON_UNIT.RURAL);
 const reasonLiteral = (reason: string): string => literal(reason);
 const polygonalTypeList = (): string => STAGING_GEOMETRY_TYPES.map(literal).join(", ");
 
-function stagedSql({ staging }: PopulateLayouts): string {
+function stagedSql({ staging }: PadronLayouts): string {
   const columns = projection(staging, Object.values(STAGING_COLUMN));
   return `SELECT row_number() OVER () AS ${q(ROW_ID_COLUMN)}, ${columns} FROM ${qualifiedName(staging)}`;
 }
 
-function provinceSourceSql({ province }: PopulateLayouts): string {
+function provinceSourceSql({ province }: PadronLayouts): string {
   const columns = projection(province, [PROVINCE_COLUMN.ID, PROVINCE_COLUMN.NAME]);
   return `SELECT ${columns} FROM ${qualifiedName(province)}`;
 }
 
-function localitySourceSql({ locality, unitType }: PopulateLayouts): string {
+function localitySourceSql({ locality, localityTypeId }: PadronLayouts): string {
   const logicals = [
     LOCALITY_COLUMN.ID,
     LOCALITY_COLUMN.NAME,
     LOCALITY_COLUMN.ID_PROVINCE,
-    ...(unitType ? [LOCALITY_TYPE_COLUMN.ID_TERRITORIAL_UNIT_TYPE] : []),
+    ...(localityTypeId === undefined ? [] : [LOCALITY_TYPE_COLUMN.ID_TERRITORIAL_UNIT_TYPE]),
   ];
   const columns = projection(locality, logicals);
   return `SELECT ${columns} FROM ${qualifiedName(locality)}`;
 }
 
-function localityTypeFilterSql({ unitType }: PopulateLayouts): string[] {
-  if (!unitType) return [];
-  return [`AND ${col("loc", LOCALITY_TYPE_COLUMN.ID_TERRITORIAL_UNIT_TYPE)} = ${unitTypeIdSubquery(unitType)}`];
+function localityTypeFilterSql({ localityTypeId }: PadronLayouts): string[] {
+  if (localityTypeId === undefined) return [];
+  return [`AND ${col("loc", LOCALITY_TYPE_COLUMN.ID_TERRITORIAL_UNIT_TYPE)} = ${localityTypeId}`];
 }
 
-function provincePickSql(layouts: PopulateLayouts): string {
+function provincePickSql(layouts: PadronLayouts): string {
   return [
     `SELECT ${col(STAGED, ROW_ID_COLUMN)}, count(${col("prov", "id")}) AS ${q("province_matches")}, min(${col("prov", "id")}) AS ${q("id")}`,
     `FROM ${q(STAGED)} LEFT JOIN (${provinceSourceSql(layouts)}) AS ${q("prov")} ON upper(${q(STAGING_COLUMN.NOMDEPTO)}) = upper(${q("name")})`,
@@ -118,7 +116,7 @@ function withProvinceSql(): string {
   ].join(" ");
 }
 
-function localityPickSql(layouts: PopulateLayouts): string {
+function localityPickSql(layouts: PadronLayouts): string {
   return [
     `SELECT ${col("wp", ROW_ID_COLUMN)}, count(${col("loc", "id")}) AS ${q("locality_matches")}, min(${col("loc", "id")}) AS ${q("id_cadastral_locality")}`,
     `FROM ${q(WITH_PROVINCE)} AS ${q("wp")}`,
@@ -152,8 +150,8 @@ function locatedSql(): string {
   const columns = [
     col("wp", ROW_ID_COLUMN),
     ...carried("wp", [STAGING_COLUMN.UNIDADCAT, STAGING_COLUMN.NOMDEPTO, STAGING_COLUMN.NOMLOCCAT, STAGING_COLUMN.PADRON]),
-    `${col("wp", "id")} AS ${q(WORK_COLUMN.ID_PROVINCE)}`,
-    col("lp", WORK_COLUMN.ID_CADASTRAL_LOCALITY),
+    `${col("wp", "id")} AS ${q(DESTINATION_COLUMN.ID_PROVINCE)}`,
+    col("lp", DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY),
     `${resolutionReasonSql()} AS ${q(REASON_COLUMN)}`,
   ];
   return [
@@ -222,8 +220,8 @@ function classifiedSql(mode: ClassifyMode): string {
     ...carried(SHAPED, CLASSIFIED_ATTRIBUTES),
     ...geometryPayload(mode, SHAPED),
     preReason,
-    `${col(SHAPED, STAGING_COLUMN.UNIDADCAT)} AS ${q(WORK_COLUMN.TYPE_PADRON)}`,
-    `trunc(${q(STAGING_COLUMN.PADRON)})::text AS ${q(WORK_COLUMN.NUMBER)}`,
+    `${col(SHAPED, STAGING_COLUMN.UNIDADCAT)} AS ${q(DESTINATION_COLUMN.TYPE_PADRON)}`,
+    `trunc(${q(STAGING_COLUMN.PADRON)})::text AS ${q(DESTINATION_COLUMN.NUMBER)}`,
   ];
   return `SELECT ${columns.join(", ")} FROM ${q(SHAPED)}`;
 }
@@ -231,7 +229,7 @@ function classifiedSql(mode: ClassifyMode): string {
 function keyedSql(mode: ClassifyMode): string {
   const key = (column: string): string => col(CLASSIFIED, column);
   const keyRows = [
-    `count(*) OVER (PARTITION BY (${key(PRE_REASON_COLUMN)} IS NULL), ${key(WORK_COLUMN.TYPE_PADRON)}, ${key(WORK_COLUMN.ID_PROVINCE)}, ${key(WORK_COLUMN.ID_CADASTRAL_LOCALITY)}, ${key(WORK_COLUMN.NUMBER)})`,
+    `count(*) OVER (PARTITION BY (${key(PRE_REASON_COLUMN)} IS NULL), ${key(DESTINATION_COLUMN.TYPE_PADRON)}, ${key(DESTINATION_COLUMN.ID_PROVINCE)}, ${key(DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY)}, ${key(DESTINATION_COLUMN.NUMBER)})`,
     `AS ${q(KEY_ROWS_COLUMN)}`,
   ].join(" ");
   const columns = [
@@ -254,20 +252,22 @@ function decidedSql(mode: ClassifyMode): string {
 }
 
 /* One CTE chain per statement: each row is staged once, then resolved, validated, shaped, keyed and decided. */
-export function buildClassifyWith(layouts: PopulateLayouts, mode: ClassifyMode = "populate"): string {
-  assertTargetSrid(layouts.work.srid);
-  const definitions: Array<[string, string]> = [
-    [STAGED, stagedSql(layouts)],
-    [PROVINCE_PICK, provincePickSql(layouts)],
-    [WITH_PROVINCE, withProvinceSql()],
-    [LOCALITY_PICK, localityPickSql(layouts)],
-    [LOCATED, locatedSql()],
-    [VALIDATED, validatedSql()],
-    [FIXED, fixedSql()],
-    [SHAPED, shapedSql(mode, layouts.work.srid)],
-    [CLASSIFIED, classifiedSql(mode)],
-    [KEYED, keyedSql(mode)],
-    [DECIDED_CTE, decidedSql(mode)],
+export function candidateCtes(layouts: PadronLayouts, mode: ClassifyMode): string[] {
+  assertTargetSrid(layouts.target.srid);
+  return [
+    cte(STAGED, stagedSql(layouts)),
+    cte(PROVINCE_PICK, provincePickSql(layouts)),
+    cte(WITH_PROVINCE, withProvinceSql()),
+    cte(LOCALITY_PICK, localityPickSql(layouts)),
+    cte(LOCATED, locatedSql()),
+    cte(VALIDATED, validatedSql()),
+    cte(FIXED, fixedSql()),
+    cte(SHAPED, shapedSql(mode, layouts.target.srid)),
+    cte(CLASSIFIED, classifiedSql(mode)),
+    cte(KEYED, keyedSql(mode)),
+    cte(DECIDED_CTE, decidedSql(mode)),
   ];
-  return `WITH ${definitions.map(([name, body]) => `${q(name)} AS (${body})`).join(", ")}`;
 }
+
+export const buildCandidateWith = (layouts: PadronLayouts, mode: ClassifyMode): string =>
+  withClause(candidateCtes(layouts, mode));

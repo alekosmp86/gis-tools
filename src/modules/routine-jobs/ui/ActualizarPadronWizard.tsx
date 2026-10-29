@@ -119,12 +119,11 @@ export default function ActualizarPadronWizard({
       requestConnection,
       state[schemaFieldOf(key)].trim(),
       table,
-      roleOfTableKey(key, { withType: isTypeTableChosen(state) }),
+      roleOfTableKey(key, { withType: isTypeTableChosen(state), linkAddressMaster: state.options.linkAddressMaster }),
     );
 
   const catalogError = firstCatalogError([
     currentCatalogError(catalogFailures, catalogKeyOf(connection, state.stagingSchema)),
-    currentCatalogError(catalogFailures, catalogKeyOf(connection, state.workSchema)),
     currentCatalogError(catalogFailures, catalogKeyOf(connection, state.cartoSchema)),
   ]);
 
@@ -171,10 +170,11 @@ export default function ActualizarPadronWizard({
         return (
           <ActualizarTablesStep
             stagingSchema={state.stagingSchema}
-            workSchema={state.workSchema}
             cartoSchema={state.cartoSchema}
             tables={state.tables}
             excluded={actualizarExcludedFor(state)}
+            linkAddressMaster={state.options.linkAddressMaster}
+            onLinkAddressMasterChange={(linkAddressMaster) => dispatch({ type: "optionsChanged", patch: { linkAddressMaster } })}
             onSchemaChange={(field, value) => dispatch({ type: "schemaChanged", field, value })}
             onTableChange={(key, table, valid) => dispatch({ type: "tableChosen", key, table, valid })}
             loadTables={loadTables}

@@ -1,4 +1,10 @@
-import type { ActualizarPadronResult, CollidingKey, SkippedLocalityGroup, SkippedSample } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
+import type {
+  ActualizarPadronResult,
+  ActualizarTargetReport,
+  PadronGeometryChange,
+  PadronInserted,
+  SkippedReport,
+} from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import { SKIP_REASON } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import { LOCALITY_SKIP_REASON } from "@/modules/routine-jobs/jobs/cargar-localidades/constants";
 import type {
@@ -260,71 +266,72 @@ export function unitResultOf(overrides: Partial<UnitResult> = {}): UnitResult {
   };
 }
 
-const groupsOf = (prefix: string, count: number): { name: string; count: number }[] =>
-  Array.from({ length: count }, (_, index) => ({ name: `${prefix} ${index}`, count: count - index }));
+const zeroReasonCounts = (): SkippedReport["byReason"] =>
+  Object.fromEntries(Object.values(SKIP_REASON).map((reason) => [reason, 0])) as SkippedReport["byReason"];
 
-const localityGroupsOf = (count: number): SkippedLocalityGroup[] => [
-  ...Array.from({ length: count }, (_, index) => ({
-    department: `DEP ${index}`,
-    locality: `LOC NO ${index}`,
-    reason: SKIP_REASON.LOCALIDAD_NO_ENCONTRADA,
-    count: index + 1,
-  })),
-  ...Array.from({ length: count }, (_, index) => ({
-    department: `DEP AMB ${index}`,
-    locality: `LOC AMB ${index}`,
-    reason: SKIP_REASON.LOCALIDAD_AMBIGUA,
-    count: 2,
-  })),
-];
-
-const actualizarSamplesOf = (count: number): SkippedSample[] =>
-  Array.from({ length: count }, (_, index) => ({
-    department: `DEP ${index}`,
-    locality: `LOC ${index}`,
-    padron: `P${index}`,
-    reason: SKIP_REASON.LOCALIDAD_NO_ENCONTRADA,
-  }));
-
-const collidingKeysOf = (count: number): CollidingKey[] =>
-  Array.from({ length: count }, (_, index) => ({
+function padronInsertedOf(count: number): PadronInserted[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: 9000 + index,
+    department: "CORDOBA",
+    locality: `Localidad ${index}`,
     typePadron: "URBANO",
-    idProvince: 2,
-    idCadastralLocality: 7,
-    number: `N${index}`,
-    rows: 2,
+    provinceId: 2,
+    localityId: 40 + index,
+    number: String(100 + index),
   }));
+}
+
+function padronGeometryChangesOf(count: number): PadronGeometryChange[] {
+  return Array.from({ length: count }, (_, index) => ({
+    department: "JUJUY",
+    locality: `Geometría ${index}`,
+    typePadron: "RURAL",
+    provinceId: 3,
+    localityId: null,
+    number: String(300 + index),
+    distance: 0.25,
+    areaRatio: 0.9,
+  }));
+}
+
+export function actualizarTargetReportOf(overrides: Partial<ActualizarTargetReport> = {}): ActualizarTargetReport {
+  return {
+    table: "carto.padron_tmp_actualizacion",
+    inserted: 25,
+    insertedList: padronInsertedOf(25),
+    updated: 25,
+    updateApplied: true,
+    unchanged: 6,
+    unchangedWithinTolerance: 2,
+    changed: 25,
+    missing: 1,
+    missingSamples: [{ typePadron: "URBANO", provinceId: 5, localityId: 9, number: "77" }],
+    ambiguous: 1,
+    ambiguousSamples: [{ typePadron: "RURAL", provinceId: 5, localityId: null, number: "78" }],
+    geometryChanges: padronGeometryChangesOf(25),
+    ...overrides,
+  };
+}
 
 export function actualizarPadronResultOf(overrides: Partial<ActualizarPadronResult> = {}): ActualizarPadronResult {
   return {
     dryRun: false,
-    tempModified: true,
-    padronModified: false,
+    targetModified: true,
     outcomeUnknown: false,
-    totals: { rowsRead: 1000, accepted: 950, written: 940, repaired: 4, skipped: 60 },
+    totals: { rowsRead: 1000, candidates: 940, repaired: 4, skipped: 60 },
     skipped: {
-      byReason: {
-        [SKIP_REASON.PROVINCIA_NO_ENCONTRADA]: 0,
-        [SKIP_REASON.PROVINCIA_AMBIGUA]: 2,
-        [SKIP_REASON.LOCALIDAD_NO_ENCONTRADA]: 20,
-        [SKIP_REASON.LOCALIDAD_AMBIGUA]: 3,
-        [SKIP_REASON.CLAVE_NULA]: 5,
-        [SKIP_REASON.SIN_GEOMETRIA]: 10,
-        [SKIP_REASON.CLAVE_DUPLICADA]: 15,
-      },
-      byDepartment: groupsOf("DEPARTAMENTO", 25),
-      byLocality: groupsOf("Localidad", 25),
-      byLocalityAndReason: localityGroupsOf(25),
-      samples: actualizarSamplesOf(25),
-      collidingKeys: collidingKeysOf(25),
-      collidingKeyCount: 25,
+      byReason: zeroReasonCounts(),
+      byDepartment: [],
+      byLocality: [],
+      byLocalityAndReason: [],
+      samples: [],
+      skippedRows: [],
+      collidingKeys: [],
+      collidingKeyCount: 0,
     },
+    target: actualizarTargetReportOf(),
     warnings: ["Advertencia de padrón."],
-    stepTimings: [
-      { label: "Cargar tabla de trabajo", ms: 1234 },
-      { label: "Analizar tabla de trabajo", ms: 2000 },
-    ],
-    analyze: { status: "ok" },
+    stepTimings: [{ label: "Clasificar padrones", ms: 1234 }],
     ...overrides,
   };
 }

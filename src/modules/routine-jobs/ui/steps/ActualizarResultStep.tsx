@@ -10,11 +10,11 @@ import { RunProgressStatus, RunResultActions } from "./RunResultParts";
 import { RunStepChecklist } from "./RunStepChecklist";
 import styles from "./WizardSteps.module.css";
 
-const IDLE_HINT = "Todavía no hay una actualización. Complete los pasos anteriores y pulse Analizar sin cargar o Actualizar tabla de trabajo.";
+const IDLE_HINT = "Todavía no hay una actualización. Complete los pasos anteriores y pulse Analizar sin cargar o Actualizar padrones.";
 const NO_REPORT_MESSAGE = "La actualización terminó, pero el servidor no envió el informe.";
 const FAILED_FALLBACK = "La actualización terminó con un error.";
 const UNKNOWN_TITLE = "No se pudo confirmar el resultado de la actualización.";
-const UNKNOWN_ADVICE = "Hay que verificar la tabla de trabajo antes de volver a actualizar.";
+const UNKNOWN_ADVICE = "Hay que verificar la tabla de destino antes de volver a actualizar.";
 
 export interface ActualizarResultStepProps {
   snapshot: ActualizarPadronRunSnapshot;

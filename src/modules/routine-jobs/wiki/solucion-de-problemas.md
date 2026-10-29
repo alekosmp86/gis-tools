@@ -21,7 +21,7 @@ El usuario de la base no puede ajustar la secuencia de la tabla destino. Pida el
 
 ## Ya hay una carga en curso
 
-Cada etapa bloquea su tabla destino mientras corre (la etapa 4 bloquea sus dos tablas). Si la pantalla dice:
+Cada etapa bloquea su tabla destino mientras corre (la etapa 4 bloquea sus dos tablas: unidades y direcciones maestras; la etapa 5 bloquea la tabla de destino y, si enlaza direcciones maestras, también la tabla de direcciones maestras). Si la pantalla dice:
 
 - Ya hay una carga en curso para esta tabla. (etapa 1)
 - Ya hay una carga de localidades en curso para esta tabla. (etapa 2)
@@ -43,9 +43,26 @@ Antes de confirmar, cada etapa compara lo que escribió con lo que el análisis 
 - Los registros de dirección maestra creados (...) no coinciden con los esperados (...) (etapa 4)
 - Las unidades enlazadas (...) no coinciden con las esperadas (...) (etapa 4)
 - Las unidades sin dirección maestra después del enlace (...) no coinciden con las ambiguas (...) (etapa 4)
-- Las filas insertadas (...) no coinciden con las filas aceptadas del informe (...) (etapa 5)
+- Los padrones insertados (...) no coinciden con los nuevos del análisis (...) (etapa 5)
+- Las geometrías actualizadas (...) no coinciden con las esperadas (...) (etapa 5)
+- Los registros de dirección maestra creados para padrones (...) no coinciden con los esperados (...) (etapa 5, con la opción de direcciones maestras)
+- Los padrones enlazados (...) no coinciden con los esperados (...) (etapa 5, con la opción de direcciones maestras)
+- Los padrones sin dirección maestra después del enlace (...) no coinciden con los ambiguos (...) (etapa 5, con la opción de direcciones maestras)
 
 No quedó nada a medias. Alguien puede haber modificado las tablas mientras corría la carga: espere unos minutos y repita **Analizar sin cargar** y la carga real. Si se repite, avise al responsable de la herramienta con el mensaje completo.
+
+## Mensajes de la etapa 5 (Actualizar padrones)
+
+- **Tolerancia**: "La tolerancia debe ser un número mayor o igual que 0." Corrija el valor en **Opciones**; Siguiente se bloquea hasta entonces.
+- **Tipo de localidad**: "Indique el tipo de localidad o quite la tabla de tipos de unidad." Escriba el tipo o quite la tabla de tipos.
+- **Tipo de localidad no único**: "El tipo de localidad "..." aparece N veces en ...: debe aparecer exactamente una vez." Revise la tabla de tipos de unidad: el nombre debe existir una sola vez, sin distinguir mayúsculas.
+- **Geometría sin SRID**: "... no tiene SRID: no se puede determinar el SRID de destino." La columna geométrica de la tabla de destino necesita un SRID métrico. Pida al administrador que lo defina.
+- **Geometrías con SRID 0 o desconocido**: "... tiene N geometrías con SRID 0 o desconocido ...". Corrija la tabla de origen.
+- **Columnas de la tabla de destino**: si falta una columna, el mensaje la nombra. La tabla de destino debe tener `id`, `number`, `type_padron`, `id_cadastral_locality`, `id_province` y `geometry`.
+- **Tabla sin secuencia**: la columna `id` de la tabla de destino debe tener una secuencia (un tipo serial o identity). Sin ella no se pueden asignar ids a los padrones nuevos.
+- **Clave de padrón no válida en la tabla de destino**: "La tabla de destino ... tiene N filas con una clave que esta etapa no genera ...". Corrija esas filas (tipo `RURAL` o `URBANO`, sin localidad en rural, número 0 o entero sin ceros a la izquierda) antes de cargar: así la etapa nunca inserta un padrón que ya está escrito de otra forma. Si la columna `number` no es de texto, el mensaje la nombra y hay que cambiarle el tipo.
+
+Esta etapa no borra filas. Si una tabla de destino tiene disparadores o reglas, el análisis se rechaza y el mensaje los nombra: quítelos antes de cargar.
 
 ## Error de serialización (etapa 4)
 
