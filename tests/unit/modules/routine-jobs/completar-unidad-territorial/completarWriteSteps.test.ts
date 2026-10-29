@@ -145,15 +145,16 @@ describe("runCompletarWriteTransaction dry run (CU-10, CU-12)", () => {
 });
 
 describe("runCompletarWriteTransaction order inside the transaction (CU-10)", () => {
-  it("should repair the address master sequence after the classification and before the apply", async () => {
+  it("should repair the address master sequence once, before the first classification and the first apply", async () => {
     const { log } = await runWrite();
 
-    const classifyAt = indexOfSql(log, (sql) => sql.includes(CLASSIFY_MARKER));
     const sequenceAt = indexOfSql(log, (sql) => sql.includes(SEQUENCE_MARKER));
+    const classifyAt = indexOfSql(log, (sql) => sql.includes(CLASSIFY_MARKER));
     const applyAt = indexOfSql(log, (sql) => sql.includes(APPLY_MARKER));
 
-    expect(classifyAt).toBeGreaterThan(-1);
-    expect(sequenceAt).toBeGreaterThan(classifyAt);
+    expect(sequenceAt).toBeGreaterThan(-1);
+    expect(log.filter((sql) => sql.includes(SEQUENCE_MARKER))).toHaveLength(1);
+    expect(classifyAt).toBeGreaterThan(sequenceAt);
     expect(applyAt).toBeGreaterThan(sequenceAt);
   });
 

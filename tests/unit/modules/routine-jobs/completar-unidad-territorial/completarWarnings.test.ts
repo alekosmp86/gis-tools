@@ -11,8 +11,12 @@ const TABLE = "carto.territorial_unit";
 const NO_AMBIGUOUS: CompletarCounts = { withoutAddressMaster: 2, created: 1, linked: 2, alreadyHadRecord: 1, ambiguous: 0 };
 const countsWith = (overrides: Partial<CompletarCounts>): CompletarCounts => ({ ...NO_AMBIGUOUS, ...overrides });
 
-const warningsOf = (overrides: Partial<Parameters<typeof buildCompletarWarnings>[0]> = {}): string[] =>
-  buildCompletarWarnings({ dryRun: false, unitTable: TABLE, counts: NO_AMBIGUOUS, ...overrides });
+const warningsOf = ({
+  dryRun = false,
+  counts = NO_AMBIGUOUS,
+  commitError,
+}: { dryRun?: boolean; counts?: CompletarCounts; commitError?: string } = {}): string[] =>
+  buildCompletarWarnings({ dryRun, unitTable: TABLE, counts, commitError });
 
 describe("buildCompletarWarnings", () => {
   describe("dry run and unknown outcome", () => {

@@ -1,29 +1,11 @@
-import { buildAnalyzeStatement, buildQualifiedTableLabel } from "@/core/services/sqlStatements";
+import { buildAnalyzeStatement } from "@/core/services/sqlStatements";
 import type { StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunSession } from "../../cargar-padrones/types";
-import {
-  buildSequenceRepairSql,
-  runTransaction,
-  type TransactionMessages,
-  type TransactionOutcome,
-} from "../../shared/transaction";
-import { buildCompletarApplySql, buildCompletarClassifySql, buildCompletarRemainingSql } from "../domain/completarSql";
+import { runAddressMasterLinkPass, type AddressMasterPassBody } from "../../shared/addressMasterLinkPass";
+import { UNIT_SUBJECT_SPEC } from "../../shared/addressMasterLinkSpec";
+import { buildSequenceRepairSql, runTransaction, type TransactionMessages, type TransactionOutcome } from "../../shared/transaction";
 import { COMPLETAR_STEP } from "../domain/plannedSteps";
-import {
-  completarCountsOf,
-  toCompletarApplyOutcome,
-  toCompletarClassification,
-  toRemainingCount,
-} from "../domain/reportMapping";
-import type {
-  CompletarAmbiguousUnit,
-  CompletarApplyOutcome,
-  CompletarClassification,
-  CompletarCounts,
-  CompletarLayouts,
-  CompletarLinkedUnit,
-  CompletarParams,
-} from "../types";
+import type { CompletarCounts, CompletarLayouts, CompletarLinkedUnit, CompletarAmbiguousUnit, CompletarParams } from "../types";
 
 export interface CompletarWriteOutcome {
   counts: CompletarCounts;
@@ -43,51 +25,11 @@ const COMPLETAR_TRANSACTION: TransactionMessages = {
     "No se pudo revertir la transacción: verifique las tablas de unidades territoriales y de direcciones maestras.",
 };
 
-async function readClassification(session: RunSession, layouts: CompletarLayouts): Promise<CompletarClassification> {
-  const result = await session.query(buildCompletarClassifySql(layouts));
-  return toCompletarClassification(result.rows[0] ?? {});
-}
-
-async function readApply(session: RunSession, layouts: CompletarLayouts): Promise<CompletarApplyOutcome> {
-  const result = await session.query(buildCompletarApplySql(layouts));
-  return toCompletarApplyOutcome(result.rows[0] ?? {});
-}
-
-async function readRemaining(session: RunSession, layouts: CompletarLayouts): Promise<number> {
-  const result = await session.query(buildCompletarRemainingSql(layouts));
-  return toRemainingCount(result.rows[0] ?? {});
-}
-
-const unitLabelOf = (layouts: CompletarLayouts): string => buildQualifiedTableLabel(layouts.unit.schema, layouts.unit.table);
-
-function assertApplyMatches(
-  layouts: CompletarLayouts,
-  classification: CompletarClassification,
-  apply: CompletarApplyOutcome
-): void {
-  const { counts } = classification;
-  if (apply.created !== counts.created) {
-    const label = buildQualifiedTableLabel(layouts.addressMaster.schema, layouts.addressMaster.table);
-    throw new Error(
-      `Los registros de dirección maestra creados (${apply.created}) no coinciden con los esperados (${counts.created}) en ${label}.`
-    );
-  }
-  const expectedLinked = counts.withoutAddressMaster - counts.ambiguous;
-  if (apply.linked !== expectedLinked) {
-    throw new Error(
-      `Las unidades enlazadas (${apply.linked}) no coinciden con las esperadas (${expectedLinked}) en ${unitLabelOf(layouts)}.`
-    );
-  }
-}
-
-function assertRemainingMatches(layouts: CompletarLayouts, classification: CompletarClassification, remaining: number): void {
-  const { ambiguous } = classification.counts;
-  if (remaining !== ambiguous) {
-    throw new Error(
-      `Las unidades sin dirección maestra después del enlace (${remaining}) no coinciden con las ambiguas (${ambiguous}) en ${unitLabelOf(layouts)}.`
-    );
-  }
-}
+const UNIT_PASS_STEPS = {
+  classify: COMPLETAR_STEP.CLASSIFY,
+  apply: COMPLETAR_STEP.APPLY,
+  verify: COMPLETAR_STEP.VERIFY,
+};
 
 async function analyzeTargets(session: RunSession, layouts: CompletarLayouts): Promise<void> {
   await session.query(buildAnalyzeStatement(layouts.unit.schema, layouts.unit.table));
@@ -99,21 +41,20 @@ async function runTransactionBody(
   layouts: CompletarLayouts,
   timer: StepTimer
 ): Promise<CompletarTransactionBody> {
-  const classification = await timer.run(COMPLETAR_STEP.CLASSIFY, () => readClassification(session, layouts));
-  // Ordered: the sequence is repaired after the analysis and before the insert of the same transaction.
+  // Ordered: the sequence is repaired before the first insert of the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   await timer.run(COMPLETAR_STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.addressMaster)));
-  const apply = await timer.run(COMPLETAR_STEP.APPLY, () => readApply(session, layouts));
-  assertApplyMatches(layouts, classification, apply);
-  const remaining = await timer.run(COMPLETAR_STEP.VERIFY, () => readRemaining(session, layouts));
-  assertRemainingMatches(layouts, classification, remaining);
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const pass: AddressMasterPassBody = await runAddressMasterLinkPass(
+    session,
+    { subject: layouts.unit, addressMaster: layouts.addressMaster },
+    UNIT_SUBJECT_SPEC,
+    UNIT_PASS_STEPS,
+    timer
+  );
   await timer.run(COMPLETAR_STEP.ANALYZE, () => analyzeTargets(session, layouts));
   return timer.run(COMPLETAR_STEP.REPORT, () =>
-    Promise.resolve({
-      counts: completarCountsOf(classification, apply),
-      linkedList: apply.linkedList,
-      ambiguousSamples: classification.ambiguousSamples,
-    })
+    Promise.resolve({ counts: pass.counts, linkedList: pass.linkedList, ambiguousSamples: pass.ambiguousSamples })
   );
 }
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  completarCountsOf,
-  toCompletarApplyOutcome,
-  toCompletarClassification,
+  addressMasterCountsOf as completarCountsOf,
+  toAddressMasterApply as toCompletarApplyOutcome,
+  toAddressMasterClassification as toCompletarClassification,
   toRemainingCount,
-} from "@/modules/routine-jobs/jobs/completar-unidad-territorial/domain/reportMapping";
+} from "@/modules/routine-jobs/jobs/shared/addressMasterLinkPass";
 import { linkedUnitOf } from "./completarFixtures";
 
 const classificationRow = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({

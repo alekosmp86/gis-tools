@@ -47,7 +47,8 @@ describe("resolvePlannedLabels for the completar plan", () => {
 
 describe("buildStepChecklist for the completar steps", () => {
   const LABELS = plannedCompletarStepLabels({ dryRun: false });
-  const CURRENT_INDEX = LABELS.indexOf(COMPLETAR_STEP.APPLY);
+  const UNIT_APPLY = COMPLETAR_STEP.APPLY;
+  const CURRENT_INDEX = LABELS.indexOf(UNIT_APPLY);
   const statusesOf = (rows: { status: ChecklistStatus }[]) => rows.map((row) => row.status);
 
   it("should show the completar step labels as they are, in order", () => {
@@ -57,7 +58,7 @@ describe("buildStepChecklist for the completar steps", () => {
   });
 
   it("should mark the steps before the apply done, the apply current and the rest pending while running", () => {
-    const rows = buildStepChecklist({ plannedLabels: LABELS, currentLabel: COMPLETAR_STEP.APPLY, phase: RunPhase.RUNNING });
+    const rows = buildStepChecklist({ plannedLabels: LABELS, currentLabel: UNIT_APPLY, phase: RunPhase.RUNNING });
 
     expect(statusesOf(rows)).toEqual(
       LABELS.map((_label, index) => (index < CURRENT_INDEX ? ChecklistStatus.DONE : index === CURRENT_INDEX ? ChecklistStatus.CURRENT : ChecklistStatus.PENDING)),
@@ -65,7 +66,7 @@ describe("buildStepChecklist for the completar steps", () => {
   });
 
   it("should mark the apply failed and leave the later steps pending when the run failed on it", () => {
-    const rows = buildStepChecklist({ plannedLabels: LABELS, currentLabel: COMPLETAR_STEP.APPLY, phase: RunPhase.FAILED });
+    const rows = buildStepChecklist({ plannedLabels: LABELS, currentLabel: UNIT_APPLY, phase: RunPhase.FAILED });
 
     expect(rows[CURRENT_INDEX].status).toBe(ChecklistStatus.FAILED);
     expect(rows.slice(CURRENT_INDEX + 1).every((row) => row.status === ChecklistStatus.PENDING)).toBe(true);

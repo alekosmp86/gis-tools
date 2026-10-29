@@ -1,9 +1,5 @@
-import {
-  DEFAULT_ADDRESS_MASTER_SCHEMA,
-  DEFAULT_ADDRESS_MASTER_TABLE,
-  DEFAULT_UNIT_SCHEMA,
-  DEFAULT_UNIT_TABLE,
-} from "../jobs/completar-unidad-territorial/constants";
+import { DEFAULT_ADDRESS_MASTER_SCHEMA, DEFAULT_ADDRESS_MASTER_TABLE } from "../jobs/shared/addressMasterLinkSpec";
+import { DEFAULT_UNIT_SCHEMA, DEFAULT_UNIT_TABLE } from "../jobs/completar-unidad-territorial/constants";
 import type { ClientConnection, CompletarStartRequest } from "./clientTypes";
 import type { CompletarRunSnapshot } from "./completarUnidadTerritorialRunStore";
 import { trimConnection } from "./connectionProfiles";

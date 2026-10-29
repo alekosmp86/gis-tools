@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALITY_TYPE_NAME } from "../jobs/unidad-territorial/constants";
 import type { ClientConnection, UnidadStartRequest } from "./clientTypes";
+import { DEFAULT_TOLERANCE_TEXT, DEFAULT_UPDATE_GEOMETRIES, isToleranceValid, toleranceOf } from "./geometryOptions";
 import { trimConnection } from "./connectionProfiles";
 import { RunPhase } from "./jobRunStore";
 import type { UnidadRunSnapshot } from "./unidadTerritorialRunStore";
@@ -86,15 +87,7 @@ const MESSAGES = {
 export const UNIT_GEOMETRY_OVERWRITE_WARNING =
   "Actualizar geometrías reemplaza la geometría de las unidades territoriales cuya localidad cambió. Si corregiste geometrías a mano en esta tabla, esas correcciones se perderán. El análisis lista cada geometría que cambiaría: revísala antes de cargar, o desactiva la opción.";
 
-const DEFAULT_TOLERANCE_M = "1.0";
-
 const isBlank = (value: string): boolean => value.trim() === "";
-
-const isToleranceValid = (text: string): boolean => {
-  if (isBlank(text)) return false;
-  const value = Number(text);
-  return Number.isFinite(value) && value >= 0;
-};
 
 const emptySlot = (): UnitSlotDraft => ({ schema: "", table: "", valid: false });
 
@@ -109,7 +102,11 @@ function initialState(seed: UnidadWizardSeed): UnidadTerritorialWizardState {
       [UnitSlot.TYPE]: emptySlot(),
       [UnitSlot.TARGET]: emptySlot(),
     },
-    options: { localityTypeName: DEFAULT_LOCALITY_TYPE_NAME, tolerance: DEFAULT_TOLERANCE_M, updateGeometries: true },
+    options: {
+      localityTypeName: DEFAULT_LOCALITY_TYPE_NAME,
+      tolerance: DEFAULT_TOLERANCE_TEXT,
+      updateGeometries: DEFAULT_UPDATE_GEOMETRIES,
+    },
     confirmation: emptyConfirmation(),
   };
 }
@@ -198,7 +195,7 @@ export function toUnidadStartRequest(state: UnidadTerritorialWizardState, flags:
     targetTable: target.table.trim(),
     options: {
       localityTypeName: state.options.localityTypeName.trim(),
-      tolerance: Number(state.options.tolerance.trim()),
+      tolerance: toleranceOf(state.options.tolerance),
       updateGeometries: state.options.updateGeometries,
     },
     dryRun: flags.dryRun,

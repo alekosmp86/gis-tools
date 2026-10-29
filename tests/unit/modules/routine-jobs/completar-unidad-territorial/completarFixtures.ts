@@ -2,16 +2,16 @@ import { vi } from "vitest";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { GENERIC_SRID } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { RunDeps, RunSession } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
-import {
-  COMPLETAR_ADDRESS_MASTER_COLUMN,
-  COMPLETAR_UNIT_COLUMN,
-} from "@/modules/routine-jobs/jobs/completar-unidad-territorial/constants";
 import type {
   CompletarLayouts,
   CompletarLinkedUnit,
   CompletarParams,
   CompletarResult,
 } from "@/modules/routine-jobs/jobs/completar-unidad-territorial/types";
+import {
+  ADDRESS_MASTER_COLUMN,
+  UNIT_SUBJECT_SPEC,
+} from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSpec";
 import type { WritableTargetLayout } from "@/modules/routine-jobs/jobs/shared/tableResolution";
 
 type Row = Record<string, unknown>;
@@ -35,14 +35,14 @@ export const completarLayoutsOf = (): CompletarLayouts => {
   const unit: TableLayout = {
     schema: UNIT_SCHEMA,
     table: UNIT_TABLE,
-    columns: identityOf(Object.values(COMPLETAR_UNIT_COLUMN)),
+    columns: identityOf(UNIT_SUBJECT_SPEC.requiredColumns),
   };
   const addressMaster: WritableTargetLayout = {
     schema: ADDRESS_MASTER_SCHEMA,
     table: ADDRESS_MASTER_TABLE,
-    columns: identityOf(Object.values(COMPLETAR_ADDRESS_MASTER_COLUMN)),
+    columns: identityOf(Object.values(ADDRESS_MASTER_COLUMN)),
     srid: GENERIC_SRID,
-    idColumn: COMPLETAR_ADDRESS_MASTER_COLUMN.ID,
+    idColumn: ADDRESS_MASTER_COLUMN.ID,
     idSequence: ADDRESS_MASTER_SEQUENCE,
     identityColumns: [],
     catalog: [],

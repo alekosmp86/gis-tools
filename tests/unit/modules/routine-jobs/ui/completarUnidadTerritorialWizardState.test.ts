@@ -40,7 +40,13 @@ const validState = (overrides: Partial<CompletarWizardState> = {}): CompletarWiz
 const atReview = (base: CompletarWizardState = validState()): CompletarWizardState => ({
   ...base,
   step: CompletarStep.REVIEW,
-  confirmation: { password: PASSWORD, typedTables: { [CompletarSlot.UNIT]: UNIT.table, [CompletarSlot.ADDRESS_MASTER]: ADDRESS_MASTER.table } },
+  confirmation: {
+    password: PASSWORD,
+    typedTables: {
+      [CompletarSlot.UNIT]: UNIT.table,
+      [CompletarSlot.ADDRESS_MASTER]: ADDRESS_MASTER.table,
+    },
+  },
 });
 
 const withPassword = (state: CompletarWizardState, password = PASSWORD): CompletarWizardState => ({
@@ -51,6 +57,21 @@ const withPassword = (state: CompletarWizardState, password = PASSWORD): Complet
 const withTyped = (state: CompletarWizardState, key: CompletarSlot, value: string): CompletarWizardState => ({
   ...state,
   confirmation: { ...state.confirmation, typedTables: { ...state.confirmation.typedTables, [key]: value } },
+});
+
+const withAllTyped = (
+  state: CompletarWizardState,
+  overrides: Partial<Record<CompletarSlot, string>> = {}
+): CompletarWizardState => ({
+  ...state,
+  confirmation: {
+    ...state.confirmation,
+    typedTables: {
+      [CompletarSlot.UNIT]: UNIT.table,
+      [CompletarSlot.ADDRESS_MASTER]: ADDRESS_MASTER.table,
+      ...overrides,
+    },
+  },
 });
 
 const deepFreeze = <T>(value: T): T => {
@@ -242,8 +263,8 @@ describe("canRunNow (CU-13)", () => {
     expect(canRunNow({ ...base, slots: { ...base.slots, [CompletarSlot.UNIT]: { ...UNIT, valid: false } } }, { dryRun: true })).toBe(false);
   });
 
-  it("should allow a real run only when the password and both typed table names are confirmed", () => {
-    const state = withTyped(withTyped(withPassword(validState()), CompletarSlot.UNIT, UNIT.table), CompletarSlot.ADDRESS_MASTER, ADDRESS_MASTER.table);
+  it("should allow a real run only when the password and the three typed table names are confirmed", () => {
+    const state = withAllTyped(withPassword(validState()));
 
     expect(canRunNow(state, { dryRun: false })).toBe(true);
   });
@@ -261,58 +282,41 @@ describe("canRunNow (CU-13)", () => {
   });
 
   it("should refuse a real run when the typed names are all there but the password is not", () => {
-    const state = withTyped(
-      withTyped(withPassword(validState(), ""), CompletarSlot.UNIT, UNIT.table),
-      CompletarSlot.ADDRESS_MASTER,
-      ADDRESS_MASTER.table,
-    );
+    const state = withAllTyped(withPassword(validState(), ""));
 
     expect(canRunNow(state, { dryRun: false })).toBe(false);
   });
 
   it("should refuse a real run when the password typed differs from the connection password", () => {
-    const state = withTyped(
-      withTyped(withPassword(validState(), "otra"), CompletarSlot.UNIT, UNIT.table),
-      CompletarSlot.ADDRESS_MASTER,
-      ADDRESS_MASTER.table,
-    );
+    const state = withAllTyped(withPassword(validState(), "otra"));
 
     expect(canRunNow(state, { dryRun: false })).toBe(false);
   });
 
   it("should refuse a typed table name that differs in case", () => {
-    const state = withTyped(
-      withTyped(withPassword(validState()), CompletarSlot.UNIT, "Territorial_Unit"),
-      CompletarSlot.ADDRESS_MASTER,
-      ADDRESS_MASTER.table,
-    );
+    const state = withAllTyped(withPassword(validState()), { [CompletarSlot.UNIT]: "Territorial_Unit" });
 
     expect(canRunNow(state, { dryRun: false })).toBe(false);
   });
 
   it("should accept a typed table name that only differs by surrounding spaces", () => {
-    const state = withTyped(
-      withTyped(withPassword(validState()), CompletarSlot.UNIT, `  ${UNIT.table} `),
-      CompletarSlot.ADDRESS_MASTER,
-      ADDRESS_MASTER.table,
-    );
+    const state = withAllTyped(withPassword(validState()), { [CompletarSlot.UNIT]: `  ${UNIT.table} ` });
 
     expect(canRunNow(state, { dryRun: false })).toBe(true);
   });
 
   it("should refuse a real run when each typed name sits in the wrong slot", () => {
-    const state = withTyped(
-      withTyped(withPassword(validState()), CompletarSlot.UNIT, ADDRESS_MASTER.table),
-      CompletarSlot.ADDRESS_MASTER,
-      UNIT.table,
-    );
+    const state = withAllTyped(withPassword(validState()), {
+      [CompletarSlot.UNIT]: ADDRESS_MASTER.table,
+      [CompletarSlot.ADDRESS_MASTER]: UNIT.table,
+    });
 
     expect(canRunNow(state, { dryRun: false })).toBe(false);
   });
 });
 
 describe("toCompletarStartRequest", () => {
-  it("should build the start request with the four trimmed table names and a confirmed real run", () => {
+  it("should build the start request with the three trimmed table names and a confirmed real run", () => {
     const state = validState({
       slots: {
         [CompletarSlot.UNIT]: { schema: " carto ", table: " territorial_unit ", valid: true },
@@ -368,7 +372,10 @@ describe("wizard reducer: navigation", () => {
     const next = completarWizardReducer(atReview(), { type: "back" });
 
     expect(next.step).toBe(CompletarStep.TABLES);
-    expect(next.confirmation).toEqual({ password: "", typedTables: { [CompletarSlot.UNIT]: "", [CompletarSlot.ADDRESS_MASTER]: "" } });
+    expect(next.confirmation).toEqual({
+      password: "",
+      typedTables: { [CompletarSlot.UNIT]: "", [CompletarSlot.ADDRESS_MASTER]: "" },
+    });
   });
 
   it("should keep the typed confirmation when a jump to the same review step happens", () => {

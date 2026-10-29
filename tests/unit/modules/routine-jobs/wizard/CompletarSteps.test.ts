@@ -9,6 +9,7 @@ import type { CompletarRunSnapshot } from "@/modules/routine-jobs/ui/completarUn
 import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { buttonAttributes, isDisabledAttributes, openingTags, withoutValueAttributes } from "./wizardFixtures";
+import type { CompletarResult } from "@/modules/routine-jobs/jobs/completar-unidad-territorial/types";
 import { completarResultOf } from "../completar-unidad-territorial/completarFixtures";
 
 const SECRET = "s3cr3t-completar-9";
@@ -17,6 +18,9 @@ const STATEMENT_HTML = STATEMENT.replace(/"/g, "&quot;");
 const SUGGESTION_HEADING = "Siguiente paso sugerido";
 const SUGGESTION_REAL = "Actualice la vista materializada para que refleje los cambios.";
 const SUGGESTION_DRY_RUN = "Después de cargar, actualice la vista materializada para que refleje los cambios.";
+
+const unitResultOf = (patch: Partial<CompletarResult>, overrides: Partial<CompletarResult> = {}) =>
+  completarResultOf({ ...overrides, ...patch });
 
 const requestOf = (overrides: Partial<CompletarStartRequest> = {}): CompletarStartRequest => ({
   connection: { host: "db.local", port: "5432", db_name: "gis", user: "carto", password: SECRET },
@@ -102,7 +106,10 @@ describe("CompletarReviewStep", () => {
 
     it("should show the typed name of each table in its own field", () => {
       const html = renderReview({
-        confirmation: { password: "", typedTables: { [CompletarSlot.UNIT]: "territorial_unit", [CompletarSlot.ADDRESS_MASTER]: "addresses_master" } },
+        confirmation: {
+          password: "",
+          typedTables: { [CompletarSlot.UNIT]: "territorial_unit", [CompletarSlot.ADDRESS_MASTER]: "addresses_master" },
+        },
       });
 
       expect(html).toContain('value="territorial_unit"');
@@ -186,7 +193,7 @@ describe("CompletarReportStep", () => {
   it("should hide the suggestion after a real run that linked nothing", () => {
     const html = renderReport(
       doneSnapshot(
-        completarResultOf({
+        unitResultOf({
           counts: { withoutAddressMaster: 1, created: 0, linked: 0, alreadyHadRecord: 0, ambiguous: 1 },
           linkedList: [],
           ambiguousSamples: [{ id: 3, name: "Doble", provinceId: "09", records: 2 }],
@@ -211,11 +218,13 @@ describe("CompletarReportStep", () => {
     const listed = completarResultOf().linkedList;
     const html = renderReport(
       doneSnapshot(
-        completarResultOf({
-          linkedList: Array.from({ length: DETAIL_LIST_LIMIT }, (_, index) => ({ ...listed[0], id: index + 1 })),
-          counts: { withoutAddressMaster: 600, created: 0, linked: 600, alreadyHadRecord: 600, ambiguous: 0 },
-          warnings: [`Se listan las primeras ${DETAIL_LIST_LIMIT} unidades enlazadas en carto.territorial_unit.`],
-        }),
+        unitResultOf(
+          {
+            linkedList: Array.from({ length: DETAIL_LIST_LIMIT }, (_, index) => ({ ...listed[0], id: index + 1 })),
+            counts: { withoutAddressMaster: 600, created: 0, linked: 600, alreadyHadRecord: 600, ambiguous: 0 },
+          },
+          { warnings: [`Se listan las primeras ${DETAIL_LIST_LIMIT} unidades enlazadas en carto.territorial_unit.`] },
+        ),
       ),
     );
 

@@ -2,10 +2,15 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  buildCompletarApplySql,
-  buildCompletarClassifySql,
-  buildCompletarRemainingSql,
-} from "@/modules/routine-jobs/jobs/completar-unidad-territorial/domain/completarSql";
+  buildAddressMasterApplySql,
+  buildAddressMasterClassifySql,
+  buildAddressMasterRemainingSql,
+  type AddressMasterLinkLayouts,
+} from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSql";
+import {
+  UNIT_SUBJECT_SPEC,
+  type AddressMasterSubjectSpec,
+} from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSpec";
 import type { CompletarLayouts } from "@/modules/routine-jobs/jobs/completar-unidad-territorial/types";
 import { DETAIL_LIST_LIMIT, SAMPLE_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { completarLayoutsOf } from "./completarFixtures";
@@ -21,11 +26,23 @@ const identity = (columns: readonly string[]): Record<string, string> =>
   Object.fromEntries(columns.map((column) => [column, column]));
 
 const layouts = completarLayoutsOf();
+const UNIT = UNIT_SUBJECT_SPEC;
+
+const linkLayoutsOf = (completar: CompletarLayouts): AddressMasterLinkLayouts => ({
+  subject: completar.unit,
+  addressMaster: completar.addressMaster,
+});
+const buildCompletarClassifySql = (completar: CompletarLayouts, spec: AddressMasterSubjectSpec): string =>
+  buildAddressMasterClassifySql(linkLayoutsOf(completar), spec);
+const buildCompletarApplySql = (completar: CompletarLayouts, spec: AddressMasterSubjectSpec): string =>
+  buildAddressMasterApplySql(linkLayoutsOf(completar), spec);
+const buildCompletarRemainingSql = (completar: CompletarLayouts, spec: AddressMasterSubjectSpec): string =>
+  buildAddressMasterRemainingSql(linkLayoutsOf(completar), spec);
 
 const ALL_STATEMENTS: ReadonlyArray<readonly [string, () => string]> = [
-  ["classify", () => buildCompletarClassifySql(layouts)],
-  ["apply", () => buildCompletarApplySql(layouts)],
-  ["remaining", () => buildCompletarRemainingSql(layouts)],
+  ["classify", () => buildCompletarClassifySql(layouts, UNIT)],
+  ["apply", () => buildCompletarApplySql(layouts, UNIT)],
+  ["remaining", () => buildCompletarRemainingSql(layouts, UNIT)],
 ];
 
 const insertColumnsOf = (sql: string): string[] => {
@@ -92,7 +109,7 @@ function sourceFilesUnder(directory: string): string[] {
 
 describe("completarSql classification (CU-3, CU-4, CU-6, CU-7)", () => {
   it("should classify a candidate with no address master row as new, one row as existing and two or more as ambiguous", () => {
-    const sql = buildCompletarClassifySql(layouts);
+    const sql = buildCompletarClassifySql(layouts, UNIT);
 
     expect(sql).toContain(`WHEN m."records" = 0 THEN 'new'`);
     expect(sql).toContain(`WHEN m."records" = 1 THEN 'existing'`);
@@ -100,18 +117,18 @@ describe("completarSql classification (CU-3, CU-4, CU-6, CU-7)", () => {
   });
 
   it("should take the candidates from every unit row with a NULL id_address_master, whatever the unit type", () => {
-    const sql = buildCompletarClassifySql(layouts);
+    const sql = buildCompletarClassifySql(layouts, UNIT);
 
-    expect(sql).toContain(`FROM "carto"."territorial_unit" AS tu WHERE tu."id_address_master" IS NULL`);
+    expect(sql).toContain(`FROM "carto"."territorial_unit" AS sj WHERE sj."id_address_master" IS NULL`);
     expect(sql).not.toMatch(/tipo|unit_type/i);
   });
 
   it("should build the URN as the constant territorial unit prefix followed by the unit id", () => {
-    expect(buildCompletarClassifySql(layouts)).toContain(`concat('cgeo:territorial_unit:id:', tu."id") AS "urn"`);
+    expect(buildCompletarClassifySql(layouts, UNIT)).toContain(`concat('cgeo:territorial_unit:id:', sj."id") AS "urn"`);
   });
 
   it("should match the address master row by exact equality of its urn", () => {
-    expect(buildCompletarClassifySql(layouts)).toContain(`am."urn" = c."urn"`);
+    expect(buildCompletarClassifySql(layouts, UNIT)).toContain(`am."urn" = c."urn"`);
   });
 
   it.each(ALL_STATEMENTS)("should never parse the urn with SPLIT_PART or an integer cast in the %s statement", (_label, build) => {
@@ -122,37 +139,37 @@ describe("completarSql classification (CU-3, CU-4, CU-6, CU-7)", () => {
   });
 
   it("should count the candidates without an address master row for the report", () => {
-    expect(buildCompletarClassifySql(layouts)).toContain(`count(*) AS "without_address_master"`);
+    expect(buildCompletarClassifySql(layouts, UNIT)).toContain(`count(*) AS "without_address_master"`);
   });
 
   it("should cap the ambiguous sample list at SAMPLE_LIMIT", () => {
-    expect(buildCompletarClassifySql(layouts)).toContain(`ORDER BY cl."unit_id" LIMIT ${SAMPLE_LIMIT}`);
+    expect(buildCompletarClassifySql(layouts, UNIT)).toContain(`ORDER BY cl."subject_id" LIMIT ${SAMPLE_LIMIT}`);
   });
 });
 
 describe("completarSql insert of address master rows (CU-5, CU-9)", () => {
   it("should insert only the urn and the two coordinates into the address master", () => {
-    expect(insertColumnsOf(buildCompletarApplySql(layouts))).toEqual(WRITTEN_INSERT_COLUMNS);
+    expect(insertColumnsOf(buildCompletarApplySql(layouts, UNIT))).toEqual(WRITTEN_INSERT_COLUMNS);
   });
 
   it("should never list addresses_master_id in the INSERT so the table sequence assigns it", () => {
-    expect(insertColumnsOf(buildCompletarApplySql(layouts))).not.toContain('"addresses_master_id"');
+    expect(insertColumnsOf(buildCompletarApplySql(layouts, UNIT))).not.toContain('"addresses_master_id"');
   });
 
   it("should give every new address record the initial coordinates 0 and 0", () => {
-    const insert = segmentBetween(buildCompletarApplySql(layouts), "INSERT INTO", "RETURNING");
+    const insert = segmentBetween(buildCompletarApplySql(layouts, UNIT), "INSERT INTO", "RETURNING");
 
     expect(insert).toContain(`cl."urn", 0, 0`);
   });
 
   it("should insert only candidates classified new, ordered by unit id", () => {
-    const insert = segmentBetween(buildCompletarApplySql(layouts), "INSERT INTO", "RETURNING");
+    const insert = segmentBetween(buildCompletarApplySql(layouts, UNIT), "INSERT INTO", "RETURNING");
 
-    expect(insert).toContain(`WHERE cl."class" = 'new' ORDER BY cl."unit_id"`);
+    expect(insert).toContain(`WHERE cl."class" = 'new' ORDER BY cl."subject_id"`);
   });
 
   it("should never insert ambiguous or existing candidates", () => {
-    const insert = segmentBetween(buildCompletarApplySql(layouts), "INSERT INTO", "RETURNING");
+    const insert = segmentBetween(buildCompletarApplySql(layouts, UNIT), "INSERT INTO", "RETURNING");
 
     expect(insert).not.toContain("ambiguous");
     expect(insert).not.toContain("'existing'");
@@ -161,27 +178,27 @@ describe("completarSql insert of address master rows (CU-5, CU-9)", () => {
 
 describe("completarSql link of units (CU-6, CU-8, CU-9)", () => {
   it("should assign only id_address_master in the UPDATE SET clause", () => {
-    expect(updateSetColumnsOf(buildCompletarApplySql(layouts))).toEqual(UPDATE_SET_COLUMNS);
+    expect(updateSetColumnsOf(buildCompletarApplySql(layouts, UNIT))).toEqual(UPDATE_SET_COLUMNS);
   });
 
   it.each(FORBIDDEN_SET_COLUMNS)("should never assign the protected column %s in the UPDATE SET clause", (column) => {
-    expect(updateSetColumnsOf(buildCompletarApplySql(layouts))).not.toContain(column);
+    expect(updateSetColumnsOf(buildCompletarApplySql(layouts, UNIT))).not.toContain(column);
   });
 
   it("should guard the UPDATE with id_address_master IS NULL so a non-null link is never overwritten", () => {
-    const update = segmentBetween(buildCompletarApplySql(layouts), "UPDATE ", "RETURNING");
+    const update = segmentBetween(buildCompletarApplySql(layouts, UNIT), "UPDATE ", "RETURNING");
 
-    expect(update).toContain(`tu."id_address_master" IS NULL`);
+    expect(update).toContain(`sj."id_address_master" IS NULL`);
   });
 
   it("should join the UPDATE to the links on the exact unit id", () => {
-    const update = segmentBetween(buildCompletarApplySql(layouts), "UPDATE ", "RETURNING");
+    const update = segmentBetween(buildCompletarApplySql(layouts, UNIT), "UPDATE ", "RETURNING");
 
-    expect(update).toContain(`WHERE tu."id" = lk."unit_id"`);
+    expect(update).toContain(`WHERE sj."id" = lk."subject_id"`);
   });
 
   it("should update only the linkable units listed in the links CTE", () => {
-    const update = segmentBetween(buildCompletarApplySql(layouts), "UPDATE ", "RETURNING");
+    const update = segmentBetween(buildCompletarApplySql(layouts, UNIT), "UPDATE ", "RETURNING");
 
     expect(update).toContain(`FROM "links" AS lk`);
     expect(update).not.toContain("ambiguous");
@@ -190,7 +207,7 @@ describe("completarSql link of units (CU-6, CU-8, CU-9)", () => {
 
 describe("completarSql single statement (CU-10)", () => {
   it("should run the classification, the insert, the links and the update in one data-modifying CTE statement", () => {
-    const sql = buildCompletarApplySql(layouts);
+    const sql = buildCompletarApplySql(layouts, UNIT);
 
     expect(sql.startsWith("WITH ")).toBe(true);
     expect(sql).toContain(`"inserted_rows" AS (INSERT INTO`);
@@ -198,7 +215,7 @@ describe("completarSql single statement (CU-10)", () => {
   });
 
   it("should cap the linked list at DETAIL_LIST_LIMIT", () => {
-    expect(buildCompletarApplySql(layouts)).toContain(`ORDER BY ur."unit_id" LIMIT ${DETAIL_LIST_LIMIT}`);
+    expect(buildCompletarApplySql(layouts, UNIT)).toContain(`ORDER BY ur."subject_id" LIMIT ${DETAIL_LIST_LIMIT}`);
   });
 
   it.each(ALL_STATEMENTS)("should never use a MATERIALIZED hint in the %s statement", (_label, build) => {
@@ -214,7 +231,7 @@ describe("completarSql single statement (CU-10)", () => {
   });
 
   it("should report the created and linked totals from the data-modifying CTEs", () => {
-    const sql = buildCompletarApplySql(layouts);
+    const sql = buildCompletarApplySql(layouts, UNIT);
 
     expect(sql).toContain(`(SELECT count(*) FROM "inserted_rows") AS "created"`);
     expect(sql).toContain(`(SELECT count(*) FROM "updated_rows") AS "linked"`);
@@ -242,7 +259,7 @@ describe("completarSql table and column resolution (CU-2)", () => {
       addressMaster: layouts.addressMaster,
     };
 
-    expect(buildCompletarClassifySql(renamed)).toContain(`tu."gid"`);
+    expect(buildCompletarClassifySql(renamed, UNIT)).toContain(`sj."gid"`);
   });
 
   it("should name no table literally, only the resolved schema and table", () => {
@@ -250,7 +267,7 @@ describe("completarSql table and column resolution (CU-2)", () => {
       unit: { schema: "otro", table: "unidades_x", columns: layouts.unit.columns },
       addressMaster: { ...layouts.addressMaster, schema: "otro", table: "direcciones_y" },
     };
-    const sql = buildCompletarApplySql(other);
+    const sql = buildCompletarApplySql(other, UNIT);
 
     expect(sql).toContain(`"otro"."unidades_x"`);
     expect(sql).toContain(`"otro"."direcciones_y"`);
@@ -264,7 +281,7 @@ describe("completarSql table and column resolution (CU-2)", () => {
       addressMaster: layouts.addressMaster,
     };
 
-    expect(buildCompletarRemainingSql(quoted)).toContain(`"we""ird"."territorial_unit"`);
+    expect(buildCompletarRemainingSql(quoted, UNIT)).toContain(`"we""ird"."territorial_unit"`);
   });
 
   it("should throw a Spanish error naming the logical column when the layout does not resolve it", () => {
@@ -273,19 +290,19 @@ describe("completarSql table and column resolution (CU-2)", () => {
       addressMaster: layouts.addressMaster,
     };
 
-    expect(() => buildCompletarClassifySql(missing)).toThrow(/Falta la columna resuelta "id_province"/);
+    expect(() => buildCompletarClassifySql(missing, UNIT)).toThrow(/Falta la columna resuelta "id_province"/);
   });
 });
 
 describe("completarSql candidate grouping (CU-3, CU-4)", () => {
   it("should group the matches by unit id and urn so a duplicated unit id forms one group", () => {
-    const sql = buildCompletarClassifySql(layouts);
+    const sql = buildCompletarClassifySql(layouts, UNIT);
 
-    expect(sql).toContain(`GROUP BY c."unit_id", c."urn"`);
+    expect(sql).toContain(`GROUP BY c."subject_id", c."urn"`);
   });
 
   it("should not group by name or province, which are aggregated with min instead", () => {
-    const sql = buildCompletarClassifySql(layouts);
+    const sql = buildCompletarClassifySql(layouts, UNIT);
 
     expect(sql).not.toMatch(/GROUP BY[^)]*"name"/);
     expect(sql).not.toMatch(/GROUP BY[^)]*"province_id"/);
@@ -296,8 +313,8 @@ describe("completarSql candidate grouping (CU-3, CU-4)", () => {
 
 describe("completarSql remaining units (CU-11)", () => {
   it("should count the units still without an address master", () => {
-    expect(buildCompletarRemainingSql(layouts)).toBe(
-      `SELECT count(*) AS "remaining" FROM "carto"."territorial_unit" AS tu WHERE tu."id_address_master" IS NULL`,
+    expect(buildCompletarRemainingSql(layouts, UNIT)).toBe(
+      `SELECT count(*) AS "remaining" FROM "carto"."territorial_unit" AS sj WHERE sj."id_address_master" IS NULL`,
     );
   });
 });

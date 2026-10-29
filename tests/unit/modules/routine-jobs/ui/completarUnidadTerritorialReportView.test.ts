@@ -31,7 +31,7 @@ describe("buildCompletarReportView counts (CU-15)", () => {
   });
 
   it("should show zero counts as rows with value 0 instead of hiding them", () => {
-    const view = viewOf({ counts: CLEAN_COUNTS, linkedList: [], warnings: [] });
+    const view = viewOf({ counts: CLEAN_COUNTS, linkedList: [] });
 
     expect(view.counts).toHaveLength(COUNT_LABELS.length);
     expect(view.counts.every((row) => row.value === 0)).toBe(true);
@@ -133,9 +133,9 @@ describe("buildCompletarReportView lists and warnings (CU-15)", () => {
     const truncationWarning = `Se listan las primeras ${DETAIL_LIST_LIMIT} unidades enlazadas en carto.territorial_unit.`;
 
     const view = viewOf({
+      warnings: [truncationWarning],
       linkedList: listed,
       counts: { ...CLEAN_COUNTS, withoutAddressMaster: 600, alreadyHadRecord: 600, linked: 600 },
-      warnings: [truncationWarning],
     });
 
     expect(view.linked).toHaveLength(DETAIL_LIST_LIMIT);

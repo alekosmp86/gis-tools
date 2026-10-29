@@ -55,7 +55,7 @@ describe("CompletarTablesStep wiring", () => {
     captured.selectors.length = 0;
   });
 
-  it("should render exactly two table selectors, one for the unit table and one for the address master table", () => {
+  it("should render exactly two table selectors, one for the unit and one for the address master tables", () => {
     render();
 
     expect(selectors()).toHaveLength(2);

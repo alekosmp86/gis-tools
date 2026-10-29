@@ -6,6 +6,10 @@ Fourth stage of the monthly carto update job in the `routine-jobs` module (`src/
 connection, `TableSelector`, shared job store, per-target locks, step checklist from server-sent planned steps, Spanish messages,
 scrubbed passwords, shared report components and CSV download. Acceptance criteria ids use the prefix `CU-`.
 
+The padron address master links are NOT part of this stage: stage 5 (`ROUTINE_JOBS_ACTUALIZAR_PADRON_SPEC.md`, AP-51 to AP-60) links
+the padrones it inserts, behind its own option. The link SQL and its safety rules are shared (`jobs/shared/addressMasterLink*`), so
+both stages apply the same rules.
+
 Legacy oracle: the `UNIDAD TERRITORIAL` block of the one-time script `addressMaster.sql` (outside the repo, read-only):
 
 ```sql

@@ -22,13 +22,18 @@ const countsOf = (linkedList: CompletarLinkedUnit[]): CompletarCounts => ({
   ambiguous: 0,
 });
 
-const rawCsvOf = (linkedList: CompletarLinkedUnit[], overrides: Partial<CompletarResult> = {}): string =>
-  buildCompletarUnidadTerritorialCsv(completarResultOf({ linkedList, counts: countsOf(linkedList), ...overrides }));
+type CsvOverrides = Partial<CompletarResult> & { counts?: CompletarCounts };
 
-const rowsOf = (linkedList: CompletarLinkedUnit[], overrides: Partial<CompletarResult> = {}): string[][] =>
+const resultOf = (patch: Partial<CompletarResult> = {}, overrides: Partial<CompletarResult> = {}): CompletarResult =>
+  completarResultOf({ ...overrides, ...patch });
+
+const rawCsvOf = (linkedList: CompletarLinkedUnit[], { counts, ...overrides }: CsvOverrides = {}): string =>
+  buildCompletarUnidadTerritorialCsv(resultOf({ linkedList, counts: counts ?? countsOf(linkedList) }, overrides));
+
+const rowsOf = (linkedList: CompletarLinkedUnit[], overrides: CsvOverrides = {}): string[][] =>
   parseCsv(rawCsvOf(linkedList, overrides));
 
-const dataRowsOf = (linkedList: CompletarLinkedUnit[], overrides: Partial<CompletarResult> = {}): string[][] =>
+const dataRowsOf = (linkedList: CompletarLinkedUnit[], overrides: CsvOverrides = {}): string[][] =>
   rowsOf(linkedList, overrides).slice(1);
 
 const unitsOf = (count: number, overrides: Partial<CompletarLinkedUnit> = {}): CompletarLinkedUnit[] =>
@@ -175,7 +180,7 @@ describe("completar CSV cut markers for created records and linked units (CU-16)
 
   const eightHundredCreated = () => {
     const listed = createdUnits(DETAIL_LIST_LIMIT);
-    return completarResultOf({
+    return resultOf({
       linkedList: listed,
       counts: { withoutAddressMaster: 800, created: 800, linked: 800, alreadyHadRecord: 0, ambiguous: 0 },
     });
@@ -202,7 +207,7 @@ describe("completar CSV cut markers for created records and linked units (CU-16)
   });
 
   it("should write no created marker when the created count equals the listed created units", () => {
-    const result = completarResultOf({
+    const result = resultOf({
       linkedList: createdUnits(3),
       counts: { withoutAddressMaster: 3, created: 3, linked: 3, alreadyHadRecord: 0, ambiguous: 0 },
     });
@@ -217,7 +222,7 @@ describe("completar CSV cut markers for created records and linked units (CU-16)
     const existing = Array.from({ length: 300 }, (_, index) =>
       linkedUnitOf({ id: 5000 + index, addressMasterId: 9000 + index, created: false }),
     );
-    const result = completarResultOf({
+    const result = resultOf({
       linkedList: [...created, ...existing],
       counts: { withoutAddressMaster: 800, created: 300, linked: 800, alreadyHadRecord: 500, ambiguous: 0 },
     });

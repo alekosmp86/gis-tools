@@ -2,6 +2,7 @@ import type { DbConfig } from "@/core/types/db";
 import type { TableLayout } from "../actualizar-padron/domain/layouts";
 import type { StepTiming } from "../cargar-padrones/types";
 import type { WritableTargetLayout } from "../shared/tableResolution";
+import type { AddressMasterAmbiguous, AddressMasterCounts, AddressMasterKey, AddressMasterLinked } from "../shared/addressMasterLinkPass";
 
 export interface CompletarParams {
   config: DbConfig;
@@ -18,39 +19,10 @@ export interface CompletarLayouts {
   addressMaster: WritableTargetLayout;
 }
 
-export interface CompletarCounts {
-  withoutAddressMaster: number;
-  created: number;
-  linked: number;
-  alreadyHadRecord: number;
-  ambiguous: number;
-}
-
-export interface CompletarUnitKey {
-  id: number;
-  name: string | null;
-  provinceId: string | null;
-}
-
-export interface CompletarLinkedUnit extends CompletarUnitKey {
-  addressMasterId: number;
-  created: boolean;
-}
-
-export interface CompletarAmbiguousUnit extends CompletarUnitKey {
-  records: number;
-}
-
-export interface CompletarClassification {
-  counts: Omit<CompletarCounts, "linked">;
-  ambiguousSamples: CompletarAmbiguousUnit[];
-}
-
-export interface CompletarApplyOutcome {
-  created: number;
-  linked: number;
-  linkedList: CompletarLinkedUnit[];
-}
+export type CompletarCounts = AddressMasterCounts;
+export type CompletarUnitKey = AddressMasterKey;
+export type CompletarLinkedUnit = AddressMasterLinked;
+export type CompletarAmbiguousUnit = AddressMasterAmbiguous;
 
 export interface CompletarResult {
   dryRun: boolean;
