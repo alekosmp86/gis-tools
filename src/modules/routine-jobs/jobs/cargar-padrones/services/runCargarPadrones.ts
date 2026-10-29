@@ -209,6 +209,7 @@ function buildResult(
     report: { rural: loaded.rural, urbano: loaded.urbano },
     totals: buildTotals([loaded.rural, loaded.urbano]),
     ambiguousLocalityCodes: loaded.ambiguousLocalityCodes,
+    ambiguousLocalityTotal: loaded.ambiguousLocalityTotal,
     warnings: buildWarnings(loaded, params.options.repair, outcome.commitError),
     stepTimings: timings,
     analyze: outcome.analyze,

@@ -1,6 +1,6 @@
 import { buildDeleteStatement, formatReplaceLiteral, quoteIdentifier } from "@/core/services/sqlStatements";
+import { DETAIL_LIST_LIMIT } from "../../shared/limits";
 import {
-  AMBIGUOUS_LOCALITY_LIMIT,
   CLEAR_MODE,
   COLUMN,
   CONFLICT_SAMPLE_LIMIT,
@@ -174,5 +174,6 @@ export function buildAmbiguousLocalityCodesSql(source: SourceLayout): string {
   const codDepto = columnOf(source, COLUMN.CODDEPTO);
   const codLocCat = columnOf(source, COLUMN.CODLOCCAT);
   const nomLocCat = columnOf(source, COLUMN.NOMLOCCAT);
-  return `SELECT ${codDepto} AS "coddepto", ${codLocCat} AS "codloccat", array_agg(DISTINCT ${nomLocCat}) AS "nomloccat" FROM ${qualifiedName(source)} WHERE ${nomLocCat} IS NOT NULL GROUP BY ${codDepto}, ${codLocCat} HAVING count(DISTINCT ${nomLocCat}) > 1 ORDER BY 1, 2 LIMIT ${AMBIGUOUS_LOCALITY_LIMIT}`;
+  const nomDepto = columnOf(source, COLUMN.NOMDEPTO);
+  return `SELECT ${codDepto} AS "coddepto", ${codLocCat} AS "codloccat", min(${nomDepto}) AS "nomdepto", array_agg(DISTINCT ${nomLocCat}) AS "nomloccat", count(*) OVER () AS "total" FROM ${qualifiedName(source)} WHERE ${nomLocCat} IS NOT NULL GROUP BY ${codDepto}, ${codLocCat} HAVING count(DISTINCT ${nomLocCat}) > 1 ORDER BY 1, 2 LIMIT ${DETAIL_LIST_LIMIT}`;
 }

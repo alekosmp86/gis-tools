@@ -1436,12 +1436,12 @@ describe("runCargarPadrones", () => {
     });
 
     it("AC-12: should list ambiguous locality codes and warn without blocking the load", async () => {
-      const codes = [{ coddepto: 10, codloccat: 77, nomloccat: ["A", "B"] }];
+      const codes = [{ coddepto: 10, codloccat: 77, nomdepto: "CANELONES", nomloccat: ["A", "B"], total: 1 }];
       const harness = createHarness({ ambiguousCodes: codes });
 
       const result = await runCargarPadrones(defaultParams(), harness.deps);
 
-      expect(result.ambiguousLocalityCodes).toEqual(codes);
+      expect(result.ambiguousLocalityCodes).toEqual([{ coddepto: 10, codloccat: 77, nomdepto: "CANELONES", nomloccat: ["A", "B"] }]);
       expect(result.warnings.some((warning) => /localidad/i.test(warning))).toBe(true);
       expect(result.targetModified).toBe(true);
     });

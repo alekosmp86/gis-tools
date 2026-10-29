@@ -89,7 +89,6 @@ export type ClearMode = (typeof CLEAR_MODE)[keyof typeof CLEAR_MODE];
 
 export const CONFLICT_SAMPLE_LIMIT = 20;
 export const CONFLICT_VALUES_LIMIT = 5;
-export const AMBIGUOUS_LOCALITY_LIMIT = 20;
 export const POLYGONAL_DIMENSION = 3;
 
 export const POLYGON_TYPE = "POLYGON";

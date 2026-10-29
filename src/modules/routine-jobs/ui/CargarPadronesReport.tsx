@@ -7,7 +7,8 @@ import {
   type CargarPadronesReportView,
   type ReportBannerKind,
 } from "./cargarPadronesReportView";
-import { buildCargarPadronesCsv } from "./reportCsv/cargarPadronesCsv";
+import { buildCargarPadronesCsv, buildCargarPadronesInconsistenciasCsv } from "./reportCsv/cargarPadronesCsv";
+import { REPORT_CSV_KIND } from "./reportCsv/filename";
 import { DataTable } from "./DataTable";
 import { ReportDownloadButton } from "./ReportDownloadButton";
 import { ReportRowList } from "./ReportRowList";
@@ -77,6 +78,14 @@ export const CargarPadronesReport: React.FC<CargarPadronesReportProps> = ({ resu
         dryRun={result.dryRun}
         buildCsv={() => buildCargarPadronesCsv(result)}
       />
+      {result.ambiguousLocalityCodes.length > 0 && (
+        <ReportDownloadButton
+          stageSlug={MonthlyStage.CARGAR_PADRONES}
+          dryRun={result.dryRun}
+          kind={REPORT_CSV_KIND.INCONSISTENCIES}
+          buildCsv={() => buildCargarPadronesInconsistenciasCsv(result)}
+        />
+      )}
       <div className={`${styles.banner} ${BANNER_CLASS[view.banner.kind]}`}>
         <p className={styles.bannerText}>{view.banner.text}</p>
       </div>

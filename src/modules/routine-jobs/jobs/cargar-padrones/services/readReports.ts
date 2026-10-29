@@ -33,6 +33,7 @@ const toConflictSample = (row: Record<string, unknown>): AttributeConflictSample
 const toAmbiguousCode = (row: Record<string, unknown>): AmbiguousLocalityCode => ({
   coddepto: scalarOf(row.coddepto),
   codloccat: scalarOf(row.codloccat),
+  nomdepto: row.nomdepto == null ? null : String(row.nomdepto),
   nomloccat: stringsOf(row.nomloccat),
 });
 
@@ -83,5 +84,10 @@ export async function readLoadOutput(
   // One pg client: report queries must not overlap.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const codes = await session.query(buildAmbiguousLocalityCodesSql(layouts.urbano));
-  return { rural, urbano, ambiguousLocalityCodes: codes.rows.map(toAmbiguousCode) };
+  return {
+    rural,
+    urbano,
+    ambiguousLocalityCodes: codes.rows.map(toAmbiguousCode),
+    ambiguousLocalityTotal: numberOf(codes.rows[0] ?? {}, "total"),
+  };
 }

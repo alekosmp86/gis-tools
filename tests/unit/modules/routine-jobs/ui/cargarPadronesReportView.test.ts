@@ -29,6 +29,7 @@ const result = (overrides: Partial<CargarPadronesResult> = {}): CargarPadronesRe
   report: { rural: typeReport(), urbano: typeReport({ rowsRead: 200, groups: 150, inserted: 150 }) },
   totals: { rowsRead: 300, groups: 240, rowsMerged: 20, inserted: 240 },
   ambiguousLocalityCodes: [],
+  ambiguousLocalityTotal: 0,
   warnings: [],
   stepTimings: [],
   analyze: { status: "ok" },
@@ -42,6 +43,7 @@ const ambiguous = (count: number): AmbiguousLocalityCode[] =>
   Array.from({ length: count }, (_, index) => ({
     coddepto: "1",
     codloccat: String(index),
+    nomdepto: null,
     nomloccat: ["Uno", "Dos"],
   }));
 
@@ -232,7 +234,7 @@ describe("cargarPadronesReportView", () => {
 
     it("AC-31: should map codes and the locality names", () => {
       const view = buildReportView(
-        result({ ambiguousLocalityCodes: [{ coddepto: "1", codloccat: "7", nomloccat: ["Uno", "Dos"] }] }),
+        result({ ambiguousLocalityCodes: [{ coddepto: "1", codloccat: "7", nomdepto: null, nomloccat: ["Uno", "Dos"] }] }),
       );
 
       expect(view.ambiguousLocalityCodes).toEqual([{ coddepto: "1", codloccat: "7", names: ["Uno", "Dos"] }]);

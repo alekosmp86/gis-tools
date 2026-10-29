@@ -103,6 +103,7 @@ export function cargarPadronesResultOf(overrides: Partial<CargarPadronesResult> 
     report: { rural: typeReportOf(100), urbano: typeReportOf(200) },
     totals: { rowsRead: 301, groups: 302, rowsMerged: 303, inserted: 304 },
     ambiguousLocalityCodes: [],
+    ambiguousLocalityTotal: 0,
     warnings: ["Hay 2 filas sin clave.", "Se detectaron conflictos."],
     stepTimings: [
       { label: "Leer rurales", ms: 2000 },

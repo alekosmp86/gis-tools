@@ -32,6 +32,7 @@ export interface AttributeConflictSample {
 export interface AmbiguousLocalityCode {
   coddepto: string | number | null;
   codloccat: string | number | null;
+  nomdepto: string | null;
   nomloccat: string[];
 }
 
@@ -53,6 +54,7 @@ export interface LoadOutput {
   rural: TypeReport;
   urbano: TypeReport;
   ambiguousLocalityCodes: AmbiguousLocalityCode[];
+  ambiguousLocalityTotal: number;
 }
 
 export interface LoadTotals {
@@ -83,6 +85,7 @@ export interface CargarPadronesResult {
   };
   totals: LoadTotals;
   ambiguousLocalityCodes: AmbiguousLocalityCode[];
+  ambiguousLocalityTotal: number;
   warnings: string[];
   stepTimings: StepTiming[];
   analyze: AnalyzeOutcome;

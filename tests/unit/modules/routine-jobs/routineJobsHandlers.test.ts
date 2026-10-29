@@ -50,6 +50,7 @@ const resultFixture = (overrides: Partial<CargarPadronesResult> = {}): CargarPad
   report: { rural: typeReport(), urbano: typeReport() },
   totals: { rowsRead: 20, groups: 16, rowsMerged: 4, inserted: 16 },
   ambiguousLocalityCodes: [],
+  ambiguousLocalityTotal: 0,
   warnings: [],
   stepTimings: [],
   analyze: { status: AnalyzeStatus.OK },

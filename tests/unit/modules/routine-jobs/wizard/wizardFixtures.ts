@@ -57,6 +57,7 @@ export function resultOf(overrides: Partial<CargarPadronesResult> = {}): CargarP
     report: { rural: typeReportOf(100), urbano: typeReportOf(200) },
     totals: { rowsRead: 301, groups: 302, rowsMerged: 303, inserted: 304 },
     ambiguousLocalityCodes: [],
+    ambiguousLocalityTotal: 0,
     warnings: [],
     stepTimings: [
       { label: "Leer rurales", ms: 1234 },

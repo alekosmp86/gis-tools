@@ -184,7 +184,7 @@ describe("CargarPadronesReport", () => {
   describe("ambiguous locality codes", () => {
     it("AC-31: should list each code with its department, locality code and names", () => {
       const html = render(resultOf({
-        ambiguousLocalityCodes: [{ coddepto: 7, codloccat: 1234, nomloccat: ["Paso Hondo", "Paso Fondo"] }],
+        ambiguousLocalityCodes: [{ coddepto: 7, codloccat: 1234, nomdepto: null, nomloccat: ["Paso Hondo", "Paso Fondo"] }],
       }));
 
       expect(html).toMatch(/ambigu/i);
@@ -195,7 +195,7 @@ describe("CargarPadronesReport", () => {
 
     it("AC-31: should render null codes without printing null", () => {
       const html = render(resultOf({
-        ambiguousLocalityCodes: [{ coddepto: null, codloccat: null, nomloccat: ["Sin código"] }],
+        ambiguousLocalityCodes: [{ coddepto: null, codloccat: null, nomdepto: null, nomloccat: ["Sin código"] }],
       }));
 
       expect(html).toContain("Sin código");
@@ -241,7 +241,7 @@ describe("CargarPadronesReport", () => {
   it("AC-31: should not use inline styles", () => {
     const html = render(resultOf({
       warnings: ["a"],
-      ambiguousLocalityCodes: [{ coddepto: 1, codloccat: 2, nomloccat: ["x"] }],
+      ambiguousLocalityCodes: [{ coddepto: 1, codloccat: 2, nomdepto: null, nomloccat: ["x"] }],
     }));
 
     expect(html).not.toMatch(/\sstyle=/);

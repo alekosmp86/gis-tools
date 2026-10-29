@@ -504,13 +504,13 @@ describe("loadSql", () => {
   });
 
   describe("buildAmbiguousLocalityCodesSql", () => {
-    it("AC-12: should list (coddepto, codloccat) pairs that carry more than one nomloccat, capped at 20", () => {
+    it("AC-12: should list (coddepto, codloccat) pairs that carry more than one nomloccat, capped at 500", () => {
       const sql = flat(buildAmbiguousLocalityCodesSql(urbanSource()));
 
       expect(sql).toMatch(/"coddepto"/);
       expect(sql).toMatch(/"codloccat"/);
       expect(sql).toMatch(/HAVING[\s\S]*count\(\s*DISTINCT[\s\S]*"nomloccat"[\s\S]*>\s*1/i);
-      expect(sql).toMatch(/LIMIT\s+20\b/i);
+      expect(sql).toMatch(/LIMIT\s+500\b/i);
       expect(sql).toContain('"cat"."paisurbano"');
     });
   });

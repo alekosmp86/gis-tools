@@ -69,7 +69,7 @@ describe("buildCargarPadronesCsv", () => {
     it("should write no metadata, warnings, timings, analyze status or ambiguous codes", () => {
       const csv = rawCsvOf({
         warnings: ["Hay 2 filas sin clave."],
-        ambiguousLocalityCodes: [{ coddepto: "01", codloccat: "C1", nomloccat: ["Uno", "Dos"] }],
+        ambiguousLocalityCodes: [{ coddepto: "01", codloccat: "C1", nomdepto: null, nomloccat: ["Uno", "Dos"] }],
         analyze: { status: "failed", message: "timeout" },
       });
 

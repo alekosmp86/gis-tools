@@ -1,4 +1,4 @@
-import { AMBIGUOUS_LOCALITY_LIMIT, CONFLICT_SAMPLE_LIMIT, PADRON_UNIT, type PadronUnit } from "../constants";
+import { CONFLICT_SAMPLE_LIMIT, PADRON_UNIT, type PadronUnit } from "../constants";
 import { UNIT_SPECS } from "./loadSql";
 import type { LoadOutput, TypeReport } from "../types";
 import { plural } from "../../shared/text";
@@ -52,9 +52,9 @@ export function buildWarnings(loaded: LoadOutput, repair: boolean, commitError: 
     ...unitWarnings(PADRON_UNIT.RURAL, loaded.rural, repair),
     ...unitWarnings(PADRON_UNIT.URBANO, loaded.urbano, repair),
   ];
-  if (loaded.ambiguousLocalityCodes.length > 0) {
+  if (loaded.ambiguousLocalityTotal > 0) {
     warnings.push(
-      `${plural(loaded.ambiguousLocalityCodes.length, "par", "pares")} (coddepto, codloccat) con más de un nombre de localidad (hasta ${AMBIGUOUS_LOCALITY_LIMIT}). La carga no se bloquea.`
+      `${plural(loaded.ambiguousLocalityTotal, "par", "pares")} (coddepto, codloccat) con más de un nombre de localidad. La carga no se bloquea.`
     );
   }
   if (commitError !== undefined) {

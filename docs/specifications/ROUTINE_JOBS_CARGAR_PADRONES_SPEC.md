@@ -162,6 +162,12 @@ Part B
   module manifest; `module.routes.json` declares the page; `npm run modules:routes:check` passes.
 - AC-34: the module wiki (`src/modules/routine-jobs/wiki/`: index + "Cargar padrones", Spanish, user-facing: what it does, the five steps, the options, how to read the report, the warnings, FAQ) is
   registered through `manifest.wiki`; wiki tests pass. No screenshots.
+- AC-35: "Descargar inconsistencias" (`ui/CargarPadronesReport.tsx`, builder `ui/reportCsv/cargarPadronesCsv.ts`) appears only when the report has
+  ambiguous locality codes and exports them, one row per (coddepto, codloccat) pair: `Departamento` (the department name from the urban source,
+  or the code when the name is missing), `Código de localidad`, `Nombres` (the distinct names joined with " / "). The list is capped at
+  `DETAIL_LIST_LIMIT` (500); the total comes from a window count in the same statement, and a cut list ends with the list cut marker. The
+  ambiguity warning counts every pair, not only the listed ones. The "Descargar CSV" file (database changes) is unchanged; the filename is
+  `carto-cargar-padrones-<simulacion|real>-inconsistencias-<stamp>.csv`.
 
 ## Out of scope
 Updating `carto.padron`; the incoming/diff tables; URN provisioning; MISSING/NEW/CHANGED classification; `ST_Equals`-based geometry
