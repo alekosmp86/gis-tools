@@ -68,6 +68,11 @@
   background: transparent;
 }
 
+.scrollTable table td {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
 .scrollTable thead th {
   position: sticky;
   top: 0;
