@@ -174,6 +174,18 @@ export interface ActualizarAddressMasterReport {
   ambiguousSamples: AddressMasterAmbiguous[];
 }
 
+export interface ActualizarPadronBackup {
+  token: string;
+  fileName: string;
+  bytes: number;
+  counts: {
+    updated: number;
+    paired: number;
+    inserted: number;
+    addressMasterRows: number;
+  };
+}
+
 export interface ActualizarPadronResult {
   dryRun: boolean;
   targetModified: boolean;
@@ -182,6 +194,7 @@ export interface ActualizarPadronResult {
   skipped: SkippedReport;
   target: ActualizarTargetReport;
   addressMaster?: ActualizarAddressMasterReport;
+  backup?: ActualizarPadronBackup;
   warnings: string[];
   stepTimings: StepTiming[];
 }

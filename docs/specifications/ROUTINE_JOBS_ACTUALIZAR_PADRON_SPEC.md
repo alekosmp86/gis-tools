@@ -174,8 +174,8 @@ The wizard and the request carry two schema fields:
   the UI checklist shows them before the run starts. A dry run has no COMMIT step; a real run has it.
 - AP-23: Planned steps (labels in Spanish): validar tablas y columnas (includes the type check of AP-7b), validar tabla de destino (structure,
   privileges, sequence), contar filas de staging, resolver provincias y localidades (candidates and the skip report), clasificar padrones,
-  ajustar secuencias de destino, aplicar cambios de padrones, analizar tabla de destino, generar informe, then confirmar cambios (real run) or
-  revertir cambios de la simulación (dry run).
+  ajustar secuencias de destino, aplicar cambios de padrones, analizar tabla de destino, generar informe, then generar respaldo para revertir
+  and confirmar cambios (real run), or revertir cambios de la simulación (dry run). The backup step exists only in a real run (AP-68).
 - AP-24: Session: the real session reuses the settings of shp-replace (`statement_timeout`, `lock_timeout`, `client_encoding = 'UTF8'`,
   memory settings) as in AC-28 of Cargar padrones. `connect` errors are scrubbed of the password; `close()` never throws. The password never
   appears in logs, statuses, results or error messages.
@@ -411,10 +411,75 @@ shared one of `jobs/shared/addressMasterLink*` that stage 4 also uses, so both s
    table (assumed; verify both on dev, `carto.territorial_unit` included).
 7. Name matching is `upper()` on both sides, with no accent or whitespace normalisation (as before).
 
+## Revert backup (real run)
+
+Before the COMMIT of a real run, the stage writes a SQL script that reverts exactly what the run changed. A dry run writes nothing and keeps
+its SQL unchanged. The script covers only the changed rows (never a dump of the table), and the stage's own SQL never runs it.
+
+- AP-68: No backup, no write. The backup is built inside the real run's transaction, after the apply, the address master pass and the
+  report, before COMMIT. If capturing, building, writing, verifying or registering the backup fails, the transaction rolls back and the
+  run fails with the Spanish message `No se pudo generar el respaldo para revertir: <detalle>.`, wrapped by
+  the transaction's outcome sentence ("Las tablas de destino no fueron modificadas."). A commit is never reached.
+- AP-69: Capture. A real run creates the temporary table `padron_revert` (`ON COMMIT DROP`) before the apply. The apply statement exposes the
+  old values of each geometry update (kind `U`), each applied pair (`P`) and each inserted row (`I`) through RETURNING and writes them to that
+  table in the same statement. Before the address master link pass, the destination rows without `id_address_master` are captured (`A`), and
+  the largest address master id is read (AP-70a). The SET lists and the key lists of AP-46 and AP-65 do not change; the apply SQL of a dry run is
+  the same statement as before.
+- AP-70: Contents and order of the script. The file is gzip `padron-revert-<schema>-<table>-<yyyymmdd-HHMMSS>.sql.gz`, with sanitised
+  identifiers. It starts with the psql preamble `\set ON_ERROR_STOP on` and `SET client_encoding = 'UTF8';`, then header comments (run time,
+  destination table, counts per kind, a warning that it reverts only this run's rows and assumes nothing changed them since, the
+  `gunzip` and `psql -f` instructions, that id sequences are not reverted, and, when the link pass ran, the address master rule of AP-70a),
+  then `BEGIN;`, then in this order: (a) when the link pass ran, `UPDATE <destination> SET id_address_master = NULL WHERE id IN (...)` in
+  chunks of 1000 ids (kind `A`), then the address master deletes of AP-70a in chunks of 1000 ids; (b)
+  `DELETE FROM <destination> WHERE id BETWEEN a AND b;` for each run of consecutive inserted ids (kind `I`); (c) `UPDATE` statements that
+  restore type_padron, id_cadastral_locality, number and geometry of each pair (kind `P`), and geometry of each update (kind `U`); then
+  `COMMIT;`. Each statement's text is produced by the database with `format('%L')`, so escaping is exact; a NULL stays NULL; the geometry is
+  written as its EWKB hex (`ST_AsEWKB`), so the SRID is restored exactly.
+- AP-70a: Address master deletes. The link pass creates an address master row only for a destination row that had no
+  `id_address_master` before it (kind `A`), with urn `cgeo:padron:id:<id>`. The script therefore deletes only those rows:
+  `DELETE FROM <addresses_master> WHERE <id column> > <max before> AND <urn column> IN ('cgeo:padron:id:<id>', ...);`, one statement per
+  chunk of 1000 kind `A` ids, the urn prefix taken from the subject spec. Rows with a larger id but another urn, and rows with a matching
+  urn at or below the saved max, are never deleted. The max is read fail closed: a missing or non-numeric value fails the backup (AP-68)
+  and rolls the run back; an empty table legitimately reads 0.
+- AP-71: Only changed rows. The script covers the kinds `U`, `P`, `I` and `A` only. Its size grows with the rows the run changed, not with
+  the size of the destination. The `A` kind holds every destination row that had no address master before the link pass, so it may include
+  rows the pass left unlinked; restoring NULL on them changes nothing.
+- AP-72: Verification before COMMIT. The lines written per kind equal the rows of the temporary table per kind. The `U`, `P` and `I` counts
+  equal the apply outcome (`updated`, `paired`, `inserted`). Any mismatch throws, which rolls back the run (AP-68).
+- AP-73: Storage and download. Files go to `<os tmp>/gis-tools-routine-jobs`. Each one is registered under a random token (UUID) in
+  memory. A real run that created the file returns `backup: { token, fileName, bytes, counts }` in its result, also when the commit outcome
+  is unknown. `GET routine-jobs/actualizar-padron/backup?token=<uuid>` streams the file as `application/gzip` with
+  `Content-Disposition: attachment; filename="<fileName>"`, `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`. The folder is
+  created private (mode 0700) and the stage refuses it when it is a link or belongs to another user; files are created 0600. A missing token answers `400`; an unknown token, or a file that is no longer on
+  disk, answers `404` with a Spanish error. The client never supplies a path.
+- AP-74: Retention. Each registration removes backup files older than 7 days from the directory and their tokens from memory. Tokens live in
+  memory: after a server restart the files stay on disk until the retention removes them, but their tokens no longer resolve.
+- AP-75: The tool never executes the revert file. Its `DELETE` statements are text in the file only; the stage's own SQL keeps AP-46 (no
+  DELETE and no TRUNCATE). The temporary table needs the TEMP privilege on the database; a role without it fails the run with AP-68.
+- AP-76: Planned steps. A real run lists `Generar respaldo para revertir` right before `Confirmar cambios`. A dry run lists the same steps
+  as before.
+- AP-77: Automatic download. After a real run whose result has `backup`, the report's backup section downloads the file by itself: it calls
+  `GET routine-jobs/actualizar-padron/backup?token=<token>` and saves the response with `backup.fileName` (browser download, Downloads or
+  the browser's save dialog). A dry run, or a result without `backup`, downloads nothing and shows no section.
+- AP-78: Once per token. The client keeps a set of tokens already downloaded automatically, in memory and mirrored to sessionStorage. A
+  re-render, a remount of the result step or a repeated effect never downloads the same token twice in the session. Without storage the
+  in-memory set still applies and the UI works.
+- AP-79: Section content. The section `Respaldo para revertir` shows the file name, its size in MB with one decimal, the counts of
+  `Geometrías actualizadas`, `Claves actualizadas`, `Padrones insertados` and `Padrones sin dirección maestra antes del enlace`, and the
+  button `Descargar respaldo` (secondary, with the download icon). The button downloads the same file on each click; it is not limited by AP-78.
+- AP-80: Failure. A failed automatic download (no connection, `400`, `404`) never throws into the page: the section shows the Spanish error
+  text `No se pudo descargar el respaldo.` with the server message near the block, and the button stays usable to retry.
+- AP-81: Instructions. Three Spanish lines explain how to revert (gunzip the file and run it with psql against the database; it reverts only
+  this run's changes and assumes nobody changed those rows since), that the server keeps a temporary copy for 7 days, and that the download
+  links stop working after a server restart.
+- AP-82: No folder, no setting. The UI asks for no folder and no option: the browser decides where the file is saved.
+
 ## Acceptance criteria count
 
 AP-1 to AP-7b, AP-9 to AP-14 (AP-8 removed), AP-15 to AP-36, AP-37 to AP-49, with AP-2b, AP-7b, AP-10b and AP-32b. AP-64 to AP-67 are the
 pairs of reclassified and renumbered padrones. AP-50 is the
 destination key-format check. AP-51 to AP-60 are the address master link option. Criteria AP-26 and AP-49 are the shared-store and CSV
 criteria. AP-61 is the inconsistencies list. AP-62 is the table defaults and the locality hint. AP-63 is the locality table reference
-check (preflight, refusal or warning).
+check (preflight, refusal or warning). AP-68 to AP-76 (AP-70a included) are the revert backup of a real run (no backup, no write; capture; script contents;
+changed rows only; verification; storage and download; retention; the tool never runs the revert file; planned step). AP-77 to AP-82 are
+the UI of that backup (automatic download once per token, section content, fallback button, failure text, instructions, no folder setting).

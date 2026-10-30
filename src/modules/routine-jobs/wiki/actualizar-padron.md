@@ -96,6 +96,31 @@ Las listas muestran hasta 500 filas (las muestras, hasta 20). Cuando una lista s
 
 Si la opción de direcciones maestras está activada, aparece además una sección con la tabla de direcciones maestras: padrones sin dirección maestra, registros por crear y creados, padrones enlazados, los que ya tenían registro, los ambiguos y los que quedan sin dirección maestra después del enlace. Sus listas siguen las mismas reglas de corte.
 
+## Respaldo para revertir
+
+Una **actualización real** (no el análisis) genera un archivo que deshace exactamente lo que esa ejecución cambió en la tabla de destino. Su nombre es `padron-revert-<esquema>-<tabla>-AAAAMMDD-HHmmss.sql.gz`.
+
+Al terminar la actualización, el navegador **descarga el archivo solo**: va a la carpeta de descargas o aparece el diálogo de guardar, según la configuración de su navegador. Si no se guardó, la sección **Respaldo para revertir** del informe tiene el botón **Descargar respaldo** para bajarlo de nuevo. La sección muestra el nombre del archivo, su tamaño y cuántos padrones y geometrías cambió la ejecución.
+
+**Cómo revertir**: descomprima el archivo y ejecútelo con `psql` contra la misma base:
+
+```
+gunzip padron-revert-carto-padron-AAAAMMDD-HHmmss.sql.gz
+psql -h <servidor> -U <usuario> -d <base> -f padron-revert-carto-padron-AAAAMMDD-HHmmss.sql
+```
+
+El script trae sus propios comentarios de cabecera con la fecha, la tabla y los conteos por tipo de cambio. Todo lo que hace va dentro de una transacción (`BEGIN` ... `COMMIT`).
+
+**Límites**:
+
+- Revierte **solo los cambios de esta ejecución**. No vuelve la tabla a un estado anterior.
+- Supone que nadie modificó esas filas después de la actualización. Si alguien cambió una de ellas, el script la sobrescribe igual.
+- Los padrones nuevos se **borran por rangos de id**. Los ids de la secuencia no vuelven atrás, así que quedan huecos.
+- Las direcciones maestras creadas por el enlace también se borran, solo si la opción de enlace estaba activada: únicamente las de los padrones que no tenían dirección maestra antes del enlace y cuyo id supera el máximo que tenía la tabla antes de la ejecución. Las demás no se tocan.
+- El servidor guarda una copia temporal del archivo durante **7 días**. Las copias más viejas se eliminan al generar un respaldo nuevo.
+- Los enlaces de descarga viven en la memoria del servidor: si el servidor se reinicia, dejan de funcionar aunque el archivo siga ahí. Descargue el respaldo antes de reiniciar.
+- El **Analizar sin cargar** no genera respaldo: no cambia la tabla de destino, así que no hay nada que revertir.
+
 ## Filas omitidas
 
 Una fila se omite, no se escribe, cuando no se puede resolver con seguridad. El informe cuenta cada motivo y muestra qué hacer:

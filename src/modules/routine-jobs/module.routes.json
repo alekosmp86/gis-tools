@@ -7,6 +7,7 @@
     { "path": "cargar-padrones/status", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "actualizar-padron/start", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "actualizar-padron/status", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "actualizar-padron/backup", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "cargar-localidades/start", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "cargar-localidades/status", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "unidad-territorial/start", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },

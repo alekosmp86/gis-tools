@@ -19,6 +19,7 @@ import {
 import type { ActualizarPadronOptions, PadronLayouts } from "../types";
 import { candidateCtes, DECIDED_CTE, SKIP_REASON_COLUMN } from "./classifySql";
 import { physicalColumn, qualifiedName } from "./layouts";
+import { REVERT_COLUMN, REVERT_KIND, REVERT_TABLE_SQL, revertColumnList } from "./revertCapture";
 
 const TARGET_ALIAS = "tgt";
 const MATCHED_TARGET_ALIAS = "t1";
@@ -51,7 +52,12 @@ const CTE_TARGET = {
   INSERTED: "inserted_rows",
   UPDATED: "updated_rows",
   PAIRED: "paired_rows",
+  REVERT: "revert_rows",
 } as const;
+
+export interface ApplySqlOptions {
+  captureRevert?: boolean;
+}
 
 const PAIR_COLUMN = {
   TARGET_ID: "target_id",
@@ -471,8 +477,15 @@ function insertedRowsCte(target: WritableTargetLayout): string {
   );
 }
 
+/* The old values come from the planned row the UPDATE joins: they were read from the same statement snapshot, so RETURNING can expose them without a second scan of the destination. */
+function updatedReturningSql(target: WritableTargetLayout, captureRevert: boolean): string {
+  const columns = [`${targetOf(target, DESTINATION_COLUMN.ID)} AS "id"`];
+  if (captureRevert) columns.push(`${plannedOf(PAIR_COLUMN.TARGET_GEOMETRY)} AS "old_geometry"`);
+  return columns.join(", ");
+}
+
 /* The only writes of the stage: a CHANGED row gets its geometry; a paired row gets type_padron, id_cadastral_locality and number, and its geometry only when updateGeometries is on. id, id_address_master and id_province are never written. */
-function updatedRowsCte(target: WritableTargetLayout, options: ActualizarPadronOptions): string {
+function updatedRowsCte(target: WritableTargetLayout, options: ActualizarPadronOptions, captureRevert: boolean): string {
   return cte(
     CTE_TARGET.UPDATED,
     [
@@ -480,12 +493,25 @@ function updatedRowsCte(target: WritableTargetLayout, options: ActualizarPadronO
       `SET ${physicalColumn(target, DESTINATION_COLUMN.GEOMETRY)} = ${PLANNED_ALIAS}.${q(CANDIDATE_GEOMETRY)}`,
       `FROM ${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS}`,
       `WHERE ${classIs(MATCH_CLASS.CHANGED)} AND ${applyFlag(options)} AND ${targetOf(target, DESTINATION_COLUMN.ID)} = ${PLANNED_ALIAS}."target_id"`,
-      `RETURNING ${targetOf(target, DESTINATION_COLUMN.ID)} AS "id"`,
+      `RETURNING ${updatedReturningSql(target, captureRevert)}`,
     ].join(" ")
   );
 }
 
-function pairedRowsCte(target: WritableTargetLayout, options: ActualizarPadronOptions): string {
+function pairedReturningSql(target: WritableTargetLayout, captureRevert: boolean): string {
+  const columns = [`${targetOf(target, DESTINATION_COLUMN.ID)} AS "id"`];
+  if (captureRevert) {
+    columns.push(
+      `${pairOf(PAIR_COLUMN.OLD_TYPE_PADRON)} AS "old_type_padron"`,
+      `${pairOf(PAIR_COLUMN.OLD_LOCALITY_ID)} AS "old_id_cadastral_locality"`,
+      `${pairOf(PAIR_COLUMN.OLD_NUMBER)} AS "old_number"`,
+      `${pairOf(PAIR_COLUMN.TARGET_GEOMETRY)} AS "old_geometry"`
+    );
+  }
+  return columns.join(", ");
+}
+
+function pairedRowsCte(target: WritableTargetLayout, options: ActualizarPadronOptions, captureRevert: boolean): string {
   const assignments = [
     ...PAIRED_KEY_COLUMNS.map((logical) => `${physicalColumn(target, logical)} = ${pairOf(logical)}`),
     `${physicalColumn(target, DESTINATION_COLUMN.GEOMETRY)} = CASE WHEN ${applyFlag(options)} THEN ${pairOf(CANDIDATE_GEOMETRY)} ELSE ${targetOf(target, DESTINATION_COLUMN.GEOMETRY)} END`,
@@ -497,7 +523,22 @@ function pairedRowsCte(target: WritableTargetLayout, options: ActualizarPadronOp
       `SET ${assignments.join(", ")}`,
       `FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS}`,
       `WHERE ${appliedCondition()} AND ${targetOf(target, DESTINATION_COLUMN.ID)} = ${pairOf(PAIR_COLUMN.TARGET_ID)}`,
-      `RETURNING ${targetOf(target, DESTINATION_COLUMN.ID)} AS "id"`,
+      `RETURNING ${pairedReturningSql(target, captureRevert)}`,
+    ].join(" ")
+  );
+}
+
+/* Writes the old values of every changed row into the session's revert table, before COMMIT. Kinds: U geometry updated, P pair updated, I row inserted. */
+function revertRowsCte(): string {
+  const [uKind, pKind, iKind] = [REVERT_KIND.UPDATED, REVERT_KIND.PAIRED, REVERT_KIND.INSERTED].map((kind) => literal(kind));
+  return cte(
+    CTE_TARGET.REVERT,
+    [
+      `INSERT INTO ${REVERT_TABLE_SQL} (${revertColumnList()})`,
+      `SELECT ${uKind}, u."id", NULL, NULL, NULL, u."old_geometry" FROM ${q(CTE_TARGET.UPDATED)} AS u`,
+      `UNION ALL SELECT ${pKind}, p."id", p."old_type_padron", p."old_id_cadastral_locality", p."old_number", p."old_geometry" FROM ${q(CTE_TARGET.PAIRED)} AS p`,
+      `UNION ALL SELECT ${iKind}, i."id", NULL, NULL, NULL, NULL FROM ${q(CTE_TARGET.INSERTED)} AS i`,
+      `RETURNING ${q(REVERT_COLUMN.KIND)}`,
     ].join(" ")
   );
 }
@@ -510,19 +551,29 @@ const INSERTED_LIST_SQL = [
   `ORDER BY ir."id" LIMIT ${DETAIL_LIST_LIMIT}`,
 ].join(" ");
 
-export function buildPadronApplySql(layouts: PadronLayouts, options: ActualizarPadronOptions): string {
+function revertCountSql(captureRevert: boolean): string[] {
+  return captureRevert ? [`(SELECT count(*) FROM ${q(CTE_TARGET.REVERT)}) AS "revert_rows",`] : [];
+}
+
+export function buildPadronApplySql(
+  layouts: PadronLayouts,
+  options: ActualizarPadronOptions,
+  { captureRevert = false }: ApplySqlOptions = {}
+): string {
   const { target } = layouts;
   return [
     withClause([
       ...classifyCtes(layouts, options),
       insertedRowsCte(target),
-      updatedRowsCte(target, options),
-      pairedRowsCte(target, options),
+      updatedRowsCte(target, options, captureRevert),
+      pairedRowsCte(target, options, captureRevert),
+      ...(captureRevert ? [revertRowsCte()] : []),
     ]),
     "SELECT",
     `(SELECT count(*) FROM ${q(CTE_TARGET.INSERTED)}) AS "inserted",`,
     `(SELECT count(*) FROM ${q(CTE_TARGET.UPDATED)}) AS "updated",`,
     `(SELECT count(*) FROM ${q(CTE_TARGET.PAIRED)}) AS "paired",`,
+    ...revertCountSql(captureRevert),
     `${jsonArrayOf(INSERTED_LIST_SQL, "inserted_list")} AS "inserted_list"`,
   ].join(" ");
 }

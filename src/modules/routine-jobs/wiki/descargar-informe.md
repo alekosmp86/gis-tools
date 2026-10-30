@@ -90,6 +90,10 @@ Un padrón nuevo genera dos filas (la creada y la enlazada); uno que ya tenía r
 
 Si una lista del informe se corta en 500 filas, el CSV termina con una fila que lo avisa: en la columna **Tabla** va la tabla y en **Cambio** un texto como `Lista incompleta: se muestran las primeras 500 de 730 unidades enlazadas`. Así no queda nada oculto. Las demás columnas de esa fila quedan vacías.
 
+## Respaldo para revertir (no es un CSV)
+
+Una actualización real de **Actualizar padrones** también genera un archivo `padron-revert-<esquema>-<tabla>-AAAAMMDD-HHmmss.sql.gz` para deshacer esa carga. Se descarga solo al terminar y se describe en [Etapa 5: Actualizar padrones](actualizar-padron.md).
+
 ## Descargar inconsistencias
 
 Los informes de **Cargar padrones**, **Cargar localidades** y **Actualizar padrones** muestran un segundo botón, **Descargar inconsistencias**, solo cuando hay datos de origen que revisar. Ese archivo no contiene cambios en la base: lista los datos que el proceso no pudo usar.

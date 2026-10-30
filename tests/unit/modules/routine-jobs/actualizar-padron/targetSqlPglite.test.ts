@@ -3,7 +3,16 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
+import {
+  buildCaptureAddressMasterSql,
+  buildCreateRevertTableSql,
+  buildMaxAddressMasterIdSql,
+  REVERT_TABLE_SQL,
+} from "@/modules/routine-jobs/jobs/actualizar-padron/domain/revertCapture";
 import type { ActualizarPadronOptions, PadronLayouts } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
+import type { RunSession } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
+import { readRevertCounts, revertScriptLines } from "@/modules/routine-jobs/jobs/actualizar-padron/services/revertScript";
+import { ADDRESS_MASTER_COLUMN } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSpec";
 import type { WritableTargetLayout } from "@/modules/routine-jobs/jobs/shared/tableResolution";
 import { buildSequenceRepairSql } from "@/modules/routine-jobs/jobs/shared/transaction";
 
@@ -334,5 +343,149 @@ describe("actualizar-padron pairs of reclassified and renumbered padrones (AP-64
     expect(Number(apply.inserted)).toBe(1);
     expect(after.find((row) => row.id === before[0].id)).toEqual(before[0]);
     expect(after.filter((row) => row.number === "501")).toHaveLength(1);
+  });
+});
+
+/* ST_AsEWKB stand-in: the geometry text is its own hex form, so an even-length digit string round-trips exactly. */
+const EWKB_STUB_SQL = `CREATE FUNCTION ST_AsEWKB(geometry) RETURNS bytea AS 'SELECT decode($1::text, ''hex'')' LANGUAGE sql;`;
+
+/* One geometry update (200), one applied pair (500 becomes RURAL 501 with a new geometry) and one insert (600). */
+const REVERT_SEED_SQL = `
+  INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry) VALUES
+    ('200', 'URBANO', 10, 1, '20'),
+    ('500', 'URBANO', 10, 1, '50');
+  INSERT INTO stg.padron_staging (unidadcat, nomdepto, nomloccat, padron, geom) VALUES
+    ('URBANO', 'Montevideo', 'centro', 200, '40'),
+    ('RURAL', 'MONTEVIDEO', NULL, 501, '51'),
+    ('RURAL', 'MONTEVIDEO', NULL, 600, '60');
+`;
+
+const REVERT_GENERATED_AT = "2026-10-30T12:00:00.000Z";
+
+const ADDRESS_MASTER: WritableTargetLayout = {
+  ...tableOf("carto", "addresses_master", Object.values(ADDRESS_MASTER_COLUMN)),
+  srid: 0,
+  idColumn: ADDRESS_MASTER_COLUMN.ID,
+  idSequence: null,
+  identityColumns: [],
+  catalog: [],
+};
+
+const ADDRESS_TARGET: WritableTargetLayout = {
+  ...TARGET,
+  columns: { ...TARGET.columns, id_address_master: "id_address_master" },
+};
+
+const sessionOn = (database: PGlite): RunSession => ({
+  async query(sql: string, values?: unknown[]) {
+    const result = await database.query(sql, values);
+    return { rows: result.rows as Row[] };
+  },
+  async close() {},
+});
+
+describe("actualizar-padron revert script on embedded Postgres (AP-69 to AP-72)", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(POSTGIS_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(PAIR_REFERENCE_SQL);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  it("should restore the table to its snapshot when the generated revert script runs after the real run (AP-69, AP-70, AP-71, AP-72)", async () => {
+    await database.exec(EWKB_STUB_SQL);
+    await database.exec(REVERT_SEED_SQL);
+    const before = await readPadron(database);
+    const session = sessionOn(database);
+
+    await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+    await database.query(buildCreateRevertTableSql());
+    await database.query(buildPadronClassifySql(LAYOUTS, OPTIONS));
+    await database.query(buildSequenceRepairSql(TARGET));
+    await database.query(buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }));
+    const counts = await readRevertCounts(session);
+    const scriptLines: string[] = [];
+    for await (const line of revertScriptLines(session, { target: TARGET, counts, generatedAt: REVERT_GENERATED_AT })) {
+      scriptLines.push(line.text);
+    }
+    await database.exec("COMMIT");
+    const afterRun = await readPadron(database);
+
+    await database.exec(scriptLines.join("\n"));
+    const afterRevert = await readPadron(database);
+
+    expect(counts).toEqual({ U: 1, P: 1, I: 1, A: 0 });
+    expect(afterRun).not.toEqual(before);
+    expect(afterRevert).toEqual(before);
+  });
+
+  it("should unlink the run's address master links and delete only the run's address master rows when the revert script runs (AP-70, AP-70a, AP-71)", async () => {
+    await database.exec(EWKB_STUB_SQL);
+    await database.exec(`
+      CREATE TABLE carto.addresses_master (addresses_master_id int PRIMARY KEY, urn text);
+      INSERT INTO carto.addresses_master VALUES (5, 'cgeo:padron:id:1');
+    `);
+    await database.exec(REVERT_SEED_SQL);
+    await database.exec(
+      "INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master) VALUES ('777', 'URBANO', 10, 1, '7', 5);"
+    );
+    const before = await readPadron(database);
+    const session = sessionOn(database);
+    const scriptLines: string[] = [];
+
+    await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+    await database.query(buildCreateRevertTableSql());
+    await database.query(buildPadronClassifySql(LAYOUTS, OPTIONS));
+    await database.query(buildSequenceRepairSql(TARGET));
+    await database.query(buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }));
+    await database.query(buildCaptureAddressMasterSql(ADDRESS_TARGET));
+    const maxIdBefore = Number((await database.query<Row>(buildMaxAddressMasterIdSql(ADDRESS_MASTER))).rows[0].max_id);
+    await database.exec(`
+      INSERT INTO carto.addresses_master VALUES (6, 'cgeo:padron:id:1'), (7, 'cgeo:padron:id:999');
+      UPDATE carto.padron SET id_address_master = 6 WHERE id = 1;
+      INSERT INTO carto.padron (id, number, type_padron, id_cadastral_locality, id_province, geometry) VALUES
+        (10, '810', 'URBANO', 10, 1, '81'), (11, '811', 'URBANO', 10, 1, '82'), (13, '813', 'URBANO', 10, 1, '83');
+      INSERT INTO carto.padron (id, number, type_padron, id_cadastral_locality, id_province, geometry) VALUES
+        (12, '812', 'URBANO', 10, 1, '84');
+      INSERT INTO ${REVERT_TABLE_SQL} (kind, id) VALUES ('I', 10), ('I', 11), ('I', 13);
+    `);
+    const counts = await readRevertCounts(session);
+    for await (const line of revertScriptLines(session, {
+      target: ADDRESS_TARGET,
+      addressMaster: { layout: ADDRESS_MASTER, maxIdBefore },
+      counts,
+      generatedAt: REVERT_GENERATED_AT,
+    })) {
+      scriptLines.push(line.text);
+    }
+    await database.exec("COMMIT");
+
+    await database.exec(scriptLines.join("\n"));
+    const after = await readPadron(database);
+    const addressMasterRows = (
+      await database.query<{ addresses_master_id: number; urn: string }>(
+        "SELECT addresses_master_id, urn FROM carto.addresses_master ORDER BY addresses_master_id"
+      )
+    ).rows;
+    const unlinkLines = scriptLines.filter((line) => line.startsWith("UPDATE ") && line.includes('SET "id_address_master" = NULL'));
+    const addressMasterDeleteLines = scriptLines.filter((line) => line.startsWith('DELETE FROM "carto"."addresses_master"'));
+
+    expect(maxIdBefore).toBe(5);
+    expect(counts).toEqual({ U: 1, P: 1, I: 4, A: 3 });
+    expect(after.filter((row) => row.id !== 12)).toEqual(before);
+    expect(after.find((row) => row.id === 12)).toBeDefined();
+    expect(addressMasterRows).toEqual([
+      { addresses_master_id: 5, urn: "cgeo:padron:id:1" },
+      { addresses_master_id: 7, urn: "cgeo:padron:id:999" },
+    ]);
+    expect(unlinkLines).toHaveLength(1);
+    expect(addressMasterDeleteLines).toHaveLength(1);
+    expect(scriptLines.indexOf(addressMasterDeleteLines[0])).toBeGreaterThan(scriptLines.indexOf(unlinkLines[0]));
   });
 });

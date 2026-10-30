@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { buildReportSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reportSql";
+import { buildMaxAddressMasterIdSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/revertCapture";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
 import { runActualizarPadron } from "@/modules/routine-jobs/jobs/actualizar-padron/services/runActualizarPadron";
 import type { ActualizarPadronOptions, ActualizarPadronParams, PadronLayouts } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
@@ -26,6 +27,12 @@ vi.mock("@/modules/routine-jobs/jobs/shared/preflightAsserts", async (importOrig
 
 vi.mock("@/modules/routine-jobs/jobs/shared/addressMasterLinkPreflight", () => ({
   addressMasterIssuesOf: vi.fn(async () => []),
+}));
+
+/* The revert writer touches the filesystem; these tests replace it so no file is written under the OS temp directory. */
+vi.mock("@/modules/routine-jobs/jobs/actualizar-padron/services/revertBackup", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/modules/routine-jobs/jobs/actualizar-padron/services/revertBackup")>()),
+  writeRevertBackup: vi.fn(async () => undefined),
 }));
 
 const BEGIN_SQL = "BEGIN ISOLATION LEVEL REPEATABLE READ";
@@ -135,15 +142,21 @@ const classificationRowOf = (): Record<string, unknown> => ({
 });
 
 /** The session answers the statements of the padron stage and of the address master pass; the address master apply reports the given counts. */
-function sessionOf(appliedAddressMaster: Record<string, unknown>): { session: RunSession; log: string[] } {
+function sessionOf(
+  appliedAddressMaster: Record<string, unknown>,
+  maxIdAnswer: Array<Record<string, unknown>> = [{ max_id: 0 }]
+): { session: RunSession; log: string[] } {
   const log: string[] = [];
+  const applyAnswer = [{ inserted: CLASSIFIED_NEW, updated: 0, inserted_list: [] }];
   const answers = new Map<string, Array<Record<string, unknown>>>([
     [buildReportSql(LAYOUTS), [REPORT_ROW]],
     [buildPadronClassifySql(LAYOUTS, OPTIONS), [classificationRowOf()]],
-    [buildPadronApplySql(LAYOUTS, OPTIONS), [{ inserted: CLASSIFIED_NEW, updated: 0, inserted_list: [] }]],
+    [buildPadronApplySql(LAYOUTS, OPTIONS), applyAnswer],
+    [buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }), applyAnswer],
     [buildAddressMasterClassifySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC), [ADDRESS_CLASSIFICATION_ROW]],
     [buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC), [appliedAddressMaster]],
     [buildAddressMasterRemainingSql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC), [ADDRESS_REMAINING_ROW]],
+    [buildMaxAddressMasterIdSql(ADDRESS_MASTER), maxIdAnswer],
   ]);
   const session: RunSession = {
     async query(sql: string) {
@@ -206,6 +219,19 @@ describe("runActualizarPadron address master count check (AP-55)", () => {
     const failure = await failureOf(runActualizarPadron(PARAMS_OF(), depsOf(session)));
 
     expect(failure.message).toMatch(message);
+    expect(log[log.length - 1]).toBe(ROLLBACK_SQL);
+    expect(log).not.toContain(COMMIT_SQL);
+  });
+});
+
+describe("runActualizarPadron revert backup fail closed on the max address master id (AP-70a, AP-68)", () => {
+  it("should ROLLBACK, never COMMIT, and throw the backup message before the link pass when the max id cannot be read", async () => {
+    const { session, log } = sessionOf({ created: 1, linked: 2, linked_list: [] }, []);
+
+    const failure = await failureOf(runActualizarPadron(PARAMS_OF(), depsOf(session)));
+
+    expect(failure.message).toMatch(/No se pudo generar el respaldo para revertir: No se pudo leer el máximo id/);
+    expect(log).not.toContain(buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC));
     expect(log[log.length - 1]).toBe(ROLLBACK_SQL);
     expect(log).not.toContain(COMMIT_SQL);
   });

@@ -19,7 +19,7 @@ function buildResult(
   const { source, target } = outcome;
   const { rowsRead, repaired, skipped } = source.totals;
   const totals = { rowsRead, candidates: rowsRead - skipped, repaired, skipped };
-  const { addressMaster } = outcome;
+  const { addressMaster, backup } = outcome;
   return {
     dryRun: params.dryRun,
     targetModified: outcome.targetModified,
@@ -28,6 +28,7 @@ function buildResult(
     skipped: source.skipped,
     target,
     ...(addressMaster === undefined ? {} : { addressMaster }),
+    ...(backup === undefined ? {} : { backup }),
     warnings: buildRunWarnings({
       dryRun: params.dryRun,
       options: params.options,

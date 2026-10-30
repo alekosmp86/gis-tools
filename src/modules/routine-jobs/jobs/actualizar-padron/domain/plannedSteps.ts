@@ -16,6 +16,7 @@ export const STEP = {
   ADDRESS_VERIFY: "Verificar padrones pendientes",
   ANALYZE: "Analizar tabla de destino",
   REPORT: "Generar informe",
+  BACKUP: "Generar respaldo para revertir",
   COMMIT: "Confirmar cambios",
   ROLLBACK: "Revertir cambios de la simulación",
 } as const;
@@ -45,6 +46,6 @@ export function plannedStepLabels({ dryRun, linkAddressMaster = false }: Planned
     ...(linkAddressMaster ? [STEP.ADDRESS_SEQUENCES, STEP.ADDRESS_CLASSIFY, STEP.ADDRESS_APPLY, STEP.ADDRESS_VERIFY] : []),
     STEP.ANALYZE,
     STEP.REPORT,
-    dryRun ? STEP.ROLLBACK : STEP.COMMIT,
+    ...(dryRun ? [STEP.ROLLBACK] : [STEP.BACKUP, STEP.COMMIT]),
   ];
 }

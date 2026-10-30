@@ -10,6 +10,7 @@ import {
   type TransactionMessages,
   type TransactionOutcome,
 } from "../../shared/transaction";
+import { nullableNumber, type Row } from "../../shared/rowMapping";
 import { ADDRESS_MASTER_PASS_STEPS, STEP } from "../domain/plannedSteps";
 import {
   buildAddressMasterReport,
@@ -21,8 +22,11 @@ import {
 } from "../domain/reportMapping";
 import { buildReportSql } from "../domain/reportSql";
 import { buildPadronApplySql, buildPadronClassifySql } from "../domain/targetSql";
+import { buildCaptureAddressMasterSql, buildCreateRevertTableSql, buildMaxAddressMasterIdSql } from "../domain/revertCapture";
+import type { RevertAddressMaster } from "./revertScript";
 import type {
   ActualizarAddressMasterReport,
+  ActualizarPadronBackup,
   ActualizarPadronOptions,
   ActualizarTargetReport,
   PadronApplyOutcome,
@@ -30,11 +34,13 @@ import type {
   PadronLayouts,
   ActualizarPadronParams,
 } from "../types";
+import { guardRevertStep, writeRevertBackup, type RevertBackupRequest } from "./revertBackup";
 
 export interface PadronWriteOutcome {
   source: ReportView;
   target: ActualizarTargetReport;
   addressMaster?: ActualizarAddressMasterReport;
+  backup?: ActualizarPadronBackup;
   targetModified: boolean;
   outcomeUnknown: boolean;
   commitError?: string;
@@ -44,6 +50,7 @@ interface PadronTransactionBody {
   source: ReportView;
   target: ActualizarTargetReport;
   addressMaster?: ActualizarAddressMasterReport;
+  backup?: ActualizarPadronBackup;
 }
 
 const PADRON_TRANSACTION: TransactionMessages = {
@@ -66,10 +73,45 @@ async function readClassification(
   return toPadronClassification(result.rows[0] ?? {});
 }
 
-async function readApply(session: RunSession, layouts: PadronLayouts, options: ActualizarPadronOptions): Promise<PadronApplyOutcome> {
-  const result = await session.query(buildPadronApplySql(layouts, options));
+/** A real run first creates the revert table in the transaction, then captures the old values inside the same apply statement. */
+async function applyPadronChanges(
+  session: RunSession,
+  params: ActualizarPadronParams,
+  layouts: PadronLayouts
+): Promise<PadronApplyOutcome> {
+  const captureRevert = !params.dryRun;
+  if (captureRevert) await guardRevertStep(() => session.query(buildCreateRevertTableSql()));
+  const result = await session.query(buildPadronApplySql(layouts, params.options, { captureRevert }));
   return toPadronApplyOutcome(result.rows[0] ?? {});
 }
+
+/** A missing or non-numeric max id fails the backup (and so the run); it never falls back to 0, which would widen the address master rollback. */
+function maxAddressMasterIdOf(row: Row | undefined): number {
+  const maxId = nullableNumber(row?.max_id);
+  if (maxId === null) throw new Error("No se pudo leer el máximo id de la tabla de direcciones maestras.");
+  return maxId;
+}
+
+/** The unlinked destination rows are captured before the link pass, which links them. */
+async function captureAddressMasterRevert(session: RunSession, layouts: PadronLayouts): Promise<RevertAddressMaster | undefined> {
+  const { addressMaster } = layouts;
+  if (addressMaster === undefined) return undefined;
+  return guardRevertStep(async () => {
+    await session.query(buildCaptureAddressMasterSql(layouts.target));
+    const result = await session.query(buildMaxAddressMasterIdSql(addressMaster));
+    return { layout: addressMaster, maxIdBefore: maxAddressMasterIdOf(result.rows[0]) };
+  });
+}
+
+const revertRequestOf = (
+  layouts: PadronLayouts,
+  apply: PadronApplyOutcome,
+  addressMaster: RevertAddressMaster | undefined
+): RevertBackupRequest => ({
+  target: layouts.target,
+  addressMaster,
+  expected: { inserted: apply.inserted, updated: apply.updated, paired: apply.paired },
+});
 
 function assertCountsMatch(target: WritableTargetLayout, classification: PadronClassification, apply: PadronApplyOutcome): void {
   const label = `${target.schema}.${target.table}`;
@@ -132,8 +174,9 @@ async function runTransactionBody(
   // Ordered: the sequence is repaired after the analysis and before the insert of the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   await timer.run(STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.target)));
-  const apply = await timer.run(STEP.APPLY, () => readApply(session, layouts, params.options));
+  const apply = await timer.run(STEP.APPLY, () => applyPadronChanges(session, params, layouts));
   assertCountsMatch(layouts.target, classification, apply);
+  const revertAddressMaster = params.dryRun ? undefined : await captureAddressMasterRevert(session, layouts);
   const addressMaster = await runAddressMasterStage(session, layouts, timer);
   await timer.run(STEP.ANALYZE, () => analyzeTargets(session, layouts));
   const target = await timer.run(STEP.REPORT, () =>
@@ -146,7 +189,12 @@ async function runTransactionBody(
       })
     )
   );
-  return { source, target, addressMaster };
+  const backup = params.dryRun
+    ? undefined
+    : await timer.run(STEP.BACKUP, () =>
+        writeRevertBackup(session, revertRequestOf(layouts, apply, revertAddressMaster))
+      );
+  return { source, target, addressMaster, backup };
 }
 
 export async function runPadronWriteTransaction(

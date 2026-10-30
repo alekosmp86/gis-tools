@@ -31,6 +31,7 @@ const UNIDAD_START_ROUTE = `${BASE_ROUTE}/unidad-territorial/start`;
 const UNIDAD_STATUS_ROUTE = `${BASE_ROUTE}/unidad-territorial/status`;
 const COMPLETAR_START_ROUTE = `${BASE_ROUTE}/completar-unidad-territorial/start`;
 const COMPLETAR_STATUS_ROUTE = `${BASE_ROUTE}/completar-unidad-territorial/status`;
+const ACTUALIZAR_BACKUP_ROUTE = `${BASE_ROUTE}/actualizar-padron/backup`;
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const NETWORK_MESSAGE = "No se pudo conectar con el servidor.";
 const INVALID_RESPONSE_MESSAGE = "El servidor devolvió una respuesta no válida.";
@@ -67,6 +68,7 @@ export interface RoutineJobsClient {
   readUnidadStatus(jobId: string): Promise<UnidadJobStatusView>;
   startCompletar(request: CompletarStartRequest): Promise<StartResult>;
   readCompletarStatus(jobId: string): Promise<CompletarJobStatusView>;
+  fetchActualizarBackup(token: string): Promise<Blob>;
 }
 
 export class RoutineJobsApiError extends Error {
@@ -132,6 +134,18 @@ async function postJson(fetchImpl: FetchLike, url: string, body: unknown): Promi
 
 function invalidResponse(): RoutineJobsApiError {
   return new RoutineJobsApiError(INVALID_RESPONSE_MESSAGE, NO_RESPONSE_STATUS);
+}
+
+async function readBackupBlob(response: Response): Promise<Blob> {
+  if (!response.ok) {
+    const payload = parseJsonRecord(await response.text().catch(() => ""));
+    throw new RoutineJobsApiError(failureMessageOf(payload, response.status), response.status);
+  }
+  try {
+    return await response.blob();
+  } catch {
+    throw new RoutineJobsApiError(NETWORK_MESSAGE, NO_RESPONSE_STATUS);
+  }
 }
 
 async function postStart(fetchImpl: FetchLike, route: string, request: unknown): Promise<StartResult> {
@@ -208,5 +222,10 @@ export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): Routi
 
     readCompletarStatus: (jobId) =>
       readJobStatus<CompletarJobStatusView>(fetchImpl, timers, COMPLETAR_STATUS_ROUTE, jobId),
+
+    async fetchActualizarBackup(token) {
+      const url = `${ACTUALIZAR_BACKUP_ROUTE}?token=${encodeURIComponent(token)}`;
+      return readBackupBlob(await send(fetchImpl, url));
+    },
   };
 }

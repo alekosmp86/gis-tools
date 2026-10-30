@@ -36,6 +36,7 @@ export const routineJobsModule: AppModuleManifest = {
     "GET cargar-padrones/status": handlers.readCargarPadronesStatus,
     "POST actualizar-padron/start": actualizarHandlers.startActualizarPadron,
     "GET actualizar-padron/status": actualizarHandlers.readActualizarPadronStatus,
+    "GET actualizar-padron/backup": actualizarHandlers.downloadActualizarPadronBackup,
     "POST cargar-localidades/start": localidadesHandlers.startCargarLocalidades,
     "GET cargar-localidades/status": localidadesHandlers.readCargarLocalidadesStatus,
     "POST unidad-territorial/start": unidadHandlers.startUnidadTerritorial,

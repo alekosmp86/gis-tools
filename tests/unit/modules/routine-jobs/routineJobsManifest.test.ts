@@ -10,6 +10,7 @@ import { RoutineJobsHomeCard } from "@/modules/routine-jobs/ui/RoutineJobsHomeCa
 
 const EXPECTED_ENDPOINTS = [
   "GET actualizar-padron/status",
+  "GET actualizar-padron/backup",
   "GET cargar-padrones/status",
   "POST actualizar-padron/start",
   "POST cargar-localidades/start",

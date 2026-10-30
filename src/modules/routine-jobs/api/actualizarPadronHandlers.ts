@@ -4,6 +4,7 @@ import { runActualizarPadron } from "../jobs/actualizar-padron/services/runActua
 import type { ActualizarPadronParams, ActualizarPadronResult } from "../jobs/actualizar-padron/types";
 import { tableLockKey } from "./jobHttp";
 import { parseActualizarStartRequest } from "./actualizarRequestParsing";
+import { downloadActualizarPadronBackup } from "./actualizarPadronBackup";
 import { createStageJobHandlers, type StageJobDeps } from "./stageJobHandlers";
 
 export type ActualizarPadronHandlerDeps = StageJobDeps<ActualizarPadronParams, ActualizarPadronResult>;
@@ -16,6 +17,7 @@ const lockKeysOfActualizar = (params: ActualizarPadronParams): string[] => [
 export interface ActualizarPadronHandlers {
   readonly startActualizarPadron: ModuleEndpointHandler;
   readonly readActualizarPadronStatus: ModuleEndpointHandler;
+  readonly downloadActualizarPadronBackup: ModuleEndpointHandler;
 }
 
 export function createActualizarPadronHandlers(
@@ -32,5 +34,5 @@ export function createActualizarPadronHandlers(
     },
     overrides
   );
-  return { startActualizarPadron: start, readActualizarPadronStatus: status };
+  return { startActualizarPadron: start, readActualizarPadronStatus: status, downloadActualizarPadronBackup };
 }
