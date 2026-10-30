@@ -97,17 +97,17 @@ describe("unidadTerritorialWizardState", () => {
     it("should send the address master table at the top level and linkAddressMaster in options, and parse them back", () => {
       const linked = withActiveTablesValid(initialState());
       const unlinked = withActiveTablesValid(withLink(initialState(), false));
-      const linkedBody = JSON.parse(JSON.stringify(toUnidadStartRequest(linked, { dryRun: false })));
-      const unlinkedBody = JSON.parse(JSON.stringify(toUnidadStartRequest(unlinked, { dryRun: false })));
+      const linkedBody = structuredClone(toUnidadStartRequest(linked, { dryRun: false }));
+      const unlinkedBody = structuredClone(toUnidadStartRequest(unlinked, { dryRun: false }));
 
       expect(linkedBody).toMatchObject({ options: { linkAddressMaster: true }, addressMasterTable: ADDRESS_MASTER });
-      const linkedParams = parseUnidadTerritorialStartRequest(linkedBody);
+      const linkedParams = parseUnidadTerritorialStartRequest({ ...linkedBody });
       expect(linkedParams.options.linkAddressMaster).toBe(true);
       expect(linkedParams.addressMasterTable).toEqual(ADDRESS_MASTER);
 
       expect(unlinkedBody.options.linkAddressMaster).toBe(false);
       expect(unlinkedBody).not.toHaveProperty("addressMasterTable");
-      const unlinkedParams = parseUnidadTerritorialStartRequest(unlinkedBody);
+      const unlinkedParams = parseUnidadTerritorialStartRequest({ ...unlinkedBody });
       expect(unlinkedParams.options.linkAddressMaster).toBe(false);
       expect(unlinkedParams).not.toHaveProperty("addressMasterTable");
     });
