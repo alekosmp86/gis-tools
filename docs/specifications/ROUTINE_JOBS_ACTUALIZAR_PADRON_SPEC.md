@@ -476,6 +476,16 @@ its SQL unchanged. The script covers only the changed rows (never a dump of the 
   links stop working after a server restart.
 - AP-82: No folder, no setting. The UI asks for no folder and no option: the browser decides where the file is saved.
 
+## Refresh suggestion (materialized views)
+
+- AP-83: The stage never refreshes `mv_padron` and `mv_padron_wms` (the view names are a named constant list, in order). After a real run
+  whose target changed or may have changed (`targetModified` or an unknown commit outcome, and inserted + updated + applied pairs greater than 0) the report shows the section
+  `Siguiente paso sugerido`, after the backup section and before the KPI cards. Its text is the Spanish sentence "Las vistas
+  materializadas de padrones no se actualizan solas. Refrésquelas, en este orden, para que el mapa y el WMS muestren los cambios:" and
+  its statement block has two lines, in this order: `REFRESH MATERIALIZED VIEW "<schema>"."mv_padron";` then
+  `REFRESH MATERIALIZED VIEW "<schema>"."mv_padron_wms";`, with identifiers quoted and `<schema>` the schema of the destination table. No
+  copy button. A dry run and a run that changed nothing show no suggestion. The tool never runs the statements.
+
 ## Acceptance criteria count
 
 AP-1 to AP-7b, AP-9 to AP-14 (AP-8 removed), AP-15 to AP-36, AP-37 to AP-49, with AP-2b, AP-7b, AP-10b and AP-32b. AP-64 to AP-67 are the
@@ -485,3 +495,4 @@ criteria. AP-61 is the inconsistencies list. AP-62 is the table defaults and the
 check (preflight, refusal or warning). AP-68 to AP-76 (AP-70a included) are the revert backup of a real run (no backup, no write; capture; script contents;
 changed rows only; verification; storage and download; retention; the tool never runs the revert file; planned step). AP-77 to AP-82 are
 the UI of that backup (automatic download once per token, section content, fallback button, failure text, instructions, no folder setting).
+AP-83 is the refresh suggestion after a real run that changed the destination (materialized views `mv_padron` and `mv_padron_wms`).

@@ -4,6 +4,7 @@ import type { CompletarAmbiguousUnit, CompletarLinkedUnit, CompletarResult } fro
 import type { ReportBannerView, TimingItemView } from "./ReportParts";
 import { outcomeBannersOf, timingsViewOf, type OutcomeTexts } from "./reportViewParts";
 import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
+import type { RefreshSuggestionView } from "./refreshSuggestionView";
 
 const OUTCOME_TEXTS: OutcomeTexts = {
   unknown:
@@ -19,11 +20,6 @@ export interface CompletarCountRow {
   label: string;
   value: number;
   tone: ReportRowTone;
-}
-
-export interface RefreshSuggestionView {
-  text: string;
-  statement: string;
 }
 
 export interface CompletarReportView {

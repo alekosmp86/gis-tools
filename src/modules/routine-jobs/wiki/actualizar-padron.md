@@ -121,6 +121,17 @@ El script trae sus propios comentarios de cabecera con la fecha, la tabla y los 
 - Los enlaces de descarga viven en la memoria del servidor: si el servidor se reinicia, dejan de funcionar aunque el archivo siga ahí. Descargue el respaldo antes de reiniciar.
 - El **Analizar sin cargar** no genera respaldo: no cambia la tabla de destino, así que no hay nada que revertir.
 
+## Vistas materializadas
+
+Esta etapa **no refresca las vistas materializadas** que leen el mapa y el WMS: `mv_padron` y `mv_padron_wms` (la del WMS sale de `mv_padron`). Después de una actualización real que cambió la tabla de destino, el informe muestra la sección **Siguiente paso sugerido** con las dos sentencias, en este orden:
+
+```sql
+REFRESH MATERIALIZED VIEW "carto"."mv_padron";
+REFRESH MATERIALIZED VIEW "carto"."mv_padron_wms";
+```
+
+Refresque primero `mv_padron`, porque `mv_padron_wms` se construye sobre ella. El esquema es el de la tabla de destino. Ejecútelas usted, o pídale a quien tenga el permiso que lo haga. Hasta entonces, el mapa y el WMS siguen mostrando las geometrías anteriores. Un **Analizar sin cargar** o una actualización sin cambios no muestra la sugerencia.
+
 ## Filas omitidas
 
 Una fila se omite, no se escribe, cuando no se puede resolver con seguridad. El informe cuenta cada motivo y muestra qué hacer:

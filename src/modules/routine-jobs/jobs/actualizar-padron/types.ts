@@ -147,6 +147,7 @@ export interface PadronApplyOutcome {
 
 export interface ActualizarTargetReport {
   table: string;
+  schema: string;
   inserted: number;
   insertedList: PadronInserted[];
   updated: number;

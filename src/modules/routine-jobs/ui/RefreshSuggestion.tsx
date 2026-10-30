@@ -1,6 +1,6 @@
 import React from "react";
 import { SectionTitle } from "./ReportParts";
-import type { RefreshSuggestionView } from "./completarUnidadTerritorialReportView";
+import type { RefreshSuggestionView } from "./refreshSuggestionView";
 import sharedStyles from "./CargarPadronesReport.module.css";
 import styles from "./RefreshSuggestion.module.css";
 

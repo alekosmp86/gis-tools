@@ -217,6 +217,7 @@ export function buildPadronTargetReport({
   const { counts } = classification;
   return {
     table: buildQualifiedTableLabel(target.schema, target.table),
+    schema: target.schema,
     inserted: apply.inserted,
     insertedList: apply.insertedList,
     updated: apply.updated,

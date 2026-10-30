@@ -300,6 +300,7 @@ function padronGeometryChangesOf(count: number): PadronGeometryChange[] {
 export function actualizarTargetReportOf(overrides: Partial<ActualizarTargetReport> = {}): ActualizarTargetReport {
   return {
     table: "carto.padron_tmp_actualizacion",
+    schema: "carto",
     inserted: 25,
     insertedList: padronInsertedOf(25),
     updated: 25,

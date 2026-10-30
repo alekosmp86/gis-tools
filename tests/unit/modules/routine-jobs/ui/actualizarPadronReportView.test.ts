@@ -32,6 +32,7 @@ const resultOf = (overrides: Partial<ActualizarPadronResult> = {}): ActualizarPa
   },
   target: {
     table: TABLE,
+    schema: "carto",
     inserted: 25,
     insertedList: [],
     updated: 24,

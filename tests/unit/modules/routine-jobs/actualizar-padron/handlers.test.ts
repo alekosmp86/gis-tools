@@ -33,6 +33,7 @@ const resultOf = (): ActualizarPadronResult => ({
   skipped: emptySkipped(),
   target: {
     table: "carto.padron_tmp_actualizacion",
+    schema: "carto",
     inserted: 0,
     insertedList: [],
     updated: 0,

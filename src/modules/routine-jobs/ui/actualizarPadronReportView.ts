@@ -15,7 +15,9 @@ import type {
 } from "../jobs/actualizar-padron/types";
 import type { AddressMasterAmbiguous, AddressMasterLinked } from "../jobs/shared/addressMasterLinkPass";
 import { PAIR_LIST_LIMIT } from "../jobs/shared/limits";
+import { buildPadronRefreshStatement } from "../jobs/actualizar-padron/domain/refreshSuggestion";
 import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
+import type { RefreshSuggestionView } from "./refreshSuggestionView";
 
 export interface KpiView {
   label: string;
@@ -133,6 +135,7 @@ export interface ActualizarReportView {
   collidingKeyCount: number;
   target: TargetView;
   addressMaster: AddressMasterView | null;
+  suggestion: RefreshSuggestionView | null;
   warnings: string[];
   timings: TimingView[];
   totalSeconds: number;
@@ -165,6 +168,9 @@ const REASON_HINT: Record<SkipReason, string> = {
   [SKIP_REASON.SIN_GEOMETRIA]: "La fila no tiene una geometría utilizable. Corrija la geometría en la tabla de origen.",
   [SKIP_REASON.CLAVE_DUPLICADA]: "Varias filas comparten la misma clave y todas se omiten. Revise la tabla de origen.",
 };
+
+const REFRESH_SUGGESTION_TEXT =
+  "Las vistas materializadas de padrones no se actualizan solas. Refrésquelas, en este orden, para que el mapa y el WMS muestren los cambios:";
 
 const BANNER_TEXT = {
   unknown: "Resultado incierto: hay que verificar la tabla de destino antes de volver a actualizar.",
@@ -272,6 +278,13 @@ function outcomeBannerOf(result: ActualizarPadronResult): ActualizarBanner {
   if (result.outcomeUnknown) return { kind: "unknown", text: BANNER_TEXT.unknown };
   if (result.dryRun) return { kind: "dryRun", text: BANNER_TEXT.dryRun };
   return { kind: "done", text: BANNER_TEXT.done };
+}
+
+const changedRowsOf = (target: ActualizarTargetReport): number => target.inserted + target.updated + target.pairsApplied;
+
+function suggestionOf(result: ActualizarPadronResult): RefreshSuggestionView | null {
+  if (result.dryRun || !(result.targetModified || result.outcomeUnknown) || changedRowsOf(result.target) === 0) return null;
+  return { text: REFRESH_SUGGESTION_TEXT, statement: buildPadronRefreshStatement(result.target.schema) };
 }
 
 function bannersOf(result: ActualizarPadronResult): ActualizarBanner[] {
@@ -385,6 +398,7 @@ export function buildActualizarReportView(result: ActualizarPadronResult): Actua
     collidingKeyCount: result.skipped.collidingKeyCount,
     target: targetViewOf(result.target),
     addressMaster: result.addressMaster === undefined ? null : addressMasterViewOf(result.addressMaster),
+    suggestion: suggestionOf(result),
     warnings: visibleWarningsOf(result),
     timings: timingsOf(result),
     totalSeconds: roundSeconds(result.stepTimings.reduce((sum, timing) => sum + timing.ms, 0)),

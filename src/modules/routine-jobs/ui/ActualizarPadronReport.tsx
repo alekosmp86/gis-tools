@@ -19,6 +19,7 @@ import {
 import { ActualizarAddressMasterSection } from "./ActualizarAddressMasterSection";
 import { ActualizarBackupSection } from "./ActualizarBackupSection";
 import { ActualizarTargetSection } from "./ActualizarTargetSection";
+import { RefreshSuggestion } from "./RefreshSuggestion";
 import styles from "./ActualizarPadronReport.module.css";
 import sharedStyles from "./CargarPadronesReport.module.css";
 import { ReportDownloadActions, ReportDownloadButton } from "./ReportDownloadButton";
@@ -129,6 +130,7 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
       </ReportDownloadActions>
       <OutcomeBanners view={view} />
       {result.backup !== undefined && !result.dryRun && <ActualizarBackupSection backup={result.backup} />}
+      {view.suggestion !== null && <RefreshSuggestion suggestion={view.suggestion} />}
       <KpiCards view={view} />
       <SkippedReasonsTable view={view} />
       <ActualizarTargetSection target={view.target} />
