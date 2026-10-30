@@ -12,6 +12,7 @@ export interface WarningInput {
   target: ActualizarTargetReport;
   addressMaster?: ActualizarAddressMasterReport;
   collidingKeyCount: number;
+  localityWarnings: string[];
   commitError: string | undefined;
 }
 
@@ -24,6 +25,21 @@ function totalsWarnings({ skipped, repaired }: ActualizarTotals, collidingKeyCou
   if (repaired > 0) warnings.push(`${plural(repaired, "geometría reparada", "geometrías reparadas")} con ST_MakeValid.`);
   if (collidingKeyCount > 0) {
     warnings.push(`${plural(collidingKeyCount, "clave natural duplicada", "claves naturales duplicadas")}: se omitieron todas sus filas.`);
+  }
+  return warnings;
+}
+
+function pairWarnings(target: ActualizarTargetReport): string[] {
+  const warnings: string[] = [];
+  if (target.pairsApplied > 0) {
+    warnings.push(
+      `${plural(target.pairsApplied, "padrón se actualiza", "padrones se actualizan")} en su clave (tipo, localidad o número) en ${target.table} en lugar de insertarse como nuevos.`
+    );
+  }
+  if (target.pairsNotApplied > 0) {
+    warnings.push(
+      `${plural(target.pairsNotApplied, "posible par no se aplicó", "posibles pares no se aplicaron")} (ambiguos): se insertan como nuevos y la fila antigua se lista como faltante.`
+    );
   }
   return warnings;
 }
@@ -41,6 +57,7 @@ function targetWarnings(target: ActualizarTargetReport, updateGeometries: boolea
       `${plural(target.changed, "geometría cambia", "geometrías cambian")} en ${target.table} y no se aplicó (Actualizar geometrías desactivado).`
     );
   }
+  warnings.push(...pairWarnings(target));
   if (target.inserted > DETAIL_LIST_LIMIT) {
     warnings.push(`Se listan las primeras ${DETAIL_LIST_LIMIT} filas insertadas en ${target.table}.`);
   }
@@ -54,9 +71,19 @@ function addressMasterWarningsOf(target: ActualizarTargetReport, addressMaster: 
   return addressMaster === undefined ? [] : addressMasterCountWarnings(PADRON_SUBJECT_SPEC, target.table, addressMaster.counts);
 }
 
-export function buildRunWarnings({ dryRun, options, totals, target, addressMaster, collidingKeyCount, commitError }: WarningInput): string[] {
+export function buildRunWarnings({
+  dryRun,
+  options,
+  totals,
+  target,
+  addressMaster,
+  collidingKeyCount,
+  localityWarnings,
+  commitError,
+}: WarningInput): string[] {
   return [
     ...(dryRun ? [DRY_RUN_WARNING] : []),
+    ...localityWarnings,
     ...totalsWarnings(totals, collidingKeyCount),
     ...targetWarnings(target, options.updateGeometries),
     ...addressMasterWarningsOf(target, addressMaster),

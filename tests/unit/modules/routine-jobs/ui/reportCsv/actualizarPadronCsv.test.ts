@@ -4,7 +4,20 @@ import type { ActualizarPadronResult, PadronGeometryChange, PadronInserted } fro
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { actualizarPadronResultOf, actualizarTargetReportOf, BOM, parseCsv } from "./reportCsvFixtures";
 
-const HEADER = ["Tabla", "Cambio", "Tipo", "Provincia", "Localidad", "Padrón", "Distancia (m)", "Relación de área", "Id"];
+const HEADER = [
+  "Tabla",
+  "Cambio",
+  "Tipo",
+  "Provincia",
+  "Localidad",
+  "Padrón",
+  "Distancia (m)",
+  "Relación de área",
+  "Id",
+  "Tipo anterior",
+  "Localidad anterior",
+  "Padrón anterior",
+];
 const TABLE = "carto.padron_tmp_actualizacion";
 const INSERTED = "Insertada";
 const MODIFIED = "Geometría modificada";
@@ -101,7 +114,7 @@ describe("buildActualizarPadronCsv (AP-49)", () => {
     it("should write one Insertada row per inserted padron with its table, type, department, locality and number", () => {
       const rows = dataRowsOf({ target: actualizarTargetReportOf({ inserted: 1, insertedList: [insertedOf({ id: 9001, number: "100" })], changed: 0, geometryChanges: [], updated: 0 }) });
 
-      expect(rows).toEqual([[TABLE, INSERTED, "URBANO", "CORDOBA", "Villa Maria", "100", "", "", ""]]);
+      expect(rows).toEqual([[TABLE, INSERTED, "URBANO", "CORDOBA", "Villa Maria", "100", "", "", "", "", "", ""]]);
     });
 
     it("should leave the distance and area cells empty for inserted padrones", () => {
@@ -121,7 +134,7 @@ describe("buildActualizarPadronCsv (AP-49)", () => {
     it("should write Geometría modificada for each geometry change when the update was applied", () => {
       const rows = dataRowsOf({ target: actualizarTargetReportOf({ inserted: 0, insertedList: [], geometryChanges: [geometryOf({ number: "7", distance: 4.5, areaRatio: 1.1 })], changed: 1, updated: 1 }) });
 
-      expect(rows).toEqual([[TABLE, MODIFIED, "URBANO", "JUJUY", "Humahuaca", "7", "4.5", "1.1", ""]]);
+      expect(rows).toEqual([[TABLE, MODIFIED, "URBANO", "JUJUY", "Humahuaca", "7", "4.5", "1.1", "", "", "", ""]]);
     });
 
     it("should write Geometría detectada (no aplicada) for every geometry change when the update was not applied", () => {
@@ -135,7 +148,7 @@ describe("buildActualizarPadronCsv (AP-49)", () => {
     it("should write an empty distance and area cell when the geometry change has no measure", () => {
       const rows = dataRowsOf({ target: actualizarTargetReportOf({ inserted: 0, insertedList: [], geometryChanges: [geometryOf({ number: "8", distance: null, areaRatio: null })], changed: 1 }) });
 
-      expect(rows).toEqual([[TABLE, MODIFIED, "URBANO", "JUJUY", "Humahuaca", "8", "", "", ""]]);
+      expect(rows).toEqual([[TABLE, MODIFIED, "URBANO", "JUJUY", "Humahuaca", "8", "", "", "", "", "", ""]]);
     });
   });
 
@@ -214,7 +227,7 @@ describe("buildActualizarPadronCsv (AP-49)", () => {
         }),
       });
 
-      expect(rows).toEqual([[TABLE, INSERTED, "sin dato", "sin dato", "sin dato", "sin dato", "", "", ""]]);
+      expect(rows).toEqual([[TABLE, INSERTED, "sin dato", "sin dato", "sin dato", "sin dato", "", "", "", "", "", ""]]);
     });
   });
 
@@ -238,7 +251,7 @@ describe("buildActualizarPadronCsv (AP-49)", () => {
         }),
       });
 
-      expect(rows).toEqual([[TABLE, INSERTED, "'@tipo", "'=CMD", "'+suma", "'-1", "", "", ""]]);
+      expect(rows).toEqual([[TABLE, INSERTED, "'@tipo", "'=CMD", "'+suma", "'-1", "", "", "", "", "", ""]]);
     });
   });
 

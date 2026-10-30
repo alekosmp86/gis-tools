@@ -44,6 +44,10 @@ const resultOf = (overrides: Partial<ActualizarPadronResult> = {}): ActualizarPa
     ambiguous: 1,
     ambiguousSamples: [],
     geometryChanges: [],
+    pairs: [],
+    pairsTotal: 0,
+    pairsApplied: 0,
+    pairsNotApplied: 0,
   },
   warnings: [],
   stepTimings: [{ label: "Clasificar padrones", ms: 1234 }],
@@ -76,6 +80,7 @@ describe("actualizarPadronReportView", () => {
       expect(counts.map((row) => [row.label, row.value])).toEqual([
         ["Insertadas", 25],
         ["Actualizadas", 24],
+        ["Claves actualizadas", 0],
         ["Geometrías que cambian", 25],
         ["Sin cambios", 6],
         ["Sin cambios dentro de tolerancia", 2],

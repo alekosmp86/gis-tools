@@ -1,4 +1,4 @@
-import { SKIP_REASON, type SkipReason } from "../jobs/actualizar-padron/constants";
+import { PAIR_STATUS, SKIP_REASON, type PairStatus, type SkipReason } from "../jobs/actualizar-padron/constants";
 import { COMMIT_UNKNOWN_WARNING, DRY_RUN_WARNING } from "../jobs/actualizar-padron/domain/warnings";
 import type {
   ActualizarAddressMasterReport,
@@ -8,11 +8,13 @@ import type {
   PadronGeometryChange,
   PadronInserted,
   PadronKey,
+  PadronPair,
   SkippedGroup,
   SkippedLocalityGroup,
   SkippedSample,
 } from "../jobs/actualizar-padron/types";
 import type { AddressMasterAmbiguous, AddressMasterLinked } from "../jobs/shared/addressMasterLinkPass";
+import { PAIR_LIST_LIMIT } from "../jobs/shared/limits";
 import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
 
 export interface KpiView {
@@ -72,6 +74,19 @@ export interface TargetCountRow {
   tone: ReportRowTone;
 }
 
+export interface PairView {
+  key: string;
+  department: string;
+  oldLocality: string;
+  newLocality: string;
+  oldType: string;
+  newType: string;
+  oldNumber: string;
+  newNumber: string;
+  distance: number | null;
+  status: string;
+}
+
 export interface TargetView {
   table: string;
   counts: TargetCountRow[];
@@ -84,6 +99,8 @@ export interface TargetView {
   missingSummary: string;
   ambiguous: PadronKey[];
   ambiguousSummary: string;
+  pairs: PairView[];
+  pairsSummary: string;
 }
 
 export interface AddressMasterView {
@@ -157,6 +174,11 @@ const BANNER_TEXT = {
 } as const;
 
 const SKIP_REASONS = Object.values(SKIP_REASON) as SkipReason[];
+
+const PAIR_STATUS_LABEL: Record<PairStatus, string> = {
+  [PAIR_STATUS.APPLIED]: "Aplicado",
+  [PAIR_STATUS.NOT_APPLIED_AMBIGUOUS]: "No aplicado: ambiguo",
+};
 
 const textOf = (value: string | null): string => (value === null || value.trim() === "" ? EMPTY_VALUE : value);
 
@@ -261,16 +283,38 @@ function bannersOf(result: ActualizarPadronResult): ActualizarBanner[] {
 const visibleWarningsOf = (result: ActualizarPadronResult): string[] =>
   result.warnings.filter((warning) => warning !== DRY_RUN_WARNING && warning !== COMMIT_UNKNOWN_WARNING);
 
+const PAIRS_SECTION_TITLE = "Padrones reclasificados o renumerados";
+
 const targetCountRowOf = (label: string, value: number, isNeutral = false): TargetCountRow => ({
   label,
   value,
   tone: reportRowToneOf(value, isNeutral),
 });
 
-const targetNotesOf = (target: ActualizarTargetReport): string[] =>
-  target.changed > 0 && !target.updateApplied
+const targetNotesOf = (target: ActualizarTargetReport): string[] => [
+  ...(target.changed > 0 && !target.updateApplied
     ? [`Las geometrías que cambian no se aplicaron en ${target.table} (Actualizar geometrías desactivado).`]
-    : [];
+    : []),
+  ...(target.pairsTotal > PAIR_LIST_LIMIT
+    ? [`Lista incompleta: se muestran los primeros ${PAIR_LIST_LIMIT} pares de ${target.pairsTotal} en ${target.table}.`]
+    : []),
+];
+
+const pairKeyOf = (pair: PadronPair): string =>
+  [pair.oldId, pair.new.typePadron, pair.new.provinceId, pair.new.localityId, pair.new.number].join("|");
+
+const pairViewOf = (pair: PadronPair): PairView => ({
+  key: pairKeyOf(pair),
+  department: textOf(pair.new.department),
+  oldLocality: textOf(pair.old.locality),
+  newLocality: textOf(pair.new.locality),
+  oldType: textOf(pair.old.typePadron),
+  newType: textOf(pair.new.typePadron),
+  oldNumber: textOf(pair.old.number),
+  newNumber: textOf(pair.new.number),
+  distance: pair.distance,
+  status: PAIR_STATUS_LABEL[pair.status],
+});
 
 /** The list summary shows the real count and says when the list shows only its first rows. */
 const listSummaryOf = (label: string, shown: number, total: number): string =>
@@ -282,6 +326,7 @@ function targetViewOf(target: ActualizarTargetReport): TargetView {
     counts: [
       targetCountRowOf("Insertadas", target.inserted),
       targetCountRowOf("Actualizadas", target.updated),
+      targetCountRowOf("Claves actualizadas", target.pairsApplied),
       targetCountRowOf("Geometrías que cambian", target.changed),
       targetCountRowOf("Sin cambios", target.unchanged, true),
       targetCountRowOf("Sin cambios dentro de tolerancia", target.unchangedWithinTolerance, true),
@@ -297,6 +342,8 @@ function targetViewOf(target: ActualizarTargetReport): TargetView {
     missingSummary: listSummaryOf("Faltantes en destino", target.missingSamples.length, target.missing),
     ambiguous: target.ambiguousSamples,
     ambiguousSummary: listSummaryOf("Ambiguas", target.ambiguousSamples.length, target.ambiguous),
+    pairs: target.pairs.map(pairViewOf),
+    pairsSummary: listSummaryOf(PAIRS_SECTION_TITLE, target.pairs.length, target.pairsTotal),
   };
 }
 

@@ -1,8 +1,10 @@
+import { PAIR_STATUS } from "../../jobs/actualizar-padron/constants";
 import type {
   ActualizarAddressMasterReport,
   ActualizarPadronResult,
   ActualizarTargetReport,
   PadronNamedKey,
+  PadronPair,
   SkippedSample,
 } from "../../jobs/actualizar-padron/types";
 import { PADRON_SUBJECT_SPEC } from "../../jobs/shared/addressMasterLinkSpec";
@@ -11,6 +13,7 @@ import { textOrNoData } from "../reportFormat";
 import { CHANGE_KIND, compareChangeKinds, listCsvOf, type ChangeKind, type ListCut } from "./reportCsvRows";
 import type { CsvRow } from "./csvFormat";
 
+const ID_HEADER = "Id";
 const PADRON_CHANGE_HEADER: CsvRow = [
   "Tabla",
   "Cambio",
@@ -20,9 +23,23 @@ const PADRON_CHANGE_HEADER: CsvRow = [
   "Padrón",
   "Distancia (m)",
   "Relación de área",
-  "Id",
+  ID_HEADER,
+  "Tipo anterior",
+  "Localidad anterior",
+  "Padrón anterior",
 ];
-const EMPTY_TAIL_WIDTH = PADRON_CHANGE_HEADER.length - 3;
+const ID_INDEX = PADRON_CHANGE_HEADER.indexOf(ID_HEADER);
+const LEADING_EMPTY_WIDTH = ID_INDEX - 2;
+const TRAILING_EMPTY_WIDTH = PADRON_CHANGE_HEADER.length - ID_INDEX - 1;
+const EMPTY_CELLS = (width: number): null[] => Array.from({ length: width }, () => null);
+
+const NOT_APPLIED_REASON = "Posible par no aplicado (ambiguo)";
+
+interface PreviousPadron {
+  type: string;
+  locality: string;
+  number: string;
+}
 
 interface PadronChangeRecord {
   table: string;
@@ -33,6 +50,7 @@ interface PadronChangeRecord {
   number: string;
   distance: number | null;
   areaRatio: number | null;
+  previous: PreviousPadron | null;
 }
 
 const recordOf = (
@@ -40,7 +58,8 @@ const recordOf = (
   kind: ChangeKind,
   key: PadronNamedKey,
   distance: number | null,
-  areaRatio: number | null
+  areaRatio: number | null,
+  previous: PreviousPadron | null = null
 ): PadronChangeRecord => ({
   table,
   kind,
@@ -50,7 +69,16 @@ const recordOf = (
   number: textOrNoData(key.number),
   distance,
   areaRatio,
+  previous,
 });
+
+const previousOf = (key: PadronNamedKey): PreviousPadron => ({
+  type: textOrNoData(key.typePadron),
+  locality: textOrNoData(key.locality),
+  number: textOrNoData(key.number),
+});
+
+const isApplied = (pair: PadronPair): boolean => pair.status === PAIR_STATUS.APPLIED;
 
 const insertedRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[] =>
   target.insertedList.map((padron) => recordOf(target.table, CHANGE_KIND.INSERTED, padron, null, null));
@@ -65,6 +93,11 @@ const geometryRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[]
       change.areaRatio
     )
   );
+
+const keyUpdatedRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[] =>
+  target.pairs
+    .filter(isApplied)
+    .map((pair) => recordOf(target.table, CHANGE_KIND.KEY_UPDATED, pair.new, pair.distance, null, previousOf(pair.old)));
 
 const compareText = (first: string, second: string): number => first.localeCompare(second, "es", { numeric: true });
 
@@ -84,13 +117,17 @@ const changeRowOf = (record: PadronChangeRecord): CsvRow => [
   record.distance,
   record.areaRatio,
   null,
+  record.previous?.type ?? null,
+  record.previous?.locality ?? null,
+  record.previous?.number ?? null,
 ];
 
 const addressMasterRowOf = (table: string, kind: string, id: number): CsvRow => [
   table,
   kind,
-  ...Array.from({ length: EMPTY_TAIL_WIDTH }, () => null),
+  ...EMPTY_CELLS(LEADING_EMPTY_WIDTH),
   id,
+  ...EMPTY_CELLS(TRAILING_EMPTY_WIDTH),
 ];
 
 function addressMasterRowsOf(addressMaster: ActualizarAddressMasterReport, targetTable: string): CsvRow[] {
@@ -105,6 +142,7 @@ function addressMasterRowsOf(addressMaster: ActualizarAddressMasterReport, targe
 const cutsOf = (target: ActualizarTargetReport, addressMaster: ActualizarAddressMasterReport | undefined): ListCut[] => [
   { table: target.table, shown: target.insertedList.length, total: target.inserted, noun: "padrones insertados" },
   { table: target.table, shown: target.geometryChanges.length, total: target.changed, noun: "geometrías que cambian" },
+  { table: target.table, shown: target.pairs.filter(isApplied).length, total: target.pairsApplied, noun: "claves actualizadas" },
   ...(addressMaster === undefined ? [] : addressMasterCutsOf(target, addressMaster)),
 ];
 
@@ -123,7 +161,13 @@ function addressMasterCutsOf(target: ActualizarTargetReport, addressMaster: Actu
 
 export const buildActualizarPadronCsv = (result: ActualizarPadronResult): string => {
   const { target, addressMaster } = result;
-  const padronRows = [...insertedRecordsOf(target), ...geometryRecordsOf(target)].sort(comparePadronChanges).map(changeRowOf);
+  const padronRows = [
+    ...insertedRecordsOf(target),
+    ...geometryRecordsOf(target),
+    ...keyUpdatedRecordsOf(target),
+  ]
+    .sort(comparePadronChanges)
+    .map(changeRowOf);
   const rows = [...padronRows, ...(addressMaster === undefined ? [] : addressMasterRowsOf(addressMaster, target.table))];
   return listCsvOf(PADRON_CHANGE_HEADER, (row: CsvRow) => row, rows, cutsOf(target, addressMaster));
 };
@@ -137,9 +181,33 @@ const inconsistencyRowOf = (row: SkippedSample): CsvRow => [
   textOrNoData(row.padron),
 ];
 
+const notAppliedRowOf = (pair: PadronPair): CsvRow => [
+  NOT_APPLIED_REASON,
+  textOrNoData(pair.new.department),
+  textOrNoData(pair.new.locality),
+  textOrNoData(pair.new.number),
+];
+
+const newKeyOf = (pair: PadronPair): string =>
+  JSON.stringify([pair.new.typePadron, pair.new.provinceId, pair.new.localityId, pair.new.number]);
+
+/** A new row that matched several destination rows is one candidate, listed once. */
+const onePerNewKey = (pairs: PadronPair[]): PadronPair[] => {
+  const seenKeys = new Set<string>();
+  return pairs.filter((pair) => {
+    const key = newKeyOf(pair);
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+};
+
 export const buildActualizarPadronInconsistenciasCsv = (result: ActualizarPadronResult): string => {
-  const { skipped, totals } = result;
-  return listCsvOf(INCONSISTENCY_HEADER, inconsistencyRowOf, skipped.skippedRows, [
+  const { skipped, totals, target } = result;
+  const notApplied = onePerNewKey(target.pairs.filter((pair) => !isApplied(pair)));
+  const rows: CsvRow[] = [...skipped.skippedRows.map(inconsistencyRowOf), ...notApplied.map(notAppliedRowOf)];
+  return listCsvOf(INCONSISTENCY_HEADER, (row: CsvRow) => row, rows, [
     { table: "", shown: skipped.skippedRows.length, total: totals.skipped, noun: "filas omitidas" },
+    { table: "", shown: notApplied.length, total: target.pairsNotApplied, noun: "posibles pares no aplicados" },
   ]);
 };

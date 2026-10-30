@@ -83,6 +83,11 @@ function assertCountsMatch(target: WritableTargetLayout, classification: PadronC
       `Las geometrías actualizadas (${apply.updated}) no coinciden con las esperadas (${classification.counts.updates}) en ${label}.`
     );
   }
+  if (apply.paired !== classification.counts.pairs) {
+    throw new Error(
+      `Las claves actualizadas (${apply.paired}) no coinciden con los pares aplicables del análisis (${classification.counts.pairs}) en ${label}.`
+    );
+  }
 }
 
 /** Links the target's padrones without a dirección maestra; it sees the rows the upsert inserted, in the same transaction. */

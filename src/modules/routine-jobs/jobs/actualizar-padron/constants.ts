@@ -136,3 +136,22 @@ export const ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE: Record<ActualizarTableRole, re
 };
 
 export const DESTINATION_TITLE = "de destino";
+
+export const PAIR_STATUS = {
+  APPLIED: "APPLIED",
+  NOT_APPLIED_AMBIGUOUS: "NOT_APPLIED_AMBIGUOUS",
+} as const;
+
+export type PairStatus = (typeof PAIR_STATUS)[keyof typeof PAIR_STATUS];
+
+export const PAIR_CHANGE = {
+  TYPE: "type",
+  LOCALITY: "locality",
+  NUMBER: "number",
+} as const;
+
+export type PairChange = (typeof PAIR_CHANGE)[keyof typeof PAIR_CHANGE];
+
+/** A new row pairs with an unmatched destination row when the footprints overlap and have the same area, within these ratios. */
+export const PAIR_OVERLAP_MIN = 0.98;
+export const PAIR_AREA_RATIO_TOLERANCE = 0.02;

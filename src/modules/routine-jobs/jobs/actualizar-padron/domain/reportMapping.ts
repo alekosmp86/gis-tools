@@ -1,7 +1,15 @@
 import { buildQualifiedTableLabel } from "@/core/services/sqlStatements";
 import { DETAIL_LIST_LIMIT, SAMPLE_LIMIT } from "../../shared/limits";
 import type { WritableTargetLayout } from "../../shared/tableResolution";
-import { LOCALITY_REASON_GROUP_LIMIT, SKIP_REASON, SKIPPED_GROUP_LIMIT, type SkipReason } from "../constants";
+import {
+  LOCALITY_REASON_GROUP_LIMIT,
+  PAIR_CHANGE,
+  SKIP_REASON,
+  SKIPPED_GROUP_LIMIT,
+  type PairChange,
+  type PairStatus,
+  type SkipReason,
+} from "../constants";
 import type { AddressMasterPassBody } from "../../shared/addressMasterLinkPass";
 import type { TableLayout } from "./layouts";
 import type {
@@ -14,6 +22,7 @@ import type {
   PadronInserted,
   PadronKey,
   PadronNamedKey,
+  PadronPair,
   SkippedGroup,
   SkippedLocalityGroup,
   SkippedReport,
@@ -137,6 +146,31 @@ const geometryChangeOf = (entry: ReportRow): PadronGeometryChange => ({
 
 const listOf = (value: unknown): ReportRow[] => rowsOf(value);
 
+const PAIR_CHANGE_FLAGS: ReadonlyArray<readonly [string, PairChange]> = [
+  ["typeChanged", PAIR_CHANGE.TYPE],
+  ["localityChanged", PAIR_CHANGE.LOCALITY],
+  ["numberChanged", PAIR_CHANGE.NUMBER],
+];
+
+const pairChangesOf = (entry: ReportRow): PairChange[] =>
+  PAIR_CHANGE_FLAGS.filter(([flag]) => entry[flag] === true).map(([, change]) => change);
+
+const pairOf = (entry: ReportRow): PadronPair => ({
+  status: entry.status as PairStatus,
+  changes: pairChangesOf(entry),
+  oldId: numberOf(entry.oldId),
+  old: {
+    typePadron: textOf(entry.oldTypePadron),
+    provinceId: numberOf(entry.provinceId),
+    localityId: numberOf(entry.oldLocalityId),
+    number: textOf(entry.oldNumber),
+    department: textOf(entry.department),
+    locality: textOf(entry.oldLocality),
+  },
+  new: namedKeyOf(entry),
+  distance: numberOf(entry.distance),
+});
+
 export function toPadronClassification(row: ReportRow): PadronClassification {
   return {
     counts: {
@@ -147,10 +181,14 @@ export function toPadronClassification(row: ReportRow): PadronClassification {
       ambiguous: countOf(row.ambiguous),
       missing: countOf(row.missing),
       updates: countOf(row.updates),
+      pairs: countOf(row.pairs),
+      pairsTotal: countOf(row.pairs_total),
+      pairsNotApplied: countOf(row.pairs_not_applied),
     },
     missingSamples: listOf(row.missing_samples).map(keyOf),
     ambiguousSamples: listOf(row.ambiguous_samples).map(keyOf),
     geometryChanges: listOf(row.geometry_changes).map(geometryChangeOf),
+    pairs: listOf(row.pairs_list).map(pairOf),
   };
 }
 
@@ -158,6 +196,7 @@ export function toPadronApplyOutcome(row: ReportRow): PadronApplyOutcome {
   return {
     inserted: countOf(row.inserted),
     updated: countOf(row.updated),
+    paired: countOf(row.paired),
     insertedList: listOf(row.inserted_list).map(insertedOf),
   };
 }
@@ -190,6 +229,10 @@ export function buildPadronTargetReport({
     ambiguous: counts.ambiguous,
     ambiguousSamples: classification.ambiguousSamples,
     geometryChanges: classification.geometryChanges,
+    pairs: classification.pairs,
+    pairsTotal: counts.pairsTotal,
+    pairsApplied: counts.pairs,
+    pairsNotApplied: counts.pairsNotApplied,
   };
 }
 

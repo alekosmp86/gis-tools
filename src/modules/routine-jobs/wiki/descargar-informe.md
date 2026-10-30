@@ -38,7 +38,7 @@ Una fila por cambio, con estas columnas:
 | Provincia | En localidades, el departamento. En unidades territoriales, el id de la provincia. |
 | Nombre | Nombre de la localidad o de la unidad. |
 | Id | El id asignado, solo en las filas **Insertada**. |
-| Distancia (m) | Distancia entre la geometría anterior y la nueva, solo en los cambios de geometría. |
+| Distancia (m) | Distancia entre la geometría anterior y la nueva, en los cambios de geometría y en las claves actualizadas (solo informativa en estas últimas). |
 | Relación de área | Proporción del área que cambió, solo en los cambios de geometría. |
 
 Valores de **Cambio**:
@@ -68,13 +68,14 @@ Un resumen de dos columnas: **Cambio** y **Cantidad**, con los padrones rurales 
 
 ### Actualizar padrones
 
-Una fila por cambio, con estas columnas: **Tabla**, **Cambio**, **Tipo**, **Provincia**, **Localidad**, **Padrón**, **Distancia (m)**, **Relación de área** y **Id**. La columna **Id** queda vacía en las filas de padrones insertados y de cambios de geometría; solo las filas de direcciones maestras la llenan.
+Una fila por cambio, con estas columnas: **Tabla**, **Cambio**, **Tipo**, **Provincia**, **Localidad**, **Padrón**, **Distancia (m)**, **Relación de área**, **Id**, **Tipo anterior**, **Localidad anterior** y **Padrón anterior** (estas tres solo se llenan en las filas `Clave actualizada`). La columna **Id** queda vacía en las filas de padrones insertados y de cambios de geometría; solo las filas de direcciones maestras la llenan.
 
 | Valor de Cambio | Significado |
 |---|---|
 | Insertada | El padrón es nuevo y se insertó en la tabla de destino, con un id nuevo. |
 | Geometría modificada | La geometría cambió y se reemplazó (con **Actualizar geometrías** activada). |
 | Geometría detectada (no aplicada) | La geometría cambió, pero no se reemplazó porque **Actualizar geometrías** estaba desactivada. |
+| Clave actualizada | El padrón era otro (de otro tipo, localidad o número) con la misma forma: su fila se actualizó en su lugar. Las columnas **Tipo**, **Provincia**, **Localidad** y **Padrón** son las nuevas; **Tipo anterior**, **Localidad anterior** y **Padrón anterior** guardan la clave antigua. |
 
 **Tipo** es `RURAL` o `URBANO`. **Provincia**, **Localidad** y **Padrón** son los nombres y el número del padrón en la tabla de origen; la localidad queda vacía en los rurales. Las filas están ordenadas: primero las insertadas, después los cambios de geometría, y dentro de cada grupo por provincia, localidad y padrón. Solo se exportan las filas que el informe lista, es decir, **hasta 500** padrones insertados y 500 cambios de geometría.
 
@@ -115,7 +116,7 @@ Una fila por cada padrón urbano que no tiene localidad en el origen (mismo depa
 
 ### Actualizar padrones
 
-Una fila por cada fila de origen omitida.
+Una fila por cada fila de origen omitida, y una fila por cada padrón nuevo de un posible par no aplicado (un padrón nuevo con la forma de una fila antigua que no se actualizó; ver **Padrones reclasificados o renumerados**). Si ese padrón nuevo se parece a varias filas antiguas, aparece una sola vez. En los pares, **Motivo** es `Posible par no aplicado (ambiguo)`, y las demás columnas son las del padrón nuevo.
 
 | Columna | Contenido |
 |---|---|

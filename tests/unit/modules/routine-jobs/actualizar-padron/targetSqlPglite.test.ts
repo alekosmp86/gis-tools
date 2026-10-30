@@ -29,6 +29,9 @@ const POSTGIS_STUBS_SQL = `
   CREATE FUNCTION ST_SymDifference(geometry, geometry) RETURNS geometry AS 'SELECT abs($1::numeric - $2::numeric)::text::geometry' LANGUAGE sql;
   CREATE FUNCTION ST_Union(geometry, geometry) RETURNS geometry AS 'SELECT greatest($1::numeric, $2::numeric)::text::geometry' LANGUAGE sql;
   CREATE FUNCTION ST_Area(geometry) RETURNS float8 AS 'SELECT $1::numeric::float8' LANGUAGE sql;
+  CREATE FUNCTION ST_Intersection(geometry, geometry) RETURNS geometry AS 'SELECT least($1::numeric, $2::numeric)::text::geometry' LANGUAGE sql;
+  CREATE FUNCTION geometry_overlaps(geometry, geometry) RETURNS boolean AS 'SELECT true' LANGUAGE sql;
+  CREATE OPERATOR && (LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overlaps);
 `;
 
 const SCHEMA_SQL = `
@@ -213,5 +216,123 @@ describe("actualizar-padron generated SQL on embedded Postgres", () => {
       expect(Number(apply.updated)).toBe(0);
       expect(await readPadron(database)).toEqual(afterFirst);
     });
+  });
+});
+
+const PAIR_REFERENCE_SQL = `
+  INSERT INTO carto.province VALUES (1, 'MONTEVIDEO');
+  INSERT INTO carto.loc VALUES (10, 'CENTRO', 1);
+`;
+
+describe("actualizar-padron pairs of reclassified and renumbered padrones (AP-64 to AP-67)", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(POSTGIS_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(PAIR_REFERENCE_SQL);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  it("should update the old row in place and insert no row when one NEW row pairs with it at equal area (AP-64, AP-65, AP-67)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '5', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '5');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs)).toBe(1);
+    expect(Number(classification.pairs_not_applied)).toBe(0);
+    expect(Number(classification.missing)).toBe(0);
+    expect(Number(classification.new)).toBe(0);
+    expect(Number(apply.inserted)).toBe(0);
+    expect(Number(apply.paired)).toBe(1);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({
+      id: before[0].id,
+      number: "501",
+      type_padron: "RURAL",
+      id_cadastral_locality: null,
+      id_province: 1,
+      geometry: "5",
+      id_address_master: 77,
+    });
+  });
+
+  it("should renumber a rural row with NULL locality in place and keep its NULL locality and address master link (AP-65)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('700', 'RURAL', NULL, 1, '7', 88);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 701, '7');
+    `);
+    const before = await readPadron(database);
+
+    const { apply } = await runStage(database);
+    const after = await readPadron(database);
+
+    expect(Number(apply.paired)).toBe(1);
+    expect(Number(apply.inserted)).toBe(0);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({
+      id: before[0].id,
+      number: "701",
+      type_padron: "RURAL",
+      id_cadastral_locality: null,
+      id_address_master: 88,
+    });
+  });
+
+  it("should leave the old row untouched, insert both NEW rows and count the old row as missing when two NEW rows claim it (AP-45, AP-66)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '5', 77);
+      INSERT INTO stg.padron_staging VALUES
+        ('RURAL', 'MONTEVIDEO', NULL, 501, '5'),
+        ('RURAL', 'MONTEVIDEO', NULL, 502, '5');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.pairs_total)).toBe(2);
+    expect(Number(classification.pairs_not_applied)).toBe(2);
+    expect(Number(classification.missing)).toBe(1);
+    expect(Number(classification.new)).toBe(2);
+    expect(Number(apply.inserted)).toBe(2);
+    expect(Number(apply.paired)).toBe(0);
+    expect(after.find((row) => row.id === before[0].id)).toEqual(before[0]);
+    expect(after.filter((row) => row.number === "501" || row.number === "502")).toHaveLength(2);
+  });
+
+  it("should not pair an old row whose key only skipped staging rows carry and should insert the NEW row (AP-64)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '5', 77);
+      INSERT INTO stg.padron_staging VALUES
+        ('URBANO', 'Montevideo', 'centro', 500, '5'),
+        ('URBANO', 'Montevideo', 'centro', 500.4, '5'),
+        ('RURAL', 'MONTEVIDEO', NULL, 501, '5');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs_total)).toBe(0);
+    expect(Number(classification.missing)).toBe(1);
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(after.find((row) => row.id === before[0].id)).toEqual(before[0]);
+    expect(after.filter((row) => row.number === "501")).toHaveLength(1);
   });
 });

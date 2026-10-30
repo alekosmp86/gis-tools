@@ -50,6 +50,13 @@ const updateSetColumnsOf = (sql: string): string[] => {
   return set[1].split(",").map((assignment) => /^\s*"([^"]+)"\s*=/.exec(assignment)?.[1] ?? "");
 };
 
+const pairedSetColumnsOf = (sql: string): string[] => {
+  const pairedBlock = sql.slice(sql.indexOf('"paired_rows" AS ('));
+  const set = /SET\s+([\s\S]*?)\s+FROM\b/.exec(pairedBlock);
+  if (!set) return [];
+  return set[1].split(/,\s*(?=")/).map((assignment) => /^\s*"([^"]+)"\s*=/.exec(assignment)?.[1] ?? "");
+};
+
 const sourceFilesUnder = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name);
@@ -101,6 +108,17 @@ describe("actualizar-padron target SQL guards", () => {
         '"id_province"',
         '"number"',
         '"geometry"',
+      ]);
+    });
+  });
+
+  describe("UPDATE of paired padrones (MJ-13)", () => {
+    it("should set only type_padron, id_cadastral_locality, number and geometry, never id, id_province or id_address_master", () => {
+      expect(pairedSetColumnsOf(buildPadronApplySql(layouts, withUpdates))).toEqual([
+        "type_padron",
+        "id_cadastral_locality",
+        "number",
+        "geometry",
       ]);
     });
   });

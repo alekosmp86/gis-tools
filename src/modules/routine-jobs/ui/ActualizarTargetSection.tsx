@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { PadronGeometryChange, PadronInserted, PadronKey, PadronNamedKey } from "../jobs/actualizar-padron/types";
-import type { TargetView } from "./actualizarPadronReportView";
+import type { PairView, TargetView } from "./actualizarPadronReportView";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import { RowsTable, SectionTitle, type TableColumn } from "./ReportParts";
 import { ReportRowList } from "./ReportRowList";
@@ -47,6 +47,21 @@ const GEOMETRY_COLUMNS: TableColumn<PadronGeometryChange>[] = [
   },
 ];
 
+const PAIR_COLUMNS: TableColumn<PairView>[] = [
+  { header: "Departamento", cell: (pair) => pair.department },
+  { header: "Localidad anterior", cell: (pair) => pair.oldLocality },
+  { header: "Localidad nueva", cell: (pair) => pair.newLocality },
+  { header: "Tipo anterior", cell: (pair) => pair.oldType },
+  { header: "Tipo nuevo", cell: (pair) => pair.newType },
+  { header: "Padrón anterior", cell: (pair) => pair.oldNumber },
+  { header: "Padrón nuevo", cell: (pair) => pair.newNumber },
+  {
+    header: "Distancia (m)",
+    cell: (pair) => (pair.distance === null ? NO_DATA_TEXT : pair.distance.toFixed(DECIMAL_PLACES)),
+  },
+  { header: "Estado", cell: (pair) => pair.status },
+];
+
 function TargetDetails({ target }: { target: TargetView }) {
   return (
     <>
@@ -58,6 +73,11 @@ function TargetDetails({ target }: { target: TargetView }) {
       {target.geometryChanges.length > 0 && (
         <CollapsibleSection summary={target.geometryChangesSummary}>
           <RowsTable columns={GEOMETRY_COLUMNS} rows={target.geometryChanges} rowKey={keyContentOf} />
+        </CollapsibleSection>
+      )}
+      {target.pairs.length > 0 && (
+        <CollapsibleSection summary={target.pairsSummary}>
+          <RowsTable columns={PAIR_COLUMNS} rows={target.pairs} rowKey={(pair) => pair.key} />
         </CollapsibleSection>
       )}
       {target.missing.length > 0 && (

@@ -13,7 +13,8 @@ import { runPadronWriteTransaction, type PadronWriteOutcome } from "./writeSteps
 function buildResult(
   params: ActualizarPadronParams,
   outcome: PadronWriteOutcome,
-  stepTimings: StepTiming[]
+  stepTimings: StepTiming[],
+  localityWarnings: string[]
 ): ActualizarPadronResult {
   const { source, target } = outcome;
   const { rowsRead, repaired, skipped } = source.totals;
@@ -34,6 +35,7 @@ function buildResult(
       target,
       addressMaster,
       collidingKeyCount: source.skipped.collidingKeyCount,
+      localityWarnings,
       commitError: outcome.commitError,
     }),
     stepTimings,
@@ -57,10 +59,10 @@ async function runOnSession(
     onProgress,
   });
   const layouts: PadronLayouts = await timer.run(STEP.VALIDATE, () => resolvePadronLayouts(session, params));
-  await timer.run(STEP.TARGET, () => assertTargetReady(session, layouts));
+  const localityWarnings = await timer.run(STEP.TARGET, () => assertTargetReady(session, layouts));
   await timer.run(STEP.COUNT, () => assertSourceTablesReady(session, sourceTablesSpecOf(layouts)));
   const outcome = await runPadronWriteTransaction(session, params, layouts, timer);
-  return buildResult(params, outcome, timer.timings);
+  return buildResult(params, outcome, timer.timings, localityWarnings);
 }
 
 function assertLinkMatchesAddressMasterTable(params: ActualizarPadronParams): void {

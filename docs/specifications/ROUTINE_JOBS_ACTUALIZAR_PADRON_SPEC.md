@@ -100,6 +100,12 @@ The wizard and the request carry two schema fields:
   non-NULL `id_cadastral_locality`; (c) `number` is NULL or does not match `^(0|[1-9][0-9]*)$` (`0` is valid). The refusal is one Spanish
   message naming the count and one example row (`id`, `type_padron`, `id_cadastral_locality`, `number`). When the `number` column is not a
   text type (`text`, `character varying`, `character`), the refusal names the column and its type, and check (c) is not run.
+- AP-63: Locality table reference check (in the target check, before BEGIN, in dry run and real run alike). One read-only query over the
+  destination rows with a non-NULL `id_cadastral_locality` counts the total and the rows whose id has no row in the chosen locality table
+  (`NOT EXISTS`). Zero total, or zero unresolved, passes. Unresolved at least half of the total refuses the run, in Spanish, naming the
+  locality table and both counts, and asking for `territorial_unit`: the destination's ids are unit ids and this stage would write the
+  ids of another table. Any smaller unresolved count does not refuse; it adds a warning to the report, naming the count, the destination
+  and the locality table. The check never changes an INSERT or an UPDATE (AP-46).
 - AP-7: The target SRID is read from the typmod of the destination geometry column (`geometry(MultiPolygon, <srid>)`). A generic (typmod 0)
   column refuses the run. The SRID must be metric, because the tolerance and the Hausdorff distance are in metres (the rule of stage 3).
 - AP-7b: Locality type check (only when a type table is selected; before BEGIN): the type table must contain exactly one row where
@@ -196,21 +202,49 @@ The wizard and the request carry two schema fields:
 - AP-40: Tolerance option `Tolerancia (m)`: a number greater than or equal to 0, default 1.0, in metres. The request validates it as stage 3
   does (`readTolerance`). The wizard blocks Siguiente on an invalid value.
 - AP-41: `MISSING` rows are only counted and sampled (up to 20, ordered by province and number). They are never deleted, updated or renumbered.
+  A destination row consumed by an applied pair (AP-64) is not missing.
   A key that exists in staging only as a skipped row (AP-12, AP-13) has no candidate and so counts as `MISSING`; the skip reasons of the report
   show why.
-- AP-42: `NEW` candidates are inserted with the list `(type_padron, id_cadastral_locality, id_province, number, geometry)`. The id comes from
+- AP-42: `NEW` candidates are inserted with the list `(type_padron, id_cadastral_locality, id_province, number, geometry)`, except the new rows
+  consumed by an applied pair (AP-64), which are not inserted. The id comes from
   the destination sequence (its `nextval` default). The insert order is deterministic (`id_province`, `number`, `type_padron`,
   `id_cadastral_locality`). `id_address_master` stays NULL.
 - AP-43: `UNCHANGED` and `WITHIN_TOLERANCE` candidates: nothing is written.
 - AP-44: `CHANGED` candidates: an UPDATE of the `geometry` column only, and only when `Actualizar geometrías` is on. When it is off, the changes
   are counted and listed as detected, not applied (`Geometría detectada (no aplicada)`).
 - AP-45: `AMBIGUOUS` candidates: untouched and reported (count and up to 20 samples). The stage never guesses which destination row is right.
-- AP-46: The only writes of the stage are the INSERT of AP-42 and the UPDATE of AP-44. No statement writes `id`, `id_address_master` or any
+- AP-46: The only writes of the stage are the INSERT of AP-42, the UPDATE of AP-44 and the pair UPDATE of AP-65. No statement writes `id`, `id_address_master` or any
   other column, and the stage issues no DELETE and no TRUNCATE (a unit test greps the stage's SQL for both).
 - AP-47: The sequence repair (`Ajustar secuencias de destino`) runs after the classification and before the insert, in the same transaction:
   `setval` to the maximum id plus one, or to the current sequence position when that is higher. Its privilege is checked by AP-5.
 - AP-48: Count checks roll back the whole transaction on mismatch, with a Spanish error: inserted rows equal the `NEW` count; updated rows equal
-  the `CHANGED` count when `Actualizar geometrías` is on (zero otherwise).
+  the `CHANGED` count when `Actualizar geometrías` is on (zero otherwise); paired rows (AP-65) equal the applied pairs (AP-67).
+
+## Reclassified and renumbered padrones (pairs)
+
+- AP-64: Pairing. A pair is a `NEW` candidate and a destination row whose key no staging row carries, skipped or not (the unmatched destination
+  rows). The bounding-box probe on the destination geometry index reads every destination row whose box meets a candidate, matched or not;
+  the footprint is evaluated only on the unmatched rows. Both sides must have the same `id_province`, overlapping bounding boxes, valid
+  destination and candidate geometries, a destination footprint overlapped at least 98 % by the candidate (`ST_Area(ST_Intersection) >= 0.98 x`
+  destination area) and an area within 2 % of the destination area (`0.98 x` to `1.02 x`). A destination row whose key a skipped staging row
+  still carries is not paired (it stays listed as missing, AP-41). The Hausdorff distance is measured for the pairs only and is informational: the
+  tolerance does not gate a pair, so a pair with a distance above tolerance is applied too. Status: `APPLIED` when each side occurs in exactly one
+  pair; `NOT_APPLIED_AMBIGUOUS` when either side occurs in more than one pair.
+- AP-65: Applied pairs are written in place: one UPDATE of the destination row sets `type_padron`, `id_cadastral_locality` and `number` to the
+  new key, and `geometry` to the candidate geometry only when `Actualizar geometrías` is on. The statement never sets `id`, `id_address_master`
+  or `id_province`, and it issues no DELETE or TRUNCATE. The row keeps its id and its address master link. The number may change only in an
+  applied pair (strict pairs, confirmed by the user for MJ-13). The new row of an applied pair is not inserted (AP-42) and its old row is not
+  missing (AP-41).
+- AP-66: `NOT_APPLIED_AMBIGUOUS` pairs change nothing: the new row is inserted (AP-42) and the old row is listed as
+  missing (AP-41). They are reported (AP-67) and warned about in Spanish.
+- AP-67: Reporting and verification. The target report lists every pair, applied or not, up to `PAIR_LIST_LIMIT` (5000), ordered by department,
+  locality and padrón, with the old and the new key, the changed parts (type, locality, number), the distance (informational) and the status. The report
+  section is "Padrones reclasificados o renumerados". The change CSV (AP-49) gets one `Clave actualizada` row per applied pair, with the new key
+  in the usual columns and the old `Tipo anterior`, `Localidad anterior` and `Padrón anterior` in the three appended columns (empty elsewhere).
+  The inconsistencies CSV (AP-61) gets one row per not-applied new padrón (`Posible par no aplicado (ambiguo)`); a new
+  row that matched several destination rows is listed once, and the `pairs_not_applied` count is the number of such new rows. The count check
+  of AP-48 compares the paired rows with the applied pairs. Verification: a second run of the same stage on the same data inserts and updates
+  nothing.
 
 ## Shared job store
 
@@ -276,7 +310,8 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 ## Change list (CSV)
 
 - AP-49: "Descargar CSV" exports the database changes only, as a flat table with the header
-  `Tabla,Cambio,Tipo,Provincia,Localidad,Padrón,Distancia (m),Relación de área,Id`. The `Id` column is empty for the rows below; only the
+  `Tabla,Cambio,Tipo,Provincia,Localidad,Padrón,Distancia (m),Relación de área,Id,Tipo anterior,Localidad anterior,Padrón anterior` (the last three
+  are filled only by `Clave actualizada` rows, AP-67). The `Id` column is empty for the rows below; only the
   AP-58 rows fill it, so the ids of inserted padrones are still not exported. One row per inserted padron (`Insertada`) and one per
   geometry change (`Geometría modificada` when applied, `Geometría detectada (no aplicada)` when not). The rows are ordered by kind, then
   department (Provincia), locality (Localidad), padrón. `Provincia` and `Localidad` are the staging names, empty cells are "sin dato". The
@@ -287,8 +322,8 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 
 ## Inconsistencies list (CSV)
 
-- AP-61: "Descargar inconsistencias" appears only when the report has skipped rows (`skipped.skippedRows` non-empty) and exports the skipped
-  staging rows, not database changes: a flat table with the header `Motivo,Departamento,Localidad,Padrón`, one row per skipped row. `Motivo`
+- AP-61: "Descargar inconsistencias" appears only when the report has skipped rows (`skipped.skippedRows` non-empty) or not-applied pairs
+  (AP-66), and exports the skipped staging rows and the not-applied pairs (AP-67), not database changes: a flat table with the header `Motivo,Departamento,Localidad,Padrón`, one row per skipped row. `Motivo`
   is the Spanish label of the skip reason (the same labels as the report), `Departamento`, `Localidad` and `Padrón` are the staging values
   (empty cells are "sin dato"). The rows come from the report SQL, capped at `DETAIL_LIST_LIMIT` (500), ordered by skip reason, department,
   locality and padrón. The total comes from the counts. When the list is cut, the CSV ends with one marker row: the `Lista incompleta: se
@@ -378,6 +413,8 @@ shared one of `jobs/shared/addressMasterLink*` that stage 4 also uses, so both s
 
 ## Acceptance criteria count
 
-AP-1 to AP-7b, AP-9 to AP-14 (AP-8 removed), AP-15 to AP-36, AP-37 to AP-49, with AP-2b, AP-7b, AP-10b and AP-32b. AP-50 is the
+AP-1 to AP-7b, AP-9 to AP-14 (AP-8 removed), AP-15 to AP-36, AP-37 to AP-49, with AP-2b, AP-7b, AP-10b and AP-32b. AP-64 to AP-67 are the
+pairs of reclassified and renumbered padrones. AP-50 is the
 destination key-format check. AP-51 to AP-60 are the address master link option. Criteria AP-26 and AP-49 are the shared-store and CSV
-criteria. AP-61 is the inconsistencies list. AP-62 is the table defaults and the locality hint.
+criteria. AP-61 is the inconsistencies list. AP-62 is the table defaults and the locality hint. AP-63 is the locality table reference
+check (preflight, refusal or warning).

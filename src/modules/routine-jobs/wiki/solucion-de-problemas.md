@@ -61,6 +61,7 @@ No quedó nada a medias. Alguien puede haber modificado las tablas mientras corr
 - **Columnas de la tabla de destino**: si falta una columna, el mensaje la nombra. La tabla de destino debe tener `id`, `number`, `type_padron`, `id_cadastral_locality`, `id_province` y `geometry`.
 - **Tabla sin secuencia**: la columna `id` de la tabla de destino debe tener una secuencia (un tipo serial o identity). Sin ella no se pueden asignar ids a los padrones nuevos.
 - **Clave de padrón no válida en la tabla de destino**: "La tabla de destino ... tiene N filas con una clave que esta etapa no genera ...". Corrija esas filas (tipo `RURAL` o `URBANO`, sin localidad en rural, número 0 o entero sin ceros a la izquierda) antes de cargar: así la etapa nunca inserta un padrón que ya está escrito de otra forma. Si la columna `number` no es de texto, el mensaje la nombra y hay que cambiarle el tipo.
+- **Tabla de localidades equivocada**: "La tabla de localidades elegida (...) no contiene las localidades que usa la tabla de destino: N de M padrones apuntan a un id que no existe en ella." Los padrones guardan ids de `territorial_unit`: elija esa tabla. Si solo algunos padrones apuntan a un id inexistente, la carga continúa y el informe lo advierte.
 
 Esta etapa no borra filas. Si una tabla de destino tiene disparadores o reglas, el análisis se rechaza y el mensaje los nombra: quítelos antes de cargar.
 

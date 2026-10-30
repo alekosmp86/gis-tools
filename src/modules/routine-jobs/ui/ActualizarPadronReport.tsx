@@ -117,7 +117,7 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
           dryRun={result.dryRun}
           buildCsv={() => buildActualizarPadronCsv(result)}
         />
-        {result.skipped.skippedRows.length > 0 && (
+        {(result.skipped.skippedRows.length > 0 || result.target.pairsNotApplied > 0) && (
           <ReportDownloadButton
             stageSlug={MonthlyStage.ACTUALIZAR_PADRON}
             dryRun={result.dryRun}

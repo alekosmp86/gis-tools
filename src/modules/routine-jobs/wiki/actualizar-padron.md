@@ -69,9 +69,19 @@ Cada padrón del origen se busca en la tabla de destino por su clave: tipo de pa
 
 Un padrón del origen que se omitió (ver **Filas omitidas**) no tiene clase: no se inserta ni cambia nada.
 
+## Padrones reclasificados o renumerados
+
+Un padrón que cambió de tipo (rural o urbano), de localidad o de número, pero que sigue ocupando la misma forma en el mapa, no es un padrón nuevo. La carga lo empareja con la fila antigua y actualiza esa fila en su lugar: su id y su dirección maestra se conservan y nunca se renumera ninguna fila.
+
+Un par se aplica cuando el padrón nuevo y la fila antigua están en la misma provincia, la forma nueva cubre casi por completo a la antigua, las áreas difieren como mucho en un 2 %, cada uno tiene una sola pareja. La tolerancia no decide si un par se aplica: la distancia entre las formas se muestra solo como información. Si el número cambia, solo cambia en un par aplicado.
+
+Los pares que no se aplican no cambian nada: el padrón nuevo se inserta y la fila antigua se lista como faltante. Son **ambiguos** (una de las dos filas tiene más de una pareja).
+
+En el informe, la sección **Padrones reclasificados o renumerados** muestra cada par con su estado: **Aplicado** o **No aplicado: ambiguo**. Los pares aplicados aparecen en el CSV de cambios como **Clave actualizada**; los no aplicados, en el CSV de inconsistencias.
+
 ## Cómo leer el informe
 
-Las tarjetas de arriba muestran **Filas leídas**, **Candidatas** (las que no se omitieron), **Omitidas**, **Insertadas**, **Actualizadas** y **Geometrías que cambian**.
+Las tarjetas de arriba muestran **Filas leídas**, **Candidatas** (las que no se omitieron), **Omitidas**, **Insertadas**, **Actualizadas** y **Geometrías que cambian**. **Claves actualizadas** cuenta los padrones reclasificados o renumerados que se actualizan en su lugar.
 
 Los banners posibles son "Análisis: la tabla de destino no fue modificada.", "Actualización confirmada: la tabla de destino fue modificada.", "La actualización terminó con advertencias. Revise el informe." y "Resultado incierto: hay que verificar la tabla de destino antes de volver a actualizar."
 
@@ -79,6 +89,7 @@ La sección de la tabla de destino trae los contadores de cada clase y listas de
 
 - **Padrones insertados**, con su id nuevo;
 - **Geometrías que cambian**, con la distancia en metros y la proporción del área que cambió;
+- **Padrones reclasificados o renumerados**, con el estado de cada par;
 - **Faltantes en destino** y **Ambiguas**, con muestras de clave.
 
 Las listas muestran hasta 500 filas (las muestras, hasta 20). Cuando una lista se corta, su título dice "primeras N de M".

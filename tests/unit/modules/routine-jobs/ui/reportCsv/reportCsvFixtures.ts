@@ -312,6 +312,10 @@ export function actualizarTargetReportOf(overrides: Partial<ActualizarTargetRepo
     ambiguous: 1,
     ambiguousSamples: [{ typePadron: "RURAL", provinceId: 5, localityId: null, number: "78" }],
     geometryChanges: padronGeometryChangesOf(25),
+    pairs: [],
+    pairsTotal: 0,
+    pairsApplied: 0,
+    pairsNotApplied: 0,
     ...overrides,
   };
 }

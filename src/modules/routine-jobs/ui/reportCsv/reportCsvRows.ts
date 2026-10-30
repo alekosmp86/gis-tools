@@ -7,6 +7,7 @@ export const CHANGE_KIND = {
   INSERTED: "Insertada",
   MODIFIED: "Geometría modificada",
   DETECTED: "Geometría detectada (no aplicada)",
+  KEY_UPDATED: "Clave actualizada",
 } as const;
 
 export type ChangeKind = (typeof CHANGE_KIND)[keyof typeof CHANGE_KIND];

@@ -1,7 +1,7 @@
 import type { DbConfig } from "@/core/types/db";
 import type { WritableTargetLayout } from "../shared/tableResolution";
 import type { StepTiming } from "../cargar-padrones/types";
-import type { SkipReason } from "./constants";
+import type { PairChange, PairStatus, SkipReason } from "./constants";
 import type { TableLayout } from "./domain/layouts";
 import type { AddressMasterAmbiguous, AddressMasterCounts, AddressMasterLinked } from "../shared/addressMasterLinkPass";
 
@@ -100,6 +100,16 @@ export interface PadronGeometryChange extends PadronNamedKey {
   areaRatio: number | null;
 }
 
+/** A new row and the unmatched destination row it reclassifies or renumbers; the old key is the destination's. */
+export interface PadronPair {
+  status: PairStatus;
+  changes: PairChange[];
+  oldId: number | null;
+  old: PadronNamedKey;
+  new: PadronNamedKey;
+  distance: number | null;
+}
+
 export interface ActualizarTotals {
   rowsRead: number;
   candidates: number;
@@ -115,6 +125,9 @@ export interface PadronCounts {
   ambiguous: number;
   missing: number;
   updates: number;
+  pairs: number;
+  pairsTotal: number;
+  pairsNotApplied: number;
 }
 
 export interface PadronClassification {
@@ -122,11 +135,13 @@ export interface PadronClassification {
   missingSamples: PadronKey[];
   ambiguousSamples: PadronKey[];
   geometryChanges: PadronGeometryChange[];
+  pairs: PadronPair[];
 }
 
 export interface PadronApplyOutcome {
   inserted: number;
   updated: number;
+  paired: number;
   insertedList: PadronInserted[];
 }
 
@@ -144,6 +159,10 @@ export interface ActualizarTargetReport {
   ambiguous: number;
   ambiguousSamples: PadronKey[];
   geometryChanges: PadronGeometryChange[];
+  pairs: PadronPair[];
+  pairsTotal: number;
+  pairsApplied: number;
+  pairsNotApplied: number;
 }
 
 export type ActualizarAddressMasterCounts = AddressMasterCounts & { toCreate: number; remaining: number };

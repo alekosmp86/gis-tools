@@ -6,6 +6,8 @@ import type { WritableTargetLayout } from "../../shared/tableResolution";
 import { STAGING_COLUMN, DESTINATION_COLUMN, DESTINATION_TITLE, DESTINATION_WRITTEN_COLUMNS } from "../constants";
 import { buildKeyFormatSql, isTextDataType, keyFormatIssue, numberTypeIssue, type KeyFormatExample } from "../domain/keyFormat";
 import { buildLocalityTypeMatchSql } from "../domain/localityTypeSql";
+import { buildLocalityReferenceSql } from "../domain/localityReferenceSql";
+import { localityReferenceVerdict, type LocalityReferenceVerdict } from "../domain/localityReference";
 import type { TableLayout } from "../domain/layouts";
 import type { PadronLayouts } from "../types";
 
@@ -55,8 +57,21 @@ async function addressMasterIssuesFor(session: CatalogQuerySession, layouts: Pad
   return layouts.addressMaster === undefined ? [] : addressMasterIssuesOf(session, layouts.addressMaster);
 }
 
-export async function assertTargetReady(session: CatalogQuerySession, layouts: PadronLayouts): Promise<void> {
+async function localityReferenceVerdictOf(session: CatalogQuerySession, layouts: PadronLayouts): Promise<LocalityReferenceVerdict> {
+  const result = await session.query(buildLocalityReferenceSql(layouts.target, layouts.locality));
+  const row = result.rows[0];
+  return localityReferenceVerdict(
+    { total: Number(row?.total ?? 0), unresolved: Number(row?.unresolved ?? 0) },
+    labelOf(layouts.target),
+    labelOf(layouts.locality)
+  );
+}
+
+export async function assertTargetReady(session: CatalogQuerySession, layouts: PadronLayouts): Promise<string[]> {
   await assertWriteTargetsReady(session, writeTargetsSpecOf(layouts));
   throwIfIssues(await keyFormatIssuesOf(session, layouts.target));
+  const localityVerdict = await localityReferenceVerdictOf(session, layouts);
+  throwIfIssues(localityVerdict.kind === "refuse" ? [localityVerdict.message] : []);
   throwIfIssues(await addressMasterIssuesFor(session, layouts));
+  return localityVerdict.kind === "warn" ? [localityVerdict.warning] : [];
 }
