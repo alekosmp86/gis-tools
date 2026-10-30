@@ -135,6 +135,9 @@
 
 .table th {
   border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  word-break: normal;
+  overflow-wrap: normal;
+  vertical-align: bottom;
 }
 
 .list {

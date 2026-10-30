@@ -111,7 +111,7 @@ export interface TableColumn<Row> {
 /** Column headers are unique within a table, so they key the cells of each row. */
 export function RowsTable<Row>({ columns, rows, rowKey }: { columns: TableColumn<Row>[]; rows: Row[]; rowKey: (row: Row) => string }) {
   return (
-    <div className={styles.tableWrap}>
+    <div className={`${styles.tableWrap} ${styles.scrollTable}`}>
       <DataTable headers={columns.map((column) => column.header)}>
         {keyedRowsOf(rows, rowKey).map(({ key, row }) => (
           <tr key={key}>

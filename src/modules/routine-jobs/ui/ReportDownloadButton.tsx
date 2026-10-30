@@ -36,11 +36,13 @@ export const ReportDownloadButton: React.FC<ReportDownloadButtonProps> = ({
   };
 
   return (
-    <div className={styles.actions}>
-      <Button variant={ButtonVariant.SECONDARY} onClick={handleDownload}>
-        <Download size={ICON_SIZE} />
-        <span>{DOWNLOAD_LABEL[kind]}</span>
-      </Button>
-    </div>
+    <Button variant={ButtonVariant.SECONDARY} onClick={handleDownload}>
+      <Download size={ICON_SIZE} />
+      <span>{DOWNLOAD_LABEL[kind]}</span>
+    </Button>
   );
 };
+
+export const ReportDownloadActions: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className={styles.actions}>{children}</div>
+);

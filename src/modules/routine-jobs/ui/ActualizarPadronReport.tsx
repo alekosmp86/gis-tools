@@ -20,7 +20,7 @@ import { ActualizarAddressMasterSection } from "./ActualizarAddressMasterSection
 import { ActualizarTargetSection } from "./ActualizarTargetSection";
 import styles from "./ActualizarPadronReport.module.css";
 import sharedStyles from "./CargarPadronesReport.module.css";
-import { ReportDownloadButton } from "./ReportDownloadButton";
+import { ReportDownloadActions, ReportDownloadButton } from "./ReportDownloadButton";
 import { buildActualizarPadronCsv, buildActualizarPadronInconsistenciasCsv } from "./reportCsv/actualizarPadronCsv";
 import { REPORT_CSV_KIND } from "./reportCsv/filename";
 import { MonthlyStage } from "./monthlyCartoStages";
@@ -111,19 +111,21 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
 
   return (
     <div className={sharedStyles.report}>
-      <ReportDownloadButton
-        stageSlug={MonthlyStage.ACTUALIZAR_PADRON}
-        dryRun={result.dryRun}
-        buildCsv={() => buildActualizarPadronCsv(result)}
-      />
-      {result.skipped.skippedRows.length > 0 && (
+      <ReportDownloadActions>
         <ReportDownloadButton
           stageSlug={MonthlyStage.ACTUALIZAR_PADRON}
           dryRun={result.dryRun}
-          kind={REPORT_CSV_KIND.INCONSISTENCIES}
-          buildCsv={() => buildActualizarPadronInconsistenciasCsv(result)}
+          buildCsv={() => buildActualizarPadronCsv(result)}
         />
-      )}
+        {result.skipped.skippedRows.length > 0 && (
+          <ReportDownloadButton
+            stageSlug={MonthlyStage.ACTUALIZAR_PADRON}
+            dryRun={result.dryRun}
+            kind={REPORT_CSV_KIND.INCONSISTENCIES}
+            buildCsv={() => buildActualizarPadronInconsistenciasCsv(result)}
+          />
+        )}
+      </ReportDownloadActions>
       <OutcomeBanners view={view} />
       <KpiCards view={view} />
       <SkippedReasonsTable view={view} />

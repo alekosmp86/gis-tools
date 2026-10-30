@@ -39,6 +39,41 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+.scrollTable {
+  max-height: 480px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.6) transparent;
+}
+
+.scrollTable::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollTable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollTable::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 4px;
+}
+
+.scrollTable::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-cyan, #06b6d4);
+}
+
+.scrollTable::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.scrollTable thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-main, #0b1220);
+}
+
 .reasonCell {
   display: flex;
   flex-direction: column;

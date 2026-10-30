@@ -10,7 +10,7 @@ import {
 import { buildCargarPadronesCsv, buildCargarPadronesInconsistenciasCsv } from "./reportCsv/cargarPadronesCsv";
 import { REPORT_CSV_KIND } from "./reportCsv/filename";
 import { DataTable } from "./DataTable";
-import { ReportDownloadButton } from "./ReportDownloadButton";
+import { ReportDownloadActions, ReportDownloadButton } from "./ReportDownloadButton";
 import { ReportRowList } from "./ReportRowList";
 import { MonthlyStage } from "./monthlyCartoStages";
 import styles from "./CargarPadronesReport.module.css";
@@ -73,19 +73,21 @@ export const CargarPadronesReport: React.FC<CargarPadronesReportProps> = ({ resu
 
   return (
     <div className={styles.report}>
-      <ReportDownloadButton
-        stageSlug={MonthlyStage.CARGAR_PADRONES}
-        dryRun={result.dryRun}
-        buildCsv={() => buildCargarPadronesCsv(result)}
-      />
-      {result.ambiguousLocalityCodes.length > 0 && (
+      <ReportDownloadActions>
         <ReportDownloadButton
           stageSlug={MonthlyStage.CARGAR_PADRONES}
           dryRun={result.dryRun}
-          kind={REPORT_CSV_KIND.INCONSISTENCIES}
-          buildCsv={() => buildCargarPadronesInconsistenciasCsv(result)}
+          buildCsv={() => buildCargarPadronesCsv(result)}
         />
-      )}
+        {result.ambiguousLocalityCodes.length > 0 && (
+          <ReportDownloadButton
+            stageSlug={MonthlyStage.CARGAR_PADRONES}
+            dryRun={result.dryRun}
+            kind={REPORT_CSV_KIND.INCONSISTENCIES}
+            buildCsv={() => buildCargarPadronesInconsistenciasCsv(result)}
+          />
+        )}
+      </ReportDownloadActions>
       <div className={`${styles.banner} ${BANNER_CLASS[view.banner.kind]}`}>
         <p className={styles.bannerText}>{view.banner.text}</p>
       </div>

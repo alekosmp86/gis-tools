@@ -7,7 +7,7 @@ import { buildCargarLocalidadesCsv, buildCargarLocalidadesInconsistenciasCsv } f
 import { REPORT_CSV_KIND } from "./reportCsv/filename";
 import { SkippedSamplesDetails, TargetBlocks, UnmatchedPadronDetails } from "./CargarLocalidadesReportSections";
 import { KpiCards, OutcomeBanners, SkippedReasonsSection, TimingsSection, WarningsSection } from "./ReportParts";
-import { ReportDownloadButton } from "./ReportDownloadButton";
+import { ReportDownloadActions, ReportDownloadButton } from "./ReportDownloadButton";
 import { MonthlyStage } from "./monthlyCartoStages";
 import sharedStyles from "./CargarPadronesReport.module.css";
 
@@ -20,19 +20,21 @@ export const CargarLocalidadesReport: React.FC<CargarLocalidadesReportProps> = (
 
   return (
     <div className={sharedStyles.report}>
-      <ReportDownloadButton
-        stageSlug={MonthlyStage.CARGAR_LOCALIDADES}
-        dryRun={result.dryRun}
-        buildCsv={() => buildCargarLocalidadesCsv(result)}
-      />
-      {view.unmatchedPadrons.length > 0 && (
+      <ReportDownloadActions>
         <ReportDownloadButton
           stageSlug={MonthlyStage.CARGAR_LOCALIDADES}
           dryRun={result.dryRun}
-          kind={REPORT_CSV_KIND.INCONSISTENCIES}
-          buildCsv={() => buildCargarLocalidadesInconsistenciasCsv(result)}
+          buildCsv={() => buildCargarLocalidadesCsv(result)}
         />
-      )}
+        {view.unmatchedPadrons.length > 0 && (
+          <ReportDownloadButton
+            stageSlug={MonthlyStage.CARGAR_LOCALIDADES}
+            dryRun={result.dryRun}
+            kind={REPORT_CSV_KIND.INCONSISTENCIES}
+            buildCsv={() => buildCargarLocalidadesInconsistenciasCsv(result)}
+          />
+        )}
+      </ReportDownloadActions>
       <OutcomeBanners banners={view.banners} />
       <KpiCards kpis={view.kpis} />
       <SkippedReasonsSection rows={view.skippedRows} zeroReasonCount={view.zeroReasonCount} />

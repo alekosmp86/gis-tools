@@ -9,7 +9,7 @@ import type {
 } from "../jobs/completar-unidad-territorial/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import { RefreshSuggestion } from "./RefreshSuggestion";
-import { ReportDownloadButton } from "./ReportDownloadButton";
+import { ReportDownloadActions, ReportDownloadButton } from "./ReportDownloadButton";
 import { ReportRowList } from "./ReportRowList";
 import { OutcomeBanners, RowsTable, SectionTitle, TimingsSection, WarningsSection, type TableColumn } from "./ReportParts";
 import { textOrNoData } from "./reportFormat";
@@ -48,11 +48,13 @@ export const CompletarUnidadTerritorialReport: React.FC<CompletarUnidadTerritori
   const view = buildCompletarReportView(result);
   return (
     <div className={sharedStyles.report}>
-      <ReportDownloadButton
-        stageSlug={MonthlyStage.COMPLETAR_UNIDAD_TERRITORIAL}
-        dryRun={result.dryRun}
-        buildCsv={() => buildCompletarUnidadTerritorialCsv(result)}
-      />
+      <ReportDownloadActions>
+        <ReportDownloadButton
+          stageSlug={MonthlyStage.COMPLETAR_UNIDAD_TERRITORIAL}
+          dryRun={result.dryRun}
+          buildCsv={() => buildCompletarUnidadTerritorialCsv(result)}
+        />
+      </ReportDownloadActions>
       <OutcomeBanners banners={view.banners} />
       <section className={sharedStyles.section}>
         <SectionTitle>{view.unitTable}</SectionTitle>
