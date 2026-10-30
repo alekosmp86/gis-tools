@@ -88,7 +88,7 @@ Los banners posibles son "Análisis: la tabla de destino no fue modificada.", "A
 La sección de la tabla de destino trae los contadores de cada clase y listas desplegables:
 
 - **Padrones insertados**, con su id nuevo;
-- **Geometrías que cambian**, con la distancia en metros y la proporción del área que cambió;
+- **Geometrías que cambian**, con la proporción del área que cambió y la distancia en metros. La lista va primero por la proporción del área (de mayor a menor) y después por la distancia;
 - **Padrones reclasificados o renumerados**, con el estado de cada par;
 - **Faltantes en destino** y **Ambiguas**, con muestras de clave.
 

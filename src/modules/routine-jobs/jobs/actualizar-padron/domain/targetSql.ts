@@ -419,23 +419,22 @@ function ambiguousSamplesSql(): string {
   ].join(" ");
 }
 
+/* The area ratio is computed for every CHANGED row so the list ranks by it; the Hausdorff distance only breaks ties. */
 function geometryChangesSql(): string {
   const changes = [
     ...keyListOf(PLANNED_ALIAS),
     `${plannedOf(DEPARTMENT_COLUMN)} AS "department"`,
     `${plannedOf(LOCALITY_NAME_COLUMN)} AS "locality"`,
     `${plannedOf("distance")} AS "distance"`,
-    `${plannedOf("target_geometry")} AS "target_geometry"`,
-    `${plannedOf(CANDIDATE_GEOMETRY)} AS "candidate_geometry"`,
+    `${areaRatioOf(plannedOf("target_geometry"), plannedOf(CANDIDATE_GEOMETRY))} AS "areaRatio"`,
   ];
   return [
-    `SELECT top."typePadron", top."provinceId", top."localityId", top."number", top."department", top."locality", top."distance",`,
-    `${areaRatioOf('top."target_geometry"', 'top."candidate_geometry"')} AS "areaRatio"`,
+    `SELECT top."typePadron", top."provinceId", top."localityId", top."number", top."department", top."locality", top."distance", top."areaRatio"`,
     `FROM (SELECT ${changes.join(", ")} FROM ${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS}`,
     `WHERE ${classIs(MATCH_CLASS.CHANGED)}`,
-    `ORDER BY ${plannedOf("distance")} DESC NULLS FIRST, ${plannedOf(DESTINATION_COLUMN.TYPE_PADRON)}, ${plannedOf(DESTINATION_COLUMN.ID_PROVINCE)},`,
+    `ORDER BY "areaRatio" DESC NULLS FIRST, ${plannedOf("distance")} DESC NULLS FIRST, ${plannedOf(DESTINATION_COLUMN.TYPE_PADRON)}, ${plannedOf(DESTINATION_COLUMN.ID_PROVINCE)},`,
     `${plannedOf(DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY)} NULLS FIRST, ${plannedOf(DESTINATION_COLUMN.NUMBER)} LIMIT ${DETAIL_LIST_LIMIT}) AS top`,
-    `ORDER BY top."distance" DESC NULLS FIRST, top."department", top."locality", top."number"`,
+    `ORDER BY top."areaRatio" DESC NULLS FIRST, top."distance" DESC NULLS FIRST, top."department", top."locality", top."number"`,
   ].join(" ");
 }
 

@@ -38,12 +38,12 @@ const INSERTED_COLUMNS: TableColumn<PadronInserted>[] = [{ header: "Id", cell: (
 const GEOMETRY_COLUMNS: TableColumn<PadronGeometryChange>[] = [
   ...NAMED_COLUMNS,
   {
-    header: "Distancia (m)",
-    cell: (change) => (change.distance === null ? NO_DATA_TEXT : change.distance.toFixed(DECIMAL_PLACES)),
-  },
-  {
     header: "Proporción de área",
     cell: (change) => (change.areaRatio === null ? NO_DATA_TEXT : change.areaRatio.toFixed(AREA_DECIMAL_PLACES)),
+  },
+  {
+    header: "Distancia (m)",
+    cell: (change) => (change.distance === null ? NO_DATA_TEXT : change.distance.toFixed(DECIMAL_PLACES)),
   },
 ];
 

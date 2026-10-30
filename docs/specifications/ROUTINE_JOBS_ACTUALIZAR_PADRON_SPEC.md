@@ -198,7 +198,9 @@ The wizard and the request carry two schema fields:
   - `MISSING` (destination rows only): the key has no candidate.
 - AP-39: The geometry comparison is cheap first: an equality test on the snapped and normalised geometries; the Hausdorff distance is computed
   only for candidates whose geometries differ and whose destination row exists. The area ratio (symmetric difference over union) is computed
-  only for the listed geometry changes.
+  for every `CHANGED` row, so that the geometry change list can be ranked by it; the list keeps the top `DETAIL_LIST_LIMIT` rows ordered by
+  area ratio descending (nulls first), then Hausdorff distance descending, then type, province, locality and padrón. The report and the
+  section's table show the area ratio before the distance.
 - AP-40: Tolerance option `Tolerancia (m)`: a number greater than or equal to 0, default 1.0, in metres. The request validates it as stage 3
   does (`readTolerance`). The wizard blocks Siguiente on an invalid value.
 - AP-41: `MISSING` rows are only counted and sampled (up to 20, ordered by province and number). They are never deleted, updated or renumbered.
