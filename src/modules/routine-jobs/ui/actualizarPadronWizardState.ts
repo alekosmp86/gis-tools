@@ -1,7 +1,7 @@
 // Same wizard API names as cargarPadronesWizardState: both jobs expose the reducer contract the tests fix.
 // fallow-ignore-file duplicate-export
+import { MONTHLY_TABLES } from "../config/monthlyTables";
 import { DEFAULT_LOCALITY_TYPE } from "../jobs/actualizar-padron/constants";
-import { DEFAULT_ADDRESS_MASTER_TABLE } from "../jobs/shared/addressMasterLinkSpec";
 import type { ActualizarStartRequest, ClientConnection, StagingSelection } from "./clientTypes";
 import type { ActualizarPadronRunSnapshot } from "./actualizarPadronRunStore";
 import {
@@ -108,6 +108,15 @@ const clearedFor = <Value>(
 
 const emptyConfirmation = (): ActualizarWizardConfirmation => ({ password: "", typedTable: "" });
 
+const defaultTables = (): Record<ActualizarTableKey, string> => ({
+  [ActualizarTableKey.STAGING]: MONTHLY_TABLES.actualizarPadrones.staging.table,
+  [ActualizarTableKey.TARGET]: MONTHLY_TABLES.actualizarPadrones.target.table,
+  [ActualizarTableKey.PROVINCE]: MONTHLY_TABLES.actualizarPadrones.province.table,
+  [ActualizarTableKey.LOCALITY]: MONTHLY_TABLES.actualizarPadrones.locality.table,
+  [ActualizarTableKey.TYPE]: MONTHLY_TABLES.actualizarPadrones.type.table,
+  [ActualizarTableKey.ADDRESS_MASTER]: "",
+});
+
 const defaultOptions = (): ActualizarOptionsDraft => ({
   localityType: DEFAULT_LOCALITY_TYPE,
   tolerance: DEFAULT_TOLERANCE_TEXT,
@@ -119,16 +128,16 @@ const seedFieldsOf = (seed: ActualizarWizardSeed): Partial<ActualizarWizardState
   ...(seed.connection === undefined ? {} : { connection: seed.connection, step: WizardStep.TABLES }),
   ...(seed.staging === undefined
     ? {}
-    : { stagingSchema: seed.staging.schema, tables: { ...recordOfEveryKey<string>(""), [ActualizarTableKey.STAGING]: seed.staging.table } }),
+    : { stagingSchema: seed.staging.schema, tables: { ...defaultTables(), [ActualizarTableKey.STAGING]: seed.staging.table } }),
 });
 
 export function initialWizardState(seed: ActualizarWizardSeed = {}): ActualizarWizardState {
   return {
     step: WizardStep.CONNECTION,
     connection: { host: "", port: "5432", db_name: "", user: "", password: "" },
-    stagingSchema: "",
-    cartoSchema: "",
-    tables: recordOfEveryKey<string>(""),
+    stagingSchema: MONTHLY_TABLES.actualizarPadrones.staging.schema,
+    cartoSchema: MONTHLY_TABLES.actualizarPadrones.target.schema,
+    tables: defaultTables(),
     tableValidity: recordOfEveryKey(false),
     options: defaultOptions(),
     confirmation: emptyConfirmation(),
@@ -330,7 +339,7 @@ function optionsReducer(state: ActualizarWizardState, patch: Partial<ActualizarO
 
 function withAddressMasterTableFor(state: ActualizarWizardState, linkAddressMaster: boolean | undefined): ActualizarWizardState {
   if (linkAddressMaster === true && isBlank(state.tables.addressMaster)) {
-    return { ...state, tables: { ...state.tables, [ActualizarTableKey.ADDRESS_MASTER]: DEFAULT_ADDRESS_MASTER_TABLE } };
+    return { ...state, tables: { ...state.tables, [ActualizarTableKey.ADDRESS_MASTER]: MONTHLY_TABLES.actualizarPadrones.addressMaster.table } };
   }
   if (linkAddressMaster !== false) return state;
   return {

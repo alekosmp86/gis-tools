@@ -271,6 +271,8 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
   travel with `catalog/columns`. The generated routes are regenerated with `npm run modules:routes`, never hand-edited; `npm run
   modules:routes:check` passes.
 
+- AP-62: The table pickers prefill from `config/monthlyTables.ts`: staging = stage 1 staging (else `bdj_carto.paispadron`), target `carto.padron`, province `carto.province`, locality `carto.territorial_unit`, type `carto.territorial_unit_type`; the address master stays empty until the link option is on. The locality picker shows the hint that the locality table must be `territorial_unit`, because padron rows store unit ids.
+
 ## Change list (CSV)
 
 - AP-49: "Descargar CSV" exports the database changes only, as a flat table with the header
@@ -378,4 +380,4 @@ shared one of `jobs/shared/addressMasterLink*` that stage 4 also uses, so both s
 
 AP-1 to AP-7b, AP-9 to AP-14 (AP-8 removed), AP-15 to AP-36, AP-37 to AP-49, with AP-2b, AP-7b, AP-10b and AP-32b. AP-50 is the
 destination key-format check. AP-51 to AP-60 are the address master link option. Criteria AP-26 and AP-49 are the shared-store and CSV
-criteria. AP-61 is the inconsistencies list.
+criteria. AP-61 is the inconsistencies list. AP-62 is the table defaults and the locality hint.

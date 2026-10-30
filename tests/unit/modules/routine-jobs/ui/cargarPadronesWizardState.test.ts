@@ -64,8 +64,8 @@ describe("cargarPadronesWizardState", () => {
       expect(initialWizardState()).toEqual({
         step: "connection",
         connection: { host: "", port: "5432", db_name: "", user: "", password: "" },
-        schema: "",
-        tables: { rural: "", urbano: "", target: "" },
+        schema: "bdj_carto",
+        tables: { rural: "catastro_paisrural", urbano: "catastro_paisurbano", target: "paispadron" },
         tableValidity: { rural: false, urbano: false, target: false },
         options: { repair: true, clearMode: "delete", resetSequences: true },
         confirmation: { password: "", targetLabel: "" },
@@ -286,7 +286,7 @@ describe("cargarPadronesWizardState", () => {
     it("AC-30: should record the chosen table and its validity for the role", () => {
       const next = wizardReducer(initialWizardState(), { type: "tableChosen", role: "urbano", table: "u", valid: true });
 
-      expect(next.tables).toEqual({ rural: "", urbano: "u", target: "" });
+      expect(next.tables).toEqual({ rural: "catastro_paisrural", urbano: "u", target: "paispadron" });
       expect(next.tableValidity).toEqual({ rural: false, urbano: true, target: false });
     });
 

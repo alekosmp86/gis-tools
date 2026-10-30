@@ -1,5 +1,5 @@
-import { DEFAULT_ADDRESS_MASTER_SCHEMA, DEFAULT_ADDRESS_MASTER_TABLE } from "../jobs/shared/addressMasterLinkSpec";
-import { DEFAULT_UNIT_SCHEMA, DEFAULT_UNIT_TABLE } from "../jobs/completar-unidad-territorial/constants";
+// fallow-ignore-file duplicate-export
+import { MONTHLY_TABLES } from "../config/monthlyTables";
 import type { ClientConnection, CompletarStartRequest } from "./clientTypes";
 import type { CompletarRunSnapshot } from "./completarUnidadTerritorialRunStore";
 import { trimConnection } from "./connectionProfiles";
@@ -87,13 +87,13 @@ function initialState(seed: CompletarWizardSeed): CompletarWizardState {
     connection: seed.connection,
     slots: {
       [CompletarSlot.UNIT]: {
-        schema: seed.unit?.schema ?? DEFAULT_UNIT_SCHEMA,
-        table: seed.unit?.table ?? DEFAULT_UNIT_TABLE,
+        schema: seed.unit?.schema ?? MONTHLY_TABLES.completarUnidades.unit.schema,
+        table: seed.unit?.table ?? MONTHLY_TABLES.completarUnidades.unit.table,
         valid: false,
       },
       [CompletarSlot.ADDRESS_MASTER]: {
-        schema: DEFAULT_ADDRESS_MASTER_SCHEMA,
-        table: DEFAULT_ADDRESS_MASTER_TABLE,
+        schema: MONTHLY_TABLES.completarUnidades.addressMaster.schema,
+        table: MONTHLY_TABLES.completarUnidades.addressMaster.table,
         valid: false,
       },
     },

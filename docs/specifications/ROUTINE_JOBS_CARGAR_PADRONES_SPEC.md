@@ -169,6 +169,8 @@ Part B
   ambiguity warning counts every pair, not only the listed ones. The "Descargar CSV" file (database changes) is unchanged; the filename is
   `carto-cargar-padrones-<simulacion|real>-inconsistencias-<stamp>.csv`.
 
+- AC-36: The three table pickers prefill schema `bdj_carto` with `catastro_paisrural`, `catastro_paisurbano` and `paispadron` from `config/monthlyTables.ts`; a default missing from the schema is cleared without an error.
+
 ## Out of scope
 Updating `carto.padron`; the incoming/diff tables; URN provisioning; MISSING/NEW/CHANGED classification; `ST_Equals`-based geometry
 comparison (belongs to that later job); other routine jobs (the shell only has to make adding one cheap); preprod/prod runs.

@@ -85,3 +85,4 @@ This stage reproduces the INSERT and the UPDATE with the safety rules below. It 
   unidades enlazadas` (N = real count), other cells empty. The created-records list gets the same marker (Tabla = address master table, `... de N direcciones maestras creadas`).
 - CU-17: Error handling and hub behaviour as in stage 3: the stage opens from the hub without status, a 409 reports the conflict, an
   uncertain commit is reported, secrets are scrubbed.
+- CU-18: The unit and address master pickers prefill `carto.territorial_unit` (or the stage 3 target) and `carto.addresses_master` from `config/monthlyTables.ts`; a default missing from the schema is cleared without an error.

@@ -24,6 +24,8 @@ La conexión ya se pidió al entrar al trabajo. Los pasos son **Tablas**, **Revi
 
 ### Tablas
 
+Las tablas vienen preelegidas y puede cambiarlas.
+
 - **Unidades territoriales**: esquema y tabla de las unidades. Se propone la tabla que eligió en la etapa 3; si no hubo una, `carto.territorial_unit`.
 - **Direcciones maestras**: esquema y tabla de las direcciones maestras. Se propone `carto.addresses_master`.
 

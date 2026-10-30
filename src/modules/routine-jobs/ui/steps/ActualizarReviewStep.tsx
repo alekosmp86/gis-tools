@@ -4,7 +4,7 @@ import React from "react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType } from "@/ui-kit/types/ui";
-import { DEFAULT_PADRON_TARGET_TABLE } from "../../jobs/actualizar-padron/constants";
+import { MONTHLY_TABLES } from "../../config/monthlyTables";
 import { GEOMETRY_OVERWRITE_WARNING, type ActualizarWizardConfirmation } from "../actualizarPadronWizardState";
 import type { ActualizarStartRequest } from "../clientTypes";
 import { PASSWORD_LABEL, ReviewRunActions } from "./reviewParts";
@@ -90,7 +90,7 @@ export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
 
       <AlertMessage type={AlertType.INFO} text={CONTENT_NOTE} />
       {options.updateGeometries && <AlertMessage type={AlertType.WARNING} text={GEOMETRY_OVERWRITE_WARNING} />}
-      {options.linkAddressMaster && request.targetTable !== DEFAULT_PADRON_TARGET_TABLE && (
+      {options.linkAddressMaster && request.targetTable !== MONTHLY_TABLES.actualizarPadrones.target.table && (
         <AlertMessage type={AlertType.WARNING} text={NON_PADRON_TARGET_WARNING} />
       )}
 

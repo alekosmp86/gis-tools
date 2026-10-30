@@ -1,3 +1,5 @@
+// fallow-ignore-file duplicate-export
+import { MONTHLY_TABLES, type MonthlyTable } from "../config/monthlyTables";
 import type { ClientConnection, LocalidadesStartRequest, StagingSelection } from "./clientTypes";
 import type { CargarLocalidadesRunSnapshot, LocalidadesRunRequest } from "./cargarLocalidadesRunStore";
 import { trimConnection } from "./connectionProfiles";
@@ -125,7 +127,12 @@ const isToleranceValid = (text: string): boolean => {
   return Number.isFinite(value) && value >= 0;
 };
 
-const emptyTarget = (included: boolean): LocalidadesTargetDraft => ({ schema: "", table: "", valid: false, included });
+const targetDraftOf = (defaultTable: MonthlyTable, included: boolean): LocalidadesTargetDraft => ({
+  schema: defaultTable.schema,
+  table: defaultTable.table,
+  valid: false,
+  included,
+});
 
 const emptyTypedTables = (): Record<LocalidadesDestination, string> => ({
   [LocalidadesDestination.BDJ_CARTO]: "",
@@ -138,13 +145,17 @@ function initialWizardState(seed: LocalidadesWizardSeed): LocalidadesWizardState
   return {
     step: LocalidadesStep.TABLES,
     connection: seed.connection,
-    stagingSchema: seed.staging?.schema ?? "",
-    provinceSchema: "",
-    tables: { padron: seed.staging?.table ?? "", locality: "", province: "" },
+    stagingSchema: seed.staging?.schema ?? MONTHLY_TABLES.cargarLocalidades.padron.schema,
+    provinceSchema: MONTHLY_TABLES.cargarLocalidades.province.schema,
+    tables: {
+      padron: seed.staging?.table ?? MONTHLY_TABLES.cargarLocalidades.padron.table,
+      locality: MONTHLY_TABLES.cargarLocalidades.locality.table,
+      province: MONTHLY_TABLES.cargarLocalidades.province.table,
+    },
     validity: { padron: false, locality: false, province: false },
     targets: {
-      [LocalidadesDestination.BDJ_CARTO]: emptyTarget(true),
-      [LocalidadesDestination.CARTO]: emptyTarget(false),
+      [LocalidadesDestination.BDJ_CARTO]: targetDraftOf(MONTHLY_TABLES.cargarLocalidades.targetBdjCarto, true),
+      [LocalidadesDestination.CARTO]: targetDraftOf(MONTHLY_TABLES.cargarLocalidades.targetCarto, false),
     },
     options: { tolerance: DEFAULT_TOLERANCE_M, updateGeometries: true },
     confirmation: emptyConfirmation(),

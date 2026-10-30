@@ -17,6 +17,8 @@ La conexión ya se pidió al entrar al trabajo. Los pasos son **Tablas**, **Opci
 
 ### Tablas
 
+Las tablas vienen preelegidas (`bdj_carto.paispadron` como origen y `carto.padron`, `carto.province`, `carto.territorial_unit` y `carto.territorial_unit_type` en carto); puede cambiarlas.
+
 Se eligen dos esquemas y estas tablas. El **Esquema de origen** contiene la tabla de origen. El **Esquema de carto** contiene la tabla de destino, las provincias, las localidades y, si se elige, los tipos de unidad.
 
 | Campo | Qué es |
@@ -24,7 +26,7 @@ Se eligen dos esquemas y estas tablas. El **Esquema de origen** contiene la tabl
 | **Tabla de origen** | La tabla de staging de la etapa 1 (no la original `catastro_paispadron`). |
 | **Tabla de destino** | La tabla que recibe los datos: inserta los padrones nuevos y actualiza las geometrías cambiadas. Nunca borra filas ni cambia ids. |
 | **Tabla de provincias** | Para resolver la provincia. |
-| **Tabla de localidades** | Para resolver la localidad. |
+| **Tabla de localidades** | Para resolver la localidad. Debe ser `territorial_unit`: los padrones guardan ids de unidades territoriales, no de localidades catastrales. |
 | **Tabla de tipos de unidad (opcional)** | Si se indica, se usa para distinguir el tipo de localidad. |
 | **Tabla de direcciones maestras** | Solo aparece con la opción de abajo activada. Debe ser distinta de la tabla de destino. |
 

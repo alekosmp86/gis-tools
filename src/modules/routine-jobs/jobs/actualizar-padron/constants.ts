@@ -136,4 +136,3 @@ export const ACTUALIZAR_REQUIRED_COLUMNS_BY_ROLE: Record<ActualizarTableRole, re
 };
 
 export const DESTINATION_TITLE = "de destino";
-export const DEFAULT_PADRON_TARGET_TABLE = "padron";

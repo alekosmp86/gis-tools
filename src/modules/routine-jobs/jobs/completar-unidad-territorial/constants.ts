@@ -13,6 +13,3 @@ export const COMPLETAR_REQUIRED_COLUMNS_BY_ROLE: Record<CompletarTableRole, read
   [COMPLETAR_TABLE_ROLE.UNIT]: UNIT_SUBJECT_SPEC.requiredColumns,
   [COMPLETAR_TABLE_ROLE.ADDRESS_MASTER]: ADDRESS_MASTER_REQUIRED_COLUMNS,
 };
-
-export const DEFAULT_UNIT_SCHEMA = "carto";
-export const DEFAULT_UNIT_TABLE = "territorial_unit";

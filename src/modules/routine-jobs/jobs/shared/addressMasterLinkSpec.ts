@@ -17,9 +17,6 @@ export const ADDRESS_MASTER_INITIAL_COORDINATE = 0;
 
 export const ADDRESS_MASTER_TITLE = "de direcciones maestras";
 
-export const DEFAULT_ADDRESS_MASTER_SCHEMA = "carto";
-export const DEFAULT_ADDRESS_MASTER_TABLE = "addresses_master";
-
 const TERRITORIAL_UNIT_URN_PREFIX = "cgeo:territorial_unit:id:";
 const PADRON_URN_PREFIX = "cgeo:padron:id:";
 

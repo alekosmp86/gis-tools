@@ -17,11 +17,11 @@ En el paso **Tablas** se eligen tres tablas de origen:
 | **Tabla de localidades de origen** | Aporta el nombre, el departamento y la geometría de cada localidad. |
 | **Tabla de provincias** | Asocia cada departamento con su provincia. |
 
-Las tablas de origen se proponen con lo que eligió en la etapa 1.
+Las tablas vienen preelegidas: la de padrones es la que eligió en la etapa 1 y las otras dos son `bdj_carto.catastro_paislocalidades` y `carto.province`. Puede cambiarlas.
 
 ## Los destinos
 
-En **Destinos** hay dos bloques, uno al lado del otro: **Localidades en bdj_carto** y **Localidades en carto**. Cada uno tiene su esquema y su tabla, y la casilla **Incluir este destino**. Elija al menos uno. Todos los destinos incluidos reciben la misma carga, en la misma transacción: si algo falla, ninguno cambia.
+En **Destinos** hay dos bloques, uno al lado del otro: **Localidades en bdj_carto** y **Localidades en carto**. Cada uno tiene su esquema y su tabla, y la casilla **Incluir este destino**. Ambos vienen con `cadastral_locality` preelegida (en bdj_carto, incluido; en carto, no incluido). Elija al menos uno. Todos los destinos incluidos reciben la misma carga, en la misma transacción: si algo falla, ninguno cambia.
 
 ## Localidades nuevas y cambiadas
 

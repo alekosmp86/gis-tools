@@ -1,3 +1,5 @@
+// fallow-ignore-file duplicate-export
+import { MONTHLY_TABLES, type MonthlyTable } from "../config/monthlyTables";
 import { DEFAULT_LOCALITY_TYPE_NAME } from "../jobs/unidad-territorial/constants";
 import type { ClientConnection, UnidadStartRequest } from "./clientTypes";
 import { DEFAULT_TOLERANCE_TEXT, DEFAULT_UPDATE_GEOMETRIES, isToleranceValid, toleranceOf } from "./geometryOptions";
@@ -89,7 +91,7 @@ export const UNIT_GEOMETRY_OVERWRITE_WARNING =
 
 const isBlank = (value: string): boolean => value.trim() === "";
 
-const emptySlot = (): UnitSlotDraft => ({ schema: "", table: "", valid: false });
+const defaultSlot = (defaultTable: MonthlyTable): UnitSlotDraft => ({ schema: defaultTable.schema, table: defaultTable.table, valid: false });
 
 const emptyConfirmation = (): UnidadConfirmation => ({ password: "", typedTable: "" });
 
@@ -98,9 +100,12 @@ function initialState(seed: UnidadWizardSeed): UnidadTerritorialWizardState {
     step: UnidadStep.TABLES,
     connection: seed.connection,
     slots: {
-      [UnitSlot.LOCALITY]: { schema: seed.locality?.schema ?? "", table: seed.locality?.table ?? "", valid: false },
-      [UnitSlot.TYPE]: emptySlot(),
-      [UnitSlot.TARGET]: emptySlot(),
+      [UnitSlot.LOCALITY]:
+        seed.locality === undefined
+          ? defaultSlot(MONTHLY_TABLES.actualizarUnidades.locality)
+          : { schema: seed.locality.schema, table: seed.locality.table, valid: false },
+      [UnitSlot.TYPE]: defaultSlot(MONTHLY_TABLES.actualizarUnidades.type),
+      [UnitSlot.TARGET]: defaultSlot(MONTHLY_TABLES.actualizarUnidades.target),
     },
     options: {
       localityTypeName: DEFAULT_LOCALITY_TYPE_NAME,

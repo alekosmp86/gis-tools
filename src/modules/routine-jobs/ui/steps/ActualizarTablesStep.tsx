@@ -17,6 +17,7 @@ const SCHEMA_HINT =
 
 const TARGET_HINT =
   "Recibe los datos: inserta los padrones nuevos y actualiza las geometrías cambiadas. Nunca borra filas ni cambia ids. Para probar, use una tabla de prueba como padron_tmp_actualizacion.";
+const LOCALITY_HINT = "Los padrones referencian unidades territoriales: elija territorial_unit.";
 const LINK_LABEL = "Enlazar direcciones maestras de los padrones";
 const LINK_HINT =
   "Crea la dirección maestra de cada padrón que no tiene una y la enlaza con el padrón, en la misma transacción. Desactivado por defecto: solo se activa si el padrón debe tener dirección maestra.";
@@ -27,7 +28,7 @@ const SELECTORS: ReadonlyArray<{ key: ActualizarTableKey; label: string; hint?: 
   { key: ActualizarTableKey.STAGING, label: "Tabla de origen" },
   { key: ActualizarTableKey.TARGET, label: "Tabla de destino", hint: TARGET_HINT },
   { key: ActualizarTableKey.PROVINCE, label: "Tabla de provincias" },
-  { key: ActualizarTableKey.LOCALITY, label: "Tabla de localidades" },
+  { key: ActualizarTableKey.LOCALITY, label: "Tabla de localidades", hint: LOCALITY_HINT },
   { key: ActualizarTableKey.TYPE, label: "Tabla de tipos de unidad (opcional)" },
 ];
 

@@ -37,6 +37,7 @@ itself (AP-51 to AP-60, behind the option "Enlazar direcciones maestras de los p
 - MJ-13 (INVARIANT): no stage may replace, delete-and-reinsert or renumber ids in `carto.padron`, `territorial_unit` or `cadastral_locality`. Updates never put `id` in SET; inserts take ids from the table sequence; no DELETE or TRUNCATE on those tables; rows missing from the source are only reported. Reviewers check this on every diff.
 - MJ-14: Every stage report CSV (stages 2, 3, 4 and 5) lists only the rows the report lists (capped at `DETAIL_LIST_LIMIT`). When a list is cut (real count greater than the list length) the CSV ends with one marker row per cut list: Tabla = target table, Cambio = `Lista incompleta: se muestran las primeras 500 de N <items>`, other cells empty. The helper is shared (`reportCsvRows.ts`).
 - MJ-12: No inline styles; reuse the shared step checklist, report table, connection profile selector and table selector.
+- MJ-15: Table pickers of stages 1-5 prefill fixed defaults from `src/modules/routine-jobs/config/monthlyTables.ts`. A value seeded by an earlier stage always wins over the default. The picker clears a value that is not in the schema listing (no error, no loop); it never clears while the listing loads or fails.
 
 ## Stage 3: Actualizar unidades territoriales
 
@@ -51,6 +52,7 @@ User query (insert only) is extended to insert-or-update. Source rows: every row
 - UT-7: Geometry follows the target column SRID/type; sources are transformed and made valid as in stage 5.
 - UT-8: Dry run reports inserted, updated, unchanged, skipped and missing counts with samples. Real run is one transaction, then sequence repair and ANALYZE.
 - UT-9: Preflight refuses when required target columns (name, id_territorial_unit_type, id_font, id_province, geometry) are missing or the source lacks name, id_font_type, id_province, geometry.
+- UT-10: The pickers prefill the locality table from the stage 2 CARTO target (else `carto.cadastral_locality`), the type table `carto.territorial_unit_type` and the unit table `carto.territorial_unit`. The user can change them; the type name default is kept.
 
 ## Build order
 

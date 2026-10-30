@@ -32,6 +32,8 @@ Un **perfil** guarda el servidor, el puerto, la base y el usuario, para no volve
 
 ### 1. Tablas
 
+Las tablas vienen preelegidas (esquema `bdj_carto`, con `catastro_paisrural`, `catastro_paisurbano` y `paispadron`); puede cambiarlas.
+
 Escriba el **esquema** donde están las tablas. Después elija las tres tablas:
 
 - **Tabla rural**: la tabla de origen rural.

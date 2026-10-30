@@ -1,3 +1,5 @@
+// fallow-ignore-file duplicate-export
+import { MONTHLY_TABLES } from "../config/monthlyTables";
 import type { TableRole } from "../jobs/cargar-padrones/constants";
 import { TABLE_ROLE } from "../jobs/cargar-padrones/constants";
 import type { ClientConnection, JobOptions, StagingSelection, StartRequest } from "./clientTypes";
@@ -76,6 +78,11 @@ const MESSAGES = {
 const ROLES: readonly TableRole[] = [TABLE_ROLE.RURAL, TABLE_ROLE.URBANO, TABLE_ROLE.TARGET];
 
 const emptyTables = (): Record<TableRole, string> => ({ rural: "", urbano: "", target: "" });
+const defaultTables = (): Record<TableRole, string> => ({
+  rural: MONTHLY_TABLES.cargarPadrones.rural,
+  urbano: MONTHLY_TABLES.cargarPadrones.urbano,
+  target: MONTHLY_TABLES.cargarPadrones.target,
+});
 const noTableValidity = (): Record<TableRole, boolean> => ({ rural: false, urbano: false, target: false });
 const emptyConfirmation = (): WizardConfirmation => ({ password: "", targetLabel: "" });
 
@@ -86,8 +93,8 @@ export function initialWizardState(seed: WizardSeed = {}): WizardState {
   return {
     step: WizardStep.CONNECTION,
     connection: { host: "", port: DEFAULT_PORT, db_name: "", user: "", password: "" },
-    schema: "",
-    tables: emptyTables(),
+    schema: MONTHLY_TABLES.cargarPadrones.schema,
+    tables: defaultTables(),
     tableValidity: noTableValidity(),
     options: { repair: true, clearMode: "delete", resetSequences: true },
     confirmation: { password: "", targetLabel: "" },

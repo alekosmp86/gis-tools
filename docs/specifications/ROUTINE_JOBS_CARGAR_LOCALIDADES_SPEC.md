@@ -283,6 +283,7 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 - CL-52: Dashboard: the routine-jobs job list shows "Cargar localidades" next to the other two jobs and opens its wizard. The module page, the
   home card and the manifest need no new entry point. `module.routes.json` declares the two endpoints and the five catalog roles; the generated
   routes are regenerated with `npm run modules:routes`, never hand-edited; `npm run modules:routes:check` passes.
+- CL-54: The pickers prefill from `config/monthlyTables.ts`: padron = stage 1 staging table (else `bdj_carto.paispadron`), locality source `bdj_carto.catastro_paislocalidades`, province `carto.province`, targets `bdj_carto.cadastral_locality` (included) and `carto.cadastral_locality` (prefilled, not included). A value seeded by stage 1 wins; a missing default is cleared without an error.
 
 ## Out of scope
 
@@ -313,6 +314,6 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 
 ## Acceptance criteria count
 
-CL-1 to CL-53 (53 criteria). CL-41 is the golden source check; CL-7 to CL-10 are the preflight checks; CL-53 is the unmatched padron report.
+CL-1 to CL-54 (54 criteria). CL-41 is the golden source check; CL-7 to CL-10 are the preflight checks; CL-53 is the unmatched padron report.
 This round builds the backend and HTTP only (CL-1 to CL-41, CL-34 and CL-35). CL-42 to CL-52 (wizard, run store, report view, dashboard
 entry) are for the next round.

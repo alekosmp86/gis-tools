@@ -47,7 +47,7 @@ describe("buildWizardSteps", () => {
 
 describe("excludedFor", () => {
   it("AC-32: should exclude nothing when no table is chosen", () => {
-    expect(excludedFor(initialWizardState())).toEqual({ rural: [], urbano: [], target: [] });
+    expect(excludedFor({ ...initialWizardState(), tables: { rural: "", urbano: "", target: "" } })).toEqual({ rural: [], urbano: [], target: [] });
   });
 
   it("AC-32: should exclude, for each role, the tables chosen for the other two roles", () => {

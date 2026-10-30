@@ -23,6 +23,8 @@ La conexión ya se pidió al entrar al trabajo. Los pasos son **Tablas**, **Opci
 
 ### Tablas
 
+Las tablas vienen preelegidas: la de localidades es la que eligió en la etapa 2 o, si no hubo, `carto.cadastral_locality`; la de tipos es `carto.territorial_unit_type` y la de unidades es `carto.territorial_unit`. Puede cambiarlas.
+
 - **Localidades de origen**: la tabla de localidades catastrales.
 - **Tipos de unidad**: la tabla que asigna el tipo de cada unidad.
 - **Unidades territoriales (destino)**: donde se escriben las unidades.

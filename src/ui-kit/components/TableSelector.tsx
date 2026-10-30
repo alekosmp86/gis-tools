@@ -73,10 +73,10 @@ export const TableSelector: React.FC<TableSelectorProps> = ({
   const selectId = useId();
   const [listAnswer, setListAnswer] = useState<ListAnswer | null>(null);
   const [columnAnswer, setColumnAnswer] = useState<ColumnAnswer | null>(null);
-  const handlers = useRef({ loadTables, checkColumns, onValidityChange, onLoadError });
+  const handlers = useRef({ loadTables, checkColumns, onValidityChange, onLoadError, onChange });
 
   useEffect(() => {
-    handlers.current = { loadTables, checkColumns, onValidityChange, onLoadError };
+    handlers.current = { loadTables, checkColumns, onValidityChange, onLoadError, onChange };
   });
 
   useEffect(() => {
@@ -121,6 +121,16 @@ export const TableSelector: React.FC<TableSelectorProps> = ({
   }, [value]);
 
   const listState = listStateOf(schema, listAnswer);
+  const isValueUnlisted =
+    listState.phase === "ready" &&
+    listState.listing !== undefined &&
+    value !== "" &&
+    !listState.listing.tables.some((table) => table.name === value);
+
+  useEffect(() => {
+    if (isValueUnlisted) handlers.current.onChange("");
+  }, [isValueUnlisted, value]);
+
   const listView = describeListing(listState, excludedTables);
   const options = withCurrentValue(listView.options, value, excludedTables);
   const isListBlocking = listState.phase === "error" || listState.phase === "ready";
