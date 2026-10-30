@@ -1,12 +1,16 @@
 import { DETAIL_LIST_LIMIT } from "../../shared/limits";
 import type { UnitOptions, UnitSourceTotals, UnitTargetReport } from "../types";
 import { plural } from "../../shared/text";
+import { addressMasterCountWarnings } from "../../shared/addressMasterLinkPass";
+import { UNIT_SUBJECT_SPEC } from "../../shared/addressMasterLinkSpec";
+import type { AddressMasterReport } from "../../shared/addressMasterLinkReport";
 
 export interface UnitWarningInput {
   dryRun: boolean;
   options: UnitOptions;
   totals: UnitSourceTotals;
   target: UnitTargetReport;
+  addressMaster?: AddressMasterReport;
   commitError?: string;
 }
 
@@ -41,11 +45,16 @@ function targetWarnings(target: UnitTargetReport, updateGeometries: boolean): st
   return warnings;
 }
 
-export function buildUnitWarnings({ dryRun, options, totals, target, commitError }: UnitWarningInput): string[] {
+function addressMasterWarningsOf(target: UnitTargetReport, addressMaster: AddressMasterReport | undefined): string[] {
+  return addressMaster === undefined ? [] : addressMasterCountWarnings(UNIT_SUBJECT_SPEC, target.table, addressMaster.counts);
+}
+
+export function buildUnitWarnings({ dryRun, options, totals, target, addressMaster, commitError }: UnitWarningInput): string[] {
   return [
     ...(dryRun ? [DRY_RUN_WARNING] : []),
     ...sourceWarnings(totals),
     ...targetWarnings(target, options.updateGeometries),
+    ...addressMasterWarningsOf(target, addressMaster),
     ...(commitError === undefined ? [] : [COMMIT_UNKNOWN_WARNING]),
   ];
 }

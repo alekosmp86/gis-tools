@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  addressMasterCountsOf as completarCountsOf,
-  toAddressMasterApply as toCompletarApplyOutcome,
-  toAddressMasterClassification as toCompletarClassification,
+  addressMasterCountsOf,
+  toAddressMasterApply,
+  toAddressMasterClassification,
   toRemainingCount,
+  type AddressMasterLinked,
 } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkPass";
-import { linkedUnitOf } from "./completarFixtures";
+
+const LINKED_UNIT: AddressMasterLinked = { id: 101, name: "Unidad uno", provinceId: "02", addressMasterId: 501, created: true };
 
 const classificationRow = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   without_address_master: 5,
@@ -16,35 +18,35 @@ const classificationRow = (overrides: Record<string, unknown> = {}): Record<stri
   ...overrides,
 });
 
-describe("toCompletarClassification", () => {
+describe("toAddressMasterClassification", () => {
   it("should map the classification counters to the report counts", () => {
-    const classification = toCompletarClassification(classificationRow());
+    const classification = toAddressMasterClassification(classificationRow());
 
     expect(classification.counts).toEqual({ withoutAddressMaster: 5, created: 2, alreadyHadRecord: 2, ambiguous: 1 });
   });
 
   it("should map each ambiguous sample to its unit key and record count", () => {
-    const classification = toCompletarClassification(classificationRow());
+    const classification = toAddressMasterClassification(classificationRow());
 
     expect(classification.ambiguousSamples).toEqual([{ id: 7, name: "Ambigua", provinceId: "09", records: 2 }]);
   });
 
   it("should read counters sent as numeric text as numbers", () => {
-    const classification = toCompletarClassification(classificationRow({ to_create: "3", ambiguous: "0" }));
+    const classification = toAddressMasterClassification(classificationRow({ to_create: "3", ambiguous: "0" }));
 
     expect(classification.counts.created).toBe(3);
     expect(classification.counts.ambiguous).toBe(0);
   });
 
   it("should map a missing row to zero counts and no samples", () => {
-    const classification = toCompletarClassification({});
+    const classification = toAddressMasterClassification({});
 
     expect(classification.counts).toEqual({ withoutAddressMaster: 0, created: 0, alreadyHadRecord: 0, ambiguous: 0 });
     expect(classification.ambiguousSamples).toEqual([]);
   });
 
   it("should keep a null name and province as null and never invent them", () => {
-    const classification = toCompletarClassification(
+    const classification = toAddressMasterClassification(
       classificationRow({ ambiguous_samples: [{ id: 3, name: null, provinceId: null, records: 3 }] }),
     );
 
@@ -52,13 +54,13 @@ describe("toCompletarClassification", () => {
   });
 
   it("should map a non-array sample value to an empty sample list", () => {
-    expect(toCompletarClassification(classificationRow({ ambiguous_samples: null })).ambiguousSamples).toEqual([]);
+    expect(toAddressMasterClassification(classificationRow({ ambiguous_samples: null })).ambiguousSamples).toEqual([]);
   });
 });
 
-describe("toCompletarApplyOutcome", () => {
+describe("toAddressMasterApply", () => {
   it("should map the created and linked totals and the linked list", () => {
-    const outcome = toCompletarApplyOutcome({
+    const outcome = toAddressMasterApply({
       created: 1,
       linked: 2,
       linked_list: [
@@ -78,7 +80,7 @@ describe("toCompletarApplyOutcome", () => {
   });
 
   it("should flag a unit as created only when the server says true", () => {
-    const outcome = toCompletarApplyOutcome({
+    const outcome = toAddressMasterApply({
       created: 0,
       linked: 2,
       linked_list: [
@@ -91,7 +93,7 @@ describe("toCompletarApplyOutcome", () => {
   });
 
   it("should map an empty row to zero totals and an empty list", () => {
-    expect(toCompletarApplyOutcome({})).toEqual({ created: 0, linked: 0, linkedList: [] });
+    expect(toAddressMasterApply({})).toEqual({ created: 0, linked: 0, linkedList: [] });
   });
 });
 
@@ -105,21 +107,21 @@ describe("toRemainingCount", () => {
   });
 });
 
-describe("completarCountsOf", () => {
+describe("addressMasterCountsOf", () => {
   it("should take the created and linked totals from the apply, not from the classification", () => {
-    const counts = completarCountsOf(
+    const counts = addressMasterCountsOf(
       {
         counts: { withoutAddressMaster: 5, created: 2, alreadyHadRecord: 2, ambiguous: 1 },
         ambiguousSamples: [],
       },
-      { created: 2, linked: 4, linkedList: [linkedUnitOf()] },
+      { created: 2, linked: 4, linkedList: [LINKED_UNIT] },
     );
 
     expect(counts).toEqual({ withoutAddressMaster: 5, created: 2, linked: 4, alreadyHadRecord: 2, ambiguous: 1 });
   });
 
   it("should keep the classification counts that the apply does not report", () => {
-    const counts = completarCountsOf(
+    const counts = addressMasterCountsOf(
       {
         counts: { withoutAddressMaster: 3, created: 0, alreadyHadRecord: 3, ambiguous: 0 },
         ambiguousSamples: [],

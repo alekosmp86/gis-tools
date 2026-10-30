@@ -1,9 +1,9 @@
 ---
-title: "Etapa 5: Actualizar padrones"
-order: 6
+title: "Etapa 4: Actualizar padrones"
+order: 5
 ---
 
-# Etapa 5: Actualizar padrones
+# Etapa 4: Actualizar padrones
 
 Esta etapa toma cada padrón de la tabla de origen (la de la etapa 1), lo resuelve contra las provincias y localidades de carto y lo lleva a la **tabla de destino** que usted elige:
 
@@ -46,7 +46,7 @@ Es una casilla del paso **Tablas**, desactivada por defecto. Con ella activada, 
 - Si hay dos o más, el padrón es **ambiguo**: no se crea ni se enlaza nada, y el informe lo lista.
 - El id del padrón y su geometría nunca cambian. Todo ocurre en la misma transacción que la carga: si algo no coincide, se revierte todo.
 
-**Por qué viene desactivada**: crear direcciones maestras es una escritura en otra tabla, y no todas las cargas la necesitan. Actívela cuando los padrones de esta carga deben tener su dirección maestra; si no, la etapa 4 puede hacerlo aparte.
+**Por qué viene desactivada**: crear direcciones maestras es una escritura en otra tabla, y no todas las cargas la necesitan. Actívela cuando los padrones de esta carga deben tener su dirección maestra.
 
 **Advertencia**: con esta opción se crean direcciones maestras reales para los ids de la tabla de destino. Si la tabla de destino no se llama `padron`, **Revisar** muestra una advertencia destacada: antes de cargar, confirme que esa es la tabla que quiere enlazar.
 

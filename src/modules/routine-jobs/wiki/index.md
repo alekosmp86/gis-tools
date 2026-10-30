@@ -16,12 +16,11 @@ Se abre desde el portal, en la tarjeta **Trabajos de rutina**, o desde el menú.
 | Antes | Cargar los shapefiles `pais*` en la base | Herramienta de sincronización de shapefiles (**fuera** de este trabajo) |
 | Etapa 1 | [Cargar padrones](cargar-padrones.md) | Este trabajo |
 | Etapa 2 | [Cargar localidades](cargar-localidades.md) | Este trabajo |
-| Etapa 3 | [Actualizar unidades territoriales](unidad-territorial.md) | Este trabajo |
-| Etapa 4 | [Completar unidades territoriales](completar-unidad-territorial.md) | Este trabajo |
-| Etapa 5 | [Actualizar padrones](actualizar-padron.md) | Este trabajo |
-| Después | Correr la etapa 5 contra una tabla de prueba y, cuando el análisis esté conforme, contra `carto.padron`. Con la opción de direcciones maestras, la etapa 5 también enlaza los padrones nuevos | Este trabajo |
+| Etapa 3 | [Actualizar unidades territoriales](unidad-territorial.md), con la opción de direcciones maestras | Este trabajo |
+| Etapa 4 | [Actualizar padrones](actualizar-padron.md) | Este trabajo |
+| Después | Correr la etapa 4 contra una tabla de prueba y, cuando el análisis esté conforme, contra `carto.padron`. Con la opción de direcciones maestras, la etapa 4 también enlaza los padrones nuevos | Este trabajo |
 
-La etapa 5 puede correrse primero contra una tabla de prueba y después contra `carto.padron`, porque nunca borra filas ni cambia ids. Con la opción **Enlazar direcciones maestras de los padrones** activada, la etapa 5 crea y enlaza la dirección maestra de cada padrón que no la tiene, así que no hace falta volver a correr la etapa 4 después de la etapa 5. No hay una etapa aparte para aplicar los padrones.
+La etapa 4 puede correrse primero contra una tabla de prueba y después contra `carto.padron`, porque nunca borra filas ni cambia ids. Con la opción **Enlazar direcciones maestras de los padrones** activada, la etapa 4 crea y enlaza la dirección maestra de cada padrón que no la tiene, y la etapa 3 hace lo mismo con cada unidad territorial, así que no hace falta correr ninguna etapa aparte para enlazarlas. La etapa **Completar unidades territoriales** ya no existe: su trabajo lo hace la opción de direcciones maestras de la etapa 3. No hay una etapa aparte para aplicar los padrones.
 
 Las etapas no se encadenan solas: usted abre cada una, revisa su informe y recién entonces pasa a la siguiente.
 
@@ -42,7 +41,7 @@ Todas las etapas tienen los mismos dos botones en el paso **Revisar**:
 | Botón | Qué hace |
 |---|---|
 | **Analizar sin cargar** | Hace todo el trabajo, cuenta y clasifica, y después revierte. No cambia ninguna tabla. Pide la contraseña. |
-| Botón de carga (**Cargar ahora**, **Cargar localidades**, **Actualizar unidades territoriales**, **Completar unidades territoriales** o **Actualizar padrones**, según la etapa) | Escribe los datos. Pide escribir de nuevo la contraseña y el nombre de la tabla destino. |
+| Botón de carga (**Cargar ahora**, **Cargar localidades**, **Actualizar unidades territoriales** o **Actualizar padrones**, según la etapa) | Escribe los datos. Pide escribir de nuevo la contraseña y el nombre de la tabla destino. |
 
 Conviene hacer siempre el análisis antes de la carga real: muestra qué se insertaría y qué cambiaría, sin tocar nada.
 
@@ -53,7 +52,7 @@ Ninguna etapa reemplaza, borra ni renumera los ids de `carto.padron`, de las uni
 - Las filas nuevas toman su id de la secuencia de la tabla.
 - Las actualizaciones nunca cambian el id.
 - Las filas que existen en el destino pero no en el origen **solo se informan**: nunca se borran.
-- La etapa 5 inserta padrones nuevos y actualiza solo la geometría de los existentes.
+- La etapa 4 inserta padrones nuevos y actualiza solo la geometría de los existentes.
 
 Esto importa porque otras tablas y las URN dependen de esos ids.
 

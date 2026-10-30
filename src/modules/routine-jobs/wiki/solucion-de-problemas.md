@@ -1,6 +1,6 @@
 ---
 title: "Solución de problemas"
-order: 8
+order: 7
 ---
 
 # Solución de problemas
@@ -21,13 +21,12 @@ El usuario de la base no puede ajustar la secuencia de la tabla destino. Pida el
 
 ## Ya hay una carga en curso
 
-Cada etapa bloquea su tabla destino mientras corre (la etapa 4 bloquea sus dos tablas: unidades y direcciones maestras; la etapa 5 bloquea la tabla de destino y, si enlaza direcciones maestras, también la tabla de direcciones maestras). Si la pantalla dice:
+Cada etapa bloquea su tabla destino mientras corre (la etapa 3 bloquea la tabla de unidades territoriales y, si enlaza direcciones maestras, también la tabla de direcciones maestras; la etapa 4 bloquea la tabla de padrones y, si enlaza direcciones maestras, también la tabla de direcciones maestras). Si la pantalla dice:
 
 - Ya hay una carga en curso para esta tabla. (etapa 1)
 - Ya hay una carga de localidades en curso para esta tabla. (etapa 2)
 - Ya hay una actualización de unidades territoriales en curso para esta tabla. (etapa 3)
-- Ya hay un proceso de direcciones maestras de unidades territoriales en curso para estas tablas. (etapa 4)
-- Ya hay una actualización en curso para esta tabla. (etapa 5)
+- Ya hay una actualización en curso para esta tabla. (etapa 4)
 
 hay otra ejecución sobre la misma tabla, tal vez de otra persona. Espere a que termine y vuelva a intentar. Si recargó la página, el avance deja de verse pero la carga sigue en el servidor.
 
@@ -40,18 +39,18 @@ Antes de confirmar, cada etapa compara lo que escribió con lo que el análisis 
 - Las geometrías actualizadas (...) no coinciden con las esperadas (...) (etapa 2)
 - Las unidades insertadas (...) no coinciden con las nuevas del análisis (...) (etapa 3)
 - Las unidades actualizadas (...) no coinciden con las esperadas (...) (etapa 3)
-- Los registros de dirección maestra creados (...) no coinciden con los esperados (...) (etapa 4)
-- Las unidades enlazadas (...) no coinciden con las esperadas (...) (etapa 4)
-- Las unidades sin dirección maestra después del enlace (...) no coinciden con las ambiguas (...) (etapa 4)
-- Los padrones insertados (...) no coinciden con los nuevos del análisis (...) (etapa 5)
-- Las geometrías actualizadas (...) no coinciden con las esperadas (...) (etapa 5)
-- Los registros de dirección maestra creados para padrones (...) no coinciden con los esperados (...) (etapa 5, con la opción de direcciones maestras)
-- Los padrones enlazados (...) no coinciden con los esperados (...) (etapa 5, con la opción de direcciones maestras)
-- Los padrones sin dirección maestra después del enlace (...) no coinciden con los ambiguos (...) (etapa 5, con la opción de direcciones maestras)
+- Los registros de dirección maestra creados (...) no coinciden con los esperados (...) (etapa 3, con la opción de direcciones maestras)
+- Las unidades enlazadas (...) no coinciden con las esperadas (...) (etapa 3, con la opción de direcciones maestras)
+- Las unidades sin dirección maestra después del enlace (...) no coinciden con las ambiguas (...) (etapa 3, con la opción de direcciones maestras)
+- Los padrones insertados (...) no coinciden con los nuevos del análisis (...) (etapa 4)
+- Las geometrías actualizadas (...) no coinciden con las esperadas (...) (etapa 4)
+- Los registros de dirección maestra creados para padrones (...) no coinciden con los esperados (...) (etapa 4, con la opción de direcciones maestras)
+- Los padrones enlazados (...) no coinciden con los esperados (...) (etapa 4, con la opción de direcciones maestras)
+- Los padrones sin dirección maestra después del enlace (...) no coinciden con los ambiguos (...) (etapa 4, con la opción de direcciones maestras)
 
 No quedó nada a medias. Alguien puede haber modificado las tablas mientras corría la carga: espere unos minutos y repita **Analizar sin cargar** y la carga real. Si se repite, avise al responsable de la herramienta con el mensaje completo.
 
-## Mensajes de la etapa 5 (Actualizar padrones)
+## Mensajes de la etapa 4 (Actualizar padrones)
 
 - **Tolerancia**: "La tolerancia debe ser un número mayor o igual que 0." Corrija el valor en **Opciones**; Siguiente se bloquea hasta entonces.
 - **Tipo de localidad**: "Indique el tipo de localidad o quite la tabla de tipos de unidad." Escriba el tipo o quite la tabla de tipos.
@@ -65,11 +64,11 @@ No quedó nada a medias. Alguien puede haber modificado las tablas mientras corr
 
 Esta etapa no borra filas. Si una tabla de destino tiene disparadores o reglas, el análisis se rechaza y el mensaje los nombra: quítelos antes de cargar.
 
-## Error de serialización (etapa 4)
+## Error de serialización
 
 > could not serialize access due to concurrent update
 
-Otra sesión (por ejemplo la etapa 3) modificó las mismas filas mientras corría la etapa 4. La transacción se revirtió y no quedó nada a medias. Espere a que la otra ejecución termine y repita. Cada intento, incluso el análisis, puede dejar saltos en los ids de la secuencia de direcciones maestras.
+Otra sesión (por ejemplo, otra carga sobre las mismas tablas) modificó las mismas filas mientras corría la etapa. La transacción se revirtió y no quedó nada a medias. Espere a que la otra ejecución termine y repita. Cada intento, incluso el análisis, puede dejar saltos en los ids de la secuencia de direcciones maestras.
 
 ## No se pudo confirmar el COMMIT
 
@@ -77,7 +76,7 @@ Otra sesión (por ejemplo la etapa 3) modificó las mismas filas mientras corrí
 
 Junto con el banner de resultado incierto ("Resultado incierto: ..."), significa que la base no confirmó la transacción: la carga pudo aplicarse o no. **No vuelva a cargar todavía.**
 
-1. Mire la tabla destino de la etapa (en la etapa 2, las dos tablas de localidades; en la etapa 4, la de unidades territoriales y la de direcciones maestras).
+1. Mire la tabla destino de la etapa (en la etapa 2, las dos tablas de localidades; en la etapa 3 con el enlace, la de unidades territoriales y la de direcciones maestras; en la etapa 4 con el enlace, la de padrones y la de direcciones maestras).
 2. Compare con el informe: ¿están las filas nuevas y las geometrías cambiadas?
 3. Si la carga está completa, no repita. Si la tabla quedó sin cambios, puede volver a cargar.
 

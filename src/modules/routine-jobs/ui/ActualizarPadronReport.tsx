@@ -16,7 +16,8 @@ import {
   SkippedReasonsTable,
   TimingList,
 } from "./ActualizarReportSections";
-import { ActualizarAddressMasterSection } from "./ActualizarAddressMasterSection";
+import { AddressMasterSection } from "./AddressMasterSection";
+import { PADRON_ADDRESS_MASTER_TEXTS } from "./addressMasterSubjectTexts";
 import { ActualizarBackupSection } from "./ActualizarBackupSection";
 import { ActualizarTargetSection } from "./ActualizarTargetSection";
 import { RefreshSuggestion } from "./RefreshSuggestion";
@@ -134,7 +135,7 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
       <KpiCards view={view} />
       <SkippedReasonsTable view={view} />
       <ActualizarTargetSection target={view.target} />
-      {view.addressMaster !== null && <ActualizarAddressMasterSection view={view.addressMaster} />}
+      {view.addressMaster !== null && <AddressMasterSection view={view.addressMaster} texts={PADRON_ADDRESS_MASTER_TEXTS} />}
       <div className={sharedStyles.columns}>
         <GroupTopList title={SECTION_TITLES.department} split={view.byDepartmentSplit} />
         <GroupTopList title={SECTION_TITLES.locality} split={view.byLocalitySplit} />

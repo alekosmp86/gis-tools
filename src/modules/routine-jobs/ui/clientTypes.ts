@@ -2,8 +2,7 @@ import type { LoadOptions } from "../jobs/cargar-padrones/domain/loadSql";
 import type { CargarPadronesResult } from "../jobs/cargar-padrones/types";
 import type { ActualizarPadronResult } from "../jobs/actualizar-padron/types";
 import type { CargarLocalidadesResult, LocalityOptions, LocalityTableRef } from "../jobs/cargar-localidades/types";
-import type { UnitOptions, UnitResult } from "../jobs/unidad-territorial/types";
-import type { CompletarResult } from "../jobs/completar-unidad-territorial/types";
+import type { UnitAddressMasterTable, UnitResult } from "../jobs/unidad-territorial/types";
 
 export type JobOptions = LoadOptions;
 
@@ -89,7 +88,12 @@ export interface LocalidadesStartRequest {
 
 export type LocalidadesJobStatusView = JobStatusBase<CargarLocalidadesResult>;
 
-export type UnitClientOptions = UnitOptions;
+export interface UnitClientOptions {
+  localityTypeName: string;
+  tolerance: number;
+  updateGeometries: boolean;
+  linkAddressMaster: boolean;
+}
 
 export interface UnidadStartRequest {
   connection: ClientConnection;
@@ -99,21 +103,10 @@ export interface UnidadStartRequest {
   typeTable: string;
   targetSchema: string;
   targetTable: string;
+  addressMasterTable?: UnitAddressMasterTable;
   options: UnitClientOptions;
   dryRun: boolean;
   confirm: boolean;
 }
 
 export type UnidadJobStatusView = JobStatusBase<UnitResult>;
-
-export interface CompletarStartRequest {
-  connection: ClientConnection;
-  unitSchema: string;
-  unitTable: string;
-  addressMasterSchema: string;
-  addressMasterTable: string;
-  dryRun: boolean;
-  confirm: boolean;
-}
-
-export type CompletarJobStatusView = JobStatusBase<CompletarResult>;

@@ -21,6 +21,7 @@ export const UnitSlot = {
   LOCALITY: "locality",
   TYPE: "type",
   TARGET: "target",
+  ADDRESS_MASTER: "addressMaster",
 } as const;
 
 export type UnitSlot = (typeof UnitSlot)[keyof typeof UnitSlot];
@@ -35,6 +36,7 @@ export interface UnidadOptionsDraft {
   localityTypeName: string;
   tolerance: string;
   updateGeometries: boolean;
+  linkAddressMaster: boolean;
 }
 
 export interface UnidadConfirmation {
@@ -75,11 +77,16 @@ const STEP_ORDER: readonly UnidadStep[] = [
   UnidadStep.REPORT,
 ];
 
-const SLOT_ORDER: readonly UnitSlot[] = [UnitSlot.LOCALITY, UnitSlot.TYPE, UnitSlot.TARGET];
+const REQUIRED_SLOT_ORDER: readonly UnitSlot[] = [UnitSlot.LOCALITY, UnitSlot.TYPE, UnitSlot.TARGET];
+const SLOT_ORDER: readonly UnitSlot[] = [...REQUIRED_SLOT_ORDER, UnitSlot.ADDRESS_MASTER];
+
+const DEFAULT_LINK_ADDRESS_MASTER = true;
 
 const MESSAGES = {
   schema: "Indique el esquema de la tabla de localidades, la de tipos y la de unidades territoriales.",
+  addressMasterSchema: "Indique el esquema de la tabla de direcciones maestras.",
   table: "Elija la tabla de localidades, la de tipos y la de unidades territoriales.",
+  addressMasterTable: "Elija la tabla de direcciones maestras o desactive el enlace de direcciones maestras.",
   distinct: "Las tablas elegidas deben ser distintas: no repita el mismo esquema y nombre.",
   invalid: "Alguna tabla tiene columnas faltantes o ambiguas.",
   localityTypeName: "Indique el nombre del tipo de localidad.",
@@ -95,6 +102,11 @@ const defaultSlot = (defaultTable: MonthlyTable): UnitSlotDraft => ({ schema: de
 
 const emptyConfirmation = (): UnidadConfirmation => ({ password: "", typedTable: "" });
 
+const clearedTypedTable = (state: UnidadTerritorialWizardState): UnidadTerritorialWizardState => ({
+  ...state,
+  confirmation: { ...state.confirmation, typedTable: "" },
+});
+
 function initialState(seed: UnidadWizardSeed): UnidadTerritorialWizardState {
   return {
     step: UnidadStep.TABLES,
@@ -106,11 +118,13 @@ function initialState(seed: UnidadWizardSeed): UnidadTerritorialWizardState {
           : { schema: seed.locality.schema, table: seed.locality.table, valid: false },
       [UnitSlot.TYPE]: defaultSlot(MONTHLY_TABLES.actualizarUnidades.type),
       [UnitSlot.TARGET]: defaultSlot(MONTHLY_TABLES.actualizarUnidades.target),
+      [UnitSlot.ADDRESS_MASTER]: defaultSlot(MONTHLY_TABLES.actualizarUnidades.addressMaster),
     },
     options: {
       localityTypeName: DEFAULT_LOCALITY_TYPE_NAME,
       tolerance: DEFAULT_TOLERANCE_TEXT,
       updateGeometries: DEFAULT_UPDATE_GEOMETRIES,
+      linkAddressMaster: DEFAULT_LINK_ADDRESS_MASTER,
     },
     confirmation: emptyConfirmation(),
   };
@@ -122,6 +136,10 @@ export function initialUnidadWizardStateFor(snapshot: UnidadRunSnapshot, seed: U
   return snapshot.phase === RunPhase.IDLE ? seeded : { ...seeded, step: UnidadStep.RUN };
 }
 
+/** The slots in play: the address master slot only while its link option is on. */
+export const activeSlotsOf = (state: UnidadTerritorialWizardState): readonly UnitSlot[] =>
+  state.options.linkAddressMaster ? SLOT_ORDER : REQUIRED_SLOT_ORDER;
+
 /** Names already chosen in the same schema by another slot: a table cannot repeat them. */
 export function excludedUnitTablesOf(state: UnidadTerritorialWizardState): Record<UnitSlot, string[]> {
   const excludedAt = (ownKey: UnitSlot): string[] => {
@@ -131,17 +149,18 @@ export function excludedUnitTablesOf(state: UnidadTerritorialWizardState): Recor
       .filter((name) => name !== "");
     return [...new Set(names)];
   };
-  return {
-    [UnitSlot.LOCALITY]: excludedAt(UnitSlot.LOCALITY),
-    [UnitSlot.TYPE]: excludedAt(UnitSlot.TYPE),
-    [UnitSlot.TARGET]: excludedAt(UnitSlot.TARGET),
-  };
+  return Object.fromEntries(SLOT_ORDER.map((key) => [key, excludedAt(key)])) as Record<UnitSlot, string[]>;
 }
 
 function tablesBlockingReason(state: UnidadTerritorialWizardState): string | null {
-  const slots = SLOT_ORDER.map((key) => state.slots[key]);
-  if (slots.some((slot) => isBlank(slot.schema))) return MESSAGES.schema;
-  if (slots.some((slot) => isBlank(slot.table))) return MESSAGES.table;
+  const required = REQUIRED_SLOT_ORDER.map((key) => state.slots[key]);
+  const addressMaster = state.slots[UnitSlot.ADDRESS_MASTER];
+  const linked = state.options.linkAddressMaster;
+  if (required.some((slot) => isBlank(slot.schema))) return MESSAGES.schema;
+  if (linked && isBlank(addressMaster.schema)) return MESSAGES.addressMasterSchema;
+  if (required.some((slot) => isBlank(slot.table))) return MESSAGES.table;
+  if (linked && isBlank(addressMaster.table)) return MESSAGES.addressMasterTable;
+  const slots = activeSlotsOf(state).map((key) => state.slots[key]);
   const names = slots.map((slot) => `${slot.schema.trim()}.${slot.table.trim()}`);
   if (new Set(names).size !== names.length) return MESSAGES.distinct;
   if (slots.some((slot) => !slot.valid)) return MESSAGES.invalid;
@@ -177,8 +196,8 @@ const isPasswordTyped = (state: UnidadTerritorialWizardState): boolean =>
   state.confirmation.password !== "" && state.confirmation.password === state.connection.password;
 
 const isRealRunConfirmed = (state: UnidadTerritorialWizardState): boolean => {
-  const target = state.slots[UnitSlot.TARGET].table.trim();
-  return isPasswordTyped(state) && !isBlank(target) && state.confirmation.typedTable.trim() === target;
+  const targetTable = state.slots[UnitSlot.TARGET].table.trim();
+  return targetTable !== "" && state.confirmation.typedTable === targetTable && isPasswordTyped(state);
 };
 
 export function canRunNow(state: UnidadTerritorialWizardState, flags: { dryRun: boolean }): boolean {
@@ -186,11 +205,17 @@ export function canRunNow(state: UnidadTerritorialWizardState, flags: { dryRun: 
   return flags.dryRun ? isPasswordTyped(state) : isRealRunConfirmed(state);
 }
 
+function withAddressMasterOf(request: UnidadStartRequest, state: UnidadTerritorialWizardState): UnidadStartRequest {
+  if (!state.options.linkAddressMaster) return request;
+  const addressMaster = state.slots[UnitSlot.ADDRESS_MASTER];
+  return { ...request, addressMasterTable: { schema: addressMaster.schema.trim(), table: addressMaster.table.trim() } };
+}
+
 export function toUnidadStartRequest(state: UnidadTerritorialWizardState, flags: { dryRun: boolean }): UnidadStartRequest {
   const locality = state.slots[UnitSlot.LOCALITY];
   const type = state.slots[UnitSlot.TYPE];
   const target = state.slots[UnitSlot.TARGET];
-  return {
+  const request: UnidadStartRequest = {
     connection: trimConnection(state.connection),
     localitySchema: locality.schema.trim(),
     localityTable: locality.table.trim(),
@@ -202,10 +227,12 @@ export function toUnidadStartRequest(state: UnidadTerritorialWizardState, flags:
       localityTypeName: state.options.localityTypeName.trim(),
       tolerance: toleranceOf(state.options.tolerance),
       updateGeometries: state.options.updateGeometries,
+      linkAddressMaster: state.options.linkAddressMaster,
     },
     dryRun: flags.dryRun,
     confirm: !flags.dryRun,
   };
+  return withAddressMasterOf(request, state);
 }
 
 const indexOfStep = (step: UnidadStep): number => STEP_ORDER.indexOf(step);
@@ -232,12 +259,10 @@ function moveTo(state: UnidadTerritorialWizardState, step: UnidadStep): UnidadTe
 
 const stepAfter = (step: UnidadStep, delta: number): UnidadStep => STEP_ORDER[indexOfStep(step) + delta] ?? step;
 
+/** Only the target's typed name is confirmed: changing the target's schema or table asks for it again. */
 function slotSchemaReducer(state: UnidadTerritorialWizardState, key: UnitSlot, schema: string): UnidadTerritorialWizardState {
-  return {
-    ...state,
-    slots: { ...state.slots, [key]: { schema, table: "", valid: false } },
-    confirmation: { ...state.confirmation, typedTable: "" },
-  };
+  const next = { ...state, slots: { ...state.slots, [key]: { schema, table: "", valid: false } } };
+  return key === UnitSlot.TARGET ? clearedTypedTable(next) : next;
 }
 
 function slotTableReducer(
@@ -248,7 +273,28 @@ function slotTableReducer(
 ): UnidadTerritorialWizardState {
   const changed = table !== state.slots[key].table;
   const next = { ...state, slots: { ...state.slots, [key]: { ...state.slots[key], table, valid } } };
-  return changed ? { ...next, confirmation: { ...next.confirmation, typedTable: "" } } : next;
+  return changed && key === UnitSlot.TARGET ? clearedTypedTable(next) : next;
+}
+
+/** Turning the link on suggests the default address master table; turning it off drops that table, so a table nobody reads is never sent. */
+function withAddressMasterSlotFor(state: UnidadTerritorialWizardState, linkAddressMaster: boolean): UnidadTerritorialWizardState {
+  const slot = state.slots[UnitSlot.ADDRESS_MASTER];
+  const table = linkAddressMaster
+    ? (isBlank(slot.table) ? MONTHLY_TABLES.actualizarUnidades.addressMaster.table : slot.table)
+    : "";
+  return { ...state, slots: { ...state.slots, [UnitSlot.ADDRESS_MASTER]: { ...slot, table, valid: false } } };
+}
+
+/** The target's role depends on the link, so its validity is re-checked against the new role. */
+function withTargetRevalidationPending(state: UnidadTerritorialWizardState): UnidadTerritorialWizardState {
+  const target = state.slots[UnitSlot.TARGET];
+  return { ...state, slots: { ...state.slots, [UnitSlot.TARGET]: { ...target, valid: false } } };
+}
+
+function optionsReducer(state: UnidadTerritorialWizardState, patch: Partial<UnidadOptionsDraft>): UnidadTerritorialWizardState {
+  const next = { ...state, options: { ...state.options, ...patch } };
+  const linkChanged = patch.linkAddressMaster !== undefined && patch.linkAddressMaster !== state.options.linkAddressMaster;
+  return linkChanged ? withAddressMasterSlotFor(withTargetRevalidationPending(next), patch.linkAddressMaster === true) : next;
 }
 
 export function unidadWizardReducer(
@@ -261,7 +307,7 @@ export function unidadWizardReducer(
     case "slotTableChosen":
       return slotTableReducer(state, action.key, action.table, action.valid);
     case "optionsChanged":
-      return { ...state, options: { ...state.options, ...action.patch } };
+      return optionsReducer(state, action.patch);
     case "confirmationChanged":
       return { ...state, confirmation: { ...state.confirmation, ...action.patch } };
     case "next":

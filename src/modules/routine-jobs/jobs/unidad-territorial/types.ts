@@ -2,12 +2,19 @@ import type { DbConfig } from "@/core/types/db";
 import type { TableLayout } from "../actualizar-padron/domain/layouts";
 import type { StepTiming } from "../cargar-padrones/types";
 import type { WritableTargetLayout } from "../shared/tableResolution";
+import type { AddressMasterReport } from "../shared/addressMasterLinkReport";
 import type { UnitSkipReason } from "./constants";
 
 export interface UnitOptions {
   localityTypeName: string;
   tolerance: number;
   updateGeometries: boolean;
+  linkAddressMaster?: boolean;
+}
+
+export interface UnitAddressMasterTable {
+  schema: string;
+  table: string;
 }
 
 export interface UnitParams {
@@ -18,6 +25,7 @@ export interface UnitParams {
   typeTable: string;
   targetSchema: string;
   targetTable: string;
+  addressMasterTable?: UnitAddressMasterTable;
   options: UnitOptions;
   dryRun: boolean;
   confirm: boolean;
@@ -28,6 +36,7 @@ export interface UnitLayouts {
   type: TableLayout;
   target: WritableTargetLayout;
   unitTypeId: number;
+  addressMaster?: WritableTargetLayout;
 }
 
 export interface UnitSkippedSample {
@@ -110,6 +119,7 @@ export interface UnitResult {
   totals: UnitSourceTotals;
   skipped: Record<UnitSkipReason, number> & { samples: UnitSkippedSample[] };
   target: UnitTargetReport;
+  addressMaster?: AddressMasterReport;
   warnings: string[];
   stepTimings: StepTiming[];
 }

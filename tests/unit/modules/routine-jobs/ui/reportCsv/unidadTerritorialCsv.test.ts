@@ -3,7 +3,7 @@ import { buildUnidadTerritorialCsv } from "@/modules/routine-jobs/ui/reportCsv/u
 import type { UnitResult } from "@/modules/routine-jobs/jobs/unidad-territorial/types";
 import { BOM, parseCsv, unitResultOf, unitTargetReportOf } from "./reportCsvFixtures";
 
-const HEADER = ["Tabla", "Cambio", "Provincia", "Nombre", "Id", "Distancia (m)", "Relación de área"];
+const HEADER = ["Tabla", "Cambio", "Provincia", "Nombre", "Id", "Distancia (m)", "Relación de área", "Id dirección maestra"];
 
 const TARGET = "unidades_destino";
 const INSERTED = "Insertada";
@@ -53,8 +53,8 @@ describe("buildUnidadTerritorialCsv", () => {
       const body = rawCsvOf().slice(BOM.length).replace(/\r\n$/, "");
       const lines = body.split("\r\n");
 
-      expect(lines[0]).toBe("Tabla,Cambio,Provincia,Nombre,Id,Distancia (m),Relación de área");
-      expect(lines[1]).toBe('unidades_destino,Insertada,02,"Unidad ""Centro"", norte",7001,,');
+      expect(lines[0]).toBe("Tabla,Cambio,Provincia,Nombre,Id,Distancia (m),Relación de área,Id dirección maestra");
+      expect(lines[1]).toBe('unidades_destino,Insertada,02,"Unidad ""Centro"", norte",7001,,,');
       expect(body.replace(/\r\n/g, "")).not.toContain("\n");
     });
 
@@ -70,7 +70,7 @@ describe("buildUnidadTerritorialCsv", () => {
 
   describe("inserted rows", () => {
     it("should write one Insertada row per inserted unit with its province, name and id", () => {
-      expect(dataRowsOf()).toContainEqual([TARGET, INSERTED, "02", 'Unidad "Centro", norte', "7001", "", ""]);
+      expect(dataRowsOf()).toContainEqual([TARGET, INSERTED, "02", 'Unidad "Centro", norte', "7001", "", "", ""]);
     });
 
     it("should write every inserted unit without truncating past the UI limit of 20", () => {
@@ -80,7 +80,7 @@ describe("buildUnidadTerritorialCsv", () => {
 
   describe("geometry rows", () => {
     it("should write one modified row per geometry change with its name, distance and area ratio", () => {
-      expect(dataRowsOf()).toContainEqual([TARGET, MODIFIED, "02", "Unidad geom uno", "", "4.5", "1.1"]);
+      expect(dataRowsOf()).toContainEqual([TARGET, MODIFIED, "02", "Unidad geom uno", "", "4.5", "1.1", ""]);
     });
 
     it("should write every geometry change without truncating past the UI limit of 20", () => {
@@ -136,8 +136,8 @@ describe("buildUnidadTerritorialCsv", () => {
       });
 
       expect(rows).toEqual([
-        [TARGET, INSERTED, "2", "Unidad dos", "2", "", ""],
-        [TARGET, INSERTED, "10", "Unidad diez", "1", "", ""],
+        [TARGET, INSERTED, "2", "Unidad dos", "2", "", "", ""],
+        [TARGET, INSERTED, "10", "Unidad diez", "1", "", "", ""],
       ]);
     });
   });
@@ -158,8 +158,8 @@ describe("buildUnidadTerritorialCsv", () => {
       });
 
       expect(rows).toEqual([
-        [TARGET, INSERTED, "'=02", '\'+Unidad, "x"\nfin', "5", "", ""],
-        [TARGET, MODIFIED, "'-03", "'@cmd", "", "", ""],
+        [TARGET, INSERTED, "'=02", '\'+Unidad, "x"\nfin', "5", "", "", ""],
+        [TARGET, MODIFIED, "'-03", "'@cmd", "", "", "", ""],
       ]);
     });
   });

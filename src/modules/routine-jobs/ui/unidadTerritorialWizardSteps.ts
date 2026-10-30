@@ -13,7 +13,7 @@ const STEP_DEFS: readonly StepDef[] = [
   {
     step: UnidadStep.TABLES,
     title: "Tablas",
-    subtitle: "Localidades catastrales de origen, tipos de unidad y tabla de unidades territoriales destino.",
+    subtitle: "Localidades catastrales de origen, tipos de unidad, unidades territoriales destino y direcciones maestras (opcional).",
     icon: Table2,
   },
   {

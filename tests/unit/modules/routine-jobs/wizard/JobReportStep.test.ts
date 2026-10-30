@@ -3,11 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { JobReportStep, type JobReportTexts } from "@/modules/routine-jobs/ui/steps/JobReportStep";
 import { UnidadReportStep } from "@/modules/routine-jobs/ui/steps/UnidadReportStep";
-import { CompletarReportStep } from "@/modules/routine-jobs/ui/steps/CompletarReportStep";
 import { LocalidadesReportStep } from "@/modules/routine-jobs/ui/steps/LocalidadesReportStep";
 import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
 import type { UnidadRunSnapshot } from "@/modules/routine-jobs/ui/unidadTerritorialRunStore";
-import type { CompletarRunSnapshot } from "@/modules/routine-jobs/ui/completarUnidadTerritorialRunStore";
 import type { CargarLocalidadesRunSnapshot } from "@/modules/routine-jobs/ui/cargarLocalidadesRunStore";
 import { buttonAttributes } from "./wizardFixtures";
 
@@ -96,14 +94,6 @@ describe("stage report wrappers keep their own texts", () => {
 
     expect(idle).toContain("Todavía no hay un informe. Ejecute una actualización desde el paso Revisar.");
     expect(failed).toContain("La actualización no terminó correctamente, así que no hay informe. Revise el paso Ejecución.");
-  });
-
-  it("should show the completar idle and running texts", () => {
-    const idle = renderToStaticMarkup(React.createElement(CompletarReportStep, { snapshot: { phase: RunPhase.IDLE } as CompletarRunSnapshot, onNewRun: vi.fn(), onBackToReview: vi.fn() }));
-    const running = renderToStaticMarkup(React.createElement(CompletarReportStep, { snapshot: { phase: RunPhase.RUNNING } as CompletarRunSnapshot, onNewRun: vi.fn(), onBackToReview: vi.fn() }));
-
-    expect(idle).toContain("Todavía no hay un informe. Ejecute un proceso desde el paso Revisar.");
-    expect(running).toContain("El proceso sigue en curso. El informe aparece cuando termine.");
   });
 
   it("should show the cargar localidades not-finished text and its actions", () => {

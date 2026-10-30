@@ -23,6 +23,10 @@ export function outcomeBannersOf({ dryRun, outcomeUnknown, modified }: RunOutcom
   return banners;
 }
 
+/** The list summary shows the real count and says when the list shows only its first rows. */
+export const listSummaryOf = (label: string, shown: number, total: number): string =>
+  shown < total ? `${label} (primeras ${shown} de ${total})` : `${label} (${total})`;
+
 export function timingsViewOf(stepTimings: readonly StepTiming[]): { timings: TimingItemView[]; totalSeconds: number } {
   const timings = stepTimings.map((timing) => ({ label: timing.label, seconds: timing.ms / MS_PER_SECOND }));
   return { timings, totalSeconds: timings.reduce((total, timing) => total + timing.seconds, 0) };

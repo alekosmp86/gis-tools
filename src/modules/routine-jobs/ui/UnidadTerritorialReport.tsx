@@ -19,6 +19,9 @@ import { ReportDownloadActions, ReportDownloadButton } from "./ReportDownloadBut
 import { buildUnidadTerritorialCsv } from "./reportCsv/unidadTerritorialCsv";
 import { MonthlyStage } from "./monthlyCartoStages";
 import { buildUnitReportView, unitSkipReasonLabelOf, type UnitReportTargetView } from "./unidadTerritorialReportView";
+import { AddressMasterSection } from "./AddressMasterSection";
+import { UNIT_ADDRESS_MASTER_TEXTS } from "./addressMasterSubjectTexts";
+import { RefreshSuggestion } from "./RefreshSuggestion";
 import sharedStyles from "./CargarPadronesReport.module.css";
 
 const DECIMAL_PLACES = 2;
@@ -101,10 +104,11 @@ function TargetSection({ target }: { target: UnitReportTargetView }) {
 
 export interface UnidadTerritorialReportProps {
   result: UnitResult;
+  targetSchema?: string;
 }
 
-export const UnidadTerritorialReport: React.FC<UnidadTerritorialReportProps> = ({ result }) => {
-  const view = buildUnitReportView(result);
+export const UnidadTerritorialReport: React.FC<UnidadTerritorialReportProps> = ({ result, targetSchema }) => {
+  const view = buildUnitReportView(result, targetSchema);
   return (
     <div className={sharedStyles.report}>
       <ReportDownloadActions>
@@ -115,9 +119,11 @@ export const UnidadTerritorialReport: React.FC<UnidadTerritorialReportProps> = (
         />
       </ReportDownloadActions>
       <OutcomeBanners banners={view.banners} />
+      {view.suggestion !== null && <RefreshSuggestion suggestion={view.suggestion} />}
       <KpiCards kpis={view.kpis} />
       <SkippedReasonsSection rows={view.skippedRows} zeroReasonCount={view.zeroReasonCount} />
       <TargetSection target={view.target} />
+      {view.addressMaster !== null && <AddressMasterSection view={view.addressMaster} texts={UNIT_ADDRESS_MASTER_TEXTS} />}
       {view.skippedSamples.length > 0 && (
         <CollapsibleSection summary={`Muestras de filas omitidas (${view.skippedSamples.length})`}>
           <RowsTable

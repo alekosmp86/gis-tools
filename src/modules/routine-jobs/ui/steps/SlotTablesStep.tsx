@@ -16,6 +16,7 @@ export interface SlotCopy<Slot extends string, Role extends string> {
   title: string;
   note: string;
   tableLabel: string;
+  selectorKey?: string;
 }
 
 export interface SlotDraft {
@@ -33,6 +34,7 @@ export interface SlotTablesStepProps<Slot extends string, Role extends string> {
   checkColumns: (role: Role, schema: string, table: string) => Promise<ResolvedColumn[]>;
   blockingReason: string | null;
   catalogError: string | null;
+  footer?: React.ReactNode;
 }
 
 export function SlotTablesStep<Slot extends string, Role extends string>({
@@ -45,6 +47,7 @@ export function SlotTablesStep<Slot extends string, Role extends string>({
   checkColumns,
   blockingReason,
   catalogError,
+  footer,
 }: SlotTablesStepProps<Slot, Role>) {
   return (
     <div className={styles.stack}>
@@ -56,6 +59,7 @@ export function SlotTablesStep<Slot extends string, Role extends string>({
             title={copy.title}
             note={copy.note}
             tableLabel={copy.tableLabel}
+            selectorKey={copy.selectorKey}
             schema={slots[copy.key].schema}
             table={slots[copy.key].table}
             excluded={excluded[copy.key]}
@@ -67,6 +71,7 @@ export function SlotTablesStep<Slot extends string, Role extends string>({
           />
         ))}
       </SchemaTableSection>
+      {footer}
       {catalogError !== null && (
         <div role="alert">
           <AlertMessage type={AlertType.ERROR} text={`${CATALOG_ERROR_MESSAGE} ${catalogError}`} />

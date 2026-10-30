@@ -2,6 +2,7 @@ import { buildAnalyzeStatement } from "@/core/services/sqlStatements";
 import type { StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunSession } from "../../cargar-padrones/types";
 import { runAddressMasterLinkPass } from "../../shared/addressMasterLinkPass";
+import { buildAddressMasterReport } from "../../shared/addressMasterLinkReport";
 import { PADRON_SUBJECT_SPEC } from "../../shared/addressMasterLinkSpec";
 import type { WritableTargetLayout } from "../../shared/tableResolution";
 import {
@@ -13,7 +14,6 @@ import {
 import { nullableNumber, type Row } from "../../shared/rowMapping";
 import { ADDRESS_MASTER_PASS_STEPS, STEP } from "../domain/plannedSteps";
 import {
-  buildAddressMasterReport,
   buildPadronTargetReport,
   toPadronApplyOutcome,
   toPadronClassification,

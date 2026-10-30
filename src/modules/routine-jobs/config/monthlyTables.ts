@@ -28,9 +28,6 @@ export const MONTHLY_TABLES = {
     locality: cartoTable("cadastral_locality"),
     type: cartoTable("territorial_unit_type"),
     target: cartoTable("territorial_unit"),
-  },
-  completarUnidades: {
-    unit: cartoTable("territorial_unit"),
     addressMaster: cartoTable("addresses_master"),
   },
   actualizarPadrones: {

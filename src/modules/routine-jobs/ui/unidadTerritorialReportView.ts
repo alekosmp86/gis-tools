@@ -1,4 +1,5 @@
-import { UNIT_SKIP_REASON, type UnitSkipReason } from "../jobs/unidad-territorial/constants";
+import { buildRefreshMaterializedViewStatement } from "../jobs/shared/refreshSuggestion";
+import { TERRITORIAL_UNIT_VIEW_NAME, UNIT_SKIP_REASON, type UnitSkipReason } from "../jobs/unidad-territorial/constants";
 import { COMMIT_UNKNOWN_WARNING, DRY_RUN_WARNING } from "../jobs/unidad-territorial/domain/warnings";
 import type {
   UnitGeometryChange,
@@ -8,15 +9,26 @@ import type {
   UnitSkippedSample,
   UnitTargetReport,
 } from "../jobs/unidad-territorial/types";
+import { addressMasterViewOf, type AddressMasterView } from "./addressMasterReportView";
+import { UNIT_ADDRESS_MASTER_TEXTS } from "./addressMasterSubjectTexts";
 import type { ReportBannerView, ReportKpiView, SkipReasonView, TimingItemView } from "./ReportParts";
 import { outcomeBannersOf, timingsViewOf, type OutcomeTexts } from "./reportViewParts";
 import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
+import type { RefreshSuggestionView } from "./refreshSuggestionView";
 
 const OUTCOME_TEXTS: OutcomeTexts = {
   unknown: "No se pudo confirmar el COMMIT. Verifique la tabla de unidades territoriales antes de volver a cargar.",
   dryRun: DRY_RUN_WARNING,
   done: "Actualización confirmada: la tabla de unidades territoriales fue modificada.",
 };
+const LINKED_OUTCOME_TEXTS: OutcomeTexts = {
+  unknown:
+    "No se pudo confirmar el COMMIT. Verifique las tablas de unidades territoriales y de direcciones maestras antes de volver a cargar.",
+  dryRun: DRY_RUN_WARNING,
+  done: "Actualización confirmada: las tablas de unidades territoriales y de direcciones maestras fueron modificadas.",
+};
+const REFRESH_SUGGESTION_TEXT =
+  "Actualice la vista materializada para que refleje los cambios. Si no tiene permiso para hacerlo, pida a quien lo tenga que ejecute:";
 const PERCENT_SCALE = 100;
 
 const REASON_TEXT: Record<UnitSkipReason, { label: string; explanation: string }> = {
@@ -68,6 +80,8 @@ export interface UnitReportView {
   skippedSamples: UnitSkippedSample[];
   warnings: string[];
   target: UnitReportTargetView;
+  addressMaster: AddressMasterView | null;
+  suggestion: RefreshSuggestionView | null;
   timings: TimingItemView[];
   totalSeconds: number;
 }
@@ -130,16 +144,34 @@ const targetViewOf = (target: UnitTargetReport): UnitReportTargetView => ({
   ambiguous: target.ambiguousSamples,
 });
 
-export function buildUnitReportView(result: UnitResult): UnitReportView {
-  const { timings, totalSeconds } = timingsViewOf(result.stepTimings);
+const addressMasterChangesOf = (result: UnitResult): number =>
+  result.addressMaster === undefined ? 0 : result.addressMaster.counts.created + result.addressMaster.counts.linked;
+
+/** The view reads units and address masters, so any changed row makes it stale: inserts, source or geometry updates, links. */
+const changedRowsOf = (result: UnitResult): number => result.target.inserted + result.target.updated + addressMasterChangesOf(result);
+
+function suggestionOf(result: UnitResult, targetSchema: string | undefined): RefreshSuggestionView | null {
+  const changed = result.targetModified || result.outcomeUnknown;
+  if (result.dryRun || targetSchema === undefined || changedRowsOf(result) === 0 || !changed) return null;
   return {
-    banners: outcomeBannersOf({ ...result, modified: result.targetModified }, OUTCOME_TEXTS),
+    text: REFRESH_SUGGESTION_TEXT,
+    statement: buildRefreshMaterializedViewStatement(targetSchema, TERRITORIAL_UNIT_VIEW_NAME),
+  };
+}
+
+export function buildUnitReportView(result: UnitResult, targetSchema: string | undefined): UnitReportView {
+  const { timings, totalSeconds } = timingsViewOf(result.stepTimings);
+  const outcomeTexts = result.addressMaster === undefined ? OUTCOME_TEXTS : LINKED_OUTCOME_TEXTS;
+  return {
+    banners: outcomeBannersOf({ ...result, modified: result.targetModified }, outcomeTexts),
     kpis: kpisOf(result),
     skippedRows: skipRowsOf(result),
     zeroReasonCount: zeroReasonCountOf(result),
     skippedSamples: result.skipped.samples,
     warnings: result.warnings.filter((warning) => warning !== DRY_RUN_WARNING && warning !== COMMIT_UNKNOWN_WARNING),
     target: targetViewOf(result.target),
+    addressMaster: result.addressMaster === undefined ? null : addressMasterViewOf(result.addressMaster, UNIT_ADDRESS_MASTER_TEXTS),
+    suggestion: suggestionOf(result, targetSchema),
     timings,
     totalSeconds,
   };

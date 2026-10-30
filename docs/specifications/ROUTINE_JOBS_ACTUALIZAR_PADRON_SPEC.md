@@ -1,6 +1,6 @@
 # Routine Jobs — "Actualizar padrones de carto": acceptance criteria
 
-Stage 5 of the monthly carto update job (`ROUTINE_JOBS_MONTHLY_CARTO_UPDATE_SPEC.md`) in the `routine-jobs` module (`src/modules/routine-jobs/`).
+Stage 4 of the monthly carto update job (`ROUTINE_JOBS_MONTHLY_CARTO_UPDATE_SPEC.md`) in the `routine-jobs` module (`src/modules/routine-jobs/`).
 Stage id `actualizar-padron`, Spanish name "Actualizar padrones". It reuses the conventions of the other stages: one wizard per stage, hub
 connection, `TableSelector`, shared job store, per-target lock, planned-step checklist, Spanish messages, scrubbed passwords, shared report
 components and CSV download. Acceptance criteria ids use the prefix `AP-`. Numbers of criteria that still apply are kept; `AP-8` is removed;
@@ -152,7 +152,7 @@ The wizard and the request carry two schema fields:
 - AP-17: `dryRun` performs the whole stage, then `ROLLBACK`. The report carries `targetModified: false`. A real run performs the same, then
   `COMMIT`; `targetModified: true` is reported only when the commit succeeded. The rollback undoes the rows only: `nextval` (the inserts)
   and `setval` (AP-47) are not transactional, so a dry run leaves the destination id sequence advanced and the ids of the next real run
-  show gaps (as CU-10a of Completar unidades territoriales).
+  show gaps (as UT-23 (a) of the monthly spec, for the units).
 - AP-18: A real run needs `confirm: true` and the password again. It also needs the destination table name typed again in the wizard (AP-31).
   The per-target lock is keyed on the destination: `host:port|db|cartoSchema|targetTable` (host trimmed and lowercased, port normalised, as in
   AC-24 of Cargar padrones). A second run on the same destination answers `409`.
@@ -301,7 +301,7 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
   percentage per reason (share of the skipped rows; 0 when nothing was skipped), the non-zero reasons sorted by count, the top 10 lists per
   department and locality with a `rest` count, the localities-not-found and ambiguous aggregations from `skipped.byLocalityAndReason`, the
   target counts and lists with their summaries, samples, warnings (without the dry-run and unknown-outcome texts, which are banners) and banners.
-- AP-35: Dashboard: the routine-jobs job list shows "Actualizar padrones" as stage 5 of the monthly update; its wizard opens from there. The module
+- AP-35: Dashboard: the routine-jobs job list shows "Actualizar padrones" as stage 4 of the monthly update; its wizard opens from there. The module
   page, the home card and the manifest need no new entry point.
 - AP-36: Routes: `module.routes.json` declares the two endpoints (`actualizar-padron/start`, `actualizar-padron/status`) and the catalog roles
   travel with `catalog/columns`. The generated routes are regenerated with `npm run modules:routes`, never hand-edited; `npm run
@@ -338,7 +338,7 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 The padrones this stage inserts have no address master record (`id_address_master` is NULL). The option below links them, in the same
 transaction. The rules are the legacy `addressMaster.sql` PADRON block (URN `cgeo:padron:id:<id>`, insert with latitude and longitude 0,
 link where NULL), with the MJ-13 invariants: exact URN equality (never `SPLIT_PART`), no id is written, no DELETE or TRUNCATE. The SQL is the
-shared one of `jobs/shared/addressMasterLink*` that stage 4 also uses, so both stages apply the same rules.
+shared one of `jobs/shared/addressMasterLink*` that stage 3 also uses, so both stages apply the same rules.
 
 - AP-51: Option `Enlazar direcciones maestras de los padrones` (`options.linkAddressMaster`, a boolean parsed strictly, as the other boolean
   options; the wizard sends it, default off). Off: the stage behaves exactly as above, and the request carries no `addressMasterTable`. On:
@@ -356,8 +356,8 @@ shared one of `jobs/shared/addressMasterLink*` that stage 4 also uses, so both s
   (the latter only when the option is on); a missing column is named in the block.
 - AP-54: The address master sequence is repaired (`Ajustar secuencia de direcciones maestras`) once, before the first address master
   insert of the transaction, after the destination's own repair (AP-47). The lock key set of the run includes the address master table when
-  the option is on, so the lock prevents another stage-5 run on the same tables. The job stores are per stage, so a stage-4 run and a
-  stage-5 run on `addresses_master` do not block each other. That is harmless: the URN prefixes differ and the sequence repair never
+  the option is on, so the lock prevents another stage-4 run on the same tables. The job stores are per stage, so a stage-3 run and a
+  stage-4 run on `addresses_master` do not block each other. That is harmless: the URN prefixes differ and the sequence repair never
   lowers the sequence.
 - AP-55: Count checks roll back the whole transaction on mismatch, in Spanish: records created equal the classification's `toCreate`
   ("Los registros de dirección maestra creados para padrones (X) no coinciden con los esperados (Y) en T."); padrones linked equal
@@ -401,7 +401,7 @@ shared one of `jobs/shared/addressMasterLink*` that stage 4 also uses, so both s
 
 ## Open questions / assumptions
 
-1. Decision: stage 6 "Aplicar padrones" of the monthly spec is removed. Stage 5 inserts and updates in place in the chosen destination table
+1. Decision: the former stage 6 "Aplicar padrones" of the monthly spec is removed. Stage 4 inserts and updates in place in the chosen destination table
    (a test table first, then `carto.padron`), so no separate apply stage is needed.
 2. A key present in staging only as a skipped row (`SIN_GEOMETRIA`, `CLAVE_DUPLICADA`) counts as `MISSING` in the destination, because
    `MISSING` is defined on accepted candidates. Confirm this reading with the user.

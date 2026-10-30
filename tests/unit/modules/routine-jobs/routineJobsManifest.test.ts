@@ -17,8 +17,6 @@ const EXPECTED_ENDPOINTS = [
   "GET cargar-localidades/status",
   "POST unidad-territorial/start",
   "GET unidad-territorial/status",
-  "POST completar-unidad-territorial/start",
-  "GET completar-unidad-territorial/status",
   "POST cargar-padrones/start",
   "POST catalog/columns",
   "POST catalog/tables",

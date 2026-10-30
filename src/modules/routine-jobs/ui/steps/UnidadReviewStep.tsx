@@ -64,6 +64,14 @@ export const UnidadReviewStep: React.FC<UnidadReviewStepProps> = ({
         <dd>{String(options.tolerance)}</dd>
         <dt>Actualizar geometrías</dt>
         <dd>{options.updateGeometries ? YES : NO}</dd>
+        <dt>Enlazar direcciones maestras de las unidades</dt>
+        <dd>{options.linkAddressMaster ? YES : NO}</dd>
+        {request.addressMasterTable !== undefined && (
+          <>
+            <dt>Tabla de direcciones maestras</dt>
+            <dd>{`${request.addressMasterTable.schema}.${request.addressMasterTable.table}`}</dd>
+          </>
+        )}
       </dl>
 
       {options.updateGeometries && <AlertMessage type={AlertType.WARNING} text={UNIT_GEOMETRY_OVERWRITE_WARNING} />}

@@ -19,5 +19,9 @@ export interface UnidadReportStepProps {
 }
 
 export const UnidadReportStep: React.FC<UnidadReportStepProps> = (props) => (
-  <JobReportStep {...props} texts={TEXTS} renderReport={(result) => <UnidadTerritorialReport result={result} />} />
+  <JobReportStep
+    {...props}
+    texts={TEXTS}
+    renderReport={(result) => <UnidadTerritorialReport result={result} targetSchema={props.snapshot.plan?.targetSchema} />}
+  />
 );

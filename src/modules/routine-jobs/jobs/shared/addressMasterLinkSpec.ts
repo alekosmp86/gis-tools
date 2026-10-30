@@ -17,6 +17,9 @@ export const ADDRESS_MASTER_INITIAL_COORDINATE = 0;
 
 export const ADDRESS_MASTER_TITLE = "de direcciones maestras";
 
+export const ADDRESS_MASTER_TOGGLE_MISMATCH_MESSAGE =
+  "La opción de enlace de direcciones maestras no coincide con la tabla de direcciones maestras. Active el enlace y elija la tabla, o desactive ambos.";
+
 const TERRITORIAL_UNIT_URN_PREFIX = "cgeo:territorial_unit:id:";
 const PADRON_URN_PREFIX = "cgeo:padron:id:";
 

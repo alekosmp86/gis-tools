@@ -13,7 +13,7 @@ import {
 } from "./reportCsvFixtures";
 
 const STAGE2_WIDTH = 7;
-const STAGE3_WIDTH = 7;
+const STAGE3_WIDTH = 8;
 const LOCALITY_TABLE = "localidades_norte";
 const UNIT_TABLE = "unidades_destino";
 const EMPTY_CELLS = (width: number): string[] => Array.from({ length: width - 2 }, () => "");
@@ -174,7 +174,7 @@ describe("cutRowsOf and changeCsvOf", () => {
     const csv = changeCsvOf([], [{ table: "t", shown: 1, total: 2, noun: "filas" }]);
     const rows = parseCsv(csv);
 
-    expect(rows[1]).toHaveLength(STAGE3_WIDTH);
+    expect(rows[1]).toHaveLength(STAGE2_WIDTH);
     expect(rows[1][1]).toBe(markerOf(1, 2, "filas"));
   });
 

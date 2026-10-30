@@ -1,7 +1,7 @@
 import { toCsv, type CsvRow } from "./csvFormat";
 
 const COUNT_HEADER: CsvRow = ["Cambio", "Cantidad"];
-const CHANGE_HEADER: CsvRow = ["Tabla", "Cambio", "Provincia", "Nombre", "Id", "Distancia (m)", "Relación de área"];
+export const CHANGE_HEADER: CsvRow = ["Tabla", "Cambio", "Provincia", "Nombre", "Id", "Distancia (m)", "Relación de área"];
 
 export const CHANGE_KIND = {
   INSERTED: "Insertada",
@@ -46,7 +46,7 @@ const compareChanges = (first: ChangeRecord, second: ChangeRecord): number =>
 
 export const orderedChangesOf = (records: readonly ChangeRecord[]): ChangeRecord[] => [...records].sort(compareChanges);
 
-const changeRowOf = (record: ChangeRecord): CsvRow => [
+export const changeRowOf = (record: ChangeRecord): CsvRow => [
   record.table,
   record.kind,
   record.province,

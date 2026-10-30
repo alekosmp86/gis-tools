@@ -13,6 +13,7 @@ export interface SlotTableCardProps<Role extends string> {
   title: string;
   note: string;
   tableLabel: string;
+  selectorKey?: string;
   schema: string;
   table: string;
   excluded: string[];
@@ -28,6 +29,7 @@ export function SlotTableCard<Role extends string>({
   title,
   note,
   tableLabel,
+  selectorKey,
   schema,
   table,
   excluded,
@@ -44,6 +46,7 @@ export function SlotTableCard<Role extends string>({
       schema={<SchemaDraftField label={SCHEMA_LABEL} initial={schema} committed={schema} onCommit={onSchemaChange} />}
       table={
         <TableSelector
+          key={selectorKey}
           label={tableLabel}
           schema={schema}
           value={table}

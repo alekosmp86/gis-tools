@@ -6,6 +6,7 @@ import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { TableSelector } from "@/ui-kit/components/TableSelector";
 import { AlertType } from "@/ui-kit/types/ui";
 import { ActualizarTableKey, schemaFieldOf, type SchemaField } from "../actualizarPadronTables";
+import { AddressMasterLinkToggle } from "./AddressMasterLinkToggle";
 import { SchemaDraftField } from "./SchemaDraftField";
 import styles from "./WizardSteps.module.css";
 
@@ -119,11 +120,12 @@ export const ActualizarTablesStep: React.FC<ActualizarTablesStepProps> = ({
         ))}
       </div>
 
-      <label className={styles.checkRow}>
-        <input type="checkbox" checked={linkAddressMaster} onChange={(event) => onLinkAddressMasterChange(event.target.checked)} />
-        <span>{LINK_LABEL}</span>
-      </label>
-      <p className={styles.hint}>{LINK_HINT}</p>
+      <AddressMasterLinkToggle
+        checked={linkAddressMaster}
+        onChange={onLinkAddressMasterChange}
+        label={LINK_LABEL}
+        hint={LINK_HINT}
+      />
 
       {catalogError !== null && (
         <div role="alert">

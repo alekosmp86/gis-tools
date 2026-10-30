@@ -13,7 +13,7 @@ Esta etapa lleva las localidades catastrales de la etapa 2 a la tabla de **unida
 - **Actualiza en el lugar** la geometría y la fuente de las unidades que ya existen, solo cuando cambiaron.
 - No toca el id, el nombre, la provincia ni el tipo de las unidades existentes: otras tablas y las URN dependen de ellos.
 - Las unidades del tipo que no tienen localidad de origen **solo se informan** (**Faltantes en origen**), nunca se borran.
-- Las unidades nuevas quedan sin dirección maestra: la [etapa 4](completar-unidad-territorial.md) se la crea y las enlaza.
+- Con la opción **Enlazar direcciones maestras de las unidades** activada (por defecto), crea y enlaza la dirección maestra de cada unidad que no tiene una. Así reemplaza a la antigua etapa «Completar unidades territoriales», que ya no existe. Véase [Direcciones maestras](#direcciones-maestras).
 
 Cada localidad se busca en el destino por **provincia, nombre y tipo de unidad**. El tipo es necesario porque otros tipos de unidad comparten nombres.
 
@@ -28,6 +28,7 @@ Las tablas vienen preelegidas: la de localidades es la que eligió en la etapa 2
 - **Localidades de origen**: la tabla de localidades catastrales.
 - **Tipos de unidad**: la tabla que asigna el tipo de cada unidad.
 - **Unidades territoriales (destino)**: donde se escriben las unidades.
+- **Direcciones maestras**: solo aparece con la opción de enlace activada. Debe ser distinta de las otras tablas de su esquema.
 
 ### Opciones
 
@@ -38,6 +39,17 @@ Las tablas vienen preelegidas: la de localidades es la que eligió en la etapa 2
 ### Revisar
 
 **Analizar sin cargar** clasifica las unidades y revierte todo. **Actualizar unidades territoriales** escribe en la tabla destino y pide escribir de nuevo la contraseña y el nombre de la tabla de unidades territoriales.
+
+## Direcciones maestras
+
+Es una casilla del paso **Tablas**, **activada por defecto**. Con ella activada, después de insertar y actualizar, la etapa crea la dirección maestra de cada unidad de la tabla de destino que todavía no la tiene y escribe su id en la unidad. Así reemplaza a la antigua etapa «Completar unidades territoriales», que ya no existe: no hace falta correrla aparte.
+
+- La tabla de direcciones maestras se preelige como `carto.addresses_master`. Puede cambiarla; debe ser distinta de las tablas de localidades, de tipos y de unidades.
+- Si ya hay exactamente un registro con el URN de la unidad, la unidad solo se enlaza con él. Si hay dos o más, la unidad es **ambigua**: no se crea ni se enlaza nada, y el informe la lista.
+- El id y la geometría de la unidad nunca cambian. Todo ocurre en la misma transacción que la actualización: **Analizar sin cargar** revierte también la tabla de direcciones maestras, y una carga real confirma las dos tablas o ninguna.
+- Con la casilla desactivada, la etapa no toca la tabla de direcciones maestras y no la pide.
+
+En el informe aparece la sección de direcciones maestras (sin dirección maestra, registros creados, unidades enlazadas, ya tenían registro, ambiguas). Si la carga real insertó o actualizó unidades, o creó o enlazó direcciones maestras, el informe sugiere actualizar la vista materializada `mv_territorial_unit_full` y muestra la sentencia `REFRESH MATERIALIZED VIEW` para copiarla: la herramienta no la ejecuta.
 
 ## Cómo leer el informe
 

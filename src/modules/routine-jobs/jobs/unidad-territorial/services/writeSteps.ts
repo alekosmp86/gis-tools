@@ -1,6 +1,9 @@
 import { buildAnalyzeStatement } from "@/core/services/sqlStatements";
 import type { StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunSession } from "../../cargar-padrones/types";
+import { runAddressMasterLinkPass } from "../../shared/addressMasterLinkPass";
+import { buildAddressMasterReport, type AddressMasterReport } from "../../shared/addressMasterLinkReport";
+import { UNIT_SUBJECT_SPEC } from "../../shared/addressMasterLinkSpec";
 import {
   buildSequenceRepairSql,
   runTransaction,
@@ -8,7 +11,7 @@ import {
   type TransactionOutcome,
 } from "../../shared/transaction";
 import type { WritableTargetLayout } from "../../shared/tableResolution";
-import { UNIT_STEP } from "../domain/plannedSteps";
+import { UNIT_ADDRESS_MASTER_PASS_STEPS, UNIT_STEP } from "../domain/plannedSteps";
 import { buildUnitTargetReport, toUnitApplyOutcome, toUnitClassification, toUnitSourceReport } from "../domain/reportMapping";
 import { buildUnitSourceReportSql } from "../domain/sourceSql";
 import { buildUnitApplySql, buildUnitClassifySql } from "../domain/targetSql";
@@ -17,6 +20,7 @@ import type { UnitApplyOutcome, UnitClassification, UnitLayouts, UnitOptions, Un
 export interface UnitWriteOutcome {
   source: UnitSourceReport;
   target: UnitTargetReport;
+  addressMaster?: AddressMasterReport;
   targetModified: boolean;
   outcomeUnknown: boolean;
   commitError?: string;
@@ -25,6 +29,7 @@ export interface UnitWriteOutcome {
 interface UnitTransactionBody {
   source: UnitSourceReport;
   target: UnitTargetReport;
+  addressMaster?: AddressMasterReport;
 }
 
 const UNIT_TRANSACTION: TransactionMessages = {
@@ -32,6 +37,16 @@ const UNIT_TRANSACTION: TransactionMessages = {
   untouched: "La tabla de unidades territoriales no fue modificada.",
   unverified: "No se pudo revertir la transacción: verifique la tabla de unidades territoriales.",
 };
+
+const UNIT_LINK_TRANSACTION: TransactionMessages = {
+  jobLabel: "actualización de unidades territoriales y enlace de direcciones maestras",
+  untouched: "Las tablas de unidades territoriales y de direcciones maestras no fueron modificadas.",
+  unverified:
+    "No se pudo revertir la transacción: verifique las tablas de unidades territoriales y de direcciones maestras.",
+};
+
+const transactionMessagesOf = (layouts: UnitLayouts): TransactionMessages =>
+  layouts.addressMaster === undefined ? UNIT_TRANSACTION : UNIT_LINK_TRANSACTION;
 
 async function readSourceReport(session: RunSession, layouts: UnitLayouts): Promise<UnitSourceReport> {
   const result = await session.query(buildUnitSourceReportSql({ locality: layouts.locality }));
@@ -62,6 +77,35 @@ function assertCountsMatch(target: WritableTargetLayout, classification: UnitCla
   }
 }
 
+/** Links the units without a dirección maestra; it sees the rows the upsert inserted, in the same transaction. */
+async function runAddressMasterStage(
+  session: RunSession,
+  layouts: UnitLayouts,
+  timer: StepTimer
+): Promise<AddressMasterReport | undefined> {
+  const { addressMaster } = layouts;
+  if (addressMaster === undefined) return undefined;
+  // Ordered: the address master sequence is repaired before its inserts of the same transaction.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  await timer.run(UNIT_STEP.ADDRESS_SEQUENCES, () => session.query(buildSequenceRepairSql(addressMaster)));
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const pass = await runAddressMasterLinkPass(
+    session,
+    { subject: layouts.target, addressMaster },
+    UNIT_SUBJECT_SPEC,
+    UNIT_ADDRESS_MASTER_PASS_STEPS,
+    timer
+  );
+  return buildAddressMasterReport(addressMaster, pass);
+}
+
+async function analyzeTargets(session: RunSession, layouts: UnitLayouts): Promise<void> {
+  await session.query(buildAnalyzeStatement(layouts.target.schema, layouts.target.table));
+  if (layouts.addressMaster !== undefined) {
+    await session.query(buildAnalyzeStatement(layouts.addressMaster.schema, layouts.addressMaster.table));
+  }
+}
+
 async function runTransactionBody(
   session: RunSession,
   params: UnitParams,
@@ -75,9 +119,12 @@ async function runTransactionBody(
   // Ordered: the sequence is repaired after the analysis and before the insert of the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   await timer.run(UNIT_STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.target)));
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const apply = await timer.run(UNIT_STEP.APPLY, () => readApply(session, layouts, params.options));
   assertCountsMatch(layouts.target, classification, apply);
-  await timer.run(UNIT_STEP.ANALYZE, () => session.query(buildAnalyzeStatement(layouts.target.schema, layouts.target.table)));
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const addressMaster = await runAddressMasterStage(session, layouts, timer);
+  await timer.run(UNIT_STEP.ANALYZE, () => analyzeTargets(session, layouts));
   const target = await timer.run(UNIT_STEP.REPORT, () =>
     Promise.resolve(
       buildUnitTargetReport({
@@ -88,7 +135,7 @@ async function runTransactionBody(
       })
     )
   );
-  return { source, target };
+  return { source, target, addressMaster };
 }
 
 export async function runUnitWriteTransaction(
@@ -104,7 +151,7 @@ export async function runUnitWriteTransaction(
       secret: params.config.password,
       timer,
       steps: { commit: UNIT_STEP.COMMIT, rollback: UNIT_STEP.ROLLBACK },
-      messages: UNIT_TRANSACTION,
+      messages: transactionMessagesOf(layouts),
     },
     () => runTransactionBody(session, params, layouts, timer)
   );

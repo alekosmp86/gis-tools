@@ -1,8 +1,9 @@
 // fallow-ignore-file duplicate-export
 import type { CatalogQuerySession } from "@/core/services/server/tableCatalog/tableCatalog";
 import { physicalColumn, qualifiedName, type TableLayout } from "../../actualizar-padron/domain/layouts";
+import { addressMasterIssuesOf } from "../../shared/addressMasterLinkPreflight";
 import { labelOf } from "../../shared/targetPreflight";
-import type { SourceTablesSpec, WriteTargetsSpec } from "../../shared/preflightAsserts";
+import { assertWriteTargetsReady, throwIfIssues, type SourceTablesSpec, type WriteTargetsSpec } from "../../shared/preflightAsserts";
 import { UNIT_SOURCE_COLUMN, UNIT_TARGET_TITLE, UNIT_TARGET_WRITTEN_COLUMNS, UNIT_TYPE_COLUMN } from "../constants";
 import type { UnitLayouts } from "../types";
 
@@ -32,7 +33,7 @@ export async function resolveUnitTypeId(
   return unitTypeId;
 }
 
-export const writeTargetsSpecOf = (layouts: UnitLayouts): WriteTargetsSpec => ({
+const writeTargetsSpecOf = (layouts: UnitLayouts): WriteTargetsSpec => ({
   targets: [layouts.target],
   writtenColumns: UNIT_TARGET_WRITTEN_COLUMNS,
   title: UNIT_TARGET_TITLE,
@@ -43,3 +44,10 @@ export const sourceTablesSpecOf = (layouts: UnitLayouts): SourceTablesSpec => ({
   withRows: [{ layout: layouts.locality, description: "localidades" }],
   geometry: { layout: layouts.locality, column: UNIT_SOURCE_COLUMN.GEOMETRY },
 });
+
+export async function assertUnitTargetsReady(session: CatalogQuerySession, layouts: UnitLayouts): Promise<void> {
+  await assertWriteTargetsReady(session, writeTargetsSpecOf(layouts));
+  if (layouts.addressMaster !== undefined) {
+    throwIfIssues(await addressMasterIssuesOf(session, layouts.addressMaster));
+  }
+}

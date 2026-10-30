@@ -1,6 +1,7 @@
 import { createStepTimer, type StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunDeps, RunProgress, RunSession } from "../../cargar-padrones/types";
 import { assertConfirmedOrDryRun, assertSourceTablesReady } from "../../shared/preflightAsserts";
+import { ADDRESS_MASTER_TOGGLE_MISMATCH_MESSAGE } from "../../shared/addressMasterLinkSpec";
 import { withRunSession } from "../../shared/transaction";
 import { plannedStepLabels, STEP, type PlannedStepsInput } from "../domain/plannedSteps";
 import { assertDistinctPadronTables } from "../domain/tableRoles";
@@ -68,9 +69,7 @@ async function runOnSession(
 
 function assertLinkMatchesAddressMasterTable(params: ActualizarPadronParams): void {
   if (params.options.linkAddressMaster !== (params.addressMasterTable !== undefined)) {
-    throw new Error(
-      "La opción de enlace de direcciones maestras no coincide con la tabla de direcciones maestras. Active el enlace y elija la tabla, o desactive ambos."
-    );
+    throw new Error(ADDRESS_MASTER_TOGGLE_MISMATCH_MESSAGE);
   }
 }
 

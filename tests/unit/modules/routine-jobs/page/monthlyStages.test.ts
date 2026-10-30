@@ -4,6 +4,15 @@ import { MONTHLY_STAGES, MonthlyStage } from "@/modules/routine-jobs/ui/monthlyC
 const stageOf = (id: MonthlyStage) => MONTHLY_STAGES.find((stage) => stage.id === id);
 
 describe("monthly carto hub stage list", () => {
+  it("should list the four stages in order, the former completar stage being gone", () => {
+    expect(MONTHLY_STAGES.map((stage) => stage.id)).toEqual([
+      MonthlyStage.CARGAR_PADRONES,
+      MonthlyStage.CARGAR_LOCALIDADES,
+      MonthlyStage.UNIDAD_TERRITORIAL,
+      MonthlyStage.ACTUALIZAR_PADRON,
+    ]);
+  });
+
   describe("unidad-territorial stage (stage 3)", () => {
     it("should list the unidad-territorial stage in the hub", () => {
       expect(stageOf(MonthlyStage.UNIDAD_TERRITORIAL)).toBeDefined();

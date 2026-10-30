@@ -1,7 +1,6 @@
 import { PAIR_STATUS, SKIP_REASON, type PairStatus, type SkipReason } from "../jobs/actualizar-padron/constants";
 import { COMMIT_UNKNOWN_WARNING, DRY_RUN_WARNING } from "../jobs/actualizar-padron/domain/warnings";
 import type {
-  ActualizarAddressMasterReport,
   ActualizarPadronResult,
   ActualizarTargetReport,
   CollidingKey,
@@ -13,11 +12,13 @@ import type {
   SkippedLocalityGroup,
   SkippedSample,
 } from "../jobs/actualizar-padron/types";
-import type { AddressMasterAmbiguous, AddressMasterLinked } from "../jobs/shared/addressMasterLinkPass";
 import { PAIR_LIST_LIMIT } from "../jobs/shared/limits";
 import { buildPadronRefreshStatement } from "../jobs/actualizar-padron/domain/refreshSuggestion";
+import { addressMasterViewOf, type AddressMasterView } from "./addressMasterReportView";
+import { PADRON_ADDRESS_MASTER_TEXTS } from "./addressMasterSubjectTexts";
 import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
 import type { RefreshSuggestionView } from "./refreshSuggestionView";
+import { listSummaryOf } from "./reportViewParts";
 
 export interface KpiView {
   label: string;
@@ -103,15 +104,6 @@ export interface TargetView {
   ambiguousSummary: string;
   pairs: PairView[];
   pairsSummary: string;
-}
-
-export interface AddressMasterView {
-  table: string;
-  counts: TargetCountRow[];
-  linked: AddressMasterLinked[];
-  linkedSummary: string;
-  ambiguous: AddressMasterAmbiguous[];
-  ambiguousSummary: string;
 }
 
 export type ActualizarBannerKind = "unknown" | "dryRun" | "warning" | "done";
@@ -329,10 +321,6 @@ const pairViewOf = (pair: PadronPair): PairView => ({
   status: PAIR_STATUS_LABEL[pair.status],
 });
 
-/** The list summary shows the real count and says when the list shows only its first rows. */
-const listSummaryOf = (label: string, shown: number, total: number): string =>
-  shown < total ? `${label} (primeras ${shown} de ${total})` : `${label} (${total})`;
-
 function targetViewOf(target: ActualizarTargetReport): TargetView {
   return {
     table: target.table,
@@ -360,26 +348,6 @@ function targetViewOf(target: ActualizarTargetReport): TargetView {
   };
 }
 
-function addressMasterViewOf(addressMaster: ActualizarAddressMasterReport): AddressMasterView {
-  const { counts } = addressMaster;
-  return {
-    table: addressMaster.table,
-    counts: [
-      targetCountRowOf("Padrones sin dirección maestra", counts.withoutAddressMaster, true),
-      targetCountRowOf("Registros por crear", counts.toCreate),
-      targetCountRowOf("Registros creados", counts.created),
-      targetCountRowOf("Padrones enlazados", counts.linked),
-      targetCountRowOf("Ya tenían registro", counts.alreadyHadRecord, true),
-      targetCountRowOf("Ambiguos", counts.ambiguous),
-      targetCountRowOf("Sin dirección maestra después del enlace", counts.remaining),
-    ],
-    linked: addressMaster.linkedList,
-    linkedSummary: listSummaryOf("Padrones enlazados", addressMaster.linkedList.length, counts.linked),
-    ambiguous: addressMaster.ambiguousSamples,
-    ambiguousSummary: listSummaryOf("Ambiguos", addressMaster.ambiguousSamples.length, counts.ambiguous),
-  };
-}
-
 export function buildActualizarReportView(result: ActualizarPadronResult): ActualizarReportView {
   const skippedByReason = skippedByReasonOf(result);
   const byDepartment = groupsOf(result.skipped.byDepartment);
@@ -397,7 +365,7 @@ export function buildActualizarReportView(result: ActualizarPadronResult): Actua
     collidingKeys: collidingKeysOf(result.skipped.collidingKeys),
     collidingKeyCount: result.skipped.collidingKeyCount,
     target: targetViewOf(result.target),
-    addressMaster: result.addressMaster === undefined ? null : addressMasterViewOf(result.addressMaster),
+    addressMaster: result.addressMaster === undefined ? null : addressMasterViewOf(result.addressMaster, PADRON_ADDRESS_MASTER_TEXTS),
     suggestion: suggestionOf(result),
     warnings: visibleWarningsOf(result),
     timings: timingsOf(result),

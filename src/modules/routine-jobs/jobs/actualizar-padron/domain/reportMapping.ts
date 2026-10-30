@@ -10,10 +10,7 @@ import {
   type PairStatus,
   type SkipReason,
 } from "../constants";
-import type { AddressMasterPassBody } from "../../shared/addressMasterLinkPass";
-import type { TableLayout } from "./layouts";
 import type {
-  ActualizarAddressMasterReport,
   ActualizarTargetReport,
   CollidingKey,
   PadronApplyOutcome,
@@ -237,11 +234,3 @@ export function buildPadronTargetReport({
   };
 }
 
-export function buildAddressMasterReport(addressMaster: TableLayout, pass: AddressMasterPassBody): ActualizarAddressMasterReport {
-  return {
-    table: buildQualifiedTableLabel(addressMaster.schema, addressMaster.table),
-    counts: { ...pass.counts, toCreate: pass.toCreate, remaining: pass.remaining },
-    linkedList: pass.linkedList,
-    ambiguousSamples: pass.ambiguousSamples,
-  };
-}

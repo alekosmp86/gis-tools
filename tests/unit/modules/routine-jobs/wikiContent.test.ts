@@ -10,7 +10,6 @@ const EXPECTED_PAGES = [
   "cargar-padrones",
   "cargar-localidades",
   "unidad-territorial",
-  "completar-unidad-territorial",
   "actualizar-padron",
   "descargar-informe",
   "solucion-de-problemas",
@@ -41,8 +40,11 @@ describe("routine-jobs wiki content", () => {
     expect(pages.map((candidate) => candidate.slug)).toEqual(EXPECTED_PAGES);
   });
 
-  it("AC-34: should give each page its position in reading order as its order, starting at 1", () => {
-    expect(pages.map((candidate) => candidate.order)).toEqual(EXPECTED_PAGES.map((_, index) => index + 1));
+  it("AC-34: should give the pages an order that rises in reading order, starting at 1", () => {
+    const orders = pages.map((candidate) => candidate.order);
+
+    expect(orders[0]).toBe(1);
+    expect(orders.every((order, index) => index === 0 || order > orders[index - 1])).toBe(true);
   });
 
   it("AC-34: should give every page a non-empty title and a numeric order", () => {

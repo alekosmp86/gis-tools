@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { parseUnidadTerritorialStartRequest } from "@/modules/routine-jobs/api/unidadTerritorialRequestParsing";
 import { RequestInvalidError } from "@/modules/routine-jobs/api/requestParsing";
+import { ADDRESS_MASTER_TOGGLE_MISMATCH_MESSAGE } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSpec";
 import { CONFIRM_REQUIRED_MESSAGE } from "@/modules/routine-jobs/jobs/unidad-territorial/services/preflight";
+import { runUnidadTerritorial } from "@/modules/routine-jobs/jobs/unidad-territorial/services/runUnidadTerritorial";
 
 const PASSWORD = "Unidad-pw!7";
 const LOCALITY = { schema: "stg", table: "localidades_catastrales_stg" };
@@ -155,5 +157,42 @@ describe("parseUnidadTerritorialStartRequest", () => {
     it("should allow a dry run without confirm", () => {
       expect(() => parse(startBody({ dryRun: true, confirm: false }))).not.toThrow();
     });
+  });
+});
+
+describe("address master link option (UT-11)", () => {
+  const ADDRESS_MASTER = { schema: "carto", table: "addresses_master" };
+  const LINKED_OPTIONS = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, linkAddressMaster: true };
+  const OFF_OPTIONS = { ...LINKED_OPTIONS, linkAddressMaster: false };
+
+  it("should default the link off, carry the nested address master table only when the link is on, and refuse a toggle that disagrees with the table at run time", async () => {
+    const absent = parse(startBody());
+    expect(absent.options.linkAddressMaster).toBe(false);
+    expect(absent.addressMasterTable).toBeUndefined();
+
+    const linked = parse(startBody({ options: LINKED_OPTIONS, addressMasterTable: ADDRESS_MASTER }));
+    expect(linked.options.linkAddressMaster).toBe(true);
+    expect(linked.addressMasterTable).toEqual(ADDRESS_MASTER);
+
+    const dropped = parse(startBody({ options: OFF_OPTIONS, addressMasterTable: ADDRESS_MASTER }));
+    expect(dropped.addressMasterTable).toBeUndefined();
+
+    const rejected: ReadonlyArray<readonly [string, Body, RegExp]> = [
+      ["a linked option without the nested table", startBody({ options: LINKED_OPTIONS }), /addressMasterTable/],
+      ["a linked option with a blank table name", startBody({ options: LINKED_OPTIONS, addressMasterTable: { schema: "carto", table: " " } }), /table/],
+      ["a non-boolean link option", startBody({ options: { ...LINKED_OPTIONS, linkAddressMaster: "true" } }), /linkAddressMaster/],
+    ];
+    for (const [, body, mention] of rejected) {
+      expectRejected(body, mention);
+    }
+
+    const deps = { openSession: vi.fn(), now: () => 0 };
+    await expect(runUnidadTerritorial({ ...linked, addressMasterTable: undefined }, deps)).rejects.toThrow(
+      ADDRESS_MASTER_TOGGLE_MISMATCH_MESSAGE,
+    );
+    await expect(runUnidadTerritorial({ ...dropped, addressMasterTable: ADDRESS_MASTER }, deps)).rejects.toThrow(
+      ADDRESS_MASTER_TOGGLE_MISMATCH_MESSAGE,
+    );
+    expect(deps.openSession).not.toHaveBeenCalled();
   });
 });

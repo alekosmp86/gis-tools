@@ -4,8 +4,8 @@ import React, { useReducer, useState, useSyncExternalStore } from "react";
 import type { ResolvedColumn } from "@/core/types/tableCatalog";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
-import type { UnitTableRole } from "../jobs/unidad-territorial/constants";
 import {
+  activeSlotsOf,
   blockingReason,
   canRunNow,
   excludedUnitTablesOf,
@@ -14,7 +14,6 @@ import {
   toUnidadStartRequest,
   UnidadStep,
   unidadWizardReducer,
-  UnitSlot,
   type UnidadWizardSeed,
 } from "./unidadTerritorialWizardState";
 import {
@@ -31,7 +30,7 @@ import { useCatalogLoader } from "./useCatalogLoader";
 import { useElapsedTick } from "./useElapsedTick";
 import { RunPhase } from "./jobRunStore";
 import { createRoutineJobsClient } from "./routineJobsClient";
-import { UnidadTablesStep } from "./steps/UnidadTablesStep";
+import { UnidadTablesStep, type UnitColumnRole } from "./steps/UnidadTablesStep";
 import { UnidadOptionsStep } from "./steps/UnidadOptionsStep";
 import { UnidadReviewStep } from "./steps/UnidadReviewStep";
 import { UnidadRunStep } from "./steps/UnidadRunStep";
@@ -43,7 +42,6 @@ const OPTIONS_STEP_ID = unidadStepIdOf(UnidadStep.OPTIONS);
 const REVIEW_STEP_ID = unidadStepIdOf(UnidadStep.REVIEW);
 const DRY_RUN = { dryRun: true };
 const REAL_RUN = { dryRun: false };
-const SLOT_KEYS: readonly UnitSlot[] = [UnitSlot.LOCALITY, UnitSlot.TYPE, UnitSlot.TARGET];
 const client = createRoutineJobsClient();
 const getIdleSnapshot = (): UnidadRunSnapshot => IDLE_SNAPSHOT;
 
@@ -75,10 +73,10 @@ export const UnidadTerritorialWizard: React.FC<UnidadTerritorialWizardProps> = (
   const { connection } = state;
   const { loadTables, reset: resetCatalog, catalogErrorFor } = useCatalogLoader(client, connection);
 
-  const checkColumns = (role: UnitTableRole, schema: string, table: string): Promise<ResolvedColumn[]> =>
+  const checkColumns = (role: UnitColumnRole, schema: string, table: string): Promise<ResolvedColumn[]> =>
     client.listColumns(trimConnection(connection), schema, table, role);
 
-  const catalogError = catalogErrorFor(SLOT_KEYS.map((key) => state.slots[key].schema));
+  const catalogError = catalogErrorFor(activeSlotsOf(state).map((key) => state.slots[key].schema));
 
   const startRun = (request: UnidadStartRequest) => {
     void runStore.start(request);
@@ -98,6 +96,8 @@ export const UnidadTerritorialWizard: React.FC<UnidadTerritorialWizardProps> = (
           <UnidadTablesStep
             slots={state.slots}
             excluded={excludedUnitTablesOf(state)}
+            linkAddressMaster={state.options.linkAddressMaster}
+            onLinkAddressMasterChange={(linkAddressMaster) => dispatch({ type: "optionsChanged", patch: { linkAddressMaster } })}
             onSchemaChange={(key, schema) => dispatch({ type: "slotSchemaChanged", key, schema })}
             onTableChange={(key, table, valid) => dispatch({ type: "slotTableChosen", key, table, valid })}
             loadTables={loadTables}

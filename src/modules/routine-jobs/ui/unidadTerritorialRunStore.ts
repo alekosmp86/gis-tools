@@ -14,6 +14,7 @@ export interface UnidadRunPlan {
   target: string;
   targetSchema: string;
   targetTable: string;
+  linkAddressMaster: boolean;
 }
 
 export type UnidadRunSnapshot = RunSnapshot<UnidadJobStatusView, UnidadRunPlan>;
@@ -36,6 +37,7 @@ const planOf = (request: UnidadStartRequest): UnidadRunPlan => ({
   target: `${request.targetSchema}.${request.targetTable}`,
   targetSchema: request.targetSchema,
   targetTable: request.targetTable,
+  linkAddressMaster: request.options.linkAddressMaster,
 });
 
 function createUnidadRunStore(deps: UnidadRunStoreDeps): UnidadRunStore {

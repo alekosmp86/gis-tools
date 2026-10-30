@@ -1,24 +1,60 @@
 import { describe, expect, it } from "vitest";
+import type { AddressMasterReport } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkReport";
+import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import {
-  buildCompletarWarnings,
+  buildUnitWarnings,
   COMMIT_UNKNOWN_WARNING,
   DRY_RUN_WARNING,
-} from "@/modules/routine-jobs/jobs/completar-unidad-territorial/domain/warnings";
-import type { CompletarCounts } from "@/modules/routine-jobs/jobs/completar-unidad-territorial/types";
-import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
+} from "@/modules/routine-jobs/jobs/unidad-territorial/domain/warnings";
+import type { UnitTargetReport } from "@/modules/routine-jobs/jobs/unidad-territorial/types";
 
 const TABLE = "carto.territorial_unit";
-const NO_AMBIGUOUS: CompletarCounts = { withoutAddressMaster: 2, created: 1, linked: 2, alreadyHadRecord: 1, ambiguous: 0 };
-const countsWith = (overrides: Partial<CompletarCounts>): CompletarCounts => ({ ...NO_AMBIGUOUS, ...overrides });
+const ADDRESS_MASTER_TABLE = "carto.addresses_master";
+const TOTALS = { rowsRead: 0, candidates: 0, skipped: 0 };
+const OPTIONS = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true };
+const TARGET: UnitTargetReport = {
+  table: TABLE,
+  inserted: 0,
+  insertedList: [],
+  updated: 0,
+  updateApplied: true,
+  unchanged: 0,
+  unchangedWithinTolerance: 0,
+  changed: 0,
+  fontDiffers: 0,
+  missing: 0,
+  missingSamples: [],
+  ambiguous: 0,
+  ambiguousSamples: [],
+  geometryChanges: [],
+};
+
+interface LinkCounts {
+  withoutAddressMaster: number;
+  created: number;
+  linked: number;
+  alreadyHadRecord: number;
+  ambiguous: number;
+}
+
+const NO_AMBIGUOUS: LinkCounts = { withoutAddressMaster: 2, created: 1, linked: 2, alreadyHadRecord: 1, ambiguous: 0 };
+const countsWith = (overrides: Partial<LinkCounts>): LinkCounts => ({ ...NO_AMBIGUOUS, ...overrides });
+
+const addressMasterOf = (counts: LinkCounts): AddressMasterReport => ({
+  table: ADDRESS_MASTER_TABLE,
+  counts: { ...counts, toCreate: counts.created, remaining: counts.ambiguous },
+  linkedList: [],
+  ambiguousSamples: [],
+});
 
 const warningsOf = ({
   dryRun = false,
   counts = NO_AMBIGUOUS,
   commitError,
-}: { dryRun?: boolean; counts?: CompletarCounts; commitError?: string } = {}): string[] =>
-  buildCompletarWarnings({ dryRun, unitTable: TABLE, counts, commitError });
+}: { dryRun?: boolean; counts?: LinkCounts; commitError?: string } = {}): string[] =>
+  buildUnitWarnings({ dryRun, options: OPTIONS, totals: TOTALS, target: TARGET, addressMaster: addressMasterOf(counts), commitError });
 
-describe("buildCompletarWarnings", () => {
+describe("buildUnitWarnings address master link", () => {
   describe("dry run and unknown outcome", () => {
     it("should add the dry run warning on a dry run", () => {
       expect(warningsOf({ dryRun: true })).toContain(DRY_RUN_WARNING);

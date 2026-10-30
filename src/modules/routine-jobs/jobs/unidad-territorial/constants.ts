@@ -1,4 +1,8 @@
+import { UNIT_SUBJECT_SPEC } from "../shared/addressMasterLinkSpec";
+
 export const DEFAULT_LOCALITY_TYPE_NAME = "LOCALIDAD CATASTRAL";
+
+export const TERRITORIAL_UNIT_VIEW_NAME = "mv_territorial_unit_full";
 
 export const UNIT_SKIP_REASON = {
   NOMBRE_NULO: "NOMBRE_NULO",
@@ -43,6 +47,7 @@ export const UNIT_TABLE_ROLE = {
   SOURCE: "unidades-origen-localidad",
   TYPE: "unidades-tipo",
   TARGET: "unidades-destino",
+  TARGET_LINKED: "unidades-destino-enlazado",
 } as const;
 
 export type UnitTableRole = (typeof UNIT_TABLE_ROLE)[keyof typeof UNIT_TABLE_ROLE];
@@ -51,6 +56,7 @@ export const UNIT_REQUIRED_COLUMNS_BY_ROLE: Record<UnitTableRole, readonly strin
   [UNIT_TABLE_ROLE.SOURCE]: Object.values(UNIT_SOURCE_COLUMN),
   [UNIT_TABLE_ROLE.TYPE]: Object.values(UNIT_TYPE_COLUMN),
   [UNIT_TABLE_ROLE.TARGET]: Object.values(UNIT_TARGET_COLUMN),
+  [UNIT_TABLE_ROLE.TARGET_LINKED]: [...Object.values(UNIT_TARGET_COLUMN), UNIT_SUBJECT_SPEC.addressMasterColumn],
 };
 
 export const UNIT_TARGET_TITLE = "de unidades territoriales";

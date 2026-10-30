@@ -3,7 +3,7 @@ import type { WritableTargetLayout } from "../shared/tableResolution";
 import type { StepTiming } from "../cargar-padrones/types";
 import type { PairChange, PairStatus, SkipReason } from "./constants";
 import type { TableLayout } from "./domain/layouts";
-import type { AddressMasterAmbiguous, AddressMasterCounts, AddressMasterLinked } from "../shared/addressMasterLinkPass";
+import type { AddressMasterReport } from "../shared/addressMasterLinkReport";
 
 export type { StepTiming } from "../cargar-padrones/types";
 
@@ -166,14 +166,7 @@ export interface ActualizarTargetReport {
   pairsNotApplied: number;
 }
 
-export type ActualizarAddressMasterCounts = AddressMasterCounts & { toCreate: number; remaining: number };
-
-export interface ActualizarAddressMasterReport {
-  table: string;
-  counts: ActualizarAddressMasterCounts;
-  linkedList: AddressMasterLinked[];
-  ambiguousSamples: AddressMasterAmbiguous[];
-}
+export type ActualizarAddressMasterReport = AddressMasterReport;
 
 export interface ActualizarPadronBackup {
   token: string;

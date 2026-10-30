@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableSelectorProps } from "@/ui-kit/components/TableSelector";
 import { UnidadTablesStep } from "@/modules/routine-jobs/ui/steps/UnidadTablesStep";
 import { UnitSlot } from "@/modules/routine-jobs/ui/unidadTerritorialWizardState";
-import { UNIT_TABLE_ROLE } from "@/modules/routine-jobs/jobs/unidad-territorial/constants";
+import { UNIT_REQUIRED_COLUMNS_BY_ROLE, UNIT_TABLE_ROLE } from "@/modules/routine-jobs/jobs/unidad-territorial/constants";
 
 const captured = vi.hoisted(() => ({ selectors: [] as unknown[] }));
 
@@ -36,8 +36,11 @@ function propsOf(overrides: Partial<Props> = {}): Props {
       [UnitSlot.LOCALITY]: { schema: "stg", table: "localidades_catastrales_stg" },
       [UnitSlot.TARGET]: { schema: "carto", table: "territorial_unit" },
       [UnitSlot.TYPE]: { schema: "carto", table: "tipo_unidad" },
+      [UnitSlot.ADDRESS_MASTER]: { schema: "carto", table: "addresses_master" },
     },
-    excluded: { [UnitSlot.LOCALITY]: [], [UnitSlot.TARGET]: ["x"], [UnitSlot.TYPE]: [] },
+    excluded: { [UnitSlot.LOCALITY]: [], [UnitSlot.TARGET]: ["x"], [UnitSlot.TYPE]: [], [UnitSlot.ADDRESS_MASTER]: [] },
+    linkAddressMaster: false,
+    onLinkAddressMasterChange: vi.fn(),
     onSchemaChange: vi.fn(),
     onTableChange: vi.fn(),
     loadTables: vi.fn().mockResolvedValue({ schemaExists: true, tables: [] }),
@@ -85,6 +88,16 @@ describe("UnidadTablesStep wiring (stage 3 after the shared slot step extraction
     expect(checkColumns).toHaveBeenNthCalledWith(1, UNIT_TABLE_ROLE.SOURCE, "stg", "localidades");
     expect(checkColumns).toHaveBeenNthCalledWith(2, UNIT_TABLE_ROLE.TARGET, "carto", "unidades");
     expect(checkColumns).toHaveBeenNthCalledWith(3, UNIT_TABLE_ROLE.TYPE, "carto", "tipos");
+  });
+
+  it("should check the target with the linked role, which requires id_address_master, when the link is on", () => {
+    const checkColumns = vi.fn().mockResolvedValue([]);
+    render({ checkColumns, linkAddressMaster: true });
+
+    void selectorLabelled(LABELS.target).checkColumns("unidades");
+
+    expect(checkColumns).toHaveBeenCalledWith(UNIT_TABLE_ROLE.TARGET_LINKED, "carto", "unidades");
+    expect(UNIT_REQUIRED_COLUMNS_BY_ROLE[UNIT_TABLE_ROLE.TARGET_LINKED]).toContain("id_address_master");
   });
 
   it("should report a choice with the slot key it belongs to", () => {

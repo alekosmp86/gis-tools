@@ -1,6 +1,6 @@
 ---
 title: "Descargar el informe"
-order: 7
+order: 6
 ---
 
 # Descargar el informe
@@ -15,7 +15,7 @@ carto-<etapa>-<simulacion|real>-AAAAMMDD-HHmmss.csv
 
 | Parte | Valores |
 |---|---|
-| `<etapa>` | `cargar-padrones`, `cargar-localidades`, `unidad-territorial`, `completar-unidad-territorial` o `actualizar-padron` |
+| `<etapa>` | `cargar-padrones`, `cargar-localidades`, `unidad-territorial` o `actualizar-padron` |
 | `simulacion` o `real` | `simulacion` si el informe viene de **Analizar sin cargar**; `real` si viene de una carga real |
 | `AAAAMMDD-HHmmss` | Fecha y hora en que se descargó, por ejemplo `20261028-143005` |
 
@@ -51,16 +51,7 @@ Valores de **Cambio**:
 
 Las filas están ordenadas: primero las insertadas, después los cambios de geometría, y dentro de cada grupo por provincia y nombre. Solo se exportan las filas que el informe lista, es decir, **hasta 500** insertadas y 500 cambios de geometría por tabla.
 
-### Completar unidades territoriales
-
-Una fila por cambio, con estas columnas: **Tabla**, **Cambio**, **Provincia**, **Nombre**, **Id** e **Id dirección maestra**.
-
-| Valor de Cambio | Significado |
-|---|---|
-| Dirección maestra creada | Se creó un registro en la tabla de direcciones maestras. **Id** es el id de la unidad. |
-| Unidad enlazada | Se escribió el id de la dirección maestra en la unidad. **Id** es el id de la unidad. |
-
-Una unidad nueva genera dos filas (la creada y la enlazada); una que ya tenía registro, solo la enlazada. Solo se exportan las filas que el informe lista, es decir, **hasta 500** unidades.
+Con la opción de direcciones maestras de **Actualizar unidades territoriales** activada, el archivo agrega la columna **Id dirección maestra** (vacía en las filas de cambio de unidades) y dos clases de filas: **Dirección maestra creada** (en la tabla de direcciones maestras, **Id** es el id de la unidad) y **Unidad enlazada** (en la tabla de unidades, con el id de su dirección maestra). Una unidad nueva genera ambas; una que ya tenía registro, solo la enlazada. Las listas se cortan en 500, con una fila de aviso por cada lista cortada.
 
 ### Cargar padrones
 
@@ -92,7 +83,7 @@ Si una lista del informe se corta en 500 filas, el CSV termina con una fila que 
 
 ## Respaldo para revertir (no es un CSV)
 
-Una actualización real de **Actualizar padrones** también genera un archivo `padron-revert-<esquema>-<tabla>-AAAAMMDD-HHmmss.sql.gz` para deshacer esa carga. Se descarga solo al terminar y se describe en [Etapa 5: Actualizar padrones](actualizar-padron.md).
+Una actualización real de **Actualizar padrones** también genera un archivo `padron-revert-<esquema>-<tabla>-AAAAMMDD-HHmmss.sql.gz` para deshacer esa carga. Se descarga solo al terminar y se describe en [Etapa 4: Actualizar padrones](actualizar-padron.md).
 
 ## Descargar inconsistencias
 
