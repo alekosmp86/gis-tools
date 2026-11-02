@@ -3,6 +3,7 @@ import { addressMasterCountWarnings } from "../../shared/addressMasterLinkPass";
 import { PADRON_SUBJECT_SPEC } from "../../shared/addressMasterLinkSpec";
 import { DETAIL_LIST_LIMIT } from "../../shared/limits";
 import { plural } from "../../shared/text";
+import { PAIR_LOOSE_OVERLAP_MIN, PAIR_OVERLAP_MIN } from "../constants";
 import type { ActualizarAddressMasterReport, ActualizarPadronOptions, ActualizarTargetReport, ActualizarTotals } from "../types";
 
 export interface WarningInput {
@@ -29,6 +30,14 @@ function totalsWarnings({ skipped, repaired }: ActualizarTotals, collidingKeyCou
   return warnings;
 }
 
+const PERCENT_SCALE = 100;
+const LOOSE_OVERLAP_RANGE = `${Math.round(PAIR_LOOSE_OVERLAP_MIN * PERCENT_SCALE)}-${Math.round(PAIR_OVERLAP_MIN * PERCENT_SCALE)}%`;
+
+const looseWarningOf = (pairsLoose: number): string => {
+  const pronoun = pairsLoose === 1 ? "lo" : "los";
+  return `${plural(pairsLoose, "padrón se actualiza", "padrones se actualizan")} por coincidencia parcial (superposición ${LOOSE_OVERLAP_RANGE}); revisar${pronoun} en el listado de pares.`;
+};
+
 function pairWarnings(target: ActualizarTargetReport): string[] {
   const warnings: string[] = [];
   if (target.pairsApplied > 0) {
@@ -36,6 +45,7 @@ function pairWarnings(target: ActualizarTargetReport): string[] {
       `${plural(target.pairsApplied, "padrón se actualiza", "padrones se actualizan")} en su clave (tipo, localidad o número) en ${target.table} en lugar de insertarse como nuevos.`
     );
   }
+  if (target.pairsLoose > 0) warnings.push(looseWarningOf(target.pairsLoose));
   if (target.pairsNotApplied > 0) {
     warnings.push(
       `${plural(target.pairsNotApplied, "posible par no se aplicó", "posibles pares no se aplicaron")} (ambiguos): se insertan como nuevos y la fila antigua se lista como faltante.`

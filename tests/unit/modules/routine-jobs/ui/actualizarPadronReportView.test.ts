@@ -48,6 +48,7 @@ const resultOf = (overrides: Partial<ActualizarPadronResult> = {}): ActualizarPa
     pairs: [],
     pairsTotal: 0,
     pairsApplied: 0,
+    pairsLoose: 0,
     pairsNotApplied: 0,
   },
   warnings: [],

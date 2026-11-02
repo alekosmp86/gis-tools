@@ -1,4 +1,4 @@
-import { PAIR_STATUS, SKIP_REASON, type PairStatus, type SkipReason } from "../jobs/actualizar-padron/constants";
+import { PAIR_STATUS, PAIR_TIER, SKIP_REASON, type PairStatus, type PairTier, type SkipReason } from "../jobs/actualizar-padron/constants";
 import { COMMIT_UNKNOWN_WARNING, DRY_RUN_WARNING } from "../jobs/actualizar-padron/domain/warnings";
 import type {
   ActualizarPadronResult,
@@ -88,6 +88,7 @@ export interface PairView {
   newNumber: string;
   distance: number | null;
   status: string;
+  tier: string;
 }
 
 export interface TargetView {
@@ -176,6 +177,11 @@ const SKIP_REASONS = Object.values(SKIP_REASON) as SkipReason[];
 const PAIR_STATUS_LABEL: Record<PairStatus, string> = {
   [PAIR_STATUS.APPLIED]: "Aplicado",
   [PAIR_STATUS.NOT_APPLIED_AMBIGUOUS]: "No aplicado: ambiguo",
+};
+
+const PAIR_TIER_LABEL: Record<PairTier, string> = {
+  [PAIR_TIER.STRICT]: "Estricta",
+  [PAIR_TIER.LOOSE]: "Parcial (coincidencia parcial)",
 };
 
 const textOf = (value: string | null): string => (value === null || value.trim() === "" ? EMPTY_VALUE : value);
@@ -319,6 +325,7 @@ const pairViewOf = (pair: PadronPair): PairView => ({
   newNumber: textOf(pair.new.number),
   distance: pair.distance,
   status: PAIR_STATUS_LABEL[pair.status],
+  tier: PAIR_TIER_LABEL[pair.tier],
 });
 
 function targetViewOf(target: ActualizarTargetReport): TargetView {

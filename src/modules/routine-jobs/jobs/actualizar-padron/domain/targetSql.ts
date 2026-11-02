@@ -12,8 +12,12 @@ import {
   DESTINATION_COLUMN,
   LOCALITY_COLUMN,
   PAIR_AREA_RATIO_TOLERANCE,
+  PAIR_LOOSE_AREA_RATIO_TOLERANCE,
+  PAIR_LOOSE_OVERLAP_MIN,
   PAIR_OVERLAP_MIN,
   PAIR_STATUS,
+  PAIR_TIER,
+  type PairTier,
   STAGING_COLUMN,
 } from "../constants";
 import type { ActualizarPadronOptions, PadronLayouts } from "../types";
@@ -32,10 +36,10 @@ const PAIR_MEASURED_ALIAS = "pm";
 const PAIR_COUNTED_ALIAS = "cnt";
 const PAIR_ALIAS = "pr";
 const OLD_LOCALITY_ALIAS = "oldloc";
+const FOOTPRINT_ALIAS = "fa";
+const TIER_ALIAS = "ft";
 const DEPARTMENT_COLUMN = STAGING_COLUMN.NOMDEPTO;
 const LOCALITY_NAME_COLUMN = STAGING_COLUMN.NOMLOCCAT;
-const AREA_RATIO_LOWER = 1 - PAIR_AREA_RATIO_TOLERANCE;
-const AREA_RATIO_UPPER = 1 + PAIR_AREA_RATIO_TOLERANCE;
 
 const CTE_TARGET = {
   CANDIDATES: "candidates",
@@ -73,7 +77,25 @@ const PAIR_COLUMN = {
   TYPE_CHANGED: "type_changed",
   LOCALITY_CHANGED: "locality_changed",
   NUMBER_CHANGED: "number_changed",
+  TIER: "tier",
 } as const;
+
+const FOOTPRINT_AREA = {
+  OVERLAP: "overlap_area",
+  EXISTING: "existing_area",
+  INCOMING: "incoming_area",
+} as const;
+
+interface PairTierBand {
+  tier: PairTier;
+  overlapMin: number;
+  areaRatioTolerance: number;
+}
+
+const PAIR_TIER_BANDS: readonly PairTierBand[] = [
+  { tier: PAIR_TIER.STRICT, overlapMin: PAIR_OVERLAP_MIN, areaRatioTolerance: PAIR_AREA_RATIO_TOLERANCE },
+  { tier: PAIR_TIER.LOOSE, overlapMin: PAIR_LOOSE_OVERLAP_MIN, areaRatioTolerance: PAIR_LOOSE_AREA_RATIO_TOLERANCE },
+];
 
 const INSERT_COLUMNS: readonly string[] = [
   DESTINATION_COLUMN.TYPE_PADRON,
@@ -211,15 +233,33 @@ function unmatchedTargetsCte(target: WritableTargetLayout): string {
   );
 }
 
-/* Same province, bounding boxes that meet, the old footprint almost wholly covered by the new one and the areas within the ratio.
-   CASE, not AND, guards the overlay: PostgreSQL does not short-circuit AND, and GEOS aborts the statement on invalid input. */
-function footprintMatchSql(existing: string, incoming: string): string {
-  const existingArea = `ST_Area(${existing})`;
-  const shape = [
-    `ST_Area(ST_Intersection(${existing}, ${incoming})) >= ${PAIR_OVERLAP_MIN} * ${existingArea}`,
-    `ST_Area(${incoming}) BETWEEN ${AREA_RATIO_LOWER} * ${existingArea} AND ${AREA_RATIO_UPPER} * ${existingArea}`,
+/* The intersection is computed once per candidate, and only for valid geometries: CASE, not AND, guards the overlay,
+   because PostgreSQL does not short-circuit AND and GEOS aborts the statement on invalid input. */
+function footprintAreasSql(existing: string, incoming: string): string {
+  const valid = `ST_IsValid(${existing}) AND ST_IsValid(${incoming})`;
+  return [
+    `CASE WHEN ${valid} THEN ST_Area(ST_Intersection(${existing}, ${incoming})) END AS ${q(FOOTPRINT_AREA.OVERLAP)}`,
+    `CASE WHEN ${valid} THEN ST_Area(${existing}) END AS ${q(FOOTPRINT_AREA.EXISTING)}`,
+    `CASE WHEN ${valid} THEN ST_Area(${incoming}) END AS ${q(FOOTPRINT_AREA.INCOMING)}`,
+  ].join(", ");
+}
+
+/* The overlap is a share of the old footprint; the new area must sit within the band around the old one. */
+function tierBandSql({ overlapMin, areaRatioTolerance }: PairTierBand): string {
+  const footprintOf = (column: string): string => `${FOOTPRINT_ALIAS}.${q(column)}`;
+  const existingArea = footprintOf(FOOTPRINT_AREA.EXISTING);
+  const lower = 1 - areaRatioTolerance;
+  const upper = 1 + areaRatioTolerance;
+  return [
+    `${footprintOf(FOOTPRINT_AREA.OVERLAP)} >= ${overlapMin} * ${existingArea}`,
+    `${footprintOf(FOOTPRINT_AREA.INCOMING)} BETWEEN ${lower} * ${existingArea} AND ${upper} * ${existingArea}`,
   ].join(" AND ");
-  return `CASE WHEN ST_IsValid(${existing}) AND ST_IsValid(${incoming}) THEN ${shape} ELSE false END`;
+}
+
+/** STRICT is tried before LOOSE; a NULL tier (no band met, or an invalid geometry) is not a candidate. */
+function pairTierSql(): string {
+  const branches = PAIR_TIER_BANDS.map((band) => `WHEN ${tierBandSql(band)} THEN ${literal(band.tier)}`);
+  return `CASE ${branches.join(" ")} END`;
 }
 
 function pairCandidateColumns(): string[] {
@@ -236,23 +276,28 @@ function pairCandidateColumns(): string[] {
     `${pairableOf(DESTINATION_COLUMN.NUMBER)} AS ${q(PAIR_COLUMN.OLD_NUMBER)}`,
     `${targetGeometry} AS ${q(PAIR_COLUMN.TARGET_GEOMETRY)}`,
     `${geometriesEqualSql(targetGeometry, newGeometry)} AS ${q(PAIR_COLUMN.EQUAL)}`,
+    `${TIER_ALIAS}.${q(PAIR_COLUMN.TIER)} AS ${q(PAIR_COLUMN.TIER)}`,
   ];
 }
 
-/* The && probe reads the destination table's GiST index; the footprint reads the unmatched copy of the geometry, so matched neighbours are dropped before it runs. */
+/* The && probe reads the destination table's GiST index; the footprint reads the unmatched copy of the geometry, so matched neighbours are dropped before it runs. OFFSET 0 fences the footprint subquery: without it the planner flattens it and re-runs the intersection per reference. */
 function pairCandidatesCte(target: WritableTargetLayout): string {
+  const existing = pairableOf(DESTINATION_COLUMN.GEOMETRY);
+  const incoming = plannedOf(CANDIDATE_GEOMETRY);
   return cte(
     CTE_TARGET.PAIR_CANDIDATES,
     [
       `SELECT ${pairCandidateColumns().join(", ")}`,
       `FROM ${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS}`,
       `JOIN ${targetTableSql(target)}`,
-      `ON ${targetOf(target, DESTINATION_COLUMN.GEOMETRY)} && ${plannedOf(CANDIDATE_GEOMETRY)}`,
+      `ON ${targetOf(target, DESTINATION_COLUMN.GEOMETRY)} && ${incoming}`,
       `AND ${targetOf(target, DESTINATION_COLUMN.ID_PROVINCE)} = ${plannedOf(DESTINATION_COLUMN.ID_PROVINCE)}`,
       `JOIN ${q(CTE_TARGET.PAIRABLE)} AS ${PAIRABLE_ALIAS}`,
       `ON ${pairableOf(DESTINATION_COLUMN.ID)} = ${targetOf(target, DESTINATION_COLUMN.ID)}`,
+      `CROSS JOIN LATERAL (SELECT ${footprintAreasSql(existing, incoming)} OFFSET 0) AS ${FOOTPRINT_ALIAS}`,
+      `CROSS JOIN LATERAL (SELECT ${pairTierSql()} AS ${q(PAIR_COLUMN.TIER)}) AS ${TIER_ALIAS}`,
       `WHERE ${classIs(MATCH_CLASS.NEW)}`,
-      `AND ${footprintMatchSql(pairableOf(DESTINATION_COLUMN.GEOMETRY), plannedOf(CANDIDATE_GEOMETRY))}`,
+      `AND ${TIER_ALIAS}.${q(PAIR_COLUMN.TIER)} IS NOT NULL`,
     ].join(" ")
   );
 }
@@ -349,11 +394,14 @@ function classificationCountsSql(options: ActualizarPadronOptions): string {
   ].join(" ");
 }
 
+const appliedLooseCondition = (): string => `${appliedCondition()} AND ${pairOf(PAIR_COLUMN.TIER)} = ${literal(PAIR_TIER.LOOSE)}`;
+
 /* A new row claimed by two or more not-applied pairs is one candidate: its duplicate pairs count once. */
 function pairCountsSql(): string {
   const notAppliedKeys = `SELECT DISTINCT ${KEY_COLUMNS.map((column) => pairOf(column)).join(", ")} FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS} WHERE ${notAppliedCondition()}`;
   return [
     `${pairCountSql(appliedCondition())} AS "pairs",`,
+    `${pairCountSql(appliedLooseCondition())} AS "pairs_loose",`,
     `(SELECT count(*) FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS}) AS "pairs_total",`,
     `(SELECT count(*) FROM (${notAppliedKeys}) AS "not_applied_keys") AS "pairs_not_applied"`,
   ].join(" ");
@@ -390,6 +438,7 @@ function pairsListSql({ locality }: PadronLayouts): string {
     `${pairOf(PAIR_COLUMN.TYPE_CHANGED)} AS "typeChanged"`,
     `${pairOf(PAIR_COLUMN.LOCALITY_CHANGED)} AS "localityChanged"`,
     `${pairOf(PAIR_COLUMN.NUMBER_CHANGED)} AS "numberChanged"`,
+    `${pairOf(PAIR_COLUMN.TIER)} AS "tier"`,
     `${pairOf(PAIR_COLUMN.DISTANCE)} AS "distance"`,
     `${pairOf(PAIR_COLUMN.TARGET_ID)} AS "oldId"`,
     `${pairOf(PAIR_COLUMN.OLD_TYPE_PADRON)} AS "oldTypePadron"`,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildActualizarPadronCsv } from "@/modules/routine-jobs/ui/reportCsv/actualizarPadronCsv";
-import type { ActualizarPadronResult, PadronGeometryChange, PadronInserted } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
+import type { ActualizarPadronResult, PadronGeometryChange, PadronInserted, PadronPair } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
+import { PAIR_CHANGE, PAIR_STATUS, PAIR_TIER, type PairTier } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { actualizarPadronResultOf, actualizarTargetReportOf, BOM, parseCsv } from "./reportCsvFixtures";
 
@@ -321,6 +322,47 @@ describe("buildActualizarPadronCsv (AP-49)", () => {
       });
 
       expect(rows.some((row) => row[1].startsWith("Lista incompleta"))).toBe(false);
+    });
+  });
+
+  describe("key updated rows (applied pairs)", () => {
+    const STRICT_KEY_LABEL = "Clave actualizada";
+    const LOOSE_KEY_LABEL = "Clave actualizada (coincidencia parcial)";
+
+    const appliedPairOf = (tier: PairTier): PadronPair => ({
+      status: PAIR_STATUS.APPLIED,
+      tier,
+      changes: [PAIR_CHANGE.NUMBER],
+      oldId: 555,
+      old: { typePadron: "URBANO", provinceId: 3, localityId: 20, number: "10", department: "JUJUY", locality: "Humahuaca" },
+      new: { typePadron: "URBANO", provinceId: 3, localityId: 20, number: "11", department: "JUJUY", locality: "Humahuaca" },
+      distance: 3.5,
+    });
+
+    const pairTargetOf = (pair: PadronPair): Partial<ActualizarPadronResult> => ({
+      target: actualizarTargetReportOf({
+        inserted: 0,
+        insertedList: [],
+        changed: 0,
+        geometryChanges: [],
+        updated: 1,
+        pairs: [pair],
+        pairsTotal: 1,
+        pairsApplied: 1,
+        pairsLoose: pair.tier === PAIR_TIER.LOOSE ? 1 : 0,
+      }),
+    });
+
+    it("should write Clave actualizada (coincidencia parcial) for an applied LOOSE pair", () => {
+      const rows = dataRowsOf(pairTargetOf(appliedPairOf(PAIR_TIER.LOOSE)));
+
+      expect(rows).toEqual([[TABLE, LOOSE_KEY_LABEL, "URBANO", "JUJUY", "Humahuaca", "11", "3.5", "", "", "URBANO", "Humahuaca", "10"]]);
+    });
+
+    it("should write Clave actualizada and never the partial-match label for an applied STRICT pair", () => {
+      const rows = dataRowsOf(pairTargetOf(appliedPairOf(PAIR_TIER.STRICT)));
+
+      expect(rows).toEqual([[TABLE, STRICT_KEY_LABEL, "URBANO", "JUJUY", "Humahuaca", "11", "3.5", "", "", "URBANO", "Humahuaca", "10"]]);
     });
   });
 

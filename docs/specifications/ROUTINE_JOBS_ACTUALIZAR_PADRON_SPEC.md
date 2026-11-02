@@ -226,16 +226,16 @@ The wizard and the request carry two schema fields:
 
 - AP-64: Pairing. A pair is a `NEW` candidate and a destination row whose key no staging row carries, skipped or not (the unmatched destination
   rows). The bounding-box probe on the destination geometry index reads every destination row whose box meets a candidate, matched or not;
-  the footprint is evaluated only on the unmatched rows. Both sides must have the same `id_province`, overlapping bounding boxes, valid
-  destination and candidate geometries, a destination footprint overlapped at least 98 % by the candidate (`ST_Area(ST_Intersection) >= 0.98 x`
-  destination area) and an area within 2 % of the destination area (`0.98 x` to `1.02 x`). A destination row whose key a skipped staging row
+  the footprint is evaluated only on the unmatched rows. Both sides must have the same `id_province`, overlapping bounding boxes and valid
+  destination and candidate geometries, and the footprint must meet the STRICT or the LOOSE tier of AP-84 (98 % or 85 % overlap of the
+  destination area, area within 2 % or 10 %). A destination row whose key a skipped staging row
   still carries is not paired (it stays listed as missing, AP-41). The Hausdorff distance is measured for the pairs only and is informational: the
   tolerance does not gate a pair, so a pair with a distance above tolerance is applied too. Status: `APPLIED` when each side occurs in exactly one
   pair; `NOT_APPLIED_AMBIGUOUS` when either side occurs in more than one pair.
 - AP-65: Applied pairs are written in place: one UPDATE of the destination row sets `type_padron`, `id_cadastral_locality` and `number` to the
   new key, and `geometry` to the candidate geometry only when `Actualizar geometrías` is on. The statement never sets `id`, `id_address_master`
   or `id_province`, and it issues no DELETE or TRUNCATE. The row keeps its id and its address master link. The number may change only in an
-  applied pair (strict pairs, confirmed by the user for MJ-13). The new row of an applied pair is not inserted (AP-42) and its old row is not
+  applied pair, of either tier (AP-84; the user confirmed the strict tier for MJ-13). The new row of an applied pair is not inserted (AP-42) and its old row is not
   missing (AP-41).
 - AP-66: `NOT_APPLIED_AMBIGUOUS` pairs change nothing: the new row is inserted (AP-42) and the old row is listed as
   missing (AP-41). They are reported (AP-67) and warned about in Spanish.
@@ -247,6 +247,19 @@ The wizard and the request carry two schema fields:
   row that matched several destination rows is listed once, and the `pairs_not_applied` count is the number of such new rows. The count check
   of AP-48 compares the paired rows with the applied pairs. Verification: a second run of the same stage on the same data inserts and updates
   nothing.
+- AP-84: Tiers. Each pair candidate carries a `tier`: `STRICT` when the overlap is at least 98 % (`PAIR_OVERLAP_MIN` 0.98) and the area is
+  within 2 % (`PAIR_AREA_RATIO_TOLERANCE` 0.02, `0.98 x` to `1.02 x`); otherwise `LOOSE` when the overlap is at least 85 %
+  (`PAIR_LOOSE_OVERLAP_MIN` 0.85) and the area is within 10 % (`PAIR_LOOSE_AREA_RATIO_TOLERANCE` 0.10, `0.90 x` to `1.10 x`). A candidate
+  that meets STRICT is tagged STRICT even when it also meets LOOSE; a candidate that meets neither is not a candidate. The intersection area is
+  computed once per candidate, and only for valid geometries (the CASE guard of AP-64). The one-to-one count of AP-64 runs over the candidates of
+  both tiers, so an ambiguity blocks both. `LOOSE` pairs are `APPLIED` for now, like `STRICT` ones; a later phase will gate them behind review.
+  The classify result carries `pairs_loose` (applied pairs with tier `LOOSE`), and every element of `pairs_list` carries `tier`. The writes
+  of AP-65 do not change: a pair UPDATE sets only `type_padron`, `id_cadastral_locality`, `number` and, when `Actualizar geometrías` is on,
+  `geometry`.
+- AP-85: Tier report. The pair table has a `Coincidencia` column: `Estricta` or `Parcial (coincidencia parcial)`. When `pairsLoose` is
+  greater than zero, the warnings carry the Spanish line "N padrones se actualizan por coincidencia parcial (superposición 85-98%); revisarlos
+  en el listado de pares." (singular: "1 padrón se actualiza ...; revisarlo ..."). The change CSV (AP-49) keeps its columns; the row of an applied
+  `LOOSE` pair has the `Cambio` value `Clave actualizada (coincidencia parcial)`, and a `STRICT` pair keeps `Clave actualizada`.
 
 ## Shared job store
 
@@ -489,7 +502,7 @@ its SQL unchanged. The script covers only the changed rows (never a dump of the 
 ## Acceptance criteria count
 
 AP-1 to AP-7b, AP-9 to AP-14 (AP-8 removed), AP-15 to AP-36, AP-37 to AP-49, with AP-2b, AP-7b, AP-10b and AP-32b. AP-64 to AP-67 are the
-pairs of reclassified and renumbered padrones. AP-50 is the
+pairs of reclassified and renumbered padrones, and AP-84 and AP-85 are their loose tier and its report. AP-50 is the
 destination key-format check. AP-51 to AP-60 are the address master link option. Criteria AP-26 and AP-49 are the shared-store and CSV
 criteria. AP-61 is the inconsistencies list. AP-62 is the table defaults and the locality hint. AP-63 is the locality table reference
 check (preflight, refusal or warning). AP-68 to AP-76 (AP-70a included) are the revert backup of a real run (no backup, no write; capture; script contents;

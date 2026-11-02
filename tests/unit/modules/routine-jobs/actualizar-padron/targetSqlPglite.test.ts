@@ -346,6 +346,229 @@ describe("actualizar-padron pairs of reclassified and renumbered padrones (AP-64
   });
 });
 
+/* Rectangles anchored at the origin, encoded "width:height": two of them intersect in min(width) x min(height), so overlap and area ratio are exact decimals. */
+const RECTANGLE_STUBS_SQL = `
+  CREATE DOMAIN geometry AS text;
+  CREATE FUNCTION rect_width(geometry) RETURNS numeric AS $$ SELECT split_part($1::text, ':', 1)::numeric $$ LANGUAGE sql;
+  CREATE FUNCTION rect_height(geometry) RETURNS numeric AS $$ SELECT split_part($1::text, ':', 2)::numeric $$ LANGUAGE sql;
+  CREATE FUNCTION ST_IsValid(geometry) RETURNS boolean AS $$ SELECT $1 <> 'bad' $$ LANGUAGE sql;
+  CREATE FUNCTION ST_MakeValid(geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_CollectionExtract(geometry, int) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION GeometryType(geometry) RETURNS text AS $$ SELECT 'MULTIPOLYGON' $$ LANGUAGE sql;
+  CREATE FUNCTION ST_SRID(geometry) RETURNS int AS $$ SELECT 32721 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_Transform(geometry, int) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_Multi(geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_Force2D(geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_IsEmpty(geometry) RETURNS boolean AS $$ SELECT $1 = '' $$ LANGUAGE sql;
+  CREATE FUNCTION ST_Normalize(geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_SnapToGrid(geometry, numeric) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_HausdorffDistance(geometry, geometry) RETURNS float8 AS $$ SELECT 1::float8 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_SymDifference(geometry, geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_Union(geometry, geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_Area(geometry) RETURNS float8 AS $$ SELECT (rect_width($1) * rect_height($1))::float8 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_Intersection(geometry, geometry) RETURNS geometry AS $$
+    SELECT (least(rect_width($1), rect_width($2))::text || ':' || least(rect_height($1), rect_height($2))::text)::geometry
+  $$ LANGUAGE sql;
+  CREATE FUNCTION geometry_overlaps(geometry, geometry) RETURNS boolean AS $$ SELECT true $$ LANGUAGE sql;
+  CREATE OPERATOR && (LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overlaps);
+`;
+
+describe("actualizar-padron pair tiers by footprint overlap and area ratio (STRICT and LOOSE)", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(RECTANGLE_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(PAIR_REFERENCE_SQL);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  it("should pair the NEW row as LOOSE and update the old row in place when overlap is 0.93 and area ratio is 1.03 (old 100:93 area 9300, new 93:103 area 9579, intersection 93x93 = 8649)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:93', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '93:103');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+    const pairsList = classification.pairs_list as Array<{ tier: string }>;
+
+    expect(Number(classification.pairs)).toBe(1);
+    expect(Number(classification.pairs_loose)).toBe(1);
+    expect(Number(classification.pairs_not_applied)).toBe(0);
+    expect(pairsList).toHaveLength(1);
+    expect(pairsList[0].tier).toBe("LOOSE");
+    expect(Number(apply.paired)).toBe(1);
+    expect(Number(apply.inserted)).toBe(0);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({
+      id: before[0].id,
+      number: "501",
+      type_padron: "RURAL",
+      id_cadastral_locality: null,
+      id_province: 1,
+      geometry: "93:103",
+      id_address_master: 77,
+    });
+  });
+
+  it("should not pair and should insert the NEW row when overlap is 0.80, below the loose floor of 0.85 (old 100:100 area 10000, new 80:115 area 9200 with ratio 0.92 inside the band, intersection 80x100 = 8000)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:100', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '80:115');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs_total)).toBe(0);
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.missing)).toBe(1);
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(after.find((row) => row.id === before[0].id)).toEqual(before[0]);
+    expect(after.filter((row) => row.number === "501")).toHaveLength(1);
+  });
+
+  it("should not pair and should insert the NEW row when area ratio is 1.15, above the loose ceiling of 1.10 (old 100:100 area 10000, new 100:115 area 11500, full overlap)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:100', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '100:115');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs_total)).toBe(0);
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.missing)).toBe(1);
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(after.find((row) => row.id === before[0].id)).toEqual(before[0]);
+    expect(after.filter((row) => row.number === "501")).toHaveLength(1);
+  });
+
+  it("should tag the pair as STRICT and count no loose pairs when overlap is 1.00 and area ratio is 1.01 (old 100:100 area 10000, new 100:101 area 10100)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:100', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '100:101');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+    const pairsList = classification.pairs_list as Array<{ tier: string }>;
+
+    expect(Number(classification.pairs)).toBe(1);
+    expect(Number(classification.pairs_loose)).toBe(0);
+    expect(pairsList).toHaveLength(1);
+    expect(pairsList[0].tier).toBe("STRICT");
+    expect(Number(apply.paired)).toBe(1);
+    expect(Number(apply.inserted)).toBe(0);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ id: before[0].id, number: "501", type_padron: "RURAL", geometry: "100:101" });
+  });
+
+  it("should tag the pair as LOOSE and count it as loose when overlap is 1.00 and area ratio is 1.05, only the ratio failing STRICT (old 100:100 area 10000, new 100:105 area 10500, intersection 100x100 = 10000)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:100', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '100:105');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+    const pairsList = classification.pairs_list as Array<{ tier: string }>;
+
+    expect(Number(classification.pairs)).toBe(1);
+    expect(Number(classification.pairs_loose)).toBe(1);
+    expect(Number(classification.pairs_not_applied)).toBe(0);
+    expect(pairsList).toHaveLength(1);
+    expect(pairsList[0].tier).toBe("LOOSE");
+    expect(Number(apply.paired)).toBe(1);
+    expect(Number(apply.inserted)).toBe(0);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({
+      id: before[0].id,
+      number: "501",
+      type_padron: "RURAL",
+      id_cadastral_locality: null,
+      id_province: 1,
+      geometry: "100:105",
+      id_address_master: 77,
+    });
+  });
+
+  it("should not throw and should pair nothing when an unmatched destination geometry is invalid and the overlay would raise on it (validity guard)", async () => {
+    await database.exec(`
+      CREATE OR REPLACE FUNCTION ST_Intersection(geometry, geometry) RETURNS geometry AS $$
+      BEGIN
+        IF $1 = 'bad' OR $2 = 'bad' THEN
+          RAISE EXCEPTION 'GEOS: overlay of an invalid geometry';
+        END IF;
+        RETURN (least(rect_width($1), rect_width($2))::text || ':' || least(rect_height($1), rect_height($2))::text)::geometry;
+      END
+      $$ LANGUAGE plpgsql;
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, 'bad', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '5:5');
+    `);
+    await expect(database.query("SELECT ST_Intersection('bad'::geometry, '5:5'::geometry)")).rejects.toThrow();
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs_total)).toBe(0);
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.missing)).toBe(1);
+    expect(Number(classification.new)).toBe(1);
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(after.find((row) => row.id === before[0].id)).toEqual(before[0]);
+    expect(after.filter((row) => row.number === "501")).toHaveLength(1);
+  });
+
+  it("should leave two LOOSE candidates ambiguous, pair nothing and insert the NEW row when one NEW row claims both old rows at overlap 0.93 and area ratio 1.03", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master) VALUES
+        ('500', 'URBANO', 10, 1, '100:93', 77),
+        ('501', 'URBANO', 10, 1, '100:93', 78);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 502, '93:103');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+    const pairsList = classification.pairs_list as Array<{ tier: string }>;
+
+    expect(Number(classification.pairs_total)).toBe(2);
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.pairs_not_applied)).toBe(1);
+    expect(Number(classification.pairs_loose)).toBe(0);
+    expect(Number(classification.missing)).toBe(2);
+    expect(pairsList.map((pair) => pair.tier)).toEqual(["LOOSE", "LOOSE"]);
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(after.filter((row) => row.number === "500" || row.number === "501")).toEqual(
+      before.filter((row) => row.number === "500" || row.number === "501")
+    );
+    expect(after.filter((row) => row.number === "502")).toHaveLength(1);
+  });
+});
+
 /* ST_AsEWKB stand-in: the geometry text is its own hex form, so an even-length digit string round-trips exactly. */
 const EWKB_STUB_SQL = `CREATE FUNCTION ST_AsEWKB(geometry) RETURNS bytea AS 'SELECT decode($1::text, ''hex'')' LANGUAGE sql;`;
 

@@ -60,6 +60,7 @@ const PAIR_COLUMNS: TableColumn<PairView>[] = [
     cell: (pair) => (pair.distance === null ? NO_DATA_TEXT : pair.distance.toFixed(DECIMAL_PLACES)),
   },
   { header: "Estado", cell: (pair) => pair.status },
+  { header: "Coincidencia", cell: (pair) => pair.tier },
 ];
 
 function TargetDetails({ target }: { target: TargetView }) {

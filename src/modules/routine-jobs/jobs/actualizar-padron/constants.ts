@@ -152,8 +152,17 @@ export const PAIR_CHANGE = {
 
 export type PairChange = (typeof PAIR_CHANGE)[keyof typeof PAIR_CHANGE];
 
+export const PAIR_TIER = {
+  STRICT: "STRICT",
+  LOOSE: "LOOSE",
+} as const;
+
+export type PairTier = (typeof PAIR_TIER)[keyof typeof PAIR_TIER];
+
 /** A new row pairs with an unmatched destination row when the footprints overlap and have the same area, within these ratios. */
 export const PAIR_OVERLAP_MIN = 0.98;
 export const PAIR_AREA_RATIO_TOLERANCE = 0.02;
+export const PAIR_LOOSE_OVERLAP_MIN = 0.85;
+export const PAIR_LOOSE_AREA_RATIO_TOLERANCE = 0.1;
 
 export const PADRON_REFRESH_VIEW_NAMES = ["mv_padron", "mv_padron_wms"] as const;

@@ -73,11 +73,16 @@ Un padrón del origen que se omitió (ver **Filas omitidas**) no tiene clase: no
 
 Un padrón que cambió de tipo (rural o urbano), de localidad o de número, pero que sigue ocupando la misma forma en el mapa, no es un padrón nuevo. La carga lo empareja con la fila antigua y actualiza esa fila en su lugar: su id y su dirección maestra se conservan y nunca se renumera ninguna fila.
 
-Un par se aplica cuando el padrón nuevo y la fila antigua están en la misma provincia, la forma nueva cubre casi por completo a la antigua, las áreas difieren como mucho en un 2 %, cada uno tiene una sola pareja. La tolerancia no decide si un par se aplica: la distancia entre las formas se muestra solo como información. Si el número cambia, solo cambia en un par aplicado.
+Un par se aplica cuando el padrón nuevo y la fila antigua están en la misma provincia, la forma nueva cubre a la antigua con la superposición mínima de uno de los dos niveles, las áreas están dentro de la banda de ese nivel y cada uno tiene una sola pareja:
+
+- **Estricta**: la forma nueva cubre al menos el 98 % de la antigua y las áreas difieren como mucho en un 2 %.
+- **Parcial**: la forma nueva cubre al menos el 85 % de la antigua y las áreas difieren como mucho en un 10 %. El par también se aplica, pero el informe lo marca como **Parcial (coincidencia parcial)** y avisa que hay que revisarlo en el listado de pares.
+
+Un par parcial que comparte fila con otro candidato (ambiguo) no se aplica, igual que uno estricto. La tolerancia no decide si un par se aplica: la distancia entre las formas se muestra solo como información. Si el número cambia, solo cambia en un par aplicado.
 
 Los pares que no se aplican no cambian nada: el padrón nuevo se inserta y la fila antigua se lista como faltante. Son **ambiguos** (una de las dos filas tiene más de una pareja).
 
-En el informe, la sección **Padrones reclasificados o renumerados** muestra cada par con su estado: **Aplicado** o **No aplicado: ambiguo**. Los pares aplicados aparecen en el CSV de cambios como **Clave actualizada**; los no aplicados, en el CSV de inconsistencias.
+En el informe, la sección **Padrones reclasificados o renumerados** muestra cada par con su estado: **Aplicado** o **No aplicado: ambiguo**. Los pares aplicados aparecen en el CSV de cambios como **Clave actualizada** (los parciales, como **Clave actualizada (coincidencia parcial)**); los no aplicados, en el CSV de inconsistencias.
 
 ## Cómo leer el informe
 

@@ -316,6 +316,7 @@ export function actualizarTargetReportOf(overrides: Partial<ActualizarTargetRepo
     pairs: [],
     pairsTotal: 0,
     pairsApplied: 0,
+    pairsLoose: 0,
     pairsNotApplied: 0,
     ...overrides,
   };

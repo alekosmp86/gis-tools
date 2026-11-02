@@ -8,6 +8,7 @@ import {
   SKIPPED_GROUP_LIMIT,
   type PairChange,
   type PairStatus,
+  type PairTier,
   type SkipReason,
 } from "../constants";
 import type {
@@ -154,6 +155,7 @@ const pairChangesOf = (entry: ReportRow): PairChange[] =>
 
 const pairOf = (entry: ReportRow): PadronPair => ({
   status: entry.status as PairStatus,
+  tier: entry.tier as PairTier,
   changes: pairChangesOf(entry),
   oldId: numberOf(entry.oldId),
   old: {
@@ -179,6 +181,7 @@ export function toPadronClassification(row: ReportRow): PadronClassification {
       missing: countOf(row.missing),
       updates: countOf(row.updates),
       pairs: countOf(row.pairs),
+      pairsLoose: countOf(row.pairs_loose),
       pairsTotal: countOf(row.pairs_total),
       pairsNotApplied: countOf(row.pairs_not_applied),
     },
@@ -230,6 +233,7 @@ export function buildPadronTargetReport({
     pairs: classification.pairs,
     pairsTotal: counts.pairsTotal,
     pairsApplied: counts.pairs,
+    pairsLoose: counts.pairsLoose,
     pairsNotApplied: counts.pairsNotApplied,
   };
 }

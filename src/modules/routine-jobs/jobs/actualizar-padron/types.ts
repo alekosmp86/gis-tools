@@ -1,7 +1,7 @@
 import type { DbConfig } from "@/core/types/db";
 import type { WritableTargetLayout } from "../shared/tableResolution";
 import type { StepTiming } from "../cargar-padrones/types";
-import type { PairChange, PairStatus, SkipReason } from "./constants";
+import type { PairChange, PairStatus, PairTier, SkipReason } from "./constants";
 import type { TableLayout } from "./domain/layouts";
 import type { AddressMasterReport } from "../shared/addressMasterLinkReport";
 
@@ -103,6 +103,7 @@ export interface PadronGeometryChange extends PadronNamedKey {
 /** A new row and the unmatched destination row it reclassifies or renumbers; the old key is the destination's. */
 export interface PadronPair {
   status: PairStatus;
+  tier: PairTier;
   changes: PairChange[];
   oldId: number | null;
   old: PadronNamedKey;
@@ -126,6 +127,7 @@ export interface PadronCounts {
   missing: number;
   updates: number;
   pairs: number;
+  pairsLoose: number;
   pairsTotal: number;
   pairsNotApplied: number;
 }
@@ -163,6 +165,7 @@ export interface ActualizarTargetReport {
   pairs: PadronPair[];
   pairsTotal: number;
   pairsApplied: number;
+  pairsLoose: number;
   pairsNotApplied: number;
 }
 

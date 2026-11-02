@@ -1,4 +1,4 @@
-import { PAIR_STATUS } from "../../jobs/actualizar-padron/constants";
+import { PAIR_STATUS, PAIR_TIER } from "../../jobs/actualizar-padron/constants";
 import type {
   ActualizarAddressMasterReport,
   ActualizarPadronResult,
@@ -94,10 +94,13 @@ const geometryRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[]
     )
   );
 
+const keyUpdatedKindOf = (pair: PadronPair): ChangeKind =>
+  pair.tier === PAIR_TIER.LOOSE ? CHANGE_KIND.KEY_UPDATED_LOOSE : CHANGE_KIND.KEY_UPDATED;
+
 const keyUpdatedRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[] =>
   target.pairs
     .filter(isApplied)
-    .map((pair) => recordOf(target.table, CHANGE_KIND.KEY_UPDATED, pair.new, pair.distance, null, previousOf(pair.old)));
+    .map((pair) => recordOf(target.table, keyUpdatedKindOf(pair), pair.new, pair.distance, null, previousOf(pair.old)));
 
 const compareText = (first: string, second: string): number => first.localeCompare(second, "es", { numeric: true });
 
