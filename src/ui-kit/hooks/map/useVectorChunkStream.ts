@@ -5,6 +5,8 @@ import { MAP_MICRO_CHUNK_SIZE, MAP_FRAME_BUDGET_MS } from "@/core/constants/mapC
 import type { MapFeatureStyle } from "@/core/types/map";
 import { createStyleResolver } from "@/ui-kit/map/MapSymbologyStyler";
 import { bindGroupFeatureEvents } from "@/ui-kit/map/MapEventHandler";
+import { bindFeatureLabel } from "@/ui-kit/map/MapFeatureLabel";
+import type { MapInteractionOptions } from "@/ui-kit/types/map";
 
 export function useVectorChunkStream(
   mapInstanceRef: React.RefObject<L.Map | null>,
@@ -14,16 +16,19 @@ export function useVectorChunkStream(
   featureStyle: MapFeatureStyle,
   onSelectFeature?: (index: number | null) => void,
   isMapReady: boolean = false,
-  isVisible: boolean = true
+  isVisible: boolean = true,
+  interaction: MapInteractionOptions = {}
 ): {
   renderedCount: number;
   isChunking: boolean;
+  renderError: Error | null;
   featureGroupRef: React.RefObject<L.FeatureGroup | null>;
 } {
   const featureGroupRef = useRef<L.FeatureGroup | null>(null);
   const lastProcessedWindowRef = useRef<FeatureCollection | null>(null);
   const lastBoundGeojsonRef = useRef<FeatureCollection | null>(null);
   const featureStyleRef = useRef(featureStyle);
+  const interactionRef = useRef(interaction);
 
   const pendingTeardownLayersRef = useRef<L.Layer[]>([]);
   const renderedSubLayersRef = useRef<L.Layer[]>([]);
@@ -31,6 +36,10 @@ export function useVectorChunkStream(
   useEffect(() => {
     featureStyleRef.current = featureStyle;
   }, [featureStyle]);
+
+  useEffect(() => {
+    interactionRef.current = interaction;
+  }, [interaction]);
 
   // Selection is a callback, not an input to rendering. Keeping it in a ref stops a click from
   // invalidating the effect and tearing down every rendered layer.
@@ -60,6 +69,7 @@ export function useVectorChunkStream(
 
   const [renderedCount, setRenderedCount] = useState<number>(0);
   const [isChunking, setIsChunking] = useState<boolean>(false);
+  const [renderError, setRenderError] = useState<Error | null>(null);
 
   useEffect(() => {
     const mapInstance = mapInstanceRef.current;
@@ -83,8 +93,11 @@ export function useVectorChunkStream(
     // Delegate click events once per full-dataset identity change
     if (lastBoundGeojsonRef.current !== geojson) {
       lastBoundGeojsonRef.current = geojson;
-      bindGroupFeatureEvents(featureGroup, geojson?.features ?? [], (featureIndex) =>
-        onSelectFeatureRef.current?.(featureIndex)
+      bindGroupFeatureEvents(
+        featureGroup,
+        geojson?.features ?? [],
+        (featureIndex) => onSelectFeatureRef.current?.(featureIndex),
+        interactionRef.current.showPopups !== false
       );
     }
 
@@ -115,6 +128,7 @@ export function useVectorChunkStream(
         if (!isCancelled) {
           setRenderedCount(0);
           setIsChunking(false);
+          setRenderError(null);
         }
       });
       return;
@@ -125,6 +139,7 @@ export function useVectorChunkStream(
 
     mapInstance.invalidateSize();
     setIsChunking(true);
+    setRenderError(null);
 
     /**
      * Renders one micro-batch straight from the windowed collection. Slicing yields references to the
@@ -147,9 +162,14 @@ export function useVectorChunkStream(
         features: chunkFeatures,
       };
 
+      const labelProperty = interactionRef.current.labelProperty;
       const geojsonSubLayer = L.geoJSON(chunkCollection as GeoJsonObject, {
         style: (feature) => styleResolver.resolvePathStyle(feature),
         pointToLayer: (feature, latlng) => styleResolver.createPointLayer(feature, latlng),
+        onEachFeature:
+          labelProperty === undefined
+            ? undefined
+            : (feature, layer) => bindFeatureLabel(feature.properties, layer, labelProperty),
       });
 
       featureGroup.addLayer(geojsonSubLayer);
@@ -184,12 +204,20 @@ export function useVectorChunkStream(
         return;
       }
 
-      // Phase 2: Progressive construction of new windowed chunks
-      while (
-        renderedOffset < totalFeatures &&
-        performance.now() - frameStart < MAP_FRAME_BUDGET_MS
-      ) {
-        renderOneChunk();
+      // Phase 2: Progressive construction of new windowed chunks. A throw here happens in a frame callback, out of
+      // React's reach, so it is reported through state instead of leaving a silently blank map.
+      try {
+        while (
+          renderedOffset < totalFeatures &&
+          performance.now() - frameStart < MAP_FRAME_BUDGET_MS
+        ) {
+          renderOneChunk();
+        }
+      } catch (error: unknown) {
+        console.error("[map] Failed to draw the features.", error);
+        setRenderError(error instanceof Error ? error : new Error(String(error)));
+        setIsChunking(false);
+        return;
       }
 
       if (isCancelled) return;
@@ -221,6 +249,7 @@ export function useVectorChunkStream(
   return {
     renderedCount,
     isChunking,
+    renderError,
     featureGroupRef,
   };
 }

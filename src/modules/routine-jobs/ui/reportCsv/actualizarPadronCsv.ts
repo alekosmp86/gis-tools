@@ -1,8 +1,10 @@
-import { PAIR_STATUS, PAIR_TIER } from "../../jobs/actualizar-padron/constants";
+import { GEOMETRY_STATE, PAIR_STATUS, PAIR_TIER, type GeometryState } from "../../jobs/actualizar-padron/constants";
 import type {
   ActualizarAddressMasterReport,
   ActualizarPadronResult,
   ActualizarTargetReport,
+  PadronGeometryChange,
+  PadronLocation,
   PadronNamedKey,
   PadronPair,
   SkippedSample,
@@ -11,7 +13,7 @@ import { PADRON_SUBJECT_SPEC } from "../../jobs/shared/addressMasterLinkSpec";
 import { reasonLabelOf } from "../actualizarPadronReportView";
 import { textOrNoData } from "../reportFormat";
 import { CHANGE_KIND, compareChangeKinds, listCsvOf, type ChangeKind, type ListCut } from "./reportCsvRows";
-import type { CsvRow } from "./csvFormat";
+import type { CsvRow } from "../../jobs/shared/csvFormat";
 
 const ID_HEADER = "Id";
 const PADRON_CHANGE_HEADER: CsvRow = [
@@ -21,9 +23,13 @@ const PADRON_CHANGE_HEADER: CsvRow = [
   "Provincia",
   "Localidad",
   "Padrón",
-  "Distancia (m)",
-  "Relación de área",
   ID_HEADER,
+  "Área anterior (m²)",
+  "Área nueva (m²)",
+  "Cambio de área (%)",
+  "Área no coincidente (%)",
+  "Latitud",
+  "Longitud",
   "Tipo anterior",
   "Localidad anterior",
   "Padrón anterior",
@@ -33,7 +39,18 @@ const LEADING_EMPTY_WIDTH = ID_INDEX - 2;
 const TRAILING_EMPTY_WIDTH = PADRON_CHANGE_HEADER.length - ID_INDEX - 1;
 const EMPTY_CELLS = (width: number): null[] => Array.from({ length: width }, () => null);
 
-const NOT_APPLIED_REASON = "Posible par no aplicado (ambiguo)";
+const NOT_APPLIED_AMBIGUOUS_REASON = "Posible par no aplicado (ambiguo)";
+const NOT_APPLIED_PENDING_REASON = "Posible par pendiente (coincidencia parcial)";
+
+const NOT_APPLIED_REASON_OF: Partial<Record<PadronPair["status"], string>> = {
+  [PAIR_STATUS.NOT_APPLIED_AMBIGUOUS]: NOT_APPLIED_AMBIGUOUS_REASON,
+  [PAIR_STATUS.NOT_APPLIED_PENDING]: NOT_APPLIED_PENDING_REASON,
+};
+
+const GEOMETRY_KIND_OF: Record<GeometryState, ChangeKind> = {
+  [GEOMETRY_STATE.APPLIED]: CHANGE_KIND.MODIFIED,
+  [GEOMETRY_STATE.PENDING]: CHANGE_KIND.DETECTED,
+};
 
 interface PreviousPadron {
   type: string;
@@ -42,35 +59,14 @@ interface PreviousPadron {
 }
 
 interface PadronChangeRecord {
-  table: string;
   kind: ChangeKind;
-  type: string;
-  department: string;
-  locality: string;
-  number: string;
-  distance: number | null;
-  areaRatio: number | null;
+  key: PadronNamedKey;
+  oldId: number | null;
+  location: PadronLocation | null;
   previous: PreviousPadron | null;
+  /** A geometry row carries the non-overlapping share of its area; a key update carries the signed change. */
+  nonOverlap: boolean;
 }
-
-const recordOf = (
-  table: string,
-  kind: ChangeKind,
-  key: PadronNamedKey,
-  distance: number | null,
-  areaRatio: number | null,
-  previous: PreviousPadron | null = null
-): PadronChangeRecord => ({
-  table,
-  kind,
-  type: textOrNoData(key.typePadron),
-  department: textOrNoData(key.department),
-  locality: textOrNoData(key.locality),
-  number: textOrNoData(key.number),
-  distance,
-  areaRatio,
-  previous,
-});
 
 const previousOf = (key: PadronNamedKey): PreviousPadron => ({
   type: textOrNoData(key.typePadron),
@@ -79,47 +75,68 @@ const previousOf = (key: PadronNamedKey): PreviousPadron => ({
 });
 
 const isApplied = (pair: PadronPair): boolean => pair.status === PAIR_STATUS.APPLIED;
+const isNotApplied = (pair: PadronPair): boolean => NOT_APPLIED_REASON_OF[pair.status] !== undefined;
 
 const insertedRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[] =>
-  target.insertedList.map((padron) => recordOf(target.table, CHANGE_KIND.INSERTED, padron, null, null));
+  target.insertedList.map((padron) => ({
+    kind: CHANGE_KIND.INSERTED,
+    key: padron,
+    oldId: null,
+    location: null,
+    previous: null,
+    nonOverlap: false,
+  }));
 
-const geometryRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[] =>
-  target.geometryChanges.map((change) =>
-    recordOf(
-      target.table,
-      target.updateApplied ? CHANGE_KIND.MODIFIED : CHANGE_KIND.DETECTED,
-      change,
-      change.distance,
-      change.areaRatio
-    )
-  );
+const geometryRecordOf = (change: PadronGeometryChange): PadronChangeRecord => ({
+  kind: GEOMETRY_KIND_OF[change.state],
+  key: change,
+  oldId: change.oldId,
+  location: change,
+  previous: null,
+  nonOverlap: true,
+});
+
+const geometryRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[] => target.geometryChanges.map(geometryRecordOf);
 
 const keyUpdatedKindOf = (pair: PadronPair): ChangeKind =>
   pair.tier === PAIR_TIER.LOOSE ? CHANGE_KIND.KEY_UPDATED_LOOSE : CHANGE_KIND.KEY_UPDATED;
 
 const keyUpdatedRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[] =>
-  target.pairs
-    .filter(isApplied)
-    .map((pair) => recordOf(target.table, keyUpdatedKindOf(pair), pair.new, pair.distance, null, previousOf(pair.old)));
+  target.pairs.filter(isApplied).map((pair) => ({
+    kind: keyUpdatedKindOf(pair),
+    key: pair.new,
+    oldId: pair.oldId,
+    location: pair,
+    previous: previousOf(pair.old),
+    nonOverlap: false,
+  }));
 
 const compareText = (first: string, second: string): number => first.localeCompare(second, "es", { numeric: true });
 
 const comparePadronChanges = (first: PadronChangeRecord, second: PadronChangeRecord): number =>
   compareChangeKinds(first.kind, second.kind) ||
-  compareText(first.department, second.department) ||
-  compareText(first.locality, second.locality) ||
-  compareText(first.number, second.number);
+  compareText(textOrNoData(first.key.department), textOrNoData(second.key.department)) ||
+  compareText(textOrNoData(first.key.locality), textOrNoData(second.key.locality)) ||
+  compareText(textOrNoData(first.key.number), textOrNoData(second.key.number));
 
-const changeRowOf = (record: PadronChangeRecord): CsvRow => [
-  record.table,
+const areaCellsOf = (record: PadronChangeRecord): [CsvRow[number], CsvRow[number]] => {
+  const areaChange = record.location?.areaChangePct ?? null;
+  return record.nonOverlap ? [null, areaChange] : [areaChange, null];
+};
+
+const changeRowOf = (table: string, record: PadronChangeRecord): CsvRow => [
+  table,
   record.kind,
-  record.type,
-  record.department,
-  record.locality,
-  record.number,
-  record.distance,
-  record.areaRatio,
-  null,
+  textOrNoData(record.key.typePadron),
+  textOrNoData(record.key.department),
+  textOrNoData(record.key.locality),
+  textOrNoData(record.key.number),
+  record.oldId,
+  record.location?.oldAreaM2 ?? null,
+  record.location?.newAreaM2 ?? null,
+  ...areaCellsOf(record),
+  record.location?.centroidLat ?? null,
+  record.location?.centroidLon ?? null,
   record.previous?.type ?? null,
   record.previous?.locality ?? null,
   record.previous?.number ?? null,
@@ -142,12 +159,32 @@ function addressMasterRowsOf(addressMaster: ActualizarAddressMasterReport, targe
   ];
 }
 
-const cutsOf = (target: ActualizarTargetReport, addressMaster: ActualizarAddressMasterReport | undefined): ListCut[] => [
-  { table: target.table, shown: target.insertedList.length, total: target.inserted, noun: "padrones insertados" },
+const insertedCutOf = (target: ActualizarTargetReport): ListCut => ({
+  table: target.table,
+  shown: target.insertedList.length,
+  total: target.inserted,
+  noun: "padrones insertados",
+});
+
+const changeCutsOf = (target: ActualizarTargetReport): ListCut[] => [
   { table: target.table, shown: target.geometryChanges.length, total: target.changed, noun: "geometrías que cambian" },
   { table: target.table, shown: target.pairs.filter(isApplied).length, total: target.pairsApplied, noun: "claves actualizadas" },
-  ...(addressMaster === undefined ? [] : addressMasterCutsOf(target, addressMaster)),
 ];
+
+/** An analysis lists no new padrones nor links (AP-88), so it has no cut for them: the note below says so instead. */
+const cutsOf = ({ target, addressMaster, dryRun }: ActualizarPadronResult): ListCut[] => {
+  if (dryRun) return changeCutsOf(target);
+  return [
+    insertedCutOf(target),
+    ...changeCutsOf(target),
+    ...(addressMaster === undefined ? [] : addressMasterCutsOf(target, addressMaster)),
+  ];
+};
+
+const ANALYSIS_UNLISTED_NOTE = "El análisis no lista los padrones nuevos ni los enlaces de direcciones: solo los muestra la carga real.";
+
+const analysisNoteRowsOf = (result: ActualizarPadronResult): CsvRow[] =>
+  result.dryRun ? [[result.target.table, ANALYSIS_UNLISTED_NOTE, ...EMPTY_CELLS(PADRON_CHANGE_HEADER.length - 2)]] : [];
 
 function addressMasterCutsOf(target: ActualizarTargetReport, addressMaster: ActualizarAddressMasterReport): ListCut[] {
   const created = addressMaster.linkedList.filter((padron) => padron.created);
@@ -164,15 +201,15 @@ function addressMasterCutsOf(target: ActualizarTargetReport, addressMaster: Actu
 
 export const buildActualizarPadronCsv = (result: ActualizarPadronResult): string => {
   const { target, addressMaster } = result;
-  const padronRows = [
-    ...insertedRecordsOf(target),
-    ...geometryRecordsOf(target),
-    ...keyUpdatedRecordsOf(target),
-  ]
+  const padronRows = [...insertedRecordsOf(target), ...geometryRecordsOf(target), ...keyUpdatedRecordsOf(target)]
     .sort(comparePadronChanges)
-    .map(changeRowOf);
-  const rows = [...padronRows, ...(addressMaster === undefined ? [] : addressMasterRowsOf(addressMaster, target.table))];
-  return listCsvOf(PADRON_CHANGE_HEADER, (row: CsvRow) => row, rows, cutsOf(target, addressMaster));
+    .map((record) => changeRowOf(target.table, record));
+  const rows = [
+    ...padronRows,
+    ...(addressMaster === undefined ? [] : addressMasterRowsOf(addressMaster, target.table)),
+    ...analysisNoteRowsOf(result),
+  ];
+  return listCsvOf(PADRON_CHANGE_HEADER, (row: CsvRow) => row, rows, cutsOf(result));
 };
 
 const INCONSISTENCY_HEADER: CsvRow = ["Motivo", "Departamento", "Localidad", "Padrón"];
@@ -185,7 +222,7 @@ const inconsistencyRowOf = (row: SkippedSample): CsvRow => [
 ];
 
 const notAppliedRowOf = (pair: PadronPair): CsvRow => [
-  NOT_APPLIED_REASON,
+  NOT_APPLIED_REASON_OF[pair.status] ?? null,
   textOrNoData(pair.new.department),
   textOrNoData(pair.new.locality),
   textOrNoData(pair.new.number),
@@ -207,10 +244,10 @@ const onePerNewKey = (pairs: PadronPair[]): PadronPair[] => {
 
 export const buildActualizarPadronInconsistenciasCsv = (result: ActualizarPadronResult): string => {
   const { skipped, totals, target } = result;
-  const notApplied = onePerNewKey(target.pairs.filter((pair) => !isApplied(pair)));
+  const notApplied = onePerNewKey(target.pairs.filter(isNotApplied));
   const rows: CsvRow[] = [...skipped.skippedRows.map(inconsistencyRowOf), ...notApplied.map(notAppliedRowOf)];
   return listCsvOf(INCONSISTENCY_HEADER, (row: CsvRow) => row, rows, [
     { table: "", shown: skipped.skippedRows.length, total: totals.skipped, noun: "filas omitidas" },
-    { table: "", shown: notApplied.length, total: target.pairsNotApplied, noun: "posibles pares no aplicados" },
+    { table: "", shown: notApplied.length, total: target.pairsNotApplied + target.pairsPending, noun: "posibles pares no aplicados" },
   ]);
 };

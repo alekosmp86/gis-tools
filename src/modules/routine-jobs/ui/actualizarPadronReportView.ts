@@ -1,4 +1,13 @@
-import { PAIR_STATUS, PAIR_TIER, SKIP_REASON, type PairStatus, type PairTier, type SkipReason } from "../jobs/actualizar-padron/constants";
+import {
+  GEOMETRY_STATE,
+  PAIR_STATUS,
+  PAIR_TIER,
+  SKIP_REASON,
+  type GeometryState,
+  type PairStatus,
+  type PairTier,
+  type SkipReason,
+} from "../jobs/actualizar-padron/constants";
 import { COMMIT_UNKNOWN_WARNING, DRY_RUN_WARNING } from "../jobs/actualizar-padron/domain/warnings";
 import type {
   ActualizarPadronResult,
@@ -8,6 +17,7 @@ import type {
   PadronInserted,
   PadronKey,
   PadronPair,
+  PairChoice,
   SkippedGroup,
   SkippedLocalityGroup,
   SkippedSample,
@@ -19,6 +29,9 @@ import { PADRON_ADDRESS_MASTER_TEXTS } from "./addressMasterSubjectTexts";
 import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
 import type { RefreshSuggestionView } from "./refreshSuggestionView";
 import { listSummaryOf } from "./reportViewParts";
+import { ambiguousGroupsOf, choiceOfPair, type AmbiguousGroupView } from "./pairChoices";
+import { missingReviewViewOf, type MissingReviewView } from "./missingPadronView";
+import { subjectOfPair, type PadronMapSubject } from "./padronMapSubject";
 
 export interface KpiView {
   label: string;
@@ -80,15 +93,28 @@ export interface TargetCountRow {
 export interface PairView {
   key: string;
   department: string;
-  oldLocality: string;
-  newLocality: string;
+  locality: string;
+  type: string;
+  number: string;
+  oldId: number | null;
   oldType: string;
-  newType: string;
+  oldLocality: string;
   oldNumber: string;
-  newNumber: string;
-  distance: number | null;
+  oldAreaM2: number | null;
+  newAreaM2: number | null;
+  areaChangePct: number | null;
+  centroidLat: number | null;
+  centroidLon: number | null;
   status: string;
   tier: string;
+}
+
+/** A listed pair with what its row needs beyond the display: whether it is pending, the choice that pairs it and its map subject. */
+export interface PairRowView {
+  view: PairView;
+  pending: boolean;
+  choice: PairChoice | null;
+  subject: PadronMapSubject;
 }
 
 export interface TargetView {
@@ -104,7 +130,11 @@ export interface TargetView {
   ambiguous: PadronKey[];
   ambiguousSummary: string;
   pairs: PairView[];
+  pairRows: PairRowView[];
+  pairsPending: number;
   pairsSummary: string;
+  ambiguousGroups: AmbiguousGroupView[];
+  missingReview: MissingReviewView | null;
 }
 
 export type ActualizarBannerKind = "unknown" | "dryRun" | "warning" | "done";
@@ -177,7 +207,15 @@ const SKIP_REASONS = Object.values(SKIP_REASON) as SkipReason[];
 const PAIR_STATUS_LABEL: Record<PairStatus, string> = {
   [PAIR_STATUS.APPLIED]: "Aplicado",
   [PAIR_STATUS.NOT_APPLIED_AMBIGUOUS]: "No aplicado: ambiguo",
+  [PAIR_STATUS.NOT_APPLIED_PENDING]: "Pendiente: coincidencia parcial",
 };
+
+const GEOMETRY_STATE_LABEL: Record<GeometryState, string> = {
+  [GEOMETRY_STATE.APPLIED]: "Aplicada",
+  [GEOMETRY_STATE.PENDING]: "Pendiente",
+};
+
+export const geometryStateLabelOf = (state: GeometryState): string => GEOMETRY_STATE_LABEL[state];
 
 const PAIR_TIER_LABEL: Record<PairTier, string> = {
   [PAIR_TIER.STRICT]: "Estricta",
@@ -317,15 +355,27 @@ const pairKeyOf = (pair: PadronPair): string =>
 const pairViewOf = (pair: PadronPair): PairView => ({
   key: pairKeyOf(pair),
   department: textOf(pair.new.department),
-  oldLocality: textOf(pair.old.locality),
-  newLocality: textOf(pair.new.locality),
+  locality: textOf(pair.new.locality),
+  type: textOf(pair.new.typePadron),
+  number: textOf(pair.new.number),
+  oldId: pair.oldId,
   oldType: textOf(pair.old.typePadron),
-  newType: textOf(pair.new.typePadron),
+  oldLocality: textOf(pair.old.locality),
   oldNumber: textOf(pair.old.number),
-  newNumber: textOf(pair.new.number),
-  distance: pair.distance,
+  oldAreaM2: pair.oldAreaM2,
+  newAreaM2: pair.newAreaM2,
+  areaChangePct: pair.areaChangePct,
+  centroidLat: pair.centroidLat,
+  centroidLon: pair.centroidLon,
   status: PAIR_STATUS_LABEL[pair.status],
   tier: PAIR_TIER_LABEL[pair.tier],
+});
+
+const pairRowOf = (pair: PadronPair): PairRowView => ({
+  view: pairViewOf(pair),
+  pending: pair.status === PAIR_STATUS.NOT_APPLIED_PENDING,
+  choice: choiceOfPair(pair),
+  subject: subjectOfPair(pair),
 });
 
 function targetViewOf(target: ActualizarTargetReport): TargetView {
@@ -336,6 +386,8 @@ function targetViewOf(target: ActualizarTargetReport): TargetView {
       targetCountRowOf("Actualizadas", target.updated),
       targetCountRowOf("Claves actualizadas", target.pairsApplied),
       targetCountRowOf("Geometrías que cambian", target.changed),
+      targetCountRowOf("Geometrías pendientes", target.geometryPending),
+      targetCountRowOf("Pares pendientes", target.pairsPending),
       targetCountRowOf("Sin cambios", target.unchanged, true),
       targetCountRowOf("Sin cambios dentro de tolerancia", target.unchangedWithinTolerance, true),
       targetCountRowOf("Faltantes en destino", target.missing),
@@ -351,7 +403,11 @@ function targetViewOf(target: ActualizarTargetReport): TargetView {
     ambiguous: target.ambiguousSamples,
     ambiguousSummary: listSummaryOf("Ambiguas", target.ambiguousSamples.length, target.ambiguous),
     pairs: target.pairs.map(pairViewOf),
+    pairRows: target.pairs.map(pairRowOf),
+    pairsPending: target.pairsPending,
     pairsSummary: listSummaryOf(PAIRS_SECTION_TITLE, target.pairs.length, target.pairsTotal),
+    ambiguousGroups: ambiguousGroupsOf(target.pairs),
+    missingReview: missingReviewViewOf(target),
   };
 }
 

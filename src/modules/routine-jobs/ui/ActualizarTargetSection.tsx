@@ -1,23 +1,26 @@
 "use client";
 
-import React from "react";
-import type { PadronGeometryChange, PadronInserted, PadronKey, PadronNamedKey } from "../jobs/actualizar-padron/types";
-import type { PairView, TargetView } from "./actualizarPadronReportView";
+import React, { useMemo } from "react";
+import type { PadronInserted, PadronKey, PadronNamedKey, PairChoice } from "../jobs/actualizar-padron/types";
+import { pairChoiceKeyId } from "../jobs/actualizar-padron/domain/pairChoiceKey";
+import type { PairRowView, TargetView } from "./actualizarPadronReportView";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import { RowsTable, SectionTitle, type TableColumn } from "./ReportParts";
 import { ReportRowList } from "./ReportRowList";
-import { NO_DATA_TEXT, textOrNoData } from "./reportFormat";
+import { textOrNoData } from "./reportFormat";
+import { PairChoiceGroups, type PairChoiceSelection } from "./PairChoiceGroups";
+import { PairChoiceList } from "./PairChoiceList";
+import { PendingPairsSection } from "./PendingPairsSection";
+import { GeometryChangesSection } from "./GeometryChangesSection";
+import type { ListedPairChoice } from "./pairChoices";
+import { choiceIndexOf, PENDING_CHOICE_STATE_LABEL, pendingChoiceStateIn, type ChoiceIndex } from "./pendingPairChoices";
+import { pairReviewItemsOf, type OpenReview } from "./padronReviewItems";
+import type { GeometryAcceptSelection } from "./reviewDecisions";
+import { idOrNoData, keyContentOf, locationColumnsOf, NUMBER_COLUMN, SIGNED_CHANGE_HEADER, TYPE_COLUMN } from "./targetColumns";
 import sharedStyles from "./CargarPadronesReport.module.css";
 
-const DECIMAL_PLACES = 2;
-const AREA_DECIMAL_PLACES = 3;
-
-const idOrNoData = (value: number | null): string => (value === null ? NO_DATA_TEXT : String(value));
-
-const keyContentOf = (key: PadronKey): string => `${key.typePadron}|${key.provinceId}|${key.localityId}|${key.number}`;
-
-const TYPE_COLUMN: TableColumn<PadronKey> = { header: "Tipo", cell: (key) => textOrNoData(key.typePadron) };
-const NUMBER_COLUMN: TableColumn<PadronKey> = { header: "Padrón", cell: (key) => textOrNoData(key.number) };
+const NO_PAIR_DECISION = "No emparejar";
+const NO_DECISION = "Sin elección";
 
 const KEY_COLUMNS: TableColumn<PadronKey>[] = [
   TYPE_COLUMN,
@@ -35,35 +38,62 @@ const NAMED_COLUMNS: TableColumn<PadronNamedKey>[] = [
 
 const INSERTED_COLUMNS: TableColumn<PadronInserted>[] = [{ header: "Id", cell: (padron) => String(padron.id) }, ...NAMED_COLUMNS];
 
-const GEOMETRY_COLUMNS: TableColumn<PadronGeometryChange>[] = [
-  ...NAMED_COLUMNS,
-  {
-    header: "Proporción de área",
-    cell: (change) => (change.areaRatio === null ? NO_DATA_TEXT : change.areaRatio.toFixed(AREA_DECIMAL_PLACES)),
-  },
-  {
-    header: "Distancia (m)",
-    cell: (change) => (change.distance === null ? NO_DATA_TEXT : change.distance.toFixed(DECIMAL_PLACES)),
-  },
+const PAIR_COLUMNS: TableColumn<PairRowView>[] = [
+  { header: "Tipo", cell: (row) => row.view.type },
+  { header: "Departamento", cell: (row) => row.view.department },
+  { header: "Localidad", cell: (row) => row.view.locality },
+  { header: "Padrón", cell: (row) => row.view.number },
+  { header: "Id actual", cell: (row) => idOrNoData(row.view.oldId) },
+  { header: "Tipo anterior", cell: (row) => row.view.oldType },
+  { header: "Localidad anterior", cell: (row) => row.view.oldLocality },
+  { header: "Padrón anterior", cell: (row) => row.view.oldNumber },
+  ...locationColumnsOf<PairRowView["view"]>(SIGNED_CHANGE_HEADER).map((column) => ({
+    header: column.header,
+    cell: (row: PairRowView) => column.cell(row.view),
+  })),
+  { header: "Estado", cell: (row) => row.view.status },
+  { header: "Coincidencia", cell: (row) => row.view.tier },
 ];
 
-const PAIR_COLUMNS: TableColumn<PairView>[] = [
-  { header: "Departamento", cell: (pair) => pair.department },
-  { header: "Localidad anterior", cell: (pair) => pair.oldLocality },
-  { header: "Localidad nueva", cell: (pair) => pair.newLocality },
-  { header: "Tipo anterior", cell: (pair) => pair.oldType },
-  { header: "Tipo nuevo", cell: (pair) => pair.newType },
-  { header: "Padrón anterior", cell: (pair) => pair.oldNumber },
-  { header: "Padrón nuevo", cell: (pair) => pair.newNumber },
-  {
-    header: "Distancia (m)",
-    cell: (pair) => (pair.distance === null ? NO_DATA_TEXT : pair.distance.toFixed(DECIMAL_PLACES)),
-  },
-  { header: "Estado", cell: (pair) => pair.status },
-  { header: "Coincidencia", cell: (pair) => pair.tier },
-];
+/** The decision a pair row carries: the acceptance of a pending pair, or the choice of its new key for an ambiguous one. */
+function pairDecisionOf(row: PairRowView, index: ChoiceIndex, ambiguousIds: ReadonlySet<string>): string {
+  if (row.pending) return PENDING_CHOICE_STATE_LABEL[pendingChoiceStateIn(index, row.choice)];
+  if (row.choice === null || !ambiguousIds.has(pairChoiceKeyId(row.choice))) return "";
+  const chosen = index.byKey.get(pairChoiceKeyId(row.choice));
+  if (chosen === undefined) return NO_DECISION;
+  return chosen.oldId === null ? NO_PAIR_DECISION : `Elegido: id ${chosen.oldId}`;
+}
 
-function TargetDetails({ target }: { target: TargetView }) {
+interface TargetDetailsProps {
+  target: TargetView;
+  selection: PairChoiceSelection;
+  geometrySelection: GeometryAcceptSelection;
+  choiceRows: readonly ListedPairChoice[];
+  unappliedChoices: readonly PairChoice[];
+  onOpenReview: OpenReview;
+}
+
+function PairsTable({ target, selection, onOpenReview }: Pick<TargetDetailsProps, "target" | "selection" | "onOpenReview">) {
+  const { pairRows, ambiguousGroups } = target;
+  const columns = useMemo(() => {
+    const index = choiceIndexOf(selection.choices);
+    const ambiguousIds = new Set(ambiguousGroups.map((group) => group.id));
+    return [...PAIR_COLUMNS, { header: "Decisión", cell: (row: PairRowView) => pairDecisionOf(row, index, ambiguousIds) }];
+  }, [selection.choices, ambiguousGroups]);
+  return (
+    <CollapsibleSection summary={target.pairsSummary}>
+      <RowsTable
+        columns={columns}
+        rows={pairRows}
+        rowKey={(row) => row.view.key}
+        onShowOnMap={(row) => onOpenReview(pairReviewItemsOf(pairRows, ambiguousGroups), pairRows.indexOf(row))}
+      />
+    </CollapsibleSection>
+  );
+}
+
+function TargetDetails({ target, selection, geometrySelection, choiceRows, unappliedChoices, onOpenReview }: TargetDetailsProps) {
+  const pendingRows = target.pairRows.filter((row) => row.pending);
   return (
     <>
       {target.inserted.length > 0 && (
@@ -72,14 +102,30 @@ function TargetDetails({ target }: { target: TargetView }) {
         </CollapsibleSection>
       )}
       {target.geometryChanges.length > 0 && (
-        <CollapsibleSection summary={target.geometryChangesSummary}>
-          <RowsTable columns={GEOMETRY_COLUMNS} rows={target.geometryChanges} rowKey={keyContentOf} />
-        </CollapsibleSection>
+        <GeometryChangesSection
+          changes={target.geometryChanges}
+          summary={target.geometryChangesSummary}
+          selection={geometrySelection}
+          onResimulate={selection.onResimulate}
+          canResimulate={selection.canResimulate}
+          onOpenReview={onOpenReview}
+        />
       )}
-      {target.pairs.length > 0 && (
-        <CollapsibleSection summary={target.pairsSummary}>
-          <RowsTable columns={PAIR_COLUMNS} rows={target.pairs} rowKey={(pair) => pair.key} />
-        </CollapsibleSection>
+      {target.pairRows.length > 0 && <PairsTable target={target} selection={selection} onOpenReview={onOpenReview} />}
+      <PendingPairsSection
+        rows={pendingRows}
+        pendingTotal={target.pairsPending}
+        selection={selection}
+        onOpenReview={onOpenReview}
+      />
+      {choiceRows.length > 0 && <PairChoiceList rows={choiceRows} onRemove={selection.onRemove} />}
+      {target.ambiguousGroups.length > 0 && (
+        <PairChoiceGroups
+          groups={target.ambiguousGroups}
+          unappliedChoices={unappliedChoices}
+          selection={selection}
+          onOpenReview={onOpenReview}
+        />
       )}
       {target.missing.length > 0 && (
         <CollapsibleSection summary={target.missingSummary}>
@@ -95,7 +141,10 @@ function TargetDetails({ target }: { target: TargetView }) {
   );
 }
 
-export function ActualizarTargetSection({ target }: { target: TargetView }) {
+export type ActualizarTargetSectionProps = TargetDetailsProps;
+
+export function ActualizarTargetSection(props: ActualizarTargetSectionProps) {
+  const { target } = props;
   return (
     <section className={sharedStyles.section}>
       <SectionTitle>{target.table}</SectionTitle>
@@ -105,7 +154,7 @@ export function ActualizarTargetSection({ target }: { target: TargetView }) {
         </p>
       ))}
       <ReportRowList rows={target.counts} />
-      <TargetDetails target={target} />
+      <TargetDetails {...props} />
     </section>
   );
 }

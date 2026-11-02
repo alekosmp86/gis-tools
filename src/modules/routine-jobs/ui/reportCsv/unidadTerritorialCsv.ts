@@ -3,7 +3,7 @@ import type { AddressMasterReport } from "../../jobs/shared/addressMasterLinkRep
 import { UNIT_SUBJECT_SPEC } from "../../jobs/shared/addressMasterLinkSpec";
 import type { UnitGeometryChange, UnitResult, UnitTargetReport } from "../../jobs/unidad-territorial/types";
 import { textOrNoData } from "../reportFormat";
-import type { CsvRow } from "./csvFormat";
+import type { CsvRow } from "../../jobs/shared/csvFormat";
 import {
   CHANGE_HEADER,
   CHANGE_KIND,

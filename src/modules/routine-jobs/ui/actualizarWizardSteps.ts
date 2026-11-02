@@ -31,13 +31,13 @@ const STEP_DEFS: readonly StepDef[] = [
   {
     step: WizardStep.REVIEW,
     title: "Revisar",
-    subtitle: "Revise el resumen antes de analizar o actualizar.",
+    subtitle: "Revise el resumen y analice: el análisis no modifica la base de datos.",
     icon: ClipboardCheck,
   },
   {
     step: WizardStep.RESULT,
     title: "Resultado",
-    subtitle: "Progreso de la actualización y su informe.",
+    subtitle: "Progreso del análisis o de la actualización, y su informe.",
     icon: ChartColumn,
   },
 ];

@@ -4,7 +4,12 @@ const MEGABYTE_DECIMAL_PLACES = 1;
 const BYTES_PER_MEGABYTE = 1024 * 1024;
 const MEGABYTE_SUFFIX = "MB";
 
-export const NO_DATA_TEXT = "sin dato";
+import { NO_DATA_TEXT } from "../jobs/shared/text";
+
+export { NO_DATA_TEXT };
+
+export const decimalOrNoData = (value: number | null, digits: number): string =>
+  value === null ? NO_DATA_TEXT : value.toFixed(digits);
 
 export const secondsText = (seconds: number): string => `${seconds.toFixed(DECIMAL_PLACES).replace(".", ",")} ${SECONDS_SUFFIX}`;
 

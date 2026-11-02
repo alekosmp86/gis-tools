@@ -1,12 +1,14 @@
 import type { ResolvedColumn, TableListing } from "@/core/types/tableCatalog";
 import type { TableRole } from "../jobs/cargar-padrones/constants";
 import type { ActualizarTableRole } from "../jobs/actualizar-padron/constants";
+import type { GeometryMapFeature } from "../jobs/actualizar-padron/types";
 import type { LocalidadesTableRole } from "../jobs/cargar-localidades/constants";
 import type { UnitTableRole } from "../jobs/unidad-territorial/constants";
 import type {
   ActualizarJobStatusView,
   ActualizarStartRequest,
   ClientConnection,
+  GeometryMapRequest,
   JobStatusView,
   LocalidadesJobStatusView,
   LocalidadesStartRequest,
@@ -27,6 +29,8 @@ const LOCALIDADES_STATUS_ROUTE = `${BASE_ROUTE}/cargar-localidades/status`;
 const UNIDAD_START_ROUTE = `${BASE_ROUTE}/unidad-territorial/start`;
 const UNIDAD_STATUS_ROUTE = `${BASE_ROUTE}/unidad-territorial/status`;
 const ACTUALIZAR_BACKUP_ROUTE = `${BASE_ROUTE}/actualizar-padron/backup`;
+const ACTUALIZAR_PENDING_CSV_ROUTE = `${BASE_ROUTE}/actualizar-padron/pending-csv`;
+const ACTUALIZAR_GEOMETRIES_ROUTE = `${BASE_ROUTE}/actualizar-padron/geometries`;
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const NETWORK_MESSAGE = "No se pudo conectar con el servidor.";
 const INVALID_RESPONSE_MESSAGE = "El servidor devolvió una respuesta no válida.";
@@ -62,6 +66,8 @@ export interface RoutineJobsClient {
   startUnidad(request: UnidadStartRequest): Promise<StartResult>;
   readUnidadStatus(jobId: string): Promise<UnidadJobStatusView>;
   fetchActualizarBackup(token: string): Promise<Blob>;
+  fetchPendingGeometryCsv(planId: string): Promise<Blob>;
+  fetchGeometryMap(request: GeometryMapRequest): Promise<GeometryMapFeature[]>;
 }
 
 export class RoutineJobsApiError extends Error {
@@ -129,7 +135,7 @@ function invalidResponse(): RoutineJobsApiError {
   return new RoutineJobsApiError(INVALID_RESPONSE_MESSAGE, NO_RESPONSE_STATUS);
 }
 
-async function readBackupBlob(response: Response): Promise<Blob> {
+async function readFileBlob(response: Response): Promise<Blob> {
   if (!response.ok) {
     const payload = parseJsonRecord(await response.text().catch(() => ""));
     throw new RoutineJobsApiError(failureMessageOf(payload, response.status), response.status);
@@ -213,7 +219,18 @@ export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): Routi
 
     async fetchActualizarBackup(token) {
       const url = `${ACTUALIZAR_BACKUP_ROUTE}?token=${encodeURIComponent(token)}`;
-      return readBackupBlob(await send(fetchImpl, url));
+      return readFileBlob(await send(fetchImpl, url));
+    },
+
+    async fetchPendingGeometryCsv(planId) {
+      const url = `${ACTUALIZAR_PENDING_CSV_ROUTE}?planId=${encodeURIComponent(planId)}`;
+      return readFileBlob(await send(fetchImpl, url));
+    },
+
+    async fetchGeometryMap(request) {
+      const payload = await postJson(fetchImpl, ACTUALIZAR_GEOMETRIES_ROUTE, request);
+      if (!Array.isArray(payload.features)) throw invalidResponse();
+      return payload.features as GeometryMapFeature[];
     },
   };
 }

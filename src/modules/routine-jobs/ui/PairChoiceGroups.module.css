@@ -1,0 +1,178 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.count {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+  font-size: 14px;
+}
+
+.unapplied {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.unappliedTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.unappliedList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unappliedItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  font-size: 14px;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card,
+.cardUnapplied {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+}
+
+.cardUnapplied {
+  border-color: rgba(250, 204, 21, 0.5);
+}
+
+.cardTitle {
+  padding: 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.badge {
+  margin: 0;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.statusApplied {
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.option,
+.optionDisabled {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.option {
+  cursor: pointer;
+}
+
+.optionDisabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.optionText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.optionMeta {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.cardMap {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.swatchLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.swatch {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.swatch1 {
+  background-color: #f59e0b;
+}
+
+.swatch2 {
+  background-color: #a855f7;
+}
+
+.swatch3 {
+  background-color: #facc15;
+}
+
+.swatch4 {
+  background-color: #f97316;
+}
+
+.swatch5 {
+  background-color: #e879f9;
+}

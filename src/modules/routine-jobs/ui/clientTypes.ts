@@ -1,6 +1,6 @@
 import type { LoadOptions } from "../jobs/cargar-padrones/domain/loadSql";
 import type { CargarPadronesResult } from "../jobs/cargar-padrones/types";
-import type { ActualizarPadronResult } from "../jobs/actualizar-padron/types";
+import type { AcceptedGeometry, ActualizarPadronResult, GeometryMapItem, PairChoice } from "../jobs/actualizar-padron/types";
 import type { CargarLocalidadesResult, LocalityOptions, LocalityTableRef } from "../jobs/cargar-localidades/types";
 import type { UnitAddressMasterTable, UnitResult } from "../jobs/unidad-territorial/types";
 
@@ -52,8 +52,11 @@ export type JobStatusView = JobStatusBase<CargarPadronesResult>;
 export interface ActualizarJobOptions {
   localityType?: string;
   tolerance: number;
+  geometryAreaThreshold: number;
   updateGeometries: boolean;
   linkAddressMaster: boolean;
+  pairChoices?: PairChoice[];
+  acceptedGeometries?: AcceptedGeometry[];
 }
 
 export interface ActualizarStartRequest {
@@ -69,9 +72,23 @@ export interface ActualizarStartRequest {
   options: ActualizarJobOptions;
   dryRun: boolean;
   confirm: boolean;
+  planId?: string;
 }
 
 export type ActualizarJobStatusView = JobStatusBase<ActualizarPadronResult>;
+
+/** The connection and the tables the map reads: the wizard's, with no option and no plan. */
+export interface GeometryMapBase {
+  connection: ClientConnection;
+  stagingSchema: string;
+  stagingTable: string;
+  cartoSchema: string;
+  targetTable: string;
+}
+
+export interface GeometryMapRequest extends GeometryMapBase {
+  items: GeometryMapItem[];
+}
 
 export interface LocalidadesStartRequest {
   connection: ClientConnection;

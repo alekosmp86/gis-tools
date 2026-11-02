@@ -1,13 +1,25 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
 import { buildReportSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reportSql";
+import { NO_REFERENCE_TABLES } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/replacementSql";
 import { runActualizarPadron } from "@/modules/routine-jobs/jobs/actualizar-padron/services/runActualizarPadron";
 import type { ActualizarPadronOptions, ActualizarPadronParams, PadronLayouts } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import type { RunDeps, RunSession } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
 import type { WritableTargetLayout } from "@/modules/routine-jobs/jobs/shared/tableResolution";
 import { writeRevertBackup } from "@/modules/routine-jobs/jobs/actualizar-padron/services/revertBackup";
+
+/* The plan file lives under os.tmpdir(): the default export is redirected to a fresh temp root per test. */
+const tempRoot = vi.hoisted(() => ({ directory: "" }));
+
+vi.mock("node:os", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:os")>();
+  return { ...actual, default: { ...actual, tmpdir: () => tempRoot.directory } };
+});
 
 vi.mock("@/modules/routine-jobs/jobs/actualizar-padron/services/resolveLayouts", () => ({
   resolvePadronLayouts: vi.fn(async () => LAYOUTS),
@@ -26,10 +38,12 @@ vi.mock("@/modules/routine-jobs/jobs/actualizar-padron/services/revertBackup", a
 }));
 
 const BEGIN_SQL = "BEGIN ISOLATION LEVEL REPEATABLE READ";
+const BEGIN_READ_ONLY_SQL = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY";
 const COMMIT_SQL = "COMMIT";
 const ROLLBACK_SQL = "ROLLBACK";
 const PASSWORD = "Actualizar-pw!7";
 const CLASSIFIED_NEW = 2;
+const PLAN_ID_PATTERN = /^[0-9a-f]{32}$/;
 const REVERT_BACKUP_FAILURE = "No se pudo generar el respaldo para revertir: disco lleno.";
 const REVERT_BACKUP = {
   token: "00000000-0000-4000-8000-000000000000",
@@ -63,7 +77,7 @@ const LAYOUTS: PadronLayouts = {
   locality: tableOf("carto", "loc", Object.values(LOCALITY_COLUMN)),
 };
 
-const OPTIONS: ActualizarPadronOptions = { tolerance: 1, updateGeometries: true, linkAddressMaster: false };
+const OPTIONS: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: false, pairChoices: [] };
 
 const PARAMS_OF = (overrides: Partial<ActualizarPadronParams> = {}): ActualizarPadronParams => ({
   config: {
@@ -120,6 +134,7 @@ function sessionOf(appliedInserted: number): { session: RunSession; log: string[
   const answers = new Map<string, Array<Record<string, unknown>>>([
     [buildReportSql(LAYOUTS), [REPORT_ROW]],
     [buildPadronClassifySql(LAYOUTS, OPTIONS), [classificationRowOf()]],
+    [buildPadronClassifySql(LAYOUTS, OPTIONS, NO_REFERENCE_TABLES, { report: false }), [classificationRowOf()]],
     [buildPadronApplySql(LAYOUTS, OPTIONS), applyAnswer],
     [buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }), applyAnswer],
   ]);
@@ -147,26 +162,47 @@ const failureOf = async (work: Promise<unknown>): Promise<Error> => {
   return outcome as Error;
 };
 
-describe("runActualizarPadron dry run (AP-17, AP-19)", () => {
-  it("should end with ROLLBACK and never COMMIT when the run is a dry run", async () => {
+beforeEach(async () => {
+  tempRoot.directory = await mkdtemp(path.join(tmpdir(), "gis-actualizar-run-"));
+});
+
+afterEach(async () => {
+  await rm(tempRoot.directory, { recursive: true, force: true });
+});
+
+/** The analysis of the same parameters, run on its own session, so the real run that follows starts with a clean log. */
+async function analysisPlanIdOf(): Promise<string> {
+  const { session } = sessionOf(CLASSIFIED_NEW);
+  const result = await runActualizarPadron(PARAMS_OF({ dryRun: true, confirm: false }), depsOf(session));
+  expect(result.planId).toMatch(PLAN_ID_PATTERN);
+  return result.planId as string;
+}
+
+describe("runActualizarPadron dry run (AP-17, AP-19, AP-88)", () => {
+  it("should run READ ONLY, never apply, and end with ROLLBACK and never COMMIT when the run is a dry run", async () => {
     const { session, log } = sessionOf(CLASSIFIED_NEW);
     const params = PARAMS_OF({ dryRun: true, confirm: false });
 
     const result = await runActualizarPadron(params, depsOf(session));
 
-    expect(log).toContain(BEGIN_SQL);
+    expect(log).toContain(BEGIN_READ_ONLY_SQL);
+    expect(log).not.toContain(BEGIN_SQL);
+    expect(log).not.toContain(buildPadronApplySql(LAYOUTS, OPTIONS));
+    expect(log).not.toContain(buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }));
     expect(log[log.length - 1]).toBe(ROLLBACK_SQL);
     expect(log).not.toContain(COMMIT_SQL);
     expect(result.dryRun).toBe(true);
     expect(result.targetModified).toBe(false);
+    expect(result.planId).toMatch(PLAN_ID_PATTERN);
   });
 });
 
 describe("runActualizarPadron count check (AP-48)", () => {
   it("should ROLLBACK, never COMMIT, and throw when the inserted rows differ from the NEW count", async () => {
+    const planId = await analysisPlanIdOf();
     const { session, log } = sessionOf(CLASSIFIED_NEW - 1);
 
-    const failure = await failureOf(runActualizarPadron(PARAMS_OF(), depsOf(session)));
+    const failure = await failureOf(runActualizarPadron(PARAMS_OF({ planId }), depsOf(session)));
 
     expect(failure.message).toMatch(/Los padrones insertados \(1\) no coinciden con los nuevos del análisis \(2\)/);
     expect(log).toContain(ROLLBACK_SQL);
@@ -176,10 +212,11 @@ describe("runActualizarPadron count check (AP-48)", () => {
 
 describe("runActualizarPadron revert backup failure (AP-68)", () => {
   it("should ROLLBACK, never COMMIT, and throw the backup message when the revert writer rejects", async () => {
+    const planId = await analysisPlanIdOf();
     const { session, log } = sessionOf(CLASSIFIED_NEW);
     vi.mocked(writeRevertBackup).mockRejectedValueOnce(new Error(REVERT_BACKUP_FAILURE));
 
-    const failure = await failureOf(runActualizarPadron(PARAMS_OF(), depsOf(session)));
+    const failure = await failureOf(runActualizarPadron(PARAMS_OF({ planId }), depsOf(session)));
 
     expect(failure.message).toMatch(/No se pudo generar el respaldo para revertir/);
     expect(log[log.length - 1]).toBe(ROLLBACK_SQL);

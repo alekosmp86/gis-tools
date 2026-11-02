@@ -17,7 +17,10 @@ export interface WarningInput {
   commitError: string | undefined;
 }
 
-export const DRY_RUN_WARNING = "Análisis: la tabla de destino no fue modificada. Todo se revierte al final y el informe describe lo que cambiaría.";
+export const DRY_RUN_WARNING =
+  "Análisis de solo lectura: la tabla de destino no fue modificada y el informe describe lo que cambiaría. Para guardar, ejecute la actualización desde este análisis.";
+const ADDRESS_MASTER_PLAN_WARNING =
+  "Las direcciones maestras se cuentan sobre los padrones que ya están en el destino: las de los padrones nuevos se calculan al guardar.";
 export const COMMIT_UNKNOWN_WARNING = "No se pudo confirmar el COMMIT: verifique las tablas de destino antes de reintentar.";
 
 function totalsWarnings({ skipped, repaired }: ActualizarTotals, collidingKeyCount: number): string[] {
@@ -38,6 +41,9 @@ const looseWarningOf = (pairsLoose: number): string => {
   return `${plural(pairsLoose, "padrón se actualiza", "padrones se actualizan")} por coincidencia parcial (superposición ${LOOSE_OVERLAP_RANGE}); revisar${pronoun} en el listado de pares.`;
 };
 
+const choicesUnappliedWarningOf = (choicesUnapplied: number): string =>
+  `${plural(choicesUnapplied, "elección de par no se aplicó", "elecciones de par no se aplicaron")} (el padrón elegido ya no es candidato o sigue siendo ambiguo).`;
+
 function pairWarnings(target: ActualizarTargetReport): string[] {
   const warnings: string[] = [];
   if (target.pairsApplied > 0) {
@@ -46,15 +52,26 @@ function pairWarnings(target: ActualizarTargetReport): string[] {
     );
   }
   if (target.pairsLoose > 0) warnings.push(looseWarningOf(target.pairsLoose));
+  if (target.pairsPending > 0) {
+    warnings.push(
+      `${plural(target.pairsPending, "posible par de coincidencia parcial está pendiente", "posibles pares de coincidencia parcial están pendientes")}: se insertan como nuevos y la fila antigua se lista como faltante.`
+    );
+  }
   if (target.pairsNotApplied > 0) {
     warnings.push(
       `${plural(target.pairsNotApplied, "posible par no se aplicó", "posibles pares no se aplicaron")} (ambiguos): se insertan como nuevos y la fila antigua se lista como faltante.`
     );
   }
+  if (target.choicesUnapplied > 0) warnings.push(choicesUnappliedWarningOf(target.choicesUnapplied));
   return warnings;
 }
 
-function targetWarnings(target: ActualizarTargetReport, updateGeometries: boolean): string[] {
+const geometryAcceptsUnappliedWarningOf = (count: number): string =>
+  `${plural(count, "geometría aceptada no se aplicó", "geometrías aceptadas no se aplicaron")} (el padrón ya no tiene un cambio de geometría o Actualizar geometrías está desactivado).`;
+
+const geometryThresholdPercentOf =(fraction: number): string => String(Number((fraction * PERCENT_SCALE).toFixed(1)));
+
+function targetWarnings(target: ActualizarTargetReport, options: ActualizarPadronOptions, dryRun: boolean): string[] {
   const warnings: string[] = [];
   if (target.ambiguous > 0) {
     warnings.push(`${plural(target.ambiguous, "padrón ambiguo", "padrones ambiguos")} en ${target.table}: no se insertaron ni actualizaron.`);
@@ -62,13 +79,20 @@ function targetWarnings(target: ActualizarTargetReport, updateGeometries: boolea
   if (target.missing > 0) {
     warnings.push(`${plural(target.missing, "padrón", "padrones")} de ${target.table} sin fila de origen: se listan, no se modifican.`);
   }
-  if (target.changed > 0 && !updateGeometries) {
+  if (target.changed > 0 && !options.updateGeometries) {
     warnings.push(
       `${plural(target.changed, "geometría cambia", "geometrías cambian")} en ${target.table} y no se aplicó (Actualizar geometrías desactivado).`
     );
   }
+  if (target.geometryPending > 0 && options.updateGeometries) {
+    warnings.push(
+      `${plural(target.geometryPending, "geometría cambia", "geometrías cambian")} en ${target.table} con un cambio de área igual o superior al ${geometryThresholdPercentOf(options.geometryAreaThreshold)} %: quedó pendiente y no se aplicó.`
+    );
+  }
+  const acceptsUnapplied = target.geometryAcceptsUnapplied ?? 0;
+  if (acceptsUnapplied > 0) warnings.push(geometryAcceptsUnappliedWarningOf(acceptsUnapplied));
   warnings.push(...pairWarnings(target));
-  if (target.inserted > DETAIL_LIST_LIMIT) {
+  if (!dryRun && target.inserted > DETAIL_LIST_LIMIT) {
     warnings.push(`Se listan las primeras ${DETAIL_LIST_LIMIT} filas insertadas en ${target.table}.`);
   }
   if (target.changed > DETAIL_LIST_LIMIT) {
@@ -77,8 +101,15 @@ function targetWarnings(target: ActualizarTargetReport, updateGeometries: boolea
   return warnings;
 }
 
-function addressMasterWarningsOf(target: ActualizarTargetReport, addressMaster: ActualizarAddressMasterReport | undefined): string[] {
-  return addressMaster === undefined ? [] : addressMasterCountWarnings(PADRON_SUBJECT_SPEC, target.table, addressMaster.counts);
+/** An analysis carries no linked list, so its planned count does not announce a listing. */
+function addressMasterWarningsOf(
+  target: ActualizarTargetReport,
+  addressMaster: ActualizarAddressMasterReport | undefined,
+  dryRun: boolean
+): string[] {
+  if (addressMaster === undefined) return [];
+  const { ambiguous, linked } = addressMaster.counts;
+  return addressMasterCountWarnings(PADRON_SUBJECT_SPEC, target.table, { ambiguous, linked: dryRun ? 0 : linked });
 }
 
 export function buildRunWarnings({
@@ -93,10 +124,11 @@ export function buildRunWarnings({
 }: WarningInput): string[] {
   return [
     ...(dryRun ? [DRY_RUN_WARNING] : []),
+    ...(dryRun && addressMaster !== undefined ? [ADDRESS_MASTER_PLAN_WARNING] : []),
     ...localityWarnings,
     ...totalsWarnings(totals, collidingKeyCount),
-    ...targetWarnings(target, options.updateGeometries),
-    ...addressMasterWarningsOf(target, addressMaster),
+    ...targetWarnings(target, options, dryRun),
+    ...addressMasterWarningsOf(target, addressMaster, dryRun),
     ...(commitError === undefined ? [] : [COMMIT_UNKNOWN_WARNING, `Error reportado al confirmar: ${sentence(commitError)}`]),
   ];
 }

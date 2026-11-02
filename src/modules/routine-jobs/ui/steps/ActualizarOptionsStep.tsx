@@ -11,6 +11,9 @@ import styles from "./WizardSteps.module.css";
 const LOCALITY_TYPE_LABEL = "Tipo de localidad";
 const LOCALITY_TYPE_HINT =
   "Valor de la columna de tipo de unidad que marca las localidades. Se escribe tal cual aparece en la tabla de tipos.";
+const AREA_THRESHOLD_LABEL = "Umbral de cambio de área para aplicar (%)";
+const AREA_THRESHOLD_HINT =
+  "Una geometría cambiada se actualiza solo si su área cambió menos que este porcentaje (diferencia simétrica sobre la unión). Las demás quedan pendientes y no se aplican.";
 const UPDATE_HINT =
   "Si está activada, la geometría de los padrones existentes se reemplaza por la del catastro en la actualización real. Las inserciones se aplican igual.";
 
@@ -40,6 +43,17 @@ export const ActualizarOptionsStep: React.FC<ActualizarOptionsStepProps> = ({
       updateHint={UPDATE_HINT}
       overwriteWarning={GEOMETRY_OVERWRITE_WARNING}
     />
+    {options.updateGeometries && (
+      <>
+        <FormField
+          label={AREA_THRESHOLD_LABEL}
+          type="number"
+          value={options.geometryAreaThresholdPercent}
+          onChange={(geometryAreaThresholdPercent) => onChange({ geometryAreaThresholdPercent })}
+        />
+        <p className={styles.hint}>{AREA_THRESHOLD_HINT}</p>
+      </>
+    )}
     {blockingReason ? <AlertMessage type={AlertType.WARNING} text={blockingReason} /> : null}
   </div>
 );

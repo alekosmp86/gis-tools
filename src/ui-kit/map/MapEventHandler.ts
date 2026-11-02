@@ -32,7 +32,8 @@ class MapEventHandler {
   public bindGroupEvents(
     featureGroup: L.FeatureGroup,
     sourceFeatures: Feature[],
-    onSelectFeature?: (index: number | null) => void
+    onSelectFeature?: (index: number | null) => void,
+    showPopups: boolean = true
   ): void {
     featureGroup.on("click", (event: L.LeafletEvent) => {
       const originLayer: L.Layer | undefined = event.sourceTarget ?? event.propagatedFrom;
@@ -41,7 +42,9 @@ class MapEventHandler {
       const clickedFeature = (originLayer as L.Layer & { feature?: Feature }).feature;
       if (!clickedFeature) return;
 
-      const popupHtml = this.popupPresenter.buildPopupHtml(clickedFeature);
+      L.DomEvent.stopPropagation(event);
+
+      const popupHtml = showPopups ? this.popupPresenter.buildPopupHtml(clickedFeature) : "";
       if (popupHtml) {
         originLayer.bindPopup(popupHtml, FEATURE_POPUP_OPTIONS).openPopup();
       }
@@ -58,12 +61,14 @@ class MapEventHandler {
   public static bindGroupEvents(
     featureGroup: L.FeatureGroup,
     sourceFeatures: Feature[],
-    onSelectFeature?: (index: number | null) => void
+    onSelectFeature?: (index: number | null) => void,
+    showPopups: boolean = true
   ): void {
     MapEventHandler.sharedInstance.bindGroupEvents(
       featureGroup,
       sourceFeatures,
-      onSelectFeature
+      onSelectFeature,
+      showPopups
     );
   }
 }

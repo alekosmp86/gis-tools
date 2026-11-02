@@ -5,6 +5,7 @@ import type { ActualizarPadronParams, ActualizarPadronResult } from "../jobs/act
 import { tableLockKey } from "./jobHttp";
 import { parseActualizarStartRequest } from "./actualizarRequestParsing";
 import { downloadActualizarPadronBackup } from "./actualizarPadronBackup";
+import { downloadActualizarPendingCsv } from "./actualizarPendingCsv";
 import { createStageJobHandlers, type StageJobDeps } from "./stageJobHandlers";
 
 export type ActualizarPadronHandlerDeps = StageJobDeps<ActualizarPadronParams, ActualizarPadronResult>;
@@ -18,6 +19,7 @@ export interface ActualizarPadronHandlers {
   readonly startActualizarPadron: ModuleEndpointHandler;
   readonly readActualizarPadronStatus: ModuleEndpointHandler;
   readonly downloadActualizarPadronBackup: ModuleEndpointHandler;
+  readonly downloadActualizarPendingCsv: ModuleEndpointHandler;
 }
 
 export function createActualizarPadronHandlers(
@@ -34,5 +36,10 @@ export function createActualizarPadronHandlers(
     },
     overrides
   );
-  return { startActualizarPadron: start, readActualizarPadronStatus: status, downloadActualizarPadronBackup };
+  return {
+    startActualizarPadron: start,
+    readActualizarPadronStatus: status,
+    downloadActualizarPadronBackup,
+    downloadActualizarPendingCsv,
+  };
 }

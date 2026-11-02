@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useReducer, useState, useSyncExternalStore } from "react";
+import React, { useEffect, useMemo, useReducer, useState, useSyncExternalStore } from "react";
 import type { ResolvedColumn } from "@/core/types/tableCatalog";
 import type { SafeDbConfig } from "@/core/types/db";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
@@ -11,11 +11,17 @@ import {
   actualizarExcludedFor,
   blockingReason,
   canRunNow,
+  completedAnalysisPlanIdOf,
+  completedDryRunAcceptsOf,
+  completedDryRunChoicesOf,
+  geometryMapBaseOf,
   initialWizardStateFor,
   isTypeTableChosen,
+  persistBlockedReason,
   roleOfTableKey,
   runBlockedReason,
   schemaFieldOf,
+  toPersistRequest,
   toStartRequest,
   WizardStep,
   wizardReducer,
@@ -56,7 +62,6 @@ const TABLES_STEP_ID = actualizarStepIdOf(WizardStep.TABLES);
 const REVIEW_STEP_ID = actualizarStepIdOf(WizardStep.REVIEW);
 const RESULT_STEP_ID = actualizarStepIdOf(WizardStep.RESULT);
 const DRY_RUN = { dryRun: true };
-const REAL_RUN = { dryRun: false };
 const client = createRoutineJobsClient();
 const getIdleSnapshot = (): ActualizarPadronRunSnapshot => IDLE_SNAPSHOT;
 const seedFromStore = (store: ActualizarPadronRunStore, seed: ActualizarWizardSeed): ActualizarWizardState =>
@@ -93,6 +98,15 @@ export default function ActualizarPadronWizard({
 
   const isRunActive = snapshot.phase === RunPhase.STARTING || snapshot.phase === RunPhase.RUNNING;
   const nowMs = useElapsedTick(isRunActive);
+  const completedChoices = completedDryRunChoicesOf(snapshot);
+  const completedAccepts = completedDryRunAcceptsOf(snapshot);
+  const analysisPlanId = completedAnalysisPlanIdOf(snapshot);
+
+  useEffect(() => {
+    if (completedChoices !== null) {
+      dispatch({ type: "dryRunCompleted", choices: completedChoices, acceptedGeometries: completedAccepts ?? [] });
+    }
+  }, [completedChoices, completedAccepts]);
 
   const { connection } = state;
   const requestConnection = trimConnection(connection);
@@ -142,7 +156,17 @@ export default function ActualizarPadronWizard({
 
   const startRun = (request: ActualizarStartRequest) => {
     void runStore.start(request);
-    dispatch({ type: "runStarted" });
+    dispatch({ type: "runStarted", dryRun: request.dryRun });
+  };
+
+  const resimulate = () => {
+    if (canRunNow(state, DRY_RUN) && !isRunActive) startRun(toStartRequest(state, DRY_RUN));
+  };
+
+  const persist = () => {
+    if (analysisPlanId !== null && persistBlockedReason(state, analysisPlanId) === null) {
+      startRun(toPersistRequest(state, analysisPlanId));
+    }
   };
 
   const newRun = () => {
@@ -195,18 +219,14 @@ export default function ActualizarPadronWizard({
       case WizardStep.REVIEW:
         return (
           <ActualizarReviewStep
-            request={toStartRequest(state, REAL_RUN)}
+            request={toStartRequest(state, DRY_RUN)}
             confirmation={state.confirmation}
-            canDryRun={canRunNow(state, DRY_RUN)}
-            canRun={canRunNow(state, REAL_RUN)}
+            canAnalyze={canRunNow(state, DRY_RUN)}
             busy={isRunActive}
             runBlockedReason={runBlockedReason(state)}
             onConfirmationChange={(patch) => dispatch({ type: "confirmationChanged", patch })}
-            onDryRun={() => {
+            onAnalyze={() => {
               if (canRunNow(state, DRY_RUN)) startRun(toStartRequest(state, DRY_RUN));
-            }}
-            onRun={() => {
-              if (canRunNow(state, REAL_RUN)) startRun(toStartRequest(state, REAL_RUN));
             }}
           />
         );
@@ -215,6 +235,34 @@ export default function ActualizarPadronWizard({
           <ActualizarResultStep
             snapshot={snapshot}
             nowMs={nowMs}
+            pairChoices={{
+              choices: state.pairChoices,
+              submitted: snapshot.plan?.pairChoices ?? [],
+              canResimulate: canRunNow(state, DRY_RUN) && !isRunActive,
+              onChoose: (choice) => dispatch({ type: "pairChoiceChosen", choice }),
+              onRemove: (choice) => dispatch({ type: "pairChoiceRemoved", choice }),
+              onChooseMany: (choices) => dispatch({ type: "pairChoicesChosen", choices }),
+              onRemoveMany: (choices) => dispatch({ type: "pairChoicesRemoved", choices }),
+              onResimulate: resimulate,
+            }}
+            geometryAccepts={{
+              accepted: state.acceptedGeometries,
+              submitted: snapshot.plan?.acceptedGeometries ?? [],
+              onAcceptMany: (accepts) => dispatch({ type: "geometriesAccepted", accepts }),
+              onRejectMany: (accepts) => dispatch({ type: "geometriesRejected", accepts }),
+            }}
+            removalMarks={{
+              marked: state.removalMarks,
+              onMark: (oldIds) => dispatch({ type: "removalMarked", oldIds }),
+              onUnmark: (oldIds) => dispatch({ type: "removalUnmarked", oldIds }),
+            }}
+            mapBase={geometryMapBaseOf(state)}
+            persist={{
+              confirmation: state.confirmation,
+              blockedReason: persistBlockedReason(state, analysisPlanId),
+              onConfirmationChange: (patch) => dispatch({ type: "confirmationChanged", patch }),
+              onPersist: persist,
+            }}
             onNewRun={newRun}
             onBackToReview={() => dispatch({ type: "goTo", step: WizardStep.REVIEW })}
           />

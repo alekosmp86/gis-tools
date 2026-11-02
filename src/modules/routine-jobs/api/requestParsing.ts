@@ -64,7 +64,7 @@ export function assertTablesDistinct<Params>(params: Params, check: (params: Par
   }
 }
 
-const isRecord = (value: unknown): value is JsonRecord =>
+export const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 export function readRequiredText(body: JsonRecord, key: string): string {

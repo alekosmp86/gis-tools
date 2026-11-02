@@ -4,21 +4,31 @@ import type { WritableTargetLayout } from "../../shared/tableResolution";
 import {
   LOCALITY_REASON_GROUP_LIMIT,
   PAIR_CHANGE,
+  REPLACEMENT_CLASS,
   SKIP_REASON,
   SKIPPED_GROUP_LIMIT,
+  type GeometryState,
   type PairChange,
   type PairStatus,
   type PairTier,
+  type ReplacementClass,
   type SkipReason,
 } from "../constants";
 import type {
   ActualizarTargetReport,
   CollidingKey,
+  MissingByClass,
+  MissingPadron,
+  MissingPadronRefs,
+  MissingPartKey,
   PadronApplyOutcome,
   PadronClassification,
+  PadronCounts,
+  PadronDataFingerprint,
   PadronGeometryChange,
   PadronInserted,
   PadronKey,
+  PadronLocation,
   PadronNamedKey,
   PadronPair,
   SkippedGroup,
@@ -136,13 +146,66 @@ const namedKeyOf = (entry: ReportRow): PadronNamedKey => ({
 
 const insertedOf = (entry: ReportRow): PadronInserted => ({ id: countOf(entry.id), ...namedKeyOf(entry) });
 
+const locationOf = (entry: ReportRow): PadronLocation => ({
+  oldAreaM2: numberOf(entry.oldAreaM2),
+  newAreaM2: numberOf(entry.newAreaM2),
+  areaChangePct: numberOf(entry.areaChangePct),
+  centroidLat: numberOf(entry.centroidLat),
+  centroidLon: numberOf(entry.centroidLon),
+});
+
 const geometryChangeOf = (entry: ReportRow): PadronGeometryChange => ({
   ...namedKeyOf(entry),
-  distance: numberOf(entry.distance),
-  areaRatio: numberOf(entry.areaRatio),
+  ...locationOf(entry),
+  oldId: numberOf(entry.oldId),
+  state: entry.state as GeometryState,
 });
 
 const listOf = (value: unknown): ReportRow[] => rowsOf(value);
+
+const textListOf = (value: unknown): string[] => (Array.isArray(value) ? value.map((entry) => String(entry)) : []);
+
+const partKeyOf = (entry: ReportRow): MissingPartKey => ({
+  typePadron: textOf(entry.typePadron),
+  number: textOf(entry.number),
+  locality: textOf(entry.locality),
+});
+
+const partKeysOf = (value: unknown): MissingPartKey[] => rowsOf(value).map(partKeyOf);
+
+const missingByClassOf = (row: ReportRow): MissingByClass => ({
+  [REPLACEMENT_CLASS.SUBDIVIDED]: countOf(row.missing_subdivided),
+  [REPLACEMENT_CLASS.REPLACED_ONE]: countOf(row.missing_replaced_one),
+  [REPLACEMENT_CLASS.PARTIAL]: countOf(row.missing_partial),
+  [REPLACEMENT_CLASS.ORPHAN]: countOf(row.missing_orphan),
+});
+
+const refsOf = (entry: ReportRow): MissingPadronRefs | undefined => {
+  const refs: MissingPadronRefs = {};
+  if (entry.accessPointRefs !== undefined) refs.accessPoint = countOf(entry.accessPointRefs);
+  if (entry.addressesRefs !== undefined) refs.addresses = countOf(entry.addressesRefs);
+  return Object.keys(refs).length === 0 ? undefined : refs;
+};
+
+const missingPadronOf = (entry: ReportRow): MissingPadron => {
+  const refs = refsOf(entry);
+  return {
+    oldId: countOf(entry.oldId),
+    typePadron: textOf(entry.typePadron),
+    provinceId: numberOf(entry.provinceId),
+    department: textOf(entry.department),
+    locality: textOf(entry.locality),
+    number: textOf(entry.number),
+    oldAreaM2: numberOf(entry.oldAreaM2),
+    centroidLat: numberOf(entry.centroidLat),
+    centroidLon: numberOf(entry.centroidLon),
+    class: entry.class as ReplacementClass,
+    coveredPct: numberOf(entry.coveredPct),
+    parts: textListOf(entry.parts),
+    partKeys: partKeysOf(entry.partKeys),
+    ...(refs === undefined ? {} : { refs }),
+  };
+};
 
 const PAIR_CHANGE_FLAGS: ReadonlyArray<readonly [string, PairChange]> = [
   ["typeChanged", PAIR_CHANGE.TYPE],
@@ -167,11 +230,21 @@ const pairOf = (entry: ReportRow): PadronPair => ({
     locality: textOf(entry.oldLocality),
   },
   new: namedKeyOf(entry),
-  distance: numberOf(entry.distance),
+  overlap: numberOf(entry.overlap),
+  areaRatio: numberOf(entry.areaRatio),
+  ...locationOf(entry),
+});
+
+const fingerprintOf = (row: ReportRow): PadronDataFingerprint => ({
+  targetRows: countOf(row.target_rows),
+  targetMaxId: countOf(row.target_max_id),
+  stagingCandidates: countOf(row.staging_candidates),
+  digest: textOf(row.plan_digest) ?? "",
 });
 
 export function toPadronClassification(row: ReportRow): PadronClassification {
   return {
+    fingerprint: fingerprintOf(row),
     counts: {
       inserted: countOf(row.new),
       unchanged: countOf(row.unchanged),
@@ -179,17 +252,29 @@ export function toPadronClassification(row: ReportRow): PadronClassification {
       changed: countOf(row.changed),
       ambiguous: countOf(row.ambiguous),
       missing: countOf(row.missing),
+      missingByClass: missingByClassOf(row),
       updates: countOf(row.updates),
       pairs: countOf(row.pairs),
       pairsLoose: countOf(row.pairs_loose),
       pairsTotal: countOf(row.pairs_total),
+      pairsPending: countOf(row.pairs_pending),
       pairsNotApplied: countOf(row.pairs_not_applied),
+      choicesUnapplied: countOf(row.choices_unapplied),
+      geometryPending: countOf(row.geometry_pending),
+      geometryAcceptsUnapplied: countOf(row.geometry_accepts_unapplied),
     },
     missingSamples: listOf(row.missing_samples).map(keyOf),
+    missingReview: listOf(row.missing_review).map(missingPadronOf),
     ambiguousSamples: listOf(row.ambiguous_samples).map(keyOf),
     geometryChanges: listOf(row.geometry_changes).map(geometryChangeOf),
+    pendingGeometryChanges: listOf(row.pending_geometry_changes).map(geometryChangeOf),
     pairs: listOf(row.pairs_list).map(pairOf),
   };
+}
+
+/** An analysis writes nothing: its inserted, updated and paired counts are the classification's planned ones, and it has no inserted list. */
+export function plannedApplyOf(counts: PadronCounts): PadronApplyOutcome {
+  return { inserted: counts.inserted, updated: counts.updates, paired: counts.pairs, insertedList: [] };
 }
 
 export function toPadronApplyOutcome(row: ReportRow): PadronApplyOutcome {
@@ -227,14 +312,20 @@ export function buildPadronTargetReport({
     changed: counts.changed,
     missing: counts.missing,
     missingSamples: classification.missingSamples,
+    missingByClass: counts.missingByClass,
+    missingReview: classification.missingReview,
     ambiguous: counts.ambiguous,
     ambiguousSamples: classification.ambiguousSamples,
     geometryChanges: classification.geometryChanges,
+    geometryPending: counts.geometryPending,
     pairs: classification.pairs,
     pairsTotal: counts.pairsTotal,
     pairsApplied: counts.pairs,
     pairsLoose: counts.pairsLoose,
+    pairsPending: counts.pairsPending,
     pairsNotApplied: counts.pairsNotApplied,
+    choicesUnapplied: counts.choicesUnapplied,
+    geometryAcceptsUnapplied: counts.geometryAcceptsUnapplied,
   };
 }
 

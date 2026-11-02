@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildActualizarReportView } from "@/modules/routine-jobs/ui/actualizarPadronReportView";
 import { SKIP_REASON, type SkipReason } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
-import type { ActualizarPadronResult } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
+import type { ActualizarPadronResult, PadronPair } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 
 const TABLE = "carto.padron_tmp_actualizacion";
 const ALL_REASONS = Object.values(SKIP_REASON) as SkipReason[];
@@ -42,14 +42,19 @@ const resultOf = (overrides: Partial<ActualizarPadronResult> = {}): ActualizarPa
     changed: 25,
     missing: 1,
     missingSamples: [],
+    missingByClass: { REPLACED_ONE: 0, SUBDIVIDED: 0, PARTIAL: 0, ORPHAN: 0 },
+    missingReview: [],
     ambiguous: 1,
     ambiguousSamples: [],
     geometryChanges: [],
+    geometryPending: 0,
     pairs: [],
     pairsTotal: 0,
     pairsApplied: 0,
     pairsLoose: 0,
+    pairsPending: 0,
     pairsNotApplied: 0,
+    choicesUnapplied: 0,
   },
   warnings: [],
   stepTimings: [{ label: "Clasificar padrones", ms: 1234 }],
@@ -84,13 +89,14 @@ describe("actualizarPadronReportView", () => {
         ["Actualizadas", 24],
         ["Claves actualizadas", 0],
         ["Geometrías que cambian", 25],
+        ["Geometrías pendientes", 0],
+        ["Pares pendientes", 0],
         ["Sin cambios", 6],
         ["Sin cambios dentro de tolerancia", 2],
         ["Faltantes en destino", 1],
         ["Ambiguas", 1],
       ]);
     });
-
     it("should say that the geometry changes were not applied when Actualizar geometrías was off", () => {
       const view = buildActualizarReportView(
         resultOf({ target: { ...resultOf().target, updateApplied: false, updated: 0 } })
@@ -117,6 +123,50 @@ describe("actualizarPadronReportView", () => {
         [SKIP_REASON.CLAVE_NULA, 5, 10],
       ]);
       expect(view.zeroReasonCount).toBe(ALL_REASONS.length - 4);
+    });
+  });
+
+  describe("pair rows", () => {
+    it("should map a pending LOOSE pair to its location, area, status and tier fields and carry no distance", () => {
+      const pair: PadronPair = {
+        status: "NOT_APPLIED_PENDING",
+        tier: "LOOSE",
+        changes: ["number"],
+        oldId: 7,
+        old: { typePadron: "URBANO", provinceId: 1, localityId: 10, number: "500", department: "MONTEVIDEO", locality: "CENTRO" },
+        new: { typePadron: "URBANO", provinceId: 1, localityId: 10, number: "501", department: "MONTEVIDEO", locality: "CENTRO" },
+        overlap: 0.93,
+        areaRatio: 1.03,
+        oldAreaM2: 9300,
+        newAreaM2: 9579,
+        areaChangePct: 103,
+        centroidLat: -34.9011,
+        centroidLon: -56.1645,
+      };
+
+      const view = buildActualizarReportView(resultOf({ target: { ...resultOf().target, pairs: [pair], pairsTotal: 1, pairsPending: 1 } }));
+
+      expect(view.target.pairs).toEqual([
+        {
+          key: "7|URBANO|1|10|501",
+          department: "MONTEVIDEO",
+          locality: "CENTRO",
+          type: "URBANO",
+          number: "501",
+          oldId: 7,
+          oldType: "URBANO",
+          oldLocality: "CENTRO",
+          oldNumber: "500",
+          oldAreaM2: 9300,
+          newAreaM2: 9579,
+          areaChangePct: 103,
+          centroidLat: -34.9011,
+          centroidLon: -56.1645,
+          status: "Pendiente: coincidencia parcial",
+          tier: "Parcial (coincidencia parcial)",
+        },
+      ]);
+      expect(view.target.pairs[0]).not.toHaveProperty("distance");
     });
   });
 

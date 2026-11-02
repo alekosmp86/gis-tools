@@ -5,6 +5,7 @@ import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
 import routeDeclarations from "./module.routes.json";
 import { createRoutineJobsHandlers } from "./api/handlers";
 import { createActualizarPadronHandlers } from "./api/actualizarPadronHandlers";
+import { readActualizarGeometryMap } from "./api/actualizarGeometryMap";
 import { createCargarLocalidadesHandlers } from "./api/cargarLocalidadesHandlers";
 import { createUnidadTerritorialHandlers } from "./api/unidadTerritorialHandlers";
 import { RoutineJobsDashboard } from "./ui/RoutineJobsDashboard";
@@ -35,6 +36,8 @@ export const routineJobsModule: AppModuleManifest = {
     "POST actualizar-padron/start": actualizarHandlers.startActualizarPadron,
     "GET actualizar-padron/status": actualizarHandlers.readActualizarPadronStatus,
     "GET actualizar-padron/backup": actualizarHandlers.downloadActualizarPadronBackup,
+    "GET actualizar-padron/pending-csv": actualizarHandlers.downloadActualizarPendingCsv,
+    "POST actualizar-padron/geometries": readActualizarGeometryMap,
     "POST cargar-localidades/start": localidadesHandlers.startCargarLocalidades,
     "GET cargar-localidades/status": localidadesHandlers.readCargarLocalidadesStatus,
     "POST unidad-territorial/start": unidadHandlers.startUnidadTerritorial,

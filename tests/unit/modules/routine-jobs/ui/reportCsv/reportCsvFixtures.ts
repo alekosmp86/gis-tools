@@ -5,7 +5,7 @@ import type {
   PadronInserted,
   SkippedReport,
 } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
-import { SKIP_REASON } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
+import { GEOMETRY_STATE, SKIP_REASON, type GeometryState } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import { LOCALITY_SKIP_REASON } from "@/modules/routine-jobs/jobs/cargar-localidades/constants";
 import type {
   CargarLocalidadesResult,
@@ -284,7 +284,7 @@ function padronInsertedOf(count: number): PadronInserted[] {
   }));
 }
 
-function padronGeometryChangesOf(count: number): PadronGeometryChange[] {
+export function padronGeometryChangesOf(count: number, state: GeometryState = GEOMETRY_STATE.APPLIED): PadronGeometryChange[] {
   return Array.from({ length: count }, (_, index) => ({
     department: "JUJUY",
     locality: `Geometría ${index}`,
@@ -292,8 +292,13 @@ function padronGeometryChangesOf(count: number): PadronGeometryChange[] {
     provinceId: 3,
     localityId: null,
     number: String(300 + index),
-    distance: 0.25,
-    areaRatio: 0.9,
+    oldId: 4000 + index,
+    state,
+    oldAreaM2: 100,
+    newAreaM2: 110,
+    areaChangePct: 10,
+    centroidLat: -24.123456,
+    centroidLon: -65.123456,
   }));
 }
 
@@ -310,14 +315,19 @@ export function actualizarTargetReportOf(overrides: Partial<ActualizarTargetRepo
     changed: 25,
     missing: 1,
     missingSamples: [{ typePadron: "URBANO", provinceId: 5, localityId: 9, number: "77" }],
+    missingByClass: { REPLACED_ONE: 0, SUBDIVIDED: 0, PARTIAL: 0, ORPHAN: 0 },
+    missingReview: [],
     ambiguous: 1,
     ambiguousSamples: [{ typePadron: "RURAL", provinceId: 5, localityId: null, number: "78" }],
     geometryChanges: padronGeometryChangesOf(25),
+    geometryPending: 0,
     pairs: [],
     pairsTotal: 0,
     pairsApplied: 0,
     pairsLoose: 0,
+    pairsPending: 0,
     pairsNotApplied: 0,
+    choicesUnapplied: 0,
     ...overrides,
   };
 }

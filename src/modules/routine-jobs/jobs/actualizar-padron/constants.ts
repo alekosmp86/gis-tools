@@ -140,9 +140,27 @@ export const DESTINATION_TITLE = "de destino";
 export const PAIR_STATUS = {
   APPLIED: "APPLIED",
   NOT_APPLIED_AMBIGUOUS: "NOT_APPLIED_AMBIGUOUS",
+  NOT_APPLIED_PENDING: "NOT_APPLIED_PENDING",
 } as const;
 
 export type PairStatus = (typeof PAIR_STATUS)[keyof typeof PAIR_STATUS];
+
+export const GEOMETRY_STATE = {
+  APPLIED: "APPLIED",
+  PENDING: "PENDING",
+} as const;
+
+export type GeometryState = (typeof GEOMETRY_STATE)[keyof typeof GEOMETRY_STATE];
+
+export const GEOMETRY_MAP_ROLE = {
+  OLD: "old",
+  NEW: "new",
+} as const;
+
+export type GeometryMapRole = (typeof GEOMETRY_MAP_ROLE)[keyof typeof GEOMETRY_MAP_ROLE];
+
+/** A CHANGED geometry is written only when its area ratio is below this fraction (5 % by default). */
+export const DEFAULT_GEOMETRY_AREA_THRESHOLD = 0.05;
 
 export const PAIR_CHANGE = {
   TYPE: "type",
@@ -166,3 +184,36 @@ export const PAIR_LOOSE_OVERLAP_MIN = 0.85;
 export const PAIR_LOOSE_AREA_RATIO_TOLERANCE = 0.1;
 
 export const PADRON_REFRESH_VIEW_NAMES = ["mv_padron", "mv_padron_wms"] as const;
+
+export const REPLACEMENT_CLASS = {
+  REPLACED_ONE: "REPLACED_ONE",
+  SUBDIVIDED: "SUBDIVIDED",
+  PARTIAL: "PARTIAL",
+  ORPHAN: "ORPHAN",
+} as const;
+
+export type ReplacementClass = (typeof REPLACEMENT_CLASS)[keyof typeof REPLACEMENT_CLASS];
+
+/** Listing order of the missing padrones: the classes that need the most review first. */
+export const REPLACEMENT_CLASS_ORDER: readonly ReplacementClass[] = [
+  REPLACEMENT_CLASS.SUBDIVIDED,
+  REPLACEMENT_CLASS.REPLACED_ONE,
+  REPLACEMENT_CLASS.PARTIAL,
+  REPLACEMENT_CLASS.ORPHAN,
+];
+
+/** A missing padrón is REPLACED_ONE when one new unpaired padrón covers this share (%) of its area, or SUBDIVIDED when several cover it together. */
+export const REPLACEMENT_COVER_MIN_PCT = 90;
+/** A new unpaired padrón takes part in a replacement only when it covers at least this share (%) of the missing padrón's area. */
+export const REPLACEMENT_PART_MIN_PCT = 5;
+/** A covered share (%) from this value up to REPLACEMENT_COVER_MIN_PCT is PARTIAL; less, or no overlap, is ORPHAN. */
+export const REPLACEMENT_PARTIAL_MIN_PCT = 50;
+/** Replacing padrones listed for each missing padrón. */
+export const REPLACEMENT_PARTS_LIMIT = 5;
+
+export const REPLACEMENT_REFERENCE_TABLE = {
+  ACCESS_POINT: "access_point",
+  ADDRESSES: "addresses_2_0_edit",
+} as const;
+
+export const REPLACEMENT_REFERENCE_COLUMN = "id_padron";

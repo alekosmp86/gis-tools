@@ -1,18 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
-import { Info } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { AlertCircle, Info } from "lucide-react";
 import type { FeatureCollection } from "geojson";
 import type { MapFeatureStyle } from "@/core/types/map";
+import type { MapInteractionOptions } from "@/ui-kit/types/map";
 import { DEFAULT_MAP_FEATURE_STYLE, MAX_VIEWPORT_RENDER_FEATURES } from "@/core/constants/mapConstants";
 import { formatNumber } from "@/core/common/ValueFormatter";
-import { capFeaturesWithoutSplittingGroups } from "@/core/spatial/FeaturePreviewCap";
 import { useLeafletMap } from "@/ui-kit/hooks/useLeafletMap";
 import { MapProgressBar } from "./map/MapProgressBar";
 import { MapHeaderBar } from "./map/MapHeaderBar";
 import { MapLegend } from "./map/MapLegend";
+import { capPreview, containerClassOf, presentTypesOf } from "./spatialPreviewLogic";
 import "leaflet/dist/leaflet.css";
 import styles from "./SpatialMapPreview.module.css";
+
+const RENDER_ERROR_PREFIX = "No se pudieron dibujar las geometrías en el mapa";
 
 export interface SpatialMapPreviewProps {
   geojson: FeatureCollection;
@@ -30,6 +33,14 @@ export interface SpatialMapPreviewProps {
    * Separate from maxFeatures, which only controls the static pre-slice before the map.
    */
   neverCapViewportRender?: boolean;
+  /** Set false to open no popup on click or on highlight; the caller shows the feature itself. */
+  showPopups?: boolean;
+  /** Feature property drawn as a permanent label on each feature. */
+  labelProperty?: string;
+  /** A click on empty map reports null through onSelectFeature. */
+  clearOnBackgroundClick?: boolean;
+  /** Fill the height of the parent instead of the default fixed height. The parent must have a definite height. */
+  fillParent?: boolean;
 }
 
 export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
@@ -42,6 +53,10 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   maxFeatures = null,
   showCapNotice = true,
   neverCapViewportRender = false,
+  showPopups = true,
+  labelProperty,
+  clearOnBackgroundClick = false,
+  fillParent = false,
 }) => {
   const [mapContainerNode, setMapContainerNode] = useState<HTMLDivElement | null>(null);
   const [basemapKey, setBasemapKey] = useState<string>("osm");
@@ -50,23 +65,17 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
     ...initialStyle,
   }));
 
-  const suppliedFeatures = geojson?.features ?? [];
-  const suppliedFeatureCount = suppliedFeatures.length;
-
-  const cappedFeatures =
-    maxFeatures === null
-      ? suppliedFeatures
-      : capFeaturesWithoutSplittingGroups(suppliedFeatures, maxFeatures);
-  const isCapped = cappedFeatures.length < suppliedFeatureCount;
-  const previewGeojson: FeatureCollection = isCapped
-    ? { type: "FeatureCollection", features: [...cappedFeatures] }
-    : geojson;
-
-  const totalFeatures = previewGeojson?.features?.length || 0;
+  const preview = capPreview(geojson, maxFeatures);
+  const previewGeojson = preview.collection;
+  const totalFeatures = preview.shownCount;
 
   const maxRenderFeatures = neverCapViewportRender ? null : MAX_VIEWPORT_RENDER_FEATURES;
+  const interaction = useMemo<MapInteractionOptions>(
+    () => ({ showPopups, labelProperty, clearOnBackgroundClick }),
+    [showPopups, labelProperty, clearOnBackgroundClick]
+  );
 
-  const { renderedCount, isChunking, handleFitBounds } = useLeafletMap(
+  const { renderedCount, isChunking, renderError, handleFitBounds } = useLeafletMap(
     mapContainerNode,
     previewGeojson,
     basemapKey,
@@ -74,28 +83,19 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
     selectedFeatureIndex,
     onSelectFeature,
     isVisible,
-    maxRenderFeatures
+    maxRenderFeatures,
+    interaction
   );
 
   const progressPct = totalFeatures > 0 ? Math.min(100, Math.round((renderedCount / totalFeatures) * 100)) : 0;
-
-  const typesSet = new Set<string>();
-  if (previewGeojson?.features) {
-    for (let featureIndex = 0; featureIndex < previewGeojson.features.length; featureIndex++) {
-      const type = previewGeojson.features[featureIndex].properties?._discrepancyType;
-      if (typeof type === "string" && type) {
-        typesSet.add(type);
-      }
-    }
-  }
-  const presentTypes = Array.from(typesSet);
+  const presentTypes = presentTypesOf(previewGeojson);
 
   const handleResetFeatureStyle = () => {
     setFeatureStyle(DEFAULT_MAP_FEATURE_STYLE);
   };
 
   return (
-    <div className={styles.mapContainer}>
+    <div className={containerClassOf(fillParent, styles.mapContainer, styles.fillParent)}>
       {isChunking && <MapProgressBar progressPct={progressPct} />}
 
       <MapHeaderBar
@@ -112,18 +112,25 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
         hasDiscrepancies={presentTypes.length > 0}
       />
 
-      {isCapped && showCapNotice && (
+      {preview.isCapped && showCapNotice && (
         <div className={styles.capNotice}>
           <Info size={14} />
           <span>
-            {`Vista previa limitada: mostrando ${formatNumber(cappedFeatures.length)} de ${formatNumber(
-              suppliedFeatureCount
+            {`Vista previa limitada: mostrando ${formatNumber(preview.shownCount)} de ${formatNumber(
+              preview.suppliedCount
             )} entidades para mantener la fluidez del mapa.`}
           </span>
         </div>
       )}
 
       <MapLegend presentTypes={presentTypes} />
+
+      {renderError !== null && (
+        <div className={styles.renderError} role="alert">
+          <AlertCircle size={16} />
+          <span>{`${RENDER_ERROR_PREFIX}: ${renderError.message}`}</span>
+        </div>
+      )}
 
       <div
         ref={setMapContainerNode}

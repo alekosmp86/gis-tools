@@ -5,7 +5,7 @@ import type {
   UnmatchedPadron,
 } from "../../jobs/cargar-localidades/types";
 import { textOrNoData } from "../reportFormat";
-import type { CsvRow } from "./csvFormat";
+import type { CsvRow } from "../../jobs/shared/csvFormat";
 import {
   CHANGE_KIND,
   changeCsvOf,

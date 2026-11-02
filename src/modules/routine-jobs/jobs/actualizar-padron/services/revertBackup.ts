@@ -37,8 +37,8 @@ interface RevertFile {
 const SAFE_IDENTIFIER_CHARACTERS = /[^A-Za-z0-9_-]/g;
 const EMPTY_FILE_MESSAGE = "el archivo de respaldo está vacío";
 const BACKUP_FILE_MODE = 0o600;
-/* Read by psql before the script: stop at the first error, and read the script as UTF-8. */
-const PSQL_PREAMBLE: readonly string[] = ["\\set ON_ERROR_STOP on", "SET client_encoding = 'UTF8';"];
+/* Plain SQL, no psql meta-commands, so psql, pgAdmin and any SQL client run the file as is. */
+const SQL_PREAMBLE: readonly string[] = ["SET client_encoding = 'UTF8';"];
 
 const pad = (value: number): string => String(value).padStart(2, "0");
 
@@ -113,7 +113,7 @@ const summaryOf = (counts: RevertCounts): ActualizarPadronBackup["counts"] => ({
 });
 
 async function* textOfLines(lines: AsyncIterable<RevertLine>, tally: RevertCounts): AsyncGenerator<string> {
-  for (const preambleLine of PSQL_PREAMBLE) yield `${preambleLine}\n`;
+  for (const preambleLine of SQL_PREAMBLE) yield `${preambleLine}\n`;
   for await (const line of lines) {
     addToRevertTally(tally, line);
     yield `${line.text}\n`;

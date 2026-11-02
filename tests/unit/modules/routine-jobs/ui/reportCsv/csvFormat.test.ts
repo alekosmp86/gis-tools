@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toCsv } from "@/modules/routine-jobs/ui/reportCsv/csvFormat";
+import { toCsv } from "@/modules/routine-jobs/jobs/shared/csvFormat";
 import { BOM, parseCsv } from "./reportCsvFixtures";
 
 const bodyOf = (csv: string): string => csv.slice(BOM.length);

@@ -1,4 +1,4 @@
-import { toCsv, type CsvRow } from "./csvFormat";
+import { toCsv, type CsvRow } from "../../jobs/shared/csvFormat";
 
 const COUNT_HEADER: CsvRow = ["Cambio", "Cantidad"];
 export const CHANGE_HEADER: CsvRow = ["Tabla", "Cambio", "Provincia", "Nombre", "Id", "Distancia (m)", "Relación de área"];

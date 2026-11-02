@@ -67,7 +67,7 @@ describe("actualizar-padron revert backup writer on a real temp directory (AP-70
     await rm(directory, { recursive: true, force: true });
   });
 
-  it("should write a gzip revert file that starts with the psql preamble, register it, and leave no file when the counts differ", async () => {
+  it("should write a gzip revert file that starts with the plain SQL preamble, register it, and leave no file when the counts differ", async () => {
     await database.exec(`BEGIN; ${buildCreateRevertTableSql()}`);
     await database.exec(
       `INSERT INTO ${REVERT_TABLE_SQL} (kind, id, geometry) VALUES ('U', 1, '20'), ('I', 7, NULL), ('I', 8, NULL);`
@@ -80,8 +80,9 @@ describe("actualizar-padron revert backup writer on a real temp directory (AP-70
     const lines = gunzipSync(await readFile(filePath)).toString("utf8").split("\n");
     const updateLines = lines.filter((line) => line.startsWith("UPDATE "));
     const deleteLines = lines.filter((line) => line.startsWith("DELETE FROM "));
-    expect(lines.slice(0, 2)).toEqual(["\\set ON_ERROR_STOP on", "SET client_encoding = 'UTF8';"]);
-    expect(lines.indexOf("BEGIN;")).toBeGreaterThan(1);
+    expect(lines.slice(0, 1)).toEqual(["SET client_encoding = 'UTF8';"]);
+    expect(lines.filter((line) => line.startsWith("\\"))).toEqual([]);
+    expect(lines.indexOf("BEGIN;")).toBeGreaterThan(0);
     expect(backup.fileName).toMatch(/^padron-revert-carto-padron-\d{8}-\d{6}\.sql\.gz$/);
     expect(backup.counts).toEqual({ updated: 1, paired: 0, inserted: 2, addressMasterRows: 0 });
     expect(updateLines).toHaveLength(1);

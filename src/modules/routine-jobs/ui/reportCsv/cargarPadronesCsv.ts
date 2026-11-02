@@ -1,6 +1,6 @@
 import type { AmbiguousLocalityCode, CargarPadronesResult } from "../../jobs/cargar-padrones/types";
 import { textOrNoData } from "../reportFormat";
-import type { CsvRow } from "./csvFormat";
+import type { CsvRow } from "../../jobs/shared/csvFormat";
 import { countCsvOf, listCsvOf } from "./reportCsvRows";
 
 const INCONSISTENCY_HEADER: CsvRow = ["Departamento", "Código de localidad", "Nombres"];

@@ -5,6 +5,7 @@ import { CollapsibleSection } from "./ActualizarReportSections";
 import { DataTable } from "./DataTable";
 import { keyedRowsOf } from "./keyedRows";
 import { secondsText } from "./reportFormat";
+import { ShowOnMapButton } from "./ShowOnMapButton";
 import sharedStyles from "./CargarPadronesReport.module.css";
 import styles from "./ActualizarPadronReport.module.css";
 
@@ -108,13 +109,31 @@ export interface TableColumn<Row> {
   cell: (row: Row) => string;
 }
 
+const MAP_COLUMN_HEADER = "Mapa";
+const TABLE_WRAP_CLASS = `${styles.tableWrap} ${styles.scrollTable}`;
+const MAP_TABLE_WRAP_CLASS = `${TABLE_WRAP_CLASS} ${styles.mapColumnTable}`;
+
+export interface RowsTableProps<Row> {
+  columns: TableColumn<Row>[];
+  rows: Row[];
+  rowKey: (row: Row) => string;
+  /** Adds a first column with the "Ver en mapa" button when given; it stays visible while the table scrolls sideways. */
+  onShowOnMap?: (row: Row) => void;
+}
+
 /** Column headers are unique within a table, so they key the cells of each row. */
-export function RowsTable<Row>({ columns, rows, rowKey }: { columns: TableColumn<Row>[]; rows: Row[]; rowKey: (row: Row) => string }) {
+export function RowsTable<Row>({ columns, rows, rowKey, onShowOnMap }: RowsTableProps<Row>) {
+  const headers = [...(onShowOnMap === undefined ? [] : [MAP_COLUMN_HEADER]), ...columns.map((column) => column.header)];
   return (
-    <div className={`${styles.tableWrap} ${styles.scrollTable}`}>
-      <DataTable headers={columns.map((column) => column.header)}>
+    <div className={onShowOnMap === undefined ? TABLE_WRAP_CLASS : MAP_TABLE_WRAP_CLASS}>
+      <DataTable headers={headers}>
         {keyedRowsOf(rows, rowKey).map(({ key, row }) => (
           <tr key={key}>
+            {onShowOnMap !== undefined && (
+              <td>
+                <ShowOnMapButton onShow={() => onShowOnMap(row)} />
+              </td>
+            )}
             {columns.map((column) => (
               <td key={column.header}>{column.cell(row)}</td>
             ))}

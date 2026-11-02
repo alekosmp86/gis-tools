@@ -2,6 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
+import { NO_REFERENCE_TABLES } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/replacementSql";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
 import {
   buildCaptureAddressMasterSql,
@@ -9,7 +10,7 @@ import {
   buildMaxAddressMasterIdSql,
   REVERT_TABLE_SQL,
 } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/revertCapture";
-import type { ActualizarPadronOptions, PadronLayouts } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
+import type { AcceptedGeometry, ActualizarPadronOptions, PadronLayouts, PairChoice } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import type { RunSession } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
 import { readRevertCounts, revertScriptLines } from "@/modules/routine-jobs/jobs/actualizar-padron/services/revertScript";
 import { ADDRESS_MASTER_COLUMN } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSpec";
@@ -37,8 +38,13 @@ const POSTGIS_STUBS_SQL = `
   CREATE FUNCTION ST_HausdorffDistance(geometry, geometry) RETURNS float8 AS 'SELECT abs($1::numeric - $2::numeric)::float8' LANGUAGE sql;
   CREATE FUNCTION ST_SymDifference(geometry, geometry) RETURNS geometry AS 'SELECT abs($1::numeric - $2::numeric)::text::geometry' LANGUAGE sql;
   CREATE FUNCTION ST_Union(geometry, geometry) RETURNS geometry AS 'SELECT greatest($1::numeric, $2::numeric)::text::geometry' LANGUAGE sql;
+  CREATE FUNCTION st_union_first(geometry, geometry) RETURNS geometry AS 'SELECT COALESCE($1, $2)' LANGUAGE sql;
+  CREATE AGGREGATE ST_Union(geometry) (SFUNC = st_union_first, STYPE = geometry);
   CREATE FUNCTION ST_Area(geometry) RETURNS float8 AS 'SELECT $1::numeric::float8' LANGUAGE sql;
   CREATE FUNCTION ST_Intersection(geometry, geometry) RETURNS geometry AS 'SELECT least($1::numeric, $2::numeric)::text::geometry' LANGUAGE sql;
+  CREATE FUNCTION ST_Centroid(geometry) RETURNS geometry AS 'SELECT $1' LANGUAGE sql;
+  CREATE FUNCTION ST_X(geometry) RETURNS float8 AS 'SELECT $1::numeric::float8' LANGUAGE sql;
+  CREATE FUNCTION ST_Y(geometry) RETURNS float8 AS 'SELECT $1::numeric::float8' LANGUAGE sql;
   CREATE FUNCTION geometry_overlaps(geometry, geometry) RETURNS boolean AS 'SELECT true' LANGUAGE sql;
   CREATE OPERATOR && (LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overlaps);
 `;
@@ -97,7 +103,13 @@ const LAYOUTS: PadronLayouts = {
   locality: tableOf("carto", "loc", Object.values(LOCALITY_COLUMN)),
 };
 
-const OPTIONS: ActualizarPadronOptions = { tolerance: 1, updateGeometries: true, linkAddressMaster: false };
+const OPTIONS: ActualizarPadronOptions = {
+  tolerance: 1,
+  geometryAreaThreshold: 0.05,
+  updateGeometries: true,
+  linkAddressMaster: false,
+  pairChoices: [],
+};
 
 const SELECT_PADRON_SQL = "SELECT id, number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master FROM carto.padron ORDER BY id";
 
@@ -126,11 +138,14 @@ const keyOf = (row: TargetRow): Omit<TargetRow, "geometry"> => ({
 });
 
 /** The transaction of the stage as the job runs it: classify, repair the sequence, apply, then COMMIT. */
-async function runStage(database: PGlite): Promise<{ classification: Row; apply: Row }> {
+async function runStage(
+  database: PGlite,
+  options: ActualizarPadronOptions = OPTIONS
+): Promise<{ classification: Row; apply: Row }> {
   await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
-  const classification = (await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS))).rows[0];
+  const classification = (await database.query<Row>(buildPadronClassifySql(LAYOUTS, options))).rows[0];
   await database.query(buildSequenceRepairSql(TARGET));
-  const apply = (await database.query<Row>(buildPadronApplySql(LAYOUTS, OPTIONS))).rows[0];
+  const apply = (await database.query<Row>(buildPadronApplySql(LAYOUTS, options))).rows[0];
   await database.exec("COMMIT");
   return { classification, apply };
 }
@@ -363,12 +378,23 @@ const RECTANGLE_STUBS_SQL = `
   CREATE FUNCTION ST_Normalize(geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
   CREATE FUNCTION ST_SnapToGrid(geometry, numeric) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
   CREATE FUNCTION ST_HausdorffDistance(geometry, geometry) RETURNS float8 AS $$ SELECT 1::float8 $$ LANGUAGE sql;
-  CREATE FUNCTION ST_SymDifference(geometry, geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
-  CREATE FUNCTION ST_Union(geometry, geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
   CREATE FUNCTION ST_Area(geometry) RETURNS float8 AS $$ SELECT (rect_width($1) * rect_height($1))::float8 $$ LANGUAGE sql;
   CREATE FUNCTION ST_Intersection(geometry, geometry) RETURNS geometry AS $$
     SELECT (least(rect_width($1), rect_width($2))::text || ':' || least(rect_height($1), rect_height($2))::text)::geometry
   $$ LANGUAGE sql;
+  CREATE FUNCTION ST_SymDifference(geometry, geometry) RETURNS geometry AS $$
+    SELECT ((rect_width($1) * rect_height($1) + rect_width($2) * rect_height($2)
+      - 2 * least(rect_width($1), rect_width($2)) * least(rect_height($1), rect_height($2)))::text || ':1')::geometry
+  $$ LANGUAGE sql;
+  CREATE FUNCTION ST_Union(geometry, geometry) RETURNS geometry AS $$
+    SELECT ((rect_width($1) * rect_height($1) + rect_width($2) * rect_height($2)
+      - least(rect_width($1), rect_width($2)) * least(rect_height($1), rect_height($2)))::text || ':1')::geometry
+  $$ LANGUAGE sql;
+  CREATE FUNCTION st_union_first(geometry, geometry) RETURNS geometry AS $$ SELECT COALESCE($1, $2) $$ LANGUAGE sql;
+  CREATE AGGREGATE ST_Union(geometry) (SFUNC = st_union_first, STYPE = geometry);
+  CREATE FUNCTION ST_Centroid(geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_X(geometry) RETURNS float8 AS $$ SELECT rect_width($1)::float8 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_Y(geometry) RETURNS float8 AS $$ SELECT rect_height($1)::float8 $$ LANGUAGE sql;
   CREATE FUNCTION geometry_overlaps(geometry, geometry) RETURNS boolean AS $$ SELECT true $$ LANGUAGE sql;
   CREATE OPERATOR && (LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overlaps);
 `;
@@ -387,15 +413,16 @@ describe("actualizar-padron pair tiers by footprint overlap and area ratio (STRI
     await database.close();
   });
 
-  it("should pair the NEW row as LOOSE and update the old row in place when overlap is 0.93 and area ratio is 1.03 (old 100:93 area 9300, new 93:103 area 9579, intersection 93x93 = 8649)", async () => {
+  it("should pair the NEW row as LOOSE and update the old row in place when the user chooses it (old 100:93 area 9300, new 93:103 area 9579, intersection 93x93 = 8649)", async () => {
     await database.exec(`
       INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
         VALUES ('500', 'URBANO', 10, 1, '100:93', 77);
       INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '93:103');
     `);
     const before = await readPadron(database);
+    const options = withChoices([{ typePadron: "RURAL", provinceId: 1, localityId: null, number: "501", oldId: before[0].id }]);
 
-    const { classification, apply } = await runStage(database);
+    const { classification, apply } = await runStage(database, options);
     const after = await readPadron(database);
     const pairsList = classification.pairs_list as Array<{ tier: string }>;
 
@@ -480,15 +507,16 @@ describe("actualizar-padron pair tiers by footprint overlap and area ratio (STRI
     expect(after[0]).toMatchObject({ id: before[0].id, number: "501", type_padron: "RURAL", geometry: "100:101" });
   });
 
-  it("should tag the pair as LOOSE and count it as loose when overlap is 1.00 and area ratio is 1.05, only the ratio failing STRICT (old 100:100 area 10000, new 100:105 area 10500, intersection 100x100 = 10000)", async () => {
+  it("should tag the pair as LOOSE, count it as loose and apply it when the user chooses it, the ratio alone failing STRICT (old 100:100 area 10000, new 100:105 area 10500, intersection 100x100 = 10000)", async () => {
     await database.exec(`
       INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
         VALUES ('500', 'URBANO', 10, 1, '100:100', 77);
       INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '100:105');
     `);
     const before = await readPadron(database);
+    const options = withChoices([{ typePadron: "RURAL", provinceId: 1, localityId: null, number: "501", oldId: before[0].id }]);
 
-    const { classification, apply } = await runStage(database);
+    const { classification, apply } = await runStage(database, options);
     const after = await readPadron(database);
     const pairsList = classification.pairs_list as Array<{ tier: string }>;
 
@@ -565,6 +593,407 @@ describe("actualizar-padron pair tiers by footprint overlap and area ratio (STRI
     expect(after.filter((row) => row.number === "500" || row.number === "501")).toEqual(
       before.filter((row) => row.number === "500" || row.number === "501")
     );
+    expect(after.filter((row) => row.number === "502")).toHaveLength(1);
+  });
+
+  it("should leave a LOOSE pair pending, insert the NEW row and list the old row as missing when no choice is made (old 100:93 area 9300, new 93:103 area 9579)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:93', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '93:103');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database);
+    const after = await readPadron(database);
+    const pairsList = classification.pairs_list as Array<{ status: string; tier: string }>;
+
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.pairs_loose)).toBe(0);
+    expect(Number(classification.pairs_pending)).toBe(1);
+    expect(Number(classification.pairs_not_applied)).toBe(0);
+    expect(Number(classification.missing)).toBe(1);
+    expect(Number(classification.new)).toBe(1);
+    expect(pairsList).toHaveLength(1);
+    expect(pairsList[0]).toMatchObject({ status: "NOT_APPLIED_PENDING", tier: "LOOSE" });
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(after.find((row) => row.id === before[0].id)).toEqual(before[0]);
+    expect(after.filter((row) => row.number === "501")).toHaveLength(1);
+  });
+
+});
+
+const GATE_OPTIONS: ActualizarPadronOptions = { ...OPTIONS, tolerance: 0.5, geometryAreaThreshold: 0.05 };
+
+describe("actualizar-padron geometry gate by area change (AP-92, AP-89)", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(RECTANGLE_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(PAIR_REFERENCE_SQL);
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry) VALUES
+        ('100', 'URBANO', 10, 1, '100:100'),
+        ('200', 'URBANO', 10, 1, '100:100'),
+        ('300', 'URBANO', 10, 1, '100:100');
+      INSERT INTO stg.padron_staging (unidadcat, nomdepto, nomloccat, padron, geom) VALUES
+        ('URBANO', 'Montevideo', 'centro', 100, '102:100'),
+        ('URBANO', 'Montevideo', 'centro', 200, '107:100'),
+        ('URBANO', 'Montevideo', 'centro', 300, '150:100');
+    `);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  const digestWith = async (options: ActualizarPadronOptions): Promise<string> =>
+    String((await database.query<Row>(buildPadronClassifySql(LAYOUTS, options))).rows[0].plan_digest);
+
+  it("should apply only the 2 % change and leave the 7 % and 50 % changes pending at the 5 % threshold, writing only the applied geometry", async () => {
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database, GATE_OPTIONS);
+    const after = await readPadron(database);
+    const geometryChanges = classification.geometry_changes as Array<{ number: string; state: string; areaChangePct: number }>;
+
+    expect(Number(classification.changed)).toBe(3);
+    expect(Number(classification.updates)).toBe(1);
+    expect(Number(classification.geometry_pending)).toBe(2);
+    expect(Number(apply.updated)).toBe(1);
+    expect(geometryChanges.map((change) => [change.number, change.state, Number(change.areaChangePct)])).toEqual([
+      ["300", "PENDING", 33.3],
+      ["200", "PENDING", 6.5],
+      ["100", "APPLIED", 2],
+    ]);
+    expect(after.map((row) => [row.number, row.geometry])).toEqual([
+      ["100", "102:100"],
+      ["200", "100:100"],
+      ["300", "100:100"],
+    ]);
+    expect(after.map(keyOf)).toEqual(before.map(keyOf));
+  });
+
+  it("should apply the 7 % and the 50 % changes too when the threshold is raised to 50 %, so the option decides the gate", async () => {
+    const { classification, apply } = await runStage(database, { ...GATE_OPTIONS, geometryAreaThreshold: 0.5 });
+    const after = await readPadron(database);
+
+    expect(Number(classification.geometry_pending)).toBe(0);
+    expect(Number(classification.updates)).toBe(3);
+    expect(Number(apply.updated)).toBe(3);
+    expect(after.map((row) => row.geometry)).toEqual(["102:100", "107:100", "150:100"]);
+  });
+
+  it("should keep the plan digest unchanged when a pending change's staging geometry changes, and change it when an applied change's geometry changes (AP-89)", async () => {
+    const digest = await digestWith(GATE_OPTIONS);
+
+    await database.exec("UPDATE stg.padron_staging SET geom = '108:100' WHERE padron = 200");
+    const pendingChangedDigest = await digestWith(GATE_OPTIONS);
+
+    await database.exec("UPDATE stg.padron_staging SET geom = '103:100' WHERE padron = 100");
+    const appliedChangedDigest = await digestWith(GATE_OPTIONS);
+
+    expect(digest).toMatch(/^[0-9a-f]{32}$/);
+    expect(pendingChangedDigest).toBe(digest);
+    expect(appliedChangedDigest).not.toBe(pendingChangedDigest);
+  });
+});
+
+const withChoices = (pairChoices: readonly PairChoice[]): ActualizarPadronOptions => ({ ...OPTIONS, pairChoices });
+
+const idOfNumber = (rows: readonly TargetRow[], number: string): number => {
+  const row = rows.find((candidate) => candidate.number === number);
+  if (!row) throw new Error(`no destination row numbered ${number}`);
+  return row.id;
+};
+
+const rowWithId = (rows: readonly TargetRow[], id: number): TargetRow | undefined => rows.find((row) => row.id === id);
+
+describe("actualizar-padron pair choices made by the user for ambiguous groups", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(RECTANGLE_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(PAIR_REFERENCE_SQL);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  it("should pair the NEW row only with the chosen old row, update it in place and leave the other candidate missing when two LOOSE candidates claim it and the choice names one (old 500 and 501 at 100:93, new 502 at 93:103)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master) VALUES
+        ('500', 'URBANO', 10, 1, '100:93', 77),
+        ('501', 'URBANO', 10, 1, '100:93', 78);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 502, '93:103');
+    `);
+    const before = await readPadron(database);
+    const oldId = idOfNumber(before, "500");
+    const options = withChoices([{ typePadron: "RURAL", provinceId: 1, localityId: null, number: "502", oldId }]);
+
+    const { classification, apply } = await runStage(database, options);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs)).toBe(1);
+    expect(Number(classification.pairs_not_applied)).toBe(0);
+    expect(Number(classification.missing)).toBe(1);
+    expect(Number(classification.new)).toBe(0);
+    expect(Number(classification.choices_unapplied)).toBe(0);
+    expect(Number(apply.paired)).toBe(1);
+    expect(Number(apply.inserted)).toBe(0);
+    expect(after).toHaveLength(2);
+    expect(rowWithId(after, oldId)).toMatchObject({
+      id: oldId,
+      number: "502",
+      type_padron: "RURAL",
+      id_cadastral_locality: null,
+      id_province: 1,
+      geometry: "93:103",
+      id_address_master: 77,
+    });
+    expect(rowWithId(after, idOfNumber(before, "501"))).toEqual(rowWithId(before, idOfNumber(before, "501")));
+  });
+
+  it("should pair nothing when two LOOSE candidates claim the NEW row and no choice is made (old 500 and 501 at 100:93, new 502 at 93:103)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master) VALUES
+        ('500', 'URBANO', 10, 1, '100:93', 77),
+        ('501', 'URBANO', 10, 1, '100:93', 78);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 502, '93:103');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database, withChoices([]));
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.choices_unapplied)).toBe(0);
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(after.filter((row) => row.number === "500" || row.number === "501")).toEqual(
+      before.filter((row) => row.number === "500" || row.number === "501")
+    );
+  });
+
+  it("should insert the NEW row and pair nothing when its choice is null (no pair, insert as new)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:93', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '93:103');
+    `);
+    const before = await readPadron(database);
+    const options = withChoices([{ typePadron: "RURAL", provinceId: 1, localityId: null, number: "501", oldId: null }]);
+
+    const { classification, apply } = await runStage(database, options);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.missing)).toBe(1);
+    expect(Number(classification.new)).toBe(1);
+    expect(Number(classification.choices_unapplied)).toBe(0);
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(rowWithId(after, idOfNumber(before, "500"))).toEqual(rowWithId(before, idOfNumber(before, "500")));
+    expect(after.filter((row) => row.number === "501")).toHaveLength(1);
+  });
+
+  it("should pair nothing for the NEW row, insert it and leave every destination row unchanged when the chosen old id is not a candidate of its key (999)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:93', 77);
+      INSERT INTO carto.padron (id, number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES (999, '999', 'URBANO', 10, 1, '1:1', NULL);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '93:103');
+    `);
+    const before = await readPadron(database);
+    const options = withChoices([{ typePadron: "RURAL", provinceId: 1, localityId: null, number: "501", oldId: 999 }]);
+
+    const { classification, apply } = await runStage(database, options);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.missing)).toBe(2);
+    expect(Number(classification.choices_unapplied)).toBe(1);
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(rowWithId(after, 999)).toEqual(rowWithId(before, 999));
+    expect(rowWithId(after, idOfNumber(before, "500"))).toEqual(rowWithId(before, idOfNumber(before, "500")));
+    expect(after).toHaveLength(3);
+    expect(after.filter((row) => row.number === "501")).toHaveLength(1);
+  });
+
+  it("should list the overlap and the area ratio of each pair as numbers in pairs_list (old 100:93 area 9300, new 93:103 area 9579, intersection 93x93 = 8649, so overlap 8649/9300 = 0.93 and ratio 9579/9300 = 1.03)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:93', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 501, '93:103');
+    `);
+
+    const { classification } = await runStage(database);
+    const pairsList = classification.pairs_list as Array<{ overlap: unknown; areaRatio: unknown }>;
+
+    expect(pairsList).toHaveLength(1);
+    expect(typeof pairsList[0].overlap).toBe("number");
+    expect(pairsList[0].overlap).toBeCloseTo(0.93, 10);
+    expect(typeof pairsList[0].areaRatio).toBe("number");
+    expect(pairsList[0].areaRatio).toBeCloseTo(1.03, 10);
+  });
+
+  it("should leave both NEW rows ambiguous, pair nothing and insert both when two NEW keys claim one old row and no choice is made (old 500 at 100:93, new 502 and 503 at 93:103)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:93', 77);
+      INSERT INTO stg.padron_staging VALUES
+        ('RURAL', 'MONTEVIDEO', NULL, 502, '93:103'),
+        ('RURAL', 'MONTEVIDEO', NULL, 503, '93:103');
+    `);
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database, withChoices([]));
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.pairs_not_applied)).toBe(2);
+    expect(Number(classification.new)).toBe(2);
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(2);
+    expect(rowWithId(after, idOfNumber(before, "500"))).toEqual(rowWithId(before, idOfNumber(before, "500")));
+    expect(after.filter((row) => row.number === "502" || row.number === "503")).toHaveLength(2);
+  });
+
+  it("should pair only the chosen NEW key with the shared old row and insert the other NEW key, so no choice is left unapplied (old 500 at 100:93, new 502 chosen, new 503 pruned)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:93', 77);
+      INSERT INTO stg.padron_staging VALUES
+        ('RURAL', 'MONTEVIDEO', NULL, 502, '93:103'),
+        ('RURAL', 'MONTEVIDEO', NULL, 503, '93:103');
+    `);
+    const before = await readPadron(database);
+    const oldId = idOfNumber(before, "500");
+    const options = withChoices([{ typePadron: "RURAL", provinceId: 1, localityId: null, number: "502", oldId }]);
+
+    const { classification, apply } = await runStage(database, options);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs)).toBe(1);
+    expect(Number(classification.pairs_total)).toBe(1);
+    expect(Number(classification.pairs_not_applied)).toBe(0);
+    expect(Number(classification.new)).toBe(1);
+    expect(Number(classification.choices_unapplied)).toBe(0);
+    expect(Number(apply.paired)).toBe(1);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(after).toHaveLength(2);
+    expect(rowWithId(after, oldId)).toMatchObject({
+      id: oldId,
+      number: "502",
+      type_padron: "RURAL",
+      id_cadastral_locality: null,
+      id_province: 1,
+      geometry: "93:103",
+      id_address_master: 77,
+    });
+    expect(after.filter((row) => row.number === "503")).toHaveLength(1);
+  });
+
+  it("should pair both chosen keys through a cascade when the first choice frees the second old row (old 500 at 100:110, old 501 at 100:100; new 502 at 100:105 and new 503 at 100:95; choice 502 to 500)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master) VALUES
+        ('500', 'URBANO', 10, 1, '100:110', 77),
+        ('501', 'URBANO', 10, 1, '100:100', 78);
+      INSERT INTO stg.padron_staging VALUES
+        ('RURAL', 'MONTEVIDEO', NULL, 502, '100:105'),
+        ('RURAL', 'MONTEVIDEO', NULL, 503, '100:95');
+    `);
+    const before = await readPadron(database);
+    const firstOldId = idOfNumber(before, "500");
+    const secondOldId = idOfNumber(before, "501");
+    const options = withChoices([
+      { typePadron: "RURAL", provinceId: 1, localityId: null, number: "502", oldId: firstOldId },
+      { typePadron: "RURAL", provinceId: 1, localityId: null, number: "503", oldId: secondOldId },
+    ]);
+
+    const { classification, apply } = await runStage(database, options);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs)).toBe(2);
+    expect(Number(classification.pairs_not_applied)).toBe(0);
+    expect(Number(classification.new)).toBe(0);
+    expect(Number(classification.choices_unapplied)).toBe(0);
+    expect(Number(apply.paired)).toBe(2);
+    expect(Number(apply.inserted)).toBe(0);
+    expect(after).toHaveLength(2);
+    expect(rowWithId(after, firstOldId)).toMatchObject({ number: "502", type_padron: "RURAL", id_cadastral_locality: null, geometry: "100:105" });
+    expect(rowWithId(after, secondOldId)).toMatchObject({ number: "503", type_padron: "RURAL", id_cadastral_locality: null, geometry: "100:95" });
+  });
+
+  it("should prune only and write nothing when the choice names an UNCHANGED key that no NEW row carries, leaving the choice unapplied (old 500 at 100:93, UNCHANGED rural 600 at 5:5)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master) VALUES
+        ('500', 'URBANO', 10, 1, '100:93', 77),
+        ('600', 'RURAL', NULL, 1, '5:5', NULL);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 600, '5:5');
+    `);
+    const before = await readPadron(database);
+    const oldId = idOfNumber(before, "500");
+    const options = withChoices([{ typePadron: "RURAL", provinceId: 1, localityId: null, number: "600", oldId }]);
+
+    const { classification, apply } = await runStage(database, options);
+    const after = await readPadron(database);
+
+    expect(Number(classification.unchanged)).toBe(1);
+    expect(Number(classification.new)).toBe(0);
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.choices_unapplied)).toBe(1);
+    expect(Number(apply.inserted)).toBe(0);
+    expect(Number(apply.updated)).toBe(0);
+    expect(Number(apply.paired)).toBe(0);
+    expect(after).toEqual(before);
+  });
+
+  it("should not count a null old id choice for an UNCHANGED key as unapplied (no pair is expected, so nothing is written)", async () => {
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master) VALUES
+        ('600', 'RURAL', NULL, 1, '5:5', NULL);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 600, '5:5');
+    `);
+    const before = await readPadron(database);
+    const options = withChoices([{ typePadron: "RURAL", provinceId: 1, localityId: null, number: "600", oldId: null }]);
+
+    const { classification, apply } = await runStage(database, options);
+    const after = await readPadron(database);
+
+    expect(Number(classification.unchanged)).toBe(1);
+    expect(Number(classification.choices_unapplied)).toBe(0);
+    expect(Number(apply.inserted)).toBe(0);
+    expect(after).toEqual(before);
+  });
+
+  it("should bind a hostile choice number as data, pair nothing and leave the table intact (number 1'; DROP TABLE x; --)", async () => {
+    const hostileNumber = "1'; DROP TABLE x; --";
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master)
+        VALUES ('500', 'URBANO', 10, 1, '100:93', 77);
+      INSERT INTO stg.padron_staging VALUES ('RURAL', 'MONTEVIDEO', NULL, 502, '93:103');
+    `);
+    const before = await readPadron(database);
+    const oldId = idOfNumber(before, "500");
+    const options = withChoices([{ typePadron: "RURAL", provinceId: 1, localityId: null, number: hostileNumber, oldId }]);
+
+    const { classification, apply } = await runStage(database, options);
+    const after = await readPadron(database);
+
+    expect(Number(classification.pairs)).toBe(0);
+    expect(Number(classification.choices_unapplied)).toBe(1);
+    expect(Number(apply.paired)).toBe(0);
+    expect(Number(apply.inserted)).toBe(1);
+    expect(rowWithId(after, oldId)).toEqual(rowWithId(before, oldId));
     expect(after.filter((row) => row.number === "502")).toHaveLength(1);
   });
 });
@@ -710,5 +1139,338 @@ describe("actualizar-padron revert script on embedded Postgres (AP-69 to AP-72)"
     expect(unlinkLines).toHaveLength(1);
     expect(addressMasterDeleteLines).toHaveLength(1);
     expect(scriptLines.indexOf(addressMasterDeleteLines[0])).toBeGreaterThan(scriptLines.indexOf(unlinkLines[0]));
+  });
+});
+
+const DIGEST_DESTINATION_SQL = `
+  INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry) VALUES
+    ('100', 'RURAL', NULL, 1, '1'),
+    ('200', 'URBANO', 10, 1, '2');
+`;
+
+const STAGING_UNCHANGED_ROW = "('RURAL', 'MONTEVIDEO', NULL, 100, '1')";
+const STAGING_CHANGED_ROW = "('URBANO', 'Montevideo', 'centro', 200, '4')";
+const STAGING_NULL_LOCALITY_NEW_ROW = "('RURAL', 'MONTEVIDEO', NULL, 600, '6')";
+
+const stagingInsertSql = (rows: readonly string[]): string =>
+  `INSERT INTO stg.padron_staging (unidadcat, nomdepto, nomloccat, padron, geom) VALUES ${rows.join(", ")};`;
+
+const openDigestDatabase = async (stagingRows: readonly string[]): Promise<PGlite> => {
+  const database = new PGlite();
+  await database.exec(POSTGIS_STUBS_SQL);
+  await database.exec(SCHEMA_SQL);
+  await database.exec(PAIR_REFERENCE_SQL);
+  await database.exec(DIGEST_DESTINATION_SQL);
+  await database.exec(stagingInsertSql(stagingRows));
+  return database;
+};
+
+const planDigestOf = async (database: PGlite): Promise<string> => {
+  const row = (await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS))).rows[0];
+  return String(row.plan_digest);
+};
+
+const stagingOrderOf = async (database: PGlite): Promise<number[]> =>
+  (await database.query<{ padron: number }>("SELECT padron FROM stg.padron_staging")).rows.map((row) => Number(row.padron));
+
+describe("actualizar-padron plan digest of the planned writes (persist guard input)", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = await openDigestDatabase([STAGING_UNCHANGED_ROW, STAGING_CHANGED_ROW, STAGING_NULL_LOCALITY_NEW_ROW]);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  it("should return the same plan digest when the same staging rows are inserted in a different order", async () => {
+    const reversed = await openDigestDatabase([STAGING_NULL_LOCALITY_NEW_ROW, STAGING_CHANGED_ROW, STAGING_UNCHANGED_ROW]);
+    try {
+      const digest = await planDigestOf(database);
+      expect(await stagingOrderOf(reversed)).not.toEqual(await stagingOrderOf(database));
+
+      const reversedDigest = await planDigestOf(reversed);
+
+      expect(digest).toMatch(/^[0-9a-f]{32}$/);
+      expect(reversedDigest).toBe(digest);
+    } finally {
+      await reversed.close();
+    }
+  });
+
+  it("should return a different plan digest when one candidate geometry differs and the counts stay equal", async () => {
+    const digest = await planDigestOf(database);
+    await database.exec("UPDATE stg.padron_staging SET geom = '44' WHERE padron = 200");
+
+    const changedDigest = await planDigestOf(database);
+
+    expect(changedDigest).not.toBe(digest);
+  });
+
+  it("should return a different plan digest when the NULL-locality NEW row changes its geometry", async () => {
+    const digest = await planDigestOf(database);
+    await database.exec("UPDATE stg.padron_staging SET geom = '66' WHERE padron = 600");
+
+    const changedDigest = await planDigestOf(database);
+
+    expect(changedDigest).not.toBe(digest);
+  });
+
+  it("should return a different plan digest when the NULL-locality NEW row is removed, so it contributes an entry", async () => {
+    const digest = await planDigestOf(database);
+    await database.exec("DELETE FROM stg.padron_staging WHERE padron = 600");
+
+    const changedDigest = await planDigestOf(database);
+
+    expect(changedDigest).not.toBe(digest);
+  });
+});
+
+const CLASSIFY_FIGURE_KEYS = [
+  "new",
+  "unchanged",
+  "within_tolerance",
+  "changed",
+  "ambiguous",
+  "updates",
+  "geometry_pending",
+  "missing",
+  "pairs",
+  "pairs_loose",
+  "pairs_total",
+  "pairs_pending",
+  "pairs_not_applied",
+  "choices_unapplied",
+  "target_rows",
+  "target_max_id",
+  "staging_candidates",
+  "plan_digest",
+] as const;
+
+const REPORT_ONLY_COLUMNS = ["missing_review", "pending_geometry_changes"] as const;
+
+describe("actualizar-padron persist classify without the report (report false)", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(POSTGIS_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(SEED_SQL);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  it("should return the same counts, fingerprint and plan digest as the report classify on the same data", async () => {
+    const report = (await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS))).rows[0];
+    const persist = (
+      await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS, NO_REFERENCE_TABLES, { report: false }))
+    ).rows[0];
+
+    expect(Number(report.new)).toBe(1);
+    expect(Number(report.changed)).toBe(1);
+    for (const key of CLASSIFY_FIGURE_KEYS) {
+      expect(String(persist[key]), key).toBe(String(report[key]));
+    }
+    expect(String(persist.plan_digest)).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it("should omit the report-only columns when the report is false and keep them when it is true", async () => {
+    const report = (await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS))).rows[0];
+    const persist = (
+      await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS, NO_REFERENCE_TABLES, { report: false }))
+    ).rows[0];
+
+    for (const column of REPORT_ONLY_COLUMNS) {
+      expect(persist).not.toHaveProperty(column);
+      expect(report).toHaveProperty(column);
+    }
+  });
+});
+
+const GEOMETRY_FILL_OPTIONS: ActualizarPadronOptions = { ...OPTIONS, tolerance: 0.5, geometryAreaThreshold: 0.05 };
+
+describe("actualizar-padron geometry of a CHANGED row with a NULL destination geometry (fill-in gate)", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(RECTANGLE_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(PAIR_REFERENCE_SQL);
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry) VALUES
+        ('100', 'URBANO', 10, 1, NULL),
+        ('200', 'URBANO', 10, 1, '100:100');
+      INSERT INTO stg.padron_staging (unidadcat, nomdepto, nomloccat, padron, geom) VALUES
+        ('URBANO', 'Montevideo', 'centro', 100, '102:100'),
+        ('URBANO', 'Montevideo', 'centro', 200, '150:100');
+    `);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  it("should apply the NULL-geometry change, counted in updates and written, when updateGeometries is on", async () => {
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database, { ...GEOMETRY_FILL_OPTIONS, updateGeometries: true });
+    const after = await readPadron(database);
+    const geometryChanges = classification.geometry_changes as Array<{ number: string; state: string }>;
+
+    expect(Number(classification.changed)).toBe(2);
+    expect(Number(classification.updates)).toBe(1);
+    expect(geometryChanges.map((change) => [change.number, change.state])).toContainEqual(["100", "APPLIED"]);
+    expect(Number(apply.updated)).toBe(1);
+    expect(after.find((row) => row.number === "100")?.geometry).toBe("102:100");
+    expect(after.map(keyOf)).toEqual(before.map(keyOf));
+  });
+
+  it("should keep a CHANGED row with an old geometry pending when its area ratio is at or above the threshold", async () => {
+    const { classification, apply } = await runStage(database, { ...GEOMETRY_FILL_OPTIONS, updateGeometries: true });
+    const after = await readPadron(database);
+    const geometryChanges = classification.geometry_changes as Array<{ number: string; state: string }>;
+
+    expect(Number(classification.geometry_pending)).toBe(1);
+    expect(geometryChanges.map((change) => [change.number, change.state])).toContainEqual(["200", "PENDING"]);
+    expect(Number(apply.updated)).toBe(1);
+    expect(after.find((row) => row.number === "200")?.geometry).toBe("100:100");
+  });
+
+  it("should leave the NULL-geometry change pending and write nothing when updateGeometries is off", async () => {
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database, { ...GEOMETRY_FILL_OPTIONS, updateGeometries: false });
+    const after = await readPadron(database);
+    const geometryChanges = classification.geometry_changes as Array<{ number: string; state: string }>;
+
+    expect(Number(classification.changed)).toBe(2);
+    expect(Number(classification.updates)).toBe(0);
+    expect(Number(classification.geometry_pending)).toBe(2);
+    expect(geometryChanges.map((change) => [change.number, change.state])).toContainEqual(["100", "PENDING"]);
+    expect(Number(apply.updated)).toBe(0);
+    expect(after).toEqual(before);
+  });
+});
+
+const ACCEPTED_URBANO_200: AcceptedGeometry = { typePadron: "URBANO", provinceId: 1, localityId: 10, number: "200" };
+
+const withAccepted = (acceptedGeometries: readonly AcceptedGeometry[], base: ActualizarPadronOptions = GATE_OPTIONS): ActualizarPadronOptions => ({
+  ...base,
+  acceptedGeometries,
+});
+
+describe("actualizar-padron accepted geometry changes (AP-100, AP-92)", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(RECTANGLE_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(PAIR_REFERENCE_SQL);
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry) VALUES
+        ('100', 'URBANO', 10, 1, '100:100'),
+        ('200', 'URBANO', 10, 1, '100:100'),
+        ('300', 'URBANO', 10, 1, '100:100');
+      INSERT INTO stg.padron_staging (unidadcat, nomdepto, nomloccat, padron, geom) VALUES
+        ('URBANO', 'Montevideo', 'centro', 100, '102:100'),
+        ('URBANO', 'Montevideo', 'centro', 200, '107:100'),
+        ('URBANO', 'Montevideo', 'centro', 300, '150:100');
+    `);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  const planDigestOf = async (options: ActualizarPadronOptions): Promise<string> =>
+    String((await database.query<Row>(buildPadronClassifySql(LAYOUTS, options))).rows[0].plan_digest);
+
+  it("should apply a CHANGED row above the threshold when its key is accepted: counted in updates, written, listed APPLIED and in the digest", async () => {
+    const before = await readPadron(database);
+    const digestWithoutAccept = await planDigestOf(GATE_OPTIONS);
+
+    const options = withAccepted([ACCEPTED_URBANO_200]);
+    const digestWithAccept = await planDigestOf(options);
+    const { classification, apply } = await runStage(database, options);
+    const after = await readPadron(database);
+    const geometryChanges = classification.geometry_changes as Array<{ number: string; state: string }>;
+
+    expect(Number(classification.updates)).toBe(2);
+    expect(Number(classification.geometry_pending)).toBe(1);
+    expect(Number(classification.geometry_accepts_unapplied)).toBe(0);
+    expect(Number(apply.updated)).toBe(2);
+    expect(geometryChanges.map((change) => [change.number, change.state])).toEqual([
+      ["300", "PENDING"],
+      ["200", "APPLIED"],
+      ["100", "APPLIED"],
+    ]);
+    expect(after.map((row) => [row.number, row.geometry])).toEqual([
+      ["100", "102:100"],
+      ["200", "107:100"],
+      ["300", "100:100"],
+    ]);
+    expect(after.map(keyOf)).toEqual(before.map(keyOf));
+    expect(digestWithAccept).not.toBe(digestWithoutAccept);
+  });
+
+  it("should keep the same CHANGED row pending, and write only the threshold change, when its key is not accepted", async () => {
+    const { classification, apply } = await runStage(database, GATE_OPTIONS);
+    const after = await readPadron(database);
+    const geometryChanges = classification.geometry_changes as Array<{ number: string; state: string }>;
+
+    expect(Number(classification.updates)).toBe(1);
+    expect(geometryChanges.map((change) => [change.number, change.state])).toContainEqual(["200", "PENDING"]);
+    expect(Number(apply.updated)).toBe(1);
+    expect(after.find((row) => row.number === "200")?.geometry).toBe("100:100");
+  });
+
+  it("should not apply an accepted key when updateGeometries is off, and count it as unapplied", async () => {
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database, withAccepted([ACCEPTED_URBANO_200], { ...GATE_OPTIONS, updateGeometries: false }));
+    const after = await readPadron(database);
+
+    expect(Number(classification.updates)).toBe(0);
+    expect(Number(apply.updated)).toBe(0);
+    expect(Number(classification.geometry_accepts_unapplied)).toBe(1);
+    expect(after).toEqual(before);
+  });
+
+  it("should count only the accepted key with no CHANGED row as unapplied, not the accepted key that was applied", async () => {
+    const goneKey: AcceptedGeometry = { typePadron: "URBANO", provinceId: 1, localityId: 10, number: "999" };
+
+    const { classification: withGone } = await runStage(database, withAccepted([ACCEPTED_URBANO_200, goneKey]));
+
+    expect(Number(withGone.geometry_accepts_unapplied)).toBe(1);
+    expect(Number(withGone.updates)).toBe(2);
+  });
+
+  it("should count zero unapplied when an accepted key is already applied by the threshold", async () => {
+    const withinThreshold: AcceptedGeometry = { typePadron: "URBANO", provinceId: 1, localityId: 10, number: "100" };
+
+    const { classification } = await runStage(database, withAccepted([withinThreshold]));
+
+    expect(Number(classification.geometry_accepts_unapplied)).toBe(0);
+    expect(Number(classification.updates)).toBe(1);
+  });
+
+  it("should bind hostile text in an accepted key as data: classify runs, nothing is injected and the destination keeps its rows", async () => {
+    const before = await readPadron(database);
+    const hostileNumber: AcceptedGeometry = { typePadron: "URBANO", provinceId: 1, localityId: 10, number: "1'; DROP TABLE carto.padron; --" };
+    const hostileType: AcceptedGeometry = { typePadron: "URBANO' OR '1'='1", provinceId: 1, localityId: 10, number: "200" };
+
+    const { classification } = await runStage(database, withAccepted([hostileNumber, hostileType]));
+    const after = await readPadron(database);
+
+    expect(Number(classification.geometry_accepts_unapplied)).toBe(2);
+    expect(Number(classification.updates)).toBe(1);
+    expect(after).toHaveLength(before.length);
+    expect(after.map(keyOf)).toEqual(before.map(keyOf));
   });
 });

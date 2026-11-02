@@ -41,12 +41,17 @@ export const RunProgressStatus: React.FC<RunProgressStatusProps> = ({ phase, sta
 export interface RunResultActionsProps {
   onNewRun: () => void;
   onBackToReview: () => void;
+  backLabel?: string;
 }
 
-export const RunResultActions: React.FC<RunResultActionsProps> = ({ onNewRun, onBackToReview }) => (
+export const RunResultActions: React.FC<RunResultActionsProps> = ({
+  onNewRun,
+  onBackToReview,
+  backLabel = BACK_TO_REVIEW_LABEL,
+}) => (
   <div className={styles.actions}>
     <Button variant={ButtonVariant.SECONDARY} onClick={onBackToReview}>
-      <span>{BACK_TO_REVIEW_LABEL}</span>
+      <span>{backLabel}</span>
     </Button>
     <Button variant={ButtonVariant.SECONDARY} onClick={onNewRun}>
       <span>{NEW_RUN_LABEL}</span>

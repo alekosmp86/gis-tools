@@ -34,18 +34,32 @@ export interface PlannedStepsInput {
   linkAddressMaster?: boolean;
 }
 
+const ANALYSIS_STEPS = (linkAddressMaster: boolean): StepLabel[] => [
+  STEP.VALIDATE,
+  STEP.TARGET,
+  STEP.COUNT,
+  STEP.RESOLVE,
+  STEP.CLASSIFY,
+  ...(linkAddressMaster ? [STEP.ADDRESS_CLASSIFY] : []),
+  STEP.REPORT,
+];
+
+const WRITE_STEPS = (linkAddressMaster: boolean): StepLabel[] => [
+  STEP.VALIDATE,
+  STEP.TARGET,
+  STEP.COUNT,
+  STEP.RESOLVE,
+  STEP.CLASSIFY,
+  STEP.SEQUENCES,
+  STEP.APPLY,
+  ...(linkAddressMaster ? [STEP.ADDRESS_SEQUENCES, STEP.ADDRESS_CLASSIFY, STEP.ADDRESS_APPLY, STEP.ADDRESS_VERIFY] : []),
+  STEP.ANALYZE,
+  STEP.REPORT,
+  STEP.BACKUP,
+  STEP.COMMIT,
+];
+
+/** An analysis is read-only: no sequence repair, apply, ANALYZE, backup or rollback step. */
 export function plannedStepLabels({ dryRun, linkAddressMaster = false }: PlannedStepsInput): StepLabel[] {
-  return [
-    STEP.VALIDATE,
-    STEP.TARGET,
-    STEP.COUNT,
-    STEP.RESOLVE,
-    STEP.CLASSIFY,
-    STEP.SEQUENCES,
-    STEP.APPLY,
-    ...(linkAddressMaster ? [STEP.ADDRESS_SEQUENCES, STEP.ADDRESS_CLASSIFY, STEP.ADDRESS_APPLY, STEP.ADDRESS_VERIFY] : []),
-    STEP.ANALYZE,
-    STEP.REPORT,
-    ...(dryRun ? [STEP.ROLLBACK] : [STEP.BACKUP, STEP.COMMIT]),
-  ];
+  return dryRun ? ANALYSIS_STEPS(linkAddressMaster) : WRITE_STEPS(linkAddressMaster);
 }

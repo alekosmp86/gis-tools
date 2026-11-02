@@ -50,7 +50,7 @@ export interface AddressMasterPassSteps {
   verify: string;
 }
 
-interface AddressMasterClassification {
+export interface AddressMasterClassification {
   counts: Omit<AddressMasterCounts, "linked">;
   ambiguousSamples: AddressMasterAmbiguous[];
 }
@@ -103,7 +103,7 @@ export const addressMasterCountsOf = (classification: AddressMasterClassificatio
   linked: apply.linked,
 });
 
-async function readClassification(
+export async function readAddressMasterClassification(
   session: RunSession,
   layouts: AddressMasterLinkLayouts,
   spec: AddressMasterSubjectSpec
@@ -166,6 +166,18 @@ function assertLinkRemainingMatches(
   }
 }
 
+/** An analysis writes nothing: its planned creates and links come from the classification, and nothing remains unlinked by its own apply. */
+export function planAddressMasterPass(classification: AddressMasterClassification): AddressMasterPassBody {
+  const { counts } = classification;
+  return {
+    counts: { ...counts, linked: counts.withoutAddressMaster - counts.ambiguous },
+    toCreate: counts.created,
+    remaining: counts.ambiguous,
+    linkedList: [],
+    ambiguousSamples: classification.ambiguousSamples,
+  };
+}
+
 /** Classify, apply and verify one subject's address master links, inside the caller's transaction. */
 export async function runAddressMasterLinkPass(
   session: RunSession,
@@ -174,7 +186,7 @@ export async function runAddressMasterLinkPass(
   steps: AddressMasterPassSteps,
   timer: StepTimer
 ): Promise<AddressMasterPassBody> {
-  const classification = await timer.run(steps.classify, () => readClassification(session, layouts, spec));
+  const classification = await timer.run(steps.classify, () => readAddressMasterClassification(session, layouts, spec));
   // Ordered: classify must run before apply in the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const apply = await timer.run(steps.apply, () => readApply(session, layouts, spec));

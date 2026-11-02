@@ -19,7 +19,7 @@ const BUTTON_LABEL = "Descargar respaldo";
 const DOWNLOAD_FAILED_PREFIX = "No se pudo descargar el respaldo.";
 const DOWNLOAD_FAILED_FALLBACK = "Intente de nuevo con el botón Descargar respaldo.";
 const INSTRUCTIONS = [
-  "Para revertir, descomprima el .gz y ejecútelo con psql contra la base. Revierte solo los cambios de esta ejecución y supone que nadie más modificó esas filas.",
+  "Para revertir, descomprima el .gz y ejecute el .sql completo contra la base, con psql o con pgAdmin / cualquier cliente SQL. Revierte solo los cambios de esta ejecución y supone que nadie más modificó esas filas.",
   "El servidor guarda una copia temporal durante 7 días.",
   "Si el servidor se reinicia, los enlaces de descarga dejan de funcionar: descargue el respaldo antes.",
 ];

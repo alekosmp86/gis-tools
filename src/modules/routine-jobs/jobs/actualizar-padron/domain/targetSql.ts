@@ -10,6 +10,7 @@ import { cte, jsonArrayOf, literal, q, withClause } from "../../shared/sqlFragme
 import type { WritableTargetLayout } from "../../shared/tableResolution";
 import {
   DESTINATION_COLUMN,
+  GEOMETRY_STATE,
   LOCALITY_COLUMN,
   PAIR_AREA_RATIO_TOLERANCE,
   PAIR_LOOSE_AREA_RATIO_TOLERANCE,
@@ -17,29 +18,45 @@ import {
   PAIR_OVERLAP_MIN,
   PAIR_STATUS,
   PAIR_TIER,
+  type PairStatus,
   type PairTier,
   STAGING_COLUMN,
 } from "../constants";
 import type { ActualizarPadronOptions, PadronLayouts } from "../types";
 import { candidateCtes, DECIDED_CTE, SKIP_REASON_COLUMN } from "./classifySql";
+import { CHOICE_OLD_ID_COLUMN, pairChoicesValuesSql } from "./pairChoicesSql";
+import { geometryAcceptsValuesSql } from "./geometryAcceptsSql";
 import { physicalColumn, qualifiedName } from "./layouts";
 import { REVERT_COLUMN, REVERT_KIND, REVERT_TABLE_SQL, revertColumnList } from "./revertCapture";
+import {
+  missingReviewSql,
+  NO_REFERENCE_TABLES,
+  replacementCountSql,
+  replacementCtes,
+  type ReferenceTableFlags,
+} from "./replacementSql";
 
 const TARGET_ALIAS = "tgt";
 const MATCHED_TARGET_ALIAS = "t1";
 const PLANNED_ALIAS = "pl";
+const CHANGED_ALIAS = "cg";
 const UNMATCHED_ALIAS = "ut";
 const PAIRABLE_ALIAS = "pt";
 const DECIDED_ALIAS = "dc";
 const PAIR_CANDIDATE_ALIAS = "pc";
-const PAIR_MEASURED_ALIAS = "pm";
 const PAIR_COUNTED_ALIAS = "cnt";
 const PAIR_ALIAS = "pr";
+const CHOICE_ALIAS = "ch";
+const OTHER_CHOICE_ALIAS = "oc";
+const ACCEPT_ALIAS = "ga";
 const OLD_LOCALITY_ALIAS = "oldloc";
+const NEW_LOCALITY_ALIAS = "newloc";
+const CENTROID_ALIAS = "ctr";
 const FOOTPRINT_ALIAS = "fa";
 const TIER_ALIAS = "ft";
 const DEPARTMENT_COLUMN = STAGING_COLUMN.NOMDEPTO;
 const LOCALITY_NAME_COLUMN = STAGING_COLUMN.NOMLOCCAT;
+const WGS84_SRID = 4326;
 
 const CTE_TARGET = {
   CANDIDATES: "candidates",
@@ -48,10 +65,12 @@ const CTE_TARGET = {
   MATCHED: "matched",
   MEASURED: "measured",
   PLANNED: "planned",
+  GEOMETRY_ACCEPTS: "geometry_accepts",
+  CHANGED_GEOMETRY: "changed_geometry",
   UNMATCHED: "unmatched_targets",
   PAIRABLE: "pairable_targets",
+  PAIR_CHOICES: "pair_choices",
   PAIR_CANDIDATES: "pair_candidates",
-  PAIR_MEASURED: "pair_measured",
   PAIRS: "pairs",
   INSERTED: "inserted_rows",
   UPDATED: "updated_rows",
@@ -69,15 +88,22 @@ const PAIR_COLUMN = {
   OLD_LOCALITY_ID: "old_id_cadastral_locality",
   OLD_NUMBER: "old_number",
   TARGET_GEOMETRY: "target_geometry",
-  EQUAL: "equal",
-  DISTANCE: "distance",
   NEW_MATCHES: "new_matches",
   TARGET_MATCHES: "target_matches",
+  CHOSEN: "chosen",
   STATUS: "status",
   TYPE_CHANGED: "type_changed",
   LOCALITY_CHANGED: "locality_changed",
   NUMBER_CHANGED: "number_changed",
   TIER: "tier",
+} as const;
+
+const CHANGED_COLUMN = {
+  AREA_RATIO: "area_ratio",
+  OLD_AREA: "old_area",
+  NEW_AREA: "new_area",
+  ACCEPTED: "accepted",
+  APPLIED: "applied",
 } as const;
 
 const FOOTPRINT_AREA = {
@@ -120,12 +146,13 @@ const PAIRED_KEY_COLUMNS: readonly string[] = [
 
 const targetOf = (target: WritableTargetLayout, logical: string): string => `${TARGET_ALIAS}.${physicalColumn(target, logical)}`;
 const plannedOf = (column: string): string => `${PLANNED_ALIAS}.${q(column)}`;
+const changedOf = (column: string): string => `${CHANGED_ALIAS}.${q(column)}`;
 const unmatchedOf = (column: string): string => `${UNMATCHED_ALIAS}.${q(column)}`;
 const pairableOf = (column: string): string => `${PAIRABLE_ALIAS}.${q(column)}`;
 const pairOf = (column: string): string => `${PAIR_ALIAS}.${q(column)}`;
 const classIs = (value: string): string => `${plannedOf("class")} = ${literal(value)}`;
-const appliedCondition = (): string => `${pairOf(PAIR_COLUMN.STATUS)} = ${literal(PAIR_STATUS.APPLIED)}`;
-const notAppliedCondition = (): string => `${pairOf(PAIR_COLUMN.STATUS)} <> ${literal(PAIR_STATUS.APPLIED)}`;
+const statusIs = (status: PairStatus): string => `${pairOf(PAIR_COLUMN.STATUS)} = ${literal(status)}`;
+const appliedCondition = (): string => statusIs(PAIR_STATUS.APPLIED);
 const targetTableSql = (target: WritableTargetLayout): string => `${qualifiedName(target)} AS ${TARGET_ALIAS}`;
 const applyFlag = (options: ActualizarPadronOptions): string => String(options.updateGeometries);
 
@@ -220,6 +247,34 @@ function plannedCte(options: ActualizarPadronOptions): string {
   );
 }
 
+function geometryAcceptsCte(options: ActualizarPadronOptions): string {
+  return cte(CTE_TARGET.GEOMETRY_ACCEPTS, geometryAcceptsValuesSql(options.acceptedGeometries ?? []));
+}
+
+/* A join, not a correlated EXISTS, so the planner can hash the accepts once; the parser rejects a repeated key, so no row multiplies. */
+const acceptsJoinSql = (alias: string): string =>
+  `LEFT JOIN ${q(CTE_TARGET.GEOMETRY_ACCEPTS)} AS ${ACCEPT_ALIAS} ON ${sameKeySql(ACCEPT_ALIAS, alias)}`;
+
+/* The area ratio and the areas of every CHANGED row are computed once here: the counts, the UPDATE and the lists all read this CTE.
+   A row is applied only when updateGeometries is on and its ratio is below the threshold or the user accepted its key (AP-100); a NULL ratio
+   with an old geometry (no usable area) stays pending unless accepted. A NULL old geometry is a fill-in: it has no ratio to gate, so it is applied with the flag. */
+function changedGeometryCte(options: ActualizarPadronOptions): string {
+  const measured = [
+    `SELECT ${PLANNED_ALIAS}.*,`,
+    `${areaRatioOf(plannedOf("target_geometry"), plannedOf(CANDIDATE_GEOMETRY))} AS ${q(CHANGED_COLUMN.AREA_RATIO)},`,
+    `ST_Area(${plannedOf("target_geometry")}) AS ${q(CHANGED_COLUMN.OLD_AREA)},`,
+    `ST_Area(${plannedOf(CANDIDATE_GEOMETRY)}) AS ${q(CHANGED_COLUMN.NEW_AREA)},`,
+    `${ACCEPT_ALIAS}.${q(DESTINATION_COLUMN.NUMBER)} IS NOT NULL AS ${q(CHANGED_COLUMN.ACCEPTED)}`,
+    `FROM ${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS} ${acceptsJoinSql(PLANNED_ALIAS)} WHERE ${classIs(MATCH_CLASS.CHANGED)}`,
+  ].join(" ");
+  const withinThreshold = `CASE WHEN ${changedOf(PAIR_COLUMN.TARGET_GEOMETRY)} IS NULL THEN true ELSE COALESCE(${changedOf(CHANGED_COLUMN.AREA_RATIO)} < ${options.geometryAreaThreshold}, false) END`;
+  const applied = `((${withinThreshold} OR ${changedOf(CHANGED_COLUMN.ACCEPTED)}) AND ${applyFlag(options)})`;
+  return cte(
+    CTE_TARGET.CHANGED_GEOMETRY,
+    `SELECT ${CHANGED_ALIAS}.*, ${applied} AS ${q(CHANGED_COLUMN.APPLIED)} FROM (${measured}) AS ${CHANGED_ALIAS}`
+  );
+}
+
 /** Destination rows whose key no staging candidate carries: the only rows a pair can start from, never removed. */
 function unmatchedTargetsCte(target: WritableTargetLayout): string {
   return cte(
@@ -275,9 +330,27 @@ function pairCandidateColumns(): string[] {
     `${pairableOf(DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY)} AS ${q(PAIR_COLUMN.OLD_LOCALITY_ID)}`,
     `${pairableOf(DESTINATION_COLUMN.NUMBER)} AS ${q(PAIR_COLUMN.OLD_NUMBER)}`,
     `${targetGeometry} AS ${q(PAIR_COLUMN.TARGET_GEOMETRY)}`,
-    `${geometriesEqualSql(targetGeometry, newGeometry)} AS ${q(PAIR_COLUMN.EQUAL)}`,
     `${TIER_ALIAS}.${q(PAIR_COLUMN.TIER)} AS ${q(PAIR_COLUMN.TIER)}`,
+    ...Object.values(FOOTPRINT_AREA).map((column) => `${FOOTPRINT_ALIAS}.${q(column)}`),
   ];
+}
+
+const choiceOf = (column: string): string => `${CHOICE_ALIAS}.${q(column)}`;
+
+/* A key with a choice keeps only the chosen candidate, so a NULL choice keeps none; a destination row chosen for one key is no candidate of another key. */
+function choicePruningSql(): string[] {
+  const oldId = pairableOf(DESTINATION_COLUMN.ID);
+  const otherChoiceOf = (column: string): string => `${OTHER_CHOICE_ALIAS}.${q(column)}`;
+  return [
+    `AND NOT EXISTS (SELECT 1 FROM ${q(CTE_TARGET.PAIR_CHOICES)} AS ${CHOICE_ALIAS}`,
+    `WHERE ${sameKeySql(CHOICE_ALIAS, PLANNED_ALIAS)} AND ${choiceOf(CHOICE_OLD_ID_COLUMN)} IS DISTINCT FROM ${oldId})`,
+    `AND NOT EXISTS (SELECT 1 FROM ${q(CTE_TARGET.PAIR_CHOICES)} AS ${OTHER_CHOICE_ALIAS}`,
+    `WHERE ${otherChoiceOf(CHOICE_OLD_ID_COLUMN)} = ${oldId} AND NOT (${sameKeySql(OTHER_CHOICE_ALIAS, PLANNED_ALIAS)}))`,
+  ];
+}
+
+function pairChoicesCte(options: ActualizarPadronOptions): string {
+  return cte(CTE_TARGET.PAIR_CHOICES, pairChoicesValuesSql(options.pairChoices));
 }
 
 /* The && probe reads the destination table's GiST index; the footprint reads the unmatched copy of the geometry, so matched neighbours are dropped before it runs. OFFSET 0 fences the footprint subquery: without it the planner flattens it and re-runs the intersection per reference. */
@@ -298,6 +371,7 @@ function pairCandidatesCte(target: WritableTargetLayout): string {
       `CROSS JOIN LATERAL (SELECT ${pairTierSql()} AS ${q(PAIR_COLUMN.TIER)}) AS ${TIER_ALIAS}`,
       `WHERE ${classIs(MATCH_CLASS.NEW)}`,
       `AND ${TIER_ALIAS}.${q(PAIR_COLUMN.TIER)} IS NOT NULL`,
+      ...choicePruningSql(),
     ].join(" ")
   );
 }
@@ -313,36 +387,27 @@ function pairableTargetsCte(): string {
   );
 }
 
-/** The Hausdorff distance is measured for the footprint pairs only. */
-function pairMeasuredCte(): string {
-  const pairColumn = (column: string): string => `${PAIR_CANDIDATE_ALIAS}.${q(column)}`;
-  const distance = hausdorffDistanceSql(
-    pairColumn(PAIR_COLUMN.TARGET_GEOMETRY),
-    pairColumn(CANDIDATE_GEOMETRY),
-    pairColumn(PAIR_COLUMN.EQUAL)
-  );
-  return cte(
-    CTE_TARGET.PAIR_MEASURED,
-    `SELECT ${PAIR_CANDIDATE_ALIAS}.*, COALESCE(${distance}, 0) AS ${q(PAIR_COLUMN.DISTANCE)} FROM ${q(CTE_TARGET.PAIR_CANDIDATES)} AS ${PAIR_CANDIDATE_ALIAS}`
-  );
-}
-
 function pairStatusSql(): string {
   const counted = (column: string): string => `${PAIR_COUNTED_ALIAS}.${q(column)}`;
   return [
     "CASE",
     `WHEN ${counted(PAIR_COLUMN.NEW_MATCHES)} > 1 OR ${counted(PAIR_COLUMN.TARGET_MATCHES)} > 1 THEN ${literal(PAIR_STATUS.NOT_APPLIED_AMBIGUOUS)}`,
+    `WHEN ${counted(PAIR_COLUMN.TIER)} = ${literal(PAIR_TIER.LOOSE)} AND NOT ${counted(PAIR_COLUMN.CHOSEN)} THEN ${literal(PAIR_STATUS.NOT_APPLIED_PENDING)}`,
     `ELSE ${literal(PAIR_STATUS.APPLIED)} END`,
   ].join(" ");
 }
 
-/** A pair is applied when both sides match exactly once; the Hausdorff distance is informational and never gates it. */
+/* A pair is applied when both sides match exactly once; a LOOSE pair also needs a user choice naming its key and old id. */
 function pairsCte(): string {
-  const measured = (column: string): string => `${PAIR_MEASURED_ALIAS}.${q(column)}`;
+  const candidate = (column: string): string => `${PAIR_CANDIDATE_ALIAS}.${q(column)}`;
   const counted = (column: string): string => `${PAIR_COUNTED_ALIAS}.${q(column)}`;
   const newKey = [DESTINATION_COLUMN.TYPE_PADRON, DESTINATION_COLUMN.ID_PROVINCE, DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY, DESTINATION_COLUMN.NUMBER]
-    .map((column) => measured(column))
+    .map((column) => candidate(column))
     .join(", ");
+  const choicesJoinSql = [
+    `LEFT JOIN ${q(CTE_TARGET.PAIR_CHOICES)} AS ${CHOICE_ALIAS}`,
+    `ON ${choiceOf(CHOICE_OLD_ID_COLUMN)} = ${candidate(PAIR_COLUMN.TARGET_ID)} AND ${sameKeySql(CHOICE_ALIAS, PAIR_CANDIDATE_ALIAS)}`,
+  ].join(" ");
   const changedSql = (column: string, oldColumn: string, alias: string): string =>
     `${counted(column)} IS DISTINCT FROM ${counted(oldColumn)} AS ${q(alias)}`;
   return cte(
@@ -353,10 +418,11 @@ function pairsCte(): string {
       `${changedSql(DESTINATION_COLUMN.TYPE_PADRON, PAIR_COLUMN.OLD_TYPE_PADRON, PAIR_COLUMN.TYPE_CHANGED)},`,
       `${changedSql(DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY, PAIR_COLUMN.OLD_LOCALITY_ID, PAIR_COLUMN.LOCALITY_CHANGED)},`,
       `${changedSql(DESTINATION_COLUMN.NUMBER, PAIR_COLUMN.OLD_NUMBER, PAIR_COLUMN.NUMBER_CHANGED)}`,
-      `FROM (SELECT ${PAIR_MEASURED_ALIAS}.*,`,
+      `FROM (SELECT ${PAIR_CANDIDATE_ALIAS}.*,`,
       `count(*) OVER (PARTITION BY ${newKey}) AS ${q(PAIR_COLUMN.NEW_MATCHES)},`,
-      `count(*) OVER (PARTITION BY ${measured(PAIR_COLUMN.TARGET_ID)}) AS ${q(PAIR_COLUMN.TARGET_MATCHES)}`,
-      `FROM ${q(CTE_TARGET.PAIR_MEASURED)} AS ${PAIR_MEASURED_ALIAS}) AS ${PAIR_COUNTED_ALIAS}`,
+      `count(*) OVER (PARTITION BY ${candidate(PAIR_COLUMN.TARGET_ID)}) AS ${q(PAIR_COLUMN.TARGET_MATCHES)},`,
+      `${choiceOf(DESTINATION_COLUMN.NUMBER)} IS NOT NULL AS ${q(PAIR_COLUMN.CHOSEN)}`,
+      `FROM ${q(CTE_TARGET.PAIR_CANDIDATES)} AS ${PAIR_CANDIDATE_ALIAS} ${choicesJoinSql}) AS ${PAIR_COUNTED_ALIAS}`,
     ].join(" ")
   );
 }
@@ -371,10 +437,12 @@ function classifyCtes(layouts: PadronLayouts, options: ActualizarPadronOptions):
     matchedCte(target),
     measuredCte(),
     plannedCte(options),
+    geometryAcceptsCte(options),
+    changedGeometryCte(options),
     unmatchedTargetsCte(target),
     pairableTargetsCte(),
+    pairChoicesCte(options),
     pairCandidatesCte(target),
-    pairMeasuredCte(),
     pairsCte(),
   ];
 }
@@ -382,28 +450,55 @@ function classifyCtes(layouts: PadronLayouts, options: ActualizarPadronOptions):
 const pairCountSql = (condition: string): string =>
   `(SELECT count(*) FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS} WHERE ${condition})`;
 
+const changedCountSql = (applied: boolean): string =>
+  `(SELECT count(*) FROM ${q(CTE_TARGET.CHANGED_GEOMETRY)} AS ${CHANGED_ALIAS} WHERE ${applied ? "" : "NOT "}${changedOf(CHANGED_COLUMN.APPLIED)})`;
+
 /** Each applied pair consumes exactly one new row (its new key is unique among the candidates and matches one pair). */
-function classificationCountsSql(options: ActualizarPadronOptions): string {
+function classificationCountsSql(): string {
   return [
     `count(*) FILTER (WHERE ${classIs(MATCH_CLASS.NEW)}) - ${pairCountSql(appliedCondition())} AS "new",`,
     `count(*) FILTER (WHERE ${classIs(MATCH_CLASS.UNCHANGED)}) AS "unchanged",`,
     `count(*) FILTER (WHERE ${classIs(MATCH_CLASS.WITHIN_TOLERANCE)}) AS "within_tolerance",`,
     `count(*) FILTER (WHERE ${classIs(MATCH_CLASS.CHANGED)}) AS "changed",`,
     `count(*) FILTER (WHERE ${classIs(MATCH_CLASS.AMBIGUOUS)}) AS "ambiguous",`,
-    `count(*) FILTER (WHERE ${classIs(MATCH_CLASS.CHANGED)} AND ${applyFlag(options)}) AS "updates"`,
+    `${changedCountSql(true)} AS "updates",`,
+    `${changedCountSql(false)} AS "geometry_pending",`,
+    geometryAcceptsUnappliedSql(),
+  ].join(" ");
+}
+
+/* An accepted key counts as unapplied when no applied CHANGED row carries it (gone, not CHANGED any more, or Actualizar geometrías off). */
+function geometryAcceptsUnappliedSql(): string {
+  return [
+    `(SELECT count(*) FROM ${q(CTE_TARGET.GEOMETRY_ACCEPTS)} AS ${ACCEPT_ALIAS}`,
+    `WHERE NOT EXISTS (SELECT 1 FROM ${q(CTE_TARGET.CHANGED_GEOMETRY)} AS ${CHANGED_ALIAS}`,
+    `WHERE ${changedOf(CHANGED_COLUMN.APPLIED)} AND ${sameKeySql(ACCEPT_ALIAS, CHANGED_ALIAS)})) AS "geometry_accepts_unapplied"`,
   ].join(" ");
 }
 
 const appliedLooseCondition = (): string => `${appliedCondition()} AND ${pairOf(PAIR_COLUMN.TIER)} = ${literal(PAIR_TIER.LOOSE)}`;
 
-/* A new row claimed by two or more not-applied pairs is one candidate: its duplicate pairs count once. */
+/* A choice with an old id is applied when an APPLIED pair carries that destination row under the choice's new key. */
+function choicesUnappliedSql(): string {
+  return [
+    `(SELECT count(*) FROM ${q(CTE_TARGET.PAIR_CHOICES)} AS ${CHOICE_ALIAS}`,
+    `WHERE ${choiceOf(CHOICE_OLD_ID_COLUMN)} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS}`,
+    `WHERE ${appliedCondition()} AND ${pairOf(PAIR_COLUMN.TARGET_ID)} = ${choiceOf(CHOICE_OLD_ID_COLUMN)}`,
+    `AND ${sameKeySql(CHOICE_ALIAS, PAIR_ALIAS)})) AS "choices_unapplied"`,
+  ].join(" ");
+}
+
+/* Only the ambiguous keys count as not applied; a pending LOOSE pair is counted on its own. A new row claimed by two or more
+   ambiguous pairs is one candidate: its duplicate pairs count once. */
 function pairCountsSql(): string {
-  const notAppliedKeys = `SELECT DISTINCT ${KEY_COLUMNS.map((column) => pairOf(column)).join(", ")} FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS} WHERE ${notAppliedCondition()}`;
+  const ambiguousKeys = `SELECT DISTINCT ${KEY_COLUMNS.map((column) => pairOf(column)).join(", ")} FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS} WHERE ${statusIs(PAIR_STATUS.NOT_APPLIED_AMBIGUOUS)}`;
   return [
     `${pairCountSql(appliedCondition())} AS "pairs",`,
     `${pairCountSql(appliedLooseCondition())} AS "pairs_loose",`,
     `(SELECT count(*) FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS}) AS "pairs_total",`,
-    `(SELECT count(*) FROM (${notAppliedKeys}) AS "not_applied_keys") AS "pairs_not_applied"`,
+    `${pairCountSql(statusIs(PAIR_STATUS.NOT_APPLIED_PENDING))} AS "pairs_pending",`,
+    `(SELECT count(*) FROM (${ambiguousKeys}) AS "not_applied_keys") AS "pairs_not_applied",`,
+    choicesUnappliedSql(),
   ].join(" ");
 }
 
@@ -430,6 +525,21 @@ function missingSqlParts(): string[] {
   ];
 }
 
+const centroidPointSql = (geometry: string): string =>
+  `CROSS JOIN LATERAL (SELECT ST_Transform(ST_Centroid(${geometry}), ${WGS84_SRID}) AS "point") AS ${q(CENTROID_ALIAS)}`;
+
+const centroidColumnsSql = (): string[] => [
+  `ROUND(CAST(ST_Y(${CENTROID_ALIAS}."point") AS numeric), 6) AS "centroidLat"`,
+  `ROUND(CAST(ST_X(${CENTROID_ALIAS}."point") AS numeric), 6) AS "centroidLon"`,
+];
+
+const areaChangePctSql = (ratio: string): string => `ROUND(CAST((${ratio}) * 100 AS numeric), 1) AS "areaChangePct"`;
+
+/** A pair's area change is signed: 0 means the same area, -2 means 2 % smaller, +2 means 2 % larger. */
+const signedAreaChangePctSql = (ratio: string): string => `ROUND(CAST((${ratio} - 1) * 100 AS numeric), 1) AS "areaChangePct"`;
+
+const pairAreaRatioSql = (): string => `${pairOf(FOOTPRINT_AREA.INCOMING)} / NULLIF(${pairOf(FOOTPRINT_AREA.EXISTING)}, 0)`;
+
 /** Every pair, applied or not, for the report; the lists are ordered by department, locality and padrón. */
 function pairsListSql({ locality }: PadronLayouts): string {
   const oldLocalityId = `${OLD_LOCALITY_ALIAS}.${physicalColumn(locality, LOCALITY_COLUMN.ID)}`;
@@ -439,7 +549,11 @@ function pairsListSql({ locality }: PadronLayouts): string {
     `${pairOf(PAIR_COLUMN.LOCALITY_CHANGED)} AS "localityChanged"`,
     `${pairOf(PAIR_COLUMN.NUMBER_CHANGED)} AS "numberChanged"`,
     `${pairOf(PAIR_COLUMN.TIER)} AS "tier"`,
-    `${pairOf(PAIR_COLUMN.DISTANCE)} AS "distance"`,
+    `${pairOf(FOOTPRINT_AREA.OVERLAP)} / NULLIF(${pairOf(FOOTPRINT_AREA.EXISTING)}, 0) AS "overlap"`,
+    `${pairAreaRatioSql()} AS "areaRatio"`,
+    `${pairOf(FOOTPRINT_AREA.EXISTING)} AS "oldAreaM2"`,
+    `${pairOf(FOOTPRINT_AREA.INCOMING)} AS "newAreaM2"`,
+    signedAreaChangePctSql(pairAreaRatioSql()),
     `${pairOf(PAIR_COLUMN.TARGET_ID)} AS "oldId"`,
     `${pairOf(PAIR_COLUMN.OLD_TYPE_PADRON)} AS "oldTypePadron"`,
     `${pairOf(PAIR_COLUMN.OLD_LOCALITY_ID)} AS "oldLocalityId"`,
@@ -451,10 +565,12 @@ function pairsListSql({ locality }: PadronLayouts): string {
     `${pairOf(DESTINATION_COLUMN.NUMBER)} AS "number"`,
     `${pairOf(DEPARTMENT_COLUMN)} AS "department"`,
     `${pairOf(LOCALITY_NAME_COLUMN)} AS "locality"`,
+    ...centroidColumnsSql(),
   ];
   return [
     `SELECT ${columns.join(", ")} FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS}`,
     `LEFT JOIN ${qualifiedName(locality)} AS ${OLD_LOCALITY_ALIAS} ON ${oldLocalityId} = ${pairOf(PAIR_COLUMN.OLD_LOCALITY_ID)}`,
+    centroidPointSql(pairOf(CANDIDATE_GEOMETRY)),
     `ORDER BY ${pairOf(DEPARTMENT_COLUMN)}, ${pairOf(LOCALITY_NAME_COLUMN)} NULLS FIRST, ${pairOf(DESTINATION_COLUMN.NUMBER)}`,
     `LIMIT ${PAIR_LIST_LIMIT}`,
   ].join(" ");
@@ -468,37 +584,130 @@ function ambiguousSamplesSql(): string {
   ].join(" ");
 }
 
-/* The area ratio is computed for every CHANGED row so the list ranks by it; the Hausdorff distance only breaks ties. */
-function geometryChangesSql(): string {
-  const changes = [
-    ...keyListOf(PLANNED_ALIAS),
-    `${plannedOf(DEPARTMENT_COLUMN)} AS "department"`,
-    `${plannedOf(LOCALITY_NAME_COLUMN)} AS "locality"`,
-    `${plannedOf("distance")} AS "distance"`,
-    `${areaRatioOf(plannedOf("target_geometry"), plannedOf(CANDIDATE_GEOMETRY))} AS "areaRatio"`,
+const geometryStateSql = (): string =>
+  `CASE WHEN ${changedOf(CHANGED_COLUMN.APPLIED)} THEN ${literal(GEOMETRY_STATE.APPLIED)} ELSE ${literal(GEOMETRY_STATE.PENDING)} END AS "state"`;
+
+/* Every CHANGED row, applied or pending, pending first and then by area ratio; the UI list passes a limit, the CSV of pending rows does not. */
+function geometryListSql({ locality }: PadronLayouts, filter: string | null, limit: number | null): string {
+  const newLocalityName = `${NEW_LOCALITY_ALIAS}.${physicalColumn(locality, LOCALITY_COLUMN.NAME)}`;
+  const localityNameSql = `COALESCE(${changedOf(LOCALITY_NAME_COLUMN)}, ${newLocalityName})`;
+  const columns = [
+    ...keyListOf(CHANGED_ALIAS),
+    `${changedOf(DEPARTMENT_COLUMN)} AS "department"`,
+    `${localityNameSql} AS "locality"`,
+    `${changedOf(PAIR_COLUMN.TARGET_ID)} AS "oldId"`,
+    geometryStateSql(),
+    `${changedOf(CHANGED_COLUMN.OLD_AREA)} AS "oldAreaM2"`,
+    `${changedOf(CHANGED_COLUMN.NEW_AREA)} AS "newAreaM2"`,
+    areaChangePctSql(changedOf(CHANGED_COLUMN.AREA_RATIO)),
+    ...centroidColumnsSql(),
   ];
   return [
-    `SELECT top."typePadron", top."provinceId", top."localityId", top."number", top."department", top."locality", top."distance", top."areaRatio"`,
-    `FROM (SELECT ${changes.join(", ")} FROM ${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS}`,
-    `WHERE ${classIs(MATCH_CLASS.CHANGED)}`,
-    `ORDER BY "areaRatio" DESC NULLS FIRST, ${plannedOf("distance")} DESC NULLS FIRST, ${plannedOf(DESTINATION_COLUMN.TYPE_PADRON)}, ${plannedOf(DESTINATION_COLUMN.ID_PROVINCE)},`,
-    `${plannedOf(DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY)} NULLS FIRST, ${plannedOf(DESTINATION_COLUMN.NUMBER)} LIMIT ${DETAIL_LIST_LIMIT}) AS top`,
-    `ORDER BY top."areaRatio" DESC NULLS FIRST, top."distance" DESC NULLS FIRST, top."department", top."locality", top."number"`,
+    `SELECT ${columns.join(", ")} FROM ${q(CTE_TARGET.CHANGED_GEOMETRY)} AS ${CHANGED_ALIAS}`,
+    `LEFT JOIN ${qualifiedName(locality)} AS ${NEW_LOCALITY_ALIAS}`,
+    `ON ${NEW_LOCALITY_ALIAS}.${physicalColumn(locality, LOCALITY_COLUMN.ID)} = ${changedOf(DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY)}`,
+    centroidPointSql(changedOf(CANDIDATE_GEOMETRY)),
+    ...(filter === null ? [] : [`WHERE ${filter}`]),
+    `ORDER BY ${changedOf(CHANGED_COLUMN.APPLIED)}, ${changedOf(CHANGED_COLUMN.AREA_RATIO)} DESC NULLS FIRST,`,
+    `${changedOf(DEPARTMENT_COLUMN)} NULLS FIRST, ${localityNameSql} NULLS FIRST, ${changedOf(DESTINATION_COLUMN.NUMBER)}`,
+    ...(limit === null ? [] : [`LIMIT ${limit}`]),
   ].join(" ");
 }
 
-export function buildPadronClassifySql(layouts: PadronLayouts, options: ActualizarPadronOptions): string {
+const PENDING_FILTER = `NOT ${changedOf(CHANGED_COLUMN.APPLIED)}`;
+
+export interface ClassifyStatementOptions {
+  /** The analysis (true) reads the replacement block and the report lists; the persist classify (false) reads the counts, fingerprint and digest only. */
+  report?: boolean;
+}
+
+/* The reference flags and the report flag only add or drop report columns: the classification, the digest and the plan never depend on them. */
+const replacementCtesOf = (layouts: PadronLayouts, report: boolean): string[] => (report ? replacementCtes(layouts.target) : []);
+const replacementCountsOf = (report: boolean): string[] => (report ? [`${replacementCountSql()},`] : []);
+
+function missingReviewOf(layouts: PadronLayouts, references: ReferenceTableFlags, report: boolean): string[] {
+  return report ? [`${jsonArrayOf(missingReviewSql(layouts, references), "missing_review")} AS "missing_review",`] : [];
+}
+
+function pendingListOf(layouts: PadronLayouts, report: boolean): string[] {
+  return report ? [`${jsonArrayOf(geometryListSql(layouts, PENDING_FILTER, null), "pending_geometry_changes")} AS "pending_geometry_changes",`] : [];
+}
+
+export function buildPadronClassifySql(
+  layouts: PadronLayouts,
+  options: ActualizarPadronOptions,
+  references: ReferenceTableFlags = NO_REFERENCE_TABLES,
+  { report = true }: ClassifyStatementOptions = {}
+): string {
   return [
-    withClause(classifyCtes(layouts, options)),
+    withClause([...classifyCtes(layouts, options), ...replacementCtesOf(layouts, report)]),
     "SELECT",
-    `${classificationCountsSql(options)},`,
+    `${classificationCountsSql()},`,
     ...missingSqlParts(),
+    ...replacementCountsOf(report),
     `${pairCountsSql()},`,
     `${jsonArrayOf(pairsListSql(layouts), "pairs_list")} AS "pairs_list",`,
+    ...missingReviewOf(layouts, references, report),
     `${jsonArrayOf(ambiguousSamplesSql(), "ambiguous_samples")} AS "ambiguous_samples",`,
-    `${jsonArrayOf(geometryChangesSql(), "geometry_changes")} AS "geometry_changes"`,
+    `${jsonArrayOf(geometryListSql(layouts, null, DETAIL_LIST_LIMIT), "geometry_changes")} AS "geometry_changes",`,
+    ...pendingListOf(layouts, report),
+    fingerprintColumnsSql(layouts.target).join(", "),
     `FROM ${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS}`,
   ].join(" ");
+}
+
+const ENTRY_COLUMN = "entry";
+const ENTRY_SEPARATOR = "\n";
+
+const keyTextSql = (alias: string): string =>
+  [
+    `${alias}.${q(DESTINATION_COLUMN.TYPE_PADRON)}`,
+    `${alias}.${q(DESTINATION_COLUMN.ID_PROVINCE)}::text`,
+    `coalesce(${alias}.${q(DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY)}::text, '-')`,
+    `${alias}.${q(DESTINATION_COLUMN.NUMBER)}`,
+  ].join(", ");
+
+const candidateHashSql = (alias: string): string => `md5(${alias}.${q(CANDIDATE_GEOMETRY)}::text)`;
+
+const digestEntrySql = (tag: string, columns: string[], from: string, where: string): string =>
+  `SELECT concat_ws('|', ${literal(tag)}, ${columns.join(", ")}) AS ${q(ENTRY_COLUMN)} FROM ${from} WHERE ${where}`;
+
+/* One entry per planned write: NEW keys, applied pairs (new key and old id) and applied geometry updates, each with its candidate geometry hash. */
+function digestEntriesSql(): string {
+  const planned = `${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS}`;
+  const pairs = `${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS}`;
+  const changed = `${q(CTE_TARGET.CHANGED_GEOMETRY)} AS ${CHANGED_ALIAS}`;
+  return [
+    digestEntrySql("N", [keyTextSql(PLANNED_ALIAS), candidateHashSql(PLANNED_ALIAS)], planned, classIs(MATCH_CLASS.NEW)),
+    digestEntrySql(
+      "P",
+      [keyTextSql(PAIR_ALIAS), pairOf(PAIR_COLUMN.TARGET_ID), candidateHashSql(PAIR_ALIAS)],
+      pairs,
+      appliedCondition()
+    ),
+    digestEntrySql(
+      "C",
+      [keyTextSql(CHANGED_ALIAS), changedOf(PAIR_COLUMN.TARGET_ID), candidateHashSql(CHANGED_ALIAS)],
+      changed,
+      changedOf(CHANGED_COLUMN.APPLIED)
+    ),
+  ].join(" UNION ALL ");
+}
+
+/* The digest is an md5 over the sorted entries, so the same planned writes always give the same text under the C collation. */
+function planDigestSql(): string {
+  const aggregate = `string_agg(${q(ENTRY_COLUMN)}, ${literal(ENTRY_SEPARATOR)} ORDER BY ${q(ENTRY_COLUMN)} COLLATE "C")`;
+  return `(SELECT md5(coalesce(${aggregate}, '')) FROM (${digestEntriesSql()}) AS ${q("entries")})`;
+}
+
+/** Cheap facts of the destination and the staging side, read in the classify statement: they change when the data does. */
+function fingerprintColumnsSql(target: WritableTargetLayout): string[] {
+  return [
+    `(SELECT count(*) FROM ${targetTableSql(target)}) AS "target_rows"`,
+    `(SELECT coalesce(max(${targetOf(target, DESTINATION_COLUMN.ID)}), 0) FROM ${targetTableSql(target)}) AS "target_max_id"`,
+    `(SELECT count(*) FROM ${q(CTE_TARGET.CANDIDATES)}) AS "staging_candidates"`,
+    `${planDigestSql()} AS "plan_digest"`,
+  ];
 }
 
 /** A new row consumed by an applied pair is not inserted: it is the row the pair's destination row now carries. */
@@ -525,22 +734,22 @@ function insertedRowsCte(target: WritableTargetLayout): string {
   );
 }
 
-/* The old values come from the planned row the UPDATE joins: they were read from the same statement snapshot, so RETURNING can expose them without a second scan of the destination. */
+/* The old values come from the changed row the UPDATE joins: they were read from the same statement snapshot, so RETURNING can expose them without a second scan of the destination. */
 function updatedReturningSql(target: WritableTargetLayout, captureRevert: boolean): string {
   const columns = [`${targetOf(target, DESTINATION_COLUMN.ID)} AS "id"`];
-  if (captureRevert) columns.push(`${plannedOf(PAIR_COLUMN.TARGET_GEOMETRY)} AS "old_geometry"`);
+  if (captureRevert) columns.push(`${changedOf(PAIR_COLUMN.TARGET_GEOMETRY)} AS "old_geometry"`);
   return columns.join(", ");
 }
 
-/* The only writes of the stage: a CHANGED row gets its geometry; a paired row gets type_padron, id_cadastral_locality and number, and its geometry only when updateGeometries is on. id, id_address_master and id_province are never written. */
-function updatedRowsCte(target: WritableTargetLayout, options: ActualizarPadronOptions, captureRevert: boolean): string {
+/* The only writes of the stage: an applied CHANGED row gets its geometry; a paired row gets type_padron, id_cadastral_locality and number, and its geometry only when updateGeometries is on. id, id_address_master and id_province are never written. */
+function updatedRowsCte(target: WritableTargetLayout, captureRevert: boolean): string {
   return cte(
     CTE_TARGET.UPDATED,
     [
       `UPDATE ${targetTableSql(target)}`,
-      `SET ${physicalColumn(target, DESTINATION_COLUMN.GEOMETRY)} = ${PLANNED_ALIAS}.${q(CANDIDATE_GEOMETRY)}`,
-      `FROM ${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS}`,
-      `WHERE ${classIs(MATCH_CLASS.CHANGED)} AND ${applyFlag(options)} AND ${targetOf(target, DESTINATION_COLUMN.ID)} = ${PLANNED_ALIAS}."target_id"`,
+      `SET ${physicalColumn(target, DESTINATION_COLUMN.GEOMETRY)} = ${changedOf(CANDIDATE_GEOMETRY)}`,
+      `FROM ${q(CTE_TARGET.CHANGED_GEOMETRY)} AS ${CHANGED_ALIAS}`,
+      `WHERE ${changedOf(CHANGED_COLUMN.APPLIED)} AND ${targetOf(target, DESTINATION_COLUMN.ID)} = ${changedOf(PAIR_COLUMN.TARGET_ID)}`,
       `RETURNING ${updatedReturningSql(target, captureRevert)}`,
     ].join(" ")
   );
@@ -613,7 +822,7 @@ export function buildPadronApplySql(
     withClause([
       ...classifyCtes(layouts, options),
       insertedRowsCte(target),
-      updatedRowsCte(target, options, captureRevert),
+      updatedRowsCte(target, captureRevert),
       pairedRowsCte(target, options, captureRevert),
       ...(captureRevert ? [revertRowsCte()] : []),
     ]),

@@ -1,49 +1,75 @@
 "use client";
 
 import React from "react";
+import { Search } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
+import { Button } from "@/ui-kit/components/ui/Button";
 import { FormField } from "@/ui-kit/components/ui/FormField";
-import { AlertType } from "@/ui-kit/types/ui";
+import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
 import { MONTHLY_TABLES } from "../../config/monthlyTables";
 import { GEOMETRY_OVERWRITE_WARNING, type ActualizarWizardConfirmation } from "../actualizarPadronWizardState";
 import type { ActualizarStartRequest } from "../clientTypes";
-import { PASSWORD_LABEL, ReviewRunActions } from "./reviewParts";
+import { PASSWORD_LABEL } from "./reviewParts";
 import styles from "./WizardSteps.module.css";
 
-const BUSY_NOTE = "Hay una actualización en curso. Espere a que termine para iniciar otra.";
-const CONTENT_NOTE = "Inserta los padrones nuevos y actualiza la geometría de los existentes. Nunca borra filas ni cambia ids.";
-const DRY_RUN_HINT = "Analizar sin cargar clasifica los padrones y revierte todo: la tabla de destino no cambia.";
-const RUN_HINT = "Actualizar padrones modifica la tabla de destino. Hace falta escribir de nuevo la contraseña y el nombre de la tabla de destino.";
+const BUSY_NOTE = "Hay un análisis en curso. Espere a que termine para iniciar otro.";
+const CONTENT_NOTE = "Al guardar, inserta los padrones nuevos y actualiza la geometría de los existentes. Nunca borra filas ni cambia ids.";
+const ANALYSIS_HINT = "El análisis no modifica la base de datos. Los cambios se guardan después, desde el resultado del análisis.";
 const NON_PADRON_TARGET_WARNING =
   "La tabla de destino no es «padron»: se crearán direcciones maestras reales para los ids de esa tabla.";
-const TYPED_TABLE_LABEL = "Vuelva a escribir el nombre de la tabla de destino";
+const ANALYZE_ICON_SIZE = 15;
 const YES = "Sí";
 const NO = "No";
+
+const pairChoiceTextOf = (count: number): string =>
+  count === 1 ? "1 elección de par incluida" : `${count} elecciones de par incluidas`;
+
+const acceptedGeometryTextOf = (count: number): string =>
+  count === 1 ? "1 geometría aceptada incluida" : `${count} geometrías aceptadas incluidas`;
+
+/** The review decisions the analysis will send: the pair choices and the accepted geometries, each only when there is one. */
+function DecisionSummary({ options }: { options: ActualizarStartRequest["options"] }) {
+  const pairChoiceCount = options.pairChoices?.length ?? 0;
+  const acceptedGeometryCount = options.acceptedGeometries?.length ?? 0;
+  return (
+    <>
+      {pairChoiceCount > 0 && (
+        <>
+          <dt>Elecciones de par</dt>
+          <dd>{pairChoiceTextOf(pairChoiceCount)}</dd>
+        </>
+      )}
+      {acceptedGeometryCount > 0 && (
+        <>
+          <dt>Geometrías aceptadas</dt>
+          <dd>{acceptedGeometryTextOf(acceptedGeometryCount)}</dd>
+        </>
+      )}
+    </>
+  );
+}
 
 export interface ActualizarReviewStepProps {
   request: ActualizarStartRequest;
   confirmation: ActualizarWizardConfirmation;
-  canDryRun: boolean;
-  canRun: boolean;
+  canAnalyze: boolean;
   busy: boolean;
   runBlockedReason: string | null;
   onConfirmationChange: (patch: Partial<ActualizarWizardConfirmation>) => void;
-  onDryRun: () => void;
-  onRun: () => void;
+  onAnalyze: () => void;
 }
 
 export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
   request,
-  canDryRun,
-  canRun,
+  canAnalyze,
   busy,
   runBlockedReason,
   confirmation,
   onConfirmationChange,
-  onDryRun,
-  onRun,
+  onAnalyze,
 }) => {
   const { connection, options } = request;
+  const blocked = busy || runBlockedReason !== null;
 
   return (
     <div className={styles.stack}>
@@ -86,6 +112,7 @@ export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
             <dd>{request.addressMasterTable}</dd>
           </>
         )}
+        <DecisionSummary options={options} />
       </dl>
 
       <AlertMessage type={AlertType.INFO} text={CONTENT_NOTE} />
@@ -94,27 +121,22 @@ export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
         <AlertMessage type={AlertType.WARNING} text={NON_PADRON_TARGET_WARNING} />
       )}
 
-      <div className={styles.gridAligned}>
-        <FormField label={PASSWORD_LABEL} type="password" onChange={(password) => onConfirmationChange({ password })} />
-        <FormField
-          label={TYPED_TABLE_LABEL}
-          value={confirmation.typedTable}
-          onChange={(typedTable) => onConfirmationChange({ typedTable })}
-        />
-      </div>
-
-      <ReviewRunActions
-        dryRunHint={DRY_RUN_HINT}
-        runHint={RUN_HINT}
-        busyNote={BUSY_NOTE}
-        runLabel="Actualizar padrones"
-        busy={busy}
-        runBlockedReason={runBlockedReason}
-        canDryRun={canDryRun}
-        canRun={canRun}
-        onDryRun={onDryRun}
-        onRun={onRun}
+      <FormField
+        label={PASSWORD_LABEL}
+        type="password"
+        value={confirmation.password}
+        onChange={(password) => onConfirmationChange({ password })}
       />
+
+      <p className={styles.hint}>{ANALYSIS_HINT}</p>
+      {busy && <AlertMessage type={AlertType.WARNING} text={BUSY_NOTE} />}
+      {runBlockedReason !== null && <AlertMessage type={AlertType.WARNING} text={runBlockedReason} />}
+      <div className={styles.actions}>
+        <Button variant={ButtonVariant.PRIMARY} isDisabled={blocked || !canAnalyze} onClick={onAnalyze}>
+          <Search size={ANALYZE_ICON_SIZE} />
+          <span>Analizar</span>
+        </Button>
+      </div>
     </div>
   );
 };

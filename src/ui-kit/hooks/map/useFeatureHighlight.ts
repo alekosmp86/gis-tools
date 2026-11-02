@@ -7,7 +7,8 @@ export function useFeatureHighlight(
   mapInstanceRef: React.RefObject<L.Map | null>,
   geojson: FeatureCollection,
   selectedFeatureIndex?: number | null,
-  isMapReady: boolean = false
+  isMapReady: boolean = false,
+  showPopups: boolean = true
 ): void {
   const highlightLayerRef = useRef<L.FeatureGroup | null>(null);
 
@@ -52,7 +53,7 @@ export function useFeatureHighlight(
         });
       },
       onEachFeature: (feature, layer) => {
-        const popupHtml = buildPopupHtml(feature);
+        const popupHtml = showPopups ? buildPopupHtml(feature) : "";
         if (popupHtml) {
           layer.bindPopup(popupHtml, {
             closeButton: true,
@@ -86,5 +87,5 @@ export function useFeatureHighlight(
         }
       }
     };
-  }, [mapInstanceRef, selectedFeatureIndex, geojson, isMapReady]);
+  }, [mapInstanceRef, selectedFeatureIndex, geojson, isMapReady, showPopups]);
 }

@@ -1,7 +1,11 @@
 import { buildAnalyzeStatement } from "@/core/services/sqlStatements";
 import type { StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunSession } from "../../cargar-padrones/types";
-import { runAddressMasterLinkPass } from "../../shared/addressMasterLinkPass";
+import {
+  planAddressMasterPass,
+  readAddressMasterClassification,
+  runAddressMasterLinkPass,
+} from "../../shared/addressMasterLinkPass";
 import { buildAddressMasterReport } from "../../shared/addressMasterLinkReport";
 import { PADRON_SUBJECT_SPEC } from "../../shared/addressMasterLinkSpec";
 import type { WritableTargetLayout } from "../../shared/tableResolution";
@@ -13,14 +17,17 @@ import {
 } from "../../shared/transaction";
 import { nullableNumber, type Row } from "../../shared/rowMapping";
 import { ADDRESS_MASTER_PASS_STEPS, STEP } from "../domain/plannedSteps";
+import { assertPlanStillValid, snapshotOf } from "../domain/plan";
 import {
   buildPadronTargetReport,
+  plannedApplyOf,
   toPadronApplyOutcome,
   toPadronClassification,
   toReportView,
   type ReportView,
 } from "../domain/reportMapping";
 import { buildReportSql } from "../domain/reportSql";
+import { NO_REFERENCE_TABLES } from "../domain/replacementSql";
 import { buildPadronApplySql, buildPadronClassifySql } from "../domain/targetSql";
 import { buildCaptureAddressMasterSql, buildCreateRevertTableSql, buildMaxAddressMasterIdSql } from "../domain/revertCapture";
 import type { RevertAddressMaster } from "./revertScript";
@@ -28,19 +35,25 @@ import type {
   ActualizarAddressMasterReport,
   ActualizarPadronBackup,
   ActualizarPadronOptions,
+  ActualizarPlanRecord,
   ActualizarTargetReport,
   PadronApplyOutcome,
   PadronClassification,
+  PadronGeometryChange,
   PadronLayouts,
   ActualizarPadronParams,
+  PlanSnapshot,
 } from "../types";
 import { guardRevertStep, writeRevertBackup, type RevertBackupRequest } from "./revertBackup";
+import { readReferenceTables } from "./referenceTables";
 
 export interface PadronWriteOutcome {
   source: ReportView;
   target: ActualizarTargetReport;
   addressMaster?: ActualizarAddressMasterReport;
   backup?: ActualizarPadronBackup;
+  snapshot: PlanSnapshot;
+  pendingGeometryChanges: PadronGeometryChange[];
   targetModified: boolean;
   outcomeUnknown: boolean;
   commitError?: string;
@@ -51,6 +64,8 @@ interface PadronTransactionBody {
   target: ActualizarTargetReport;
   addressMaster?: ActualizarAddressMasterReport;
   backup?: ActualizarPadronBackup;
+  snapshot: PlanSnapshot;
+  pendingGeometryChanges: PadronGeometryChange[];
 }
 
 const PADRON_TRANSACTION: TransactionMessages = {
@@ -59,29 +74,44 @@ const PADRON_TRANSACTION: TransactionMessages = {
   unverified: "No se pudo revertir la transacción: verifique las tablas de destino.",
 };
 
+const TRANSACTION_STEPS = { commit: STEP.COMMIT, rollback: STEP.ROLLBACK };
+
 async function readSourceReport(session: RunSession, layouts: PadronLayouts): Promise<ReportView> {
   const result = await session.query(buildReportSql(layouts));
   return toReportView(result.rows[0]);
 }
 
-async function readClassification(
+async function readAnalysisClassification(
   session: RunSession,
   layouts: PadronLayouts,
   options: ActualizarPadronOptions
 ): Promise<PadronClassification> {
-  const result = await session.query(buildPadronClassifySql(layouts, options));
+  const references = await readReferenceTables(session, layouts.target.schema);
+  return readClassificationSql(session, buildPadronClassifySql(layouts, options, references));
+}
+
+/** The persist classify reads the counts, fingerprint and digest only: no replacement block and no reference probe. */
+function readPersistClassification(
+  session: RunSession,
+  layouts: PadronLayouts,
+  options: ActualizarPadronOptions
+): Promise<PadronClassification> {
+  return readClassificationSql(session, buildPadronClassifySql(layouts, options, NO_REFERENCE_TABLES, { report: false }));
+}
+
+async function readClassificationSql(session: RunSession, sql: string): Promise<PadronClassification> {
+  const result = await session.query(sql);
   return toPadronClassification(result.rows[0] ?? {});
 }
 
 /** A real run first creates the revert table in the transaction, then captures the old values inside the same apply statement. */
 async function applyPadronChanges(
   session: RunSession,
-  params: ActualizarPadronParams,
-  layouts: PadronLayouts
+  layouts: PadronLayouts,
+  options: ActualizarPadronOptions
 ): Promise<PadronApplyOutcome> {
-  const captureRevert = !params.dryRun;
-  if (captureRevert) await guardRevertStep(() => session.query(buildCreateRevertTableSql()));
-  const result = await session.query(buildPadronApplySql(layouts, params.options, { captureRevert }));
+  await guardRevertStep(() => session.query(buildCreateRevertTableSql()));
+  const result = await session.query(buildPadronApplySql(layouts, options, { captureRevert: true }));
   return toPadronApplyOutcome(result.rows[0] ?? {});
 }
 
@@ -154,6 +184,20 @@ async function runAddressMasterStage(
   return buildAddressMasterReport(addressMaster, pass);
 }
 
+/** The analysis only classifies the links: the rows the padron insert will add are not in the destination yet, so they are not counted. */
+async function runAddressMasterPlan(
+  session: RunSession,
+  layouts: PadronLayouts,
+  timer: StepTimer
+): Promise<ActualizarAddressMasterReport | undefined> {
+  const { addressMaster } = layouts;
+  if (addressMaster === undefined) return undefined;
+  const classification = await timer.run(ADDRESS_MASTER_PASS_STEPS.classify, () =>
+    readAddressMasterClassification(session, { subject: layouts.target, addressMaster }, PADRON_SUBJECT_SPEC)
+  );
+  return buildAddressMasterReport(addressMaster, planAddressMasterPass(classification));
+}
+
 async function analyzeTargets(session: RunSession, layouts: PadronLayouts): Promise<void> {
   await session.query(buildAnalyzeStatement(layouts.target.schema, layouts.target.table));
   if (layouts.addressMaster !== undefined) {
@@ -161,7 +205,7 @@ async function analyzeTargets(session: RunSession, layouts: PadronLayouts): Prom
   }
 }
 
-async function runTransactionBody(
+async function runAnalysisBody(
   session: RunSession,
   params: ActualizarPadronParams,
   layouts: PadronLayouts,
@@ -170,54 +214,113 @@ async function runTransactionBody(
   const source = await timer.run(STEP.RESOLVE, () => readSourceReport(session, layouts));
   // Ordered reads on the transaction's snapshot: the analysis follows the source report step.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const classification = await timer.run(STEP.CLASSIFY, () => readClassification(session, layouts, params.options));
-  // Ordered: the sequence is repaired after the analysis and before the insert of the same transaction.
+  const classification = await timer.run(STEP.CLASSIFY, () => readAnalysisClassification(session, layouts, params.options));
+  const addressMaster = await runAddressMasterPlan(session, layouts, timer);
+  // Ordered: the report step keeps its planned place after the link classification.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  await timer.run(STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.target)));
-  const apply = await timer.run(STEP.APPLY, () => applyPadronChanges(session, params, layouts));
-  assertCountsMatch(layouts.target, classification, apply);
-  const revertAddressMaster = params.dryRun ? undefined : await captureAddressMasterRevert(session, layouts);
-  const addressMaster = await runAddressMasterStage(session, layouts, timer);
-  await timer.run(STEP.ANALYZE, () => analyzeTargets(session, layouts));
-  const target = await timer.run(STEP.REPORT, () =>
-    Promise.resolve(
-      buildPadronTargetReport({
-        target: layouts.target,
-        classification,
-        apply,
-        updateGeometries: params.options.updateGeometries,
-      })
-    )
+  const target = await timer.run(STEP.REPORT, async () =>
+    buildPadronTargetReport({
+      target: layouts.target,
+      classification,
+      apply: plannedApplyOf(classification.counts),
+      updateGeometries: params.options.updateGeometries,
+    })
   );
-  const backup = params.dryRun
-    ? undefined
-    : await timer.run(STEP.BACKUP, () =>
-        writeRevertBackup(session, revertRequestOf(layouts, apply, revertAddressMaster))
-      );
-  return { source, target, addressMaster, backup };
+  return {
+    source,
+    target,
+    addressMaster,
+    snapshot: snapshotOf(classification),
+    pendingGeometryChanges: classification.pendingGeometryChanges,
+  };
 }
 
-export async function runPadronWriteTransaction(
+/** The plan check runs before the first write: a refusal leaves the destination and its sequence untouched. */
+async function runPersistBody(
+  session: RunSession,
+  params: ActualizarPadronParams,
+  layouts: PadronLayouts,
+  timer: StepTimer,
+  plan: ActualizarPlanRecord
+): Promise<PadronTransactionBody> {
+  const source = await timer.run(STEP.RESOLVE, () => readSourceReport(session, layouts));
+  // Ordered reads on the transaction's snapshot: the classification follows the source report step.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const classification = await timer.run(STEP.CLASSIFY, () => readPersistClassification(session, layouts, params.options));
+  const snapshot = snapshotOf(classification);
+  assertPlanStillValid(plan, snapshot);
+  // Ordered: the sequence is repaired after the classification and before the insert of the same transaction.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  await timer.run(STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.target)));
+  const apply = await timer.run(STEP.APPLY, () => applyPadronChanges(session, layouts, params.options));
+  assertCountsMatch(layouts.target, classification, apply);
+  const revertAddressMaster = await captureAddressMasterRevert(session, layouts);
+  // Ordered: the revert capture reads the unlinked rows before the link pass links them.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const addressMaster = await runAddressMasterStage(session, layouts, timer);
+  await timer.run(STEP.ANALYZE, () => analyzeTargets(session, layouts));
+  const target = await timer.run(STEP.REPORT, async () =>
+    buildPadronTargetReport({
+      target: layouts.target,
+      classification,
+      apply,
+      updateGeometries: params.options.updateGeometries,
+    })
+  );
+  // Ordered: the backup reads the revert rows this transaction wrote, after the report step.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const backup = await timer.run(STEP.BACKUP, () =>
+    writeRevertBackup(session, revertRequestOf(layouts, apply, revertAddressMaster))
+  );
+  return { source, target, addressMaster, backup, snapshot, pendingGeometryChanges: classification.pendingGeometryChanges };
+}
+
+const toWriteOutcome = (outcome: TransactionOutcome<PadronTransactionBody>): PadronWriteOutcome => ({
+  ...outcome.body,
+  targetModified: outcome.targetsModified,
+  outcomeUnknown: outcome.outcomeUnknown,
+  commitError: outcome.commitError,
+});
+
+/** The analysis runs in a READ ONLY transaction: nothing it does can reach the destination. */
+export async function runAnalysisTransaction(
   session: RunSession,
   params: ActualizarPadronParams,
   layouts: PadronLayouts,
   timer: StepTimer
 ): Promise<PadronWriteOutcome> {
-  const outcome: TransactionOutcome<PadronTransactionBody> = await runTransaction(
+  const outcome = await runTransaction(
     session,
     {
-      dryRun: params.dryRun,
+      dryRun: true,
+      readOnly: true,
       secret: params.config.password,
       timer,
-      steps: { commit: STEP.COMMIT, rollback: STEP.ROLLBACK },
+      steps: TRANSACTION_STEPS,
       messages: PADRON_TRANSACTION,
     },
-    () => runTransactionBody(session, params, layouts, timer)
+    () => runAnalysisBody(session, params, layouts, timer)
   );
-  return {
-    ...outcome.body,
-    targetModified: outcome.targetsModified,
-    outcomeUnknown: outcome.outcomeUnknown,
-    commitError: outcome.commitError,
-  };
+  return toWriteOutcome(outcome);
+}
+
+export async function runPersistTransaction(
+  session: RunSession,
+  params: ActualizarPadronParams,
+  layouts: PadronLayouts,
+  timer: StepTimer,
+  plan: ActualizarPlanRecord
+): Promise<PadronWriteOutcome> {
+  const outcome = await runTransaction(
+    session,
+    {
+      dryRun: false,
+      secret: params.config.password,
+      timer,
+      steps: TRANSACTION_STEPS,
+      messages: PADRON_TRANSACTION,
+    },
+    () => runPersistBody(session, params, layouts, timer, plan)
+  );
+  return toWriteOutcome(outcome);
 }

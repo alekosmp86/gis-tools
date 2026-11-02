@@ -126,7 +126,7 @@ function headerLines(plan: RevertScriptPlan): RevertLine[] {
     "-- ADVERTENCIA: revierte SOLO las filas que cambió esta ejecución. Supone que nadie cambió esas filas después de la ejecución.",
     ...(plan.addressMaster !== undefined ? [ADDRESS_MASTER_HEADER] : []),
     "-- Las secuencias de id no se revierten.",
-    "-- Para revertir: descomprima el archivo (gunzip) y ejecute psql -f sobre el .sql resultante. Todo corre en una sola transacción.",
+    "-- Para revertir: descomprima el archivo (gunzip) y ejecute el .sql completo en psql (psql -v ON_ERROR_STOP=1 -f) o en pgAdmin / cualquier cliente SQL, de una sola vez. Todo corre en una sola transacción.",
   ].map(structural);
 }
 

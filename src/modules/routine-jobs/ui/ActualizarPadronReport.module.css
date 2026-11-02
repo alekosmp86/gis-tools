@@ -79,6 +79,22 @@
   background: var(--bg-main, #0b1220);
 }
 
+.mapColumnTable table th:first-child,
+.mapColumnTable table td:first-child {
+  position: sticky;
+  left: 0;
+  width: 1%;
+  background: var(--bg-main, #0b1220);
+}
+
+.mapColumnTable table th:first-child {
+  z-index: 2;
+}
+
+.mapColumnTable table td:first-child {
+  z-index: 1;
+}
+
 .reasonCell {
   display: flex;
   flex-direction: column;

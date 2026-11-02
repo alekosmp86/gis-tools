@@ -1,7 +1,16 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState } from "react";
 import type { ActualizarPadronResult } from "../jobs/actualizar-padron/types";
+import type { GeometryMapBase } from "./clientTypes";
+import type { PadronReview, PadronReviewItem } from "./padronReviewItems";
+import { PadronMapModal } from "./PadronMapModal";
+import {
+  readOnlyAcceptsOf,
+  type GeometryAcceptSelection,
+  type RemovalMarkSelection,
+  type ReviewDecisions,
+} from "./reviewDecisions";
 import {
   buildActualizarReportView,
   type ActualizarBannerKind,
@@ -20,6 +29,10 @@ import { AddressMasterSection } from "./AddressMasterSection";
 import { PADRON_ADDRESS_MASTER_TEXTS } from "./addressMasterSubjectTexts";
 import { ActualizarBackupSection } from "./ActualizarBackupSection";
 import { ActualizarTargetSection } from "./ActualizarTargetSection";
+import { MissingPadronSection } from "./MissingPadronSection";
+import { PendingGeometryDownload } from "./PendingGeometryDownload";
+import type { PairChoiceSelection } from "./PairChoiceGroups";
+import { listedChoicesOf, unappliedChoicesOf } from "./pairChoices";
 import { RefreshSuggestion } from "./RefreshSuggestion";
 import styles from "./ActualizarPadronReport.module.css";
 import sharedStyles from "./CargarPadronesReport.module.css";
@@ -107,10 +120,41 @@ function ClosingSections({ view }: { view: ActualizarReportView }) {
 
 export interface ActualizarPadronReportProps {
   result: ActualizarPadronResult;
+  pairChoices: PairChoiceSelection;
+  geometryAccepts: GeometryAcceptSelection;
+  removalMarks: RemovalMarkSelection;
+  /** The connection of the wizard for the map; null when the wizard holds no password. */
+  mapBase: GeometryMapBase | null;
 }
 
-export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ result }) => {
-  const view = buildActualizarReportView(result);
+const GEOMETRY_LOCKED_OFF = "Actualizar geometrías está desactivado: las geometrías pendientes no se pueden aceptar.";
+
+/** An analysis with Actualizar geometrías off cannot accept geometries: the gate applies nothing without the option. */
+const geometryLockReasonOf = (result: ActualizarPadronResult): string | null =>
+  result.dryRun && !result.target.updateApplied ? GEOMETRY_LOCKED_OFF : null;
+
+/** Only an analysis that updates geometries takes acceptances; a real-run result shows the submitted ones read-only. */
+const geometriesEditableIn = (result: ActualizarPadronResult): boolean => result.dryRun && result.target.updateApplied;
+
+export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ result, pairChoices, geometryAccepts, removalMarks, mapBase }) => {
+  const [review, setReview] = useState<PadronReview | null>(null);
+  const view = useMemo(() => buildActualizarReportView(result), [result]);
+  const pairSelection: PairChoiceSelection = result.dryRun
+    ? pairChoices
+    : { choices: pairChoices.submitted, submitted: pairChoices.submitted, canResimulate: false };
+  const geometrySelection = geometriesEditableIn(result) ? geometryAccepts : readOnlyAcceptsOf(geometryAccepts.submitted);
+  const removalSelection: RemovalMarkSelection = result.dryRun ? removalMarks : { marked: [] };
+  const unappliedChoices = unappliedChoicesOf(pairSelection.choices, pairSelection.submitted, result.target.pairs);
+  const choiceRows = listedChoicesOf(pairSelection.choices, pairSelection.submitted, result.target.pairs, view.target.ambiguousGroups);
+  const decisions: ReviewDecisions = {
+    pairs: pairSelection,
+    unappliedChoices,
+    geometries: geometrySelection,
+    geometryLockReason: geometryLockReasonOf(result),
+    removals: removalSelection,
+  };
+  const openReview = (items: PadronReviewItem[], index: number) => setReview({ items, index });
+  const navigate = (index: number) => setReview((current) => (current === null ? null : { ...current, index }));
 
   return (
     <div className={sharedStyles.report}>
@@ -120,6 +164,9 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
           dryRun={result.dryRun}
           buildCsv={() => buildActualizarPadronCsv(result)}
         />
+        {result.dryRun && result.planId !== undefined && result.target.geometryPending > 0 && (
+          <PendingGeometryDownload planId={result.planId} />
+        )}
         {(result.skipped.skippedRows.length > 0 || result.target.pairsNotApplied > 0) && (
           <ReportDownloadButton
             stageSlug={MonthlyStage.ACTUALIZAR_PADRON}
@@ -134,7 +181,24 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
       {view.suggestion !== null && <RefreshSuggestion suggestion={view.suggestion} />}
       <KpiCards view={view} />
       <SkippedReasonsTable view={view} />
-      <ActualizarTargetSection target={view.target} />
+      <ActualizarTargetSection
+        target={view.target}
+        selection={pairSelection}
+        geometrySelection={geometrySelection}
+        choiceRows={choiceRows}
+        unappliedChoices={unappliedChoices}
+        onOpenReview={openReview}
+      />
+      <PadronMapModal review={review} base={mapBase} decisions={decisions} onNavigate={navigate} onClose={() => setReview(null)} />
+      {view.target.missingReview !== null && (
+        <MissingPadronSection
+          review={view.target.missingReview}
+          target={result.target}
+          dryRun={result.dryRun}
+          removals={removalSelection}
+          onOpenReview={openReview}
+        />
+      )}
       {view.addressMaster !== null && <AddressMasterSection view={view.addressMaster} texts={PADRON_ADDRESS_MASTER_TEXTS} />}
       <div className={sharedStyles.columns}>
         <GroupTopList title={SECTION_TITLES.department} split={view.byDepartmentSplit} />

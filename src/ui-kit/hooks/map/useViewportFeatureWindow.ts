@@ -18,6 +18,19 @@ function latLngBoundsToBBox(bounds: L.LatLngBounds): BBox {
   ];
 }
 
+const FIT_OPTIONS: L.FitBoundsOptions = { padding: [30, 30] };
+
+function collectionBoundsOf(collectionBBox: BBox | null): L.LatLngBounds | null {
+  if (!collectionBBox) return null;
+  const bounds = L.latLngBounds([collectionBBox[1], collectionBBox[0]], [collectionBBox[3], collectionBBox[2]]);
+  return bounds.isValid() ? bounds : null;
+}
+
+function hasArea(map: L.Map): boolean {
+  const size = map.getSize();
+  return size.x > 0 && size.y > 0;
+}
+
 const INITIAL_WINDOWED_COLLECTION: FeatureCollection = {
   type: "FeatureCollection",
   features: [],
@@ -37,6 +50,7 @@ export function useViewportFeatureWindow(
   const indexRef = useRef<ViewportFeatureIndex | null>(null);
   const lastProcessedGeojsonRef = useRef<FeatureCollection | null>(null);
   const previousWindowBBoxRef = useRef<BBox | null>(null);
+  const pendingFitBoundsRef = useRef<L.LatLngBounds | null>(null);
 
   const windowedCollectionRef = useRef<FeatureCollection>(INITIAL_WINDOWED_COLLECTION);
 
@@ -59,21 +73,24 @@ export function useViewportFeatureWindow(
       const newIndex = new ViewportFeatureIndex(features);
       indexRef.current = newIndex;
       previousWindowBBoxRef.current = null;
-
-      const collectionBBox = newIndex.getCollectionBBox();
-      if (collectionBBox) {
-        const southWest: L.LatLngTuple = [collectionBBox[1], collectionBBox[0]];
-        const northEast: L.LatLngTuple = [collectionBBox[3], collectionBBox[2]];
-        const bounds = L.latLngBounds(southWest, northEast);
-        if (bounds.isValid()) {
-          mapInstance.fitBounds(bounds, { padding: [30, 30] });
-        }
-      }
+      pendingFitBoundsRef.current = collectionBoundsOf(newIndex.getCollectionBBox());
     }
+
+    // A fit on a container without size zooms out to the world, so the fit waits for the first resize with a size.
+    const fitPendingBounds = () => {
+      const bounds = pendingFitBoundsRef.current;
+      if (bounds === null || !hasArea(mapInstance)) return;
+      pendingFitBoundsRef.current = null;
+      mapInstance.fitBounds(bounds, FIT_OPTIONS);
+    };
+    fitPendingBounds();
+    mapInstance.on("resize", fitPendingBounds);
 
     const currentIndex = indexRef.current;
     if (!currentIndex) {
-      return;
+      return () => {
+        mapInstance.off("resize", fitPendingBounds);
+      };
     }
 
     const updateWindow = () => {
@@ -123,6 +140,7 @@ export function useViewportFeatureWindow(
     mapInstance.on("zoomend", updateWindow);
 
     return () => {
+      mapInstance.off("resize", fitPendingBounds);
       mapInstance.off("moveend", updateWindow);
       mapInstance.off("zoomend", updateWindow);
     };

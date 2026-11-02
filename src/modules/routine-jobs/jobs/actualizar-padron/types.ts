@@ -1,17 +1,39 @@
+import type { Geometry } from "geojson";
 import type { DbConfig } from "@/core/types/db";
 import type { WritableTargetLayout } from "../shared/tableResolution";
 import type { StepTiming } from "../cargar-padrones/types";
-import type { PairChange, PairStatus, PairTier, SkipReason } from "./constants";
+import type { GeometryMapRole, GeometryState, PairChange, PairStatus, PairTier, ReplacementClass, SkipReason } from "./constants";
 import type { TableLayout } from "./domain/layouts";
 import type { AddressMasterReport } from "../shared/addressMasterLinkReport";
 
 export type { StepTiming } from "../cargar-padrones/types";
 
+/** The user's choice for an ambiguous group: the new row key as in a pairs_list element, and the destination id it pairs with (null: insert as new). */
+export interface PairChoice {
+  typePadron: string;
+  provinceId: number;
+  localityId: number | null;
+  number: string;
+  oldId: number | null;
+}
+
+/** A pending geometry change the user accepted: the staging key of its CHANGED row. Accepting applies it whatever its area ratio (AP-100). */
+export interface AcceptedGeometry {
+  typePadron: string;
+  provinceId: number;
+  localityId: number | null;
+  number: string;
+}
+
 export interface ActualizarPadronOptions {
   localityType?: string;
   tolerance: number;
+  geometryAreaThreshold: number;
   updateGeometries: boolean;
   linkAddressMaster: boolean;
+  pairChoices: readonly PairChoice[];
+  /** Absent means none: the request parser always fills it. */
+  acceptedGeometries?: readonly AcceptedGeometry[];
 }
 
 export interface ActualizarPadronParams {
@@ -27,6 +49,7 @@ export interface ActualizarPadronParams {
   options: ActualizarPadronOptions;
   dryRun: boolean;
   confirm: boolean;
+  planId?: string;
 }
 
 export interface PadronLayouts {
@@ -95,20 +118,30 @@ export interface PadronInserted extends PadronNamedKey {
   id: number;
 }
 
-export interface PadronGeometryChange extends PadronNamedKey {
-  distance: number | null;
-  areaRatio: number | null;
+/** Where a padron's geometry sits and how big it is: the areas are m² (SRID of the destination), the centroid is WGS84. */
+export interface PadronLocation {
+  oldAreaM2: number | null;
+  newAreaM2: number | null;
+  areaChangePct: number | null;
+  centroidLat: number | null;
+  centroidLon: number | null;
+}
+
+export interface PadronGeometryChange extends PadronNamedKey, PadronLocation {
+  oldId: number | null;
+  state: GeometryState;
 }
 
 /** A new row and the unmatched destination row it reclassifies or renumbers; the old key is the destination's. */
-export interface PadronPair {
+export interface PadronPair extends PadronLocation {
   status: PairStatus;
   tier: PairTier;
   changes: PairChange[];
   oldId: number | null;
   old: PadronNamedKey;
   new: PadronNamedKey;
-  distance: number | null;
+  overlap: number | null;
+  areaRatio: number | null;
 }
 
 export interface ActualizarTotals {
@@ -118,6 +151,62 @@ export interface ActualizarTotals {
   skipped: number;
 }
 
+/** Where a missing padrón's old geometry is referenced: only the tables that exist in the carto schema are counted. */
+export interface MissingPadronRefs {
+  accessPoint?: number;
+  addresses?: number;
+}
+
+/** The staging key of a replacing padrón (the new row): what the map reads back from the staging table. The department is the missing padrón's. */
+export interface MissingPartKey {
+  typePadron: string | null;
+  number: string | null;
+  locality: string | null;
+}
+
+/** A destination padrón with no staging row and no applied pair. `coveredPct` is the union of the replacing padrones (each at least REPLACEMENT_PART_MIN_PCT). `partKeys` lists the same parts as `parts`, in the same order. */
+export interface MissingPadron {
+  oldId: number;
+  typePadron: string | null;
+  provinceId: number | null;
+  department: string | null;
+  locality: string | null;
+  number: string | null;
+  oldAreaM2: number | null;
+  centroidLat: number | null;
+  centroidLon: number | null;
+  class: ReplacementClass;
+  coveredPct: number | null;
+  parts: string[];
+  partKeys?: MissingPartKey[];
+  refs?: MissingPadronRefs;
+}
+
+/** A staging key for the map: a RURAL padrón has no locality, an URBANO one names its locality (nomloccat). */
+export interface GeometryMapStagingKey {
+  typePadron: string;
+  department: string;
+  locality: string | null;
+  number: string;
+}
+
+/** One entry of the map request: an old destination id, a staging key, or both (a pair). */
+export interface GeometryMapItem {
+  oldId?: number;
+  staging?: GeometryMapStagingKey;
+}
+
+export type { GeometryMapRole } from "./constants";
+
+export interface GeometryMapFeature {
+  itemIndex: number;
+  role: GeometryMapRole;
+  label: string;
+  geometry: Geometry;
+}
+
+export type MissingByClass = Record<ReplacementClass, number>;
+
 export interface PadronCounts {
   inserted: number;
   unchanged: number;
@@ -125,18 +214,55 @@ export interface PadronCounts {
   changed: number;
   ambiguous: number;
   missing: number;
+  missingByClass: MissingByClass;
   updates: number;
   pairs: number;
   pairsLoose: number;
   pairsTotal: number;
+  pairsPending: number;
   pairsNotApplied: number;
+  choicesUnapplied: number;
+  geometryPending: number;
+  geometryAcceptsUnapplied: number;
+}
+
+/** Cheap facts of the destination and the staging side, read in the classify statement; the digest covers the planned writes. */
+export interface PadronDataFingerprint {
+  targetRows: number;
+  targetMaxId: number;
+  stagingCandidates: number;
+  digest: string;
+}
+
+export interface PlanExpectedCounts {
+  inserted: number;
+  updates: number;
+  pairs: number;
+}
+
+/** What an analysis saw and expects a real run to write: a persist must reproduce it exactly. */
+export interface PlanSnapshot {
+  dataFingerprint: PadronDataFingerprint;
+  expected: PlanExpectedCounts;
+}
+
+/** A stored analysis. It holds no password: the real run must still send its own. The uncapped pending geometry list is served as a CSV, never in a payload. */
+export interface ActualizarPlanRecord extends PlanSnapshot {
+  planId: string;
+  paramsFingerprint: string;
+  createdAt: string;
+  expiresAt: string;
+  pendingGeometryChanges: PadronGeometryChange[];
 }
 
 export interface PadronClassification {
   counts: PadronCounts;
+  fingerprint: PadronDataFingerprint;
   missingSamples: PadronKey[];
+  missingReview: MissingPadron[];
   ambiguousSamples: PadronKey[];
   geometryChanges: PadronGeometryChange[];
+  pendingGeometryChanges: PadronGeometryChange[];
   pairs: PadronPair[];
 }
 
@@ -159,14 +285,21 @@ export interface ActualizarTargetReport {
   changed: number;
   missing: number;
   missingSamples: PadronKey[];
+  missingByClass: MissingByClass;
+  missingReview: MissingPadron[];
   ambiguous: number;
   ambiguousSamples: PadronKey[];
   geometryChanges: PadronGeometryChange[];
+  geometryPending: number;
   pairs: PadronPair[];
   pairsTotal: number;
   pairsApplied: number;
   pairsLoose: number;
+  pairsPending: number;
   pairsNotApplied: number;
+  choicesUnapplied: number;
+  /** Accepted geometries that did not end applied (AP-100); absent in results of older runs. */
+  geometryAcceptsUnapplied?: number;
 }
 
 export type ActualizarAddressMasterReport = AddressMasterReport;
@@ -192,6 +325,7 @@ export interface ActualizarPadronResult {
   target: ActualizarTargetReport;
   addressMaster?: ActualizarAddressMasterReport;
   backup?: ActualizarPadronBackup;
+  planId?: string;
   warnings: string[];
   stepTimings: StepTiming[];
 }

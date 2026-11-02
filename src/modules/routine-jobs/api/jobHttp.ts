@@ -7,6 +7,7 @@ export const HTTP_STATUS = {
   BAD_REQUEST: 400,
   NOT_FOUND: 404,
   CONFLICT: 409,
+  GONE: 410,
   SERVER_ERROR: 500,
 } as const;
 
@@ -31,7 +32,10 @@ export function failureResponse(error: unknown): Response {
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-const scrubText = (text: string, secret: string): string => (secret ? text.split(secret).join(REDACTION) : text);
+export const scrubText = (text: string, secret: string): string => (secret ? text.split(secret).join(REDACTION) : text);
+
+/** Server-generated ids are hex: a password that is a substring of one would corrupt the id the client sends back. */
+const SCRUB_EXEMPT_KEYS: ReadonlySet<string> = new Set(["planId"]);
 
 function scrubDeep<T>(value: T, secret: string): T {
   if (!secret) return value;
@@ -39,7 +43,10 @@ function scrubDeep<T>(value: T, secret: string): T {
   if (Array.isArray(value)) return value.map((entry: unknown) => scrubDeep(entry, secret)) as T;
   if (typeof value === "object" && value !== null) {
     return Object.fromEntries(
-      Object.entries(value).map(([key, entry]: [string, unknown]) => [key, scrubDeep(entry, secret)])
+      Object.entries(value).map(([key, entry]: [string, unknown]) => [
+        key,
+        SCRUB_EXEMPT_KEYS.has(key) ? entry : scrubDeep(entry, secret),
+      ])
     ) as T;
   }
   return value;

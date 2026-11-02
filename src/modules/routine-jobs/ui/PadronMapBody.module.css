@@ -1,0 +1,44 @@
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.mapColumn {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  height: clamp(360px, 62vh, 640px);
+  min-width: 0;
+}
+
+.detailsColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.passwordNotice {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-size: 14px;
+  text-align: center;
+}
+
+@media (max-width: 800px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detailsColumn {
+    overflow: visible;
+  }
+}

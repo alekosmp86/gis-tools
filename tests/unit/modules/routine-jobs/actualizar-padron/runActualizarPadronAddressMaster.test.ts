@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { buildReportSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reportSql";
+import { NO_REFERENCE_TABLES } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/replacementSql";
 import { buildMaxAddressMasterIdSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/revertCapture";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
 import { runActualizarPadron } from "@/modules/routine-jobs/jobs/actualizar-padron/services/runActualizarPadron";
@@ -14,6 +18,14 @@ import {
 } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSql";
 import { PADRON_SUBJECT_SPEC } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSpec";
 import type { WritableTargetLayout } from "@/modules/routine-jobs/jobs/shared/tableResolution";
+
+/* The plan file lives under os.tmpdir(): the default export is redirected to a fresh temp root per test. */
+const tempRoot = vi.hoisted(() => ({ directory: "" }));
+
+vi.mock("node:os", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:os")>();
+  return { ...actual, default: { ...actual, tmpdir: () => tempRoot.directory } };
+});
 
 vi.mock("@/modules/routine-jobs/jobs/actualizar-padron/services/resolveLayouts", () => ({
   resolvePadronLayouts: vi.fn(async () => LAYOUTS),
@@ -36,11 +48,13 @@ vi.mock("@/modules/routine-jobs/jobs/actualizar-padron/services/revertBackup", a
 }));
 
 const BEGIN_SQL = "BEGIN ISOLATION LEVEL REPEATABLE READ";
+const BEGIN_READ_ONLY_SQL = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY";
 const COMMIT_SQL = "COMMIT";
 const ROLLBACK_SQL = "ROLLBACK";
 const PASSWORD = "Actualizar-pw!7";
 const ADDRESS_MASTER_TABLE = "addresses_master";
 const CLASSIFIED_NEW = 2;
+const PLAN_ID_PATTERN = /^[0-9a-f]{32}$/;
 
 const identityOf = (columns: readonly string[]): Record<string, string> =>
   Object.fromEntries(columns.map((column) => [column, column]));
@@ -77,7 +91,7 @@ const LAYOUTS: PadronLayouts = {
   addressMaster: ADDRESS_MASTER,
 };
 
-const OPTIONS: ActualizarPadronOptions = { tolerance: 1, updateGeometries: true, linkAddressMaster: true };
+const OPTIONS: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: true, pairChoices: [] };
 
 const ADDRESS_LAYOUTS = { subject: TARGET, addressMaster: ADDRESS_MASTER };
 
@@ -151,6 +165,7 @@ function sessionOf(
   const answers = new Map<string, Array<Record<string, unknown>>>([
     [buildReportSql(LAYOUTS), [REPORT_ROW]],
     [buildPadronClassifySql(LAYOUTS, OPTIONS), [classificationRowOf()]],
+    [buildPadronClassifySql(LAYOUTS, OPTIONS, NO_REFERENCE_TABLES, { report: false }), [classificationRowOf()]],
     [buildPadronApplySql(LAYOUTS, OPTIONS), applyAnswer],
     [buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }), applyAnswer],
     [buildAddressMasterClassifySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC), [ADDRESS_CLASSIFICATION_ROW]],
@@ -182,22 +197,41 @@ const failureOf = async (work: Promise<unknown>): Promise<Error> => {
   return outcome as Error;
 };
 
-describe("runActualizarPadron address master pass dry run (AP-56)", () => {
-  it("should run the address master insert and update before ROLLBACK and never COMMIT when the run is a dry run", async () => {
+beforeEach(async () => {
+  tempRoot.directory = await mkdtemp(path.join(tmpdir(), "gis-actualizar-address-"));
+});
+
+afterEach(async () => {
+  await rm(tempRoot.directory, { recursive: true, force: true });
+});
+
+/** The analysis of the same parameters, run on its own session, so the real run that follows starts with a clean log. */
+async function analysisPlanIdOf(): Promise<string> {
+  const { session } = sessionOf({ created: 1, linked: 2, linked_list: [] });
+  const result = await runActualizarPadron(PARAMS_OF({ dryRun: true, confirm: false }), depsOf(session));
+  expect(result.planId).toMatch(PLAN_ID_PATTERN);
+  return result.planId as string;
+}
+
+describe("runActualizarPadron address master analysis (AP-56, AP-88)", () => {
+  it("should classify the address master links READ ONLY, never run the address master apply, and end with ROLLBACK when the run is a dry run", async () => {
     const { session, log } = sessionOf({ created: 1, linked: 2, linked_list: [] });
     const params = PARAMS_OF({ dryRun: true, confirm: false });
 
     const result = await runActualizarPadron(params, depsOf(session));
 
-    const applyIndex = log.indexOf(buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC));
-    const rollbackIndex = log.lastIndexOf(ROLLBACK_SQL);
-    expect(log.indexOf(BEGIN_SQL)).toBeLessThan(applyIndex);
-    expect(applyIndex).toBeGreaterThan(0);
-    expect(applyIndex).toBeLessThan(rollbackIndex);
+    const classifyIndex = log.indexOf(buildAddressMasterClassifySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC));
+    const beginIndex = log.indexOf(BEGIN_READ_ONLY_SQL);
+    expect(beginIndex).toBeGreaterThan(-1);
+    expect(beginIndex).toBeLessThan(classifyIndex);
+    expect(log).not.toContain(BEGIN_SQL);
+    expect(log).not.toContain(buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC));
+    expect(log).not.toContain(buildMaxAddressMasterIdSql(ADDRESS_MASTER));
     expect(log[log.length - 1]).toBe(ROLLBACK_SQL);
     expect(log).not.toContain(COMMIT_SQL);
     expect(result.targetModified).toBe(false);
     expect(result.addressMaster?.counts.linked).toBe(2);
+    expect(result.planId).toMatch(PLAN_ID_PATTERN);
   });
 });
 
@@ -214,9 +248,10 @@ describe("runActualizarPadron address master count check (AP-55)", () => {
       message: /Los padrones enlazados \(1\) no coinciden con los esperados \(2\)/,
     },
   ])("should ROLLBACK, never COMMIT, and throw when the address master $caseName count differs from the classification", async ({ applied, message }) => {
+    const planId = await analysisPlanIdOf();
     const { session, log } = sessionOf(applied);
 
-    const failure = await failureOf(runActualizarPadron(PARAMS_OF(), depsOf(session)));
+    const failure = await failureOf(runActualizarPadron(PARAMS_OF({ planId }), depsOf(session)));
 
     expect(failure.message).toMatch(message);
     expect(log[log.length - 1]).toBe(ROLLBACK_SQL);
@@ -226,9 +261,10 @@ describe("runActualizarPadron address master count check (AP-55)", () => {
 
 describe("runActualizarPadron revert backup fail closed on the max address master id (AP-70a, AP-68)", () => {
   it("should ROLLBACK, never COMMIT, and throw the backup message before the link pass when the max id cannot be read", async () => {
+    const planId = await analysisPlanIdOf();
     const { session, log } = sessionOf({ created: 1, linked: 2, linked_list: [] }, []);
 
-    const failure = await failureOf(runActualizarPadron(PARAMS_OF(), depsOf(session)));
+    const failure = await failureOf(runActualizarPadron(PARAMS_OF({ planId }), depsOf(session)));
 
     expect(failure.message).toMatch(/No se pudo generar el respaldo para revertir: No se pudo leer el máximo id/);
     expect(log).not.toContain(buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC));

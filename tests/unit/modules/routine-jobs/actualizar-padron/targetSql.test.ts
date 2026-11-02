@@ -49,8 +49,8 @@ const layouts: PadronLayouts = {
   locality: tableOf("carto", "cadastral_locality", Object.values(LOCALITY_COLUMN)),
 };
 
-const withUpdates: ActualizarPadronOptions = { tolerance: 1, updateGeometries: true, linkAddressMaster: false };
-const withoutUpdates: ActualizarPadronOptions = { tolerance: 1, updateGeometries: false, linkAddressMaster: false };
+const withUpdates: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: false, pairChoices: [] };
+const withoutUpdates: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: false, linkAddressMaster: false, pairChoices: [] };
 
 const insertColumnsOf = (sql: string): string[] => {
   const match = /INSERT INTO\s+"carto"\."padron"\s*\(([^)]*)\)/i.exec(sql);

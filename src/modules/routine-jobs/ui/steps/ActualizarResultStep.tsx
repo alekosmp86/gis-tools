@@ -4,27 +4,42 @@ import React from "react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import { ActualizarPadronReport } from "../ActualizarPadronReport";
+import type { GeometryMapBase } from "../clientTypes";
+import type { PairChoiceSelection } from "../PairChoiceGroups";
+import type { GeometryAcceptSelection, RemovalMarkSelection } from "../reviewDecisions";
 import type { ActualizarPadronRunSnapshot } from "../actualizarPadronRunStore";
+import { persistSummaryOf } from "../actualizarPersistSummary";
 import { RunPhase } from "../jobRunStore";
+import { ActualizarPersistPanel, type ActualizarPersistState } from "./ActualizarPersistPanel";
 import { RunProgressStatus, RunResultActions } from "./RunResultParts";
 import { RunStepChecklist } from "./RunStepChecklist";
 import styles from "./WizardSteps.module.css";
 
-const IDLE_HINT = "Todavía no hay una actualización. Complete los pasos anteriores y pulse Analizar sin cargar o Actualizar padrones.";
+const IDLE_HINT = "Todavía no hay una actualización. Complete los pasos anteriores y pulse Analizar.";
 const NO_REPORT_MESSAGE = "La actualización terminó, pero el servidor no envió el informe.";
 const FAILED_FALLBACK = "La actualización terminó con un error.";
 const UNKNOWN_TITLE = "No se pudo confirmar el resultado de la actualización.";
 const UNKNOWN_ADVICE = "Hay que verificar la tabla de destino antes de volver a actualizar.";
+const RETRY_ANALYSIS_LABEL = "Volver a analizar";
 
 export interface ActualizarResultStepProps {
   snapshot: ActualizarPadronRunSnapshot;
   nowMs: number;
+  pairChoices: PairChoiceSelection;
+  geometryAccepts: GeometryAcceptSelection;
+  removalMarks: RemovalMarkSelection;
+  mapBase: GeometryMapBase | null;
+  persist: ActualizarPersistState;
   onNewRun: () => void;
   onBackToReview: () => void;
 }
 
 const textOr = (value: string | undefined, fallback: string): string =>
   value !== undefined && value.trim() !== "" ? value : fallback;
+
+/** A refused persist (missing, expired or changed plan) is answered by a new analysis, not by a review of the same plan. */
+const backLabelOf = (snapshot: ActualizarPadronRunSnapshot): string | undefined =>
+  snapshot.phase === RunPhase.FAILED && snapshot.plan?.dryRun === false ? RETRY_ANALYSIS_LABEL : undefined;
 
 function OutcomeChecklist({ snapshot }: { snapshot: ActualizarPadronRunSnapshot }) {
   return (
@@ -37,10 +52,18 @@ function OutcomeChecklist({ snapshot }: { snapshot: ActualizarPadronRunSnapshot 
   );
 }
 
-function DoneBody({ snapshot }: { snapshot: ActualizarPadronRunSnapshot }) {
+function PersistSection({ snapshot, persist }: { snapshot: ActualizarPadronRunSnapshot; persist: ActualizarPersistState }) {
+  const result = snapshot.job?.result;
+  if (result === undefined || !result.dryRun) return null;
+  return <ActualizarPersistPanel summary={persistSummaryOf(result.target)} {...persist} />;
+}
+
+type DoneBodyProps = Pick<ActualizarResultStepProps, "snapshot" | "pairChoices" | "geometryAccepts" | "removalMarks" | "mapBase">;
+
+function DoneBody({ snapshot, ...decisions }: DoneBodyProps) {
   const result = snapshot.job?.result;
   return result ? (
-    <ActualizarPadronReport result={result} />
+    <ActualizarPadronReport result={result} {...decisions} />
   ) : (
     <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />
   );
@@ -65,8 +88,20 @@ function FailedBody({ snapshot }: { snapshot: ActualizarPadronRunSnapshot }) {
   );
 }
 
-export const ActualizarResultStep: React.FC<ActualizarResultStepProps> = ({ snapshot, nowMs, onNewRun, onBackToReview }) => {
-  const actions = <RunResultActions onNewRun={onNewRun} onBackToReview={onBackToReview} />;
+export const ActualizarResultStep: React.FC<ActualizarResultStepProps> = ({
+  snapshot,
+  nowMs,
+  pairChoices,
+  geometryAccepts,
+  removalMarks,
+  mapBase,
+  persist,
+  onNewRun,
+  onBackToReview,
+}) => {
+  const actions = (
+    <RunResultActions onNewRun={onNewRun} onBackToReview={onBackToReview} backLabel={backLabelOf(snapshot)} />
+  );
   switch (snapshot.phase) {
     case RunPhase.IDLE:
       return <p className={styles.hint}>{IDLE_HINT}</p>;
@@ -85,7 +120,14 @@ export const ActualizarResultStep: React.FC<ActualizarResultStepProps> = ({ snap
     case RunPhase.DONE:
       return (
         <div className={styles.stack}>
-          <DoneBody snapshot={snapshot} />
+          <PersistSection snapshot={snapshot} persist={persist} />
+          <DoneBody
+            snapshot={snapshot}
+            pairChoices={pairChoices}
+            geometryAccepts={geometryAccepts}
+            removalMarks={removalMarks}
+            mapBase={mapBase}
+          />
           {actions}
         </div>
       );

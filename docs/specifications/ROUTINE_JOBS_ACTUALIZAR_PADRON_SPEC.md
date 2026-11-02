@@ -17,7 +17,7 @@ criteria added by the in-place design are `AP-37` and up.
   - nothing else is written. Nothing is deleted, truncated, re-inserted or renumbered. Destination rows that the staging table no longer
     carries are counted and listed, never touched.
 - The destination can be a scratch table (for example `carto.padron_tmp_actualizacion`) or `carto.padron` itself. Both are safe because the
-  stage never removes or renumbers rows. Applying to `carto.padron` is the user's decision after the dry run.
+  stage never removes or renumbers rows. Applying to `carto.padron` is the user's decision after the analysis.
 - Dev finding (first real dry run): the locality table the user selects is `carto.territorial_unit` (`padron.id_cadastral_locality` points at
   it), which holds 8 unit types. 337 of 496 `LOCALIDAD CATASTRAL` names are shared with another unit type in the same province, so name-only
   resolution made 914,709 urban rows `LOCALIDAD_AMBIGUA`. The optional unit-type table and the locality type filter (AP-2b, AP-7b, AP-10,
@@ -138,50 +138,61 @@ The wizard and the request carry two schema fields:
 
 ## Run control
 
-- AP-15: After the apply, the job runs `ANALYZE` on the destination, inside the transaction, in both modes. Its failure rolls back the run.
-- AP-16: Result report (built after the ANALYZE, returned in the job result):
+- AP-15: A real run runs `ANALYZE` on the destination after the apply, inside the transaction. Its failure rolls back the run. An analysis
+  runs no `ANALYZE` (AP-88).
+- AP-16: Result report (built after the ANALYZE in a real run, and from the classification in an analysis, AP-88; returned in the job result):
   - totals: staging rows read, candidates (accepted rows), rows repaired (AP-12), rows skipped;
   - skipped rows by reason (`skipped.byReason`: all seven reasons, zero counts included);
   - skipped rows by department name and by locality name, top 20 by count each;
   - `skipped.byLocalityAndReason`: groups by (department, locality, reason), restricted to the two locality reasons and capped at 20 per
     reason (PG11 compatible; no global LIMIT). It feeds the UI lists of localities not found and ambiguous (AP-32b);
   - up to 20 sample skipped rows, and up to 20 colliding keys (AP-13);
-  - the target report of AP-37 to AP-45 (inserted rows, geometry changes, missing and ambiguous samples, counts);
+  - the target report of AP-37 to AP-45 (inserted rows, geometry changes, missing and ambiguous samples, counts); in an analysis the
+    inserted, updated and paired counts are the planned ones and the inserted list is empty (AP-88);
   - step timings: elapsed ms per step, labelled as the planned steps of AP-23;
-  - warnings in Spanish (AP-40 to AP-45, skipped rows, repaired geometries, colliding keys, dry run, outcome unknown).
-- AP-17: `dryRun` performs the whole stage, then `ROLLBACK`. The report carries `targetModified: false`. A real run performs the same, then
-  `COMMIT`; `targetModified: true` is reported only when the commit succeeded. The rollback undoes the rows only: `nextval` (the inserts)
-  and `setval` (AP-47) are not transactional, so a dry run leaves the destination id sequence advanced and the ids of the next real run
-  show gaps (as UT-23 (a) of the monthly spec, for the units).
-- AP-18: A real run needs `confirm: true` and the password again. It also needs the destination table name typed again in the wizard (AP-31).
+  - warnings in Spanish (AP-40 to AP-45, skipped rows, repaired geometries, colliding keys, analysis (read-only), outcome unknown).
+- AP-17: `dryRun` is the read-only analysis of AP-88: it runs the classification in a `READ ONLY` transaction and writes nothing, so it
+  never advances the destination id sequence. The report carries `targetModified: false` and a `planId` (AP-89). A real run performs the
+  whole stage, then `COMMIT`; `targetModified: true` is reported only when the commit succeeded. The ids of a real run can still show gaps,
+  because `nextval` (the inserts) and `setval` (AP-47) are not transactional and a rolled-back real run keeps its ids spent (as UT-23 (a)
+  of the monthly spec, for the units).
+- AP-18: A real run needs `confirm: true` and the password. In the wizard the password stays filled from the analysis (the dry run keeps it so
+  "Volver a analizar con la selección" works), and the destination table name must be typed again (AP-31). The persist is refused with the
+  message naming what is missing: the table name when the password is filled, the password when only it is missing, both when neither is.
+  A real run also needs a usable plan from an analysis of the same parameters (AP-89, AP-90).
   The per-target lock is keyed on the destination: `host:port|db|cartoSchema|targetTable` (host trimmed and lowercased, port normalised, as in
   AC-24 of Cargar padrones). A second run on the same destination answers `409`.
 - AP-19: Any failure before `COMMIT` rolls back: the destination is left as it was before the run. A `COMMIT` that throws gives
   `outcomeUnknown: true`; the UI asks the user to verify the destination table before retrying (as AC-21 of Cargar padrones).
 - AP-20: The job runs in the background. `POST actualizar-padron/start` body = `{ connection, stagingSchema, stagingTable, cartoSchema,
-  targetTable, provinceTable, localityTable, typeTable?, options: { tolerance, updateGeometries, localityType? }, dryRun, confirm }`.
+  targetTable, provinceTable, localityTable, typeTable?, options: { tolerance, updateGeometries, localityType?, pairChoices? }, dryRun, confirm,
+  planId? }`. A real run (`dryRun: false`) also sends the `planId` of its analysis (AP-89).
   `stagingSchema` covers the staging table; `cartoSchema` covers the destination, province, locality and type tables. `typeTable` is optional
   (omitted or empty = no type table). `options.localityType` applies only when `typeTable` is present: an absent value defaults to
   `LOCALIDAD CATASTRAL`, a present blank value is refused with `400`, and a non-blank one is trimmed. `options.tolerance` is a number greater
-  than or equal to 0 (`400` otherwise, AP-40). `options.updateGeometries` is a boolean. Answers `200 { success, jobId }` at once. Errors: `400`
+  than or equal to 0 (`400` otherwise, AP-40). `options.updateGeometries` is a boolean and `options.geometryAreaThreshold` a number from 0 to 1 (absent means 0.05, AP-92). Answers `200 { success, jobId }` at once. Errors: `400`
   for an invalid body, repeated tables (AP-3), an unknown or ambiguous type (AP-7b), a blank `localityType` with a type table, a missing
-  `confirm` on a real run; `409` with `Ya hay una actualización en curso para esta tabla.` when a job is running for the same destination.
+  `confirm` on a real run, and a real run whose `planId` is missing or not a plan id (AP-90, `400`); `409` with `Ya hay una actualización en
+  curso para esta tabla.` when a job is running for the same destination. A plan that is unknown, expired or for other parameters is refused
+  by the job itself (AP-90): the job is FAILED with the Spanish message and nothing is written.
 - AP-21: `GET actualizar-padron/status?jobId=...` -> `200 { success, job }` with the fields of AC-25 of Cargar padrones (`jobId`, `state`,
   `step`, `current`, `total`, `dryRun`, `startedAt`, `finishedAt`, `result?`, `error?`, `outcomeUnknown?`). `400` without `jobId`, `404` for
   an unknown id. A `result` with `outcomeUnknown` is DONE with that flag.
 - AP-22: `runActualizarPadron` takes injected dependencies (session, clock) and calls `onProgress({ label, current, total })` once per step, in
   order, 1-based. A throwing `onProgress` never fails the run. The planned steps come from the pure function `plannedStepLabels({ dryRun })`, so
-  the UI checklist shows them before the run starts. A dry run has no COMMIT step; a real run has it.
-- AP-23: Planned steps (labels in Spanish): validar tablas y columnas (includes the type check of AP-7b), validar tabla de destino (structure,
-  privileges, sequence), contar filas de staging, resolver provincias y localidades (candidates and the skip report), clasificar padrones,
-  ajustar secuencias de destino, aplicar cambios de padrones, analizar tabla de destino, generar informe, then generar respaldo para revertir
-  and confirmar cambios (real run), or revertir cambios de la simulación (dry run). The backup step exists only in a real run (AP-68).
+  the UI checklist shows them before the run starts. An analysis has no sequence, apply, ANALYZE, backup, COMMIT or rollback step (AP-23).
+- AP-23: Planned steps (labels in Spanish). A real run: validar tablas y columnas (includes the type check of AP-7b), validar tabla de
+  destino (structure, privileges, sequence), contar filas de staging, resolver provincias y localidades (candidates and the skip report),
+  clasificar padrones, ajustar secuencias de destino, aplicar cambios de padrones, analizar tabla de destino, generar informe, generar
+  respaldo para revertir and confirmar cambios. An analysis (AP-88): the same validation, count, resolve and classify steps, then
+  clasificar padrones sin dirección maestra (only with the link option) and generar informe. The backup step exists only in a real run (AP-68).
 - AP-24: Session: the real session reuses the settings of shp-replace (`statement_timeout`, `lock_timeout`, `client_encoding = 'UTF8'`,
   memory settings) as in AC-28 of Cargar padrones. `connect` errors are scrubbed of the password; `close()` never throws. The password never
   appears in logs, statuses, results or error messages.
 - AP-25: Sample and payload caps hold for every report field, so the status payload stays bounded whatever the table size: samples (skipped,
   missing, ambiguous) and colliding keys at `SAMPLE_LIMIT` (20); skipped groups at 20; locality-and-reason groups at 20 per reason; the
-  inserted list and the geometry change list at `DETAIL_LIST_LIMIT` (500).
+  inserted list, the geometry change list and the missing padrón review list (AP-96) at `DETAIL_LIST_LIMIT` (500). No uncapped list is in any
+  payload: the full pending geometry list lives in the plan record and is served by AP-95.
 - AP-26: The job store is the shared helper of the module (AC-26 of Cargar padrones): namespace `actualizar-padron`, `tryStart` per destination
   key, `progress`, `finish`, `fail`, `get`, `sweep`. The lock is always released; a background throw marks the job FAILED.
 
@@ -197,10 +208,9 @@ The wizard and the request carry two schema fields:
   - `CHANGED`: one destination row, Hausdorff distance > tolerance;
   - `MISSING` (destination rows only): the key has no candidate.
 - AP-39: The geometry comparison is cheap first: an equality test on the snapped and normalised geometries; the Hausdorff distance is computed
-  only for candidates whose geometries differ and whose destination row exists. The area ratio (symmetric difference over union) is computed
-  for every `CHANGED` row, so that the geometry change list can be ranked by it; the list keeps the top `DETAIL_LIST_LIMIT` rows ordered by
-  area ratio descending (nulls first), then Hausdorff distance descending, then type, province, locality and padrón. The report and the
-  section's table show the area ratio before the distance.
+  only for candidates whose geometries differ and whose destination row exists, and it only decides `CHANGED` against the tolerance. The area
+  ratio (symmetric difference over union, `areaRatioOf`) is computed once for every `CHANGED` row (AP-92) and ranks the geometry change list
+  (AP-94): pending first, then the ratio descending (nulls first), then department, locality and padrón.
 - AP-40: Tolerance option `Tolerancia (m)`: a number greater than or equal to 0, default 1.0, in metres. The request validates it as stage 3
   does (`readTolerance`). The wizard blocks Siguiente on an invalid value.
 - AP-41: `MISSING` rows are only counted and sampled (up to 20, ordered by province and number). They are never deleted, updated or renumbered.
@@ -212,15 +222,17 @@ The wizard and the request carry two schema fields:
   the destination sequence (its `nextval` default). The insert order is deterministic (`id_province`, `number`, `type_padron`,
   `id_cadastral_locality`). `id_address_master` stays NULL.
 - AP-43: `UNCHANGED` and `WITHIN_TOLERANCE` candidates: nothing is written.
-- AP-44: `CHANGED` candidates: an UPDATE of the `geometry` column only, and only when `Actualizar geometrías` is on. When it is off, the changes
-  are counted and listed as detected, not applied (`Geometría detectada (no aplicada)`).
+- AP-44: `CHANGED` candidates: an UPDATE of the `geometry` column only, when `Actualizar geometrías` is on and the area ratio is below the
+  threshold (AP-92). Any other `CHANGED` candidate is pending: not written, counted and listed with state `PENDING`. When `Actualizar
+  geometrías` is off, every `CHANGED` candidate is pending (`Geometría detectada (no aplicada)`).
 - AP-45: `AMBIGUOUS` candidates: untouched and reported (count and up to 20 samples). The stage never guesses which destination row is right.
 - AP-46: The only writes of the stage are the INSERT of AP-42, the UPDATE of AP-44 and the pair UPDATE of AP-65. No statement writes `id`, `id_address_master` or any
   other column, and the stage issues no DELETE and no TRUNCATE (a unit test greps the stage's SQL for both).
-- AP-47: The sequence repair (`Ajustar secuencias de destino`) runs after the classification and before the insert, in the same transaction:
+- AP-47: A real run's sequence repair (`Ajustar secuencias de destino`) runs after the classification and before the insert, in the same
+  transaction (an analysis never repairs a sequence, AP-88):
   `setval` to the maximum id plus one, or to the current sequence position when that is higher. Its privilege is checked by AP-5.
 - AP-48: Count checks roll back the whole transaction on mismatch, with a Spanish error: inserted rows equal the `NEW` count; updated rows equal
-  the `CHANGED` count when `Actualizar geometrías` is on (zero otherwise); paired rows (AP-65) equal the applied pairs (AP-67).
+  the applied geometry updates (AP-92; zero when `Actualizar geometrías` is off); paired rows (AP-65) equal the applied pairs (AP-67).
 
 ## Reclassified and renumbered padrones (pairs)
 
@@ -228,38 +240,160 @@ The wizard and the request carry two schema fields:
   rows). The bounding-box probe on the destination geometry index reads every destination row whose box meets a candidate, matched or not;
   the footprint is evaluated only on the unmatched rows. Both sides must have the same `id_province`, overlapping bounding boxes and valid
   destination and candidate geometries, and the footprint must meet the STRICT or the LOOSE tier of AP-84 (98 % or 85 % overlap of the
-  destination area, area within 2 % or 10 %). A destination row whose key a skipped staging row
-  still carries is not paired (it stays listed as missing, AP-41). The Hausdorff distance is measured for the pairs only and is informational: the
-  tolerance does not gate a pair, so a pair with a distance above tolerance is applied too. Status: `APPLIED` when each side occurs in exactly one
-  pair; `NOT_APPLIED_AMBIGUOUS` when either side occurs in more than one pair.
+  destination area, area within 2 % or 10 %). A destination row whose key a skipped staging row still carries is not paired (it stays listed as
+  missing, AP-41). The Hausdorff distance is not measured for pairs, and the tolerance does not gate a pair. Status: `APPLIED` when each side
+  occurs in exactly one pair and the pair is STRICT or is chosen by the user (AP-86, AP-93); `NOT_APPLIED_PENDING` when the pair is LOOSE and not
+  chosen (AP-93); `NOT_APPLIED_AMBIGUOUS` when either side occurs in more than one pair, whatever the tier.
 - AP-65: Applied pairs are written in place: one UPDATE of the destination row sets `type_padron`, `id_cadastral_locality` and `number` to the
   new key, and `geometry` to the candidate geometry only when `Actualizar geometrías` is on. The statement never sets `id`, `id_address_master`
   or `id_province`, and it issues no DELETE or TRUNCATE. The row keeps its id and its address master link. The number may change only in an
-  applied pair, of either tier (AP-84; the user confirmed the strict tier for MJ-13). The new row of an applied pair is not inserted (AP-42) and its old row is not
-  missing (AP-41).
-- AP-66: `NOT_APPLIED_AMBIGUOUS` pairs change nothing: the new row is inserted (AP-42) and the old row is listed as
+  applied pair (STRICT, or LOOSE when chosen, AP-93). The new row of an applied pair is not inserted (AP-42) and its old row is not missing (AP-41).
+- AP-66: `NOT_APPLIED_AMBIGUOUS` and `NOT_APPLIED_PENDING` pairs change nothing: the new row is inserted (AP-42) and the old row is listed as
   missing (AP-41). They are reported (AP-67) and warned about in Spanish.
 - AP-67: Reporting and verification. The target report lists every pair, applied or not, up to `PAIR_LIST_LIMIT` (5000), ordered by department,
-  locality and padrón, with the old and the new key, the changed parts (type, locality, number), the distance (informational) and the status. The report
-  section is "Padrones reclasificados o renumerados". The change CSV (AP-49) gets one `Clave actualizada` row per applied pair, with the new key
-  in the usual columns and the old `Tipo anterior`, `Localidad anterior` and `Padrón anterior` in the three appended columns (empty elsewhere).
-  The inconsistencies CSV (AP-61) gets one row per not-applied new padrón (`Posible par no aplicado (ambiguo)`); a new
-  row that matched several destination rows is listed once, and the `pairs_not_applied` count is the number of such new rows. The count check
-  of AP-48 compares the paired rows with the applied pairs. Verification: a second run of the same stage on the same data inserts and updates
-  nothing.
+  locality and padrón, with the old and the new key, the changed parts (type, locality, number), the overlap and the area ratio (AP-86), the
+  location fields of AP-94, and the status label: `Aplicado`, `No aplicado: ambiguo` or `Pendiente: coincidencia parcial`. The report section is
+  "Padrones reclasificados o renumerados". The change CSV (AP-49) gets one `Clave actualizada` row per applied pair, with the new key in the usual
+  columns and the old `Tipo anterior`, `Localidad anterior` and `Padrón anterior` in the three appended columns (empty elsewhere). The
+  inconsistencies CSV (AP-61) gets one row per not-applied new padrón (`Posible par no aplicado (ambiguo)` or `Posible par pendiente (coincidencia
+  parcial)`); a new row that matched several destination rows is listed once. Its total is `pairs_not_applied` (ambiguous new rows) plus
+  `pairs_pending`. The count check of AP-48 compares the paired rows with the applied pairs. Verification: a second run of the same stage on the
+  same data inserts and updates nothing.
 - AP-84: Tiers. Each pair candidate carries a `tier`: `STRICT` when the overlap is at least 98 % (`PAIR_OVERLAP_MIN` 0.98) and the area is
   within 2 % (`PAIR_AREA_RATIO_TOLERANCE` 0.02, `0.98 x` to `1.02 x`); otherwise `LOOSE` when the overlap is at least 85 %
   (`PAIR_LOOSE_OVERLAP_MIN` 0.85) and the area is within 10 % (`PAIR_LOOSE_AREA_RATIO_TOLERANCE` 0.10, `0.90 x` to `1.10 x`). A candidate
   that meets STRICT is tagged STRICT even when it also meets LOOSE; a candidate that meets neither is not a candidate. The intersection area is
   computed once per candidate, and only for valid geometries (the CASE guard of AP-64). The one-to-one count of AP-64 runs over the candidates of
-  both tiers, so an ambiguity blocks both. `LOOSE` pairs are `APPLIED` for now, like `STRICT` ones; a later phase will gate them behind review.
-  The classify result carries `pairs_loose` (applied pairs with tier `LOOSE`), and every element of `pairs_list` carries `tier`. The writes
-  of AP-65 do not change: a pair UPDATE sets only `type_padron`, `id_cadastral_locality`, `number` and, when `Actualizar geometrías` is on,
-  `geometry`.
-- AP-85: Tier report. The pair table has a `Coincidencia` column: `Estricta` or `Parcial (coincidencia parcial)`. When `pairsLoose` is
-  greater than zero, the warnings carry the Spanish line "N padrones se actualizan por coincidencia parcial (superposición 85-98%); revisarlos
-  en el listado de pares." (singular: "1 padrón se actualiza ...; revisarlo ..."). The change CSV (AP-49) keeps its columns; the row of an applied
-  `LOOSE` pair has the `Cambio` value `Clave actualizada (coincidencia parcial)`, and a `STRICT` pair keeps `Clave actualizada`.
+  both tiers, so an ambiguity blocks both. A `LOOSE` pair is applied only when the user chooses it (AP-93). The classify result carries
+  `pairs_loose` (applied pairs with tier `LOOSE`), and every element of `pairs_list` carries `tier`. The writes of AP-65 do not change: a pair
+  UPDATE sets only `type_padron`, `id_cadastral_locality`, `number` and, when `Actualizar geometrías` is on, `geometry`.
+- AP-85: Tier report. The pair table has a `Coincidencia` column: `Estricta` or `Parcial (coincidencia parcial)`, and its `Estado` column shows
+  `Pendiente: coincidencia parcial` for a pending LOOSE pair. When `pairsLoose` (applied LOOSE pairs, all chosen) is greater than zero, the
+  warnings carry the Spanish line "N padrones se actualizan por coincidencia parcial (superposición 85-98%); revisarlos en el listado de pares."
+  (singular: "1 padrón se actualiza ...; revisarlo ..."). When `pairsPending` is greater than zero, the warnings carry "N posibles pares de
+  coincidencia parcial están pendientes: se insertan como nuevos y la fila antigua se lista como faltante." (singular: "1 posible par de
+  coincidencia parcial está pendiente ..."). The change CSV (AP-49) keeps its columns; the row of an applied `LOOSE` pair has the `Cambio` value
+  `Clave actualizada (coincidencia parcial)`, and a `STRICT` pair keeps `Clave actualizada`.
+- AP-86: User choices for ambiguous groups. The start request takes `options.pairChoices`, a list of `PairChoice` objects (absent means
+  `[]`). Each choice holds the new row key as in a `pairs_list` element (`typePadron`, `provinceId`, `localityId` or null, `number`) and
+  `oldId`, the destination id chosen for that key, or null (no pair: insert as new). Deny by default for ambiguous groups: without a choice
+  an ambiguous group pairs nothing (AP-66). A key with no choice and a single STRICT candidate pairs as AP-64 says; a single LOOSE candidate stays pending (AP-93). Pruning:
+  before the one-to-one count of AP-64, a pair candidate is
+  dropped when its new key has a choice whose `oldId` differs from the candidate's old id (a null choice drops every candidate of that
+  key), or when its old id is chosen for a different new key. The surviving candidates are counted and tiered as usual, so a unique
+  survivor is `APPLIED` when it is STRICT or chosen (AP-93). The writes of AP-65 do not change.
+  Validation, as an invalid request naming `pairChoices` in Spanish: not a list (null included); an entry that is not an object, or whose
+  `provinceId` or `localityId` or `oldId` is not an integer within the int4 range, -2147483648 to 2147483647 (`localityId` and `oldId` may
+  be null), or whose `typePadron` is not `RURAL` or `URBANO` (the only unit types the stage classifies: any other value is `CLAVE_NULA`, so
+  a choice with another value could never match), or whose `number` is not filled text (its digit form is not validated: the stage builds
+  `number` as `trunc(padron)::text`, which can carry a sign or an exponent); two choices for the same new key; the same non-null `oldId`
+  chosen for two new keys (two null choices are accepted); more than `PAIR_LIST_LIMIT` (5000) entries. The list is rejected, never truncated.
+  The classify result carries `choices_unapplied`: the number of choices with a non-null `oldId` that did not end as an `APPLIED` pair. It
+  maps to `choicesUnapplied` in the target report and, when greater than zero, the warning "N elecciones de par no se aplicaron (el padrón
+  elegido ya no es candidato o sigue siendo ambiguo)." (singular: "1 elección de par no se aplicó ..."). A null choice is never counted.
+  Every `pairs_list` element carries `overlap` (intersection area over the old area) and `areaRatio` (new area over the old area) as
+  numbers, or null when the old area is zero. They are mapped to `PadronPair` and to the report view as data only; no column shows them yet.
+  The control that sends the choices is AP-87.
+- AP-87: Choice control. The dry-run report (stage 4, target section) lists the `NOT_APPLIED_AMBIGUOUS` pairs grouped by new key
+  (`typePadron`, `provinceId`, `localityId`, `number`) in the section "Grupos ambiguos", in report order. Each group card shows the new
+  padrón (department, locality, number, type) and its candidates as a radio list, one per pair: the old id, the old key (type, locality,
+  number), the tier (`Estricta` or `Parcial`), the overlap in percent and the area ratio; a last option "No emparejar (insertar como
+  nuevo)" chooses a null `oldId`. No option is selected by default: a group without a choice pairs nothing (AP-86). A candidate whose old
+  id is chosen for another group is disabled, so the request never repeats an old id. The choices live in the wizard state
+  (`pairChoices`), are kept across "Volver a Revisar", are sent in `options.pairChoices` by the dry run and the real run (only the groups
+  with a choice; absent when there is none), and are cleared when the connection (except the password), a schema, a table, or an option
+  changes, and by "Nueva carga". The dry-run result shows "N de M grupos con elección" (groups with a choice of the groups listed) and
+  the button "Volver a analizar con la selección", which starts an analysis with the current choices; it is enabled only when an analysis
+  can start (the password typed on the review). A group the re-run resolves (its pair is applied) leaves the list; its pair stays in the
+  pairs table as `Aplicado`.
+  Cascade: a choice also removes its old padrón from the candidates of the other groups (AP-86 pruning), so it can resolve them; the
+  re-analysis shows it. The persist (AP-91) is blocked with "Analice de nuevo con la selección de pares actual antes de persistir." unless
+  the choices (same set of key and old id, order-insensitive) equal those of the last analysis that completed, including when every choice
+  was cleared after an analysis that had choices (the server would refuse the plan). The wizard state keeps that set as `simulatedChoices`;
+  an analysis that failed or is still running does not count. The review shows "N elecciones de par incluidas" when there are choices.
+  Unapplied: a choice is unapplied when its own submitted version (the choices sent with the shown run, kept in the run plan) has a
+  non-null `oldId` and no `APPLIED` pair of that run has the same new key and the same `oldId`. A group card carries the badge
+  "Elección no aplicada" only when its own submitted choice is unapplied, not when it was picked after the run.
+  Choices list: the results list under "Elecciones de par" every current choice whose group card is not on screen (applied pair, "No
+  emparejar", or group gone) and every unapplied choice, each with the new padrón key, the chosen old id or "No emparejar", and a status
+  label: "Aplicada", "No aplicada" or "Sin emparejar". Dry-run results add "Quitar elección" to each row; removing one lets the user
+  re-simulate without it. A remount of a completed dry run seeds the choices from the run plan, so the list and the guard match the
+  shown run. The backend warning (`choicesUnapplied`) is not repeated in the UI. A real-run result shows the same groups and rows
+  read-only, with the submitted choices: the radios are disabled, there is no count, no re-run button and no "Quitar elección".
+
+## Analysis plan (read-only analysis, guarded load)
+
+- AP-88: Read-only analysis. `dryRun: true` runs the same preflight checks, then the classification (`buildPadronClassifySql`) inside a
+  `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` transaction. It runs no sequence repair, no apply, no revert table, no revert backup, no
+  `ANALYZE` and no address master write: the link option is classified only. The report is built from the classification: the inserted,
+  updated and paired counts are the planned `new`, `updates` and `pairs`; the inserted list is empty (the ids exist only after an insert)
+  and is omitted; the address master counts are the planned ones, and a warning says that the links of the new padrones are computed when
+  the load is saved. The result carries `targetModified: false` and the `planId` of AP-89. The read-only transaction is a second line: the
+  database rejects any write inside it.
+- AP-89: Plan record. A successful analysis writes a plan file to `<os.tmpdir()>/gis-tools-routine-jobs/plans/<planId>.json`, in the same private
+  folder as the revert backups (a folder that is a link or belongs to another user is refused; the file is created with mode 0600). The
+  `planId` is 128 random bits as 32 lowercase hex characters. The record holds `planId`, `createdAt`, `expiresAt` (three days after
+  `createdAt`), `paramsFingerprint`, `dataFingerprint`, `expected` and `pendingGeometryChanges` (the uncapped pending list that feeds the
+  pending CSV, AP-95; it is not part of any fingerprint), and never the password. `paramsFingerprint` is the SHA-256 of the
+  canonical request parameters that define the result: host (trimmed, lowercased), port, database, user, staging and carto schemas, the
+  table names, the locality type, the tolerance, the geometry area threshold, `updateGeometries`, `linkAddressMaster`, `pairChoices` sorted and `acceptedGeometries` sorted (AP-100); the password and the
+  confirmation flags are not part of it. `dataFingerprint` is read by the classify statement: the destination row count, its maximum id, the
+  staging candidate count, and `digest`, an md5 over the sorted entries of the planned writes: `N|` for each NEW key, `P|` for each applied
+  pair (new key and old id) and `C|` for each applied geometry update (with its target id, AP-92); each entry carries the md5 of its candidate geometry. `expected`
+  holds the inserted, updates and pairs counts. `pendingGeometryChanges` holds the full list of pending geometry changes (AP-92) for the CSV of AP-95;
+  it is not part of `dataFingerprint`, `paramsFingerprint` or the digest, and it never reaches a payload. Plan files older than three days are removed
+  when a new plan is written.
+- AP-90: Persist guard. A real run (`dryRun: false`) requires a `planId` in the request: a missing or non-text value answers `400` with the
+  Spanish message that asks to analyse first, and a value that is not in the plan id format answers `400` as an unknown plan. Before any
+  connection is opened, the run refuses (the job is FAILED with the Spanish message, nothing is written) when the plan is unknown, expired
+  (`El plan del análisis caducó: vuelva a analizar.`) or its `paramsFingerprint` differs from the request's. Inside the write transaction the
+  classification is read again before any write, and before the sequence repair: when its data fingerprint or its expected counts differ
+  from the plan, the run aborts with `El plan cambió desde el análisis; vuelva a analizar.` and writes nothing. When they are equal, the stage
+  runs as AP-42 to AP-48. A plan is single use: it is deleted once its real run has committed (`targetModified: true`); a run that fails
+  keeps it, and the digest check refuses it after any committed change.
+
+- AP-91: Wizard flow of the analysis and the persist (UI). The review step (AP-31) has one primary button, `Analizar` (`dryRun: true`), and the
+  password that connecting needs. It has no real-run button and no typed table name: the only field is the password that connecting needs. On the result of a completed
+  analysis (a DONE job with `dryRun: true`) the top of the screen is the panel `Persistir cambios revisados`: a one-line summary built from
+  the planned counts of the report, `Se aplicarán: N padrones nuevos, M pares actualizados, K geometrías actualizadas.` (`target.inserted`,
+  `target.pairsApplied`, `target.updated`), the password (still filled from the analysis, AP-18) and the destination table name typed again (the validation of AP-18), and the
+  button `Persistir cambios revisados` with the Database icon. The button is disabled, and the reason is shown, when the result carries no
+  `planId` (the plan of AP-89), when the confirmation is incomplete, or when the pair choices (AP-86) or the accepted geometries (AP-100) differ
+  from those of the last completed analysis (guard `simulationBlockingReason`). A click sends the real run through the existing start flow: `dryRun: false`, `confirm: true`, the
+  same tables, options and pair choices as the analysis, and the `planId` of the analysis result. The panel is never shown on a real-run result
+  nor while a run is active. After a persist the result and the automatic backup download follow AP-77 to AP-82 unchanged. When the server
+  refuses the persist (missing, expired or changed plan, AP-90) the failed result shows the server's Spanish message and the action
+  `Volver a analizar`, which returns to the review step. The button `Volver a analizar con la selección` (AP-87) re-runs the analysis on the
+  result screen; the review's `Volver a Revisar` is unchanged.
+
+- AP-92: Geometry gate. `options.geometryAreaThreshold` (a number from 0 to 1, default 0.05; the wizard sends the `Umbral de cambio de área
+  para aplicar (%)` of AP-30 divided by 100) decides which `CHANGED` rows are written. A request value that is not a number from 0 to 1 answers
+  `400`. The area ratio of AP-39 is computed once per `CHANGED` row, in the `changed_geometry` CTE, with the two areas; the counts, the UPDATE,
+  the digest and the lists all read that CTE. A row is applied when `Actualizar geometrías` is on and its ratio is below the threshold (strictly)
+  or the user accepted its key (AP-100);
+  otherwise it is `PENDING`: not written, counted in `geometry_pending` (`geometryPending` of the target report) and listed with state
+  `PENDING`. A `CHANGED` row whose destination geometry is NULL has no ratio to gate: it is a fill-in, applied when `Actualizar geometrías`
+  is on (and counted in `updates`, listed as `APPLIED`). A NULL ratio of a row with a destination geometry (no usable area) is pending. `updates` counts the applied rows only, so AP-48 compares applied rows. A pending row is not
+  part of the plan digest (AP-89) and not a planned write. The threshold is part of `paramsFingerprint` (AP-89). The full list of pending rows
+  (`pending_geometry_changes`) has no cap: the analysis stores it in the plan record (AP-89) and the pending CSV of AP-95 serves it. The report keeps
+  only the capped geometry list (AP-94) and the exact counts; the status payload never carries the full list.
+- AP-93: Loose pairs pending. A pair of tier `LOOSE` (AP-84) is `APPLIED` only when a user pair choice (AP-86) names its new key and its old id.
+  Otherwise its status is `NOT_APPLIED_PENDING`: the old row is not written, the new row is inserted (AP-42) and the old row is listed as missing
+  (AP-41). `STRICT` pairs stay applied by default. A new key or an old row claimed by two candidates is `NOT_APPLIED_AMBIGUOUS` whatever the tier,
+  and a pending candidate takes part in the one-to-one count of AP-64 as before. The counts: `pairs` and `pairs_loose` count applied pairs only;
+  `pairs_pending` counts pending pairs; `pairs_not_applied` counts ambiguous new keys only. A pending pair is listed in `pairs_list` with status
+  `NOT_APPLIED_PENDING`. The control that lets the user choose a pending pair is not part of this round.
+- AP-94: Locating data. The geometry change list and the pairs list drop the Hausdorff distance and carry these fields instead: `oldId` (the
+  destination id, shown as `Id actual`), `typePadron`, `provinceId`, `department` and `locality` (the staging nomdepto and nomloccat; the locality
+  falls back to the destination locality name when the staging name is empty), `number`, `oldAreaM2` and `newAreaM2` (`ST_Area` on the destination
+  SRID, in m²), `areaChangePct` (`areaRatio` × 100, one decimal), `centroidLat` and `centroidLon` (the centroid of the new geometry in WGS84, six
+  decimals). For a pair, `areaRatio` is the new area over the old one (AP-86), and its `areaChangePct` is the signed change, `(areaRatio − 1) × 100`
+  rounded to one decimal: 0 is the same area, −2.0 is 2 % smaller. The Hausdorff distance stays only inside the class `CHANGED` (AP-38) and is not in any
+  report or view model of these lists. The geometry
+  list (`geometry_changes`) keeps `DETAIL_LIST_LIMIT` rows, pending first, then by area ratio descending, department, locality and padrón, each with
+  `state` `APPLIED` or `PENDING`. The target section shows the counts `Geometrías pendientes` and `Pares pendientes`. Columns of the geometry
+  table: Tipo, Departamento, Localidad, Padrón, Id actual, Área anterior (m²), Área nueva (m²), Área no coincidente (%), Latitud, Longitud, Estado;
+  the pair table has the same location columns after the old key, then Estado and Coincidencia.
 
 ## Shared job store
 
@@ -272,7 +406,8 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 - AP-27: Wizard (`ui/ActualizarPadronWizard.tsx`), five steps with `WizardOrchestrator`: (1) Conexión, (2) Tablas, (3) Opciones, (4) Revisar,
   (5) Resultado. The reducer is pure (`ui/actualizarPadronWizardState.ts`). `canContinue` requires: connection fields valid; the two schemas
   chosen; the required tables chosen, distinct and valid (the type table is optional); when a type table is selected, a non-blank locality
-  type; a valid tolerance; for a real run, the typed destination table name and the password match. Changing the connection resets the schemas
+  type; a valid tolerance. The typed destination table name and the password that a real run needs are checked by the persist panel of
+  AP-91, not by the review step. Changing the connection resets the schemas
   and table choices. Changing a schema resets only the table choices that live in that schema (`stagingSchema`: staging table; `cartoSchema`:
   destination, province, locality and type tables).
 - AP-28: Connection step uses the shared saved-connection selector (`ProfileSelect` over `core/services/localStorageDbConfig.ts`), as the
@@ -286,15 +421,17 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 - AP-30: Options step: a "Tipo de localidad" text field (default `LOCALIDAD CATASTRAL`, a domain value, not an identifier), shown only when a
   type table is selected and not empty (AP-7b). `Tolerancia (m)` (default `1,0`, same validation and hint as stage 3) and `Actualizar
   geometrías` (default on, with the warning that it replaces the destination geometry by the cadastre polygon, and the hint that inserts are
-  applied either way). No clear mode, no repair toggle and no sequence option.
+  applied either way). `Umbral de cambio de área para aplicar (%)` (default `5`, 0 to 100, shown with `Actualizar geometrías`, sent as a fraction, AP-92). No clear mode, no repair toggle and no sequence option.
 - AP-31: Review step: summary of the selected tables (the type table and the locality type only when a type table is selected), the tolerance
   and the geometry option. The info line "Inserta los padrones nuevos y actualiza la geometría de los existentes. Nunca borra filas ni cambia
-  ids." is always shown. When `Actualizar geometrías` is on, the overwrite warning is shown. "Analizar sin cargar" = dry run (password required).
-  "Actualizar padrones" = real run (password and destination table name typed again). With the link option on, the review also shows
-  the option and the address master table, and the warning of AP-59 when the destination is not named `padron`.
+  ids." is always shown. When `Actualizar geometrías` is on, the overwrite warning is shown. The only action is "Analizar" (the analysis,
+  `dryRun: true`, password required); the review has no real-run button and no typed table name (AP-91). The info line "El análisis no modifica
+  la base de datos. Los cambios se guardan después, desde el resultado del análisis." is always shown. With the link option on, the review
+  also shows the option and the address master table, and the warning of AP-59 when the destination is not named `padron`.
 - AP-32: Result step: planned-step checklist (every planned step listed at once, done / current / pending, planned steps sent by the server in
   the job status), elapsed time from the run store while running; the report afterwards (AP-16), laid out as AP-32b. A dry run shows the
-  banner that the destination was not modified. An `outcomeUnknown` result shows the verify-before-retry banner.
+  banner that the destination was not modified, and the persist panel of AP-91 at the top. An `outcomeUnknown` result shows the
+  verify-before-retry banner.
 - AP-32b: Report layout:
   - a KPI row: rows read, candidates, skipped, inserted, updated, geometry changes; below it the outcome banner (dry run "Análisis: la tabla de
     destino no fue modificada", or confirmed "Actualización confirmada: la tabla de destino fue modificada", or unknown);
@@ -325,15 +462,17 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 ## Change list (CSV)
 
 - AP-49: "Descargar CSV" exports the database changes only, as a flat table with the header
-  `Tabla,Cambio,Tipo,Provincia,Localidad,Padrón,Distancia (m),Relación de área,Id,Tipo anterior,Localidad anterior,Padrón anterior` (the last three
-  are filled only by `Clave actualizada` rows, AP-67). The `Id` column is empty for the rows below; only the
-  AP-58 rows fill it, so the ids of inserted padrones are still not exported. One row per inserted padron (`Insertada`) and one per
-  geometry change (`Geometría modificada` when applied, `Geometría detectada (no aplicada)` when not). The rows are ordered by kind, then
-  department (Provincia), locality (Localidad), padrón. `Provincia` and `Localidad` are the staging names, empty cells are "sin dato". The
-  formula guard and the escaping of the shared CSV helper apply. When a list is cut at its cap (the real count is greater than the list length)
-  the CSV ends with one marker row per cut list (MJ-14): Tabla = destination table, Cambio = `Lista incompleta: se muestran las primeras 500 de N
-  padrones insertados` or `... de N geometrías que cambian`, other cells empty. The filename follows the convention of the other stages with the
-  slug `actualizar-padron`.
+  `Tabla,Cambio,Tipo,Provincia,Localidad,Padrón,Id,Área anterior (m²),Área nueva (m²),Cambio de área (%),Área no coincidente (%),Latitud,Longitud,Tipo anterior,Localidad anterior,Padrón anterior`
+  (`Área no coincidente (%)` is filled by the geometry rows, `Cambio de área (%)` by the key-update rows; each row fills only its own column)
+  (the last three are filled only by `Clave actualizada` rows, AP-67). `Id` is the destination id of a geometry change or a key update; it is
+  empty for an inserted padron, whose id is still not exported. One row per inserted padron (`Insertada`), one per applied geometry change
+  (`Geometría modificada`) and one per pending geometry change (`Geometría detectada (no aplicada)`), both read from the capped geometry list
+  (AP-94), so the CSV never carries the full pending list (that one is downloaded with AP-95); and one per applied key update (AP-67). The rows
+  are ordered by kind, then department (Provincia), locality (Localidad), padrón. `Provincia` and `Localidad` are the staging names, empty cells
+  are "sin dato". The formula guard and the escaping of the shared CSV helper apply. When a list is cut at its cap (the real count is greater
+  than the list length) the CSV ends with one marker row per cut list (MJ-14): Tabla = destination table, Cambio = `Lista incompleta: se muestran
+  las primeras 500 de N padrones insertados` or `... de N geometrías que cambian` (the geometry rows against the changed count), other cells
+  empty. A complete list has no marker. The filename follows the convention of the other stages with the slug `actualizar-padron`.
 
 ## Inconsistencies list (CSV)
 
@@ -344,7 +483,7 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
   locality and padrón. The total comes from the counts. When the list is cut, the CSV ends with one marker row: the `Lista incompleta: se
   muestran las primeras 500 de N filas omitidas` text in the second cell, the other cells empty. The formula guard and the escaping of the
   shared CSV helper apply. The filename is `carto-actualizar-padron-<simulacion|real>-inconsistencias-<stamp>.csv`. The 20-sample table of
-  the report is unchanged, and the database-changes CSV (AP-49) does not change.
+  the report is unchanged, and the database-changes CSV (AP-49) does not change. The Motivo of a not-applied pair is `Posible par no aplicado (ambiguo)` (AP-66) or `Posible par pendiente (coincidencia parcial)` (AP-93).
 
 ## Address master links (option)
 
@@ -377,8 +516,9 @@ shared one of `jobs/shared/addressMasterLink*` that stage 3 also uses, so both s
   `toCreate + alreadyHadRecord` ("Los padrones enlazados (X) no coinciden con los esperados (Y) en T."); padrones still without address
   master after the link equal the ambiguous count ("Los padrones sin dirección maestra después del enlace (X) no coinciden con los
   ambiguos (Y) en T.").
-- AP-56: A dry run rolls back both passes; the report says the destination was not modified. A real run commits both or neither. The
-  result carries the address master section only when the option is on (AP-57).
+- AP-56: An analysis writes no address master row and links nothing; it classifies the links only (AP-88), and the report says the
+  destination was not modified. A real run commits both passes or neither. The result carries the address master section only when the
+  option is on (AP-57).
 - AP-57: Result section `addressMaster` (present only when the option is on): counts (padrones sin dirección maestra, registros por crear,
   registros creados, padrones enlazados, ya tenían registro, ambiguos, sin dirección maestra después del enlace), the linked list (up to
   `DETAIL_LIST_LIMIT`, with id, address master id and created or existing), and the ambiguous samples (up to `SAMPLE_LIMIT`). The report
@@ -428,8 +568,8 @@ shared one of `jobs/shared/addressMasterLink*` that stage 3 also uses, so both s
 
 ## Revert backup (real run)
 
-Before the COMMIT of a real run, the stage writes a SQL script that reverts exactly what the run changed. A dry run writes nothing and keeps
-its SQL unchanged. The script covers only the changed rows (never a dump of the table), and the stage's own SQL never runs it.
+Before the COMMIT of a real run, the stage writes a SQL script that reverts exactly what the run changed. An analysis writes nothing and
+never reaches this step (AP-88). The script covers only the changed rows (never a dump of the table), and the stage's own SQL never runs it.
 
 - AP-68: No backup, no write. The backup is built inside the real run's transaction, after the apply, the address master pass and the
   report, before COMMIT. If capturing, building, writing, verifying or registering the backup fails, the transaction rolls back and the
@@ -438,12 +578,12 @@ its SQL unchanged. The script covers only the changed rows (never a dump of the 
 - AP-69: Capture. A real run creates the temporary table `padron_revert` (`ON COMMIT DROP`) before the apply. The apply statement exposes the
   old values of each geometry update (kind `U`), each applied pair (`P`) and each inserted row (`I`) through RETURNING and writes them to that
   table in the same statement. Before the address master link pass, the destination rows without `id_address_master` are captured (`A`), and
-  the largest address master id is read (AP-70a). The SET lists and the key lists of AP-46 and AP-65 do not change; the apply SQL of a dry run is
-  the same statement as before.
+  the largest address master id is read (AP-70a). The SET lists and the key lists of AP-46 and AP-65 do not change; the apply SQL is the same
+  statement as before, and an analysis never runs it.
 - AP-70: Contents and order of the script. The file is gzip `padron-revert-<schema>-<table>-<yyyymmdd-HHMMSS>.sql.gz`, with sanitised
-  identifiers. It starts with the psql preamble `\set ON_ERROR_STOP on` and `SET client_encoding = 'UTF8';`, then header comments (run time,
+  identifiers. It starts with `SET client_encoding = 'UTF8';` (plain SQL, no psql meta-commands, so psql, pgAdmin and any SQL client run the whole file), then header comments (run time,
   destination table, counts per kind, a warning that it reverts only this run's rows and assumes nothing changed them since, the
-  `gunzip` and `psql -f` instructions, that id sequences are not reverted, and, when the link pass ran, the address master rule of AP-70a),
+  `gunzip` and run-the-whole-file instructions (`psql -v ON_ERROR_STOP=1 -f` or any SQL client), that id sequences are not reverted, and, when the link pass ran, the address master rule of AP-70a),
   then `BEGIN;`, then in this order: (a) when the link pass ran, `UPDATE <destination> SET id_address_master = NULL WHERE id IN (...)` in
   chunks of 1000 ids (kind `A`), then the address master deletes of AP-70a in chunks of 1000 ids; (b)
   `DELETE FROM <destination> WHERE id BETWEEN a AND b;` for each run of consecutive inserted ids (kind `I`); (c) `UPDATE` statements that
@@ -471,8 +611,8 @@ its SQL unchanged. The script covers only the changed rows (never a dump of the 
   memory: after a server restart the files stay on disk until the retention removes them, but their tokens no longer resolve.
 - AP-75: The tool never executes the revert file. Its `DELETE` statements are text in the file only; the stage's own SQL keeps AP-46 (no
   DELETE and no TRUNCATE). The temporary table needs the TEMP privilege on the database; a role without it fails the run with AP-68.
-- AP-76: Planned steps. A real run lists `Generar respaldo para revertir` right before `Confirmar cambios`. A dry run lists the same steps
-  as before.
+- AP-76: Planned steps. A real run lists `Generar respaldo para revertir` right before `Confirmar cambios`. An analysis lists no backup
+  step (AP-23).
 - AP-77: Automatic download. After a real run whose result has `backup`, the report's backup section downloads the file by itself: it calls
   `GET routine-jobs/actualizar-padron/backup?token=<token>` and saves the response with `backup.fileName` (browser download, Downloads or
   the browser's save dialog). A dry run, or a result without `backup`, downloads nothing and shows no section.
@@ -484,7 +624,7 @@ its SQL unchanged. The script covers only the changed rows (never a dump of the 
   button `Descargar respaldo` (secondary, with the download icon). The button downloads the same file on each click; it is not limited by AP-78.
 - AP-80: Failure. A failed automatic download (no connection, `400`, `404`) never throws into the page: the section shows the Spanish error
   text `No se pudo descargar el respaldo.` with the server message near the block, and the button stays usable to retry.
-- AP-81: Instructions. Three Spanish lines explain how to revert (gunzip the file and run it with psql against the database; it reverts only
+- AP-81: Instructions. Three Spanish lines explain how to revert (gunzip the file and run the whole .sql against the database with psql or any SQL client; it reverts only
   this run's changes and assumes nobody changed those rows since), that the server keeps a temporary copy for 7 days, and that the download
   links stop working after a server restart.
 - AP-82: No folder, no setting. The UI asks for no folder and no option: the browser decides where the file is saved.
@@ -502,10 +642,145 @@ its SQL unchanged. The script covers only the changed rows (never a dump of the 
 ## Acceptance criteria count
 
 AP-1 to AP-7b, AP-9 to AP-14 (AP-8 removed), AP-15 to AP-36, AP-37 to AP-49, with AP-2b, AP-7b, AP-10b and AP-32b. AP-64 to AP-67 are the
-pairs of reclassified and renumbered padrones, and AP-84 and AP-85 are their loose tier and its report. AP-50 is the
+pairs of reclassified and renumbered padrones, AP-84 and AP-85 are their loose tier and its report, and AP-86 is the user's choice for an ambiguous group, AP-87 its control in the dry-run report. AP-50 is the
 destination key-format check. AP-51 to AP-60 are the address master link option. Criteria AP-26 and AP-49 are the shared-store and CSV
 criteria. AP-61 is the inconsistencies list. AP-62 is the table defaults and the locality hint. AP-63 is the locality table reference
 check (preflight, refusal or warning). AP-68 to AP-76 (AP-70a included) are the revert backup of a real run (no backup, no write; capture; script contents;
 changed rows only; verification; storage and download; retention; the tool never runs the revert file; planned step). AP-77 to AP-82 are
 the UI of that backup (automatic download once per token, section content, fallback button, failure text, instructions, no folder setting).
 AP-83 is the refresh suggestion after a real run that changed the destination (materialized views `mv_padron` and `mv_padron_wms`).
+AP-88 is the read-only analysis, AP-89 the plan record it stores (fingerprints, TTL, no password), AP-90 the server-side guard of a real run
+and AP-91 the wizard flow built on them (one analysis button, the persist panel on the analysis result, its guards and the refused-persist action). AP-92 is the geometry threshold gate, AP-93 the pending loose pairs and AP-94 the locating columns of the two lists.
+
+AP-95 is the pending geometry CSV endpoint and AP-96 the replacement classification of the missing padrones. AP-97 is the read-only geometries endpoint of the map, AP-98 the map panel with the Catastro data (and the review inside it) and AP-99 the acceptance of the pending loose pairs. AP-100 is the acceptance of pending geometry changes and AP-101 the record-only removal marks of the missing padrones.
+
+## Pending geometry CSV and missing padrones review
+
+- AP-95: Pending geometry CSV. `GET /api/m/routine-jobs/actualizar-padron/pending-csv?planId=<id>` returns every pending geometry change of the
+  analysis that stored the plan `<id>` (AP-89), uncapped, as `text/csv; charset=utf-8` with a UTF-8 BOM and the header
+  `Tipo,Provincia,Departamento,Localidad,Padrón,Id actual,Área anterior (m²),Área nueva (m²),Área no coincidente (%),Latitud,Longitud`. `Tipo` is the
+  padrón type, `Provincia` the province id, `Departamento` and `Localidad` the staging names (empty cells are "sin dato"), `Id actual` the
+  destination id. `Área no coincidente (%)` is the non-overlapping share of the combined area of the old and new geometry (0 identical, 100
+  disjoint; the symmetric difference over the union, AP-92). Rows are ordered by `Área no coincidente (%)`, largest first, missing values last. The plan id is the same kind of secret as the backup
+  token (AP-77): the client sends the id only, never a path. Errors: a missing or malformed `planId` answers `400` with `El identificador del plan no
+  es válido.`; an unknown plan answers `404` with `El plan del análisis no existe: vuelva a analizar.`; an expired plan answers `410` with
+  `El plan del análisis caducó: vuelva a analizar.`. The file is not removed on download: it lives as long as the plan (AP-89). The analysis result
+  shows the button `Descargar geometrías pendientes (CSV)` (Lucide `Download`) when the result is an analysis and `geometryPending` is greater than
+  0. A real run consumes its plan (AP-90), so the result of a real run offers no pending CSV.
+- AP-96: Missing padrones review. A destination padrón that no staging row carries and no applied pair claims (the `Faltante en destino` of AP-41)
+  is classified against the new padrones that no applied pair consumes (the rows the insert would add, AP-42), of the same `id_province` (the
+  province rule of AP-64), with a valid geometry on both sides. The overlap is the intersection area over the old area; a new padrón is a part
+  when it covers at least `REPLACEMENT_PART_MIN_PCT` (5 %) of the old area. The classes, in this order of tests: `REPLACED_ONE` when one part covers
+  at least `REPLACEMENT_COVER_MIN_PCT` (90 %) of the old area; `SUBDIVIDED` when two or more parts exist and their union covers at least 90 %;
+  `PARTIAL` when the union covers at least `REPLACEMENT_PARTIAL_MIN_PCT` (50 %); otherwise `ORPHAN` (also when there is no overlap or the old
+  geometry is invalid). `coveredPct` is the union of the parts, one decimal. `parts` lists up to `REPLACEMENT_PARTS_LIMIT` (5) replacing padrones
+  as `tipo número (x.x %)`, largest cover first. The thresholds and limits are constants of `constants.ts`.
+  The report carries the exact counts per class (`missingByClass`: subdivided, replaced one, partial, orphan) and `missingReview`: the rows ordered
+  by class in the order SUBDIVIDED, REPLACED_ONE, PARTIAL, ORPHAN and then department, locality and padrón, capped at `DETAIL_LIST_LIMIT` (500).
+  Each row carries `oldId`, `typePadron`, `provinceId`, `department` and `locality` (the destination locality name), `number`, `oldAreaM2`,
+  `centroidLat` and `centroidLon` of the OLD geometry (WGS84, six decimals), `class`, `coveredPct`, `parts` and `refs`. `refs` counts the rows of
+  `<carto schema>.access_point` and of `<carto schema>.addresses_2_0_edit` whose `id_padron` is the old id. A table is counted only when it exists,
+  the role can read it and it has a numeric `id_padron` column (`smallint`, `integer`, `bigint` or `numeric`); the check is a read-only catalog probe that never fails the analysis. The counts are one grouped aggregate per counted table over the listed old ids (one scan per table, never one per listed row). `refs` is absent
+  when neither table is counted. The overlaps of the classification are read from the destination's geometry index, one bounding-box lookup per new padrón.
+  The real run's classification (AP-90) reads no replacement block: its report carries no `missingReview` and every `missingByClass` count is zero; the analysis is the only place that shows them. The review is informational: it writes nothing, deletes nothing, changes no planned write and is not part of the
+  plan digest (AP-89). The analysis report shows the section `Padrones que ya no están en el catastro` with the counts per class and the capped table; its
+  CSV `Descargar padrones faltantes` is built in the browser from the listed rows. A real run's report shows only the line `La clasificación de padrones que ya no están en el catastro se muestra en el análisis previo.` and no CSV button.
+  The listed row also carries `partKeys` (AP-98): for each part of `parts`, in the same order, its `typePadron`, `number` and `locality` (the staging
+  locality name, null for a rural part). The field is read from the same parts query and is optional in the type, so older results still load.
+- AP-97: Geometries endpoint (read-only). `POST /api/m/routine-jobs/actualizar-padron/geometries` returns the outlines of up to
+  `GEOMETRY_MAP_ITEMS_LIMIT` (6) padrones for the map of AP-98. The body carries `connection` (as the start endpoint, the password only in the body),
+  `stagingSchema`, `stagingTable`, `cartoSchema` and `targetTable` (the map reads the staging and the destination table only), and `items`: a list
+  of 1 to 6 entries, each with an optional `oldId` (an integer: the destination id) and an optional `staging` object `{typePadron, department,
+  locality, number}`. An entry carries at least one of them. `typePadron` is `RURAL` or `URBANO`; `locality` is required for `URBANO` and ignored
+  for `RURAL`; `number` is digits only. The answer is `200 { success: true, features }`, where each feature is `{ itemIndex, role, label, geometry }`:
+  `role` is `old` for an `oldId` and `new` for a `staging` key, `itemIndex` is the entry it answers, `label` is the Spanish name shown in the legend and
+  the popup, and `geometry` is a GeoJSON geometry in WGS84 (`ST_AsGeoJSON(ST_Transform(ST_SimplifyPreserveTopology(geom, tolerance), 4326))`). The
+  tolerance is 2 m; an outline over 1 km² takes 5 m and one over 100 km² takes 20 m, so the payload stays small. The old outline is the destination row
+  with that id; the new outline is the union of the staging rows that match the key: `upper(nomdepto)` equals `upper(department)` (the province rule
+  of AP-64), `unidadcat` equals `typePadron`, `trunc(padron)::text` equals `number`, and `upper(nomloccat)` equals `upper(locality)` for an `URBANO`
+  key. Staging geometries in another SRID are transformed to the destination SRID first, as the classification does. Identifiers are checked by the
+  catalog (the same table resolution as the analysis, required columns and polygonal geometry); values are bound parameters, never interpolated.
+  The read runs in one `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` transaction, rolled back at the end, with `SET LOCAL statement_timeout` of
+  20 s. Errors: a malformed body or item answers `400` with a Spanish message; a missing destination id, a staging key with no rows or a row
+  without geometry answers `404` (`No existe un padrón de destino con id <id> y geometría.` or `No se encontró <padrón> en la tabla de origen.`);
+  a timeout answers `500` with `La lectura de las geometrías tardó demasiado. Pruebe de nuevo con menos padrones.`; any other failure answers `500`
+  with `No se pudieron leer las geometrías:` and the database message, with the password scrubbed. Nothing is logged. The route is declared in
+  `module.routes.json` and generated with `npm run modules:routes`.
+- AP-98: Map modal, labels and Catastro data (UI). Each row of the geometry change table, of the pairs table, of the pending pairs table and of
+  the missing padrones table has a `Ver en mapa` icon button (Lucide `Map`) in its FIRST column; the column is sticky to the left inside the
+  table's scroll box, so the button stays visible when the table scrolls sideways. The button opens a modal dialog over the report (not a panel):
+  `role="dialog"`, `aria-modal`, labelled by the padrón title; the map takes most of the dialog height. Escape, the close button (Lucide `X`) and a
+  click on the backdrop close it; focus moves into the dialog and returns to the row button on close; the page behind does not scroll while it is
+  open; on mobile widths the dialog fills the screen and the map takes 60 % of its height above the details. The map shows ONLY the selected padrón:
+  the old outline in one colour and the new outline in another (for a missing padrón, the old outline and each replacing part), with the legend of
+  the shared map (`Padrón anterior`, `Padrón nuevo`). Every outline has a permanent minimal label built from the subject: `TIPO NÚMERO · anterior` for
+  the old outline (`RURAL 1345 · anterior`), `· nuevo` for the new one and `· parte` for each replacing part of a missing padrón. The outlines are
+  fetched lazily through AP-97 with the connection of the wizard, and cached by item (the old id and each staging key) for the life of the modal. The
+  password is read from the wizard state: without it the modal asks in Spanish to type the password on the connection step. Loading shows
+  `Cargando geometrías…`; a failure shows the server's Spanish message and `Reintentar`. Before any click the details area shows
+  `Haga clic en un padrón del mapa para ver todos sus datos.`. A click on an outline selects it: it is drawn highlighted, the map centres on it, and
+  its details replace the hint; a click on another outline switches the selection; a click on empty map clears it. Clicks open no map popup. The
+  details of the selected outline only list Tipo, Departamento, Localidad, Número, Id actual, the areas (m²), the area difference (new minus old, m²),
+  the change (`Cambio de área (%)` for a pair, `Área no coincidente (%)` for a changed geometry), and the centroid (WGS84). A pair's new outline also
+  shows its old key (`Clave anterior`). The block `Datos para buscar en Catastro` lists, for the NEW padrón of the selected outline (Tipo,
+  Departamento, Localidad catastral and Número), each with a copy button; the old outline shows `No hay padrón nuevo que buscar en el catastro.`.
+  The map is not shown for a padrón whose keys cannot name a staging row (a missing department, an URBANO row without locality or a non-digit
+  number): only its old outline is asked for then.
+  Amendment (review inside the modal): the modal receives the ordered rows of the table it was opened from and the index of the row on screen.
+  Above the map it shows `Anterior` and `Siguiente` (Lucide `ChevronLeft` / `ChevronRight`, disabled at the ends) and `N de M`; moving keeps the
+  dialog open, keeps the outline cache and clears the outline selection. The details column starts with the decision of the row, read live
+  from the wizard state, by kind: a geometry change (AP-100: its state `Aceptada`, `Pendiente`, `Rechazada` or `Aplicada (bajo el umbral)` and,
+  when decidable, `Aceptar` / `Rechazar`); a pending loose pair (AP-99: `Aceptar` / `Rechazar`, state `Aceptado` or `Pendiente`); an ambiguous pair
+  or group (AP-87: its candidates as radio options plus `No emparejar (insertar como nuevo)`, each candidate numbered `candidato N` with a colour
+  swatch; the map shows the new outline and every candidate's old outline, up to five, each in a distinct colour of `MAP_CANDIDATE_TYPES` with
+  the label `TIPO NÚMERO · candidato N (id <id>)` and the legend `Candidato N`); a missing padrón (AP-101: its class, `Reemplazado por`, `Cubierto
+  (%)` and `Referencias` shown prominently, and `Marcar para eliminar` / `Conservar`). An applied pair has no decision. The decision panels of
+  geometries, pending pairs and groups also carry `Volver a analizar con la selección` in an analysis. Each ambiguous group card has its own
+  `Ver en mapa` button; the modal's copy of the card uses its own radio name. The tables carry a `Decisión` column: the pairs table shows the
+  acceptance of a pending pair (`Aceptado` / `Pendiente`) or the choice of an ambiguous one (`Elegido: id N`, `No emparejar`, `Sin elección`);
+  the geometry table the state of AP-100; the missing table `Marcado para eliminar` or `Se conserva`. A real-run result shows the same modal
+  read-only.
+- AP-99: Accepting the pending loose pairs (UI). The analysis result has the section `Pares por coincidencia parcial pendientes` with every pair of the
+  report list whose status is `NOT_APPLIED_PENDING` (AP-93): its departamento and localidad (the new padrón), the old key (tipo, localidad, padrón and
+  id) and the new key (tipo, padrón), the area change (signed, AP-94) and the state. Each row has `Aceptar` and `Rechazar` and the `Ver en mapa` button of
+  AP-98. `Aceptar` adds the pair as a choice `{typePadron, provinceId, localityId, number, oldId}` to the pair choices of the wizard (the same choices
+  the ambiguous groups use, AP-86); `Rechazar` removes that choice. `Aceptar` is disabled when the pair is blocked: another new key already chose the
+  same old id (the request refuses it, AP-86). The header actions are `Aceptar todos` (every open pair of the list, each old id once) and
+  `Rechazar todos` (removes the choices of the list), and the counter reads `N aceptados de M pendientes` (with the blocked count when there are
+  blocked pairs). When the list is capped at `PAIR_LIST_LIMIT` (5000) the section says so: `Aceptar todos` then acts only on the listed pairs. A
+  choice does not apply the pair by itself: a pending pair becomes `APPLIED` only after `Volver a analizar con la selección` (the same button and the
+  same guard as AP-86 and AP-91), and the persist stays blocked until then. The section is read-only in a real run result. Bulk changes are one
+  state update (`pairChoicesChosen` and `pairChoicesRemoved` in the wizard reducer), so a long list stays linear. The state of an open pair reads
+  `Pendiente` (it read `Sin aceptar` before AP-100).
+- AP-100: Accepting pending geometry changes. The start request takes `options.acceptedGeometries`, a list of `AcceptedGeometry` keys
+  `{typePadron, provinceId, localityId|null, number}` (the new key of a `CHANGED` row, as a pair choice without `oldId`); absent means `[]`.
+  Validation, as an invalid request naming `acceptedGeometries` in Spanish: not a list (null included); an entry that is not an object, whose
+  `provinceId` or `localityId` is not an int4 integer (`localityId` may be null), whose `typePadron` is not `RURAL` or `URBANO`, or whose `number`
+  is not filled text; the same key twice; more than `PAIR_LIST_LIMIT` (5000) entries. The list is rejected, never truncated. The classify
+  statement builds a typed `geometry_accepts` VALUES CTE (strings escaped with `literal()`, integers validated, a typed empty CTE when there is
+  none) and the `changed_geometry` CTE marks each row `accepted` when its key (NULL-safe on the locality) is in it. A row is applied when
+  `Actualizar geometrías` is on AND (its destination geometry is NULL, OR its ratio is below the threshold, OR it is accepted). The counts
+  (`updates`, `geometry_pending`), the UPDATE, the digest, the lists and the CSV of AP-95 all read that CTE, so an accepted row is `APPLIED`
+  everywhere and is a planned write. The list is part of `paramsFingerprint` (sorted, AP-89). The classify result carries
+  `geometry_accepts_unapplied`: the accepted keys with no applied `CHANGED` row (gone, no longer `CHANGED`, or `Actualizar geometrías` off), mapped
+  to `geometryAcceptsUnapplied` of the target report (optional: older results lack it) and, when greater than zero, the warning "N geometrías
+  aceptadas no se aplicaron (el padrón ya no tiene un cambio de geometría o Actualizar geometrías está desactivado)." (singular "1 geometría
+  aceptada no se aplicó ..."). UI: the wizard state keeps `acceptedGeometries` and `simulatedAcceptedGeometries` (those of the last completed
+  analysis, from the run plan); they are sent by the analysis and the persist (only when there is one), cleared on the same events as the pair
+  choices, seeded from the run plan on a remount, and the persist is blocked with "Analice de nuevo con las geometrías aceptadas actuales antes de
+  persistir." while they differ (order-insensitive), after the pair-choice reason. Reducer actions `geometriesAccepted` and `geometriesRejected`
+  (bulk, keyed by the new key). The geometry change table, in an analysis with `Actualizar geometrías` on, has the counter `N aceptadas de M
+  pendientes (listadas)` (M: the listed rows that can be decided), `Aceptar todos los listados` (the listed rows still pending, stopped at the
+  5000 limit with a Spanish note), `Rechazar todos` (every acceptance), `Volver a analizar con la selección`, a `Decisión` column and per-row
+  `Aceptar` / `Rechazar`. Decision states: `Aceptada` (the key is in the current acceptances), `Pendiente` (pending in the shown run and not
+  accepted), `Rechazada` (applied in the shown run because it was accepted, acceptance removed since) and `Aplicada (bajo el umbral)` (nothing to
+  decide). With `Actualizar geometrías` off the modal says that geometries cannot be accepted; a real-run result is read-only. The review lists
+  `N geometrías aceptadas incluidas`. The pending CSV of AP-95 and its button are unchanged.
+- AP-101: Record-only removal marks. In an analysis, a missing padrón (AP-96) opened in the map modal has `Marcar para eliminar` and
+  `Conservar`. A mark is recorded only in the wizard state (`removalMarks`, the old ids; actions `removalMarked` and `removalUnmarked`): nothing is
+  deleted, nothing is sent to the server, and the start and persist requests never carry it. Marks are cleared with the other decisions (a
+  connection, schema, table or option change, and `Nueva carga`). The missing padrones section shows a note that marking only records the
+  decision, the counter `N marcados para eliminar` (marked rows of the listed review) and the button `Descargar padrones marcados para eliminar
+  (CSV)` (disabled with no mark), built in the browser from the listed review rows that are marked, with a UTF-8 BOM and the header `Id
+  actual,Tipo,Departamento,Localidad,Padrón,Clase,Cubierto (%),Reemplazado por,Referencias,Latitud,Longitud`; file name segment
+  `marcados-eliminar`.

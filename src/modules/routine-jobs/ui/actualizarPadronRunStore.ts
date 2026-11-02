@@ -1,3 +1,4 @@
+import type { AcceptedGeometry, PairChoice } from "../jobs/actualizar-padron/types";
 import type { ActualizarJobStatusView, ActualizarStartRequest } from "./clientTypes";
 import { createRoutineJobsClient } from "./routineJobsClient";
 import {
@@ -13,6 +14,9 @@ export interface ActualizarPadronRunPlan {
   dryRun: boolean;
   destinationTable: string;
   linkAddressMaster: boolean;
+  pairChoices: readonly PairChoice[];
+  /** Absent in plans built before the geometry acceptances existed: read as none. */
+  acceptedGeometries?: readonly AcceptedGeometry[];
 }
 
 export type ActualizarPadronRunSnapshot = RunSnapshot<ActualizarJobStatusView, ActualizarPadronRunPlan>;
@@ -37,6 +41,8 @@ const planOf = (request: ActualizarStartRequest): ActualizarPadronRunPlan => ({
   dryRun: request.dryRun,
   destinationTable: request.targetTable,
   linkAddressMaster: request.options.linkAddressMaster,
+  pairChoices: request.options.pairChoices ?? [],
+  acceptedGeometries: request.options.acceptedGeometries ?? [],
 });
 
 function createActualizarPadronRunStore(deps: ActualizarPadronRunStoreDeps): ActualizarPadronRunStore {

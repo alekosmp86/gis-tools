@@ -54,9 +54,32 @@ export const BASEMAP_TILES: Record<string, TileLayerConfig> = {
   },
 };
 
+/** Feature roles of a two-layer comparison (old and new outline of one padrón): the `_discrepancyType` values that colour them. */
+export const MAP_ROLE_TYPE = {
+  OLD: "PADRON_ANTERIOR",
+  NEW: "PADRON_NUEVO",
+} as const;
+
+/** Candidate outlines of one comparison (several old outlines competing for one new one), each in its own colour, in candidate order. */
+export const MAP_CANDIDATE_TYPES = [
+  "PADRON_CANDIDATO_1",
+  "PADRON_CANDIDATO_2",
+  "PADRON_CANDIDATO_3",
+  "PADRON_CANDIDATO_4",
+  "PADRON_CANDIDATO_5",
+] as const;
+
+const CANDIDATE_COLORS = ["#f59e0b", "#a855f7", "#facc15", "#f97316", "#e879f9"] as const;
+
+const candidateRecordOf = (valueOf: (index: number) => string): Record<string, string> =>
+  Object.fromEntries(MAP_CANDIDATE_TYPES.map((type, index) => [type, valueOf(index)]));
+
 const DISCREPANCY_COLORS: Record<string, string> = {
   DB_FEATURE: "#00e5ff",
   FILE_FEATURE: "#ff0055",
+  [MAP_ROLE_TYPE.OLD]: "#fb7185",
+  [MAP_ROLE_TYPE.NEW]: "#34d399",
+  ...candidateRecordOf((index) => CANDIDATE_COLORS[index]),
   [DiscrepancyType.GEOMETRY_MISMATCH]: "#ff0055",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#f59e0b",
   [DiscrepancyType.ONLY_IN_SHP]: "#a855f7",
@@ -76,6 +99,9 @@ export function getDiscrepancyColor(type?: string): string {
 const DISCREPANCY_LABELS: Record<string, string> = {
   DB_FEATURE: "Geometría Base de Datos (PostgreSQL)",
   FILE_FEATURE: "Geometría Archivo (Shapefile / CSV)",
+  [MAP_ROLE_TYPE.OLD]: "Padrón anterior",
+  [MAP_ROLE_TYPE.NEW]: "Padrón nuevo",
+  ...candidateRecordOf((index) => `Candidato ${index + 1}`),
   [DiscrepancyType.GEOMETRY_MISMATCH]: "Discrepancia Geométrica",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "Discrepancia de Atributos",
   [DiscrepancyType.ONLY_IN_SHP]: "Solo en Archivo Fuente",

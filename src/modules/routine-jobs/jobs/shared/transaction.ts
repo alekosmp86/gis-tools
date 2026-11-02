@@ -6,6 +6,7 @@ import type { StepTimer } from "../cargar-padrones/services/runSteps";
 import type { RunDeps, RunSession } from "../cargar-padrones/types";
 
 const BEGIN_SQL = "BEGIN ISOLATION LEVEL REPEATABLE READ";
+const BEGIN_READ_ONLY_SQL = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY";
 const COMMIT_SQL = "COMMIT";
 const ROLLBACK_SQL = "ROLLBACK";
 const REDACTED = "***";
@@ -18,6 +19,8 @@ export interface TransactionMessages {
 
 export interface TransactionOptions {
   dryRun: boolean;
+  /** A read-only transaction cannot write: the database rejects any write, and its end is not a timed step. */
+  readOnly?: boolean;
   secret: string | undefined;
   timer: StepTimer;
   steps: { commit: string; rollback: string };
@@ -72,13 +75,17 @@ export async function runTransaction<Body>(
   options: TransactionOptions,
   work: () => Promise<Body>
 ): Promise<TransactionOutcome<Body>> {
-  await session.query(BEGIN_SQL);
+  await session.query(options.readOnly ? BEGIN_READ_ONLY_SQL : BEGIN_SQL);
   let body: Body;
   try {
     body = await work();
   } catch (error: unknown) {
     const rolledBack = await rollbackQuietly(session);
     throw rollbackFailure(error, rolledBack, options);
+  }
+  if (options.readOnly) {
+    await rollbackQuietly(session);
+    return { body, targetsModified: false, outcomeUnknown: false };
   }
   if (options.dryRun) {
     await options.timer.run(options.steps.rollback, () => session.query(ROLLBACK_SQL));

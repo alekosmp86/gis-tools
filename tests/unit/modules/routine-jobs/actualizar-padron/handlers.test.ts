@@ -4,8 +4,10 @@ import { createJobStore } from "@/modules/routine-jobs/jobs/shared/jobStore";
 import { plannedStepLabels } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/plannedSteps";
 import { SKIP_REASON } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { ActualizarPadronParams, ActualizarPadronResult, SkippedReport } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
+import { PLAN_MISSING_MESSAGE, PLAN_UNKNOWN_MESSAGE } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/plan";
 
 const PASSWORD = "Ac7ual!zar-pw";
+const PLAN_ID = "0123456789abcdef0123456789abcdef";
 const NOW = 1_700_000_000_000;
 const LOCK_KEY = "db.local:5432|gis|carto|padron_tmp_actualizacion";
 const CONFLICT_MESSAGE = "Ya hay una actualización en curso para esta tabla.";
@@ -43,14 +45,19 @@ const resultOf = (): ActualizarPadronResult => ({
     changed: 0,
     missing: 0,
     missingSamples: [],
+    missingByClass: { REPLACED_ONE: 0, SUBDIVIDED: 0, PARTIAL: 0, ORPHAN: 0 },
+    missingReview: [],
     ambiguous: 0,
     ambiguousSamples: [],
     geometryChanges: [],
+    geometryPending: 0,
     pairs: [],
     pairsTotal: 0,
     pairsApplied: 0,
     pairsLoose: 0,
+    pairsPending: 0,
     pairsNotApplied: 0,
+    choicesUnapplied: 0,
   },
   warnings: [],
   stepTimings: [],
@@ -64,9 +71,10 @@ const startBody = (): Body => ({
   targetTable: "padron_tmp_actualizacion",
   provinceTable: "province",
   localityTable: "cadastral_locality",
-  options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false },
+  options: { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: false },
   dryRun: false,
   confirm: true,
+  planId: PLAN_ID,
 });
 
 const withPatch = (patch: (body: Body) => void): Body => {
@@ -173,5 +181,41 @@ describe("createActualizarPadronHandlers lock", () => {
 
     expect(response.status).toBe(400);
     expect(wiring.run).not.toHaveBeenCalled();
+  });
+
+  it("should answer 400 with the plan-missing message and never run the job when a real run has no planId", async () => {
+    const wiring = createWiring();
+
+    const response = await wiring.start(withPatch((body) => delete body.planId));
+    await wiring.settle();
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ success: false, error: PLAN_MISSING_MESSAGE });
+    expect(wiring.run).not.toHaveBeenCalled();
+  });
+
+  it("should answer 400 with the unknown-plan message and never run the job when a real run sends a malformed planId", async () => {
+    const wiring = createWiring();
+
+    const response = await wiring.start(withPatch((body) => (body.planId = "../../etc/passwd")));
+    await wiring.settle();
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ success: false, error: PLAN_UNKNOWN_MESSAGE });
+    expect(wiring.run).not.toHaveBeenCalled();
+  });
+
+  it("should grant a dry run without a planId, since the analysis is the step that creates the plan", async () => {
+    const wiring = createWiring();
+
+    const response = await wiring.start(withPatch((body) => {
+      delete body.planId;
+      body.dryRun = true;
+      body.confirm = false;
+    }));
+    await wiring.settle();
+
+    expect(response.status).toBe(200);
+    expect(wiring.run).toHaveBeenCalledTimes(1);
   });
 });
