@@ -966,3 +966,21 @@ like AP-102: whatever cannot be moved with certainty keeps the old padrón and e
   AP-79's backup counts add `Direcciones reasignadas` and `Entradas de direcciones maestras eliminadas`; AP-72's verification checks that the
   `R` and `M` lines written equal the moved and deleted counts. The revert script restores in this order: `M`, then `D`, then `R`.
 
+
+## Accept every pending geometry (AP-116 to AP-118)
+
+`Aceptar todos` (AP-100) only reaches the listed rows (`DETAIL_LIST_LIMIT`) and the accepted list is capped (`PAIR_LIST_LIMIT`), so a run with tens of
+thousands of pending geometries cannot be accepted. This section adds an acceptance that never depends on the list.
+
+- AP-116: Request. `options.acceptAllGeometries` (boolean, default false; any other type is rejected like the other options). When true, every
+  geometry change that AP-100 would leave pending (the matched key whose geometry differs by more than the threshold, with `Actualizar geometrías`
+  on) is accepted, in the analysis and in the real run alike, whatever the list shows. `acceptedGeometries` is still read and its keys are
+  accepted as before; with the flag on there is no per-row rejection. The flag is part of `paramsFingerprint` (AP-89), so the plan-changed guard
+  and the persist re-analysis (AP-91) cover it. Without `Actualizar geometrías` the flag has no effect and the UI does not offer it.
+- AP-117: Classification. The accepted count and the pending count of the classify statement include the geometries accepted by the flag: with it
+  on, `geometryPending` is 0 and the updates count (AP-48's count check) grows by the formerly pending ones. The digest of AP-89 stays complete
+  (no per-row entry is added; the flag is in the fingerprint). The CSV of pending geometries (AP-95) is empty with the flag on.
+- AP-118: UI. The geometry changes section shows the button `Aceptar todas (N)` (Lucide `Check`), N being the total pending count of the analysis
+  (`geometryPending`), in place of the listed-rows `Aceptar todos` for geometry changes. Pressing it sets the flag and re-analyzes with the
+  selection; the section then reads `Todas las geometrías pendientes aceptadas (N)` and offers `Rechazar todas`, which clears the flag. The persist
+  panel summary (AP-91) already reports the geometry count. The note says the acceptance applies to every pending geometry, not only the listed ones.
