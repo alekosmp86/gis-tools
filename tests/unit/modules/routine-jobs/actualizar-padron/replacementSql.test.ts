@@ -99,7 +99,74 @@ describe("referenceTablesScanSql (AP-102 catalog scan)", () => {
     expect(sql).toContain("pg_catalog.pg_class");
     expect(sql).toContain("pg_catalog.pg_namespace");
     expect(sql).toContain("pg_catalog.pg_attribute");
-    expect(sql).not.toMatch(/count\(/i);
+    const sources = [...sql.matchAll(/\b(?:FROM|JOIN)\s+([^\s(]+)/g)].map((match) => match[1]);
+    expect(sources.length).toBeGreaterThan(0);
+    expect(sources.filter((source) => source !== "LATERAL").every((source) => source.startsWith("pg_catalog."))).toBe(true);
+  });
+
+  it("should report whether the role can UPDATE the id_padron column (AP-110)", () => {
+    expect(referenceTablesScanSql(SCHEMA, TARGET_TABLE)).toContain("has_column_privilege(c.oid, a.attnum, 'UPDATE') AS \"updatable\"");
+  });
+
+  it("should count the primary key columns from pg_index.indisprimary, ignoring dropped columns (AP-110)", () => {
+    const sql = referenceTablesScanSql(SCHEMA, TARGET_TABLE);
+
+    expect(sql).toContain("pg_catalog.pg_index");
+    expect(sql).toContain("i.indisprimary");
+    expect(sql).toContain("NOT pa.attisdropped");
+    expect(sql).toContain('pk.pk_columns AS "pk_columns"');
+    expect(sql).toContain('pk.pk_column AS "pk_column"');
+  });
+
+  it("should count the geometry and geography columns and name their type (AP-110)", () => {
+    const sql = referenceTablesScanSql(SCHEMA, TARGET_TABLE);
+
+    expect(sql).toContain("gt.typname IN ('geometry', 'geography')");
+    expect(sql).toContain("NOT ga.attisdropped");
+    expect(sql).toContain('geo.geometry_columns AS "geometry_columns"');
+    expect(sql).toContain('geo.geometry_column AS "geometry_column"');
+    expect(sql).toContain('geo.geometry_type AS "geometry_type"');
+  });
+
+  it("should map each REFERENCE_POINT_SOURCES entry through a VALUES list joined by the referencing table name (AP-110)", () => {
+    const sql = referenceTablesScanSql(SCHEMA, TARGET_TABLE);
+
+    expect(sql).toContain("LEFT JOIN (VALUES ('access_point', 'address', 'id', 'id')) AS pm(ref_table, companion_table, ref_column, companion_column) ON pm.ref_table = c.relname::text");
+    expect(sql).toContain("LEFT JOIN pg_catalog.pg_class c2 ON c2.relnamespace = n.oid AND c2.relname = pm.companion_table AND c2.relkind IN ('r', 'p')");
+  });
+
+  it("should return the companion facts as columns the scan row mapping reads (AP-110)", () => {
+    const sql = referenceTablesScanSql(SCHEMA, TARGET_TABLE);
+
+    for (const column of [
+      "companion_table",
+      "companion_column",
+      "companion_ref_column",
+      "companion_pk_columns",
+      "companion_pk_column",
+      "companion_geometry_columns",
+      "companion_geometry_column",
+      "companion_geometry_type",
+      "companion_readable",
+      "companion_join_columns",
+    ]) {
+      expect(sql, column).toContain(`AS "${column}"`);
+    }
+  });
+
+  it("should read the companion's SELECT privilege and count both join columns from the catalog, never user input", () => {
+    const sql = referenceTablesScanSql(SCHEMA, TARGET_TABLE);
+
+    expect(sql).toContain("CASE WHEN c2.oid IS NULL THEN false ELSE has_table_privilege(c2.oid, 'SELECT') END AS \"companion_readable\"");
+    expect(sql).toContain("ja.attrelid = c.oid AND ja.attname = pm.ref_column");
+    expect(sql).toContain("ja.attrelid = c2.oid AND ja.attname = pm.companion_column");
+  });
+
+  it("should bind the schema and the excluded table as literals so a hostile name cannot add SQL", () => {
+    const sql = referenceTablesScanSql("ca'rto", "pa'dron");
+
+    expect(sql).toContain("n.nspname = 'ca''rto'");
+    expect(sql).toContain("c.relname <> 'pa''dron'");
   });
 });
 
@@ -181,5 +248,103 @@ describe("missingReviewSql reference columns (AP-96's refs, {total, byTable})", 
   it("should cap the listed rows at DETAIL_LIST_LIMIT and order by class, department, locality and number", () => {
     expect(sql).toContain("LIMIT 500");
     expect(sql).toMatch(/ORDER BY[^)]*"department"[^)]*"locality"[^)]*"number"/);
+  });
+});
+
+describe("referenceCountCtes block_reason and blockers (AP-110)", () => {
+  const reassignable: ReferenceTable = {
+    schema: SCHEMA,
+    table: "access_point",
+    reassign: { pkColumn: "gid", geometryColumn: "geom", geography: false },
+  };
+  const blocked: ReferenceTable = { schema: SCHEMA, table: "audit_log", reassignBlocker: "sin clave primaria de una sola columna" };
+
+  const withCompanion: ReferenceTable = {
+    schema: SCHEMA,
+    table: "access_point",
+    reassign: {
+      pkColumn: "id",
+      geometryColumn: "geometry",
+      geography: false,
+      companion: { schema: SCHEMA, table: "address", column: "id", companionColumn: "id" },
+    },
+  };
+
+  it("should never block a reassignable table, even for rows with a NULL or empty point (AP-111)", () => {
+    const [raw] = referenceCountCtes("r", "ids", "old_id", [reassignable]);
+
+    expect(raw).toContain('CAST(NULL AS text) AS "block_reason"');
+    expect(raw).not.toContain("tiene filas sin geometría");
+    expect(raw).not.toContain("IS NULL OR ST_IsEmpty(rt0.\"geom\"::geometry)) > 0");
+  });
+
+  it("should count the rows without a usable point per table as no_point, over the table's own geometry", () => {
+    const [raw] = referenceCountCtes("r", "ids", "old_id", [reassignable]);
+
+    expect(raw).toContain(
+      'count(*) FILTER (WHERE CASE WHEN rt0."geom" IS NULL OR ST_IsEmpty(rt0."geom") THEN NULL WHEN ST_GeometryType(rt0."geom") = \'ST_Point\' THEN rt0."geom" ELSE ST_PointOnSurface(rt0."geom") END IS NULL) AS "no_point"'
+    );
+    expect(raw).toContain('FROM "carto"."access_point" AS rt0  WHERE');
+  });
+
+  it("should count no_point over the LEFT JOINed companion geometry when the table has no point of its own", () => {
+    const [raw] = referenceCountCtes("r", "ids", "old_id", [withCompanion]);
+
+    expect(raw).toContain('FROM "carto"."access_point" AS rt0 LEFT JOIN "carto"."address" AS rt0c ON rt0c."id" = rt0."id" WHERE');
+    expect(raw).toContain('CASE WHEN rt0c."geometry" IS NULL OR ST_IsEmpty(rt0c."geometry") THEN NULL');
+    expect(raw).toContain('IS NULL) AS "no_point"');
+    expect(raw).toContain('CAST(NULL AS text) AS "block_reason"');
+  });
+
+  it("should cast a geography point to geometry before testing it", () => {
+    const geography: ReferenceTable = { schema: SCHEMA, table: "g", reassign: { pkColumn: "gid", geometryColumn: "geog", geography: true } };
+
+    const [raw] = referenceCountCtes("r", "ids", "old_id", [geography]);
+
+    expect(raw).toContain('rt0."geog"::geometry IS NULL OR ST_IsEmpty(rt0."geog"::geometry)');
+  });
+
+  it("should count zero no_point rows for a table that cannot be reassigned, and add no join", () => {
+    const [raw] = referenceCountCtes("r", "ids", "old_id", [blocked]);
+
+    expect(raw).toContain('CAST(0 AS bigint) AS "no_point"');
+    expect(raw).not.toContain("LEFT JOIN");
+  });
+
+  it("should type the empty raw set with the no_point column too", () => {
+    const [raw] = referenceCountCtes("r", "ids", "old_id", []);
+
+    expect(raw).toContain('CAST(NULL AS bigint) AS "no_point"');
+  });
+
+  it("should report the table's own blocker as a constant for every id of a table that cannot be reassigned", () => {
+    const [raw] = referenceCountCtes("r", "ids", "old_id", [blocked]);
+
+    expect(raw).toContain("CAST('sin clave primaria de una sola columna' AS text) AS \"block_reason\"");
+    expect(raw).not.toContain("ST_IsEmpty");
+    expect(raw).not.toContain("tiene filas sin geometría");
+  });
+
+  it("should fall back to the no-primary-key reason when a table carries neither a target nor a blocker (fail closed)", () => {
+    const [raw] = referenceCountCtes("r", "ids", "old_id", [{ schema: SCHEMA, table: "bare" }]);
+
+    expect(raw).toContain("CAST('sin clave primaria de una sola columna' AS text) AS \"block_reason\"");
+  });
+
+  it("should type the empty raw set with the block_reason column too", () => {
+    const [raw] = referenceCountCtes("r", "ids", "old_id", []);
+
+    expect(raw).toContain('CAST(NULL AS text) AS "block_reason"');
+  });
+
+  it("should aggregate the number of blocking tables and a table to reason json object, empty when none", () => {
+    const [, agg] = referenceCountCtes("r", "ids", "old_id", [reassignable, blocked]);
+
+    expect(agg).toContain('count("block_reason") AS "blocked"');
+    expect(agg).toContain(`COALESCE(json_object_agg("table_label", "block_reason") FILTER (WHERE "block_reason" IS NOT NULL), '{}'::json) AS "blockers"`);
+  });
+
+  it("should expose reassignBlockers in the missing review rows from the removal refs, coalesced to an empty object", () => {
+    expect(missingReviewSql(LAYOUTS)).toContain(`COALESCE("removal_refs"."blockers", '{}'::json) AS "reassignBlockers"`);
   });
 });

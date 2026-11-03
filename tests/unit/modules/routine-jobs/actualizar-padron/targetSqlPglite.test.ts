@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { buildCreateDeleteIdsTableSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteIdsTable";
+import { buildCreateReassignIdsTableSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reassignTables";
 import { NO_REFERENCE_SCAN, referenceScanOf, type ReferenceScan, type ReferenceScanRow } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/referenceScan";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { buildPadronDeleteSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteSql";
@@ -1076,7 +1077,7 @@ describe("actualizar-padron revert script on embedded Postgres (AP-69 to AP-72)"
     await database.exec(scriptLines.join("\n"));
     const afterRevert = await readPadron(database);
 
-    expect(counts).toEqual({ U: 1, P: 1, I: 1, A: 0, D: 0 });
+    expect(counts).toEqual({ U: 1, P: 1, I: 1, A: 0, D: 0, R: 0, M: 0 });
     expect(afterRun).not.toEqual(before);
     expect(afterRevert).toEqual(before);
   });
@@ -1133,7 +1134,7 @@ describe("actualizar-padron revert script on embedded Postgres (AP-69 to AP-72)"
     const addressMasterDeleteLines = scriptLines.filter((line) => line.startsWith('DELETE FROM "carto"."addresses_master"'));
 
     expect(maxIdBefore).toBe(5);
-    expect(counts).toEqual({ U: 1, P: 1, I: 4, A: 3, D: 0 });
+    expect(counts).toEqual({ U: 1, P: 1, I: 4, A: 3, D: 0, R: 0, M: 0 });
     expect(after.filter((row) => row.id !== 12)).toEqual(before);
     expect(after.find((row) => row.id === 12)).toBeDefined();
     expect(addressMasterRows).toEqual([
@@ -1517,6 +1518,9 @@ const REMOVAL_FIGURE_KEYS = [
   "removed",
   "removals_skipped_still_pairable",
   "removals_skipped_now_referenced",
+  "removals_skipped_not_reassignable",
+  "reassigned",
+  "subdivided_deleted",
   "removals_skipped_unverified",
   "plan_digest",
 ] as const;
@@ -1530,6 +1534,7 @@ const tempIdsOf = async (database: PGlite): Promise<number[]> =>
 /** Inside an open transaction: creates the temp table and runs the persist classify that fills it (AP-106). */
 async function persistClassify(database: PGlite, scan: ReferenceScan, options: ActualizarPadronOptions = OPTIONS): Promise<Row> {
   await database.exec(buildCreateDeleteIdsTableSql());
+  await database.exec(buildCreateReassignIdsTableSql());
   return (await database.query<Row>(buildPadronClassifySql(REMOVAL_LAYOUTS, options, scan, { report: false, persistDeletable: true }))).rows[0];
 }
 
@@ -1568,7 +1573,7 @@ describe("actualizar-padron automatic deletion of unpaired, reference-free padro
       expect(withRefs.counts.removed).toBe(1);
       expect(withRefs.counts.removalsSkipped).toEqual({
         total: 5,
-        byReason: { STILL_PAIRABLE: 3, NOW_REFERENCED: 2, UNVERIFIED: 0 },
+        byReason: { STILL_PAIRABLE: 3, NOW_REFERENCED: 2, NOT_REASSIGNABLE: 0, UNVERIFIED: 0 },
       });
       expect(withRefs.removedList.map((removed) => removed.id)).toEqual([idOfNumber(before, "700")]);
     });
@@ -1900,7 +1905,7 @@ describe("actualizar-padron automatic deletion of unpaired, reference-free padro
       await database.exec("COMMIT");
       const after = await readPadron(database);
 
-      expect(scan.tables).toEqual([{ schema: "carto", table: "access_point" }]);
+      expect(scan.tables).toEqual([{ schema: "carto", table: "access_point", reassignBlocker: "sin clave primaria de una sola columna" }]);
       expect(scan.blockedReason).toContain("carto.address_ref");
       expect(Number(row.removed)).toBe(0);
       expect(Number(row.removals_skipped_now_referenced)).toBe(1);

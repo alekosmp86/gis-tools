@@ -77,26 +77,36 @@ const geometryAcceptsUnappliedWarningOf = (count: number): string =>
 
 const removalDoneWarningOf = (removed: number, table: string, dryRun: boolean): string =>
   dryRun
-    ? `${plural(removed, "padrón sin fila de origen se eliminará", "padrones sin fila de origen se eliminarán")} de ${table} (sin direcciones asociadas).`
-    : `${plural(removed, "padrón sin fila de origen eliminado", "padrones sin fila de origen eliminados")} de ${table} (sin direcciones asociadas).`;
+    ? `${plural(removed, "padrón sin fila de origen se eliminará", "padrones sin fila de origen se eliminarán")} de ${table} (sin direcciones asociadas o con direcciones reasignadas a sus partes).`
+    : `${plural(removed, "padrón sin fila de origen eliminado", "padrones sin fila de origen eliminados")} de ${table} (sin direcciones asociadas o con direcciones reasignadas a sus partes).`;
 
 const removalSkippedWarningOf = (removalsSkipped: RemovalSkippedReport): string => {
   const paired = removalsSkipped.byReason[REMOVAL_SKIP_REASON.STILL_PAIRABLE];
   const referenced = removalsSkipped.byReason[REMOVAL_SKIP_REASON.NOW_REFERENCED];
+  const notReassignable = removalsSkipped.byReason[REMOVAL_SKIP_REASON.NOT_REASSIGNABLE];
   const reasons = [
     ...(paired > 0 ? [`${paired} porque tienen un par sin resolver`] : []),
     ...(referenced > 0 ? [`${referenced} porque tienen direcciones asociadas`] : []),
+    ...(notReassignable > 0 ? [`${notReassignable} porque no se pueden reasignar sus direcciones`] : []),
   ];
-  return `${plural(paired + referenced, "padrón sin fila de origen no se elimina", "padrones sin fila de origen no se eliminan")}: ${reasons.join(", ")}.`;
+  return `${plural(paired + referenced + notReassignable, "padrón sin fila de origen no se elimina", "padrones sin fila de origen no se eliminan")}: ${reasons.join(", ")}.`;
 };
 
 const notDeletedCountOf = (removalsSkipped: RemovalSkippedReport): number =>
-  removalsSkipped.byReason[REMOVAL_SKIP_REASON.STILL_PAIRABLE] + removalsSkipped.byReason[REMOVAL_SKIP_REASON.NOW_REFERENCED];
+  removalsSkipped.byReason[REMOVAL_SKIP_REASON.STILL_PAIRABLE] +
+  removalsSkipped.byReason[REMOVAL_SKIP_REASON.NOW_REFERENCED] +
+  removalsSkipped.byReason[REMOVAL_SKIP_REASON.NOT_REASSIGNABLE];
+
+const reassignedWarningOf = (reassigned: number, dryRun: boolean): string =>
+  dryRun
+    ? `${plural(reassigned, "dirección de un padrón subdividido pasará", "direcciones de padrones subdivididos pasarán")} a la parte más cercana.`
+    : `${plural(reassigned, "dirección de un padrón subdividido pasó", "direcciones de padrones subdivididos pasaron")} a la parte más cercana.`;
 
 function removalWarnings(target: ActualizarTargetReport, dryRun: boolean): string[] {
   const warnings: string[] = [];
   if (target.removalBlockedReason !== undefined) warnings.push(target.removalBlockedReason);
   if ((target.removed ?? 0) > 0) warnings.push(removalDoneWarningOf(target.removed ?? 0, target.table, dryRun));
+  if ((target.reassigned ?? 0) > 0) warnings.push(reassignedWarningOf(target.reassigned ?? 0, dryRun));
   if (target.removalsSkipped !== undefined && notDeletedCountOf(target.removalsSkipped) > 0) {
     warnings.push(removalSkippedWarningOf(target.removalsSkipped));
   }

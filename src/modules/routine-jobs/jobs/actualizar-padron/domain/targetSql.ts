@@ -19,6 +19,7 @@ import {
   PAIR_STATUS,
   PAIR_TIER,
   REMOVAL_SKIP_REASON,
+  REPLACEMENT_CLASS,
   type PairStatus,
   type PairTier,
   type RemovalSkipReason,
@@ -31,17 +32,30 @@ import { geometryAcceptsValuesSql } from "./geometryAcceptsSql";
 import { physicalColumn, qualifiedName } from "./layouts";
 import { REVERT_COLUMN, REVERT_KIND, REVERT_TABLE_SQL, revertColumnList } from "./revertCapture";
 import { DELETE_IDS_ID_COLUMN, DELETE_IDS_TABLE_SQL } from "./deleteIdsTable";
+import { INSERTED_IDS_TABLE_SQL, SESSION_IDS_COLUMN } from "./reassignTables";
 import { NO_REFERENCE_SCAN, type ReferenceScan } from "./referenceScan";
 import { removedListSql } from "./removedListSql";
 import {
+  classificationCtes,
+  MISSING_SCORED_CLASS_COLUMN,
+  MISSING_SCORED_CTE,
   missingReviewSql,
+  referenceBlockedColumnSql,
   referenceCountCtes,
   referenceJoinSql,
   referenceTotalColumnSql,
   REMOVAL_CTE,
   replacementCountSql,
-  replacementCtes,
+  replacementLabelCtes,
 } from "./replacementSql";
+import {
+  DELETE_WITHOUT_REASSIGN,
+  reassignCountsSql,
+  reassignDigestEntrySql,
+  reassignFlagSql,
+  reassignIdsInsertCte,
+  VERDICT_COLUMN,
+} from "./reassignClassifySql";
 
 const TARGET_ALIAS = "tgt";
 const MATCHED_TARGET_ALIAS = "t1";
@@ -80,6 +94,7 @@ const CTE_TARGET = {
   PAIR_CANDIDATES: "pair_candidates",
   PAIRS: "pairs",
   INSERTED: "inserted_rows",
+  INSERTED_STORE: "inserted_ids_store",
   UPDATED: "updated_rows",
   PAIRED: "paired_rows",
   REVERT: "revert_rows",
@@ -87,6 +102,8 @@ const CTE_TARGET = {
 
 export interface ApplySqlOptions {
   captureRevert?: boolean;
+  /** The real run stores the inserted ids in the session's temp table when it has addresses to reassign (AP-113). */
+  storeInsertedIds?: boolean;
 }
 
 const PAIR_COLUMN = {
@@ -485,20 +502,28 @@ function openPairIdsCte(): string {
    padrón is deleted. A blocked scan (no table found, or one unreadable) leaves every unreferenced padrón UNVERIFIED. */
 function removalVerdictsCte(blocked: boolean): string {
   const openPair = `${q(CTE_REMOVAL.OPEN_PAIR_IDS)}.${q("id")}`;
+  const refsTotal = referenceTotalColumnSql(REMOVAL_CTE.REFS);
+  const subdivided = `${q(MISSING_SCORED_CTE)}.${q(MISSING_SCORED_CLASS_COLUMN)} = ${literal(REPLACEMENT_CLASS.SUBDIVIDED)}`;
+  const reassignable = blocked ? "false" : `${referenceBlockedColumnSql(REMOVAL_CTE.REFS)} = 0`;
   const branches = [
     `WHEN ${openPair} IS NOT NULL THEN ${literal(REMOVAL_SKIP_REASON.STILL_PAIRABLE)}`,
-    `WHEN ${referenceTotalColumnSql(REMOVAL_CTE.REFS)} > 0 THEN ${literal(REMOVAL_SKIP_REASON.NOW_REFERENCED)}`,
+    `WHEN ${refsTotal} > 0 AND ${subdivided} AND ${reassignable} THEN NULL`,
+    `WHEN ${refsTotal} > 0 AND ${subdivided} THEN ${literal(REMOVAL_SKIP_REASON.NOT_REASSIGNABLE)}`,
+    `WHEN ${refsTotal} > 0 THEN ${literal(REMOVAL_SKIP_REASON.NOW_REFERENCED)}`,
     ...(blocked ? [`ELSE ${literal(REMOVAL_SKIP_REASON.UNVERIFIED)}`] : []),
   ];
   const missingId = `${q(CTE_REMOVAL.MISSING_IDS)}.${q("id")}`;
+  const verdicts = [
+    `SELECT ${missingId} AS ${q(VERDICT_COLUMN.OLD_ID)}, CASE ${branches.join(" ")} END AS ${q(REMOVAL_REASON_COLUMN)},`,
+    `${refsTotal} AS ${q(VERDICT_COLUMN.REFS_TOTAL)}`,
+    `FROM ${q(CTE_REMOVAL.MISSING_IDS)}`,
+    `LEFT JOIN ${q(CTE_REMOVAL.OPEN_PAIR_IDS)} ON ${openPair} = ${missingId}`,
+    referenceJoinSql(REMOVAL_CTE.REFS, missingId),
+    `LEFT JOIN ${q(MISSING_SCORED_CTE)} ON ${q(MISSING_SCORED_CTE)}.${q(DESTINATION_COLUMN.ID)} = ${missingId}`,
+  ].join(" ");
   return cte(
     REMOVAL_CTE.VERDICTS,
-    [
-      `SELECT ${missingId} AS "old_id", CASE ${branches.join(" ")} END AS ${q(REMOVAL_REASON_COLUMN)}`,
-      `FROM ${q(CTE_REMOVAL.MISSING_IDS)}`,
-      `LEFT JOIN ${q(CTE_REMOVAL.OPEN_PAIR_IDS)} ON ${openPair} = ${missingId}`,
-      referenceJoinSql(REMOVAL_CTE.REFS, missingId),
-    ].join(" ")
+    `SELECT vd.*, ${reassignFlagSql("vd")} AS ${q(VERDICT_COLUMN.REASSIGN)} FROM (${verdicts}) AS vd`
   );
 }
 
@@ -522,7 +547,7 @@ function deleteIdsInsertCte(): string {
     CTE_REMOVAL.DELETE_IDS,
     [
       `INSERT INTO ${DELETE_IDS_TABLE_SQL} (${q(DELETE_IDS_ID_COLUMN)})`,
-      `SELECT "old_id" FROM ${q(REMOVAL_CTE.VERDICTS)} WHERE ${DELETABLE_CONDITION}`,
+      `SELECT "old_id" FROM ${q(REMOVAL_CTE.VERDICTS)} WHERE ${DELETE_WITHOUT_REASSIGN}`,
       `RETURNING ${q(DELETE_IDS_ID_COLUMN)}`,
     ].join(" ")
   );
@@ -533,6 +558,7 @@ const verdictCountSql = (condition: string): string => `(SELECT count(*) FROM ${
 const SKIPPED_COUNT_COLUMN: Record<RemovalSkipReason, string> = {
   [REMOVAL_SKIP_REASON.STILL_PAIRABLE]: "removals_skipped_still_pairable",
   [REMOVAL_SKIP_REASON.NOW_REFERENCED]: "removals_skipped_now_referenced",
+  [REMOVAL_SKIP_REASON.NOT_REASSIGNABLE]: "removals_skipped_not_reassignable",
   [REMOVAL_SKIP_REASON.UNVERIFIED]: "removals_skipped_unverified",
 };
 
@@ -572,6 +598,7 @@ function classificationCountsSql(): string {
     `${changedCountSql(true)} AS "updates",`,
     `${changedCountSql(false)} AS "geometry_pending",`,
     ...removalCountsSql(),
+    ...reassignCountsSql(),
     geometryAcceptsUnappliedSql(),
   ].join(" ");
 }
@@ -732,8 +759,7 @@ export interface ClassifyStatementOptions {
   persistDeletable?: boolean;
 }
 
-/* The reference flags and the report flag only add or drop report columns: the classification, the digest and the plan never depend on them. */
-const replacementCtesOf = (layouts: PadronLayouts, report: boolean): string[] => (report ? replacementCtes(layouts.target) : []);
+/* The report flag only adds or drops report columns: the classification, the digest and the plan never depend on it. */
 const replacementCountsOf = (report: boolean): string[] => (report ? [`${replacementCountSql()},`] : []);
 
 function missingReviewOf(layouts: PadronLayouts, report: boolean): string[] {
@@ -743,7 +769,10 @@ function missingReviewOf(layouts: PadronLayouts, report: boolean): string[] {
 const removedListOf = (layouts: PadronLayouts, report: boolean): string[] =>
   report ? [`${plannedRemovedListSql(layouts)} AS "removed_list",`] : [];
 
-const deleteIdsInsertOf = (persistDeletable: boolean): string[] => (persistDeletable ? [deleteIdsInsertCte()] : []);
+const deleteIdsInsertOf = (persistDeletable: boolean): string[] =>
+  persistDeletable ? [deleteIdsInsertCte(), reassignIdsInsertCte()] : [];
+
+const labelCtesOf = (report: boolean): string[] => (report ? replacementLabelCtes() : []);
 
 function pendingListOf(layouts: PadronLayouts, report: boolean): string[] {
   return report ? [`${jsonArrayOf(geometryListSql(layouts, PENDING_FILTER, null), "pending_geometry_changes")} AS "pending_geometry_changes",`] : [];
@@ -758,9 +787,10 @@ export function buildPadronClassifySql(
   return [
     withClause([
       ...classifyCtes(layouts, options),
+      ...classificationCtes(layouts.target),
       ...removalCtes(scan),
       ...deleteIdsInsertOf(persistDeletable),
-      ...replacementCtesOf(layouts, report),
+      ...labelCtesOf(report),
     ]),
     "SELECT",
     `${classificationCountsSql()},`,
@@ -823,6 +853,7 @@ function digestEntriesSql(): string {
       changedOf(CHANGED_COLUMN.APPLIED)
     ),
     removalDigestEntrySql(),
+    reassignDigestEntrySql(),
   ].join(" UNION ALL ");
 }
 
@@ -944,16 +975,29 @@ function revertCountSql(captureRevert: boolean): string[] {
   return captureRevert ? [`(SELECT count(*) FROM ${q(CTE_TARGET.REVERT)}) AS "revert_rows",`] : [];
 }
 
+/* AP-113: the ids this statement inserted, kept for the reassign statement so its receivers are exactly this run's inserts. */
+function insertedIdsStoreCte(): string {
+  return cte(
+    CTE_TARGET.INSERTED_STORE,
+    [
+      `INSERT INTO ${INSERTED_IDS_TABLE_SQL} (${q(SESSION_IDS_COLUMN)})`,
+      `SELECT ir.${q(DESTINATION_COLUMN.ID)} FROM ${q(CTE_TARGET.INSERTED)} AS ir`,
+      `RETURNING ${q(SESSION_IDS_COLUMN)}`,
+    ].join(" ")
+  );
+}
+
 export function buildPadronApplySql(
   layouts: PadronLayouts,
   options: ActualizarPadronOptions,
-  { captureRevert = false }: ApplySqlOptions = {}
+  { captureRevert = false, storeInsertedIds = false }: ApplySqlOptions = {}
 ): string {
   const { target } = layouts;
   return [
     withClause([
       ...classifyCtes(layouts, options),
       insertedRowsCte(target),
+      ...(storeInsertedIds ? [insertedIdsStoreCte()] : []),
       updatedRowsCte(target, captureRevert),
       pairedRowsCte(target, options, captureRevert),
       ...(captureRevert ? [revertRowsCte()] : []),

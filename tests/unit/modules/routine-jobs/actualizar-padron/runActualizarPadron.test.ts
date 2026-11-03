@@ -6,6 +6,9 @@ import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } 
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
 import { buildReportSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reportSql";
+import { buildMaxAddressMasterIdSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/revertCapture";
+import { buildPadronReassignSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reassignSql";
+import { buildCreateInsertedIdsTableSql, buildCreateReassignIdsTableSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reassignTables";
 import { buildPadronDeleteSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteSql";
 import { buildCreateDeleteIdsTableSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteIdsTable";
 import { referenceScanOf, type ReferenceScanRow } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/referenceScan";
@@ -18,6 +21,7 @@ import { writeRevertBackup } from "@/modules/routine-jobs/jobs/actualizar-padron
 
 /* The plan file lives under os.tmpdir(): the default export is redirected to a fresh temp root per test. */
 const tempRoot = vi.hoisted(() => ({ directory: "" }));
+const activeLayouts = vi.hoisted(() => ({ current: undefined as unknown as PadronLayouts }));
 
 vi.mock("node:os", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:os")>();
@@ -25,13 +29,17 @@ vi.mock("node:os", async (importOriginal) => {
 });
 
 vi.mock("@/modules/routine-jobs/jobs/actualizar-padron/services/resolveLayouts", () => ({
-  resolvePadronLayouts: vi.fn(async () => LAYOUTS),
+  resolvePadronLayouts: vi.fn(async () => activeLayouts.current),
 }));
 
 vi.mock("@/modules/routine-jobs/jobs/shared/preflightAsserts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/modules/routine-jobs/jobs/shared/preflightAsserts")>()),
   assertWriteTargetsReady: vi.fn(async () => undefined),
   assertSourceTablesReady: vi.fn(async () => undefined),
+}));
+
+vi.mock("@/modules/routine-jobs/jobs/shared/addressMasterLinkPreflight", () => ({
+  addressMasterIssuesOf: vi.fn(async () => []),
 }));
 
 /* The revert writer touches the filesystem; these tests replace it so no file is written under the OS temp directory. */
@@ -78,6 +86,21 @@ const LAYOUTS: PadronLayouts = {
   target: TARGET,
   province: tableOf("carto", "province", Object.values(PROVINCE_COLUMN)),
   locality: tableOf("carto", "loc", Object.values(LOCALITY_COLUMN)),
+};
+
+const ADDRESS_MASTER: WritableTargetLayout = {
+  ...tableOf("carto", "addresses_master", ["addresses_master_id", "urn", "latitud", "longitud"]),
+  srid: 0,
+  idColumn: "addresses_master_id",
+  idSequence: "carto.addresses_master_addresses_master_id_seq",
+  identityColumns: [],
+  catalog: [],
+};
+
+const LAYOUTS_WITH_MASTER: PadronLayouts = {
+  ...LAYOUTS,
+  target: { ...TARGET, columns: { ...TARGET.columns, id_address_master: "id_address_master" } },
+  addressMaster: ADDRESS_MASTER,
 };
 
 const OPTIONS: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: false, pairChoices: [] };
@@ -133,6 +156,22 @@ const classificationRowOf = (removed = 0): Record<string, unknown> => ({
   geometry_changes: [],
 });
 
+/** AP-114: the scan reads the reassign facts only when an address master table is defined. */
+const scanOf = (rows: ReferenceScanRow[], layouts: PadronLayouts = LAYOUTS) =>
+  referenceScanOf(rows, { reassignAllowed: layouts.addressMaster !== undefined });
+
+const scanCatalogRowOf = (row: ReferenceScanRow): Record<string, unknown> => ({
+  schema: row.schema,
+  table: row.table,
+  readable: row.readable,
+  updatable: row.updatable,
+  pk_columns: row.primaryKeyColumns,
+  pk_column: row.primaryKeyColumn,
+  geometry_columns: row.geometryColumns,
+  geometry_column: row.geometryColumn,
+  geometry_type: row.geometryType,
+});
+
 const HAS_TABLE_PRIVILEGE_PATTERN = /has_table_privilege/i;
 
 /** The session answers the exact statements the stage builds; the apply reports the given insert count. Statements it
@@ -145,28 +184,57 @@ interface SessionOptions {
   removed?: number;
   deleted?: number;
   surviving?: number;
+  layouts?: PadronLayouts;
+  options?: ActualizarPadronOptions;
+  classification?: Record<string, unknown>;
+  reassignMoved?: { moved: number; byTable?: Record<string, number> };
+  masterDeleted?: number;
 }
 
 function sessionOf(
   appliedInserted: number,
-  { deletePrivilegeGranted = true, scanRows = READABLE_SCAN_ROWS, removed = 0, deleted = removed, surviving = removed }: SessionOptions = {}
+  {
+    deletePrivilegeGranted = true,
+    scanRows = READABLE_SCAN_ROWS,
+    removed = 0,
+    deleted = removed,
+    surviving = removed,
+    layouts = LAYOUTS,
+    options = OPTIONS,
+    classification = {},
+    reassignMoved = { moved: 0 },
+    masterDeleted = 0,
+  }: SessionOptions = {}
 ): { session: RunSession; log: string[] } {
   const log: string[] = [];
-  const scan = referenceScanOf(scanRows);
+  const scan = scanOf(scanRows, layouts);
+  const classified = { ...classificationRowOf(removed), ...classification };
+  const reassignStored = Number(classification.subdivided_deleted ?? 0) > 0;
   const applyAnswer = [{ inserted: appliedInserted, updated: 0, inserted_list: [] }];
   const answers = new Map<string, Array<Record<string, unknown>>>([
-    [buildReportSql(LAYOUTS), [REPORT_ROW]],
-    [referenceTablesScanSql("carto", "padron"), scanRows.map((row) => ({ ...row }))],
-    [buildPadronClassifySql(LAYOUTS, OPTIONS, scan, { report: true }), [classificationRowOf(removed)]],
-    [buildPadronClassifySql(LAYOUTS, OPTIONS, scan, { report: false, persistDeletable: true }), [classificationRowOf(removed)]],
-    [buildPadronDeleteSql(LAYOUTS, scan.tables), [{ surviving, deleted, revert_rows: deleted, removed_list: [] }]],
-    [buildPadronApplySql(LAYOUTS, OPTIONS), applyAnswer],
-    [buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }), applyAnswer],
+    [buildReportSql(layouts), [REPORT_ROW]],
+    [referenceTablesScanSql("carto", "padron"), scanRows.map((row) => scanCatalogRowOf(row))],
+    [buildPadronClassifySql(layouts, options, scan, { report: true }), [classified]],
+    [buildPadronClassifySql(layouts, options, scan, { report: false, persistDeletable: true }), [classified]],
+    [
+      buildPadronDeleteSql(layouts, scan.tables),
+      [{ surviving, deleted, revert_rows: deleted, master_deleted: masterDeleted, removed_list: [] }],
+    ],
+    [
+      buildPadronReassignSql(layouts, scan.tables),
+      [{ moved: reassignMoved.moved, by_table: reassignMoved.byTable ?? {}, padrones: 1, revert_rows: reassignMoved.moved }],
+    ],
+    [buildPadronApplySql(layouts, options), applyAnswer],
+    [buildPadronApplySql(layouts, options, { captureRevert: true, storeInsertedIds: reassignStored }), applyAnswer],
+    ...(layouts.addressMaster === undefined ? [] : [[buildMaxAddressMasterIdSql(layouts.addressMaster), [{ max_id: 0 }]] as [string, Array<Record<string, unknown>>]]),
   ]);
+  activeLayouts.current = layouts;
   const session: RunSession = {
     async query(sql: string) {
       log.push(sql);
       await Promise.resolve();
+      const known = answers.get(sql);
+      if (known !== undefined) return { rows: known };
       if (HAS_TABLE_PRIVILEGE_PATTERN.test(sql)) return { rows: [{ has_privilege: deletePrivilegeGranted }] };
       return { rows: answers.get(sql) ?? [] };
     },
@@ -266,9 +334,9 @@ describe("runActualizarPadron revert backup failure (AP-68)", () => {
 
 describe("runActualizarPadron automatic removal (AP-102, AP-106, AP-107)", () => {
   const CREATE_TEMP_SQL = buildCreateDeleteIdsTableSql();
-  const deleteSqlOf = (rows: ReferenceScanRow[] = READABLE_SCAN_ROWS): string => buildPadronDeleteSql(LAYOUTS, referenceScanOf(rows).tables);
+  const deleteSqlOf = (rows: ReferenceScanRow[] = READABLE_SCAN_ROWS): string => buildPadronDeleteSql(LAYOUTS, scanOf(rows).tables);
   const persistClassifyOf = (rows: ReferenceScanRow[] = READABLE_SCAN_ROWS): string =>
-    buildPadronClassifySql(LAYOUTS, OPTIONS, referenceScanOf(rows), { report: false, persistDeletable: true });
+    buildPadronClassifySql(LAYOUTS, OPTIONS, scanOf(rows), { report: false, persistDeletable: true });
 
   it("should create the temp table, classify into it, apply, delete and analyze, in that order, in a real run", async () => {
     const planId = await analysisPlanIdOf();
@@ -356,5 +424,125 @@ describe("runActualizarPadron automatic removal (AP-102, AP-106, AP-107)", () =>
     expect(result.target.removed).toBe(0);
     expect(result.target.removalBlockedReason).toContain("carto.secret_refs");
     expect(result.warnings.some((warning) => warning.includes("carto.secret_refs"))).toBe(true);
+  });
+});
+
+describe("runActualizarPadron reassignment of subdivided padrones (AP-109 to AP-115)", () => {
+  const REASSIGNABLE_ROWS: ReferenceScanRow[] = [
+    {
+      schema: "carto",
+      table: "access_point",
+      readable: true,
+      updatable: true,
+      primaryKeyColumns: 1,
+      primaryKeyColumn: "gid",
+      geometryColumns: 1,
+      geometryColumn: "geom",
+      geometryType: "geometry",
+    },
+  ];
+  const MASTER_OPTIONS: ActualizarPadronOptions = { ...OPTIONS, linkAddressMaster: true };
+  const MASTER_PARAMS = (overrides: Partial<ActualizarPadronParams> = {}): ActualizarPadronParams => PARAMS_OF({ addressMasterTable: "addresses_master", options: MASTER_OPTIONS, ...overrides });
+  const SUBDIVIDED = { subdivided_deleted: 1, reassigned: 4, reassigned_by_table: { "carto.access_point": 4 } };
+  const sessionWithReassign = (overrides: SessionOptions = {}) =>
+    sessionOf(CLASSIFIED_NEW, {
+      layouts: LAYOUTS_WITH_MASTER,
+      options: MASTER_OPTIONS,
+      scanRows: REASSIGNABLE_ROWS,
+      removed: 2,
+      classification: SUBDIVIDED,
+      reassignMoved: { moved: 4, byTable: { "carto.access_point": 4 } },
+      masterDeleted: 2,
+      ...overrides,
+    });
+  const scan = () => scanOf(REASSIGNABLE_ROWS, LAYOUTS_WITH_MASTER);
+  const reassignSql = (): string => buildPadronReassignSql(LAYOUTS_WITH_MASTER, scan().tables);
+  const planIdWithMaster = async (): Promise<string> => {
+    const { session } = sessionWithReassign();
+    const result = await runActualizarPadron(MASTER_PARAMS({ dryRun: true, confirm: false }), depsOf(session));
+    return result.planId as string;
+  };
+
+  it("should create both id temp tables before the classify, the inserted-ids one before the apply, then reassign between the apply and the delete", async () => {
+    const planId = await planIdWithMaster();
+    const { session, log } = sessionWithReassign();
+
+    await runActualizarPadron(MASTER_PARAMS({ planId }), depsOf(session));
+
+    const persistClassify = buildPadronClassifySql(LAYOUTS_WITH_MASTER, MASTER_OPTIONS, scan(), { report: false, persistDeletable: true });
+    const apply = buildPadronApplySql(LAYOUTS_WITH_MASTER, MASTER_OPTIONS, { captureRevert: true, storeInsertedIds: true });
+    const order = [
+      log.indexOf(buildCreateReassignIdsTableSql()),
+      log.indexOf(persistClassify),
+      log.indexOf(buildCreateInsertedIdsTableSql()),
+      log.indexOf(apply),
+      log.indexOf(reassignSql()),
+      log.indexOf(buildPadronDeleteSql(LAYOUTS_WITH_MASTER, scan().tables)),
+    ];
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(log).toContain(COMMIT_SQL);
+  });
+
+  it("should report the rows the reassign statement moved, per table, and pass the moved and master counts to the revert backup", async () => {
+    const planId = await planIdWithMaster();
+    const { session } = sessionWithReassign();
+
+    const result = await runActualizarPadron(MASTER_PARAMS({ planId }), depsOf(session));
+
+    expect(result.target.reassigned).toBe(4);
+    expect(result.target.reassignedByTable).toEqual({ "carto.access_point": 4 });
+    expect(result.target.removed).toBe(2);
+    expect(result.warnings).toContain("4 direcciones de padrones subdivididos pasaron a la parte más cercana.");
+    const request = vi.mocked(writeRevertBackup).mock.calls.at(-1)?.[1];
+    expect(request?.expected).toMatchObject({ reassigned: 4, masterDeleted: 2, removed: 2 });
+  });
+
+  it("should ROLLBACK, never COMMIT, and throw when the rows moved differ from the rows the classification counted", async () => {
+    const planId = await planIdWithMaster();
+    const { session, log } = sessionWithReassign({ reassignMoved: { moved: 3 } });
+
+    const failure = await failureOf(runActualizarPadron(MASTER_PARAMS({ planId }), depsOf(session)));
+
+    expect(failure.message).toMatch(/Las direcciones reasignadas \(3\) no coinciden con las del análisis \(4\) en carto\.padron/);
+    expect(log[log.length - 1]).toBe(ROLLBACK_SQL);
+    expect(log).not.toContain(COMMIT_SQL);
+    expect(log).not.toContain(buildPadronDeleteSql(LAYOUTS_WITH_MASTER, scan().tables));
+  });
+
+  it("should neither store inserted ids nor run the reassign statement when no subdivided padron is to be reassigned", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { removed: 2 });
+
+    const result = await runActualizarPadron(PARAMS_OF({ planId }), depsOf(session));
+
+    expect(log).not.toContain(buildCreateInsertedIdsTableSql());
+    expect(log.some((sql) => sql.includes("padron_inserted_ids"))).toBe(false);
+    expect(log.some((sql) => sql.includes("reassign_receivers"))).toBe(false);
+    expect(result.target.reassigned).toBe(0);
+  });
+
+  it("should plan the reassigned rows in an analysis without creating a temp table or running the reassign statement", async () => {
+    const { session, log } = sessionWithReassign();
+
+    const result = await runActualizarPadron(MASTER_PARAMS({ dryRun: true, confirm: false }), depsOf(session));
+
+    expect(result.target.reassigned).toBe(4);
+    expect(result.target.reassignedByTable).toEqual({ "carto.access_point": 4 });
+    expect(log).not.toContain(reassignSql());
+    expect(log).not.toContain(buildCreateReassignIdsTableSql());
+    expect(log).not.toContain(buildCreateInsertedIdsTableSql());
+    expect(result.warnings).toContain("4 direcciones de padrones subdivididos pasarán a la parte más cercana.");
+  });
+
+  it("should list the reassign step in a real run's planned steps only", async () => {
+    const planId = await planIdWithMaster();
+    const { session } = sessionWithReassign();
+
+    const result = await runActualizarPadron(MASTER_PARAMS({ planId }), depsOf(session));
+    const analysis = await runActualizarPadron(MASTER_PARAMS({ dryRun: true, confirm: false }), depsOf(sessionWithReassign().session));
+
+    expect(JSON.stringify(result)).toContain("Reasignar direcciones de padrones subdivididos");
+    expect(JSON.stringify(analysis)).not.toContain("Reasignar direcciones de padrones subdivididos");
   });
 });

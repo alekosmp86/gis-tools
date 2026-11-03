@@ -77,9 +77,9 @@ describe("buildRunWarnings accepted geometry warning (AP-100)", () => {
   });
 });
 
-const removalsSkippedOf = (stillPairable: number, nowReferenced: number, unverified = 0): RemovalSkippedReport => ({
-  total: stillPairable + nowReferenced + unverified,
-  byReason: { STILL_PAIRABLE: stillPairable, NOW_REFERENCED: nowReferenced, UNVERIFIED: unverified },
+const removalsSkippedOf = (stillPairable: number, nowReferenced: number, unverified = 0, notReassignable = 0): RemovalSkippedReport => ({
+  total: stillPairable + nowReferenced + notReassignable + unverified,
+  byReason: { STILL_PAIRABLE: stillPairable, NOW_REFERENCED: nowReferenced, NOT_REASSIGNABLE: notReassignable, UNVERIFIED: unverified },
 });
 
 const removalInputOf = (
@@ -98,21 +98,21 @@ describe("buildRunWarnings automatic removal warnings (AP-105)", () => {
   it("should warn in Spanish with the plural past form naming the table when a real run deleted several padrones", () => {
     const warnings = buildRunWarnings(removalInputOf(3, removalsSkippedOf(0, 0), { missing: 3 }));
 
-    expect(warnings).toContain(`3 padrones sin fila de origen eliminados de ${TABLE} (sin direcciones asociadas).`);
+    expect(warnings).toContain(`3 padrones sin fila de origen eliminados de ${TABLE} (sin direcciones asociadas o con direcciones reasignadas a sus partes).`);
   });
 
   it("should warn with the singular past form when a real run deleted exactly one padron", () => {
     const warnings = buildRunWarnings(removalInputOf(1, removalsSkippedOf(0, 0), { missing: 1 }));
 
-    expect(warnings).toContain(`1 padrón sin fila de origen eliminado de ${TABLE} (sin direcciones asociadas).`);
+    expect(warnings).toContain(`1 padrón sin fila de origen eliminado de ${TABLE} (sin direcciones asociadas o con direcciones reasignadas a sus partes).`);
   });
 
   it("should warn with the future form when an analysis will delete padrones", () => {
     const many = buildRunWarnings(removalInputOf(2, removalsSkippedOf(0, 0), { dryRun: true, missing: 2 }));
     const one = buildRunWarnings(removalInputOf(1, removalsSkippedOf(0, 0), { dryRun: true, missing: 1 }));
 
-    expect(many).toContain(`2 padrones sin fila de origen se eliminarán de ${TABLE} (sin direcciones asociadas).`);
-    expect(one).toContain(`1 padrón sin fila de origen se eliminará de ${TABLE} (sin direcciones asociadas).`);
+    expect(many).toContain(`2 padrones sin fila de origen se eliminarán de ${TABLE} (sin direcciones asociadas o con direcciones reasignadas a sus partes).`);
+    expect(one).toContain(`1 padrón sin fila de origen se eliminará de ${TABLE} (sin direcciones asociadas o con direcciones reasignadas a sus partes).`);
   });
 
   it("should warn naming both counts, grouped by the two held-back reasons, when padrones are not deleted", () => {
@@ -168,6 +168,45 @@ describe("buildRunWarnings automatic removal warnings (AP-105)", () => {
     const warnings = buildRunWarnings(removalInputOf(0, removalsSkippedOf(0, 0, 3), { missing: 3, removalBlockedReason: "bloqueado" }));
 
     expect(warnings.some((warning) => SKIPPED_WARNING.test(warning))).toBe(false);
+  });
+});
+
+describe("buildRunWarnings reassignment warnings (AP-113, AP-115)", () => {
+  const withReassigned = (reassigned: number | undefined, dryRun: boolean): WarningInput => {
+    const input = removalInputOf(0, removalsSkippedOf(0, 0), { dryRun });
+    return { ...input, target: { ...input.target, reassigned } };
+  };
+
+  it("should warn in the past, plural, when a real run moved several addresses to the nearest part", () => {
+    expect(buildRunWarnings(withReassigned(3, false))).toContain("3 direcciones de padrones subdivididos pasaron a la parte más cercana.");
+  });
+
+  it("should warn in the past, singular, when a real run moved exactly one address", () => {
+    expect(buildRunWarnings(withReassigned(1, false))).toContain("1 dirección de un padrón subdividido pasó a la parte más cercana.");
+  });
+
+  it("should warn in the future when an analysis will move addresses", () => {
+    expect(buildRunWarnings(withReassigned(2, true))).toContain("2 direcciones de padrones subdivididos pasarán a la parte más cercana.");
+    expect(buildRunWarnings(withReassigned(1, true))).toContain("1 dirección de un padrón subdividido pasará a la parte más cercana.");
+  });
+
+  it("should produce no reassignment warning when zero or absent", () => {
+    expect(buildRunWarnings(withReassigned(0, false)).some((warning) => warning.includes("parte más cercana"))).toBe(false);
+    expect(buildRunWarnings(withReassigned(undefined, false)).some((warning) => warning.includes("parte más cercana"))).toBe(false);
+  });
+
+  it("should list the not-reassignable reason in the held-back warning and count it in the total", () => {
+    const warnings = buildRunWarnings(removalInputOf(0, removalsSkippedOf(1, 1, 0, 2), { missing: 4 }));
+
+    expect(warnings).toContain(
+      "4 padrones sin fila de origen no se eliminan: 1 porque tienen un par sin resolver, 1 porque tienen direcciones asociadas, 2 porque no se pueden reasignar sus direcciones."
+    );
+  });
+
+  it("should warn singular when exactly one padron is not reassignable", () => {
+    const warnings = buildRunWarnings(removalInputOf(0, removalsSkippedOf(0, 0, 0, 1), { missing: 1 }));
+
+    expect(warnings).toContain("1 padrón sin fila de origen no se elimina: 1 porque no se pueden reasignar sus direcciones.");
   });
 });
 

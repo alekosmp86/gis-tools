@@ -201,6 +201,8 @@ export interface MissingPadron {
   refs?: MissingPadronRefs;
   /** Why this padrón is not deleted (AP-101); null when it will be. */
   removalReason: RemovalSkipReason | null;
+  /** AP-110: per `schema.table`, why its rows cannot be moved to a part; empty when none blocks (absent in older results). */
+  reassignBlockers?: Record<string, string>;
 }
 
 /** A staging key for the map: a RURAL padrón has no locality, an URBANO one names its locality (nomloccat). */
@@ -248,6 +250,12 @@ export interface PadronCounts {
   /** The delete-eligible missing padrón count (AP-105); a planned write. */
   removed: number;
   removalsSkipped: RemovalSkippedReport;
+  /** AP-112: the referencing rows the real run will move, the subdivided padrones it will then delete, and the rows per table. */
+  reassigned: number;
+  subdividedDeleted: number;
+  reassignedByTable: Record<string, number>;
+  /** AP-111: of `reassigned`, the rows with no usable point, sent to the receiver covering most of the old padrón. */
+  reassignedWithoutPoint: number;
 }
 
 /** Cheap facts of the destination and the staging side, read in the classify statement; the digest covers the planned writes. */
@@ -299,11 +307,20 @@ export interface PadronApplyOutcome {
   insertedList: PadronInserted[];
 }
 
-/** The outcome of AP-106's delete statement: `deleted` and `surviving` are the same count by construction, verified as AP-48 does. */
+/** The outcome of AP-106's delete statement: `deleted` and `surviving` are the same count by construction, verified as AP-48 does. `masterDeleted` counts the address master rows deleted with their padrón (AP-114). */
 export interface PadronDeleteOutcome {
   deleted: number;
   surviving: number;
+  masterDeleted: number;
   removedList: PadronRemoved[];
+}
+
+/** The outcome of AP-113's reassign statement: the rows moved (checked against the classification), per `schema.table`, and the padrones handed to the delete ids. */
+export interface PadronReassignOutcome {
+  moved: number;
+  byTable: Record<string, number>;
+  withoutPoint: number;
+  padrones: number;
 }
 
 export interface ActualizarTargetReport {
@@ -337,6 +354,11 @@ export interface ActualizarTargetReport {
   removed?: number;
   removalsSkipped?: RemovalSkippedReport;
   removedList?: PadronRemoved[];
+  /** AP-115: the referencing rows of the subdivided padrones moved (a real run) or to move (an analysis) to their parts, and how many per `schema.table`. */
+  reassigned?: number;
+  reassignedByTable?: Record<string, number>;
+  /** AP-111: of `reassigned`, the rows moved without a point to the largest receiver. */
+  reassignedWithoutPoint?: number;
   /** Set when the reference scan could not vouch for every referencing table: nothing was deleted (AP-102). */
   removalBlockedReason?: string;
 }
@@ -353,6 +375,9 @@ export interface ActualizarPadronBackup {
     inserted: number;
     addressMasterRows: number;
     deleted: number;
+    /** AP-115: the referencing rows moved to a part and the address master rows deleted with their padrón; absent in results of older runs. */
+    reassigned?: number;
+    masterDeleted?: number;
   };
 }
 

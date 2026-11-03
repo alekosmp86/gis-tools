@@ -7,6 +7,7 @@ import {
   plannedRemovalOf,
   toPadronClassification,
   toPadronDeleteOutcome,
+  toPadronReassignOutcome,
 } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reportMapping";
 import { plannedStepLabels, STEP } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/plannedSteps";
 import type { PadronClassification } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
@@ -45,18 +46,18 @@ const classificationOf = (row: Record<string, unknown> = {}): PadronClassificati
   });
 
 describe("toPadronClassification removal counts (AP-105)", () => {
-  it("should map removed and the three skip reasons, with a total that is their sum", () => {
+  it("should map removed and the four skip reasons, with a total that is their sum", () => {
     const { counts } = classificationOf({ removals_skipped_unverified: 3 });
 
     expect(counts.removed).toBe(4);
-    expect(counts.removalsSkipped).toEqual({ total: 6, byReason: { STILL_PAIRABLE: 2, NOW_REFERENCED: 1, UNVERIFIED: 3 } });
+    expect(counts.removalsSkipped).toEqual({ total: 6, byReason: { STILL_PAIRABLE: 2, NOW_REFERENCED: 1, NOT_REASSIGNABLE: 0, UNVERIFIED: 3 } });
   });
 
   it("should read missing removal columns as zero", () => {
     const { counts } = toPadronClassification({});
 
     expect(counts.removed).toBe(0);
-    expect(counts.removalsSkipped).toEqual({ total: 0, byReason: { STILL_PAIRABLE: 0, NOW_REFERENCED: 0, UNVERIFIED: 0 } });
+    expect(counts.removalsSkipped).toEqual({ total: 0, byReason: { STILL_PAIRABLE: 0, NOW_REFERENCED: 0, NOT_REASSIGNABLE: 0, UNVERIFIED: 0 } });
   });
 
   it("should read bigint-as-text counts as numbers", () => {
@@ -93,15 +94,83 @@ describe("toPadronClassification removal counts (AP-105)", () => {
   });
 });
 
+describe("toPadronDeleteOutcome master count (AP-114)", () => {
+  it("should map master_deleted as masterDeleted", () => {
+    expect(toPadronDeleteOutcome({ surviving: 2, deleted: 2, master_deleted: "2" }).masterDeleted).toBe(2);
+  });
+});
+
+describe("toPadronReassignOutcome (AP-113)", () => {
+  it("should map moved, padrones and per-table counts, reading bigint text as numbers", () => {
+    expect(toPadronReassignOutcome({ moved: "5", padrones: 2, without_point: "2", by_table: { "carto.a": "5" } })).toEqual({
+      moved: 5,
+      padrones: 2,
+      withoutPoint: 2,
+      byTable: { "carto.a": 5 },
+    });
+  });
+
+  it("should read an empty row as zero moved and no tables, and a non-object by_table as no tables", () => {
+    expect(toPadronReassignOutcome({})).toEqual({ moved: 0, padrones: 0, withoutPoint: 0, byTable: {} });
+    expect(toPadronReassignOutcome({ by_table: "x" }).byTable).toEqual({});
+    expect(toPadronReassignOutcome({ by_table: null }).byTable).toEqual({});
+  });
+});
+
+describe("toPadronClassification reassign fields (AP-112)", () => {
+  it("should map the not-reassignable skip, the reassigned counts and the per-table map", () => {
+    const { counts } = classificationOf({
+      removals_skipped_not_reassignable: 4,
+      reassigned: 9,
+      subdivided_deleted: 3,
+      reassigned_by_table: { "carto.t": 9 },
+    });
+
+    expect(counts.removalsSkipped.byReason.NOT_REASSIGNABLE).toBe(4);
+    expect(counts.removalsSkipped.total).toBe(7);
+    expect(counts.reassigned).toBe(9);
+    expect(counts.subdividedDeleted).toBe(3);
+    expect(counts.reassignedByTable).toEqual({ "carto.t": 9 });
+  });
+
+  it("should map reassigned_without_point to reassignedWithoutPoint and read it as zero when absent", () => {
+    expect(classificationOf({ reassigned_without_point: "3" }).counts.reassignedWithoutPoint).toBe(3);
+    expect(toPadronClassification({}).counts.reassignedWithoutPoint).toBe(0);
+  });
+
+  it("should read the reassign columns of an older result as zero and an empty map", () => {
+    const { counts } = toPadronClassification({});
+
+    expect(counts.reassigned).toBe(0);
+    expect(counts.subdividedDeleted).toBe(0);
+    expect(counts.reassignedByTable).toEqual({});
+  });
+
+  it("should map reassignBlockers of a missing review row to table and reason, empty when absent or not an object", () => {
+    const { missingReview } = toPadronClassification({
+      missing_review: [
+        { oldId: 1, class: "SUBDIVIDED", removalReason: "NOT_REASSIGNABLE", reassignBlockers: { "carto.t": "sin clave primaria de una sola columna" } },
+        { oldId: 2, class: "SUBDIVIDED" },
+        { oldId: 3, class: "SUBDIVIDED", reassignBlockers: "x" },
+      ],
+    });
+
+    expect(missingReview[0].reassignBlockers).toEqual({ "carto.t": "sin clave primaria de una sola columna" });
+    expect(missingReview[0].removalReason).toBe("NOT_REASSIGNABLE");
+    expect(missingReview[1].reassignBlockers).toEqual({});
+    expect(missingReview[2].reassignBlockers).toEqual({});
+  });
+});
+
 describe("toPadronDeleteOutcome (AP-106)", () => {
   it("should map the surviving, deleted counts and the capped list", () => {
     const outcome = toPadronDeleteOutcome({ surviving: "3", deleted: 3, removed_list: [removedRowOf(7)] });
 
-    expect(outcome).toEqual({ deleted: 3, surviving: 3, removedList: [removedRowOf(7)] });
+    expect(outcome).toEqual({ deleted: 3, surviving: 3, masterDeleted: 0, removedList: [removedRowOf(7)] });
   });
 
   it("should read an empty delete row as zero deleted and an empty list", () => {
-    expect(toPadronDeleteOutcome({})).toEqual({ deleted: 0, surviving: 0, removedList: [] });
+    expect(toPadronDeleteOutcome({})).toEqual({ deleted: 0, surviving: 0, masterDeleted: 0, removedList: [] });
   });
 });
 
@@ -111,31 +180,44 @@ describe("plannedRemovalOf (AP-107)", () => {
 
     expect(plannedRemovalOf(classification)).toEqual({
       removed: 4,
-      removalsSkipped: { total: 3, byReason: { STILL_PAIRABLE: 2, NOW_REFERENCED: 1, UNVERIFIED: 0 } },
+      removalsSkipped: { total: 3, byReason: { STILL_PAIRABLE: 2, NOW_REFERENCED: 1, NOT_REASSIGNABLE: 0, UNVERIFIED: 0 } },
       removedList: [removedRowOf(1), removedRowOf(2)],
+      reassigned: 0,
+      reassignedByTable: {},
+      reassignedWithoutPoint: 0,
     });
+  });
+
+  it("should carry the classification's reassigned rows and per-table counts for an analysis", () => {
+    const classification = classificationOf({ reassigned: 7, subdivided_deleted: 2, reassigned_by_table: { "carto.a": 5, "carto.b": "2" } });
+
+    const planned = plannedRemovalOf(classification);
+
+    expect(planned.reassigned).toBe(7);
+    expect(planned.reassignedByTable).toEqual({ "carto.a": 5, "carto.b": 2 });
+    expect(classification.counts.subdividedDeleted).toBe(2);
   });
 });
 
 describe("actualRemovalCountsOf (AP-106)", () => {
   it("should report the deleted count and the delete statement's list, keeping the planned skips, when every candidate was deleted", () => {
-    const result = actualRemovalCountsOf(classificationOf(), { deleted: 4, surviving: 4, removedList: [removedRowOf(9)] });
+    const result = actualRemovalCountsOf(classificationOf(), { deleted: 4, surviving: 4, masterDeleted: 0, removedList: [removedRowOf(9)] });
 
     expect(result.removed).toBe(4);
     expect(result.removedList).toEqual([removedRowOf(9)]);
-    expect(result.removalsSkipped).toEqual({ total: 3, byReason: { STILL_PAIRABLE: 2, NOW_REFERENCED: 1, UNVERIFIED: 0 } });
+    expect(result.removalsSkipped).toEqual({ total: 3, byReason: { STILL_PAIRABLE: 2, NOW_REFERENCED: 1, NOT_REASSIGNABLE: 0, UNVERIFIED: 0 } });
   });
 
   it("should count an id referenced since the classify as NOW_REFERENCED, growing the total by the same amount", () => {
-    const result = actualRemovalCountsOf(classificationOf(), { deleted: 3, surviving: 3, removedList: [] });
+    const result = actualRemovalCountsOf(classificationOf(), { deleted: 3, surviving: 3, masterDeleted: 0, removedList: [] });
 
     expect(result.removed).toBe(3);
-    expect(result.removalsSkipped.byReason).toEqual({ STILL_PAIRABLE: 2, NOW_REFERENCED: 2, UNVERIFIED: 0 });
+    expect(result.removalsSkipped.byReason).toEqual({ STILL_PAIRABLE: 2, NOW_REFERENCED: 2, NOT_REASSIGNABLE: 0, UNVERIFIED: 0 });
     expect(result.removalsSkipped.total).toBe(4);
   });
 
   it("should count every candidate as newly referenced when the delete statement deleted none", () => {
-    const result = actualRemovalCountsOf(classificationOf(), { deleted: 0, surviving: 0, removedList: [] });
+    const result = actualRemovalCountsOf(classificationOf(), { deleted: 0, surviving: 0, masterDeleted: 0, removedList: [] });
 
     expect(result.removed).toBe(0);
     expect(result.removalsSkipped.byReason.NOW_REFERENCED).toBe(5);
@@ -146,7 +228,7 @@ describe("actualRemovalCountsOf (AP-106)", () => {
     const classification = classificationOf();
     const plannedTotal = classification.counts.removed + classification.counts.removalsSkipped.total;
 
-    const result = actualRemovalCountsOf(classification, { deleted: 1, surviving: 1, removedList: [] });
+    const result = actualRemovalCountsOf(classification, { deleted: 1, surviving: 1, masterDeleted: 0, removedList: [] });
 
     expect(result.removed + result.removalsSkipped.total).toBe(plannedTotal);
   });
@@ -154,9 +236,60 @@ describe("actualRemovalCountsOf (AP-106)", () => {
   it("should not mutate the classification's planned skips", () => {
     const classification = classificationOf();
 
-    actualRemovalCountsOf(classification, { deleted: 0, surviving: 0, removedList: [] });
+    actualRemovalCountsOf(classification, { deleted: 0, surviving: 0, masterDeleted: 0, removedList: [] });
 
     expect(classification.counts.removalsSkipped.byReason.NOW_REFERENCED).toBe(1);
+  });
+});
+
+describe("actualRemovalCountsOf reassign outcome (AP-113, AP-115)", () => {
+  it("should report the rows the reassign statement moved, per table, instead of the planned ones", () => {
+    const classification = classificationOf({ reassigned: 5 });
+
+    const result = actualRemovalCountsOf(classification, { deleted: 4, surviving: 4, masterDeleted: 1, removedList: [] }, { moved: 5, byTable: { "carto.a": 5 }, withoutPoint: 2, padrones: 1 });
+
+    expect(result.reassigned).toBe(5);
+    expect(result.reassignedByTable).toEqual({ "carto.a": 5 });
+    expect(result.reassignedWithoutPoint).toBe(2);
+  });
+
+  it("should report zero reassigned when no reassign outcome is given", () => {
+    const result = actualRemovalCountsOf(classificationOf({ reassigned: 5 }), { deleted: 4, surviving: 4, masterDeleted: 0, removedList: [] });
+
+    expect(result.reassigned).toBe(0);
+    expect(result.reassignedByTable).toEqual({});
+  });
+
+  it("should carry reassigned and reassignedByTable on the target report", () => {
+    const classification = classificationOf({ reassigned: 5, reassigned_by_table: { "carto.a": 5 } });
+
+    const report = buildPadronTargetReport({
+      target: TARGET,
+      classification,
+      apply: plannedApplyOf(classification.counts),
+      removal: plannedRemovalOf(classification),
+      removalBlockedReason: null,
+      updateGeometries: true,
+    });
+
+    expect(report.reassigned).toBe(5);
+    expect(report.reassignedByTable).toEqual({ "carto.a": 5 });
+  });
+
+  it("should carry reassignedWithoutPoint of the classification on the planned removal and the target report", () => {
+    const classification = classificationOf({ reassigned: 5, reassigned_without_point: 2 });
+
+    const report = buildPadronTargetReport({
+      target: TARGET,
+      classification,
+      apply: plannedApplyOf(classification.counts),
+      removal: plannedRemovalOf(classification),
+      removalBlockedReason: null,
+      updateGeometries: true,
+    });
+
+    expect(plannedRemovalOf(classification).reassignedWithoutPoint).toBe(2);
+    expect(report.reassignedWithoutPoint).toBe(2);
   });
 });
 
@@ -200,7 +333,8 @@ describe("plannedStepLabels removal step (AP-107)", () => {
   it("should place the delete step after Aplicar cambios de padrones and before Analizar tabla de destino in a real run", () => {
     const labels = plannedStepLabels({ dryRun: false });
 
-    expect(labels.indexOf("Eliminar padrones faltantes sin referencias")).toBe(labels.indexOf("Aplicar cambios de padrones") + 1);
+    expect(labels.indexOf("Eliminar padrones faltantes sin referencias")).toBe(labels.indexOf("Reasignar direcciones de padrones subdivididos") + 1);
+    expect(labels.indexOf("Reasignar direcciones de padrones subdivididos")).toBe(labels.indexOf("Aplicar cambios de padrones") + 1);
     expect(labels.indexOf("Eliminar padrones faltantes sin referencias")).toBeLessThan(labels.indexOf("Analizar tabla de destino"));
   });
 

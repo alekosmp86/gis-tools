@@ -10,6 +10,8 @@ export const REVERT_KIND = {
   INSERTED: "I",
   ADDRESS_MASTER_LINK: "A",
   DELETED: "D",
+  REASSIGNED: "R",
+  MASTER_DELETED: "M",
 } as const;
 
 export type RevertKind = (typeof REVERT_KIND)[keyof typeof REVERT_KIND];
@@ -25,6 +27,16 @@ export const REVERT_COLUMN = {
   GEOMETRY: "geometry",
   ID_PROVINCE: "id_province",
   ID_ADDRESS_MASTER: "id_address_master",
+} as const;
+
+/* AP-113 and AP-114: kind R keeps the referencing table, its primary key column and value, and the old id_padron (in id); kind M keeps the
+   deleted address master row as jsonb (its id in id). `seq` orders the rows of those kinds, whose id is not unique. */
+export const REVERT_EXTRA_COLUMN = {
+  SEQ: "seq",
+  REF_TABLE: "ref_table",
+  REF_KEY_COLUMN: "ref_key_column",
+  REF_KEY: "ref_key",
+  PAYLOAD: "payload",
 } as const;
 
 /* id_province and id_address_master are populated only for kind D rows (AP-106): a deleted row's revert is a full INSERT,
@@ -56,6 +68,11 @@ export function buildCreateRevertTableSql(): string {
     `${q(REVERT_COLUMN.GEOMETRY)} geometry`,
     `${q(REVERT_COLUMN.ID_PROVINCE)} integer`,
     `${q(REVERT_COLUMN.ID_ADDRESS_MASTER)} integer`,
+    `${q(REVERT_EXTRA_COLUMN.SEQ)} bigint GENERATED ALWAYS AS IDENTITY`,
+    `${q(REVERT_EXTRA_COLUMN.REF_TABLE)} text`,
+    `${q(REVERT_EXTRA_COLUMN.REF_KEY_COLUMN)} text`,
+    `${q(REVERT_EXTRA_COLUMN.REF_KEY)} text`,
+    `${q(REVERT_EXTRA_COLUMN.PAYLOAD)} jsonb`,
   ];
   return `CREATE TEMP TABLE ${q(REVERT_TABLE_NAME)} (${columns.join(", ")}) ON COMMIT DROP;`;
 }

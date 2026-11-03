@@ -34,6 +34,7 @@ import type {
   PadronLocation,
   PadronNamedKey,
   PadronPair,
+  PadronReassignOutcome,
   PadronRemoved,
   RemovalSkippedReport,
   SkippedGroup,
@@ -190,6 +191,11 @@ const byTableOf = (value: unknown): Record<string, number> => {
   return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([table, count]) => [table, countOf(count)]));
 };
 
+const blockersOf = (value: unknown): Record<string, string> => {
+  if (typeof value !== "object" || value === null) return {};
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([table, reason]) => [table, String(reason)]));
+};
+
 /* refs.total is zero when the scan (AP-102) finds no table or no referencing row; byTable lists only the tables that do. */
 const refsOf = (entry: ReportRow): MissingPadronRefs => ({
   total: countOf(entry.refsTotal),
@@ -219,6 +225,7 @@ const missingPadronOf = (entry: ReportRow): MissingPadron => ({
   partKeys: partKeysOf(entry.partKeys),
   refs: refsOf(entry),
   removalReason: removalReasonOf(entry.removalReason),
+  reassignBlockers: blockersOf(entry.reassignBlockers),
 });
 
 const PAIR_CHANGE_FLAGS: ReadonlyArray<readonly [string, PairChange]> = [
@@ -260,6 +267,7 @@ const removalsSkippedOf = (row: ReportRow): RemovalSkippedReport => {
   const byReason: Record<RemovalSkipReason, number> = {
     [REMOVAL_SKIP_REASON.STILL_PAIRABLE]: countOf(row.removals_skipped_still_pairable),
     [REMOVAL_SKIP_REASON.NOW_REFERENCED]: countOf(row.removals_skipped_now_referenced),
+    [REMOVAL_SKIP_REASON.NOT_REASSIGNABLE]: countOf(row.removals_skipped_not_reassignable),
     [REMOVAL_SKIP_REASON.UNVERIFIED]: countOf(row.removals_skipped_unverified),
   };
   const total = Object.values(byReason).reduce((sum, count) => sum + count, 0);
@@ -288,6 +296,10 @@ export function toPadronClassification(row: ReportRow): PadronClassification {
       geometryAcceptsUnapplied: countOf(row.geometry_accepts_unapplied),
       removed: countOf(row.removed),
       removalsSkipped: removalsSkippedOf(row),
+      reassigned: countOf(row.reassigned),
+      subdividedDeleted: countOf(row.subdivided_deleted),
+      reassignedByTable: byTableOf(row.reassigned_by_table),
+      reassignedWithoutPoint: countOf(row.reassigned_without_point),
     },
     missingSamples: listOf(row.missing_samples).map(keyOf),
     missingReview: listOf(row.missing_review).map(missingPadronOf),
@@ -314,30 +326,59 @@ export function toPadronApplyOutcome(row: ReportRow): PadronApplyOutcome {
 }
 
 export function toPadronDeleteOutcome(row: ReportRow): PadronDeleteOutcome {
-  return { deleted: countOf(row.deleted), surviving: countOf(row.surviving), removedList: listOf(row.removed_list).map(insertedOf) };
+  return {
+    deleted: countOf(row.deleted),
+    surviving: countOf(row.surviving),
+    masterDeleted: countOf(row.master_deleted),
+    removedList: listOf(row.removed_list).map(insertedOf),
+  };
+}
+
+export const NO_REASSIGN_OUTCOME: PadronReassignOutcome = { moved: 0, byTable: {}, withoutPoint: 0, padrones: 0 };
+
+export function toPadronReassignOutcome(row: ReportRow): PadronReassignOutcome {
+  return {
+    moved: countOf(row.moved),
+    byTable: byTableOf(row.by_table),
+    withoutPoint: countOf(row.without_point),
+    padrones: countOf(row.padrones),
+  };
 }
 
 interface TargetRemoval {
   removed: number;
   removalsSkipped: RemovalSkippedReport;
   removedList: PadronRemoved[];
+  reassigned: number;
+  reassignedByTable: Record<string, number>;
+  reassignedWithoutPoint: number;
 }
 
-/** An analysis deletes nothing: its removed, removalsSkipped and removedList are the classification's planned ones (AP-107). */
+/** An analysis deletes nothing: its removed, removalsSkipped, removedList and reassigned counts are the classification's planned ones (AP-107, AP-112). */
 export const plannedRemovalOf = (classification: PadronClassification): TargetRemoval => ({
   removed: classification.counts.removed,
   removalsSkipped: classification.counts.removalsSkipped,
   removedList: classification.removedList,
+  reassigned: classification.counts.reassigned,
+  reassignedByTable: classification.counts.reassignedByTable,
+  reassignedWithoutPoint: classification.counts.reassignedWithoutPoint,
 });
 
 /** A real run's actual removed count can be lower than the classify-time estimate: an id newly referenced since is skipped,
-    not a failure, and counted here as NOW_REFERENCED instead (AP-106). */
-export function actualRemovalCountsOf(classification: PadronClassification, deleteOutcome: PadronDeleteOutcome): TargetRemoval {
+    not a failure, and counted here as NOW_REFERENCED instead (AP-106). The reassigned rows are the ones the reassign statement moved (AP-113). */
+export function actualRemovalCountsOf(
+  classification: PadronClassification,
+  deleteOutcome: PadronDeleteOutcome,
+  reassignOutcome: PadronReassignOutcome = NO_REASSIGN_OUTCOME
+): TargetRemoval {
   const planned = classification.counts.removalsSkipped;
   const newlyReferenced = classification.counts.removed - deleteOutcome.deleted;
   return {
     removed: deleteOutcome.deleted,
     removedList: deleteOutcome.removedList,
+    reassigned: reassignOutcome.moved,
+    reassignedByTable: reassignOutcome.byTable,
+    reassignedWithoutPoint: reassignOutcome.withoutPoint,
     removalsSkipped: {
       total: planned.total + newlyReferenced,
       byReason: {
@@ -394,6 +435,9 @@ export function buildPadronTargetReport({
     removed: removal.removed,
     removalsSkipped: removal.removalsSkipped,
     removedList: removal.removedList,
+    reassigned: removal.reassigned,
+    reassignedByTable: removal.reassignedByTable,
+    reassignedWithoutPoint: removal.reassignedWithoutPoint,
     ...(removalBlockedReason === null ? {} : { removalBlockedReason }),
     geometryAcceptsUnapplied: counts.geometryAcceptsUnapplied,
   };

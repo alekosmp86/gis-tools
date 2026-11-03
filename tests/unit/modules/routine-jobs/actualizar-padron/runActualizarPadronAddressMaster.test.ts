@@ -184,6 +184,8 @@ function sessionOf(
     async query(sql: string) {
       log.push(sql);
       await Promise.resolve();
+      const known = answers.get(sql);
+      if (known !== undefined) return { rows: known };
       if (/has_table_privilege/i.test(sql)) return { rows: [{ has_privilege: true }] };
       return { rows: answers.get(sql) ?? [] };
     },

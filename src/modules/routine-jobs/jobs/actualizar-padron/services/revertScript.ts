@@ -13,6 +13,8 @@ import { ADDRESS_MASTER_COLUMN, PADRON_SUBJECT_SPEC } from "../../shared/address
 import { numberOf, type Row } from "../../shared/rowMapping";
 import { literal, q } from "../../shared/sqlFragments";
 import type { WritableTargetLayout } from "../../shared/tableResolution";
+import { formatCall, INT4_MIN, pagedRows } from "./revertPaging";
+import { masterRestoreLines, reassignedRestoreLines } from "./revertReassignLines";
 
 /* The revert file is a manual artifact: the tool never executes these statements. The stage's own SQL stays free of them. */
 
@@ -24,6 +26,9 @@ export interface RevertExpected {
   paired: number;
   /** Absent means zero: a run with no delete step (an analysis never reaches this check) or no marks still never captures a D row. */
   removed?: number;
+  /** The referencing rows moved to a part (kind R) and the address master rows deleted with their padrón (kind M); absent means zero. */
+  reassigned?: number;
+  masterDeleted?: number;
 }
 
 export interface RevertAddressMaster {
@@ -51,13 +56,14 @@ interface InsertedIsland {
 
 const PAGE_SIZE = 5000;
 const ADDRESS_MASTER_PAGE_SIZE = 1000;
-const INT4_MIN = -2147483648;
 const REVERT_KIND_LABEL: Record<RevertKind, string> = {
   [REVERT_KIND.UPDATED]: "geometrías actualizadas",
   [REVERT_KIND.PAIRED]: "padrones reclasificados",
   [REVERT_KIND.INSERTED]: "padrones insertados",
   [REVERT_KIND.ADDRESS_MASTER_LINK]: "padrones sin dirección maestra",
   [REVERT_KIND.DELETED]: "padrones eliminados",
+  [REVERT_KIND.REASSIGNED]: "direcciones reasignadas",
+  [REVERT_KIND.MASTER_DELETED]: "direcciones maestras eliminadas",
 };
 
 export const emptyRevertCounts = (): RevertCounts => ({
@@ -66,6 +72,8 @@ export const emptyRevertCounts = (): RevertCounts => ({
   [REVERT_KIND.INSERTED]: 0,
   [REVERT_KIND.ADDRESS_MASTER_LINK]: 0,
   [REVERT_KIND.DELETED]: 0,
+  [REVERT_KIND.REASSIGNED]: 0,
+  [REVERT_KIND.MASTER_DELETED]: 0,
 });
 
 const isRevertKind = (value: string): value is RevertKind => (REVERT_KINDS as readonly string[]).includes(value);
@@ -121,6 +129,18 @@ export function assertRevertTally(tally: RevertCounts, counts: RevertCounts, exp
     expectedRemoved,
     `Los padrones eliminados guardados (${counts[REVERT_KIND.DELETED]}) no coinciden con los eliminados (${expectedRemoved}).`
   );
+  const expectedReassigned = expected.reassigned ?? 0;
+  assertSameCount(
+    counts[REVERT_KIND.REASSIGNED],
+    expectedReassigned,
+    `Las direcciones reasignadas guardadas (${counts[REVERT_KIND.REASSIGNED]}) no coinciden con las reasignadas (${expectedReassigned}).`
+  );
+  const expectedMasterDeleted = expected.masterDeleted ?? 0;
+  assertSameCount(
+    counts[REVERT_KIND.MASTER_DELETED],
+    expectedMasterDeleted,
+    `Las direcciones maestras guardadas (${counts[REVERT_KIND.MASTER_DELETED]}) no coinciden con las eliminadas (${expectedMasterDeleted}).`
+  );
 }
 
 const structural = (text: string): RevertLine => ({ kind: null, rows: 0, text });
@@ -133,40 +153,13 @@ function headerLines(plan: RevertScriptPlan): RevertLine[] {
     "-- Respaldo para revertir una actualización de padrones (ejecución real).",
     `-- Generado: ${plan.generatedAt}`,
     `-- Tabla de destino: ${plan.target.schema}.${plan.target.table}`,
-    `-- Filas que cambió la ejecución: geometrías ${counts.U}, padrones reclasificados ${counts.P}, insertados ${counts.I}, sin dirección maestra antes del enlace ${counts.A}, eliminados ${counts.D}.`,
+    `-- Filas que cambió la ejecución: geometrías ${counts.U}, padrones reclasificados ${counts.P}, insertados ${counts.I}, sin dirección maestra antes del enlace ${counts.A}, eliminados ${counts.D}, direcciones reasignadas ${counts.R}, direcciones maestras eliminadas ${counts.M}.`,
     "-- ADVERTENCIA: revierte SOLO las filas que cambió esta ejecución. Supone que nadie cambió esas filas después de la ejecución.",
     ...(plan.addressMaster !== undefined ? [ADDRESS_MASTER_HEADER] : []),
     "-- Las secuencias de id no se revierten.",
     "-- Para revertir: descomprima el archivo (gunzip) y ejecute el .sql completo en psql (psql -v ON_ERROR_STOP=1 -f) o en pgAdmin / cualquier cliente SQL, de una sola vez. Todo corre en una sola transacción.",
   ].map(structural);
 }
-
-async function readPage(
-  session: RunSession,
-  kind: RevertKind,
-  select: string,
-  pageSize: number,
-  afterId: number
-): Promise<Row[]> {
-  const result = await session.query(
-    `SELECT ${select} FROM ${REVERT_TABLE_SQL} WHERE ${q(REVERT_COLUMN.KIND)} = ${literal(kind)} AND ${q(REVERT_COLUMN.ID)} > $1 ORDER BY ${q(REVERT_COLUMN.ID)} LIMIT ${pageSize}`,
-    [afterId]
-  );
-  return result.rows;
-}
-
-/* Keyset pages: a page is read only after the previous one was written, so no list of all rows is held in memory. */
-async function* pagedRows(session: RunSession, kind: RevertKind, select: string, pageSize: number): AsyncGenerator<Row[]> {
-  let afterId = INT4_MIN;
-  let page = await readPage(session, kind, select, pageSize, afterId);
-  while (page.length > 0) {
-    yield page;
-    afterId = numberOf(page[page.length - 1].id);
-    page = await readPage(session, kind, select, pageSize, afterId);
-  }
-}
-
-const formatCall = (template: string, args: readonly string[]): string => `format(${literal(template)}, ${args.join(", ")})`;
 
 function pairedRestoreSelect(target: WritableTargetLayout): string {
   const restore = formatCall("UPDATE %s SET %s = %L, %s = %L, %s = %L, %s = %L::geometry WHERE %s = %s;", [
@@ -310,7 +303,7 @@ async function* insertedDeleteLines(session: RunSession, target: WritableTargetL
   }
 }
 
-/** The lines of the revert script, in the order it must run: address master links, inserted rows, then the restores. */
+/** The lines of the revert script, in the order it must run: address master links, inserted rows, then the restores (the master rows before the padrones, the moved references after them). */
 export async function* revertScriptLines(session: RunSession, plan: RevertScriptPlan): AsyncGenerator<RevertLine> {
   yield* headerLines(plan);
   yield structural("BEGIN;");
@@ -321,6 +314,8 @@ export async function* revertScriptLines(session: RunSession, plan: RevertScript
   yield* insertedDeleteLines(session, plan.target);
   yield* restoreLines(session, REVERT_KIND.PAIRED, pairedRestoreSelect(plan.target));
   yield* restoreLines(session, REVERT_KIND.UPDATED, geometryRestoreSelect(plan.target));
+  if (plan.addressMaster !== undefined) yield* masterRestoreLines(session, plan.addressMaster.layout);
   yield* restoreLines(session, REVERT_KIND.DELETED, deletedRestoreSelect(plan.target));
+  yield* reassignedRestoreLines(session);
   yield structural("COMMIT;");
 }

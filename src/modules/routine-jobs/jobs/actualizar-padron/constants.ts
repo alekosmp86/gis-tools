@@ -218,7 +218,24 @@ export const REPLACEMENT_REFERENCE_COLUMN = "id_padron";
 export const REMOVAL_SKIP_REASON = {
   STILL_PAIRABLE: "STILL_PAIRABLE",
   NOW_REFERENCED: "NOW_REFERENCED",
+  NOT_REASSIGNABLE: "NOT_REASSIGNABLE",
   UNVERIFIED: "UNVERIFIED",
+} as const;
+
+/** AP-110: referencing tables with no geometry of their own. `column` is the join column of the referencing table, `companionColumn` that of the companion table (same schema), whose single geometry column is the row's point. */
+export interface ReferencePointSource {
+  table: string;
+  column: string;
+  companionColumn: string;
+}
+
+export const REFERENCE_POINT_SOURCES: Readonly<Record<string, ReferencePointSource>> = {
+  access_point: { table: "address", column: "id", companionColumn: "id" },
+};
+
+export const GEOMETRY_TYPE_NAME = {
+  GEOMETRY: "geometry",
+  GEOGRAPHY: "geography",
 } as const;
 
 export type RemovalSkipReason = (typeof REMOVAL_SKIP_REASON)[keyof typeof REMOVAL_SKIP_REASON];

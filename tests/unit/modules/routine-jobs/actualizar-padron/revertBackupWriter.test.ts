@@ -84,7 +84,7 @@ describe("actualizar-padron revert backup writer on a real temp directory (AP-70
     expect(lines.filter((line) => line.startsWith("\\"))).toEqual([]);
     expect(lines.indexOf("BEGIN;")).toBeGreaterThan(0);
     expect(backup.fileName).toMatch(/^padron-revert-carto-padron-\d{8}-\d{6}\.sql\.gz$/);
-    expect(backup.counts).toEqual({ updated: 1, paired: 0, inserted: 2, addressMasterRows: 0, deleted: 0 });
+    expect(backup.counts).toEqual({ updated: 1, paired: 0, inserted: 2, addressMasterRows: 0, deleted: 0, reassigned: 0, masterDeleted: 0 });
     expect(updateLines).toHaveLength(1);
     expect(deleteLines).toHaveLength(1);
     expect(backup.bytes).toBe((await stat(filePath)).size);
@@ -99,5 +99,103 @@ describe("actualizar-padron revert backup writer on a real temp directory (AP-70
     expect(await readdir(path.join(directory, "gis-tools-routine-jobs"))).toEqual([backup.fileName]);
 
     await database.exec("ROLLBACK");
+  });
+
+  describe("reassigned and master rows (AP-115, AP-72)", () => {
+    const ADDRESS_MASTER: WritableTargetLayout = {
+      schema: "carto",
+      table: "addresses_master",
+      columns: identityOf(["addresses_master_id", "urn", "latitud", "longitud"]),
+      srid: 0,
+      idColumn: "addresses_master_id",
+      idSequence: null,
+      identityColumns: [],
+      catalog: [],
+    };
+
+    const LINKED_TARGET: WritableTargetLayout = { ...TARGET, columns: { ...TARGET.columns, id_address_master: "id_address_master" } };
+
+    const seedReassignRows = async (): Promise<void> => {
+      await database.exec(`BEGIN; ${buildCreateRevertTableSql()}`);
+      await database.exec(`
+        INSERT INTO ${REVERT_TABLE_SQL} (kind, id, ref_table, ref_key_column, ref_key) VALUES
+          ('R', 9, '"carto"."access_point"', 'gid', '1'),
+          ('R', 9, '"carto"."access_point"', 'gid', '2');
+        INSERT INTO ${REVERT_TABLE_SQL} (kind, id, payload) VALUES ('M', 33, '{"addresses_master_id": 33, "urn": "u"}');
+      `);
+    };
+
+    const readLines = async (filePath: string): Promise<string[]> => gunzipSync(await readFile(filePath)).toString("utf8").split("\n");
+
+    it("should write one restore line per R and M row, report both counts and register the file when they equal the expected ones", async () => {
+      await seedReassignRows();
+
+      const backup = await writeRevertBackup(
+        sessionOn(database),
+        {
+          target: LINKED_TARGET,
+          addressMaster: { layout: ADDRESS_MASTER, maxIdBefore: 40 },
+          expected: { inserted: 0, updated: 0, paired: 0, reassigned: 2, masterDeleted: 1 },
+        },
+        NOW
+      );
+
+      const lines = await readLines(path.join(directory, "gis-tools-routine-jobs", backup.fileName));
+      expect(backup.counts).toMatchObject({ reassigned: 2, masterDeleted: 1 });
+      expect(lines.filter((line) => line.startsWith("UPDATE \"carto\".\"access_point\" SET \"id_padron\" = '9'"))).toHaveLength(2);
+      expect(lines.filter((line) => line.startsWith('INSERT INTO "carto"."addresses_master" SELECT * FROM jsonb_populate_record'))).toHaveLength(1);
+      await database.exec("ROLLBACK");
+    });
+
+    it("should fail the backup and leave no file when the stored R rows differ from the moved rows", async () => {
+      await seedReassignRows();
+
+      await expect(
+        writeRevertBackup(
+          sessionOn(database),
+          {
+            target: LINKED_TARGET,
+            addressMaster: { layout: ADDRESS_MASTER, maxIdBefore: 40 },
+            expected: { inserted: 0, updated: 0, paired: 0, reassigned: 3, masterDeleted: 1 },
+          },
+          NOW
+        )
+      ).rejects.toThrow(/Las direcciones reasignadas guardadas \(2\) no coinciden con las reasignadas \(3\)\./);
+
+      expect(await readdir(path.join(directory, "gis-tools-routine-jobs"))).toEqual([]);
+      await database.exec("ROLLBACK");
+    });
+
+    it("should fail the backup and leave no file when the stored M rows differ from the deleted masters", async () => {
+      await seedReassignRows();
+
+      await expect(
+        writeRevertBackup(
+          sessionOn(database),
+          {
+            target: LINKED_TARGET,
+            addressMaster: { layout: ADDRESS_MASTER, maxIdBefore: 40 },
+            expected: { inserted: 0, updated: 0, paired: 0, reassigned: 2, masterDeleted: 2 },
+          },
+          NOW
+        )
+      ).rejects.toThrow(/Las direcciones maestras guardadas \(1\) no coinciden con las eliminadas \(2\)\./);
+
+      expect(await readdir(path.join(directory, "gis-tools-routine-jobs"))).toEqual([]);
+      await database.exec("ROLLBACK");
+    });
+
+    it("should fail when R rows exist but none were expected, since the run moved no row", async () => {
+      await seedReassignRows();
+
+      await expect(
+        writeRevertBackup(
+          sessionOn(database),
+          { target: LINKED_TARGET, addressMaster: { layout: ADDRESS_MASTER, maxIdBefore: 40 }, expected: { inserted: 0, updated: 0, paired: 0, masterDeleted: 1 } },
+          NOW
+        )
+      ).rejects.toThrow(/Las direcciones reasignadas guardadas \(2\) no coinciden con las reasignadas \(0\)\./);
+      await database.exec("ROLLBACK");
+    });
   });
 });

@@ -55,7 +55,7 @@ describe("buildPadronDeleteSql (AP-106)", () => {
     expect(sql).toContain('"delete_refs_raw" AS (SELECT CAST(NULL AS integer)');
   });
 
-  it("should add one grouped reference-count select per readable table when the reference table list is not empty", () => {
+  it("should add one grouped reference-count CTE per readable table when the reference table list is not empty", () => {
     const two: readonly ReferenceTable[] = [...ONE_REFERENCE_TABLE, { schema: "carto", table: "address" }];
 
     const sql = buildPadronDeleteSql(layouts, two);
@@ -83,6 +83,12 @@ describe("buildPadronDeleteSql (AP-106)", () => {
     const sql = buildPadronDeleteSql(layouts, NO_TABLES);
 
     expect(sql).toMatch(/SELECT 'D', dr\."id", dr\."type_padron", dr\."id_cadastral_locality", dr\."number", dr\."geometry",\s*dr\."id_province"/);
+  });
+
+  it("should capture a NULL address master when the destination has no id_address_master column", () => {
+    const sql = buildPadronDeleteSql(layouts, NO_TABLES);
+
+    expect(sql).toContain('NULL AS "id_address_master"');
   });
 
   it("should never write id or id_address_master in the DELETE itself, reading them only through RETURNING for the revert capture", () => {

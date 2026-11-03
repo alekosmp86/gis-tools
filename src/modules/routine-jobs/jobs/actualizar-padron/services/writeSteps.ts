@@ -21,16 +21,20 @@ import { assertPlanStillValid, snapshotOf } from "../domain/plan";
 import {
   actualRemovalCountsOf,
   buildPadronTargetReport,
+  NO_REASSIGN_OUTCOME,
   plannedApplyOf,
   plannedRemovalOf,
   toPadronApplyOutcome,
   toPadronClassification,
   toPadronDeleteOutcome,
+  toPadronReassignOutcome,
   toReportView,
   type ReportView,
 } from "../domain/reportMapping";
 import { buildReportSql } from "../domain/reportSql";
 import { buildCreateDeleteIdsTableSql } from "../domain/deleteIdsTable";
+import { buildCreateInsertedIdsTableSql, buildCreateReassignIdsTableSql } from "../domain/reassignTables";
+import { buildPadronReassignSql } from "../domain/reassignSql";
 import type { ReferenceScan } from "../domain/referenceScan";
 import { buildPadronApplySql, buildPadronClassifySql, type ClassifyStatementOptions } from "../domain/targetSql";
 import { buildPadronDeleteSql } from "../domain/deleteSql";
@@ -47,6 +51,7 @@ import type {
   PadronDeleteOutcome,
   PadronGeometryChange,
   PadronLayouts,
+  PadronReassignOutcome,
   ActualizarPadronParams,
   PlanSnapshot,
 } from "../types";
@@ -100,7 +105,7 @@ async function readClassification(
   options: ActualizarPadronOptions,
   classifyOptions: ClassifyStatementOptions
 ): Promise<ClassifiedRun> {
-  const scan = await scanReferenceTables(session, layouts.target.schema, layouts.target.table);
+  const scan = await scanReferenceTables(session, layouts.target.schema, layouts.target.table, layouts.addressMaster !== undefined);
   const result = await session.query(buildPadronClassifySql(layouts, options, scan, classifyOptions));
   return { classification: toPadronClassification(result.rows[0] ?? {}), scan };
 }
@@ -122,18 +127,34 @@ async function readPersistClassification(
   options: ActualizarPadronOptions
 ): Promise<ClassifiedRun> {
   await session.query(buildCreateDeleteIdsTableSql());
+  await session.query(buildCreateReassignIdsTableSql());
   return readClassification(session, layouts, options, { report: false, persistDeletable: true });
 }
 
-/** A real run first creates the revert table in the transaction, then captures the old values inside the same apply statement. */
+/** A real run first creates the revert table in the transaction, then captures the old values inside the same apply statement.
+    When subdivided padrones are to be reassigned, the same statement keeps the ids it inserted: they are the receivers (AP-113). */
 async function applyPadronChanges(
   session: RunSession,
   layouts: PadronLayouts,
-  options: ActualizarPadronOptions
+  options: ActualizarPadronOptions,
+  storeInsertedIds: boolean
 ): Promise<PadronApplyOutcome> {
   await guardRevertStep(() => session.query(buildCreateRevertTableSql()));
-  const result = await session.query(buildPadronApplySql(layouts, options, { captureRevert: true }));
+  if (storeInsertedIds) await session.query(buildCreateInsertedIdsTableSql());
+  const result = await session.query(buildPadronApplySql(layouts, options, { captureRevert: true, storeInsertedIds }));
   return toPadronApplyOutcome(result.rows[0] ?? {});
+}
+
+/** AP-113: its own statement, after the apply and before the delete. With no subdivided padrón to reassign it runs nothing. */
+async function reassignPadronAddresses(
+  session: RunSession,
+  layouts: PadronLayouts,
+  scan: ReferenceScan,
+  classification: PadronClassification
+): Promise<PadronReassignOutcome> {
+  if (classification.counts.subdividedDeleted === 0) return NO_REASSIGN_OUTCOME;
+  const result = await session.query(buildPadronReassignSql(layouts, scan.tables));
+  return toPadronReassignOutcome(result.rows[0] ?? {});
 }
 
 /** AP-106: its own statement, after the apply, before the address master pass. Reads the digest-verified delete-eligible ids
@@ -165,12 +186,33 @@ const revertRequestOf = (
   layouts: PadronLayouts,
   apply: PadronApplyOutcome,
   deleteOutcome: PadronDeleteOutcome,
+  reassignOutcome: PadronReassignOutcome,
   addressMaster: RevertAddressMaster | undefined
 ): RevertBackupRequest => ({
   target: layouts.target,
   addressMaster,
-  expected: { inserted: apply.inserted, updated: apply.updated, paired: apply.paired, removed: deleteOutcome.deleted },
+  expected: {
+    inserted: apply.inserted,
+    updated: apply.updated,
+    paired: apply.paired,
+    removed: deleteOutcome.deleted,
+    reassigned: reassignOutcome.moved,
+    masterDeleted: deleteOutcome.masterDeleted,
+  },
 });
+
+/** AP-113's count check, as AP-48: the rows moved must equal the referencing rows the classification counted, or the transaction rolls back. */
+function assertReassignCountsMatch(
+  target: WritableTargetLayout,
+  classification: PadronClassification,
+  reassignOutcome: PadronReassignOutcome
+): void {
+  if (reassignOutcome.moved !== classification.counts.reassigned) {
+    throw new Error(
+      `Las direcciones reasignadas (${reassignOutcome.moved}) no coinciden con las del análisis (${classification.counts.reassigned}) en ${target.schema}.${target.table}.`
+    );
+  }
+}
 
 function assertCountsMatch(target: WritableTargetLayout, classification: PadronClassification, apply: PadronApplyOutcome): void {
   const label = `${target.schema}.${target.table}`;
@@ -294,9 +336,15 @@ async function runPersistBody(
   // Ordered: the sequence is repaired after the classification and before the insert of the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   await timer.run(STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.target)));
-  const apply = await timer.run(STEP.APPLY, () => applyPadronChanges(session, layouts, params.options));
+  const apply = await timer.run(STEP.APPLY, () =>
+    applyPadronChanges(session, layouts, params.options, classification.counts.subdividedDeleted > 0)
+  );
   assertCountsMatch(layouts.target, classification, apply);
-  // Ordered: the delete statement needs the apply's inserts, geometry updates and applied pairs already in place (AP-106).
+  // Ordered: the reassignment needs the parts the apply inserted (AP-113).
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const reassignOutcome = await timer.run(STEP.REASSIGN, () => reassignPadronAddresses(session, layouts, scan, classification));
+  assertReassignCountsMatch(layouts.target, classification, reassignOutcome);
+  // Ordered: the delete statement needs the apply's inserts, geometry updates and applied pairs already in place (AP-106), and the references already moved.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const deleteOutcome = await timer.run(STEP.DELETE, () => deletePadronRows(session, layouts, scan));
   assertDeleteCountsMatch(layouts.target, deleteOutcome);
@@ -310,7 +358,7 @@ async function runPersistBody(
       target: layouts.target,
       classification,
       apply,
-      removal: actualRemovalCountsOf(classification, deleteOutcome),
+      removal: actualRemovalCountsOf(classification, deleteOutcome, reassignOutcome),
       removalBlockedReason: scan.blockedReason,
       updateGeometries: params.options.updateGeometries,
     })
@@ -318,7 +366,7 @@ async function runPersistBody(
   // Ordered: the backup reads the revert rows this transaction wrote, after the report step.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const backup = await timer.run(STEP.BACKUP, () =>
-    writeRevertBackup(session, revertRequestOf(layouts, apply, deleteOutcome, revertAddressMaster))
+    writeRevertBackup(session, revertRequestOf(layouts, apply, deleteOutcome, reassignOutcome, revertAddressMaster))
   );
   return { source, target, addressMaster, backup, snapshot, pendingGeometryChanges: classification.pendingGeometryChanges };
 }
