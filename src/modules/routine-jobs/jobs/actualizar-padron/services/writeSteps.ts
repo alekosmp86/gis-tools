@@ -19,16 +19,21 @@ import { nullableNumber, type Row } from "../../shared/rowMapping";
 import { ADDRESS_MASTER_PASS_STEPS, STEP } from "../domain/plannedSteps";
 import { assertPlanStillValid, snapshotOf } from "../domain/plan";
 import {
+  actualRemovalCountsOf,
   buildPadronTargetReport,
   plannedApplyOf,
+  plannedRemovalOf,
   toPadronApplyOutcome,
   toPadronClassification,
+  toPadronDeleteOutcome,
   toReportView,
   type ReportView,
 } from "../domain/reportMapping";
 import { buildReportSql } from "../domain/reportSql";
-import { NO_REFERENCE_TABLES } from "../domain/replacementSql";
-import { buildPadronApplySql, buildPadronClassifySql } from "../domain/targetSql";
+import { buildCreateDeleteIdsTableSql } from "../domain/deleteIdsTable";
+import type { ReferenceScan } from "../domain/referenceScan";
+import { buildPadronApplySql, buildPadronClassifySql, type ClassifyStatementOptions } from "../domain/targetSql";
+import { buildPadronDeleteSql } from "../domain/deleteSql";
 import { buildCaptureAddressMasterSql, buildCreateRevertTableSql, buildMaxAddressMasterIdSql } from "../domain/revertCapture";
 import type { RevertAddressMaster } from "./revertScript";
 import type {
@@ -39,13 +44,14 @@ import type {
   ActualizarTargetReport,
   PadronApplyOutcome,
   PadronClassification,
+  PadronDeleteOutcome,
   PadronGeometryChange,
   PadronLayouts,
   ActualizarPadronParams,
   PlanSnapshot,
 } from "../types";
 import { guardRevertStep, writeRevertBackup, type RevertBackupRequest } from "./revertBackup";
-import { readReferenceTables } from "./referenceTables";
+import { scanReferenceTables } from "./referenceTables";
 
 export interface PadronWriteOutcome {
   source: ReportView;
@@ -81,27 +87,42 @@ async function readSourceReport(session: RunSession, layouts: PadronLayouts): Pr
   return toReportView(result.rows[0]);
 }
 
-async function readAnalysisClassification(
+interface ClassifiedRun {
+  classification: PadronClassification;
+  scan: ReferenceScan;
+}
+
+/* AP-102 runs a fresh catalog scan both in an analysis and in the persist classify: the removal-eligibility counts and their
+   digest entry (AP-105) must be identical whichever path computed them, so AP-90's plan-changed guard also covers deletions. */
+async function readClassification(
+  session: RunSession,
+  layouts: PadronLayouts,
+  options: ActualizarPadronOptions,
+  classifyOptions: ClassifyStatementOptions
+): Promise<ClassifiedRun> {
+  const scan = await scanReferenceTables(session, layouts.target.schema, layouts.target.table);
+  const result = await session.query(buildPadronClassifySql(layouts, options, scan, classifyOptions));
+  return { classification: toPadronClassification(result.rows[0] ?? {}), scan };
+}
+
+/** The analysis computes the deletable set inside its READ ONLY transaction (counts and a capped list only): nothing is written. */
+function readAnalysisClassification(
   session: RunSession,
   layouts: PadronLayouts,
   options: ActualizarPadronOptions
-): Promise<PadronClassification> {
-  const references = await readReferenceTables(session, layouts.target.schema);
-  return readClassificationSql(session, buildPadronClassifySql(layouts, options, references));
+): Promise<ClassifiedRun> {
+  return readClassification(session, layouts, options, { report: true });
 }
 
-/** The persist classify reads the counts, fingerprint and digest only: no replacement block and no reference probe. */
-function readPersistClassification(
+/** The persist classify also reads the removal-eligibility block (never gated by report): no replacement block and no missing-review lists.
+    It first creates the session's temp table and writes the delete-eligible ids into it, set-based (AP-106). */
+async function readPersistClassification(
   session: RunSession,
   layouts: PadronLayouts,
   options: ActualizarPadronOptions
-): Promise<PadronClassification> {
-  return readClassificationSql(session, buildPadronClassifySql(layouts, options, NO_REFERENCE_TABLES, { report: false }));
-}
-
-async function readClassificationSql(session: RunSession, sql: string): Promise<PadronClassification> {
-  const result = await session.query(sql);
-  return toPadronClassification(result.rows[0] ?? {});
+): Promise<ClassifiedRun> {
+  await session.query(buildCreateDeleteIdsTableSql());
+  return readClassification(session, layouts, options, { report: false, persistDeletable: true });
 }
 
 /** A real run first creates the revert table in the transaction, then captures the old values inside the same apply statement. */
@@ -113,6 +134,13 @@ async function applyPadronChanges(
   await guardRevertStep(() => session.query(buildCreateRevertTableSql()));
   const result = await session.query(buildPadronApplySql(layouts, options, { captureRevert: true }));
   return toPadronApplyOutcome(result.rows[0] ?? {});
+}
+
+/** AP-106: its own statement, after the apply, before the address master pass. Reads the digest-verified delete-eligible ids
+    from the session's temp table and the same reference table list, re-checking only condition (c) for staleness. */
+async function deletePadronRows(session: RunSession, layouts: PadronLayouts, scan: ReferenceScan): Promise<PadronDeleteOutcome> {
+  const result = await session.query(buildPadronDeleteSql(layouts, scan.tables));
+  return toPadronDeleteOutcome(result.rows[0] ?? {});
 }
 
 /** A missing or non-numeric max id fails the backup (and so the run); it never falls back to 0, which would widen the address master rollback. */
@@ -136,11 +164,12 @@ async function captureAddressMasterRevert(session: RunSession, layouts: PadronLa
 const revertRequestOf = (
   layouts: PadronLayouts,
   apply: PadronApplyOutcome,
+  deleteOutcome: PadronDeleteOutcome,
   addressMaster: RevertAddressMaster | undefined
 ): RevertBackupRequest => ({
   target: layouts.target,
   addressMaster,
-  expected: { inserted: apply.inserted, updated: apply.updated, paired: apply.paired },
+  expected: { inserted: apply.inserted, updated: apply.updated, paired: apply.paired, removed: deleteOutcome.deleted },
 });
 
 function assertCountsMatch(target: WritableTargetLayout, classification: PadronClassification, apply: PadronApplyOutcome): void {
@@ -158,6 +187,15 @@ function assertCountsMatch(target: WritableTargetLayout, classification: PadronC
   if (apply.paired !== classification.counts.pairs) {
     throw new Error(
       `Las claves actualizadas (${apply.paired}) no coinciden con los pares aplicables del análisis (${classification.counts.pairs}) en ${label}.`
+    );
+  }
+}
+
+/** AP-106's own count check: the delete statement's reported deleted rows must equal the candidates it found still eligible. */
+function assertDeleteCountsMatch(target: WritableTargetLayout, deleteOutcome: PadronDeleteOutcome): void {
+  if (deleteOutcome.deleted !== deleteOutcome.surviving) {
+    throw new Error(
+      `Los padrones eliminados (${deleteOutcome.deleted}) no coinciden con los que seguían siendo eliminables (${deleteOutcome.surviving}) en ${target.schema}.${target.table}.`
     );
   }
 }
@@ -214,7 +252,7 @@ async function runAnalysisBody(
   const source = await timer.run(STEP.RESOLVE, () => readSourceReport(session, layouts));
   // Ordered reads on the transaction's snapshot: the analysis follows the source report step.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const classification = await timer.run(STEP.CLASSIFY, () => readAnalysisClassification(session, layouts, params.options));
+  const { classification, scan } = await timer.run(STEP.CLASSIFY, () => readAnalysisClassification(session, layouts, params.options));
   const addressMaster = await runAddressMasterPlan(session, layouts, timer);
   // Ordered: the report step keeps its planned place after the link classification.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
@@ -223,6 +261,8 @@ async function runAnalysisBody(
       target: layouts.target,
       classification,
       apply: plannedApplyOf(classification.counts),
+      removal: plannedRemovalOf(classification),
+      removalBlockedReason: scan.blockedReason,
       updateGeometries: params.options.updateGeometries,
     })
   );
@@ -246,7 +286,9 @@ async function runPersistBody(
   const source = await timer.run(STEP.RESOLVE, () => readSourceReport(session, layouts));
   // Ordered reads on the transaction's snapshot: the classification follows the source report step.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const classification = await timer.run(STEP.CLASSIFY, () => readPersistClassification(session, layouts, params.options));
+  const { classification, scan } = await timer.run(STEP.CLASSIFY, () =>
+    readPersistClassification(session, layouts, params.options)
+  );
   const snapshot = snapshotOf(classification);
   assertPlanStillValid(plan, snapshot);
   // Ordered: the sequence is repaired after the classification and before the insert of the same transaction.
@@ -254,6 +296,10 @@ async function runPersistBody(
   await timer.run(STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.target)));
   const apply = await timer.run(STEP.APPLY, () => applyPadronChanges(session, layouts, params.options));
   assertCountsMatch(layouts.target, classification, apply);
+  // Ordered: the delete statement needs the apply's inserts, geometry updates and applied pairs already in place (AP-106).
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const deleteOutcome = await timer.run(STEP.DELETE, () => deletePadronRows(session, layouts, scan));
+  assertDeleteCountsMatch(layouts.target, deleteOutcome);
   const revertAddressMaster = await captureAddressMasterRevert(session, layouts);
   // Ordered: the revert capture reads the unlinked rows before the link pass links them.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
@@ -264,13 +310,15 @@ async function runPersistBody(
       target: layouts.target,
       classification,
       apply,
+      removal: actualRemovalCountsOf(classification, deleteOutcome),
+      removalBlockedReason: scan.blockedReason,
       updateGeometries: params.options.updateGeometries,
     })
   );
   // Ordered: the backup reads the revert rows this transaction wrote, after the report step.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const backup = await timer.run(STEP.BACKUP, () =>
-    writeRevertBackup(session, revertRequestOf(layouts, apply, revertAddressMaster))
+    writeRevertBackup(session, revertRequestOf(layouts, apply, deleteOutcome, revertAddressMaster))
   );
   return { source, target, addressMaster, backup, snapshot, pendingGeometryChanges: classification.pendingGeometryChanges };
 }

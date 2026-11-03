@@ -2,7 +2,11 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
-import { NO_REFERENCE_TABLES } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/replacementSql";
+import { buildCreateDeleteIdsTableSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteIdsTable";
+import { NO_REFERENCE_SCAN, referenceScanOf, type ReferenceScan, type ReferenceScanRow } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/referenceScan";
+import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
+import { buildPadronDeleteSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteSql";
+import { toPadronClassification } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reportMapping";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
 import {
   buildCaptureAddressMasterSql,
@@ -1072,7 +1076,7 @@ describe("actualizar-padron revert script on embedded Postgres (AP-69 to AP-72)"
     await database.exec(scriptLines.join("\n"));
     const afterRevert = await readPadron(database);
 
-    expect(counts).toEqual({ U: 1, P: 1, I: 1, A: 0 });
+    expect(counts).toEqual({ U: 1, P: 1, I: 1, A: 0, D: 0 });
     expect(afterRun).not.toEqual(before);
     expect(afterRevert).toEqual(before);
   });
@@ -1129,7 +1133,7 @@ describe("actualizar-padron revert script on embedded Postgres (AP-69 to AP-72)"
     const addressMasterDeleteLines = scriptLines.filter((line) => line.startsWith('DELETE FROM "carto"."addresses_master"'));
 
     expect(maxIdBefore).toBe(5);
-    expect(counts).toEqual({ U: 1, P: 1, I: 4, A: 3 });
+    expect(counts).toEqual({ U: 1, P: 1, I: 4, A: 3, D: 0 });
     expect(after.filter((row) => row.id !== 12)).toEqual(before);
     expect(after.find((row) => row.id === 12)).toBeDefined();
     expect(addressMasterRows).toEqual([
@@ -1267,7 +1271,7 @@ describe("actualizar-padron persist classify without the report (report false)",
   it("should return the same counts, fingerprint and plan digest as the report classify on the same data", async () => {
     const report = (await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS))).rows[0];
     const persist = (
-      await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS, NO_REFERENCE_TABLES, { report: false }))
+      await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS, NO_REFERENCE_SCAN, { report: false }))
     ).rows[0];
 
     expect(Number(report.new)).toBe(1);
@@ -1281,7 +1285,7 @@ describe("actualizar-padron persist classify without the report (report false)",
   it("should omit the report-only columns when the report is false and keep them when it is true", async () => {
     const report = (await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS))).rows[0];
     const persist = (
-      await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS, NO_REFERENCE_TABLES, { report: false }))
+      await database.query<Row>(buildPadronClassifySql(LAYOUTS, OPTIONS, NO_REFERENCE_SCAN, { report: false }))
     ).rows[0];
 
     for (const column of REPORT_ONLY_COLUMNS) {
@@ -1472,5 +1476,505 @@ describe("actualizar-padron accepted geometry changes (AP-100, AP-92)", () => {
     expect(Number(classification.updates)).toBe(1);
     expect(after).toHaveLength(before.length);
     expect(after.map(keyOf)).toEqual(before.map(keyOf));
+  });
+});
+
+/* AP-101 to AP-108: automatic deletion of unpaired, reference-free padrones.
+   Province 1: 100 UNCHANGED by staging (not missing), 500 the old side of a PENDING loose pair with the NEW row 501
+   (old area 100, new area 95: overlap 0.95, inside the loose band, short of the strict 0.98 floor), 700 missing and
+   reference-free (the only deletable one), 800 missing and referenced by carto.access_point, 810 missing and
+   referenced by carto.address_ref (a second referencing table).
+   Province 2: 900 and 901, both candidates of the one NEW row 902 (area 95): an AMBIGUOUS pair, both STILL_PAIRABLE. */
+const READABLE_ACCESS_POINT: ReferenceScanRow = { schema: "carto", table: "access_point", readable: true };
+const READABLE_ADDRESS_REF: ReferenceScanRow = { schema: "carto", table: "address_ref", readable: true };
+const BOTH_READABLE_SCAN = referenceScanOf([READABLE_ACCESS_POINT, READABLE_ADDRESS_REF]);
+
+const REMOVAL_SCHEMA_SQL = `
+  CREATE TABLE carto.access_point (id serial PRIMARY KEY, id_padron int);
+  CREATE TABLE carto.address_ref (id serial PRIMARY KEY, id_padron bigint);
+`;
+
+const REMOVAL_SEED_SQL = `
+  INSERT INTO carto.province VALUES (1, 'MONTEVIDEO'), (2, 'CANELONES'), (3, 'ROCHA');
+  INSERT INTO carto.loc VALUES (10, 'CENTRO', 1);
+  INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry, id_address_master) VALUES
+    ('100', 'RURAL', NULL, 1, '1', 11),
+    ('500', 'URBANO', 10, 1, '100', 22),
+    ('700', 'URBANO', 10, 1, '7', 33),
+    ('800', 'URBANO', 10, 1, '8', 44),
+    ('810', 'URBANO', 10, 1, '81', 55),
+    ('900', 'RURAL', NULL, 2, '100', NULL),
+    ('901', 'RURAL', NULL, 2, '100', NULL);
+  INSERT INTO stg.padron_staging (unidadcat, nomdepto, nomloccat, padron, geom) VALUES
+    ('RURAL', 'MONTEVIDEO', NULL, 100, '1'),
+    ('URBANO', 'Montevideo', 'centro', 501, '95'),
+    ('RURAL', 'CANELONES', NULL, 902, '95');
+`;
+
+const REMOVAL_LAYOUTS: PadronLayouts = { ...LAYOUTS, target: ADDRESS_TARGET };
+
+const REMOVAL_FIGURE_KEYS = [
+  "removed",
+  "removals_skipped_still_pairable",
+  "removals_skipped_now_referenced",
+  "removals_skipped_unverified",
+  "plan_digest",
+] as const;
+
+const hasTempIdsTable = async (database: PGlite): Promise<boolean> =>
+  (await database.query<{ found: boolean }>(`SELECT to_regclass('pg_temp.padron_delete_ids') IS NOT NULL AS found`)).rows[0].found;
+
+const tempIdsOf = async (database: PGlite): Promise<number[]> =>
+  (await database.query<{ id: number }>(`SELECT id FROM pg_temp.padron_delete_ids ORDER BY id`)).rows.map((row) => Number(row.id));
+
+/** Inside an open transaction: creates the temp table and runs the persist classify that fills it (AP-106). */
+async function persistClassify(database: PGlite, scan: ReferenceScan, options: ActualizarPadronOptions = OPTIONS): Promise<Row> {
+  await database.exec(buildCreateDeleteIdsTableSql());
+  return (await database.query<Row>(buildPadronClassifySql(REMOVAL_LAYOUTS, options, scan, { report: false, persistDeletable: true }))).rows[0];
+}
+
+const analysisClassifyOf = async (database: PGlite, scan: ReferenceScan): Promise<Row> =>
+  (await database.query<Row>(buildPadronClassifySql(REMOVAL_LAYOUTS, OPTIONS, scan, { report: true }))).rows[0];
+
+async function deleteStatement(database: PGlite, scan: ReferenceScan): Promise<Row> {
+  return (await database.query<Row>(buildPadronDeleteSql(REMOVAL_LAYOUTS, scan.tables))).rows[0];
+}
+
+describe("actualizar-padron automatic deletion of unpaired, reference-free padrones (AP-101 to AP-108)", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(POSTGIS_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(REMOVAL_SCHEMA_SQL);
+    await database.exec(REMOVAL_SEED_SQL);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  describe("classification (AP-103, AP-105)", () => {
+    it("should delete only the unreferenced non-pairable missing padron and skip the pending, ambiguous and referenced ones", async () => {
+      const before = await readPadron(database);
+
+      const classification = toPadronClassification(await analysisClassifyOf(database, BOTH_READABLE_SCAN));
+      await database.exec(`INSERT INTO carto.access_point (id_padron) VALUES (${idOfNumber(before, "800")});`);
+      await database.exec(`INSERT INTO carto.address_ref (id_padron) VALUES (${idOfNumber(before, "810")});`);
+      const withRefs = toPadronClassification(await analysisClassifyOf(database, BOTH_READABLE_SCAN));
+
+      expect(classification.counts.removed).toBe(3);
+      expect(withRefs.counts.removed).toBe(1);
+      expect(withRefs.counts.removalsSkipped).toEqual({
+        total: 5,
+        byReason: { STILL_PAIRABLE: 3, NOW_REFERENCED: 2, UNVERIFIED: 0 },
+      });
+      expect(withRefs.removedList.map((removed) => removed.id)).toEqual([idOfNumber(before, "700")]);
+    });
+
+    it("should give the old side of a pending pair and of an ambiguous pair the STILL_PAIRABLE reason even when referenced, before NOW_REFERENCED", async () => {
+      const before = await readPadron(database);
+      await database.exec(
+        `INSERT INTO carto.access_point (id_padron) VALUES (${idOfNumber(before, "500")}), (${idOfNumber(before, "900")});`
+      );
+
+      const classification = toPadronClassification(await analysisClassifyOf(database, BOTH_READABLE_SCAN));
+      const reasonOf = (number: string): string | null | undefined =>
+        classification.missingReview.find((entry) => entry.oldId === idOfNumber(before, number))?.removalReason;
+
+      expect(reasonOf("500")).toBe("STILL_PAIRABLE");
+      expect(reasonOf("900")).toBe("STILL_PAIRABLE");
+      expect(reasonOf("901")).toBe("STILL_PAIRABLE");
+    });
+
+    it("should expose the reference counts by table in the missing review and a null reason for the padron that will be deleted", async () => {
+      const before = await readPadron(database);
+      await database.exec(`INSERT INTO carto.access_point (id_padron) VALUES (${idOfNumber(before, "800")}), (${idOfNumber(before, "800")});`);
+      await database.exec(`INSERT INTO carto.address_ref (id_padron) VALUES (${idOfNumber(before, "800")});`);
+
+      const review = toPadronClassification(await analysisClassifyOf(database, BOTH_READABLE_SCAN)).missingReview;
+      const entry800 = review.find((entry) => entry.oldId === idOfNumber(before, "800"));
+      const entry700 = review.find((entry) => entry.oldId === idOfNumber(before, "700"));
+
+      expect(entry800?.removalReason).toBe("NOW_REFERENCED");
+      expect(entry800?.refs).toEqual({ total: 3, byTable: { "carto.access_point": 2, "carto.address_ref": 1 } });
+      expect(entry700?.removalReason).toBeNull();
+      expect(entry700?.refs).toEqual({ total: 0, byTable: {} });
+    });
+
+    it("should not count a padron claimed by an applied pair, nor one the staging table still carries, as deletable", async () => {
+      await database.exec(`
+        INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry) VALUES ('950', 'RURAL', NULL, 3, '100');
+        INSERT INTO stg.padron_staging (unidadcat, nomdepto, nomloccat, padron, geom) VALUES ('RURAL', 'ROCHA', NULL, 951, '100');
+      `);
+
+      const classification = toPadronClassification(await analysisClassifyOf(database, BOTH_READABLE_SCAN));
+
+      expect(classification.counts.pairs).toBe(1);
+      expect(classification.counts.removed).toBe(3);
+    });
+  });
+
+  describe("analysis (AP-106, AP-107)", () => {
+    it("should list the deletable padron with its department, write nothing and leave no temp table in a READ ONLY transaction", async () => {
+      const before = await readPadron(database);
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      const row = await analysisClassifyOf(database, BOTH_READABLE_SCAN);
+      const tempBeforeRollback = await hasTempIdsTable(database);
+      await database.exec("ROLLBACK");
+      const after = await readPadron(database);
+
+      const removedList = (row.removed_list ?? []) as Array<Record<string, unknown>>;
+      expect(removedList.map((removed) => Number(removed.id))).toEqual([idOfNumber(before, "700"), idOfNumber(before, "800"), idOfNumber(before, "810")]);
+      expect(removedList[0]).toMatchObject({ typePadron: "URBANO", provinceId: 1, department: "MONTEVIDEO", localityId: 10, locality: "CENTRO", number: "700" });
+      expect(tempBeforeRollback).toBe(false);
+      expect(after).toEqual(before);
+    });
+
+    it("should return the same removal counts and plan digest as the persist classify on the same data (digest stability across both paths)", async () => {
+      const analysis = await analysisClassifyOf(database, BOTH_READABLE_SCAN);
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      const persist = await persistClassify(database, BOTH_READABLE_SCAN);
+      await database.exec("ROLLBACK");
+
+      for (const key of [...CLASSIFY_FIGURE_KEYS, ...REMOVAL_FIGURE_KEYS]) {
+        expect(String(persist[key]), key).toBe(String(analysis[key]));
+      }
+      expect(Number(analysis.removed)).toBe(3);
+    });
+
+    it("should return a plan digest of 32 hex characters that covers the deletable set", async () => {
+      const analysis = await analysisClassifyOf(database, BOTH_READABLE_SCAN);
+
+      expect(String(analysis.plan_digest)).toMatch(/^[0-9a-f]{32}$/);
+    });
+  });
+
+  describe("plan digest over the deletable set (AP-89, AP-90, AP-105)", () => {
+    const digestOf = async (scan: ReferenceScan = BOTH_READABLE_SCAN): Promise<string> =>
+      String((await analysisClassifyOf(database, scan)).plan_digest);
+
+    it("should change the digest when a deletable padron becomes referenced, so the eligible set shrinks while every count elsewhere is equal", async () => {
+      const before = await readPadron(database);
+      const digestBefore = await digestOf();
+
+      await database.exec(`INSERT INTO carto.access_point (id_padron) VALUES (${idOfNumber(before, "700")});`);
+      const digestAfter = await digestOf();
+
+      expect(digestAfter).not.toBe(digestBefore);
+    });
+
+    it("should change the digest when a new deletable padron appears", async () => {
+      const digestBefore = await digestOf();
+
+      await database.exec(
+        `INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry) VALUES ('960', 'RURAL', NULL, 3, '100');`
+      );
+      const digestAfter = await digestOf();
+
+      expect(digestAfter).not.toBe(digestBefore);
+    });
+
+    it("should change the digest when the deletable set swaps one id for another of the same size", async () => {
+      const before = await readPadron(database);
+      await database.exec(`INSERT INTO carto.access_point (id_padron) VALUES (${idOfNumber(before, "800")}), (${idOfNumber(before, "810")});`);
+      const digestOne = await digestOf();
+
+      await database.exec(`DELETE FROM carto.access_point; DELETE FROM carto.address_ref;`);
+      await database.exec(`INSERT INTO carto.access_point (id_padron) VALUES (${idOfNumber(before, "700")}), (${idOfNumber(before, "810")});`);
+      const digestTwo = await digestOf();
+
+      expect(digestTwo).not.toBe(digestOne);
+    });
+
+    it("should keep the digest when the references of a padron that is already not deletable change", async () => {
+      const before = await readPadron(database);
+      await database.exec(`INSERT INTO carto.access_point (id_padron) VALUES (${idOfNumber(before, "800")});`);
+      const digestBefore = await digestOf();
+
+      await database.exec(`INSERT INTO carto.access_point (id_padron) VALUES (${idOfNumber(before, "800")}), (${idOfNumber(before, "500")});`);
+      const digestAfter = await digestOf();
+
+      expect(digestAfter).toBe(digestBefore);
+    });
+
+  });
+
+  describe("real run (AP-106)", () => {
+    it("should fill the temp table with exactly the deletable ids in the persist classify, set-based", async () => {
+      const before = await readPadron(database);
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      const row = await persistClassify(database, BOTH_READABLE_SCAN);
+      const ids = await tempIdsOf(database);
+      await database.exec("ROLLBACK");
+
+      expect(Number(row.removed)).toBe(3);
+      expect(ids).toEqual([idOfNumber(before, "700"), idOfNumber(before, "800"), idOfNumber(before, "810")]);
+    });
+
+    it("should delete exactly the unreferenced non-pairable padron, keep every other row and drop the temp table at COMMIT", async () => {
+      const before = await readPadron(database);
+      await database.exec(`INSERT INTO carto.access_point (id_padron) VALUES (${idOfNumber(before, "800")});`);
+      await database.exec(`INSERT INTO carto.address_ref (id_padron) VALUES (${idOfNumber(before, "810")});`);
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await database.query(buildCreateRevertTableSql());
+      await persistClassify(database, BOTH_READABLE_SCAN);
+      await database.query(buildSequenceRepairSql(TARGET));
+      await database.query(buildPadronApplySql(REMOVAL_LAYOUTS, OPTIONS, { captureRevert: true }));
+      const deleteRow = await deleteStatement(database, BOTH_READABLE_SCAN);
+      const tempDuringTransaction = await hasTempIdsTable(database);
+      await database.exec("COMMIT");
+      const after = await readPadron(database);
+      const tempAfterCommit = await hasTempIdsTable(database);
+
+      const removedIds = before.filter((row) => !after.some((kept) => kept.id === row.id)).map((row) => row.number);
+      expect(removedIds).toEqual(["700"]);
+      expect(Number(deleteRow.deleted)).toBe(1);
+      expect(Number(deleteRow.surviving)).toBe(1);
+      expect(Number(deleteRow.revert_rows)).toBe(1);
+      expect(tempDuringTransaction).toBe(true);
+      expect(tempAfterCommit).toBe(false);
+      for (const number of ["100", "500", "800", "810", "900", "901"]) {
+        expect(after.some((row) => row.number === number), number).toBe(true);
+      }
+    });
+
+    it("should capture the deleted row in padron_revert with kind D and every column, including id_province and id_address_master", async () => {
+      const before = await readPadron(database);
+      const id700 = idOfNumber(before, "700");
+      const target700 = rowWithId(before, id700) as TargetRow;
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await database.query(buildCreateRevertTableSql());
+      await persistClassify(database, BOTH_READABLE_SCAN);
+      const deleteRow = await deleteStatement(database, BOTH_READABLE_SCAN);
+      const revertRows = (await database.query<Row>(`SELECT * FROM ${REVERT_TABLE_SQL} WHERE kind = 'D' ORDER BY id`)).rows;
+      await database.exec("COMMIT");
+
+      expect(Number(deleteRow.deleted)).toBe(3);
+      const captured = revertRows.map((row) => ({ ...row, id: Number(row.id) }));
+      expect(captured.map((row) => row.id)).toEqual([id700, idOfNumber(before, "800"), idOfNumber(before, "810")]);
+      expect(captured[0]).toMatchObject({
+        kind: "D",
+        id: id700,
+        type_padron: target700.type_padron,
+        id_cadastral_locality: target700.id_cadastral_locality,
+        number: target700.number,
+        geometry: target700.geometry,
+        id_province: target700.id_province,
+        id_address_master: 33,
+      });
+    });
+
+    it("should skip, not fail, an id that gets a reference after the classify, deleting the others and capturing only the deleted ones", async () => {
+      const before = await readPadron(database);
+      const id700 = idOfNumber(before, "700");
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await database.query(buildCreateRevertTableSql());
+      await persistClassify(database, BOTH_READABLE_SCAN);
+      await database.exec(`INSERT INTO carto.access_point (id_padron) VALUES (${id700});`);
+      const deleteRow = await deleteStatement(database, BOTH_READABLE_SCAN);
+      const revertIds = (await database.query<Row>(`SELECT id FROM ${REVERT_TABLE_SQL} WHERE kind = 'D'`)).rows.map((row) => Number(row.id));
+      await database.exec("COMMIT");
+      const after = await readPadron(database);
+
+      expect(Number(deleteRow.surviving)).toBe(2);
+      expect(Number(deleteRow.deleted)).toBe(2);
+      expect(after.some((row) => row.id === id700)).toBe(true);
+      expect(revertIds).not.toContain(id700);
+      expect(revertIds).toHaveLength(2);
+    });
+
+    it("should skip an id that gets a reference in the second referencing table after the classify", async () => {
+      const before = await readPadron(database);
+      const id700 = idOfNumber(before, "700");
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await database.query(buildCreateRevertTableSql());
+      await persistClassify(database, BOTH_READABLE_SCAN);
+      await database.exec(`INSERT INTO carto.address_ref (id_padron) VALUES (${id700});`);
+      const deleteRow = await deleteStatement(database, BOTH_READABLE_SCAN);
+      await database.exec("COMMIT");
+      const after = await readPadron(database);
+
+      expect(after.some((row) => row.id === id700)).toBe(true);
+      expect(Number(deleteRow.deleted)).toBe(2);
+      expect(Number(deleteRow.surviving)).toBe(2);
+    });
+
+    it("should delete nothing on a second delete statement with the same temp ids, since the rows are already gone", async () => {
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await database.query(buildCreateRevertTableSql());
+      await persistClassify(database, BOTH_READABLE_SCAN);
+      const first = await deleteStatement(database, BOTH_READABLE_SCAN);
+      const second = await deleteStatement(database, BOTH_READABLE_SCAN);
+      await database.exec("COMMIT");
+
+      expect(Number(first.deleted)).toBe(3);
+      expect(Number(second.deleted)).toBe(0);
+    });
+
+    it("should leave the temp table gone and the destination intact when the transaction rolls back", async () => {
+      const before = await readPadron(database);
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await database.query(buildCreateRevertTableSql());
+      await persistClassify(database, BOTH_READABLE_SCAN);
+      await deleteStatement(database, BOTH_READABLE_SCAN);
+      await database.exec("ROLLBACK");
+      const after = await readPadron(database);
+
+      expect(after).toEqual(before);
+      expect(await hasTempIdsTable(database)).toBe(false);
+    });
+
+    it("should restore the deleted padron, with its address master link, when the generated revert script runs after the real run", async () => {
+      await database.exec(EWKB_STUB_SQL);
+      await database.exec(`UPDATE carto.padron SET geometry = number || '0' WHERE number IN ('700', '800', '810');`);
+      const before = await readPadron(database);
+      const session = sessionOn(database);
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await database.query(buildCreateRevertTableSql());
+      await persistClassify(database, BOTH_READABLE_SCAN);
+      await database.query(buildSequenceRepairSql(TARGET));
+      await database.query(buildPadronApplySql(REMOVAL_LAYOUTS, OPTIONS, { captureRevert: true }));
+      const deleteRow = await deleteStatement(database, BOTH_READABLE_SCAN);
+      const counts = await readRevertCounts(session);
+      const scriptLines: string[] = [];
+      for await (const line of revertScriptLines(session, { target: ADDRESS_TARGET, counts, generatedAt: REVERT_GENERATED_AT })) {
+        scriptLines.push(line.text);
+      }
+      await database.exec("COMMIT");
+      const afterRun = await readPadron(database);
+
+      await database.exec(scriptLines.join("\n"));
+      const afterRevert = await readPadron(database);
+
+      expect(counts.D).toBe(Number(deleteRow.deleted));
+      expect(counts.D).toBe(3);
+      expect(afterRun).not.toEqual(before);
+      expect(afterRevert).toEqual(before);
+    });
+  });
+
+  describe("fail closed (AP-102)", () => {
+    it("should delete nothing and mark every unpairable, unreferenced padron UNVERIFIED when the scan found no reference table", async () => {
+      const before = await readPadron(database);
+      const scan = referenceScanOf([]);
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await database.query(buildCreateRevertTableSql());
+      const row = await persistClassify(database, scan);
+      const ids = await tempIdsOf(database);
+      const deleteRow = await deleteStatement(database, scan);
+      await database.exec("COMMIT");
+      const after = await readPadron(database);
+
+      expect(scan.blockedReason).not.toBeNull();
+      expect(Number(row.removed)).toBe(0);
+      expect(Number(row.removals_skipped_unverified)).toBe(3);
+      expect(Number(row.removals_skipped_still_pairable)).toBe(3);
+      expect(ids).toEqual([]);
+      expect(Number(deleteRow.deleted)).toBe(0);
+      expect(after.some((padron) => padron.number === "700")).toBe(true);
+      expect(after.filter((padron) => before.some((old) => old.id === padron.id))).toEqual(before);
+    });
+
+    it("should delete nothing, even a padron whose readable tables show no reference, when another table cannot be read", async () => {
+      const before = await readPadron(database);
+      const scan = referenceScanOf([READABLE_ACCESS_POINT, { schema: "carto", table: "address_ref", readable: false }]);
+      await database.exec(`INSERT INTO carto.address_ref (id_padron) VALUES (${idOfNumber(before, "700")});`);
+      await database.exec(`INSERT INTO carto.access_point (id_padron) VALUES (${idOfNumber(before, "800")});`);
+
+      await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await database.query(buildCreateRevertTableSql());
+      const row = await persistClassify(database, scan);
+      const deleteRow = await deleteStatement(database, scan);
+      await database.exec("COMMIT");
+      const after = await readPadron(database);
+
+      expect(scan.tables).toEqual([{ schema: "carto", table: "access_point" }]);
+      expect(scan.blockedReason).toContain("carto.address_ref");
+      expect(Number(row.removed)).toBe(0);
+      expect(Number(row.removals_skipped_now_referenced)).toBe(1);
+      expect(Number(row.removals_skipped_unverified)).toBe(2);
+      expect(Number(deleteRow.deleted)).toBe(0);
+      expect(after.some((padron) => padron.number === "700")).toBe(true);
+    });
+
+    it("should behave as a normal run when every found table is readable", async () => {
+      const scan = referenceScanOf([READABLE_ACCESS_POINT, READABLE_ADDRESS_REF]);
+
+      const row = await analysisClassifyOf(database, scan);
+
+      expect(scan.blockedReason).toBeNull();
+      expect(Number(row.removed)).toBe(3);
+      expect(Number(row.removals_skipped_unverified)).toBe(0);
+    });
+
+    it("should change the plan digest between a blocked scan and a readable one, so a plan analyzed under one is refused under the other", async () => {
+      const blocked = await analysisClassifyOf(database, referenceScanOf([]));
+      const readable = await analysisClassifyOf(database, BOTH_READABLE_SCAN);
+
+      expect(String(blocked.plan_digest)).not.toBe(String(readable.plan_digest));
+    });
+  });
+});
+
+describe("actualizar-padron deletion at scale (AP-106, AP-108)", () => {
+  const OVER_LIMIT = DETAIL_LIST_LIMIT + 5;
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(POSTGIS_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(REMOVAL_SCHEMA_SQL);
+    await database.exec(REMOVAL_SEED_SQL);
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry)
+        SELECT 'bulk' || lpad(n::text, 4, '0'), 'RURAL', NULL, 3, '1' FROM generate_series(1, ${OVER_LIMIT}) AS n;
+    `);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  it("should count every deletable padron but list only the first DETAIL_LIST_LIMIT in the analysis", async () => {
+    const row = await analysisClassifyOf(database, BOTH_READABLE_SCAN);
+
+    expect(Number(row.removed)).toBe(OVER_LIMIT + 3);
+    expect(row.removed_list as unknown[]).toHaveLength(DETAIL_LIST_LIMIT);
+  });
+
+  it("should list the capped removed padrones ordered by department, locality, number and id", async () => {
+    const row = await analysisClassifyOf(database, BOTH_READABLE_SCAN);
+
+    const listed = (row.removed_list as Array<{ department: string | null; number: string }>).map((entry) => `${entry.department}:${entry.number}`);
+    expect(listed).toEqual([...listed].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).sort((a, b) => a.split(":")[0].localeCompare(b.split(":")[0], "en") ));
+    expect(listed[0].startsWith("MONTEVIDEO:")).toBe(true);
+  });
+
+  it("should delete every deletable padron in a real run, set-based, while the returned list stays capped", async () => {
+    await database.exec("BEGIN ISOLATION LEVEL REPEATABLE READ");
+    await database.query(buildCreateRevertTableSql());
+    const row = await persistClassify(database, BOTH_READABLE_SCAN);
+    const deleteRow = await deleteStatement(database, BOTH_READABLE_SCAN);
+    const revertCount = Number((await database.query<Row>(`SELECT count(*) AS n FROM ${REVERT_TABLE_SQL} WHERE kind = 'D'`)).rows[0].n);
+    await database.exec("COMMIT");
+
+    expect(Number(row.removed)).toBe(OVER_LIMIT + 3);
+    expect(Number(deleteRow.deleted)).toBe(OVER_LIMIT + 3);
+    expect(Number(deleteRow.surviving)).toBe(OVER_LIMIT + 3);
+    expect(revertCount).toBe(OVER_LIMIT + 3);
+    expect(deleteRow.removed_list as unknown[]).toHaveLength(DETAIL_LIST_LIMIT);
   });
 });

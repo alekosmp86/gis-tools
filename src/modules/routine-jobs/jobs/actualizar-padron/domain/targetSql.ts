@@ -18,8 +18,10 @@ import {
   PAIR_OVERLAP_MIN,
   PAIR_STATUS,
   PAIR_TIER,
+  REMOVAL_SKIP_REASON,
   type PairStatus,
   type PairTier,
+  type RemovalSkipReason,
   STAGING_COLUMN,
 } from "../constants";
 import type { ActualizarPadronOptions, PadronLayouts } from "../types";
@@ -28,12 +30,17 @@ import { CHOICE_OLD_ID_COLUMN, pairChoicesValuesSql } from "./pairChoicesSql";
 import { geometryAcceptsValuesSql } from "./geometryAcceptsSql";
 import { physicalColumn, qualifiedName } from "./layouts";
 import { REVERT_COLUMN, REVERT_KIND, REVERT_TABLE_SQL, revertColumnList } from "./revertCapture";
+import { DELETE_IDS_ID_COLUMN, DELETE_IDS_TABLE_SQL } from "./deleteIdsTable";
+import { NO_REFERENCE_SCAN, type ReferenceScan } from "./referenceScan";
+import { removedListSql } from "./removedListSql";
 import {
   missingReviewSql,
-  NO_REFERENCE_TABLES,
+  referenceCountCtes,
+  referenceJoinSql,
+  referenceTotalColumnSql,
+  REMOVAL_CTE,
   replacementCountSql,
   replacementCtes,
-  type ReferenceTableFlags,
 } from "./replacementSql";
 
 const TARGET_ALIAS = "tgt";
@@ -447,6 +454,107 @@ function classifyCtes(layouts: PadronLayouts, options: ActualizarPadronOptions):
   ];
 }
 
+/* AP-102 to AP-105: every missing destination row is a deletion candidate; it is deleted unless a live pair could claim it or
+   something references it. Read fresh at classify time, both dry run and real run alike. A separate block from classifyCtes()
+   because buildPadronApplySql's WITH chain never needs it: the delete is its own statement. */
+const CTE_REMOVAL = {
+  MISSING_IDS: "missing_target_ids",
+  OPEN_PAIR_IDS: "open_pair_ids",
+  DELETE_IDS: "deleted_ids_insert",
+} as const;
+
+const REMOVAL_REASON_COLUMN = "reason";
+
+/* Condition (a) of AP-103: the destination id has no staging candidate and no applied pair claims it. */
+function missingTargetIdsCte(): string {
+  return cte(CTE_REMOVAL.MISSING_IDS, [`SELECT ${unmatchedOf(DESTINATION_COLUMN.ID)} AS "id"`, missingTargetsSql()].join(" "));
+}
+
+/* Condition (b) of AP-103: a pair still waiting for a decision (pending or ambiguous) may yet claim the row. */
+function openPairIdsCte(): string {
+  return cte(
+    CTE_REMOVAL.OPEN_PAIR_IDS,
+    [
+      `SELECT DISTINCT ${pairOf(PAIR_COLUMN.TARGET_ID)} AS "id" FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS}`,
+      `WHERE ${pairOf(PAIR_COLUMN.STATUS)} IN (${literal(PAIR_STATUS.NOT_APPLIED_PENDING)}, ${literal(PAIR_STATUS.NOT_APPLIED_AMBIGUOUS)})`,
+    ].join(" ")
+  );
+}
+
+/* Conditions (b), (c) and the scan guard of AP-102, in that order: the first that fails names the reason; NULL means the
+   padrón is deleted. A blocked scan (no table found, or one unreadable) leaves every unreferenced padrón UNVERIFIED. */
+function removalVerdictsCte(blocked: boolean): string {
+  const openPair = `${q(CTE_REMOVAL.OPEN_PAIR_IDS)}.${q("id")}`;
+  const branches = [
+    `WHEN ${openPair} IS NOT NULL THEN ${literal(REMOVAL_SKIP_REASON.STILL_PAIRABLE)}`,
+    `WHEN ${referenceTotalColumnSql(REMOVAL_CTE.REFS)} > 0 THEN ${literal(REMOVAL_SKIP_REASON.NOW_REFERENCED)}`,
+    ...(blocked ? [`ELSE ${literal(REMOVAL_SKIP_REASON.UNVERIFIED)}`] : []),
+  ];
+  const missingId = `${q(CTE_REMOVAL.MISSING_IDS)}.${q("id")}`;
+  return cte(
+    REMOVAL_CTE.VERDICTS,
+    [
+      `SELECT ${missingId} AS "old_id", CASE ${branches.join(" ")} END AS ${q(REMOVAL_REASON_COLUMN)}`,
+      `FROM ${q(CTE_REMOVAL.MISSING_IDS)}`,
+      `LEFT JOIN ${q(CTE_REMOVAL.OPEN_PAIR_IDS)} ON ${openPair} = ${missingId}`,
+      referenceJoinSql(REMOVAL_CTE.REFS, missingId),
+    ].join(" ")
+  );
+}
+
+const DELETABLE_CONDITION = `${q(REMOVAL_REASON_COLUMN)} IS NULL`;
+
+/** The removal-eligibility CTEs, always present (not gated by the report flag): the digest and the removed/removalsSkipped
+    counts must be identical in an analysis and in the persist classify, so AP-90's plan-changed guard also covers deletions. */
+function removalCtes(scan: ReferenceScan): string[] {
+  return [
+    missingTargetIdsCte(),
+    ...referenceCountCtes(REMOVAL_CTE.REFS, CTE_REMOVAL.MISSING_IDS, "id", scan.tables),
+    openPairIdsCte(),
+    removalVerdictsCte(scan.blockedReason !== null),
+  ];
+}
+
+/* The persist classify also writes the eligible ids, set-based, into the session's temp table (AP-106): a data-modifying CTE
+   runs exactly once and to completion whether or not the main select reads it. */
+function deleteIdsInsertCte(): string {
+  return cte(
+    CTE_REMOVAL.DELETE_IDS,
+    [
+      `INSERT INTO ${DELETE_IDS_TABLE_SQL} (${q(DELETE_IDS_ID_COLUMN)})`,
+      `SELECT "old_id" FROM ${q(REMOVAL_CTE.VERDICTS)} WHERE ${DELETABLE_CONDITION}`,
+      `RETURNING ${q(DELETE_IDS_ID_COLUMN)}`,
+    ].join(" ")
+  );
+}
+
+const verdictCountSql = (condition: string): string => `(SELECT count(*) FROM ${q(REMOVAL_CTE.VERDICTS)} WHERE ${condition})`;
+
+const SKIPPED_COUNT_COLUMN: Record<RemovalSkipReason, string> = {
+  [REMOVAL_SKIP_REASON.STILL_PAIRABLE]: "removals_skipped_still_pairable",
+  [REMOVAL_SKIP_REASON.NOW_REFERENCED]: "removals_skipped_now_referenced",
+  [REMOVAL_SKIP_REASON.UNVERIFIED]: "removals_skipped_unverified",
+};
+
+/** removed is the delete-eligible missing padrón count (a planned write); the removalsSkipped reasons partition the rest (AP-105). */
+function removalCountsSql(): string[] {
+  return [
+    `${verdictCountSql(DELETABLE_CONDITION)} AS "removed",`,
+    ...Object.values(REMOVAL_SKIP_REASON).map(
+      (reason) => `${verdictCountSql(`${q(REMOVAL_REASON_COLUMN)} = ${literal(reason)}`)} AS ${q(SKIPPED_COUNT_COLUMN[reason])},`
+    ),
+  ];
+}
+
+/** An analysis lists the padrones it would delete: the unmatched rows whose verdict is NULL, capped (AP-108). */
+function plannedRemovedListSql(layouts: PadronLayouts): string {
+  const source = [
+    `SELECT ${UNMATCHED_ALIAS}.* FROM ${q(CTE_TARGET.UNMATCHED)} AS ${UNMATCHED_ALIAS}`,
+    `WHERE ${unmatchedOf(DESTINATION_COLUMN.ID)} IN (SELECT "old_id" FROM ${q(REMOVAL_CTE.VERDICTS)} WHERE ${DELETABLE_CONDITION})`,
+  ].join(" ");
+  return removedListSql(layouts, source);
+}
+
 const pairCountSql = (condition: string): string =>
   `(SELECT count(*) FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS} WHERE ${condition})`;
 
@@ -463,6 +571,7 @@ function classificationCountsSql(): string {
     `count(*) FILTER (WHERE ${classIs(MATCH_CLASS.AMBIGUOUS)}) AS "ambiguous",`,
     `${changedCountSql(true)} AS "updates",`,
     `${changedCountSql(false)} AS "geometry_pending",`,
+    ...removalCountsSql(),
     geometryAcceptsUnappliedSql(),
   ].join(" ");
 }
@@ -619,15 +728,22 @@ const PENDING_FILTER = `NOT ${changedOf(CHANGED_COLUMN.APPLIED)}`;
 export interface ClassifyStatementOptions {
   /** The analysis (true) reads the replacement block and the report lists; the persist classify (false) reads the counts, fingerprint and digest only. */
   report?: boolean;
+  /** The real run's classify (AP-106) also writes the delete-eligible ids into the session's temp table, which the caller created first. */
+  persistDeletable?: boolean;
 }
 
 /* The reference flags and the report flag only add or drop report columns: the classification, the digest and the plan never depend on them. */
 const replacementCtesOf = (layouts: PadronLayouts, report: boolean): string[] => (report ? replacementCtes(layouts.target) : []);
 const replacementCountsOf = (report: boolean): string[] => (report ? [`${replacementCountSql()},`] : []);
 
-function missingReviewOf(layouts: PadronLayouts, references: ReferenceTableFlags, report: boolean): string[] {
-  return report ? [`${jsonArrayOf(missingReviewSql(layouts, references), "missing_review")} AS "missing_review",`] : [];
+function missingReviewOf(layouts: PadronLayouts, report: boolean): string[] {
+  return report ? [`${jsonArrayOf(missingReviewSql(layouts), "missing_review")} AS "missing_review",`] : [];
 }
+
+const removedListOf = (layouts: PadronLayouts, report: boolean): string[] =>
+  report ? [`${plannedRemovedListSql(layouts)} AS "removed_list",`] : [];
+
+const deleteIdsInsertOf = (persistDeletable: boolean): string[] => (persistDeletable ? [deleteIdsInsertCte()] : []);
 
 function pendingListOf(layouts: PadronLayouts, report: boolean): string[] {
   return report ? [`${jsonArrayOf(geometryListSql(layouts, PENDING_FILTER, null), "pending_geometry_changes")} AS "pending_geometry_changes",`] : [];
@@ -636,21 +752,27 @@ function pendingListOf(layouts: PadronLayouts, report: boolean): string[] {
 export function buildPadronClassifySql(
   layouts: PadronLayouts,
   options: ActualizarPadronOptions,
-  references: ReferenceTableFlags = NO_REFERENCE_TABLES,
-  { report = true }: ClassifyStatementOptions = {}
+  scan: ReferenceScan = NO_REFERENCE_SCAN,
+  { report = true, persistDeletable = false }: ClassifyStatementOptions = {}
 ): string {
   return [
-    withClause([...classifyCtes(layouts, options), ...replacementCtesOf(layouts, report)]),
+    withClause([
+      ...classifyCtes(layouts, options),
+      ...removalCtes(scan),
+      ...deleteIdsInsertOf(persistDeletable),
+      ...replacementCtesOf(layouts, report),
+    ]),
     "SELECT",
     `${classificationCountsSql()},`,
     ...missingSqlParts(),
     ...replacementCountsOf(report),
     `${pairCountsSql()},`,
     `${jsonArrayOf(pairsListSql(layouts), "pairs_list")} AS "pairs_list",`,
-    ...missingReviewOf(layouts, references, report),
+    ...missingReviewOf(layouts, report),
     `${jsonArrayOf(ambiguousSamplesSql(), "ambiguous_samples")} AS "ambiguous_samples",`,
     `${jsonArrayOf(geometryListSql(layouts, null, DETAIL_LIST_LIMIT), "geometry_changes")} AS "geometry_changes",`,
     ...pendingListOf(layouts, report),
+    ...removedListOf(layouts, report),
     fingerprintColumnsSql(layouts.target).join(", "),
     `FROM ${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS}`,
   ].join(" ");
@@ -672,7 +794,16 @@ const candidateHashSql = (alias: string): string => `md5(${alias}.${q(CANDIDATE_
 const digestEntrySql = (tag: string, columns: string[], from: string, where: string): string =>
   `SELECT concat_ws('|', ${literal(tag)}, ${columns.join(", ")}) AS ${q(ENTRY_COLUMN)} FROM ${from} WHERE ${where}`;
 
-/* One entry per planned write: NEW keys, applied pairs (new key and old id) and applied geometry updates, each with its candidate geometry hash. */
+/* One entry for the whole deletable set: its size and an md5 over its sorted ids, so the plan-changed guard (AP-90) covers deletions without a row per padrón. */
+function removalDigestEntrySql(): string {
+  const idsHash = `md5(string_agg("old_id"::text, ',' ORDER BY "old_id"))`;
+  return [
+    `SELECT concat_ws('|', 'D', count(*), coalesce(${idsHash}, '')) AS ${q(ENTRY_COLUMN)}`,
+    `FROM ${q(REMOVAL_CTE.VERDICTS)} WHERE ${DELETABLE_CONDITION}`,
+  ].join(" ");
+}
+
+/* One entry per planned write: NEW keys, applied pairs (new key and old id) and applied geometry updates, each with its candidate geometry hash, plus the one deletion entry. */
 function digestEntriesSql(): string {
   const planned = `${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS}`;
   const pairs = `${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS}`;
@@ -691,6 +822,7 @@ function digestEntriesSql(): string {
       changed,
       changedOf(CHANGED_COLUMN.APPLIED)
     ),
+    removalDigestEntrySql(),
   ].join(" UNION ALL ");
 }
 
@@ -792,9 +924,9 @@ function revertRowsCte(): string {
     CTE_TARGET.REVERT,
     [
       `INSERT INTO ${REVERT_TABLE_SQL} (${revertColumnList()})`,
-      `SELECT ${uKind}, u."id", NULL, NULL, NULL, u."old_geometry" FROM ${q(CTE_TARGET.UPDATED)} AS u`,
-      `UNION ALL SELECT ${pKind}, p."id", p."old_type_padron", p."old_id_cadastral_locality", p."old_number", p."old_geometry" FROM ${q(CTE_TARGET.PAIRED)} AS p`,
-      `UNION ALL SELECT ${iKind}, i."id", NULL, NULL, NULL, NULL FROM ${q(CTE_TARGET.INSERTED)} AS i`,
+      `SELECT ${uKind}, u."id", NULL, NULL, NULL, u."old_geometry", NULL::integer, NULL::integer FROM ${q(CTE_TARGET.UPDATED)} AS u`,
+      `UNION ALL SELECT ${pKind}, p."id", p."old_type_padron", p."old_id_cadastral_locality", p."old_number", p."old_geometry", NULL::integer, NULL::integer FROM ${q(CTE_TARGET.PAIRED)} AS p`,
+      `UNION ALL SELECT ${iKind}, i."id", NULL, NULL, NULL, NULL, NULL::integer, NULL::integer FROM ${q(CTE_TARGET.INSERTED)} AS i`,
       `RETURNING ${q(REVERT_COLUMN.KIND)}`,
     ].join(" ")
   );
@@ -834,3 +966,4 @@ export function buildPadronApplySql(
     `${jsonArrayOf(INSERTED_LIST_SQL, "inserted_list")} AS "inserted_list"`,
   ].join(" ");
 }
+

@@ -6,7 +6,10 @@ import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } 
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
 import { buildReportSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reportSql";
-import { NO_REFERENCE_TABLES } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/replacementSql";
+import { buildPadronDeleteSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteSql";
+import { buildCreateDeleteIdsTableSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteIdsTable";
+import { referenceScanOf, type ReferenceScanRow } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/referenceScan";
+import { referenceTablesScanSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/replacementSql";
 import { runActualizarPadron } from "@/modules/routine-jobs/jobs/actualizar-padron/services/runActualizarPadron";
 import type { ActualizarPadronOptions, ActualizarPadronParams, PadronLayouts } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import type { RunDeps, RunSession } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
@@ -114,8 +117,11 @@ const REPORT_ROW = {
   byLocalityAndReason: [],
 };
 
-const classificationRowOf = (): Record<string, unknown> => ({
+const READABLE_SCAN_ROWS: ReferenceScanRow[] = [{ schema: "carto", table: "access_point", readable: true }];
+
+const classificationRowOf = (removed = 0): Record<string, unknown> => ({
   new: CLASSIFIED_NEW,
+  removed,
   unchanged: 1,
   within_tolerance: 0,
   changed: 0,
@@ -127,14 +133,33 @@ const classificationRowOf = (): Record<string, unknown> => ({
   geometry_changes: [],
 });
 
-/** The session answers the exact statements the stage builds; the apply reports the given insert count. Statements it does not know answer no rows. */
-function sessionOf(appliedInserted: number): { session: RunSession; log: string[] } {
+const HAS_TABLE_PRIVILEGE_PATTERN = /has_table_privilege/i;
+
+/** The session answers the exact statements the stage builds; the apply reports the given insert count. Statements it
+    does not know answer no rows. AP-5's has_table_privilege(..., 'DELETE') preflight check matches by pattern, not by
+    exact text (its bound parameters differ from every other mocked statement), and is granted unless the test says
+    otherwise. */
+interface SessionOptions {
+  deletePrivilegeGranted?: boolean;
+  scanRows?: ReferenceScanRow[];
+  removed?: number;
+  deleted?: number;
+  surviving?: number;
+}
+
+function sessionOf(
+  appliedInserted: number,
+  { deletePrivilegeGranted = true, scanRows = READABLE_SCAN_ROWS, removed = 0, deleted = removed, surviving = removed }: SessionOptions = {}
+): { session: RunSession; log: string[] } {
   const log: string[] = [];
+  const scan = referenceScanOf(scanRows);
   const applyAnswer = [{ inserted: appliedInserted, updated: 0, inserted_list: [] }];
   const answers = new Map<string, Array<Record<string, unknown>>>([
     [buildReportSql(LAYOUTS), [REPORT_ROW]],
-    [buildPadronClassifySql(LAYOUTS, OPTIONS), [classificationRowOf()]],
-    [buildPadronClassifySql(LAYOUTS, OPTIONS, NO_REFERENCE_TABLES, { report: false }), [classificationRowOf()]],
+    [referenceTablesScanSql("carto", "padron"), scanRows.map((row) => ({ ...row }))],
+    [buildPadronClassifySql(LAYOUTS, OPTIONS, scan, { report: true }), [classificationRowOf(removed)]],
+    [buildPadronClassifySql(LAYOUTS, OPTIONS, scan, { report: false, persistDeletable: true }), [classificationRowOf(removed)]],
+    [buildPadronDeleteSql(LAYOUTS, scan.tables), [{ surviving, deleted, revert_rows: deleted, removed_list: [] }]],
     [buildPadronApplySql(LAYOUTS, OPTIONS), applyAnswer],
     [buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }), applyAnswer],
   ]);
@@ -142,6 +167,7 @@ function sessionOf(appliedInserted: number): { session: RunSession; log: string[
     async query(sql: string) {
       log.push(sql);
       await Promise.resolve();
+      if (HAS_TABLE_PRIVILEGE_PATTERN.test(sql)) return { rows: [{ has_privilege: deletePrivilegeGranted }] };
       return { rows: answers.get(sql) ?? [] };
     },
     async close() {},
@@ -197,6 +223,20 @@ describe("runActualizarPadron dry run (AP-17, AP-19, AP-88)", () => {
   });
 });
 
+describe("runActualizarPadron DELETE privilege preflight (AP-5, AP-106)", () => {
+  it("should refuse before BEGIN, open no transaction and write nothing when the connecting role has no DELETE on the destination", async () => {
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { deletePrivilegeGranted: false });
+    const params = PARAMS_OF({ dryRun: true, confirm: false });
+
+    const failure = await failureOf(runActualizarPadron(params, depsOf(session)));
+
+    expect(failure.message).toMatch(/No tiene privilegio DELETE sobre la tabla carto\.padron/);
+    expect(log).not.toContain(BEGIN_SQL);
+    expect(log).not.toContain(BEGIN_READ_ONLY_SQL);
+    expect(log).not.toContain(COMMIT_SQL);
+  });
+});
+
 describe("runActualizarPadron count check (AP-48)", () => {
   it("should ROLLBACK, never COMMIT, and throw when the inserted rows differ from the NEW count", async () => {
     const planId = await analysisPlanIdOf();
@@ -221,5 +261,100 @@ describe("runActualizarPadron revert backup failure (AP-68)", () => {
     expect(failure.message).toMatch(/No se pudo generar el respaldo para revertir/);
     expect(log[log.length - 1]).toBe(ROLLBACK_SQL);
     expect(log).not.toContain(COMMIT_SQL);
+  });
+});
+
+describe("runActualizarPadron automatic removal (AP-102, AP-106, AP-107)", () => {
+  const CREATE_TEMP_SQL = buildCreateDeleteIdsTableSql();
+  const deleteSqlOf = (rows: ReferenceScanRow[] = READABLE_SCAN_ROWS): string => buildPadronDeleteSql(LAYOUTS, referenceScanOf(rows).tables);
+  const persistClassifyOf = (rows: ReferenceScanRow[] = READABLE_SCAN_ROWS): string =>
+    buildPadronClassifySql(LAYOUTS, OPTIONS, referenceScanOf(rows), { report: false, persistDeletable: true });
+
+  it("should create the temp table, classify into it, apply, delete and analyze, in that order, in a real run", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { removed: 2 });
+
+    const result = await runActualizarPadron(PARAMS_OF({ planId }), depsOf(session));
+
+    const order = [
+      log.indexOf(CREATE_TEMP_SQL),
+      log.indexOf(persistClassifyOf()),
+      log.indexOf(buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true })),
+      log.indexOf(deleteSqlOf()),
+    ];
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(log.some((sql) => sql.startsWith("ANALYZE") && log.indexOf(sql) > order[3])).toBe(true);
+    expect(log).toContain(COMMIT_SQL);
+    expect(result.target.removed).toBe(2);
+  });
+
+  it("should scan the reference tables once in the analysis and once in the real run, both before the classify", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(CLASSIFIED_NEW);
+    const scanSql = referenceTablesScanSql("carto", "padron");
+
+    await runActualizarPadron(PARAMS_OF({ planId }), depsOf(session));
+
+    expect(log.filter((sql) => sql === scanSql)).toHaveLength(1);
+    expect(log.indexOf(scanSql)).toBeLessThan(log.indexOf(persistClassifyOf()));
+  });
+
+  it("should never create the temp table nor delete in an analysis, and report the planned removed count", async () => {
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { removed: 3 });
+
+    const result = await runActualizarPadron(PARAMS_OF({ dryRun: true, confirm: false }), depsOf(session));
+
+    expect(log).not.toContain(CREATE_TEMP_SQL);
+    expect(log).not.toContain(deleteSqlOf());
+    expect(log.some((sql) => /\bDELETE FROM\b/.test(sql))).toBe(false);
+    expect(result.target.removed).toBe(3);
+    expect(result.targetModified).toBe(false);
+  });
+
+  it("should report the deleted count of the delete statement as removed in the real run result", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session } = sessionOf(CLASSIFIED_NEW, { removed: 3, deleted: 2, surviving: 2 });
+
+    const result = await runActualizarPadron(PARAMS_OF({ planId }), depsOf(session));
+
+    expect(result.target.removed).toBe(2);
+    expect(result.target.removalsSkipped?.byReason.NOW_REFERENCED).toBe(1);
+  });
+
+  it("should ROLLBACK, never COMMIT, and throw when the deleted rows differ from the surviving candidates", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { removed: 3, deleted: 2, surviving: 3 });
+
+    const failure = await failureOf(runActualizarPadron(PARAMS_OF({ planId }), depsOf(session)));
+
+    expect(failure.message).toMatch(/Los padrones eliminados \(2\) no coinciden con los que seguían siendo eliminables \(3\)/);
+    expect(log[log.length - 1]).toBe(ROLLBACK_SQL);
+    expect(log).not.toContain(COMMIT_SQL);
+  });
+
+  it("should delete nothing and report the blocked reason when the scan finds no reference table", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { scanRows: [] });
+    const result = await runActualizarPadron(PARAMS_OF({ planId }), depsOf(session));
+
+    expect(log).toContain(COMMIT_SQL);
+    expect(result.target.removed).toBe(0);
+    expect(result.target.removalBlockedReason).toBe("No se encontraron tablas que referencien padrones: no se eliminan padrones faltantes.");
+    expect(result.warnings).toContain(result.target.removalBlockedReason);
+  });
+
+  it("should delete nothing and name the table in the warning when the role cannot read a reference table", async () => {
+    const rows: ReferenceScanRow[] = [
+      { schema: "carto", table: "access_point", readable: true },
+      { schema: "carto", table: "secret_refs", readable: false },
+    ];
+    const { session } = sessionOf(CLASSIFIED_NEW, { scanRows: rows });
+
+    const result = await runActualizarPadron(PARAMS_OF({ dryRun: true, confirm: false }), depsOf(session));
+
+    expect(result.target.removed).toBe(0);
+    expect(result.target.removalBlockedReason).toContain("carto.secret_refs");
+    expect(result.warnings.some((warning) => warning.includes("carto.secret_refs"))).toBe(true);
   });
 });

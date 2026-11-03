@@ -186,10 +186,12 @@ interface TargetRow {
   id_address_master: number | null;
 }
 
-/** A session on the embedded database: each statement the stage sends runs on the same PGlite connection. */
+/** A session on the embedded database: each statement the stage sends runs on the same PGlite connection. Bound
+    parameters are forwarded, so AP-5's has_table_privilege(..., 'DELETE') preflight check (and any other parameterized
+    query) runs for real against PGlite instead of silently dropping its arguments. */
 const sessionOn = (database: PGlite): RunSession => ({
-  async query(sql: string) {
-    const result = await database.query(sql);
+  async query(sql: string, values?: unknown[]) {
+    const result = await database.query(sql, values);
     return { rows: result.rows as Row[] };
   },
   async close() {},

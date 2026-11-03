@@ -158,6 +158,19 @@ describe("paramsFingerprintOf and the accepted geometries (AP-100)", () => {
   });
 });
 
+describe("paramsFingerprintOf and the automatic removal (AP-104, AP-89)", () => {
+  it("should return the same fingerprint whether or not a stale removalMarks option rides along, since removals are not a request parameter", () => {
+    const stale = paramsOf();
+    stale.options = { ...stale.options, removalMarks: [500, 600] } as ActualizarPadronParams["options"];
+
+    expect(paramsFingerprintOf(stale)).toBe(paramsFingerprintOf(paramsOf()));
+  });
+
+  it("should keep the fingerprint a 64-character hex digest", () => {
+    expect(paramsFingerprintOf(paramsOf())).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
 describe("usablePlanOf (AP-90)", () => {
   it("should return the record when it matches the parameters and has not expired", () => {
     const record = recordOf();

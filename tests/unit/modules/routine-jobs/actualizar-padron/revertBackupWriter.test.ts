@@ -84,7 +84,7 @@ describe("actualizar-padron revert backup writer on a real temp directory (AP-70
     expect(lines.filter((line) => line.startsWith("\\"))).toEqual([]);
     expect(lines.indexOf("BEGIN;")).toBeGreaterThan(0);
     expect(backup.fileName).toMatch(/^padron-revert-carto-padron-\d{8}-\d{6}\.sql\.gz$/);
-    expect(backup.counts).toEqual({ updated: 1, paired: 0, inserted: 2, addressMasterRows: 0 });
+    expect(backup.counts).toEqual({ updated: 1, paired: 0, inserted: 2, addressMasterRows: 0, deleted: 0 });
     expect(updateLines).toHaveLength(1);
     expect(deleteLines).toHaveLength(1);
     expect(backup.bytes).toBe((await stat(filePath)).size);

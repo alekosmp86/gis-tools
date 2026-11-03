@@ -1,5 +1,6 @@
 import { physicalColumn, qualifiedName } from "../domain/layouts";
 import {
+  optionalAddressMasterColumn,
   REVERT_COLUMN,
   REVERT_KIND,
   REVERT_KINDS,
@@ -21,6 +22,8 @@ export interface RevertExpected {
   inserted: number;
   updated: number;
   paired: number;
+  /** Absent means zero: a run with no delete step (an analysis never reaches this check) or no marks still never captures a D row. */
+  removed?: number;
 }
 
 export interface RevertAddressMaster {
@@ -54,6 +57,7 @@ const REVERT_KIND_LABEL: Record<RevertKind, string> = {
   [REVERT_KIND.PAIRED]: "padrones reclasificados",
   [REVERT_KIND.INSERTED]: "padrones insertados",
   [REVERT_KIND.ADDRESS_MASTER_LINK]: "padrones sin dirección maestra",
+  [REVERT_KIND.DELETED]: "padrones eliminados",
 };
 
 export const emptyRevertCounts = (): RevertCounts => ({
@@ -61,6 +65,7 @@ export const emptyRevertCounts = (): RevertCounts => ({
   [REVERT_KIND.PAIRED]: 0,
   [REVERT_KIND.INSERTED]: 0,
   [REVERT_KIND.ADDRESS_MASTER_LINK]: 0,
+  [REVERT_KIND.DELETED]: 0,
 });
 
 const isRevertKind = (value: string): value is RevertKind => (REVERT_KINDS as readonly string[]).includes(value);
@@ -110,6 +115,12 @@ export function assertRevertTally(tally: RevertCounts, counts: RevertCounts, exp
     expected.inserted,
     `Los padrones insertados guardados (${counts[REVERT_KIND.INSERTED]}) no coinciden con los insertados (${expected.inserted}).`
   );
+  const expectedRemoved = expected.removed ?? 0;
+  assertSameCount(
+    counts[REVERT_KIND.DELETED],
+    expectedRemoved,
+    `Los padrones eliminados guardados (${counts[REVERT_KIND.DELETED]}) no coinciden con los eliminados (${expectedRemoved}).`
+  );
 }
 
 const structural = (text: string): RevertLine => ({ kind: null, rows: 0, text });
@@ -122,7 +133,7 @@ function headerLines(plan: RevertScriptPlan): RevertLine[] {
     "-- Respaldo para revertir una actualización de padrones (ejecución real).",
     `-- Generado: ${plan.generatedAt}`,
     `-- Tabla de destino: ${plan.target.schema}.${plan.target.table}`,
-    `-- Filas que cambió la ejecución: geometrías ${counts.U}, padrones reclasificados ${counts.P}, insertados ${counts.I}, sin dirección maestra antes del enlace ${counts.A}.`,
+    `-- Filas que cambió la ejecución: geometrías ${counts.U}, padrones reclasificados ${counts.P}, insertados ${counts.I}, sin dirección maestra antes del enlace ${counts.A}, eliminados ${counts.D}.`,
     "-- ADVERTENCIA: revierte SOLO las filas que cambió esta ejecución. Supone que nadie cambió esas filas después de la ejecución.",
     ...(plan.addressMaster !== undefined ? [ADDRESS_MASTER_HEADER] : []),
     "-- Las secuencias de id no se revierten.",
@@ -182,6 +193,40 @@ function geometryRestoreSelect(target: WritableTargetLayout): string {
     literal(physicalColumn(target, DESTINATION_COLUMN.ID)),
     q(REVERT_COLUMN.ID),
   ]);
+  return `${q(REVERT_COLUMN.ID)}, ${restore} AS "line"`;
+}
+
+interface DeletedColumn {
+  logical: string;
+  value: string;
+  geometry?: boolean;
+}
+
+const DELETED_COLUMNS: readonly DeletedColumn[] = [
+  { logical: DESTINATION_COLUMN.ID, value: q(REVERT_COLUMN.ID) },
+  { logical: DESTINATION_COLUMN.TYPE_PADRON, value: q(REVERT_COLUMN.TYPE_PADRON) },
+  { logical: DESTINATION_COLUMN.ID_CADASTRAL_LOCALITY, value: q(REVERT_COLUMN.LOCALITY) },
+  { logical: DESTINATION_COLUMN.ID_PROVINCE, value: q(REVERT_COLUMN.ID_PROVINCE) },
+  { logical: DESTINATION_COLUMN.NUMBER, value: q(REVERT_COLUMN.NUMBER) },
+  { logical: DESTINATION_COLUMN.GEOMETRY, value: `encode(ST_AsEWKB(${q(REVERT_COLUMN.GEOMETRY)}), 'hex')`, geometry: true },
+];
+
+/** A deleted row's revert is a full INSERT, not a partial restore like U/P (AP-106): every column the destination writes,
+    the id explicit (ids are not reverted), plus id_address_master when the destination has it resolved. No WHERE: the row
+    is assumed gone since the run deleted it. */
+function deletedRestoreSelect(target: WritableTargetLayout): string {
+  const addressMasterColumn = optionalAddressMasterColumn(target);
+  const columnNameArgs = DELETED_COLUMNS.map((column) => literal(physicalColumn(target, column.logical)));
+  const valuePlaceholders = DELETED_COLUMNS.map((column) => (column.geometry ? "%L::geometry" : "%L"));
+  const valueArgs = DELETED_COLUMNS.map((column) => column.value);
+  if (addressMasterColumn !== null) {
+    columnNameArgs.push(literal(addressMasterColumn));
+    valuePlaceholders.push("%L");
+    valueArgs.push(q(REVERT_COLUMN.ID_ADDRESS_MASTER));
+  }
+  const columnPlaceholders = columnNameArgs.map(() => "%s").join(", ");
+  const template = `INSERT INTO %s (${columnPlaceholders}) VALUES (${valuePlaceholders.join(", ")});`;
+  const restore = formatCall(template, [literal(qualifiedName(target)), ...columnNameArgs, ...valueArgs]);
   return `${q(REVERT_COLUMN.ID)}, ${restore} AS "line"`;
 }
 
@@ -276,5 +321,6 @@ export async function* revertScriptLines(session: RunSession, plan: RevertScript
   yield* insertedDeleteLines(session, plan.target);
   yield* restoreLines(session, REVERT_KIND.PAIRED, pairedRestoreSelect(plan.target));
   yield* restoreLines(session, REVERT_KIND.UPDATED, geometryRestoreSelect(plan.target));
+  yield* restoreLines(session, REVERT_KIND.DELETED, deletedRestoreSelect(plan.target));
   yield structural("COMMIT;");
 }

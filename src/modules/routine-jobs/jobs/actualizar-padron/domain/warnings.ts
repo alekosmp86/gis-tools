@@ -3,8 +3,14 @@ import { addressMasterCountWarnings } from "../../shared/addressMasterLinkPass";
 import { PADRON_SUBJECT_SPEC } from "../../shared/addressMasterLinkSpec";
 import { DETAIL_LIST_LIMIT } from "../../shared/limits";
 import { plural } from "../../shared/text";
-import { PAIR_LOOSE_OVERLAP_MIN, PAIR_OVERLAP_MIN } from "../constants";
-import type { ActualizarAddressMasterReport, ActualizarPadronOptions, ActualizarTargetReport, ActualizarTotals } from "../types";
+import { PAIR_LOOSE_OVERLAP_MIN, PAIR_OVERLAP_MIN, REMOVAL_SKIP_REASON } from "../constants";
+import type {
+  ActualizarAddressMasterReport,
+  ActualizarPadronOptions,
+  ActualizarTargetReport,
+  ActualizarTotals,
+  RemovalSkippedReport,
+} from "../types";
 
 export interface WarningInput {
   dryRun: boolean;
@@ -69,6 +75,34 @@ function pairWarnings(target: ActualizarTargetReport): string[] {
 const geometryAcceptsUnappliedWarningOf = (count: number): string =>
   `${plural(count, "geometría aceptada no se aplicó", "geometrías aceptadas no se aplicaron")} (el padrón ya no tiene un cambio de geometría o Actualizar geometrías está desactivado).`;
 
+const removalDoneWarningOf = (removed: number, table: string, dryRun: boolean): string =>
+  dryRun
+    ? `${plural(removed, "padrón sin fila de origen se eliminará", "padrones sin fila de origen se eliminarán")} de ${table} (sin direcciones asociadas).`
+    : `${plural(removed, "padrón sin fila de origen eliminado", "padrones sin fila de origen eliminados")} de ${table} (sin direcciones asociadas).`;
+
+const removalSkippedWarningOf = (removalsSkipped: RemovalSkippedReport): string => {
+  const paired = removalsSkipped.byReason[REMOVAL_SKIP_REASON.STILL_PAIRABLE];
+  const referenced = removalsSkipped.byReason[REMOVAL_SKIP_REASON.NOW_REFERENCED];
+  const reasons = [
+    ...(paired > 0 ? [`${paired} porque tienen un par sin resolver`] : []),
+    ...(referenced > 0 ? [`${referenced} porque tienen direcciones asociadas`] : []),
+  ];
+  return `${plural(paired + referenced, "padrón sin fila de origen no se elimina", "padrones sin fila de origen no se eliminan")}: ${reasons.join(", ")}.`;
+};
+
+const notDeletedCountOf = (removalsSkipped: RemovalSkippedReport): number =>
+  removalsSkipped.byReason[REMOVAL_SKIP_REASON.STILL_PAIRABLE] + removalsSkipped.byReason[REMOVAL_SKIP_REASON.NOW_REFERENCED];
+
+function removalWarnings(target: ActualizarTargetReport, dryRun: boolean): string[] {
+  const warnings: string[] = [];
+  if (target.removalBlockedReason !== undefined) warnings.push(target.removalBlockedReason);
+  if ((target.removed ?? 0) > 0) warnings.push(removalDoneWarningOf(target.removed ?? 0, target.table, dryRun));
+  if (target.removalsSkipped !== undefined && notDeletedCountOf(target.removalsSkipped) > 0) {
+    warnings.push(removalSkippedWarningOf(target.removalsSkipped));
+  }
+  return warnings;
+}
+
 const geometryThresholdPercentOf =(fraction: number): string => String(Number((fraction * PERCENT_SCALE).toFixed(1)));
 
 function targetWarnings(target: ActualizarTargetReport, options: ActualizarPadronOptions, dryRun: boolean): string[] {
@@ -76,8 +110,9 @@ function targetWarnings(target: ActualizarTargetReport, options: ActualizarPadro
   if (target.ambiguous > 0) {
     warnings.push(`${plural(target.ambiguous, "padrón ambiguo", "padrones ambiguos")} en ${target.table}: no se insertaron ni actualizaron.`);
   }
-  if (target.missing > 0) {
-    warnings.push(`${plural(target.missing, "padrón", "padrones")} de ${target.table} sin fila de origen: se listan, no se modifican.`);
+  const keptMissing = target.missing - (target.removed ?? 0);
+  if (keptMissing > 0) {
+    warnings.push(`${plural(keptMissing, "padrón", "padrones")} de ${target.table} sin fila de origen: se listan, no se modifican.`);
   }
   if (target.changed > 0 && !options.updateGeometries) {
     warnings.push(
@@ -91,6 +126,7 @@ function targetWarnings(target: ActualizarTargetReport, options: ActualizarPadro
   }
   const acceptsUnapplied = target.geometryAcceptsUnapplied ?? 0;
   if (acceptsUnapplied > 0) warnings.push(geometryAcceptsUnappliedWarningOf(acceptsUnapplied));
+  warnings.push(...removalWarnings(target, dryRun));
   warnings.push(...pairWarnings(target));
   if (!dryRun && target.inserted > DETAIL_LIST_LIMIT) {
     warnings.push(`Se listan las primeras ${DETAIL_LIST_LIMIT} filas insertadas en ${target.table}.`);

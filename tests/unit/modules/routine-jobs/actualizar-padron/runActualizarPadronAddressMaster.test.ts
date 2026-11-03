@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { buildReportSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reportSql";
-import { NO_REFERENCE_TABLES } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/replacementSql";
+import { buildPadronDeleteSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteSql";
+import { referenceScanOf } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/referenceScan";
+import { referenceTablesScanSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/replacementSql";
 import { buildMaxAddressMasterIdSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/revertCapture";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
 import { runActualizarPadron } from "@/modules/routine-jobs/jobs/actualizar-padron/services/runActualizarPadron";
@@ -155,6 +157,9 @@ const classificationRowOf = (): Record<string, unknown> => ({
   geometry_changes: [],
 });
 
+const SCAN_ROWS = [{ schema: "carto", table: "access_point", readable: true }];
+const SCAN = referenceScanOf(SCAN_ROWS);
+
 /** The session answers the statements of the padron stage and of the address master pass; the address master apply reports the given counts. */
 function sessionOf(
   appliedAddressMaster: Record<string, unknown>,
@@ -164,8 +169,10 @@ function sessionOf(
   const applyAnswer = [{ inserted: CLASSIFIED_NEW, updated: 0, inserted_list: [] }];
   const answers = new Map<string, Array<Record<string, unknown>>>([
     [buildReportSql(LAYOUTS), [REPORT_ROW]],
-    [buildPadronClassifySql(LAYOUTS, OPTIONS), [classificationRowOf()]],
-    [buildPadronClassifySql(LAYOUTS, OPTIONS, NO_REFERENCE_TABLES, { report: false }), [classificationRowOf()]],
+    [referenceTablesScanSql("carto", "padron"), SCAN_ROWS.map((row) => ({ ...row }))],
+    [buildPadronClassifySql(LAYOUTS, OPTIONS, SCAN, { report: true }), [classificationRowOf()]],
+    [buildPadronClassifySql(LAYOUTS, OPTIONS, SCAN, { report: false, persistDeletable: true }), [classificationRowOf()]],
+    [buildPadronDeleteSql(LAYOUTS, SCAN.tables), [{ surviving: 0, deleted: 0, revert_rows: 0, removed_list: [] }]],
     [buildPadronApplySql(LAYOUTS, OPTIONS), applyAnswer],
     [buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }), applyAnswer],
     [buildAddressMasterClassifySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC), [ADDRESS_CLASSIFICATION_ROW]],
@@ -177,6 +184,7 @@ function sessionOf(
     async query(sql: string) {
       log.push(sql);
       await Promise.resolve();
+      if (/has_table_privilege/i.test(sql)) return { rows: [{ has_privilege: true }] };
       return { rows: answers.get(sql) ?? [] };
     },
     async close() {},
@@ -270,5 +278,21 @@ describe("runActualizarPadron revert backup fail closed on the max address maste
     expect(log).not.toContain(buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC));
     expect(log[log.length - 1]).toBe(ROLLBACK_SQL);
     expect(log).not.toContain(COMMIT_SQL);
+  });
+});
+
+describe("runActualizarPadron deletion before the address master pass (AP-106)", () => {
+  it("should run the delete statement after the padron apply and before the address master apply in a real run", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf({ created: 1, linked: 2, linked_list: [] });
+
+    await runActualizarPadron(PARAMS_OF({ planId }), depsOf(session));
+
+    const applyIndex = log.indexOf(buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }));
+    const deleteIndex = log.indexOf(buildPadronDeleteSql(LAYOUTS, SCAN.tables));
+    const addressApplyIndex = log.indexOf(buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC));
+    expect(applyIndex).toBeGreaterThan(-1);
+    expect(deleteIndex).toBeGreaterThan(applyIndex);
+    expect(addressApplyIndex).toBeGreaterThan(deleteIndex);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildRunWarnings, type WarningInput } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/warnings";
-import type { ActualizarTargetReport } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
+import type { ActualizarTargetReport, RemovalSkippedReport } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 
 const TABLE = "carto.padron_tmp_actualizacion";
 const LOOSE_ONE_WARNING = "1 padrón se actualiza por coincidencia parcial (superposición 85-98%); revisarlo en el listado de pares.";
@@ -74,6 +74,100 @@ describe("buildRunWarnings accepted geometry warning (AP-100)", () => {
   it("should produce no accepted geometry warning when the count is zero or the result is older and lacks it", () => {
     expect(buildRunWarnings(acceptsInputOf(0))).toEqual([]);
     expect(buildRunWarnings(acceptsInputOf(undefined))).toEqual([]);
+  });
+});
+
+const removalsSkippedOf = (stillPairable: number, nowReferenced: number, unverified = 0): RemovalSkippedReport => ({
+  total: stillPairable + nowReferenced + unverified,
+  byReason: { STILL_PAIRABLE: stillPairable, NOW_REFERENCED: nowReferenced, UNVERIFIED: unverified },
+});
+
+const removalInputOf = (
+  removed: number | undefined,
+  removalsSkipped: RemovalSkippedReport | undefined,
+  overrides: { dryRun?: boolean; missing?: number; removalBlockedReason?: string } = {}
+): WarningInput => {
+  const input = inputOf(0);
+  const { dryRun = false, missing = 0, removalBlockedReason } = overrides;
+  return { ...input, dryRun, target: { ...input.target, missing, removed, removalsSkipped, removalBlockedReason } };
+};
+
+const SKIPPED_WARNING = /no se elimina/;
+
+describe("buildRunWarnings automatic removal warnings (AP-105)", () => {
+  it("should warn in Spanish with the plural past form naming the table when a real run deleted several padrones", () => {
+    const warnings = buildRunWarnings(removalInputOf(3, removalsSkippedOf(0, 0), { missing: 3 }));
+
+    expect(warnings).toContain(`3 padrones sin fila de origen eliminados de ${TABLE} (sin direcciones asociadas).`);
+  });
+
+  it("should warn with the singular past form when a real run deleted exactly one padron", () => {
+    const warnings = buildRunWarnings(removalInputOf(1, removalsSkippedOf(0, 0), { missing: 1 }));
+
+    expect(warnings).toContain(`1 padrón sin fila de origen eliminado de ${TABLE} (sin direcciones asociadas).`);
+  });
+
+  it("should warn with the future form when an analysis will delete padrones", () => {
+    const many = buildRunWarnings(removalInputOf(2, removalsSkippedOf(0, 0), { dryRun: true, missing: 2 }));
+    const one = buildRunWarnings(removalInputOf(1, removalsSkippedOf(0, 0), { dryRun: true, missing: 1 }));
+
+    expect(many).toContain(`2 padrones sin fila de origen se eliminarán de ${TABLE} (sin direcciones asociadas).`);
+    expect(one).toContain(`1 padrón sin fila de origen se eliminará de ${TABLE} (sin direcciones asociadas).`);
+  });
+
+  it("should warn naming both counts, grouped by the two held-back reasons, when padrones are not deleted", () => {
+    const warnings = buildRunWarnings(removalInputOf(1, removalsSkippedOf(2, 1), { missing: 4 }));
+
+    expect(warnings).toContain(
+      "3 padrones sin fila de origen no se eliminan: 2 porque tienen un par sin resolver, 1 porque tienen direcciones asociadas."
+    );
+  });
+
+  it("should use the singular form and leave out the zero reason when exactly one padron is not deleted", () => {
+    const pairable = buildRunWarnings(removalInputOf(0, removalsSkippedOf(1, 0), { missing: 1 }));
+    const referenced = buildRunWarnings(removalInputOf(0, removalsSkippedOf(0, 1), { missing: 1 }));
+
+    expect(pairable).toContain("1 padrón sin fila de origen no se elimina: 1 porque tienen un par sin resolver.");
+    expect(referenced).toContain("1 padrón sin fila de origen no se elimina: 1 porque tienen direcciones asociadas.");
+  });
+
+  it("should produce no deletion warning when nothing is deleted and nothing is held back", () => {
+    const warnings = buildRunWarnings(removalInputOf(0, removalsSkippedOf(0, 0)));
+
+    expect(warnings.some((warning) => /eliminad|eliminar|no se elimina/.test(warning))).toBe(false);
+  });
+
+  it("should produce no deletion warning when the removal fields are absent (an older result shape)", () => {
+    const warnings = buildRunWarnings(removalInputOf(undefined, undefined));
+
+    expect(warnings).toEqual([]);
+  });
+
+  it("should count only the kept missing padrones in the listed-not-modified warning", () => {
+    const warnings = buildRunWarnings(removalInputOf(2, removalsSkippedOf(1, 2), { missing: 5 }));
+
+    expect(warnings).toContain(`3 padrones de ${TABLE} sin fila de origen: se listan, no se modifican.`);
+  });
+
+  it("should leave out the listed-not-modified warning when every missing padron is deleted", () => {
+    const warnings = buildRunWarnings(removalInputOf(4, removalsSkippedOf(0, 0), { missing: 4 }));
+
+    expect(warnings.some((warning) => warning.includes("se listan, no se modifican"))).toBe(false);
+  });
+
+  it("should carry the blocked reason as a run warning and report nothing deleted when the reference scan was blocked", () => {
+    const reason = "No se encontraron tablas que referencien padrones: no se eliminan padrones faltantes.";
+
+    const warnings = buildRunWarnings(removalInputOf(0, removalsSkippedOf(0, 0, 3), { missing: 3, removalBlockedReason: reason }));
+
+    expect(warnings).toContain(reason);
+    expect(warnings.some((warning) => warning.includes("sin fila de origen se eliminar") || warning.includes("sin fila de origen eliminad"))).toBe(false);
+  });
+
+  it("should not repeat the unverified padrones in the skipped warning, as the blocked reason already explains them", () => {
+    const warnings = buildRunWarnings(removalInputOf(0, removalsSkippedOf(0, 0, 3), { missing: 3, removalBlockedReason: "bloqueado" }));
+
+    expect(warnings.some((warning) => SKIPPED_WARNING.test(warning))).toBe(false);
   });
 });
 

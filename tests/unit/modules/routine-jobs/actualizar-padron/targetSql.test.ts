@@ -2,6 +2,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
+import { buildPadronDeleteSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteSql";
+import { buildCreateDeleteIdsTableSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteIdsTable";
+import { referenceScanOf } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/referenceScan";
+import type { ReferenceTable } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/replacementSql";
 import {
   buildCaptureAddressMasterSql,
   buildCreateRevertTableSql,
@@ -16,9 +20,20 @@ import { buildSequenceRepairSql } from "@/modules/routine-jobs/jobs/shared/trans
 
 const REPOSITORY_ROOT = path.resolve(__dirname, "../../../../..");
 const DELETE_OR_TRUNCATE = /\b(DELETE|TRUNCATE)\b/i;
+/* The raw-source-file scan below greps whole file text, where legitimate English now collides with the bare word
+   "DELETE" since AP-101 to AP-108 added real deletion: STEP.DELETE ("Eliminar padrones faltantes sin referencias"),
+   DESTINATION_DELETE_PRIVILEGE's privilege name "DELETE", deletePadronRows identifiers, and comments
+   describing delete-eligibility. None of those is a SQL statement. A real DELETE statement in Postgres is always
+   "DELETE FROM ..."; TRUNCATE has no such collision in this stage, so it stays a bare-word match. This pattern is
+   used only for the raw-file scan; DELETE_OR_TRUNCATE above, used against the generated SQL strings, is unchanged. */
+const SOURCE_DELETE_OR_TRUNCATE = /\bDELETE\s+FROM\b|\bTRUNCATE\b/i;
 const STAGE_FILE_PATTERN = /(actualizar|Actualizar|geometryOption|GeometryOption|ActualizarTarget)/;
 const STAGE_DIRECTORY = path.join(REPOSITORY_ROOT, "src/modules/routine-jobs/jobs/actualizar-padron");
 const REVERT_SCRIPT_FILE = path.join(STAGE_DIRECTORY, "services/revertScript.ts");
+/* AP-106's own DELETE statement: kept apart from this file's blanket "no DELETE" guard, the one exception besides the
+   revert script (which only ever writes DELETE text into the revert file, never runs it). */
+const DELETE_SQL_FILE = path.join(STAGE_DIRECTORY, "domain/deleteSql.ts");
+const NO_DELETE_OR_TRUNCATE_EXCEPTIONS: readonly string[] = [REVERT_SCRIPT_FILE, DELETE_SQL_FILE];
 
 const identity = (columns: readonly string[]): Record<string, string> => Object.fromEntries(columns.map((column) => [column, column]));
 
@@ -48,6 +63,10 @@ const layouts: PadronLayouts = {
   province: tableOf("carto", "province", Object.values(PROVINCE_COLUMN)),
   locality: tableOf("carto", "cadastral_locality", Object.values(LOCALITY_COLUMN)),
 };
+
+const READABLE_SCAN = referenceScanOf([{ schema: "carto", table: "access_point", readable: true }]);
+const REFERENCE_TABLES: readonly ReferenceTable[] = READABLE_SCAN.tables;
+const NO_REFERENCE_TABLES: readonly ReferenceTable[] = [];
 
 const withUpdates: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: false, pairChoices: [] };
 const withoutUpdates: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: false, linkAddressMaster: false, pairChoices: [] };
@@ -85,6 +104,9 @@ const stageSourceFiles = (): string[] => {
 
 const GENERATED_SQL: ReadonlyArray<readonly [string, () => string]> = [
   ["classify with geometry updates", () => buildPadronClassifySql(layouts, withUpdates)],
+  ["classify with a scan and the persist temp table insert", () => buildPadronClassifySql(layouts, withUpdates, READABLE_SCAN, { report: false, persistDeletable: true })],
+  ["classify with a blocked scan", () => buildPadronClassifySql(layouts, withUpdates, referenceScanOf([]))],
+  ["create delete ids temp table", () => buildCreateDeleteIdsTableSql()],
   ["apply with geometry updates", () => buildPadronApplySql(layouts, withUpdates)],
   ["apply without geometry updates", () => buildPadronApplySql(layouts, withoutUpdates)],
   ["apply with geometry updates and revert capture", () => buildPadronApplySql(layouts, withUpdates, { captureRevert: true })],
@@ -109,18 +131,65 @@ describe("actualizar-padron target SQL guards", () => {
       expect(buildSequenceRepairSql(targetLayout)).not.toMatch(DELETE_OR_TRUNCATE);
     });
 
-    it("should contain no DELETE or TRUNCATE in any source file of the stage except the revert script", () => {
+    it("should contain no DELETE FROM or TRUNCATE statement in any source file of the stage except the revert script and the delete statement", () => {
       const files = stageSourceFiles();
       const offenders = files.filter(
-        (file) => file !== REVERT_SCRIPT_FILE && DELETE_OR_TRUNCATE.test(readFileSync(file, "utf8"))
+        (file) => !NO_DELETE_OR_TRUNCATE_EXCEPTIONS.includes(file) && SOURCE_DELETE_OR_TRUNCATE.test(readFileSync(file, "utf8"))
       );
 
       expect(files.length).toBeGreaterThan(0);
       expect(offenders).toEqual([]);
     });
 
-    it("should include the revert script among the scanned stage files", () => {
-      expect(stageSourceFiles()).toContain(REVERT_SCRIPT_FILE);
+    it("should include the revert script and the delete statement among the scanned stage files", () => {
+      const files = stageSourceFiles();
+
+      expect(files).toContain(REVERT_SCRIPT_FILE);
+      expect(files).toContain(DELETE_SQL_FILE);
+    });
+
+    it("should still match both DELETE and TRUNCATE anywhere outside the two named exceptions (regex sanity)", () => {
+      expect(DELETE_OR_TRUNCATE.test("DELETE FROM x")).toBe(true);
+      expect(DELETE_OR_TRUNCATE.test("delete from x")).toBe(true);
+      expect(DELETE_OR_TRUNCATE.test("TRUNCATE x")).toBe(true);
+      expect(DELETE_OR_TRUNCATE.test("truncate x")).toBe(true);
+      expect(DELETE_OR_TRUNCATE.test("SELECT 1")).toBe(false);
+    });
+
+    it("should still match a real DELETE FROM statement and a bare TRUNCATE in the raw-source scan's own pattern", () => {
+      expect(SOURCE_DELETE_OR_TRUNCATE.test("DELETE FROM x")).toBe(true);
+      expect(SOURCE_DELETE_OR_TRUNCATE.test("delete  from x")).toBe(true);
+      expect(SOURCE_DELETE_OR_TRUNCATE.test("TRUNCATE x")).toBe(true);
+      expect(SOURCE_DELETE_OR_TRUNCATE.test("truncate x")).toBe(true);
+      expect(SOURCE_DELETE_OR_TRUNCATE.test("deletePadronRows")).toBe(false);
+      expect(SOURCE_DELETE_OR_TRUNCATE.test("STEP.DELETE")).toBe(false);
+      expect(SOURCE_DELETE_OR_TRUNCATE.test("SELECT 1")).toBe(false);
+    });
+  });
+
+  describe("buildPadronDeleteSql scopes its DELETE with a WHERE clause (AP-106)", () => {
+    /* The statement the builder emits is one CTE chain with no semicolons (it is never run as raw multi-statement
+       text), so the unscoped-DELETE guard is the substring between "DELETE FROM" and its own "RETURNING": a DELETE
+       with no WHERE before RETURNING would delete every row of the table. */
+    const deleteClauseOf = (sql: string): string => {
+      const match = /DELETE FROM[\s\S]*?RETURNING/.exec(sql);
+      if (!match) throw new Error("no DELETE FROM ... RETURNING clause found");
+      return match[0];
+    };
+
+    it("should always scope the DELETE with a WHERE clause before RETURNING, never an unscoped DELETE FROM table", () => {
+      const sql = buildPadronDeleteSql(layouts, REFERENCE_TABLES);
+
+      const clause = deleteClauseOf(sql);
+      expect(clause).toMatch(/^DELETE FROM "carto"\."padron" AS tgt WHERE/);
+      expect(clause).toContain("WHERE");
+    });
+
+    it("should scope the DELETE on the surviving candidate ids, also with no reference table", () => {
+      const sql = buildPadronDeleteSql(layouts, NO_REFERENCE_TABLES);
+
+      const clause = deleteClauseOf(sql);
+      expect(clause).toContain('WHERE tgt."id" IN (SELECT "old_id" FROM "surviving_candidates")');
     });
   });
 

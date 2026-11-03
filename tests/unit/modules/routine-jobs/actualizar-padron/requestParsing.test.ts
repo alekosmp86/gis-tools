@@ -65,6 +65,22 @@ describe("parseActualizarStartRequest", () => {
     });
   });
 
+  describe("automatic removal (AP-101)", () => {
+    it("should ignore a stale removalMarks option sent by an old client, never carrying it into the parsed options", () => {
+      const body = startBody({ options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false, removalMarks: [500, 600] } });
+
+      const params = parseActualizarStartRequest(body as Parameters<typeof parseActualizarStartRequest>[0]);
+
+      expect(params.options).not.toHaveProperty("removalMarks");
+    });
+
+    it("should not reject a malformed removalMarks option, as marks no longer exist", () => {
+      const body = startBody({ options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false, removalMarks: "not-a-list" } });
+
+      expect(() => parseActualizarStartRequest(body as Parameters<typeof parseActualizarStartRequest>[0])).not.toThrow();
+    });
+  });
+
   describe("target table", () => {
     it("should reject a request without targetTable, naming the field", () => {
       const body = startBody();

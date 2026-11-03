@@ -8,6 +8,7 @@ import {
   LOCALITY_COLUMN,
   PAIR_STATUS,
   PROVINCE_COLUMN,
+  RELATION_KIND,
   REPLACEMENT_CLASS,
   REPLACEMENT_CLASS_ORDER,
   REPLACEMENT_COVER_MIN_PCT,
@@ -15,19 +16,17 @@ import {
   REPLACEMENT_PART_MIN_PCT,
   REPLACEMENT_PARTS_LIMIT,
   REPLACEMENT_REFERENCE_COLUMN,
-  REPLACEMENT_REFERENCE_TABLE,
   STAGING_COLUMN,
   type ReplacementClass,
 } from "../constants";
 import type { PadronLayouts } from "../types";
 import { physicalColumn, qualifiedName } from "./layouts";
 
-export interface ReferenceTableFlags {
-  accessPoint: boolean;
-  addresses: boolean;
+/** A table of `cartoSchema`, other than the destination, that AP-102's catalog scan found to carry an `id_padron` column. */
+export interface ReferenceTable {
+  schema: string;
+  table: string;
 }
-
-export const NO_REFERENCE_TABLES: ReferenceTableFlags = { accessPoint: false, addresses: false };
 
 /* Names of the classify statement's CTEs that the replacement block reads. */
 const SOURCE = {
@@ -224,44 +223,68 @@ const classRankSql = (classColumn: string): string =>
   ].join(" ");
 
 const LISTED = "listed";
-const LISTED_OLD_ID = `${q(LISTED)}."oldId"`;
-const REFERENCE_COUNT_COLUMN = "refs";
 
-interface ReferenceCountSource {
-  flag: keyof ReferenceTableFlags;
-  table: string;
-  column: string;
-  cte: string;
+const tableLabelOf = (table: ReferenceTable): string => `${table.schema}.${table.table}`;
+
+const INTEGER_TYPE_NAMES: readonly string[] = ["int2", "int4", "int8", "numeric"];
+const integerTypeListSql = (): string => INTEGER_TYPE_NAMES.map((name) => `${literal(name)}::regtype`).join(", ");
+
+/** AP-102: every table of `cartoSchema`, other than the destination, that carries a numeric `id_padron` column; `schema` is
+    always bound, never a literal. The type filter matters: without it, a same-named non-numeric column would make the
+    reference count query below throw a type mismatch. `readable` is the role's SELECT privilege on that column: a table it
+    cannot read is never counted as zero references, it blocks the deletion (AP-102). */
+export function referenceTablesScanSql(schema: string, excludedTable: string): string {
+  return [
+    `SELECT n.nspname AS ${q("schema")}, c.relname AS ${q("table")},`,
+    `has_column_privilege(c.oid, a.attnum, 'SELECT') AS ${q("readable")}`,
+    `FROM pg_catalog.pg_class c`,
+    `JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace`,
+    `JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid`,
+    `WHERE n.nspname = ${literal(schema)}`,
+    `AND c.relkind IN (${literal(RELATION_KIND.TABLE)}, ${literal(RELATION_KIND.PARTITIONED)})`,
+    `AND c.relname <> ${literal(excludedTable)}`,
+    `AND a.attname = ${literal(REPLACEMENT_REFERENCE_COLUMN)}`,
+    `AND a.attnum > 0 AND NOT a.attisdropped`,
+    `AND a.atttypid IN (${integerTypeListSql()})`,
+    `ORDER BY 1, 2`,
+  ].join(" ");
 }
 
-/* The reference counts exist only for the tables the carto schema has, readable and carrying a numeric id_padron column. */
-const REFERENCE_COUNT_SOURCES: readonly ReferenceCountSource[] = [
-  { flag: "accessPoint", table: REPLACEMENT_REFERENCE_TABLE.ACCESS_POINT, column: "accessPointRefs", cte: "access_point_refs" },
-  { flag: "addresses", table: REPLACEMENT_REFERENCE_TABLE.ADDRESSES, column: "addressesRefs", cte: "addresses_refs" },
-];
-
-const referenceSourcesOf = (references: ReferenceTableFlags): ReferenceCountSource[] =>
-  REFERENCE_COUNT_SOURCES.filter((source) => references[source.flag]);
-
-/* One grouped aggregate per reference table over the listed old ids: one sequential scan per table, never one per listed row. */
-function referenceCountCte(schema: string, source: ReferenceCountSource): string {
-  const idColumn = q(REPLACEMENT_REFERENCE_COLUMN);
-  return cte(
-    source.cte,
-    [
-      `SELECT ar.${idColumn} AS ${idColumn}, count(*) AS ${q(REFERENCE_COUNT_COLUMN)}`,
-      `FROM ${refTableSql(schema, source.table)} AS ar`,
-      `WHERE ar.${idColumn} IN (SELECT ${LISTED_OLD_ID} FROM ${q(LISTED)})`,
-      `GROUP BY ar.${idColumn}`,
-    ].join(" ")
-  );
+/* One grouped aggregate per discovered table, over the ids of idsCte (column idColumn): one scan per table, never one per listed row.
+   Only readable tables are given here (AP-102): a table with no rows contributes nothing for that id. */
+function referenceRawSql(idsCte: string, idColumn: string, tables: readonly ReferenceTable[]): string {
+  if (tables.length === 0) {
+    return `SELECT CAST(NULL AS integer) AS "old_id", CAST(NULL AS text) AS "table_label", CAST(NULL AS bigint) AS "refs" WHERE false`;
+  }
+  return tables
+    .map((table, index) => {
+      const alias = `rt${index}`;
+      const idColumnSql = `${alias}.${q(REPLACEMENT_REFERENCE_COLUMN)}`;
+      return [
+        `SELECT ${idColumnSql} AS "old_id", ${literal(tableLabelOf(table))} AS "table_label", count(*) AS "refs"`,
+        `FROM ${refTableSql(table.schema, table.table)} AS ${alias}`,
+        `WHERE ${idColumnSql} IN (SELECT ${q(idColumn)} FROM ${q(idsCte)})`,
+        `GROUP BY ${idColumnSql}`,
+      ].join(" ");
+    })
+    .join(" UNION ALL ");
 }
 
-const referenceJoinSql = (source: ReferenceCountSource): string =>
-  `LEFT JOIN ${q(source.cte)} ON ${q(source.cte)}.${q(REPLACEMENT_REFERENCE_COLUMN)} = ${LISTED_OLD_ID}`;
+const referenceAggSql = (rawName: string): string =>
+  [
+    `SELECT "old_id", sum("refs") AS "total", json_object_agg("table_label", "refs") AS "by_table"`,
+    `FROM ${q(rawName)} GROUP BY "old_id"`,
+  ].join(" ");
 
-const referenceColumnSql = (source: ReferenceCountSource): string =>
-  `COALESCE(${q(source.cte)}.${q(REFERENCE_COUNT_COLUMN)}, 0) AS ${q(source.column)}`;
+/** The two CTEs of a reference-count block: the per-table raw counts over `idsCte`, then one row per id with its total and its per-table counts. Shared by AP-103's eligibility refs (every missing padrón) and AP-106's staleness re-check. */
+export function referenceCountCtes(name: string, idsCte: string, idColumn: string, tables: readonly ReferenceTable[]): string[] {
+  const rawName = `${name}_raw`;
+  return [cte(rawName, referenceRawSql(idsCte, idColumn, tables)), cte(name, referenceAggSql(rawName))];
+}
+
+export const referenceJoinSql = (name: string, idExpr: string): string => `LEFT JOIN ${q(name)} ON ${q(name)}."old_id" = ${idExpr}`;
+export const referenceTotalColumnSql = (name: string): string => `COALESCE(${q(name)}."total", 0)`;
+const referenceByTableColumnSql = (name: string): string => `COALESCE(${q(name)}."by_table", '{}'::json)`;
 
 function listedSql({ province, locality }: PadronLayouts): string {
   const provinceName = `${q("prov")}.${physicalColumn(province, PROVINCE_COLUMN.NAME)}`;
@@ -290,9 +313,16 @@ function listedSql({ province, locality }: PadronLayouts): string {
   ].join(" ");
 }
 
-/** The listed missing padrones, capped at DETAIL_LIST_LIMIT. The centroid and the reference counts are read for the listed rows only. */
-export function missingReviewSql(layouts: PadronLayouts, references: ReferenceTableFlags): string {
-  const sources = referenceSourcesOf(references);
+/** The classify chain's removal CTEs that the missing review reads: the reference counts (AP-102) and the removal reason (AP-103) of every missing padrón. */
+export const REMOVAL_CTE = {
+  REFS: "removal_refs",
+  VERDICTS: "removal_verdicts",
+} as const;
+
+const VERDICT_ALIAS = "rv";
+
+/** The listed missing padrones, capped at DETAIL_LIST_LIMIT. The centroid is read for the listed rows only; the references and the removal reason come from the classify chain. */
+export function missingReviewSql(layouts: PadronLayouts): string {
   const centroid = `ST_Transform(ST_Centroid(${LISTED}."oldGeometry"), ${WGS84_SRID})`;
   const columns = [
     `${LISTED}."oldId"`,
@@ -308,28 +338,15 @@ export function missingReviewSql(layouts: PadronLayouts, references: ReferenceTa
     `ROUND(CAST(${LISTED}."coveredPct" AS numeric), 1) AS "coveredPct"`,
     `${LISTED}."parts"`,
     `${LISTED}."partKeys"`,
-    ...sources.map(referenceColumnSql),
+    `${referenceTotalColumnSql(REMOVAL_CTE.REFS)} AS "refsTotal"`,
+    `${referenceByTableColumnSql(REMOVAL_CTE.REFS)} AS "refsByTable"`,
+    `${VERDICT_ALIAS}."reason" AS "removalReason"`,
   ];
   return [
-    withClause([cte(LISTED, listedSql(layouts)), ...sources.map((source) => referenceCountCte(layouts.target.schema, source))]),
+    withClause([cte(LISTED, listedSql(layouts))]),
     `SELECT ${columns.join(", ")} FROM ${q(LISTED)}`,
-    ...sources.map(referenceJoinSql),
+    referenceJoinSql(REMOVAL_CTE.REFS, `${LISTED}."oldId"`),
+    `LEFT JOIN ${q(REMOVAL_CTE.VERDICTS)} AS ${VERDICT_ALIAS} ON ${VERDICT_ALIAS}."old_id" = ${LISTED}."oldId"`,
     `ORDER BY ${LISTED}.${q(CLASS_RANK)}, ${LISTED}."department", ${LISTED}."locality", ${LISTED}."number"`,
   ].join(" ");
-}
-
-const INTEGER_TYPE_NAMES: readonly string[] = ["int2", "int4", "int8", "numeric"];
-const integerTypeListSql = (): string => INTEGER_TYPE_NAMES.map((name) => `${literal(name)}::regtype`).join(", ");
-
-/** The probe reads the catalog only: a missing table, a missing or non-numeric id_padron column or a missing privilege answers false, never an error. */
-export function referenceTablesProbeSql(schema: string): string {
-  const flag = (table: string): string => {
-    const regclass = `to_regclass(${literal(refTableSql(schema, table))})`;
-    return [
-      `(${regclass} IS NOT NULL AND has_table_privilege(${regclass}, 'SELECT') AND EXISTS (`,
-      `SELECT 1 FROM pg_attribute WHERE attrelid = ${regclass} AND attname = ${literal(REPLACEMENT_REFERENCE_COLUMN)} AND NOT attisdropped`,
-      `AND atttypid IN (${integerTypeListSql()})))`,
-    ].join(" ");
-  };
-  return `SELECT ${flag(REPLACEMENT_REFERENCE_TABLE.ACCESS_POINT)} AS "accessPoint", ${flag(REPLACEMENT_REFERENCE_TABLE.ADDRESSES)} AS "addresses"`;
 }

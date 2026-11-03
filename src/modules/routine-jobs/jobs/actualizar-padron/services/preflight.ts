@@ -1,6 +1,6 @@
 import type { CatalogQuerySession } from "@/core/services/server/tableCatalog/tableCatalog";
 import { addressMasterIssuesOf } from "../../shared/addressMasterLinkPreflight";
-import { labelOf } from "../../shared/targetPreflight";
+import { labelOf, tablePrivilegeIssues } from "../../shared/targetPreflight";
 import { assertWriteTargetsReady, throwIfIssues, type SourceTablesSpec, type WriteTargetsSpec } from "../../shared/preflightAsserts";
 import type { WritableTargetLayout } from "../../shared/tableResolution";
 import { STAGING_COLUMN, DESTINATION_COLUMN, DESTINATION_TITLE, DESTINATION_WRITTEN_COLUMNS } from "../constants";
@@ -36,6 +36,10 @@ const writeTargetsSpecOf = (layouts: PadronLayouts): WriteTargetsSpec => ({
   readTables: [layouts.staging, layouts.province, layouts.locality, ...(layouts.type ? [layouts.type] : [])],
 });
 
+/** AP-106 deletes unreferenced missing padrones: this stage alone needs DELETE on its destination (stage 3 never deletes, so this stays
+    out of the shared WRITE_PRIVILEGES). Checked here, not in the shared targetStructureIssuesOf, for that reason. */
+const DESTINATION_DELETE_PRIVILEGE: readonly string[] = ["DELETE"];
+
 export const sourceTablesSpecOf = (layouts: PadronLayouts): SourceTablesSpec => ({
   withRows: [{ layout: layouts.staging, description: "padrones" }],
   geometry: { layout: layouts.staging, column: STAGING_COLUMN.GEOM },
@@ -69,6 +73,7 @@ async function localityReferenceVerdictOf(session: CatalogQuerySession, layouts:
 
 export async function assertTargetReady(session: CatalogQuerySession, layouts: PadronLayouts): Promise<string[]> {
   await assertWriteTargetsReady(session, writeTargetsSpecOf(layouts));
+  throwIfIssues(await tablePrivilegeIssues(session, layouts.target, DESTINATION_DELETE_PRIVILEGE));
   throwIfIssues(await keyFormatIssuesOf(session, layouts.target));
   const localityVerdict = await localityReferenceVerdictOf(session, layouts);
   throwIfIssues(localityVerdict.kind === "refuse" ? [localityVerdict.message] : []);

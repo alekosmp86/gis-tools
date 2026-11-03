@@ -4,6 +4,7 @@ import type { WritableTargetLayout } from "../../shared/tableResolution";
 import {
   LOCALITY_REASON_GROUP_LIMIT,
   PAIR_CHANGE,
+  REMOVAL_SKIP_REASON,
   REPLACEMENT_CLASS,
   SKIP_REASON,
   SKIPPED_GROUP_LIMIT,
@@ -11,6 +12,7 @@ import {
   type PairChange,
   type PairStatus,
   type PairTier,
+  type RemovalSkipReason,
   type ReplacementClass,
   type SkipReason,
 } from "../constants";
@@ -25,12 +27,15 @@ import type {
   PadronClassification,
   PadronCounts,
   PadronDataFingerprint,
+  PadronDeleteOutcome,
   PadronGeometryChange,
   PadronInserted,
   PadronKey,
   PadronLocation,
   PadronNamedKey,
   PadronPair,
+  PadronRemoved,
+  RemovalSkippedReport,
   SkippedGroup,
   SkippedLocalityGroup,
   SkippedReport,
@@ -180,32 +185,41 @@ const missingByClassOf = (row: ReportRow): MissingByClass => ({
   [REPLACEMENT_CLASS.ORPHAN]: countOf(row.missing_orphan),
 });
 
-const refsOf = (entry: ReportRow): MissingPadronRefs | undefined => {
-  const refs: MissingPadronRefs = {};
-  if (entry.accessPointRefs !== undefined) refs.accessPoint = countOf(entry.accessPointRefs);
-  if (entry.addressesRefs !== undefined) refs.addresses = countOf(entry.addressesRefs);
-  return Object.keys(refs).length === 0 ? undefined : refs;
+const byTableOf = (value: unknown): Record<string, number> => {
+  if (typeof value !== "object" || value === null) return {};
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([table, count]) => [table, countOf(count)]));
 };
 
-const missingPadronOf = (entry: ReportRow): MissingPadron => {
-  const refs = refsOf(entry);
-  return {
-    oldId: countOf(entry.oldId),
-    typePadron: textOf(entry.typePadron),
-    provinceId: numberOf(entry.provinceId),
-    department: textOf(entry.department),
-    locality: textOf(entry.locality),
-    number: textOf(entry.number),
-    oldAreaM2: numberOf(entry.oldAreaM2),
-    centroidLat: numberOf(entry.centroidLat),
-    centroidLon: numberOf(entry.centroidLon),
-    class: entry.class as ReplacementClass,
-    coveredPct: numberOf(entry.coveredPct),
-    parts: textListOf(entry.parts),
-    partKeys: partKeysOf(entry.partKeys),
-    ...(refs === undefined ? {} : { refs }),
-  };
+/* refs.total is zero when the scan (AP-102) finds no table or no referencing row; byTable lists only the tables that do. */
+const refsOf = (entry: ReportRow): MissingPadronRefs => ({
+  total: countOf(entry.refsTotal),
+  byTable: byTableOf(entry.refsByTable),
+});
+
+const REMOVAL_REASONS: readonly string[] = Object.values(REMOVAL_SKIP_REASON);
+
+const removalReasonOf = (value: unknown): RemovalSkipReason | null => {
+  const text = textOf(value);
+  return text !== null && REMOVAL_REASONS.includes(text) ? (text as RemovalSkipReason) : null;
 };
+
+const missingPadronOf = (entry: ReportRow): MissingPadron => ({
+  oldId: countOf(entry.oldId),
+  typePadron: textOf(entry.typePadron),
+  provinceId: numberOf(entry.provinceId),
+  department: textOf(entry.department),
+  locality: textOf(entry.locality),
+  number: textOf(entry.number),
+  oldAreaM2: numberOf(entry.oldAreaM2),
+  centroidLat: numberOf(entry.centroidLat),
+  centroidLon: numberOf(entry.centroidLon),
+  class: entry.class as ReplacementClass,
+  coveredPct: numberOf(entry.coveredPct),
+  parts: textListOf(entry.parts),
+  partKeys: partKeysOf(entry.partKeys),
+  refs: refsOf(entry),
+  removalReason: removalReasonOf(entry.removalReason),
+});
 
 const PAIR_CHANGE_FLAGS: ReadonlyArray<readonly [string, PairChange]> = [
   ["typeChanged", PAIR_CHANGE.TYPE],
@@ -242,6 +256,16 @@ const fingerprintOf = (row: ReportRow): PadronDataFingerprint => ({
   digest: textOf(row.plan_digest) ?? "",
 });
 
+const removalsSkippedOf = (row: ReportRow): RemovalSkippedReport => {
+  const byReason: Record<RemovalSkipReason, number> = {
+    [REMOVAL_SKIP_REASON.STILL_PAIRABLE]: countOf(row.removals_skipped_still_pairable),
+    [REMOVAL_SKIP_REASON.NOW_REFERENCED]: countOf(row.removals_skipped_now_referenced),
+    [REMOVAL_SKIP_REASON.UNVERIFIED]: countOf(row.removals_skipped_unverified),
+  };
+  const total = Object.values(byReason).reduce((sum, count) => sum + count, 0);
+  return { total, byReason };
+};
+
 export function toPadronClassification(row: ReportRow): PadronClassification {
   return {
     fingerprint: fingerprintOf(row),
@@ -262,6 +286,8 @@ export function toPadronClassification(row: ReportRow): PadronClassification {
       choicesUnapplied: countOf(row.choices_unapplied),
       geometryPending: countOf(row.geometry_pending),
       geometryAcceptsUnapplied: countOf(row.geometry_accepts_unapplied),
+      removed: countOf(row.removed),
+      removalsSkipped: removalsSkippedOf(row),
     },
     missingSamples: listOf(row.missing_samples).map(keyOf),
     missingReview: listOf(row.missing_review).map(missingPadronOf),
@@ -269,6 +295,7 @@ export function toPadronClassification(row: ReportRow): PadronClassification {
     geometryChanges: listOf(row.geometry_changes).map(geometryChangeOf),
     pendingGeometryChanges: listOf(row.pending_geometry_changes).map(geometryChangeOf),
     pairs: listOf(row.pairs_list).map(pairOf),
+    removedList: listOf(row.removed_list).map(insertedOf),
   };
 }
 
@@ -286,10 +313,47 @@ export function toPadronApplyOutcome(row: ReportRow): PadronApplyOutcome {
   };
 }
 
+export function toPadronDeleteOutcome(row: ReportRow): PadronDeleteOutcome {
+  return { deleted: countOf(row.deleted), surviving: countOf(row.surviving), removedList: listOf(row.removed_list).map(insertedOf) };
+}
+
+interface TargetRemoval {
+  removed: number;
+  removalsSkipped: RemovalSkippedReport;
+  removedList: PadronRemoved[];
+}
+
+/** An analysis deletes nothing: its removed, removalsSkipped and removedList are the classification's planned ones (AP-107). */
+export const plannedRemovalOf = (classification: PadronClassification): TargetRemoval => ({
+  removed: classification.counts.removed,
+  removalsSkipped: classification.counts.removalsSkipped,
+  removedList: classification.removedList,
+});
+
+/** A real run's actual removed count can be lower than the classify-time estimate: an id newly referenced since is skipped,
+    not a failure, and counted here as NOW_REFERENCED instead (AP-106). */
+export function actualRemovalCountsOf(classification: PadronClassification, deleteOutcome: PadronDeleteOutcome): TargetRemoval {
+  const planned = classification.counts.removalsSkipped;
+  const newlyReferenced = classification.counts.removed - deleteOutcome.deleted;
+  return {
+    removed: deleteOutcome.deleted,
+    removedList: deleteOutcome.removedList,
+    removalsSkipped: {
+      total: planned.total + newlyReferenced,
+      byReason: {
+        ...planned.byReason,
+        [REMOVAL_SKIP_REASON.NOW_REFERENCED]: planned.byReason[REMOVAL_SKIP_REASON.NOW_REFERENCED] + newlyReferenced,
+      },
+    },
+  };
+}
+
 interface PadronTargetReportInput {
   target: WritableTargetLayout;
   classification: PadronClassification;
   apply: PadronApplyOutcome;
+  removal: TargetRemoval;
+  removalBlockedReason: string | null;
   updateGeometries: boolean;
 }
 
@@ -297,6 +361,8 @@ export function buildPadronTargetReport({
   target,
   classification,
   apply,
+  removal,
+  removalBlockedReason,
   updateGeometries,
 }: PadronTargetReportInput): ActualizarTargetReport {
   const { counts } = classification;
@@ -325,6 +391,10 @@ export function buildPadronTargetReport({
     pairsPending: counts.pairsPending,
     pairsNotApplied: counts.pairsNotApplied,
     choicesUnapplied: counts.choicesUnapplied,
+    removed: removal.removed,
+    removalsSkipped: removal.removalsSkipped,
+    removedList: removal.removedList,
+    ...(removalBlockedReason === null ? {} : { removalBlockedReason }),
     geometryAcceptsUnapplied: counts.geometryAcceptsUnapplied,
   };
 }

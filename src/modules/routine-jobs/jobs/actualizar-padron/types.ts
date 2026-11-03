@@ -2,7 +2,16 @@ import type { Geometry } from "geojson";
 import type { DbConfig } from "@/core/types/db";
 import type { WritableTargetLayout } from "../shared/tableResolution";
 import type { StepTiming } from "../cargar-padrones/types";
-import type { GeometryMapRole, GeometryState, PairChange, PairStatus, PairTier, ReplacementClass, SkipReason } from "./constants";
+import type {
+  GeometryMapRole,
+  GeometryState,
+  PairChange,
+  PairStatus,
+  PairTier,
+  RemovalSkipReason,
+  ReplacementClass,
+  SkipReason,
+} from "./constants";
 import type { TableLayout } from "./domain/layouts";
 import type { AddressMasterReport } from "../shared/addressMasterLinkReport";
 
@@ -118,6 +127,9 @@ export interface PadronInserted extends PadronNamedKey {
   id: number;
 }
 
+/** A deleted padrón (or, in an analysis, one that would be): its id and the destination's own names. */
+export type PadronRemoved = PadronInserted;
+
 /** Where a padron's geometry sits and how big it is: the areas are m² (SRID of the destination), the centroid is WGS84. */
 export interface PadronLocation {
   oldAreaM2: number | null;
@@ -151,10 +163,17 @@ export interface ActualizarTotals {
   skipped: number;
 }
 
-/** Where a missing padrón's old geometry is referenced: only the tables that exist in the carto schema are counted. */
+/** Where a missing padrón's old geometry is referenced (AP-102): every carto-schema table the catalog scan finds with an
+    `id_padron` column, never limited to a hardcoded list. `byTable` keys are `schema.table` labels. */
 export interface MissingPadronRefs {
-  accessPoint?: number;
-  addresses?: number;
+  total: number;
+  byTable: Record<string, number>;
+}
+
+/** The missing padrones that are not deleted (AP-105), grouped by reason. */
+export interface RemovalSkippedReport {
+  total: number;
+  byReason: Record<RemovalSkipReason, number>;
 }
 
 /** The staging key of a replacing padrón (the new row): what the map reads back from the staging table. The department is the missing padrón's. */
@@ -180,6 +199,8 @@ export interface MissingPadron {
   parts: string[];
   partKeys?: MissingPartKey[];
   refs?: MissingPadronRefs;
+  /** Why this padrón is not deleted (AP-101); null when it will be. */
+  removalReason: RemovalSkipReason | null;
 }
 
 /** A staging key for the map: a RURAL padrón has no locality, an URBANO one names its locality (nomloccat). */
@@ -224,6 +245,9 @@ export interface PadronCounts {
   choicesUnapplied: number;
   geometryPending: number;
   geometryAcceptsUnapplied: number;
+  /** The delete-eligible missing padrón count (AP-105); a planned write. */
+  removed: number;
+  removalsSkipped: RemovalSkippedReport;
 }
 
 /** Cheap facts of the destination and the staging side, read in the classify statement; the digest covers the planned writes. */
@@ -264,6 +288,8 @@ export interface PadronClassification {
   geometryChanges: PadronGeometryChange[];
   pendingGeometryChanges: PadronGeometryChange[];
   pairs: PadronPair[];
+  /** The first DETAIL_LIST_LIMIT delete-eligible padrones (AP-108); the full set only ever lives in the database (AP-106). */
+  removedList: PadronRemoved[];
 }
 
 export interface PadronApplyOutcome {
@@ -271,6 +297,13 @@ export interface PadronApplyOutcome {
   updated: number;
   paired: number;
   insertedList: PadronInserted[];
+}
+
+/** The outcome of AP-106's delete statement: `deleted` and `surviving` are the same count by construction, verified as AP-48 does. */
+export interface PadronDeleteOutcome {
+  deleted: number;
+  surviving: number;
+  removedList: PadronRemoved[];
 }
 
 export interface ActualizarTargetReport {
@@ -300,6 +333,12 @@ export interface ActualizarTargetReport {
   choicesUnapplied: number;
   /** Accepted geometries that did not end applied (AP-100); absent in results of older runs. */
   geometryAcceptsUnapplied?: number;
+  /** The deleted padrón count (AP-106), the missing padrones that were not deleted (AP-105) and the first DETAIL_LIST_LIMIT deleted ones (AP-108); absent in results of older runs. */
+  removed?: number;
+  removalsSkipped?: RemovalSkippedReport;
+  removedList?: PadronRemoved[];
+  /** Set when the reference scan could not vouch for every referencing table: nothing was deleted (AP-102). */
+  removalBlockedReason?: string;
 }
 
 export type ActualizarAddressMasterReport = AddressMasterReport;
@@ -313,6 +352,7 @@ export interface ActualizarPadronBackup {
     paired: number;
     inserted: number;
     addressMasterRows: number;
+    deleted: number;
   };
 }
 

@@ -110,6 +110,7 @@ const summaryOf = (counts: RevertCounts): ActualizarPadronBackup["counts"] => ({
   paired: counts.P,
   inserted: counts.I,
   addressMasterRows: counts.A,
+  deleted: counts.D,
 });
 
 async function* textOfLines(lines: AsyncIterable<RevertLine>, tally: RevertCounts): AsyncGenerator<string> {

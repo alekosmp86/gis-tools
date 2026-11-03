@@ -211,9 +211,14 @@ export const REPLACEMENT_PARTIAL_MIN_PCT = 50;
 /** Replacing padrones listed for each missing padrón. */
 export const REPLACEMENT_PARTS_LIMIT = 5;
 
-export const REPLACEMENT_REFERENCE_TABLE = {
-  ACCESS_POINT: "access_point",
-  ADDRESSES: "addresses_2_0_edit",
+/** The foreign-key-less reference column AP-102's catalog scan matches on; the table list is never hardcoded. */
+export const REPLACEMENT_REFERENCE_COLUMN = "id_padron";
+
+/** Why a missing padrón is not deleted, read fresh at classify time (AP-103, AP-105), in this order of precedence. A missing padrón with no reason is deleted. */
+export const REMOVAL_SKIP_REASON = {
+  STILL_PAIRABLE: "STILL_PAIRABLE",
+  NOW_REFERENCED: "NOW_REFERENCED",
+  UNVERIFIED: "UNVERIFIED",
 } as const;
 
-export const REPLACEMENT_REFERENCE_COLUMN = "id_padron";
+export type RemovalSkipReason = (typeof REMOVAL_SKIP_REASON)[keyof typeof REMOVAL_SKIP_REASON];
