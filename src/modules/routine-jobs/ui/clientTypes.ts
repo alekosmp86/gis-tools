@@ -57,6 +57,7 @@ export interface ActualizarJobOptions {
   linkAddressMaster: boolean;
   pairChoices?: PairChoice[];
   acceptedGeometries?: AcceptedGeometry[];
+  acceptAllGeometries?: boolean;
 }
 
 export interface ActualizarStartRequest {

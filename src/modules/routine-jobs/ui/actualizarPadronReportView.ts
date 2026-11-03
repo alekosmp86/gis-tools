@@ -127,6 +127,7 @@ export interface TargetView {
   geometryChanges: PadronGeometryChange[];
   geometryChangesSummary: string;
   geometryAppliedCount: number;
+  geometryPending: number;
   reviewSummary: string;
   ambiguous: PadronKey[];
   ambiguousSummary: string;
@@ -421,6 +422,7 @@ function targetViewOf(target: ActualizarTargetReport, dryRun: boolean): TargetVi
       Math.max(target.geometryPending, pendingGeometries.length),
     ),
     geometryAppliedCount: geometryAppliedCountOf(target),
+    geometryPending: target.geometryPending,
     reviewSummary: reviewSummaryOf(target),
     ambiguous: target.ambiguousSamples,
     ambiguousSummary: listSummaryOf("Ambiguas", target.ambiguousSamples.length, target.ambiguous),

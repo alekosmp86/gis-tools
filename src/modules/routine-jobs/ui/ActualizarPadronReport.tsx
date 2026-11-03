@@ -140,7 +140,14 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
   const pairSelection: PairChoiceSelection = result.dryRun
     ? pairChoices
     : { choices: pairChoices.submitted, submitted: pairChoices.submitted, canResimulate: false };
-  const geometrySelection = geometriesEditableIn(result) ? geometryAccepts : readOnlyAcceptsOf(geometryAccepts.submitted);
+  const geometrySelection = geometriesEditableIn(result)
+    ? geometryAccepts
+    : {
+        ...readOnlyAcceptsOf(geometryAccepts.submitted),
+        acceptAll: geometryAccepts.submittedAcceptAll,
+        submittedAcceptAll: geometryAccepts.submittedAcceptAll,
+        acceptAllCount: geometryAccepts.acceptAllCount,
+      };
   const unappliedChoices = unappliedChoicesOf(pairSelection.choices, pairSelection.submitted, result.target.pairs);
   const decisions: ReviewDecisions = {
     pairs: pairSelection,

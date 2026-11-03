@@ -17,6 +17,7 @@ export interface ActualizarPadronRunPlan {
   pairChoices: readonly PairChoice[];
   /** Absent in plans built before the geometry acceptances existed: read as none. */
   acceptedGeometries?: readonly AcceptedGeometry[];
+  acceptAllGeometries?: boolean;
 }
 
 export type ActualizarPadronRunSnapshot = RunSnapshot<ActualizarJobStatusView, ActualizarPadronRunPlan>;
@@ -43,6 +44,7 @@ const planOf = (request: ActualizarStartRequest): ActualizarPadronRunPlan => ({
   linkAddressMaster: request.options.linkAddressMaster,
   pairChoices: request.options.pairChoices ?? [],
   acceptedGeometries: request.options.acceptedGeometries ?? [],
+  acceptAllGeometries: request.options.acceptAllGeometries === true,
 });
 
 function createActualizarPadronRunStore(deps: ActualizarPadronRunStoreDeps): ActualizarPadronRunStore {

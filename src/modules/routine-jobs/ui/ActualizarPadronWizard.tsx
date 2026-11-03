@@ -12,6 +12,7 @@ import {
   blockingReason,
   canRunNow,
   completedAnalysisPlanIdOf,
+  completedDryRunAcceptAllOf,
   completedDryRunAcceptsOf,
   completedDryRunChoicesOf,
   geometryMapBaseOf,
@@ -111,13 +112,18 @@ export default function ActualizarPadronWizard({
   const nowMs = useElapsedTick(isRunActive);
   const completedChoices = completedDryRunChoicesOf(snapshot);
   const completedAccepts = completedDryRunAcceptsOf(snapshot);
+  const completedAcceptAll = completedDryRunAcceptAllOf(snapshot);
   const analysisPlanId = completedAnalysisPlanIdOf(snapshot);
 
   useEffect(() => {
     if (completedChoices !== null) {
-      dispatch({ type: "dryRunCompleted", choices: completedChoices, acceptedGeometries: completedAccepts ?? [] });
+      dispatch({
+        type: "dryRunCompleted",
+        choices: completedChoices, acceptedGeometries: completedAccepts ?? [],
+        acceptAllGeometries: completedAcceptAll === true,
+      });
     }
-  }, [completedChoices, completedAccepts]);
+  }, [completedChoices, completedAccepts, completedAcceptAll]);
 
   const { connection } = state;
   const requestConnection = trimConnection(connection);
@@ -172,6 +178,13 @@ export default function ActualizarPadronWizard({
 
   const resimulate = () => {
     if (canRunNow(state, DRY_RUN) && !isRunActive) startRun(toStartRequest(state, DRY_RUN));
+  };
+
+  const setAcceptAllAndAnalyze = (value: boolean, count?: number) => {
+    const action = { type: "acceptAllGeometriesSet", value, count } as const;
+    dispatch(action);
+    const next = wizardReducer(state, action);
+    if (canRunNow(next, DRY_RUN) && !isRunActive) startRun(toStartRequest(next, DRY_RUN));
   };
 
   const persistDecision = persistDecisionOf(state, analysisPlanId);
@@ -275,6 +288,11 @@ export default function ActualizarPadronWizard({
               submitted: snapshot.plan?.acceptedGeometries ?? [],
               onAcceptMany: (accepts) => dispatch({ type: "geometriesAccepted", accepts }),
               onRejectMany: (accepts) => dispatch({ type: "geometriesRejected", accepts }),
+              acceptAll: state.acceptAllGeometries,
+              submittedAcceptAll: snapshot.plan?.acceptAllGeometries === true,
+              acceptAllCount: state.acceptAllCount,
+              onAcceptAll: (pendingTotal) => setAcceptAllAndAnalyze(true, pendingTotal),
+              onRejectAll: () => setAcceptAllAndAnalyze(false),
             }}
             mapBase={geometryMapBaseOf(state)}
             persist={{

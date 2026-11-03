@@ -10,6 +10,13 @@ export interface GeometryAcceptSelection {
   submitted: readonly AcceptedGeometry[];
   onAcceptMany?: (accepts: AcceptedGeometry[]) => void;
   onRejectMany?: (accepts: AcceptedGeometry[]) => void;
+  /** Every pending geometry is accepted by the flag, not by the list (AP-116). */
+  acceptAll?: boolean;
+  submittedAcceptAll?: boolean;
+  /** The pending total accepted with the flag; 0 when unknown. */
+  acceptAllCount?: number;
+  onAcceptAll?: (pendingTotal: number) => void;
+  onRejectAll?: () => void;
 }
 
 /** Everything the decision controls of the map modal read and change, live from the wizard state. */

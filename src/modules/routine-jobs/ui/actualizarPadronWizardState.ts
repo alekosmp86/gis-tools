@@ -66,11 +66,18 @@ export interface ActualizarWizardState extends ActualizarTableSelection {
   acceptedGeometries: readonly AcceptedGeometry[];
   /** The acceptances of the last analysis that completed; null when none did. A persist needs them to match. */
   simulatedAcceptedGeometries: readonly AcceptedGeometry[] | null;
+  /** Accept every pending geometry, not only the listed ones (AP-116). */
+  acceptAllGeometries: boolean;
+  /** The pending total the user accepted with the flag; 0 when unknown (a remount). */
+  acceptAllCount: number;
+  /** The flag of the last analysis that completed; false when none did. */
+  simulatedAcceptAllGeometries: boolean;
 }
 
 type DecisionAction =
   | { type: "geometriesAccepted"; accepts: readonly AcceptedGeometry[] }
-  | { type: "geometriesRejected"; accepts: readonly AcceptedGeometry[] };
+  | { type: "geometriesRejected"; accepts: readonly AcceptedGeometry[] }
+  | { type: "acceptAllGeometriesSet"; value: boolean; count?: number };
 
 export type ActualizarWizardAction =
   | DecisionAction
@@ -82,7 +89,7 @@ export type ActualizarWizardAction =
   | { type: "pairChoiceChosen"; choice: PairChoice }
   | { type: "pairChoicesChosen"; choices: readonly PairChoice[] }
   | { type: "pairChoicesRemoved"; choices: readonly PairChoice[] }
-  | { type: "dryRunCompleted"; choices: readonly PairChoice[]; acceptedGeometries?: readonly AcceptedGeometry[] }
+  | { type: "dryRunCompleted"; choices: readonly PairChoice[]; acceptedGeometries?: readonly AcceptedGeometry[]; acceptAllGeometries?: boolean }
   | { type: "next" }
   | { type: "back" }
   | { type: "goTo"; step: WizardStep }
@@ -194,6 +201,9 @@ export function initialWizardState(seed: ActualizarWizardSeed = {}): ActualizarW
     simulatedChoices: null,
     acceptedGeometries: [],
     simulatedAcceptedGeometries: null,
+    acceptAllGeometries: false,
+    acceptAllCount: 0,
+    simulatedAcceptAllGeometries: false,
     ...seedFieldsOf(seed),
   };
 }
@@ -211,6 +221,11 @@ export function completedDryRunAcceptsOf(snapshot: ActualizarPadronRunSnapshot):
   return snapshot.phase === RunPhase.DONE && snapshot.plan?.dryRun === true ? (snapshot.plan.acceptedGeometries ?? NO_ACCEPTS) : null;
 }
 
+/** The accept-all flag of the run when it is a dry run that completed, null otherwise. */
+export function completedDryRunAcceptAllOf(snapshot: ActualizarPadronRunSnapshot): boolean | null {
+  return snapshot.phase === RunPhase.DONE && snapshot.plan?.dryRun === true ? snapshot.plan.acceptAllGeometries === true : null;
+}
+
 /** The plan id of the completed analysis on screen, null when there is none (no analysis, or the result carries no plan). */
 export function completedAnalysisPlanIdOf(snapshot: ActualizarPadronRunSnapshot): string | null {
   if (completedDryRunChoicesOf(snapshot) === null) return null;
@@ -226,6 +241,7 @@ export function initialWizardStateFor(snapshot: ActualizarPadronRunSnapshot, see
   if (snapshot.phase === RunPhase.IDLE) return seeded;
   const simulated = completedDryRunChoicesOf(snapshot);
   const simulatedAccepts = completedDryRunAcceptsOf(snapshot);
+  const simulatedAcceptAll = completedDryRunAcceptAllOf(snapshot);
   const inFlightPlan = isInFlight(snapshot) ? snapshot.plan : undefined;
   return {
     ...seeded,
@@ -234,6 +250,8 @@ export function initialWizardStateFor(snapshot: ActualizarPadronRunSnapshot, see
     simulatedChoices: simulated,
     acceptedGeometries: simulatedAccepts ?? inFlightPlan?.acceptedGeometries ?? [],
     simulatedAcceptedGeometries: simulatedAccepts,
+    acceptAllGeometries: simulatedAcceptAll ?? inFlightPlan?.acceptAllGeometries === true,
+    simulatedAcceptAllGeometries: simulatedAcceptAll === true,
   };
 }
 
@@ -320,7 +338,8 @@ const confirmationMissingOf = (state: ActualizarWizardState): string => {
 /** Pair choices and accepted geometries change the planned writes, so a persist needs the ones its completed analysis simulated (none when both are empty). */
 export function simulationBlockingReason(state: ActualizarWizardState): string | null {
   if (!sameChoices(state.pairChoices, state.simulatedChoices ?? [])) return MESSAGES.simulationStale;
-  return sameAccepts(state.acceptedGeometries, state.simulatedAcceptedGeometries ?? []) ? null : MESSAGES.acceptsStale;
+  if (!sameAccepts(state.acceptedGeometries, state.simulatedAcceptedGeometries ?? [])) return MESSAGES.acceptsStale;
+  return state.acceptAllGeometries === state.simulatedAcceptAllGeometries ? null : MESSAGES.acceptsStale;
 }
 
 /** Why the analysis on screen cannot be persisted, in the order the user can fix it; null when it can. */
@@ -378,6 +397,11 @@ function withAcceptedGeometries(request: ActualizarStartRequest, state: Actualiz
   return { ...request, options: { ...request.options, acceptedGeometries: [...accepts] } };
 }
 
+function withAcceptAllGeometries(request: ActualizarStartRequest, state: ActualizarWizardState): ActualizarStartRequest {
+  if (!state.acceptAllGeometries || !state.options.updateGeometries) return request;
+  return { ...request, options: { ...request.options, acceptAllGeometries: true } };
+}
+
 /** The connection and tables the map of the result reads. Null without a password: the map then asks for one. */
 export function geometryMapBaseOf(state: ActualizarWizardState): GeometryMapBase | null {
   if (state.connection.password === "") return null;
@@ -391,7 +415,10 @@ export function geometryMapBaseOf(state: ActualizarWizardState): GeometryMapBase
 }
 
 export function toStartRequest(state: ActualizarWizardState, flags: { dryRun: boolean }): ActualizarStartRequest {
-  const request = withAcceptedGeometries(withPairChoices(withTypeTable(baseStartRequest(state, flags), state), state), state);
+  const request = withAcceptAllGeometries(
+    withAcceptedGeometries(withPairChoices(withTypeTable(baseStartRequest(state, flags), state), state), state),
+    state,
+  );
   if (!state.options.linkAddressMaster) return request;
   return { ...request, addressMasterTable: state.tables.addressMaster.trim() };
 }
@@ -427,9 +454,11 @@ function stepAfter(step: WizardStep, delta: number): WizardStep {
 }
 
 /** The review decisions (pair choices, accepted geometries) name padrones of the tables and the matching options: they stop meaning anything once those change. */
-const CLEARED_DECISIONS: Pick<ActualizarWizardState, "pairChoices" | "acceptedGeometries"> = {
+const CLEARED_DECISIONS: Pick<ActualizarWizardState, "pairChoices" | "acceptedGeometries" | "acceptAllGeometries" | "acceptAllCount"> = {
   pairChoices: [],
   acceptedGeometries: [],
+  acceptAllGeometries: false,
+  acceptAllCount: 0,
 };
 
 const withoutPairChoices = (state: ActualizarWizardState): ActualizarWizardState => ({ ...state, ...CLEARED_DECISIONS });
@@ -443,6 +472,8 @@ function decisionReducer(state: ActualizarWizardState, action: DecisionAction): 
       return { ...state, acceptedGeometries: withChoices(state.acceptedGeometries, action.accepts) };
     case "geometriesRejected":
       return { ...state, acceptedGeometries: withoutChoices(state.acceptedGeometries, action.accepts) };
+    case "acceptAllGeometriesSet":
+      return { ...state, acceptAllGeometries: action.value, acceptAllCount: action.value ? (action.count ?? 0) : 0 };
   }
 }
 
@@ -538,9 +569,15 @@ export function wizardReducer(state: ActualizarWizardState, action: ActualizarWi
       return { ...state, pairChoices: withoutChoices(state.pairChoices, action.choices) };
     case "geometriesAccepted":
     case "geometriesRejected":
+    case "acceptAllGeometriesSet":
       return decisionReducer(state, action);
     case "dryRunCompleted":
-      return { ...state, simulatedChoices: action.choices, simulatedAcceptedGeometries: action.acceptedGeometries ?? [] };
+      return {
+        ...state,
+        simulatedChoices: action.choices,
+        simulatedAcceptedGeometries: action.acceptedGeometries ?? [],
+        simulatedAcceptAllGeometries: action.acceptAllGeometries === true,
+      };
     case "next":
       return canContinue(state) ? moveTo(state, stepAfter(state.step, 1)) : state;
     case "back":

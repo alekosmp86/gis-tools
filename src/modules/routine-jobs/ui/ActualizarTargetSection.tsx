@@ -17,7 +17,7 @@ import { idOrNoData, keyContentOf, NUMBER_COLUMN, TYPE_COLUMN } from "./targetCo
 import sharedStyles from "./CargarPadronesReport.module.css";
 
 const appliedGeometriesTextOf = (count: number): string =>
-  `${count} geometrías aplicadas bajo el umbral, sin revisión (incluidas en el CSV de cambios).`;
+  `${count} geometrías aplicadas sin revisión individual: bajo el umbral o aceptadas en bloque (incluidas en el CSV de cambios).`;
 
 const KEY_COLUMNS: TableColumn<PadronKey>[] = [
   TYPE_COLUMN,
@@ -56,6 +56,7 @@ function TargetDetails({ target, selection, geometrySelection, unappliedChoices,
       <GeometryChangesSection
         changes={target.geometryChanges}
         summary={target.geometryChangesSummary}
+        pendingTotal={target.geometryPending}
         selection={geometrySelection}
         onResimulate={selection.onResimulate}
         canResimulate={selection.canResimulate}

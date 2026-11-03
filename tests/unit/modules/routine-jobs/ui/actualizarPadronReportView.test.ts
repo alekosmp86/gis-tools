@@ -311,6 +311,12 @@ describe("actualizarPadronReportView", () => {
       expect(target.geometryChangesSummary).toBe("Geometrías pendientes (primeras 1 de 3)");
     });
 
+    it("should expose the pending geometry total of the report as geometryPending", () => {
+      const target = buildActualizarReportView(resultOf({ target: mixedTarget() })).target;
+
+      expect(target.geometryPending).toBe(3);
+    });
+
     it("should count no applied geometries when Actualizar geometrías is off", () => {
       const target = buildActualizarReportView(resultOf({ target: { ...mixedTarget(), updateApplied: false } })).target;
 
