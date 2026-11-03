@@ -1,4 +1,3 @@
-import { pairChoiceKeyId } from "../jobs/actualizar-padron/domain/pairChoiceKey";
 import type { PadronGeometryChange, PairChoice } from "../jobs/actualizar-padron/types";
 import type { PairRowView } from "./actualizarPadronReportView";
 import type { MissingPadronView } from "./missingPadronView";
@@ -40,23 +39,12 @@ const ambiguousItemOf = (group: AmbiguousGroupView): PadronReviewItem => ({
 
 export const groupReviewItemsOf = (groups: readonly AmbiguousGroupView[]): PadronReviewItem[] => groups.map(ambiguousItemOf);
 
-/** The ambiguous group a listed pair is a candidate of, when it is one. */
-function groupOfRow(row: PairRowView, groupsById: ReadonlyMap<string, AmbiguousGroupView>): AmbiguousGroupView | null {
-  if (row.choice === null) return null;
-  const group = groupsById.get(pairChoiceKeyId(row.choice));
-  const oldId = row.choice.oldId;
-  return group !== undefined && group.candidates.some((candidate) => candidate.oldId === oldId) ? group : null;
-}
-
-/** A pending pair gets accept and reject, an ambiguous one the radios of its group; an applied pair is shown only. */
-export function pairReviewItemsOf(rows: readonly PairRowView[], groups: readonly AmbiguousGroupView[]): PadronReviewItem[] {
-  const groupsById = new Map(groups.map((group) => [group.id, group]));
-  return rows.map((row): PadronReviewItem => {
-    if (row.pending) return { kind: REVIEW_KIND.PENDING_PAIR, subject: row.subject, choice: row.choice };
-    const group = groupOfRow(row, groupsById);
-    return group === null ? { kind: REVIEW_KIND.INFO, subject: row.subject } : ambiguousItemOf(group);
-  });
-}
+/** The pending pairs of the list the modal was opened from: each gets accept and reject. A row that is not pending is shown only. */
+export const pairReviewItemsOf = (rows: readonly PairRowView[]): PadronReviewItem[] =>
+  rows.map(
+    (row): PadronReviewItem =>
+      row.pending ? { kind: REVIEW_KIND.PENDING_PAIR, subject: row.subject, choice: row.choice } : { kind: REVIEW_KIND.INFO, subject: row.subject },
+  );
 
 export const missingReviewItemsOf = (rows: readonly MissingPadronView[]): PadronReviewItem[] =>
   rows.map((padron) => ({ kind: REVIEW_KIND.MISSING, subject: padron.subject, padron }));

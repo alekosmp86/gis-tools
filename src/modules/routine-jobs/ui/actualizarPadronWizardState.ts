@@ -4,7 +4,7 @@ import { MONTHLY_TABLES } from "../config/monthlyTables";
 import { DEFAULT_LOCALITY_TYPE } from "../jobs/actualizar-padron/constants";
 import type { AcceptedGeometry, PairChoice } from "../jobs/actualizar-padron/types";
 import type { ActualizarStartRequest, ClientConnection, StagingSelection } from "./clientTypes";
-import { sameChoices, withChoice, withChoices, withoutChoice, withoutChoices } from "./pairChoices";
+import { sameChoices, withChoice, withChoices, withoutChoices } from "./pairChoices";
 import { sameAccepts } from "./geometryAccepts";
 import type { GeometryMapBase } from "./clientTypes";
 import type { ActualizarPadronRunSnapshot } from "./actualizarPadronRunStore";
@@ -66,15 +66,11 @@ export interface ActualizarWizardState extends ActualizarTableSelection {
   acceptedGeometries: readonly AcceptedGeometry[];
   /** The acceptances of the last analysis that completed; null when none did. A persist needs them to match. */
   simulatedAcceptedGeometries: readonly AcceptedGeometry[] | null;
-  /** Old ids of the missing padrones marked for a later removal (AP-101): record only, never sent. */
-  removalMarks: readonly number[];
 }
 
 type DecisionAction =
   | { type: "geometriesAccepted"; accepts: readonly AcceptedGeometry[] }
-  | { type: "geometriesRejected"; accepts: readonly AcceptedGeometry[] }
-  | { type: "removalMarked"; oldIds: readonly number[] }
-  | { type: "removalUnmarked"; oldIds: readonly number[] };
+  | { type: "geometriesRejected"; accepts: readonly AcceptedGeometry[] };
 
 export type ActualizarWizardAction =
   | DecisionAction
@@ -84,7 +80,6 @@ export type ActualizarWizardAction =
   | { type: "optionsChanged"; patch: Partial<ActualizarOptionsDraft> }
   | { type: "confirmationChanged"; patch: Partial<ActualizarWizardConfirmation> }
   | { type: "pairChoiceChosen"; choice: PairChoice }
-  | { type: "pairChoiceRemoved"; choice: PairChoice }
   | { type: "pairChoicesChosen"; choices: readonly PairChoice[] }
   | { type: "pairChoicesRemoved"; choices: readonly PairChoice[] }
   | { type: "dryRunCompleted"; choices: readonly PairChoice[]; acceptedGeometries?: readonly AcceptedGeometry[] }
@@ -199,7 +194,6 @@ export function initialWizardState(seed: ActualizarWizardSeed = {}): ActualizarW
     simulatedChoices: null,
     acceptedGeometries: [],
     simulatedAcceptedGeometries: null,
-    removalMarks: [],
     ...seedFieldsOf(seed),
   };
 }
@@ -378,7 +372,6 @@ function withPairChoices(request: ActualizarStartRequest, state: ActualizarWizar
   return { ...request, options: { ...request.options, pairChoices: [...state.pairChoices] } };
 }
 
-/** The removal marks are never sent: only the accepted geometries join the request. */
 function withAcceptedGeometries(request: ActualizarStartRequest, state: ActualizarWizardState): ActualizarStartRequest {
   const accepts = state.acceptedGeometries;
   if (accepts.length === 0) return request;
@@ -433,11 +426,10 @@ function stepAfter(step: WizardStep, delta: number): WizardStep {
   return STEP_ORDER[indexOfStep(step) + delta] ?? step;
 }
 
-/** The review decisions (pair choices, accepted geometries, removal marks) name padrones of the tables and the matching options: they stop meaning anything once those change. */
-const CLEARED_DECISIONS: Pick<ActualizarWizardState, "pairChoices" | "acceptedGeometries" | "removalMarks"> = {
+/** The review decisions (pair choices, accepted geometries) name padrones of the tables and the matching options: they stop meaning anything once those change. */
+const CLEARED_DECISIONS: Pick<ActualizarWizardState, "pairChoices" | "acceptedGeometries"> = {
   pairChoices: [],
   acceptedGeometries: [],
-  removalMarks: [],
 };
 
 const withoutPairChoices = (state: ActualizarWizardState): ActualizarWizardState => ({ ...state, ...CLEARED_DECISIONS });
@@ -445,23 +437,12 @@ const withoutPairChoices = (state: ActualizarWizardState): ActualizarWizardState
 const decisionsKeptUnless = (state: ActualizarWizardState, changed: boolean): ActualizarWizardState =>
   changed ? withoutPairChoices(state) : state;
 
-const withMarks = (marks: readonly number[], oldIds: readonly number[]): number[] => [...new Set([...marks, ...oldIds])];
-
-const withoutMarks = (marks: readonly number[], oldIds: readonly number[]): number[] => {
-  const removed = new Set(oldIds);
-  return marks.filter((oldId) => !removed.has(oldId));
-};
-
 function decisionReducer(state: ActualizarWizardState, action: DecisionAction): ActualizarWizardState {
   switch (action.type) {
     case "geometriesAccepted":
       return { ...state, acceptedGeometries: withChoices(state.acceptedGeometries, action.accepts) };
     case "geometriesRejected":
       return { ...state, acceptedGeometries: withoutChoices(state.acceptedGeometries, action.accepts) };
-    case "removalMarked":
-      return { ...state, removalMarks: withMarks(state.removalMarks, action.oldIds) };
-    case "removalUnmarked":
-      return { ...state, removalMarks: withoutMarks(state.removalMarks, action.oldIds) };
   }
 }
 
@@ -551,16 +532,12 @@ export function wizardReducer(state: ActualizarWizardState, action: ActualizarWi
       return { ...state, confirmation: { ...state.confirmation, ...action.patch } };
     case "pairChoiceChosen":
       return { ...state, pairChoices: withChoice(state.pairChoices, action.choice) };
-    case "pairChoiceRemoved":
-      return { ...state, pairChoices: withoutChoice(state.pairChoices, action.choice) };
     case "pairChoicesChosen":
       return { ...state, pairChoices: withChoices(state.pairChoices, action.choices) };
     case "pairChoicesRemoved":
       return { ...state, pairChoices: withoutChoices(state.pairChoices, action.choices) };
     case "geometriesAccepted":
     case "geometriesRejected":
-    case "removalMarked":
-    case "removalUnmarked":
       return decisionReducer(state, action);
     case "dryRunCompleted":
       return { ...state, simulatedChoices: action.choices, simulatedAcceptedGeometries: action.acceptedGeometries ?? [] };

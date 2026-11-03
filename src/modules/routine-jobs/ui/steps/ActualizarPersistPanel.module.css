@@ -19,6 +19,12 @@
   font-weight: 600;
 }
 
+.notice {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
 .fields {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

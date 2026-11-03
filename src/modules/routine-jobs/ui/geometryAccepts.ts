@@ -48,6 +48,15 @@ export function geometryDecisionStateOf(
   return id !== null && submitted.has(id) ? GeometryDecisionState.REJECTED : GeometryDecisionState.APPLIED;
 }
 
+/** The rows worth listing: pending ones and those the user decided. Rows applied by the threshold alone need no review. */
+export function reviewableGeometryChangesOf(
+  changes: readonly PadronGeometryChange[],
+  current: ReadonlySet<string>,
+  submitted: ReadonlySet<string>
+): PadronGeometryChange[] {
+  return changes.filter((change) => geometryDecisionStateOf(change, current, submitted) !== GeometryDecisionState.APPLIED);
+}
+
 /** A row the user can accept or reject: pending, or applied only because the shown run accepted it. */
 export const isDecidableGeometry = (state: GeometryDecisionState, change: PadronGeometryChange): boolean =>
   acceptOfGeometryChange(change) !== null && (change.state === GEOMETRY_STATE.PENDING || state !== GeometryDecisionState.APPLIED);

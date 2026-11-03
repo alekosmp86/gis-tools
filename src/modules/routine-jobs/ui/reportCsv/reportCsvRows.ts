@@ -9,6 +9,7 @@ export const CHANGE_KIND = {
   DETECTED: "Geometría detectada (no aplicada)",
   KEY_UPDATED: "Clave actualizada",
   KEY_UPDATED_LOOSE: "Clave actualizada (coincidencia parcial)",
+  REMOVED: "Eliminada",
 } as const;
 
 export type ChangeKind = (typeof CHANGE_KIND)[keyof typeof CHANGE_KIND];

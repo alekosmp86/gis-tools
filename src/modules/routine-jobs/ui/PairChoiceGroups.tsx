@@ -17,14 +17,13 @@ export const RESIMULATE_LABEL = "Volver a analizar con la selección";
 
 /**
  * `choices` is the current selection and `submitted` the choices sent with the shown run. Without onChoose the groups are read-only;
- * without onResimulate there is no re-run button (real-run results); without onRemove the failed choices cannot be removed.
+ * without onResimulate there is no re-run button (real-run results).
  * onChooseMany and onRemoveMany are the bulk forms used by the pending loose pairs (one state update for the whole list).
  */
 export interface PairChoiceSelection {
   choices: readonly PairChoice[];
   submitted: readonly PairChoice[];
   onChoose?: (choice: PairChoice) => void;
-  onRemove?: (choice: PairChoice) => void;
   onChooseMany?: (choices: PairChoice[]) => void;
   onRemoveMany?: (choices: PairChoice[]) => void;
   onResimulate?: () => void;

@@ -399,14 +399,6 @@ describe("actualizarPadronWizardState", () => {
       plan: { dryRun, destinationTable: TARGET_TABLE, linkAddressMaster: false, pairChoices },
     });
 
-    it("should remove the pair choice of the same new key when pairChoiceRemoved is dispatched", () => {
-      const state = tablesStep({ pairChoices: [CHOICE_ONE, CHOICE_TWO] });
-
-      const next = wizardReducer(state, { type: "pairChoiceRemoved", choice: CHOICE_ONE });
-
-      expect(next.pairChoices).toEqual([CHOICE_TWO]);
-    });
-
     it("should start with no simulated choices when the wizard opens", () => {
       expect(initialWizardState().simulatedChoices).toBeNull();
     });

@@ -463,6 +463,70 @@ describe("buildActualizarPadronCsv (AP-49)", () => {
     });
   });
 
+  describe("removed rows (AP-108)", () => {
+    const REMOVED_LABEL = "Eliminada";
+    const removedTargetOf = (removedList: PadronInserted[], removed: number = removedList.length): Partial<ActualizarPadronResult> => ({
+      dryRun: false,
+      target: actualizarTargetReportOf({ inserted: 0, insertedList: [], changed: 0, geometryChanges: [], updated: 0, removed, removedList }),
+    });
+
+    it("should write one Eliminada row per deleted padron with its old key columns and the deleted destination id", () => {
+      const rows = dataRowsOf(removedTargetOf([insertedOf({ id: 700, number: "700", locality: "Villa Maria" })]));
+
+      expect(rows).toEqual([rowFor([TABLE, REMOVED_LABEL, "URBANO", "CORDOBA", "Villa Maria", "700", "700"])]);
+    });
+
+    it("should leave the areas, the change percent, the coordinates and the previous key empty for a deleted padron", () => {
+      const [row] = dataRowsOf(removedTargetOf([insertedOf({ id: 700 })]));
+
+      expect(row.slice(7)).toEqual(Array.from({ length: CELL_COUNT - 7 }, () => ""));
+    });
+
+    it("should write sin dato for a deleted padron missing its department and locality", () => {
+      const [row] = dataRowsOf(removedTargetOf([insertedOf({ id: 701, department: null, locality: null })]));
+
+      expect(row.slice(2, 5)).toEqual(["URBANO", "sin dato", "sin dato"]);
+    });
+
+    it("should write the deleted padrones after the inserted and the geometry rows, ordered by department, locality and number", () => {
+      const rows = dataRowsOf({
+        dryRun: false,
+        target: actualizarTargetReportOf({
+          inserted: 1,
+          insertedList: [insertedOf({ id: 1, number: "5" })],
+          changed: 0,
+          geometryChanges: [],
+          updated: 0,
+          removed: 2,
+          removedList: [insertedOf({ id: 20, number: "20" }), insertedOf({ id: 3, number: "3" })],
+        }),
+      });
+
+      expect(rows.map((row) => [row[1], row[5]])).toEqual([[INSERTED, "5"], [REMOVED_LABEL, "3"], [REMOVED_LABEL, "20"]]);
+    });
+
+    it("should write no Eliminada row when nothing was deleted or the result lacks the removed list", () => {
+      const rows = dataRowsOf({ dryRun: false, target: actualizarTargetReportOf({ inserted: 0, insertedList: [], changed: 0, geometryChanges: [], updated: 0 }) });
+
+      expect(rows.some((row) => row[1] === REMOVED_LABEL)).toBe(false);
+    });
+
+    it("should close the removed list with the cut marker when the deleted count exceeds the list", () => {
+      const list = Array.from({ length: DETAIL_LIST_LIMIT }, (_, index) => insertedOf({ id: index + 1, number: String(index + 1) }));
+
+      const rows = dataRowsOf(removedTargetOf(list, DETAIL_LIST_LIMIT + 7));
+
+      expect(rows.at(-1)).toEqual(rowFor([TABLE, markerOf(DETAIL_LIST_LIMIT, DETAIL_LIST_LIMIT + 7, "padrones eliminados")]));
+      expect(rows.filter(isCutMarkerRow)).toHaveLength(1);
+    });
+
+    it("should write no cut marker when the deleted list holds every deleted padron", () => {
+      const rows = dataRowsOf(removedTargetOf([insertedOf({ id: 1 }), insertedOf({ id: 2, number: "2" })]));
+
+      expect(rows.some(isCutMarkerRow)).toBe(false);
+    });
+  });
+
   describe("target fixture passthrough", () => {
     it("should export the table name of the target report in every row", () => {
       const rows = dataRowsOf(withTarget({ table: "carto.padron" }));

@@ -137,7 +137,7 @@ export function PadronReviewDecision({ item, decisions }: PadronReviewDecisionPr
     case REVIEW_KIND.AMBIGUOUS:
       return <AmbiguousDecision group={item.group} decisions={decisions} />;
     case REVIEW_KIND.MISSING:
-      return <MissingDecisionPanel padron={item.padron} removals={decisions.removals} />;
+      return <MissingDecisionPanel padron={item.padron} />;
     case REVIEW_KIND.INFO:
       return null;
   }

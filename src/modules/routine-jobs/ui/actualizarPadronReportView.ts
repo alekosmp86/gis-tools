@@ -30,7 +30,8 @@ import { reportRowToneOf, type ReportRowTone } from "./reportRowTone";
 import type { RefreshSuggestionView } from "./refreshSuggestionView";
 import { listSummaryOf } from "./reportViewParts";
 import { ambiguousGroupsOf, choiceOfPair, type AmbiguousGroupView } from "./pairChoices";
-import { missingReviewViewOf, type MissingReviewView } from "./missingPadronView";
+import { missingAwaitingPairOf, missingReviewViewOf, type MissingReviewView } from "./missingPadronView";
+import { removalViewOf, type RemovalView } from "./removalReportView";
 import { subjectOfPair, type PadronMapSubject } from "./padronMapSubject";
 
 export interface KpiView {
@@ -125,16 +126,16 @@ export interface TargetView {
   insertedSummary: string;
   geometryChanges: PadronGeometryChange[];
   geometryChangesSummary: string;
-  missing: PadronKey[];
-  missingSummary: string;
+  geometryAppliedCount: number;
+  reviewSummary: string;
   ambiguous: PadronKey[];
   ambiguousSummary: string;
   pairs: PairView[];
   pairRows: PairRowView[];
   pairsPending: number;
-  pairsSummary: string;
   ambiguousGroups: AmbiguousGroupView[];
   missingReview: MissingReviewView | null;
+  removal: RemovalView | null;
 }
 
 export type ActualizarBannerKind = "unknown" | "dryRun" | "warning" | "done";
@@ -248,6 +249,7 @@ function kpisOf(result: ActualizarPadronResult): KpiView[] {
     { label: "Insertadas", value: target.inserted },
     { label: "Actualizadas", value: target.updated },
     { label: "Geometrías que cambian", value: target.changed },
+    { label: "Eliminadas", value: target.removed ?? 0 },
   ];
 }
 
@@ -316,7 +318,8 @@ function outcomeBannerOf(result: ActualizarPadronResult): ActualizarBanner {
   return { kind: "done", text: BANNER_TEXT.done };
 }
 
-const changedRowsOf = (target: ActualizarTargetReport): number => target.inserted + target.updated + target.pairsApplied;
+const changedRowsOf = (target: ActualizarTargetReport): number =>
+  target.inserted + target.updated + target.pairsApplied + (target.removed ?? 0);
 
 function suggestionOf(result: ActualizarPadronResult): RefreshSuggestionView | null {
   if (result.dryRun || !(result.targetModified || result.outcomeUnknown) || changedRowsOf(result.target) === 0) return null;
@@ -331,8 +334,6 @@ function bannersOf(result: ActualizarPadronResult): ActualizarBanner[] {
 
 const visibleWarningsOf = (result: ActualizarPadronResult): string[] =>
   result.warnings.filter((warning) => warning !== DRY_RUN_WARNING && warning !== COMMIT_UNKNOWN_WARNING);
-
-const PAIRS_SECTION_TITLE = "Padrones reclasificados o renumerados";
 
 const targetCountRowOf = (label: string, value: number, isNeutral = false): TargetCountRow => ({
   label,
@@ -378,7 +379,23 @@ const pairRowOf = (pair: PadronPair): PairRowView => ({
   subject: subjectOfPair(pair),
 });
 
-function targetViewOf(target: ActualizarTargetReport): TargetView {
+/** Geometries applied under the threshold: they need no review, so they get a count and no list rows. */
+const geometryAppliedCountOf = (target: ActualizarTargetReport): number =>
+  target.updateApplied ? Math.max(0, target.changed - target.geometryPending) : 0;
+
+function reviewSummaryOf(target: ActualizarTargetReport): string {
+  const awaiting = missingAwaitingPairOf(target);
+  const missingToReview = Math.max(0, target.missing - awaiting.count);
+  const missingText = `${awaiting.atLeast ? "hasta " : ""}${missingToReview} faltantes`;
+  return [
+    `Aplicados sin revisión: ${target.pairsApplied} claves actualizadas, ${geometryAppliedCountOf(target)} geometrías.`,
+    `Para revisar: ${target.pairsPending} pares pendientes, ${target.pairsNotApplied} grupos ambiguos,`,
+    `${target.geometryPending} geometrías pendientes, ${missingText}.`,
+  ].join(" ");
+}
+
+function targetViewOf(target: ActualizarTargetReport, dryRun: boolean): TargetView {
+  const pendingGeometries = target.geometryChanges.filter((change) => change.state === GEOMETRY_STATE.PENDING);
   return {
     table: target.table,
     counts: [
@@ -391,23 +408,28 @@ function targetViewOf(target: ActualizarTargetReport): TargetView {
       targetCountRowOf("Sin cambios", target.unchanged, true),
       targetCountRowOf("Sin cambios dentro de tolerancia", target.unchangedWithinTolerance, true),
       targetCountRowOf("Faltantes en destino", target.missing),
+      targetCountRowOf("Eliminadas", target.removed ?? 0),
       targetCountRowOf("Ambiguas", target.ambiguous),
     ],
     notes: targetNotesOf(target),
     inserted: target.insertedList,
     insertedSummary: listSummaryOf("Padrones insertados", target.insertedList.length, target.inserted),
     geometryChanges: target.geometryChanges,
-    geometryChangesSummary: listSummaryOf("Geometrías que cambian", target.geometryChanges.length, target.changed),
-    missing: target.missingSamples,
-    missingSummary: listSummaryOf("Faltantes en destino", target.missingSamples.length, target.missing),
+    geometryChangesSummary: listSummaryOf(
+      "Geometrías pendientes",
+      pendingGeometries.length,
+      Math.max(target.geometryPending, pendingGeometries.length),
+    ),
+    geometryAppliedCount: geometryAppliedCountOf(target),
+    reviewSummary: reviewSummaryOf(target),
     ambiguous: target.ambiguousSamples,
     ambiguousSummary: listSummaryOf("Ambiguas", target.ambiguousSamples.length, target.ambiguous),
     pairs: target.pairs.map(pairViewOf),
     pairRows: target.pairs.map(pairRowOf),
     pairsPending: target.pairsPending,
-    pairsSummary: listSummaryOf(PAIRS_SECTION_TITLE, target.pairs.length, target.pairsTotal),
     ambiguousGroups: ambiguousGroupsOf(target.pairs),
     missingReview: missingReviewViewOf(target),
+    removal: removalViewOf(target, dryRun),
   };
 }
 
@@ -427,7 +449,7 @@ export function buildActualizarReportView(result: ActualizarPadronResult): Actua
     samples: samplesOf(result.skipped.samples),
     collidingKeys: collidingKeysOf(result.skipped.collidingKeys),
     collidingKeyCount: result.skipped.collidingKeyCount,
-    target: targetViewOf(result.target),
+    target: targetViewOf(result.target, result.dryRun),
     addressMaster: result.addressMaster === undefined ? null : addressMasterViewOf(result.addressMaster, PADRON_ADDRESS_MASTER_TEXTS),
     suggestion: suggestionOf(result),
     warnings: visibleWarningsOf(result),

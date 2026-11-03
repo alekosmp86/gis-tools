@@ -96,6 +96,7 @@ const missingPadronOf = (overrides: Partial<MissingPadron> = {}): MissingPadron 
   class: REPLACEMENT_CLASS.REPLACED_ONE,
   coveredPct: 95,
   parts: ["RURAL 100 (95.0 %)"],
+  removalReason: null,
   ...overrides,
 });
 
@@ -149,52 +150,33 @@ const CHOICE: PairChoice = { typePadron: "RURAL", provinceId: 6, localityId: 120
 describe("pairReviewItemsOf", () => {
   it("should give one item per row, in row order, with the kind each row needs", () => {
     const pending = pairRowOf(pairOf({ status: PAIR_STATUS.NOT_APPLIED_PENDING, tier: PAIR_TIER.LOOSE }), true, CHOICE);
-    const ambiguousRow = pairRowOf(pairOf(), false, CHOICE);
     const applied = pairRowOf(pairOf({ new: newKeyOf({ number: "300" }) }), false, null);
 
-    const items = pairReviewItemsOf([pending, ambiguousRow, applied], [groupOf(CHOICE)]);
+    const items = pairReviewItemsOf([pending, applied]);
 
-    expect(items.map((item) => item.kind)).toEqual([REVIEW_KIND.PENDING_PAIR, REVIEW_KIND.AMBIGUOUS, REVIEW_KIND.INFO]);
+    expect(items.map((item) => item.kind)).toEqual([REVIEW_KIND.PENDING_PAIR, REVIEW_KIND.INFO]);
   });
 
   it("should give a pending pair the PENDING_PAIR kind with its choice, and a null choice when it has no complete key", () => {
     const withChoice = pairRowOf(pairOf({ status: PAIR_STATUS.NOT_APPLIED_PENDING }), true, CHOICE);
     const withoutChoice = pairRowOf(pairOf({ status: PAIR_STATUS.NOT_APPLIED_PENDING }), true, null);
 
-    const items = pairReviewItemsOf([withChoice, withoutChoice], []);
+    const items = pairReviewItemsOf([withChoice, withoutChoice]);
 
     expect(items[0]).toEqual({ kind: REVIEW_KIND.PENDING_PAIR, subject: withChoice.subject, choice: CHOICE });
     expect(items[1]).toEqual({ kind: REVIEW_KIND.PENDING_PAIR, subject: withoutChoice.subject, choice: null });
   });
 
-  it("should give an applied pair that a group holds the AMBIGUOUS kind of that group", () => {
-    const group = groupOf(CHOICE);
-    const row = pairRowOf(pairOf(), false, CHOICE);
-
-    const items = pairReviewItemsOf([row], [group]);
-
-    expect(items).toEqual([{ kind: REVIEW_KIND.AMBIGUOUS, subject: expect.anything(), group }]);
-  });
-
-  it("should give an applied pair whose chosen old id is not a candidate of its group the INFO kind", () => {
-    const otherCandidate: PairChoice = { ...CHOICE, oldId: 99 };
-    const row = pairRowOf(pairOf(), false, otherCandidate);
-
-    const items = pairReviewItemsOf([row], [groupOf(CHOICE)]);
-
-    expect(items[0].kind).toBe(REVIEW_KIND.INFO);
-  });
-
   it("should give an applied pair with no choice the INFO kind, carrying its map subject", () => {
     const row = pairRowOf(pairOf(), false, null);
 
-    const items = pairReviewItemsOf([row], []);
+    const items = pairReviewItemsOf([row]);
 
     expect(items).toEqual([{ kind: REVIEW_KIND.INFO, subject: row.subject }]);
   });
 
   it("should return no items for no rows", () => {
-    expect(pairReviewItemsOf([], [])).toEqual([]);
+    expect(pairReviewItemsOf([])).toEqual([]);
   });
 });
 

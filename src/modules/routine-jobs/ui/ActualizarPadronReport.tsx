@@ -8,7 +8,6 @@ import { PadronMapModal } from "./PadronMapModal";
 import {
   readOnlyAcceptsOf,
   type GeometryAcceptSelection,
-  type RemovalMarkSelection,
   type ReviewDecisions,
 } from "./reviewDecisions";
 import {
@@ -32,7 +31,7 @@ import { ActualizarTargetSection } from "./ActualizarTargetSection";
 import { MissingPadronSection } from "./MissingPadronSection";
 import { PendingGeometryDownload } from "./PendingGeometryDownload";
 import type { PairChoiceSelection } from "./PairChoiceGroups";
-import { listedChoicesOf, unappliedChoicesOf } from "./pairChoices";
+import { unappliedChoicesOf } from "./pairChoices";
 import { RefreshSuggestion } from "./RefreshSuggestion";
 import styles from "./ActualizarPadronReport.module.css";
 import sharedStyles from "./CargarPadronesReport.module.css";
@@ -122,7 +121,6 @@ export interface ActualizarPadronReportProps {
   result: ActualizarPadronResult;
   pairChoices: PairChoiceSelection;
   geometryAccepts: GeometryAcceptSelection;
-  removalMarks: RemovalMarkSelection;
   /** The connection of the wizard for the map; null when the wizard holds no password. */
   mapBase: GeometryMapBase | null;
 }
@@ -136,22 +134,19 @@ const geometryLockReasonOf = (result: ActualizarPadronResult): string | null =>
 /** Only an analysis that updates geometries takes acceptances; a real-run result shows the submitted ones read-only. */
 const geometriesEditableIn = (result: ActualizarPadronResult): boolean => result.dryRun && result.target.updateApplied;
 
-export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ result, pairChoices, geometryAccepts, removalMarks, mapBase }) => {
+export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ result, pairChoices, geometryAccepts, mapBase }) => {
   const [review, setReview] = useState<PadronReview | null>(null);
   const view = useMemo(() => buildActualizarReportView(result), [result]);
   const pairSelection: PairChoiceSelection = result.dryRun
     ? pairChoices
     : { choices: pairChoices.submitted, submitted: pairChoices.submitted, canResimulate: false };
   const geometrySelection = geometriesEditableIn(result) ? geometryAccepts : readOnlyAcceptsOf(geometryAccepts.submitted);
-  const removalSelection: RemovalMarkSelection = result.dryRun ? removalMarks : { marked: [] };
   const unappliedChoices = unappliedChoicesOf(pairSelection.choices, pairSelection.submitted, result.target.pairs);
-  const choiceRows = listedChoicesOf(pairSelection.choices, pairSelection.submitted, result.target.pairs, view.target.ambiguousGroups);
   const decisions: ReviewDecisions = {
     pairs: pairSelection,
     unappliedChoices,
     geometries: geometrySelection,
     geometryLockReason: geometryLockReasonOf(result),
-    removals: removalSelection,
   };
   const openReview = (items: PadronReviewItem[], index: number) => setReview({ items, index });
   const navigate = (index: number) => setReview((current) => (current === null ? null : { ...current, index }));
@@ -185,7 +180,6 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
         target={view.target}
         selection={pairSelection}
         geometrySelection={geometrySelection}
-        choiceRows={choiceRows}
         unappliedChoices={unappliedChoices}
         onOpenReview={openReview}
       />
@@ -195,7 +189,6 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
           review={view.target.missingReview}
           target={result.target}
           dryRun={result.dryRun}
-          removals={removalSelection}
           onOpenReview={openReview}
         />
       )}

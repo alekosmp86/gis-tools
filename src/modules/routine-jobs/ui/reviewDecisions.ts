@@ -12,13 +12,6 @@ export interface GeometryAcceptSelection {
   onRejectMany?: (accepts: AcceptedGeometry[]) => void;
 }
 
-/** The record-only removal marks of the missing padrones (AP-101), by old id. Nothing is ever sent to the server. */
-export interface RemovalMarkSelection {
-  marked: readonly number[];
-  onMark?: (oldIds: number[]) => void;
-  onUnmark?: (oldIds: number[]) => void;
-}
-
 /** Everything the decision controls of the map modal read and change, live from the wizard state. */
 export interface ReviewDecisions {
   pairs: PairChoiceSelection;
@@ -26,7 +19,6 @@ export interface ReviewDecisions {
   geometries: GeometryAcceptSelection;
   /** Why the geometries cannot be accepted here; null when they can. */
   geometryLockReason: string | null;
-  removals: RemovalMarkSelection;
 }
 
 /** The submitted acceptances shown read-only. */

@@ -19,6 +19,7 @@ export interface ActualizarPersistPanelProps {
   summary: string;
   confirmation: ActualizarWizardConfirmation;
   blockedReason: string | null;
+  notice: string | null;
   onConfirmationChange: (patch: Partial<ActualizarWizardConfirmation>) => void;
   onPersist: () => void;
 }
@@ -29,6 +30,7 @@ export const ActualizarPersistPanel: React.FC<ActualizarPersistPanelProps> = ({
   summary,
   confirmation,
   blockedReason,
+  notice,
   onConfirmationChange,
   onPersist,
 }) => (
@@ -55,5 +57,6 @@ export const ActualizarPersistPanel: React.FC<ActualizarPersistPanelProps> = ({
         <span>{BUTTON_LABEL}</span>
       </Button>
     </div>
+    {notice !== null && <p className={styles.notice}>{notice}</p>}
   </section>
 );

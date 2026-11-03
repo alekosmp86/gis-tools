@@ -10,7 +10,6 @@ export const REPORT_CSV_KIND = {
   INCONSISTENCIES: "inconsistencies",
   MISSING: "missing",
   PENDING_GEOMETRIES: "pending-geometries",
-  REMOVAL_MARKS: "removal-marks",
 } as const;
 
 export type ReportCsvKind = (typeof REPORT_CSV_KIND)[keyof typeof REPORT_CSV_KIND];
@@ -20,7 +19,6 @@ const KIND_SEGMENTS: Record<ReportCsvKind, readonly string[]> = {
   [REPORT_CSV_KIND.INCONSISTENCIES]: ["inconsistencias"],
   [REPORT_CSV_KIND.MISSING]: ["faltantes"],
   [REPORT_CSV_KIND.PENDING_GEOMETRIES]: ["geometrias-pendientes"],
-  [REPORT_CSV_KIND.REMOVAL_MARKS]: ["marcados-eliminar"],
 };
 
 const pad = (value: number): string => String(value).padStart(PAD_WIDTH, "0");

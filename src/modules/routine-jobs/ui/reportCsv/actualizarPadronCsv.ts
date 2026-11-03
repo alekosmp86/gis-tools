@@ -87,6 +87,16 @@ const insertedRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[]
     nonOverlap: false,
   }));
 
+const removedRecordsOf = (target: ActualizarTargetReport): PadronChangeRecord[] =>
+  (target.removedList ?? []).map((padron) => ({
+    kind: CHANGE_KIND.REMOVED,
+    key: padron,
+    oldId: padron.id,
+    location: null,
+    previous: null,
+    nonOverlap: false,
+  }));
+
 const geometryRecordOf = (change: PadronGeometryChange): PadronChangeRecord => ({
   kind: GEOMETRY_KIND_OF[change.state],
   key: change,
@@ -169,6 +179,7 @@ const insertedCutOf = (target: ActualizarTargetReport): ListCut => ({
 const changeCutsOf = (target: ActualizarTargetReport): ListCut[] => [
   { table: target.table, shown: target.geometryChanges.length, total: target.changed, noun: "geometrías que cambian" },
   { table: target.table, shown: target.pairs.filter(isApplied).length, total: target.pairsApplied, noun: "claves actualizadas" },
+  { table: target.table, shown: (target.removedList ?? []).length, total: target.removed ?? 0, noun: "padrones eliminados" },
 ];
 
 /** An analysis lists no new padrones nor links (AP-88), so it has no cut for them: the note below says so instead. */
@@ -201,7 +212,7 @@ function addressMasterCutsOf(target: ActualizarTargetReport, addressMaster: Actu
 
 export const buildActualizarPadronCsv = (result: ActualizarPadronResult): string => {
   const { target, addressMaster } = result;
-  const padronRows = [...insertedRecordsOf(target), ...geometryRecordsOf(target), ...keyUpdatedRecordsOf(target)]
+  const padronRows = [...insertedRecordsOf(target), ...geometryRecordsOf(target), ...keyUpdatedRecordsOf(target), ...removedRecordsOf(target)]
     .sort(comparePadronChanges)
     .map((record) => changeRowOf(target.table, record));
   const rows = [

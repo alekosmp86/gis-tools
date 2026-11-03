@@ -9,7 +9,6 @@ import {
   unappliedChoicesOf,
   withChoice,
   withChoices,
-  withoutChoice,
   withoutChoices,
 } from "@/modules/routine-jobs/ui/pairChoices";
 
@@ -153,25 +152,6 @@ describe("pairChoices", () => {
       const choices = [choiceOf({ number: "300", oldId: null })];
 
       expect([...takenOldIds(choices, groups[0])]).toEqual([]);
-    });
-  });
-
-  describe("withoutChoice", () => {
-    it("should remove the choice of the same new key whatever its old id and keep the other choices", () => {
-      const chosen = choiceOf({ oldId: 1 });
-      const other = choiceOf({ number: "200", oldId: 2 });
-
-      expect(withoutChoice([chosen, other], choiceOf({ oldId: null }))).toEqual([other]);
-    });
-
-    it("should return the same choices when no choice has the new key of the removed one", () => {
-      const existing = choiceOf({ number: "200", oldId: 2 });
-
-      expect(withoutChoice([existing], choiceOf({ oldId: 9 }))).toEqual([existing]);
-    });
-
-    it("should return an empty list when the only choice is removed", () => {
-      expect(withoutChoice([choiceOf({ oldId: 1 })], choiceOf({ oldId: 1 }))).toEqual([]);
     });
   });
 

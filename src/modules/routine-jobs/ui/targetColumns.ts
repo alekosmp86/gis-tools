@@ -7,7 +7,6 @@ const AREA_DECIMAL_PLACES = 1;
 const PERCENT_DECIMAL_PLACES = 1;
 const COORDINATE_DECIMAL_PLACES = 6;
 const NON_OVERLAP_HEADER = "Área no coincidente (%)";
-export const SIGNED_CHANGE_HEADER = "Cambio de área (%)";
 
 export const idOrNoData = (value: number | null): string => (value === null ? NO_DATA_TEXT : String(value));
 
@@ -16,7 +15,7 @@ export const keyContentOf = (key: PadronKey): string => `${key.typePadron}|${key
 export const TYPE_COLUMN: TableColumn<PadronKey> = { header: "Tipo", cell: (key) => textOrNoData(key.typePadron) };
 export const NUMBER_COLUMN: TableColumn<PadronKey> = { header: "Padrón", cell: (key) => textOrNoData(key.number) };
 
-export const locationColumnsOf = <Row extends PadronLocation>(areaChangeHeader: string): TableColumn<Row>[] => [
+const locationColumnsOf = <Row extends PadronLocation>(areaChangeHeader: string): TableColumn<Row>[] => [
   { header: "Área anterior (m²)", cell: (row) => decimalOrNoData(row.oldAreaM2, AREA_DECIMAL_PLACES) },
   { header: "Área nueva (m²)", cell: (row) => decimalOrNoData(row.newAreaM2, AREA_DECIMAL_PLACES) },
   { header: areaChangeHeader, cell: (row) => decimalOrNoData(row.areaChangePct, PERCENT_DECIMAL_PLACES) },

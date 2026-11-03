@@ -8,6 +8,7 @@ import {
   GeometryDecisionState,
   geometryDecisionStateOf,
   isDecidableGeometry,
+  reviewableGeometryChangesOf,
   sameAccepts,
 } from "@/modules/routine-jobs/ui/geometryAccepts";
 
@@ -131,5 +132,26 @@ describe("sameAccepts", () => {
 
   it("should be false when the same count holds a different number", () => {
     expect(sameAccepts([KEY_200], [{ ...KEY_200, number: "201" }])).toBe(false);
+  });
+});
+
+describe("reviewableGeometryChangesOf", () => {
+  it("should keep pending rows and drop the rows the threshold applied alone", () => {
+    const pending = changeOf({ number: "200" });
+    const applied = changeOf({ number: "300", state: GEOMETRY_STATE.APPLIED });
+
+    expect(reviewableGeometryChangesOf([pending, applied], NONE, NONE)).toEqual([pending]);
+  });
+
+  it("should keep an applied row the user accepted, so the acceptance can still be undone", () => {
+    const acceptedApplied = changeOf({ state: GEOMETRY_STATE.APPLIED });
+
+    expect(reviewableGeometryChangesOf([acceptedApplied], ACCEPTED_200, ACCEPTED_200)).toEqual([acceptedApplied]);
+  });
+
+  it("should keep an applied row whose acceptance was removed since the shown run", () => {
+    const rejected = changeOf({ state: GEOMETRY_STATE.APPLIED });
+
+    expect(reviewableGeometryChangesOf([rejected], NONE, ACCEPTED_200)).toEqual([rejected]);
   });
 });

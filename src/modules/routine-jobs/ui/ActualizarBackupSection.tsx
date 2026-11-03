@@ -33,6 +33,7 @@ const countRowsOf = (backup: ActualizarPadronBackup): ReportRowListRow[] => [
   { label: "Geometrías actualizadas", value: backup.counts.updated },
   { label: "Claves actualizadas", value: backup.counts.paired },
   { label: "Padrones insertados", value: backup.counts.inserted },
+  ...(backup.counts.deleted > 0 ? [{ label: "Padrones eliminados", value: backup.counts.deleted }] : []),
   { label: "Padrones sin dirección maestra antes del enlace", value: backup.counts.addressMasterRows },
 ];
 

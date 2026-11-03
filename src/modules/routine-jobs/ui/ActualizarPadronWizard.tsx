@@ -17,7 +17,6 @@ import {
   geometryMapBaseOf,
   initialWizardStateFor,
   isTypeTableChosen,
-  persistBlockedReason,
   roleOfTableKey,
   runBlockedReason,
   schemaFieldOf,
@@ -34,6 +33,14 @@ import {
   type ActualizarPadronRunSnapshot,
   type ActualizarPadronRunStore,
 } from "./actualizarPadronRunStore";
+import {
+  AutoPersistOutcomeKind,
+  createAutoPersistController,
+  persistBlockReasonOf,
+  persistDecisionOf,
+  PersistDecisionKind,
+  persistNoticeOf,
+} from "./actualizarPersistFlow";
 import { useElapsedTick } from "./useElapsedTick";
 import { RunPhase } from "./jobRunStore";
 import { createRoutineJobsClient, RoutineJobsApiError } from "./routineJobsClient";
@@ -95,6 +102,10 @@ export default function ActualizarPadronWizard({
     deleteProfile,
   } = useConnectionProfiles();
   const [catalogFailures, setCatalogFailures] = useState<CatalogFailures>(emptyCatalogFailures);
+  const [autoPersist, setAutoPersist] = useState(false);
+  const [autoPersistController] = useState(() => createAutoPersistController(runStore));
+
+  useEffect(() => autoPersistController.cancel, [autoPersistController]);
 
   const isRunActive = snapshot.phase === RunPhase.STARTING || snapshot.phase === RunPhase.RUNNING;
   const nowMs = useElapsedTick(isRunActive);
@@ -163,9 +174,24 @@ export default function ActualizarPadronWizard({
     if (canRunNow(state, DRY_RUN) && !isRunActive) startRun(toStartRequest(state, DRY_RUN));
   };
 
+  const persistDecision = persistDecisionOf(state, analysisPlanId);
+
+  const analyzeThenPersist = () => {
+    const persistState = state;
+    autoPersistController.begin((outcome) => {
+      setAutoPersist(false);
+      if (outcome.kind === AutoPersistOutcomeKind.PERSIST) startRun(toPersistRequest(persistState, outcome.planId));
+    });
+    setAutoPersist(true);
+    startRun(toStartRequest(state, DRY_RUN));
+  };
+
   const persist = () => {
-    if (analysisPlanId !== null && persistBlockedReason(state, analysisPlanId) === null) {
-      startRun(toPersistRequest(state, analysisPlanId));
+    if (isRunActive) return;
+    if (persistDecision.kind === PersistDecisionKind.PERSIST_NOW) {
+      startRun(toPersistRequest(state, persistDecision.planId));
+    } else if (persistDecision.kind === PersistDecisionKind.ANALYZE_THEN_PERSIST) {
+      analyzeThenPersist();
     }
   };
 
@@ -240,7 +266,6 @@ export default function ActualizarPadronWizard({
               submitted: snapshot.plan?.pairChoices ?? [],
               canResimulate: canRunNow(state, DRY_RUN) && !isRunActive,
               onChoose: (choice) => dispatch({ type: "pairChoiceChosen", choice }),
-              onRemove: (choice) => dispatch({ type: "pairChoiceRemoved", choice }),
               onChooseMany: (choices) => dispatch({ type: "pairChoicesChosen", choices }),
               onRemoveMany: (choices) => dispatch({ type: "pairChoicesRemoved", choices }),
               onResimulate: resimulate,
@@ -251,18 +276,15 @@ export default function ActualizarPadronWizard({
               onAcceptMany: (accepts) => dispatch({ type: "geometriesAccepted", accepts }),
               onRejectMany: (accepts) => dispatch({ type: "geometriesRejected", accepts }),
             }}
-            removalMarks={{
-              marked: state.removalMarks,
-              onMark: (oldIds) => dispatch({ type: "removalMarked", oldIds }),
-              onUnmark: (oldIds) => dispatch({ type: "removalUnmarked", oldIds }),
-            }}
             mapBase={geometryMapBaseOf(state)}
             persist={{
               confirmation: state.confirmation,
-              blockedReason: persistBlockedReason(state, analysisPlanId),
+              blockedReason: persistBlockReasonOf(persistDecision),
+              notice: persistNoticeOf(persistDecision),
               onConfirmationChange: (patch) => dispatch({ type: "confirmationChanged", patch }),
               onPersist: persist,
             }}
+            autoAnalysis={autoPersist}
             onNewRun={newRun}
             onBackToReview={() => dispatch({ type: "goTo", step: WizardStep.REVIEW })}
           />

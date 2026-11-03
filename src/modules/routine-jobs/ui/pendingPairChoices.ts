@@ -59,6 +59,18 @@ export function acceptableChoicesOf(choices: readonly (PairChoice | null)[], cur
   return accepted;
 }
 
+export interface PendingBulk {
+  states: PendingChoiceState[];
+  /** The open pairs "Aceptar todos" would add before the limit. */
+  open: number;
+  /** The choices "Aceptar todos" adds, within the limit. */
+  acceptChoices: PairChoice[];
+  truncated: boolean;
+  /** The choices of the rows already accepted: what "Rechazar todos" removes. */
+  acceptedChoices: PairChoice[];
+  blocked: number;
+}
+
 export interface ChoicesWithinLimit<Item extends PairChoiceKeyFields = PairChoice> {
   choices: Item[];
   truncated: boolean;
@@ -80,4 +92,15 @@ export function choicesWithinLimit<Item extends PairChoiceKeyFields>(
     within.push(choice);
   }
   return { choices: within, truncated: false };
+}
+
+/** The bulk state of a list of pending pairs (their choices, in list order) against the current choices. */
+export function pendingBulkOf(rowChoices: readonly (PairChoice | null)[], current: readonly PairChoice[], limit: number): PendingBulk {
+  const index = choiceIndexOf(current);
+  const states = rowChoices.map((choice) => pendingChoiceStateIn(index, choice));
+  const open = acceptableChoicesOf(rowChoices, current);
+  const within = choicesWithinLimit(open, current, limit);
+  const acceptedChoices = rowChoices.flatMap((choice, i) => (choice !== null && states[i] === PendingChoiceState.ACCEPTED ? [choice] : []));
+  const blocked = states.filter((state) => state === PendingChoiceState.BLOCKED).length;
+  return { states, open: open.length, acceptChoices: within.choices, truncated: within.truncated, acceptedChoices, blocked };
 }

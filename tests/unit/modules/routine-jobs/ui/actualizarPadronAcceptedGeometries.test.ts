@@ -66,7 +66,6 @@ const decided = (overrides: Partial<ActualizarWizardState> = {}): ActualizarWiza
     confirmation: { password: PASSWORD, typedTable: TARGET_TABLE },
     acceptedGeometries: [ACCEPT_RURAL],
     simulatedAcceptedGeometries: [ACCEPT_RURAL],
-    removalMarks: [500, 600],
     ...overrides,
   });
 
@@ -102,70 +101,39 @@ describe("accepted geometries reducer (AP-100)", () => {
     expect(next.acceptedGeometries).toEqual([ACCEPT_URBANO]);
   });
 
-  it("should leave the pair choices and the removal marks alone when geometries are accepted", () => {
-    const state = tablesStep({ pairChoices: [PAIR], removalMarks: [500] });
+  it("should leave the pair choices alone when geometries are accepted", () => {
+    const state = tablesStep({ pairChoices: [PAIR] });
 
     const next = wizardReducer(state, { type: "geometriesAccepted", accepts: [ACCEPT_RURAL] });
 
     expect(next.pairChoices).toEqual([PAIR]);
-    expect(next.removalMarks).toEqual([500]);
   });
 });
 
-describe("removal marks reducer (AP-101)", () => {
-  it("should record each marked old id once, in mark order", () => {
-    const first = wizardReducer(tablesStep(), { type: "removalMarked", oldIds: [500, 600] });
-
-    const second = wizardReducer(first, { type: "removalMarked", oldIds: [600, 700] });
-
-    expect(second.removalMarks).toEqual([500, 600, 700]);
-  });
-
-  it("should remove only the unmarked old ids when removalUnmarked is dispatched", () => {
-    const state = tablesStep({ removalMarks: [500, 600] });
-
-    const next = wizardReducer(state, { type: "removalUnmarked", oldIds: [500] });
-
-    expect(next.removalMarks).toEqual([600]);
-  });
-
-  it("should leave the accepted geometries and the pair choices alone when a padron is marked", () => {
+describe("clearing the decisions with the pair choices (AP-100)", () => {
+  it.each(CLEARING_EVENTS)("should clear the accepted geometries and the pair choices when %s", (_label, action) => {
     const state = tablesStep({ acceptedGeometries: [ACCEPT_RURAL], pairChoices: [PAIR] });
-
-    const next = wizardReducer(state, { type: "removalMarked", oldIds: [500] });
-
-    expect(next.acceptedGeometries).toEqual([ACCEPT_RURAL]);
-    expect(next.pairChoices).toEqual([PAIR]);
-  });
-});
-
-describe("clearing the decisions with the pair choices (AP-100, AP-101)", () => {
-  it.each(CLEARING_EVENTS)("should clear the accepted geometries, the removal marks and the pair choices when %s", (_label, action) => {
-    const state = tablesStep({ acceptedGeometries: [ACCEPT_RURAL], removalMarks: [500], pairChoices: [PAIR] });
 
     const next = wizardReducer(state, action);
 
     expect(next.acceptedGeometries).toEqual([]);
-    expect(next.removalMarks).toEqual([]);
     expect(next.pairChoices).toEqual([]);
   });
 
-  it("should keep the accepted geometries and the marks when a table is chosen with the name it already had", () => {
-    const state = tablesStep({ acceptedGeometries: [ACCEPT_RURAL], removalMarks: [500] });
+  it("should keep the accepted geometries when a table is chosen with the name it already had", () => {
+    const state = tablesStep({ acceptedGeometries: [ACCEPT_RURAL] });
 
     const next = wizardReducer(state, { type: "tableChosen", key: ActualizarTableKey.TARGET, table: TARGET_TABLE, valid: true });
 
     expect(next.acceptedGeometries).toEqual([ACCEPT_RURAL]);
-    expect(next.removalMarks).toEqual([500]);
   });
 
-  it("should keep the accepted geometries and the marks when an option is set to the value it already has", () => {
-    const state = tablesStep({ acceptedGeometries: [ACCEPT_RURAL], removalMarks: [500] });
+  it("should keep the accepted geometries when an option is set to the value it already has", () => {
+    const state = tablesStep({ acceptedGeometries: [ACCEPT_RURAL] });
 
     const next = wizardReducer(state, { type: "optionsChanged", patch: { tolerance: OPTIONS.tolerance } });
 
     expect(next.acceptedGeometries).toEqual([ACCEPT_RURAL]);
-    expect(next.removalMarks).toEqual([500]);
   });
 
   it("should keep the accepted geometries when only the password changes, as the pair choices do", () => {
@@ -176,12 +144,12 @@ describe("clearing the decisions with the pair choices (AP-100, AP-101)", () => 
     expect(next.acceptedGeometries).toEqual([ACCEPT_RURAL]);
   });
 
-  it("should start with no accepted geometries and no removal marks when the wizard opens", () => {
+  it("should start with no accepted geometries and no removal state when the wizard opens", () => {
     const initial = initialWizardState();
 
     expect(initial.acceptedGeometries).toEqual([]);
     expect(initial.simulatedAcceptedGeometries).toBeNull();
-    expect(initial.removalMarks).toEqual([]);
+    expect(initial).not.toHaveProperty("removalMarks");
   });
 });
 
@@ -264,9 +232,9 @@ describe("simulation of the accepted geometries (AP-100)", () => {
   });
 });
 
-describe("start and persist requests carry the accepted geometries and never the removal marks (AP-100, AP-101)", () => {
+describe("start and persist requests carry the accepted geometries and nothing about removals (AP-100, AP-104)", () => {
   it("should send the accepted geometries in the start request options", () => {
-    const request = toStartRequest(decided({ removalMarks: [] }), { dryRun: true });
+    const request = toStartRequest(decided(), { dryRun: true });
 
     expect(request.options.acceptedGeometries).toEqual([ACCEPT_RURAL]);
   });
@@ -287,16 +255,16 @@ describe("start and persist requests carry the accepted geometries and never the
     expect(request.options).toEqual(toStartRequest(state, { dryRun: true }).options);
   });
 
-  it("should never send the removal marks in the start request, nor anywhere in its body", () => {
-    const request = toStartRequest(decided({ removalMarks: [500, 600] }), { dryRun: true });
+  it("should never send any removal field in the start request, nor anywhere in its body", () => {
+    const request = toStartRequest(decided(), { dryRun: true });
 
     expect(request).not.toHaveProperty("removalMarks");
     expect(request.options).not.toHaveProperty("removalMarks");
     expect(JSON.stringify(request)).not.toContain("removalMarks");
   });
 
-  it("should never send the removal marks in the persist request, even when no geometry is accepted", () => {
-    const state = decided({ acceptedGeometries: [], simulatedAcceptedGeometries: [], removalMarks: [500, 600] });
+  it("should never send any removal field in the persist request, even when no geometry is accepted", () => {
+    const state = decided({ acceptedGeometries: [], simulatedAcceptedGeometries: [] });
 
     const request = toPersistRequest(state, PLAN_ID);
 

@@ -18,6 +18,7 @@ import {
   GeometryDecisionState,
   geometryDecisionStateOf,
   isDecidableGeometry,
+  reviewableGeometryChangesOf,
 } from "./geometryAccepts";
 import { choicesWithinLimit } from "./pendingPairChoices";
 import { geometryReviewItemsOf, type OpenReview } from "./padronReviewItems";
@@ -29,14 +30,14 @@ import reportStyles from "./ActualizarPadronReport.module.css";
 
 const ICON_SIZE = 15;
 const NOTE = "Aceptar aplica la geometría del catastro aunque supere el umbral. Se aplica al volver a analizar con la selección; sin aceptar, queda pendiente.";
-const ACCEPT_ALL_LABEL = "Aceptar todos los listados";
+const ACCEPT_ALL_LABEL = "Aceptar todos";
 const REJECT_ALL_LABEL = "Rechazar todos";
 const MAP_HEADER = "Mapa";
 const DECISION_HEADER = "Decisión";
 const ACTIONS_HEADER = "Acciones";
 
 const capNoteOf = (accepted: number, total: number): string =>
-  `Aceptar todos los listados llega al límite de ${PAIR_LIST_LIMIT} geometrías aceptadas: acepta ${accepted} de ${total} pendientes listadas.`;
+  `Aceptar todos llega al límite de ${PAIR_LIST_LIMIT} geometrías aceptadas: acepta ${accepted} de ${total} pendientes listadas.`;
 
 const STATE_CLASS: Record<GeometryDecisionState, string> = {
   [GeometryDecisionState.ACCEPTED]: own.stateAccepted,
@@ -85,9 +86,13 @@ export interface GeometryChangesSectionProps {
 }
 
 /** The listed geometry changes with their acceptance (AP-100). Read-only without the selection callbacks. */
-export function GeometryChangesSection({ changes, summary, selection, onResimulate, canResimulate, onOpenReview }: GeometryChangesSectionProps) {
+export function GeometryChangesSection({ changes: allChanges, summary, selection, onResimulate, canResimulate, onOpenReview }: GeometryChangesSectionProps) {
   const { accepted, submitted, onAcceptMany, onRejectMany } = selection;
   const editable = onAcceptMany !== undefined && onRejectMany !== undefined;
+  const changes = useMemo(
+    () => reviewableGeometryChangesOf(allChanges, acceptKeySetOf(accepted), acceptKeySetOf(submitted)),
+    [allChanges, accepted, submitted],
+  );
   const states = useMemo(() => {
     const current = acceptKeySetOf(accepted);
     const shown = acceptKeySetOf(submitted);
@@ -103,6 +108,7 @@ export function GeometryChangesSection({ changes, summary, selection, onResimula
   const decidable = changes.filter((change, index) => isDecidableGeometry(states[index], change)).length;
   const acceptedListed = states.filter((state) => state === GeometryDecisionState.ACCEPTED).length;
   const openReview = (index: number) => onOpenReview(geometryReviewItemsOf(changes), index);
+  if (changes.length === 0) return null;
 
   return (
     <CollapsibleSection summary={summary}>

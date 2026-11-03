@@ -5,6 +5,7 @@ import {
   acceptableChoicesOf,
   choiceIndexOf,
   choicesWithinLimit,
+  pendingBulkOf,
   pendingChoiceStateIn,
   pendingChoiceStateOf,
   PendingChoiceState,
@@ -188,5 +189,35 @@ describe("pendingPairChoices", () => {
     it("should return no choices and not truncated when the incoming list is empty", () => {
       expect(choicesWithinLimit([], choicesOfKeys(0, LIMIT), LIMIT)).toEqual({ choices: [], truncated: false });
     });
+  });
+});
+
+describe("pendingBulkOf", () => {
+  it("splits open, accepted and blocked pairs and skips null choices", () => {
+    const current = [KEY_ONE_OLD_SEVEN];
+
+    const bulk = pendingBulkOf([KEY_ONE_OLD_SEVEN, KEY_TWO_OLD_EIGHT, KEY_THREE_OLD_SEVEN, null], current, PAIR_LIST_LIMIT);
+
+    expect(bulk.states).toEqual([
+      PendingChoiceState.ACCEPTED,
+      PendingChoiceState.OPEN,
+      PendingChoiceState.BLOCKED,
+      PendingChoiceState.NONE,
+    ]);
+    expect(bulk.acceptedChoices).toEqual([KEY_ONE_OLD_SEVEN]);
+    expect(bulk.acceptChoices).toEqual([KEY_TWO_OLD_EIGHT]);
+    expect(bulk.open).toBe(1);
+    expect(bulk.blocked).toBe(1);
+    expect(bulk.truncated).toBe(false);
+  });
+
+  it("accepts each old id once and flags truncation at the limit", () => {
+    const sameOldId = choiceOf({ number: "300", oldId: 8 });
+
+    const bulk = pendingBulkOf([KEY_ONE_OLD_SEVEN, KEY_TWO_OLD_EIGHT, sameOldId], [], 1);
+
+    expect(bulk.open).toBe(2);
+    expect(bulk.acceptChoices).toEqual([KEY_ONE_OLD_SEVEN]);
+    expect(bulk.truncated).toBe(true);
   });
 });
