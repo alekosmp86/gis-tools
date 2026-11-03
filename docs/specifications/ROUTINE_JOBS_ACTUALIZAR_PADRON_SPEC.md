@@ -576,9 +576,9 @@ shared one of `jobs/shared/addressMasterLink*` that stage 3 also uses, so both s
 
 - Deleting a destination row that anything still references, that a pair decision is still waiting on, or when the reference scan is blocked
   (AP-102 to AP-108); truncating, re-inserting or renumbering destination rows. Such a missing row is counted and listed only (AP-41). A
-  padrón is deleted automatically otherwise, with no user marking. Reassigning or subdividing the addresses of a deleted padrón is a later feature.
-- Unlinking or deleting the `addresses_master` row of a deleted padrón's `id_address_master` (AP-106): it is left exactly as it was,
-  orphaned only in the sense that nothing points to it from the destination any more.
+  padrón is deleted automatically otherwise, with no user marking. The one referenced padrón that is deleted is a `SUBDIVIDED` one (AP-96) whose
+  referencing rows are first reassigned to its new parts (AP-109 to AP-115). `REPLACED_ONE`, `PARTIAL` and `ORPHAN` padrones with references are
+  kept; reassigning addresses for them is out of scope.
 - Comparison histograms and per-department comparison counts. The user and the assistant compare by hand with queries on dev.
 - Creating or dropping the destination table, provinces or localities. Creating missing localities is a separate decision (see the monthly spec).
 - Accent-insensitive name matching, repair toggles, sequence reset options, preprod/prod runs, index creation, wiki pages beyond the user guide.
@@ -860,7 +860,7 @@ rest of this spec says. Because this is a mass destructive action it fails close
   report also carries `removedList` (the first `DETAIL_LIST_LIMIT` delete-eligible padrones: id, tipo, provincia, localidad, número). The digest
   of AP-89 gets one entry for the whole deletable set (tag `"D"`, its size and an md5 over its sorted ids), so a real run's plan-changed guard
   (AP-90) also covers the deletable set without a row per padrón. A warning says how many padrones are deleted ("N padrones sin fila de origen se
-  eliminarán / eliminados de <tabla> (sin direcciones asociadas)."), one how many are not and why, and the "sin fila de origen: se listan, no se
+  eliminarán / eliminados de <tabla> (sin direcciones asociadas o con direcciones reasignadas a sus partes)."), one how many are not and why, and the "sin fila de origen: se listan, no se
   modifican" warning counts only the missing padrones that are kept.
 - AP-106: Apply. A real run only, and its own statement, after `Aplicar cambios de padrones` (never a CTE inside that statement's WITH chain):
   by the time it runs, the inserts, geometry updates and applied pairs have already happened in the same transaction, so a row an applied pair
@@ -874,9 +874,8 @@ rest of this spec says. Because this is a mass destructive action it fails close
   digest, so they are not re-derived here. `DELETE FROM <destination> WHERE id IN (<temp ids whose refs.total is still zero>) RETURNING *`. An id
   whose refs.total is no longer zero is **skipped**, not a run failure: it is not deleted, it is counted in the real run's own
   `removalsSkipped` (reason `NOW_REFERENCED`), and every other write of the run (inserts, geometry updates, pairs, and the rest of the deletes)
-  commits normally. The count check (as AP-48): deleted rows equal the surviving delete-eligible count, or the whole transaction rolls back. No
-  other column or table is touched by this statement: `id_address_master`, if set, is left exactly as it was on the now-deleted row's
-  `addresses_master` record (Out of scope).
+  commits normally. The count check (as AP-48): deleted rows equal the surviving delete-eligible count, or the whole transaction rolls back. The
+  `addresses_master` rows of the deleted padrones are deleted by AP-114; no other column or table is touched by this statement.
   Revert: `REVERT_KIND.DELETED = "D"`. Because a deleted row's revert is a full `INSERT`, not a partial restore like `U`/`P`, the `padron_revert`
   temp table (`revertCapture.ts`) gets two more nullable columns, `id_province` and `id_address_master`, populated only for kind `D` rows; the
   `DELETE ... RETURNING` captures the whole row into them before COMMIT, inside the same capture pass as AP-69. The revert script (AP-70) gets one
@@ -888,8 +887,8 @@ rest of this spec says. Because this is a mass destructive action it fails close
   nothing (consistent with AP-88, which already reads no sequence-repair, apply, backup or address-master step).
 - AP-108: Report and UI. The target report carries `removed`, `removalsSkipped` (`{ total, byReason }`, the reasons of AP-103), `removedList` and,
   when the scan was blocked, `removalBlockedReason`. The review of an analysis and the result of a real run show a removal section, prominent
-  before the other lists of the destination: "Padrones que se eliminarán: R (sin direcciones asociadas)" (a real run: "Padrones eliminados: R
-  (sin direcciones asociadas)"), the `removalBlockedReason` when set, the not-deleted breakdown by reason ("No se elimina: tiene direcciones
+  before the other lists of the destination: "Padrones que se eliminarán: R (sin direcciones asociadas o con direcciones reasignadas a sus partes)" (a real run: "Padrones eliminados: R
+  (sin direcciones asociadas o con direcciones reasignadas a sus partes)"), the `removalBlockedReason` when set, the not-deleted breakdown by reason ("No se elimina: tiene direcciones
   asociadas", "... tiene un par sin resolver", "... no se pudieron verificar sus referencias"; a real run: "No eliminada: <motivo>") and a
   collapsible list of the removed padrones, "primeras N de M" when cut at `DETAIL_LIST_LIMIT`, with a state column (`Se eliminará` in an
   analysis, `Eliminada` in a real run). `ActualizarTargetSection` also adds the count row `Eliminadas` and the KPI card `Eliminadas`.
@@ -897,3 +896,73 @@ rest of this spec says. Because this is a mass destructive action it fails close
   (AP-79) adds `Padrones eliminados` to its displayed counts when the backup carries any kind-`D` rows. The CSV of AP-49 adds one `Eliminada` row
   per deleted padrón (the `removedList`; old key columns filled, `Id` the deleted destination id); a cut list gets the marker row of AP-49 like
   every other kind.
+
+## Reassignment of a subdivided padrón's addresses (real; AP-109 to AP-115)
+
+A destination padrón that two or more new padrones cover (`SUBDIVIDED`, AP-96) cannot be paired one to one (AP-64). Its referencing rows are moved to the
+new part nearest to each of them, then the old padrón and its `addresses_master` entry are deleted, all in the real run's transaction. Fail closed,
+like AP-102: whatever cannot be moved with certainty keeps the old padrón and everything that points to it.
+
+- AP-109: Scope. A missing padrón is reassignable when it is `SUBDIVIDED` (AP-96, computed in the analysis and in the persist classify alike, so the
+  set is identical), it is not held back by a pair (`STILL_PAIRABLE`, AP-103 b), the reference scan is not blocked (AP-102), it has at least one
+  reference (refs.total > 0) and every found referencing table is reassignable (AP-110). `REPLACED_ONE` (one part covers 90 % or more: the pair of
+  AP-64 updates it), `PARTIAL` and `ORPHAN` are never reassigned. The receivers of a padrón are its `parts` of AP-96 (new padrones of the same
+  province covering at least `REPLACEMENT_PART_MIN_PCT` of its area), after the apply: the rows this run's insert added.
+- AP-110: Reassignable table and where the point comes from. A table found by AP-102 is reassignable when the catalog (`pg_index.indisprimary`) gives
+  it a primary key of exactly one column and a point source exists, in this order: (1) the table has exactly one `geometry` or `geography` column of
+  its own; (2) otherwise a fixed entry of `REFERENCE_POINT_SOURCES` in `constants.ts` names a companion table in the same schema and the join
+  (`access_point` takes its point from `address.geometry`, joined `address.id = access_point.id`: the schema has no foreign key between them);
+  the companion must itself have exactly one geometry column and a one-column primary key, read from the catalog like (1). A table with neither source,
+  a composite or missing primary key, or several own geometry columns and no entry makes only the padrones it references `NOT_REASSIGNABLE`
+  (kept, listed, the table named); it never blocks the other padrones. The point of a row is its geometry when it is a point, otherwise
+  `ST_PointOnSurface`, transformed to the destination geometry's SRID when the SRIDs differ. A referencing row whose point is missing (no
+  companion row, or a NULL or empty geometry) does not block its padrón: it is assigned by the fallback of AP-111.
+- AP-112: Classification and digest. The classify statement adds `reassigned` (the referencing rows the real run will move, over every table) and
+  `subdividedDeleted` (the padrones it will then delete), the new removal reason `NOT_REASSIGNABLE` (precedence in AP-103: `STILL_PAIRABLE`, then,
+  for a padrón with references, `NOT_REASSIGNABLE` when it is `SUBDIVIDED` but not reassignable, else `NOW_REFERENCED`, then `UNVERIFIED`), and one
+  digest entry (tag `"S"`, count and md5 of the sorted padrón ids and of the reference counts per table), so AP-90's plan-changed guard covers the
+  reassignment set. The analysis computes the same numbers against the staging candidates that the insert would add; it writes nothing.
+- AP-113: Apply. A real run only, two statements after `Aplicar cambios de padrones` (the parts exist by then) and before the delete statement of
+  AP-106. The apply statement keeps the ids it inserted in a session temp table so the receivers are exactly this run's inserts. The reassign
+  statement updates `id_padron` of every referencing row of every found table to its nearest receiver, captures each old value for the revert
+  (kind `R`: table, primary key value, old `id_padron`), and adds the padrón ids whose references reached zero to `padron_delete_ids` (AP-106). Its
+  count check, as AP-48: rows moved equal the rows counted by the classification, or the whole transaction rolls back.
+- AP-114: Master entry. When a padrón is deleted (AP-106; the subdivided ones of this section and the unreferenced ones alike), the
+  `addresses_master` row its `id_address_master` points to is deleted in the same step, unless another destination row still carries that
+  `id_address_master`. The address master table is assumed to be defined (the stage's address master option); when it is not, a subdivided padrón
+  is `NOT_REASSIGNABLE` and an unreferenced padrón is deleted without any master change. A foreign-key violation on that delete fails the
+  transaction. Revert, kind `M`: the master row is captured as `to_jsonb(row)` and the script restores it with `jsonb_populate_record` before the
+  `D` inserts; kind `R` is restored after them.
+- AP-115: Planned steps and report. A real run adds the step `Reasignar direcciones de padrones subdivididos` right after the pair apply step and
+  before `Eliminar padrones faltantes sin referencias`. The target report adds `reassigned` and, per table, how many; the removal section of AP-108
+  says "Se eliminará (N direcciones pasan a sus partes)" for a subdivided padrón, and "No se elimina: no se pueden reasignar sus direcciones
+  (<tabla>: <motivo>)" for `NOT_REASSIGNABLE`. The persist panel summary (AP-91) adds ", D direcciones reasignadas" when D is greater than 0.
+  AP-79's backup counts add `Direcciones reasignadas` and `Entradas de direcciones maestras eliminadas`; AP-72's verification checks that the
+  `R` and `M` lines written equal the moved and deleted counts. The revert script restores in this order: `M`, then `D`, then `R`.
+- AP-111: Assignment. Each referencing row with a point goes to the receiver nearest to it (`ST_Distance`, zero when contained; a tie goes to the
+  lowest part id). Nearest wins also when the point is in no part or on a boundary shared by two. A row without a point (AP-110) goes to the receiver
+  covering the largest share of the old padrón (AP-96 `parts` order), a tie to the lowest id; the count of such rows is reported
+  (`reassignedWithoutPoint`). The padrón's references become zero, so AP-103 (c) holds for it afterwards.
+- AP-112: Classification and digest. The classify statement adds `reassigned` (the referencing rows the real run will move, over every table) and
+  `subdividedDeleted` (the padrones it will then delete), the new removal reason `NOT_REASSIGNABLE` (precedence in AP-103: `STILL_PAIRABLE`, then,
+  for a padrón with references, `NOT_REASSIGNABLE` when it is `SUBDIVIDED` but not reassignable, else `NOW_REFERENCED`, then `UNVERIFIED`), and one
+  digest entry (tag `"S"`, count and md5 of the sorted padrón ids and of the reference counts per table), so AP-90's plan-changed guard covers the
+  reassignment set. The analysis computes the same numbers against the staging candidates that the insert would add; it writes nothing.
+- AP-113: Apply. A real run only, two statements after `Aplicar cambios de padrones` (the parts exist by then) and before the delete statement of
+  AP-106. The apply statement keeps the ids it inserted in a session temp table so the receivers are exactly this run's inserts. The reassign
+  statement updates `id_padron` of every referencing row of every found table to its nearest receiver, captures each old value for the revert
+  (kind `R`: table, primary key value, old `id_padron`), and adds the padrón ids whose references reached zero to `padron_delete_ids` (AP-106). Its
+  count check, as AP-48: rows moved equal the rows counted by the classification, or the whole transaction rolls back.
+- AP-114: Master entry. When a padrón is deleted (AP-106; the subdivided ones of this section and the unreferenced ones alike), the
+  `addresses_master` row its `id_address_master` points to is deleted in the same step, unless another destination row still carries that
+  `id_address_master`. The address master table is assumed to be defined (the stage's address master option); when it is not, a subdivided padrón
+  is `NOT_REASSIGNABLE` and an unreferenced padrón is deleted without any master change. A foreign-key violation on that delete fails the
+  transaction. Revert, kind `M`: the master row is captured as `to_jsonb(row)` and the script restores it with `jsonb_populate_record` before the
+  `D` inserts; kind `R` is restored after them.
+- AP-115: Planned steps and report. A real run adds the step `Reasignar direcciones de padrones subdivididos` right after the pair apply step and
+  before `Eliminar padrones faltantes sin referencias`. The target report adds `reassigned` and, per table, how many; the removal section of AP-108
+  says "Se eliminará (N direcciones pasan a sus partes)" for a subdivided padrón, and "No se elimina: no se pueden reasignar sus direcciones
+  (<tabla>: <motivo>)" for `NOT_REASSIGNABLE`. The persist panel summary (AP-91) adds ", D direcciones reasignadas" when D is greater than 0.
+  AP-79's backup counts add `Direcciones reasignadas` and `Entradas de direcciones maestras eliminadas`; AP-72's verification checks that the
+  `R` and `M` lines written equal the moved and deleted counts. The revert script restores in this order: `M`, then `D`, then `R`.
+

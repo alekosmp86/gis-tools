@@ -155,13 +155,17 @@ La clasificación es informativa: el análisis no borra, no modifica ni inserta 
 
 ## Eliminación automática de padrones
 
-Al guardar, la carga real elimina los padrones que ya no están en el catastro, no tienen direcciones asociadas (ninguna tabla del esquema los referencia por `id_padron`) y no esperan una decisión de par. No hay nada que marcar. El análisis no borra nada: muestra la sección **Padrones que se eliminarán: N (sin direcciones asociadas)**, con la lista (hasta 500) y cuántos no se eliminan y por qué (**tiene direcciones asociadas**, **tiene un par sin resolver**). El resumen del botón de guardar incluye **N padrones eliminados**.
+Al guardar, la carga real elimina los padrones que ya no están en el catastro, no tienen direcciones asociadas (ninguna tabla del esquema los referencia por `id_padron`) o las tenían y se reasignaron a sus partes (ver abajo), y no esperan una decisión de par. No hay nada que marcar. El análisis no borra nada: muestra la sección **Padrones que se eliminarán: N (sin direcciones asociadas o con direcciones reasignadas a sus partes)**, con la lista (hasta 500) y cuántos no se eliminan y por qué (**tiene direcciones asociadas**, **tiene un par sin resolver**). El resumen del botón de guardar incluye **N padrones eliminados**.
 
 En la ventana del mapa y en la columna **Eliminación** de la tabla, cada padrón muestra **Se eliminará**, **No se elimina: tiene N direcciones asociadas** o **No se elimina: tiene un par sin resolver**.
 
 Si el análisis no encuentra ninguna tabla que referencie padrones, o el usuario de la base no puede leer alguna, no se elimina ningún padrón y se muestra una advertencia con el motivo; el resto de la actualización sigue igual. Si una referencia aparece entre el análisis y el guardado, ese padrón no se elimina y se cuenta como no eliminado.
 
-El respaldo para revertir incluye los padrones eliminados (se vuelven a insertar). La dirección maestra de un padrón eliminado no se modifica.
+### Reasignación de direcciones de padrones subdivididos
+
+Si un padrón faltante está subdividido (sus partes nuevas lo cubren) y todas las tablas que lo referencian tienen clave primaria de una sola columna, la carga real reasigna cada fila referenciante a la parte nueva más cercana a su punto (cero si lo contiene; el empate va a la parte de menor id) y luego elimina el padrón. El análisis muestra cuántas filas se reasignarán, por tabla. Los demás padrones con referencias siguen sin eliminarse.
+
+El respaldo para revertir incluye los padrones eliminados (se vuelven a insertar) y las filas reasignadas. Al eliminar un padrón también se borra su dirección maestra, salvo que otra fila de destino la siga usando.
 
 ## Aceptar las geometrías pendientes
 
