@@ -7,7 +7,7 @@ import styles from "./PadronReview.module.css";
 
 const PERCENT_DECIMAL_PLACES = 1;
 const TITLE = "Padrón que ya no está en el catastro";
-const AUTOMATIC_NOTE = "Los padrones sin direcciones asociadas ni par pendiente se eliminan al guardar; no hay nada que decidir aquí.";
+const AUTOMATIC_NOTE = "Los padrones sin direcciones asociadas o con direcciones reasignadas a sus partes se eliminan al guardar (salvo con par pendiente); no hay nada que decidir aquí.";
 
 export interface MissingDecisionPanelProps {
   padron: MissingPadronView;

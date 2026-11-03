@@ -29,11 +29,16 @@ export interface ActualizarBackupSectionProps {
   backup: ActualizarPadronBackup;
 }
 
+const optionalRowOf = (label: string, value: number | undefined): ReportRowListRow[] =>
+  value !== undefined && value > 0 ? [{ label, value }] : [];
+
 const countRowsOf = (backup: ActualizarPadronBackup): ReportRowListRow[] => [
   { label: "Geometrías actualizadas", value: backup.counts.updated },
   { label: "Claves actualizadas", value: backup.counts.paired },
   { label: "Padrones insertados", value: backup.counts.inserted },
   ...(backup.counts.deleted > 0 ? [{ label: "Padrones eliminados", value: backup.counts.deleted }] : []),
+  ...optionalRowOf("Direcciones reasignadas", backup.counts.reassigned),
+  ...optionalRowOf("Entradas de direcciones maestras eliminadas", backup.counts.masterDeleted),
   { label: "Padrones sin dirección maestra antes del enlace", value: backup.counts.addressMasterRows },
 ];
 

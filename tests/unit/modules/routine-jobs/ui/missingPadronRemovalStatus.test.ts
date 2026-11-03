@@ -148,3 +148,58 @@ describe("refsTextOf (AP-96)", () => {
     expect(text.endsWith("carto.b: 1")).toBe(true);
   });
 });
+
+describe("missing padron reassignment status (AP-115)", () => {
+  it("should say how many addresses move to the parts for a subdivided padron that will be removed while still referenced", () => {
+    const padron = missingPadronOf({
+      class: REPLACEMENT_CLASS.SUBDIVIDED,
+      removalReason: null,
+      refs: { total: 7, byTable: { "carto.access_point": 7 } },
+    });
+
+    expect(statusOf(padron)).toBe("Se eliminará (7 direcciones pasan a sus partes)");
+  });
+
+  it("should use the singular form for exactly one address", () => {
+    const padron = missingPadronOf({
+      class: REPLACEMENT_CLASS.SUBDIVIDED,
+      removalReason: null,
+      refs: { total: 1, byTable: { "carto.access_point": 1 } },
+    });
+
+    expect(statusOf(padron)).toBe("Se eliminará (1 dirección pasa a sus partes)");
+  });
+
+  it("should keep the plain Se eliminará text when the padron has no references or the refs are absent", () => {
+    expect(statusOf(missingPadronOf({ removalReason: null, refs: { total: 0, byTable: {} } }))).toBe("Se eliminará");
+    expect(statusOf(missingPadronOf({ removalReason: null, refs: undefined as unknown as MissingPadron["refs"] }))).toBe("Se eliminará");
+  });
+
+  it("should still flag a reassigned subdivided padron as removable", () => {
+    const padron = missingPadronOf({ class: REPLACEMENT_CLASS.SUBDIVIDED, removalReason: null, refs: { total: 2, byTable: { "carto.a": 2 } } });
+
+    expect(missingReviewViewOf(targetOf([padron]))?.rows[0].willBeRemoved).toBe(true);
+  });
+
+  it("should name each table and its reason for a padron that is not reassignable", () => {
+    const padron = missingPadronOf({
+      class: REPLACEMENT_CLASS.SUBDIVIDED,
+      removalReason: REMOVAL_SKIP_REASON.NOT_REASSIGNABLE,
+      reassignBlockers: { "carto.a": "sin clave primaria de una sola columna", "carto.b": "tiene filas sin geometría" },
+    });
+
+    expect(statusOf(padron)).toBe(
+      "No se elimina: no se pueden reasignar sus direcciones (carto.a: sin clave primaria de una sola columna; carto.b: tiene filas sin geometría)"
+    );
+    expect(missingReviewViewOf(targetOf([padron]))?.rows[0].willBeRemoved).toBe(false);
+  });
+
+  it("should read the generic not-reassignable text when no blocker is listed (an older result)", () => {
+    expect(statusOf(missingPadronOf({ removalReason: REMOVAL_SKIP_REASON.NOT_REASSIGNABLE }))).toBe(
+      "No se elimina: no se pueden reasignar sus direcciones"
+    );
+    expect(statusOf(missingPadronOf({ removalReason: REMOVAL_SKIP_REASON.NOT_REASSIGNABLE, reassignBlockers: {} }))).toBe(
+      "No se elimina: no se pueden reasignar sus direcciones"
+    );
+  });
+});

@@ -16,7 +16,7 @@ import sharedStyles from "./CargarPadronesReport.module.css";
 const AREA_DECIMAL_PLACES = 1;
 const PERCENT_DECIMAL_PLACES = 1;
 const COORDINATE_DECIMAL_PLACES = 6;
-const INFO_TEXT = "El análisis no borra nada: al guardar se eliminan los padrones sin direcciones asociadas ni par sin resolver.";
+const INFO_TEXT = "El análisis no borra nada: al guardar se eliminan los padrones sin direcciones asociadas o con direcciones reasignadas a sus partes, salvo los que tengan un par sin resolver.";
 const REAL_RUN_NOTICE = "La clasificación de padrones que ya no están en el catastro se muestra en el análisis previo.";
 
 const MISSING_COLUMNS: TableColumn<MissingPadronView>[] = [

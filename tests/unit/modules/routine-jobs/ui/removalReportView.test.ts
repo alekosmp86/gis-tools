@@ -33,9 +33,9 @@ const targetOf = (overrides: Partial<ActualizarTargetReport> = {}): ActualizarTa
   ...overrides,
 });
 
-const skippedOf = (stillPairable: number, nowReferenced: number, unverified: number): RemovalSkippedReport => ({
-  total: stillPairable + nowReferenced + unverified,
-  byReason: { STILL_PAIRABLE: stillPairable, NOW_REFERENCED: nowReferenced, UNVERIFIED: unverified },
+const skippedOf = (stillPairable: number, nowReferenced: number, unverified: number, notReassignable = 0): RemovalSkippedReport => ({
+  total: stillPairable + nowReferenced + notReassignable + unverified,
+  byReason: { STILL_PAIRABLE: stillPairable, NOW_REFERENCED: nowReferenced, NOT_REASSIGNABLE: notReassignable, UNVERIFIED: unverified },
 });
 
 const removedOf = (id: number): PadronRemoved => ({
@@ -79,7 +79,7 @@ describe("removalViewOf (AP-108)", () => {
     it("should headline the planned count with the no-references suffix and label the rows Se eliminará", () => {
       const view = removalViewOf(targetOf({ removed: 3, removedList: [removedOf(1), removedOf(2), removedOf(3)] }), true);
 
-      expect(view?.headline).toBe("Padrones que se eliminarán: 3 (sin direcciones asociadas)");
+      expect(view?.headline).toBe("Padrones que se eliminarán: 3 (sin direcciones asociadas o con direcciones reasignadas a sus partes)");
       expect(view?.statusLabel).toBe("Se eliminará");
       expect(view?.rows).toHaveLength(3);
     });
@@ -105,7 +105,7 @@ describe("removalViewOf (AP-108)", () => {
     it("should headline the deleted count and label the rows Eliminada", () => {
       const view = removalViewOf(targetOf({ removed: 2, removedList: [removedOf(1), removedOf(2)] }), false);
 
-      expect(view?.headline).toBe("Padrones eliminados: 2 (sin direcciones asociadas)");
+      expect(view?.headline).toBe("Padrones eliminados: 2 (sin direcciones asociadas o con direcciones reasignadas a sus partes)");
       expect(view?.statusLabel).toBe("Eliminada");
     });
 
@@ -122,7 +122,7 @@ describe("removalViewOf (AP-108)", () => {
     it("should still show the held-back list when every padron was kept, with a zero headline", () => {
       const view = removalViewOf(targetOf({ removed: 0, removalsSkipped: skippedOf(0, 3, 0) }), false);
 
-      expect(view?.headline).toBe("Padrones eliminados: 0 (sin direcciones asociadas)");
+      expect(view?.headline).toBe("Padrones eliminados: 0 (sin direcciones asociadas o con direcciones reasignadas a sus partes)");
       expect(view?.rows).toEqual([]);
     });
   });
@@ -149,5 +149,65 @@ describe("removalViewOf (AP-108)", () => {
 
       expect(view?.listSummary).toBe(`Padrones que se eliminarán (${DETAIL_LIST_LIMIT})`);
     });
+  });
+});
+
+describe("removalViewOf reassignment (AP-115)", () => {
+  it("should add the not-reassignable reason, in the second position of the fixed order", () => {
+    const view = removalViewOf(targetOf({ removed: 1, removalsSkipped: skippedOf(1, 1, 1, 2) }), true);
+
+    expect(view?.notRemoved).toEqual([
+      { label: "No se elimina: tiene direcciones asociadas", value: 1 },
+      { label: "No se elimina: no se pueden reasignar sus direcciones", value: 2 },
+      { label: "No se elimina: tiene un par sin resolver", value: 1 },
+      { label: "No se elimina: no se pudieron verificar sus referencias", value: 1 },
+    ]);
+  });
+
+  it("should word the not-reassignable reason with No eliminada in a real run", () => {
+    const view = removalViewOf(targetOf({ removed: 0, removalsSkipped: skippedOf(0, 0, 0, 1) }), false);
+
+    expect(view?.notRemoved).toEqual([{ label: "No eliminada: no se pueden reasignar sus direcciones", value: 1 }]);
+  });
+
+  it("should show the section when only not-reassignable padrones exist", () => {
+    expect(removalViewOf(targetOf({ removed: 0, removalsSkipped: skippedOf(0, 0, 0, 3) }), true)).not.toBeNull();
+  });
+
+  it("should have no reassigned note when no address moves or the field is absent", () => {
+    expect(removalViewOf(targetOf({ removed: 1, reassigned: 0 }), true)?.reassignedNote).toBeNull();
+    expect(removalViewOf(targetOf({ removed: 1 }), true)?.reassignedNote).toBeNull();
+  });
+
+  it("should word the planned note with the total and each table", () => {
+    const view = removalViewOf(targetOf({ removed: 1, reassigned: 5, reassignedByTable: { "carto.a": 3, "carto.b": 2 } }), true);
+
+    expect(view?.reassignedNote).toBe("Direcciones que pasan a la parte más cercana de su padrón subdividido: 5 (carto.a: 3; carto.b: 2)");
+  });
+
+  it("should word the done note in the past and omit the table list when there is none", () => {
+    const view = removalViewOf(targetOf({ removed: 1, reassigned: 4 }), false);
+
+    expect(view?.reassignedNote).toBe("Direcciones reasignadas a la parte más cercana de su padrón subdividido: 4");
+  });
+
+  it("should append the without-point count when some rows had no point", () => {
+    const withTables = removalViewOf(targetOf({ removed: 1, reassigned: 5, reassignedByTable: { "carto.a": 5 }, reassignedWithoutPoint: 2 }), true);
+    const withoutTables = removalViewOf(targetOf({ removed: 1, reassigned: 4, reassignedWithoutPoint: 1 }), false);
+
+    expect(withTables?.reassignedNote).toBe(
+      "Direcciones que pasan a la parte más cercana de su padrón subdividido: 5 (carto.a: 5); 2 sin punto, a la parte de mayor cobertura"
+    );
+    expect(withoutTables?.reassignedNote).toBe(
+      "Direcciones reasignadas a la parte más cercana de su padrón subdividido: 4; 1 sin punto, a la parte de mayor cobertura"
+    );
+  });
+
+  it("should not mention points when the without-point count is zero or absent", () => {
+    const zero = removalViewOf(targetOf({ removed: 1, reassigned: 4, reassignedWithoutPoint: 0 }), true);
+    const absent = removalViewOf(targetOf({ removed: 1, reassigned: 4 }), true);
+
+    expect(zero?.reassignedNote).not.toContain("sin punto");
+    expect(absent?.reassignedNote).not.toContain("sin punto");
   });
 });

@@ -82,6 +82,20 @@ const referencedTextOf = (refs: MissingPadronRefs | undefined): string => {
   return `${NOT_REMOVED_PREFIX}tiene ${total} ${noun} (${refsTextOf(refs)})`;
 };
 
+const NOT_REASSIGNABLE_TEXT = `${NOT_REMOVED_PREFIX}no se pueden reasignar sus direcciones`;
+
+/** AP-115: a padrón that will be removed while still referenced is a subdivided one: its addresses move to its parts. */
+function willBeRemovedTextOf(padron: MissingPadron): string {
+  const moved = padron.refs?.total ?? 0;
+  if (moved === 0) return WILL_BE_REMOVED_TEXT;
+  return `${WILL_BE_REMOVED_TEXT} (${moved} ${moved === 1 ? "dirección pasa" : "direcciones pasan"} a sus partes)`;
+}
+
+function notReassignableTextOf(padron: MissingPadron): string {
+  const blockers = Object.entries(padron.reassignBlockers ?? {}).map(([table, reason]) => `${table}: ${reason}`);
+  return blockers.length === 0 ? NOT_REASSIGNABLE_TEXT : `${NOT_REASSIGNABLE_TEXT} (${blockers.join(LIST_SEPARATOR)})`;
+}
+
 /** AP-101: the status is read from the server's reason for the padrón, never decided in the browser. */
 function removalStatusOf(padron: MissingPadron): string {
   switch (padron.removalReason) {
@@ -89,10 +103,12 @@ function removalStatusOf(padron: MissingPadron): string {
       return PAIR_OPEN_TEXT;
     case REMOVAL_SKIP_REASON.NOW_REFERENCED:
       return referencedTextOf(padron.refs);
+    case REMOVAL_SKIP_REASON.NOT_REASSIGNABLE:
+      return notReassignableTextOf(padron);
     case REMOVAL_SKIP_REASON.UNVERIFIED:
       return UNVERIFIED_TEXT;
     case null:
-      return WILL_BE_REMOVED_TEXT;
+      return willBeRemovedTextOf(padron);
   }
 }
 

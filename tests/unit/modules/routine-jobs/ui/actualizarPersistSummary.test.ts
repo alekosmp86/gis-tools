@@ -38,5 +38,27 @@ describe("actualizarPersistSummary", () => {
 
       expect(summary).toBe("Se aplicarán: 0 padrones nuevos, 0 pares actualizados, 0 geometrías actualizadas, 7 padrones eliminados.");
     });
+
+    it("should add the reassigned addresses before the final period when there are some", () => {
+      const summary = persistSummaryOf({ inserted: 2, pairsApplied: 0, updated: 0, removed: 3, reassigned: 5 });
+
+      expect(summary).toBe(
+        "Se aplicarán: 2 padrones nuevos, 0 pares actualizados, 0 geometrías actualizadas, 3 padrones eliminados, 5 direcciones reasignadas."
+      );
+    });
+
+    it("should use the singular noun for exactly one reassigned address", () => {
+      const summary = persistSummaryOf({ inserted: 0, pairsApplied: 0, updated: 0, removed: 1, reassigned: 1 });
+
+      expect(summary.endsWith("1 padrón eliminado, 1 dirección reasignada.")).toBe(true);
+    });
+
+    it("should leave the reassigned text out when the count is zero or absent (an older result)", () => {
+      const zero = persistSummaryOf({ inserted: 1, pairsApplied: 1, updated: 1, removed: 1, reassigned: 0 });
+      const absent = persistSummaryOf({ inserted: 1, pairsApplied: 1, updated: 1, removed: 1 });
+
+      expect(zero).toBe(absent);
+      expect(zero).not.toContain("reasignad");
+    });
   });
 });
