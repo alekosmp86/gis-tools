@@ -369,3 +369,30 @@ describe("parseActualizarStartRequest", () => {
     });
   });
 });
+
+describe("parseActualizarStartRequest accept all geometries (AP-116)", () => {
+  const parse = (body: Body) => parseActualizarStartRequest(body as Parameters<typeof parseActualizarStartRequest>[0]);
+
+  const withFlag = (acceptAllGeometries: unknown): Body =>
+    startBody({ options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false, acceptAllGeometries } });
+
+  it("should default the flag to false when the request omits it", () => {
+    expect(parse(startBody()).options.acceptAllGeometries).toBe(false);
+  });
+
+  it("should map true to true", () => {
+    expect(parse(withFlag(true)).options.acceptAllGeometries).toBe(true);
+  });
+
+  it("should map false to false", () => {
+    expect(parse(withFlag(false)).options.acceptAllGeometries).toBe(false);
+  });
+
+  it.each([
+    ["a text value", "true"],
+    ["a number", 1],
+    ["null", null],
+  ])("should reject the flag sent as %s with the Spanish message naming acceptAllGeometries", (_label, value) => {
+    expectRejected(withFlag(value), /^El campo acceptAllGeometries debe ser verdadero o falso\.$/);
+  });
+});

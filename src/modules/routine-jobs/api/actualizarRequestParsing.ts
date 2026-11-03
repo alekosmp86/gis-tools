@@ -52,6 +52,11 @@ function readGeometryAreaThreshold(options: JsonRecord): number {
   return value;
 }
 
+function readAcceptAllGeometries(options: JsonRecord): boolean {
+  if (options.acceptAllGeometries === undefined) return false;
+  return readBoolean(options, "acceptAllGeometries");
+}
+
 function parseOptions(body: JsonRecord, typeTable: string | undefined): ActualizarPadronOptions {
   const options = readRecord(body, "options");
   const shared = {
@@ -61,6 +66,7 @@ function parseOptions(body: JsonRecord, typeTable: string | undefined): Actualiz
     linkAddressMaster: readBoolean(options, "linkAddressMaster"),
     pairChoices: readPairChoices(options),
     acceptedGeometries: readAcceptedGeometries(options),
+    acceptAllGeometries: readAcceptAllGeometries(options),
   };
   return typeTable === undefined ? shared : { ...shared, localityType: readLocalityType(options) };
 }

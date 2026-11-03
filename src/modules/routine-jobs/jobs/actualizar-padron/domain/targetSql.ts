@@ -288,7 +288,7 @@ function changedGeometryCte(options: ActualizarPadronOptions): string {
     `${areaRatioOf(plannedOf("target_geometry"), plannedOf(CANDIDATE_GEOMETRY))} AS ${q(CHANGED_COLUMN.AREA_RATIO)},`,
     `ST_Area(${plannedOf("target_geometry")}) AS ${q(CHANGED_COLUMN.OLD_AREA)},`,
     `ST_Area(${plannedOf(CANDIDATE_GEOMETRY)}) AS ${q(CHANGED_COLUMN.NEW_AREA)},`,
-    `${ACCEPT_ALIAS}.${q(DESTINATION_COLUMN.NUMBER)} IS NOT NULL AS ${q(CHANGED_COLUMN.ACCEPTED)}`,
+    `(${options.acceptAllGeometries === true ? "true OR " : ""}${ACCEPT_ALIAS}.${q(DESTINATION_COLUMN.NUMBER)} IS NOT NULL) AS ${q(CHANGED_COLUMN.ACCEPTED)}`,
     `FROM ${q(CTE_TARGET.PLANNED)} AS ${PLANNED_ALIAS} ${acceptsJoinSql(PLANNED_ALIAS)} WHERE ${classIs(MATCH_CLASS.CHANGED)}`,
   ].join(" ");
   const withinThreshold = `CASE WHEN ${changedOf(PAIR_COLUMN.TARGET_GEOMETRY)} IS NULL THEN true ELSE COALESCE(${changedOf(CHANGED_COLUMN.AREA_RATIO)} < ${options.geometryAreaThreshold}, false) END`;

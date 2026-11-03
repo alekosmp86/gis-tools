@@ -1983,3 +1983,86 @@ describe("actualizar-padron deletion at scale (AP-106, AP-108)", () => {
     expect(deleteRow.removed_list as unknown[]).toHaveLength(DETAIL_LIST_LIMIT);
   });
 });
+
+describe("actualizar-padron accept-all geometries (AP-116, AP-117)", () => {
+  let database: PGlite;
+
+  beforeEach(async () => {
+    database = new PGlite();
+    await database.exec(RECTANGLE_STUBS_SQL);
+    await database.exec(SCHEMA_SQL);
+    await database.exec(PAIR_REFERENCE_SQL);
+    await database.exec(`
+      INSERT INTO carto.padron (number, type_padron, id_cadastral_locality, id_province, geometry) VALUES
+        ('100', 'URBANO', 10, 1, '100:100'),
+        ('200', 'URBANO', 10, 1, '100:100'),
+        ('300', 'URBANO', 10, 1, '100:100');
+      INSERT INTO stg.padron_staging (unidadcat, nomdepto, nomloccat, padron, geom) VALUES
+        ('URBANO', 'Montevideo', 'centro', 100, '102:100'),
+        ('URBANO', 'Montevideo', 'centro', 200, '107:100'),
+        ('URBANO', 'Montevideo', 'centro', 300, '150:100');
+    `);
+  }, SETUP_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  });
+
+  const everyOf = (base: ActualizarPadronOptions = GATE_OPTIONS): ActualizarPadronOptions => ({ ...base, acceptAllGeometries: true });
+  const classifyOf = async (options: ActualizarPadronOptions): Promise<Row> =>
+    (await database.query<Row>(buildPadronClassifySql(LAYOUTS, options))).rows[0];
+
+  it("should leave no geometry pending and count the old pending rows as updates when the flag is on", async () => {
+    const off = await classifyOf(GATE_OPTIONS);
+
+    const { classification, apply } = await runStage(database, everyOf());
+    const after = await readPadron(database);
+    const changes = classification.geometry_changes as Array<{ number: string; state: string }>;
+
+    expect(Number(off.geometry_pending)).toBe(2);
+    expect(Number(classification.geometry_pending)).toBe(0);
+    expect(Number(classification.updates)).toBe(Number(off.updates) + Number(off.geometry_pending));
+    expect(Number(apply.updated)).toBe(3);
+    expect(changes.every((change) => change.state === "APPLIED")).toBe(true);
+    expect(after.map((row) => [row.number, row.geometry])).toEqual([
+      ["100", "102:100"],
+      ["200", "107:100"],
+      ["300", "150:100"],
+    ]);
+  });
+
+  it("should change the plan digest relative to the flag off", async () => {
+    expect(String((await classifyOf(everyOf())).plan_digest)).not.toBe(String((await classifyOf(GATE_OPTIONS)).plan_digest));
+  });
+
+  it("should give the analysis and the persist classify the same counts and plan digest with the flag on", async () => {
+    const report = await classifyOf(everyOf());
+    const persist = (await database.query<Row>(buildPadronClassifySql(LAYOUTS, everyOf(), NO_REFERENCE_SCAN, { report: false }))).rows[0];
+
+    for (const key of CLASSIFY_FIGURE_KEYS) {
+      expect(String(persist[key]), key).toBe(String(report[key]));
+    }
+    expect(String(persist.plan_digest)).toBe(String(report.plan_digest));
+    expect(Number(report.geometry_pending)).toBe(0);
+  });
+
+  it("should apply nothing and write no geometry when the flag is on but updateGeometries is off", async () => {
+    const before = await readPadron(database);
+
+    const { classification, apply } = await runStage(database, everyOf({ ...GATE_OPTIONS, updateGeometries: false }));
+    const after = await readPadron(database);
+
+    expect(Number(classification.updates)).toBe(0);
+    expect(Number(apply.updated)).toBe(0);
+    expect(after).toEqual(before);
+  });
+
+  it("should give the same counts with the flag on whether or not a key is also accepted", async () => {
+    const plain = await classifyOf(everyOf());
+    const combined = await classifyOf(everyOf(withAccepted([ACCEPTED_URBANO_200])));
+
+    expect(Number(combined.updates)).toBe(Number(plain.updates));
+    expect(Number(combined.geometry_pending)).toBe(0);
+    expect(Number(combined.geometry_accepts_unapplied)).toBe(0);
+  });
+});

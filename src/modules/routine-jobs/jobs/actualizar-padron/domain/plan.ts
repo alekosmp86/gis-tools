@@ -61,6 +61,7 @@ export function paramsFingerprintOf(params: ActualizarPadronParams): string {
     linkAddressMaster: params.options.linkAddressMaster,
     pairChoices: canonicalChoicesOf(params.options.pairChoices),
     acceptedGeometries: canonicalAcceptsOf(params.options.acceptedGeometries ?? []),
+    acceptAllGeometries: params.options.acceptAllGeometries === true,
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }

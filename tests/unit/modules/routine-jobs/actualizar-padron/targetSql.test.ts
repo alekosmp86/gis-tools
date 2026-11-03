@@ -323,3 +323,30 @@ describe("actualizar-padron target SQL guards", () => {
     });
   });
 });
+
+describe("accept-all geometries in the generated SQL (AP-116)", () => {
+  const acceptAll = (base: ActualizarPadronOptions): ActualizarPadronOptions => ({ ...base, acceptAllGeometries: true });
+  const ACCEPTED_ALWAYS = /\(true OR [^)]*IS NOT NULL\) AS "accepted"/;
+  const builders: Array<[string, (options: ActualizarPadronOptions) => string]> = [
+    ["classify", (options) => buildPadronClassifySql(layouts, options)],
+    ["apply", (options) => buildPadronApplySql(layouts, options)],
+  ];
+
+  it.each(builders)("should make the %s accepted column always true when the flag is on", (_label, build) => {
+    expect(build(acceptAll(withUpdates))).toMatch(ACCEPTED_ALWAYS);
+  });
+
+  it.each(builders)("should not emit the always-true accepted column in %s when the flag is off or absent", (_label, build) => {
+    expect(build(withUpdates)).not.toContain("true OR");
+    expect(build({ ...withUpdates, acceptAllGeometries: false })).not.toContain("true OR");
+  });
+
+  it("should keep the acceptances in the SQL when the flag is combined with accepted geometries", () => {
+    const accepted = [{ typePadron: "URBANO" as const, provinceId: 1, localityId: 10, number: "200" }];
+
+    const sql = buildPadronApplySql(layouts, acceptAll({ ...withUpdates, acceptedGeometries: accepted }));
+
+    expect(sql).toMatch(ACCEPTED_ALWAYS);
+    expect(sql).toContain("200");
+  });
+});

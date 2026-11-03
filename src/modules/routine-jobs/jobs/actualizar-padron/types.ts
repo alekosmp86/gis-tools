@@ -43,6 +43,8 @@ export interface ActualizarPadronOptions {
   pairChoices: readonly PairChoice[];
   /** Absent means none: the request parser always fills it. */
   acceptedGeometries?: readonly AcceptedGeometry[];
+  /** Absent means false: accepts every pending geometry change, whatever the list shows (AP-116). */
+  acceptAllGeometries?: boolean;
 }
 
 export interface ActualizarPadronParams {

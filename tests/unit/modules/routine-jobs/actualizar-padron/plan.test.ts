@@ -234,3 +234,23 @@ describe("isPlanId and isPlanRecord (AP-89)", () => {
     expect(isPlanRecord(value)).toBe(false);
   });
 });
+
+describe("paramsFingerprintOf accept-all flag (AP-116)", () => {
+  const withFlag = (value: boolean | undefined): ActualizarPadronParams => {
+    const params = paramsOf();
+    params.options.acceptAllGeometries = value;
+    return params;
+  };
+
+  it("should return a different fingerprint when the flag is on than when it is off", () => {
+    expect(paramsFingerprintOf(withFlag(true))).not.toBe(paramsFingerprintOf(withFlag(false)));
+  });
+
+  it("should return the same fingerprint for the flag absent and the flag false", () => {
+    expect(paramsFingerprintOf(withFlag(undefined))).toBe(paramsFingerprintOf(withFlag(false)));
+  });
+
+  it("should return a stable fingerprint across calls with the flag on", () => {
+    expect(paramsFingerprintOf(withFlag(true))).toBe(paramsFingerprintOf(withFlag(true)));
+  });
+});
