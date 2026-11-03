@@ -37,6 +37,8 @@ export interface SpatialMapPreviewProps {
   showPopups?: boolean;
   /** Feature property drawn as a permanent label on each feature. */
   labelProperty?: string;
+  /** Offset labels by their `_labelSlot` property and outline each in its feature colour; the selected feature keeps its colour. */
+  codedLabels?: boolean;
   /** A click on empty map reports null through onSelectFeature. */
   clearOnBackgroundClick?: boolean;
   /** Fill the height of the parent instead of the default fixed height. The parent must have a definite height. */
@@ -56,6 +58,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   showPopups = true,
   labelProperty,
   clearOnBackgroundClick = false,
+  codedLabels = false,
   fillParent = false,
 }) => {
   const [mapContainerNode, setMapContainerNode] = useState<HTMLDivElement | null>(null);
@@ -71,8 +74,8 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
 
   const maxRenderFeatures = neverCapViewportRender ? null : MAX_VIEWPORT_RENDER_FEATURES;
   const interaction = useMemo<MapInteractionOptions>(
-    () => ({ showPopups, labelProperty, clearOnBackgroundClick }),
-    [showPopups, labelProperty, clearOnBackgroundClick]
+    () => ({ showPopups, labelProperty, codedLabels, clearOnBackgroundClick }),
+    [showPopups, labelProperty, codedLabels, clearOnBackgroundClick]
   );
 
   const { renderedCount, isChunking, renderError, handleFitBounds } = useLeafletMap(

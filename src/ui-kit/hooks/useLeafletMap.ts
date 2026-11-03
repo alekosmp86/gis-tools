@@ -55,7 +55,7 @@ export function useLeafletMap(
   );
 
   // 4. Highlight Selected Feature & Pan Camera
-  useFeatureHighlight(mapInstanceRef, geojson, selectedFeatureIndex, isMapReady, interaction.showPopups !== false);
+  useFeatureHighlight(mapInstanceRef, geojson, selectedFeatureIndex, isMapReady, interaction.showPopups !== false, interaction.codedLabels === true);
 
   useBackgroundClick(
     mapInstanceRef,

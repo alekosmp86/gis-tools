@@ -163,13 +163,14 @@ export function useVectorChunkStream(
       };
 
       const labelProperty = interactionRef.current.labelProperty;
+      const codedLabels = interactionRef.current.codedLabels === true;
       const geojsonSubLayer = L.geoJSON(chunkCollection as GeoJsonObject, {
         style: (feature) => styleResolver.resolvePathStyle(feature),
         pointToLayer: (feature, latlng) => styleResolver.createPointLayer(feature, latlng),
         onEachFeature:
           labelProperty === undefined
             ? undefined
-            : (feature, layer) => bindFeatureLabel(feature.properties, layer, labelProperty),
+            : (feature, layer) => bindFeatureLabel(feature.properties, layer, labelProperty, { coded: codedLabels }),
       });
 
       featureGroup.addLayer(geojsonSubLayer);

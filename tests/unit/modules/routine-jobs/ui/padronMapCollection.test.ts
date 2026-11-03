@@ -71,10 +71,21 @@ describe("toMapCollection", () => {
     expect(collection.features[0].properties).toEqual({
       _discrepancyType: MAP_ROLE_TYPE.NEW,
       [OUTLINE_LABEL_PROPERTY]: "",
+      _labelSlot: 0,
     });
   });
 
   it("should return an empty feature collection for no features", () => {
     expect(toMapCollection([], [])).toEqual({ type: "FeatureCollection", features: [] });
+  });
+});
+
+describe("toMapCollection label slots", () => {
+  it("should give every feature its own label slot, in feature order", () => {
+    const outlines = [outlineOf("a"), outlineOf("b")];
+
+    const collection = toMapCollection([featureOf(0, GEOMETRY_MAP_ROLE.OLD), featureOf(1, GEOMETRY_MAP_ROLE.NEW)], outlines);
+
+    expect(collection.features.map((feature) => feature.properties?._labelSlot)).toEqual([0, 1]);
   });
 });

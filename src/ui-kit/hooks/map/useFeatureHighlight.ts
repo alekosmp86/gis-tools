@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import type { FeatureCollection } from "geojson";
+import { getDiscrepancyColor } from "@/core/constants/mapConstants";
 import { buildPopupHtml } from "@/ui-kit/map/MapPopupPresenter";
 
 export function useFeatureHighlight(
@@ -8,7 +9,8 @@ export function useFeatureHighlight(
   geojson: FeatureCollection,
   selectedFeatureIndex?: number | null,
   isMapReady: boolean = false,
-  showPopups: boolean = true
+  showPopups: boolean = true,
+  keepTypeColor: boolean = false
 ): void {
   const highlightLayerRef = useRef<L.FeatureGroup | null>(null);
 
@@ -35,13 +37,13 @@ export function useFeatureHighlight(
     highlightLayerRef.current = highlightGroup;
 
     const highlightSubLayer = L.geoJSON(targetFeature as import("geojson").GeoJsonObject, {
-      style: () => ({
-        color: "#38bdf8",
-        weight: 7,
-        opacity: 1,
-        fillColor: "#0284c7",
-        fillOpacity: 0.5,
-      }),
+      style: () => {
+        if (!keepTypeColor) {
+          return { color: "#38bdf8", weight: 7, opacity: 1, fillColor: "#0284c7", fillOpacity: 0.5 };
+        }
+        const typeColor = getDiscrepancyColor(targetFeature.properties?._discrepancyType);
+        return { color: typeColor, weight: 7, opacity: 1, fillColor: typeColor, fillOpacity: 0.5 };
+      },
       pointToLayer: (_feature, latlng) => {
         return L.circleMarker(latlng, {
           radius: 12,
@@ -87,5 +89,5 @@ export function useFeatureHighlight(
         }
       }
     };
-  }, [mapInstanceRef, selectedFeatureIndex, geojson, isMapReady, showPopups]);
+  }, [mapInstanceRef, selectedFeatureIndex, geojson, isMapReady, showPopups, keepTypeColor]);
 }

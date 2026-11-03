@@ -34,7 +34,7 @@ function CopyValueButton({ label, value }: { label: string; value: string | null
 function CatastroField({ label, value }: { label: string; value: string | null }) {
   return (
     <div className={styles.row}>
-      <span>{label}</span>
+      <span className={styles.label}>{label}</span>
       <span className={styles.value}>{value ?? NO_DATA_TEXT}</span>
       <CopyValueButton label={label} value={value} />
     </div>

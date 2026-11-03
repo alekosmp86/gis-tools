@@ -18,26 +18,30 @@
 }
 
 .keyCard {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: fit-content(45%) minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 6px 10px;
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
 }
 
 .row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  display: contents;
   font-size: 13px;
+}
+
+.label {
+  min-width: 0;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
 }
 
 .value {
   min-width: 0;
   overflow-wrap: anywhere;
-  text-align: right;
+  text-align: left;
 }
 
 .copyButton {

@@ -20,19 +20,23 @@
 
 .list {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: fit-content(45%) minmax(0, 1fr);
+  align-items: baseline;
   gap: 4px 12px;
   margin: 0;
   font-size: 13px;
 }
 
 .term {
+  min-width: 0;
   opacity: 0.75;
+  overflow-wrap: anywhere;
 }
 
 .definition {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
+  text-align: left;
   font-variant-numeric: tabular-nums;
 }

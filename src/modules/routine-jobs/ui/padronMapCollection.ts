@@ -16,7 +16,7 @@ const roleTypeOf = (feature: GeometryMapFeature): string =>
 export function toMapCollection(features: readonly GeometryMapFeature[], outlines: readonly PadronMapOutline[]): FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: features.map((feature) => {
+    features: features.map((feature, labelSlot) => {
       const outline = outlines[feature.itemIndex];
       return {
         type: "Feature",
@@ -24,6 +24,7 @@ export function toMapCollection(features: readonly GeometryMapFeature[], outline
         properties: {
           _discrepancyType: outline?.mapType ?? roleTypeOf(feature),
           [OUTLINE_LABEL_PROPERTY]: labelOf(outline),
+          _labelSlot: labelSlot,
         },
       };
     }),

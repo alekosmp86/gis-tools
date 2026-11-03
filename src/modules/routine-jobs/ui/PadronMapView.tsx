@@ -83,6 +83,7 @@ export function PadronMapView({ subject, base, selectedOutlineIndex, onSelectOut
         onSelectFeature={handleSelectFeature}
         showPopups={false}
         labelProperty={OUTLINE_LABEL_PROPERTY}
+        codedLabels
         clearOnBackgroundClick
         fillParent
       />
