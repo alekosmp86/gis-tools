@@ -87,7 +87,7 @@ Un par estricto que comparte fila con otro candidato (ambiguo) no se aplica. La 
 
 Los pares que no se aplican no cambian nada: el padrón nuevo se inserta y la fila antigua se lista como faltante. Son **ambiguos** (una de las dos filas tiene más de una pareja) o **pendientes** (parciales que nadie eligió).
 
-En el listado de pares, **Cambio de área (%)** es el cambio con signo: 0 significa la misma área, −2 significa un 2 % menos de área y 2 un 2 % más.
+En la lista de pares pendientes, **Cambio de área (%)** es el cambio con signo: 0 significa la misma área, −2 significa un 2 % menos de área y 2 un 2 % más.
 
 En el listado de geometrías que cambian, la columna se llama **Área no coincidente (%)**: es la parte del área combinada de la geometría anterior y la nueva que no se superpone. 0 significa que las dos formas son idénticas y 100 que no tienen nada en común.
 
@@ -97,9 +97,9 @@ Elegir un padrón antiguo también lo quita de los candidatos de los otros grupo
 
 Guardar exige que las elecciones (y las geometrías aceptadas) coincidan con las del último análisis completado. Si cambió la selección, el botón queda bloqueado con el aviso **Analice de nuevo con la selección de pares actual antes de persistir.** y hay que volver a analizar. En la revisión, **Elecciones de par incluidas** cuenta las elecciones que se enviarán.
 
-El informe lista las elecciones fuera de los grupos en **Elecciones de par**: las aplicadas (**Aplicada**), las que no se aplicaron (**No aplicada**, porque su padrón antiguo ya no es candidato o sigue siendo ambiguo) y las de **No emparejar** (**Sin emparejar**). Cada fila muestra el padrón nuevo y el id elegido, y en un análisis ofrece **Quitar elección**; quítela y vuelva a analizar para no usarla. El grupo de una elección no aplicada se marca con **Elección no aplicada** solo si la elección que se envió en esa ejecución no se aplicó: una elección hecha después de la ejecución no se marca.
+El informe ya no lista las elecciones aparte: cada caso aparece en una sola lista. El grupo de una elección no aplicada se marca con **Elección no aplicada** solo si la elección que se envió en esa ejecución no se aplicó: una elección hecha después de la ejecución no se marca.
 
-En el informe, la sección **Padrones reclasificados o renumerados** muestra cada par con su estado: **Aplicado**, **No aplicado: ambiguo** o **Pendiente: coincidencia parcial**. Los pares aplicados aparecen en el CSV de cambios como **Clave actualizada** (los parciales elegidos, como **Clave actualizada (coincidencia parcial)**); los no aplicados y los pendientes, en el CSV de inconsistencias.
+En el informe no hay una tabla de pares: los pares aplicados solo se cuentan (**Claves actualizadas**), los pendientes están en **Pares por coincidencia parcial pendientes** y los ambiguos en **Grupos ambiguos**. Una línea sobre las listas resume los aplicados sin revisión y lo que queda por revisar. Los pares aplicados aparecen en el CSV de cambios como **Clave actualizada** (los parciales elegidos, como **Clave actualizada (coincidencia parcial)**); los no aplicados y los pendientes, en el CSV de inconsistencias.
 
 ## Aceptar los pares pendientes
 
@@ -133,7 +133,7 @@ La ventana no solo muestra el padrón: también tiene la decisión de esa fila, 
 - **Geometría que cambia**: muestra su estado (**Aceptada**, **Pendiente**, **Rechazada** o **Aplicada (bajo el umbral)**) y, si está pendiente, **Aceptar** y **Rechazar**. Ver **Aceptar las geometrías pendientes**.
 - **Par por coincidencia parcial pendiente**: **Aceptar** y **Rechazar**, igual que en la tabla de pares pendientes.
 - **Grupo ambiguo** (desde la tabla de pares o con **Ver en mapa** en la tarjeta del grupo): el mapa muestra el padrón nuevo y cada padrón antiguo candidato en un color distinto, con la etiqueta `· candidato 1`, `· candidato 2`, etc. Las opciones de la ventana usan el mismo número y color; elija una o **No emparejar (insertar como nuevo)**.
-- **Padrón que ya no está en el catastro**: muestra destacados la clase, **Reemplazado por**, **Cubierto (%)** y **Referencias**, con **Marcar para eliminar** y **Conservar**. Ver **Marcar padrones para eliminar más adelante**.
+- **Padrón que ya no está en el catastro**: muestra destacados la clase, **Reemplazado por**, **Cubierto (%)** y **Referencias**, y su estado de eliminación (solo lectura, sin botones). Ver **Eliminación automática de padrones**.
 - Un par ya aplicado solo se muestra: no tiene nada que decidir.
 
 Las decisiones se guardan al instante en la selección del asistente y se ven también en la columna **Decisión** de cada tabla. Ninguna se aplica hasta pulsar **Volver a analizar con la selección** (disponible también en la ventana); al analizar de nuevo la ventana se cierra.
@@ -153,20 +153,22 @@ Un padrón de la tabla de destino que no tiene fila en el origen y que ningún p
 
 La clasificación es informativa: el análisis no borra, no modifica ni inserta nada más que lo que ya muestra el informe. El informe lista hasta 500 filas, ordenadas por clase (subdivididos, reemplazados, cubiertos en parte y huérfanos) y luego por departamento, localidad y padrón; los contadores de cada clase son exactos. El CSV **Descargar padrones faltantes** exporta las filas de la lista. En una carga real no se muestra esta clasificación: el resultado solo indica que se muestra en el análisis previo.
 
-## Marcar padrones para eliminar más adelante
+## Eliminación automática de padrones
 
-En la ventana del mapa, un padrón que ya no está en el catastro tiene **Marcar para eliminar** y **Conservar**. Es **solo un registro**: no se borra nada, no se envía nada al servidor y la carga real no cambia. La columna **Decisión** de la tabla indica **Marcado para eliminar** o **Se conserva**, y el contador **N marcados para eliminar** cuenta los marcados de la lista.
+Al guardar, la carga real elimina los padrones que ya no están en el catastro, no tienen direcciones asociadas (ninguna tabla del esquema los referencia por `id_padron`) y no esperan una decisión de par. No hay nada que marcar. El análisis no borra nada: muestra la sección **Padrones que se eliminarán: N (sin direcciones asociadas)**, con la lista (hasta 500) y cuántos no se eliminan y por qué (**tiene direcciones asociadas**, **tiene un par sin resolver**). El resumen del botón de guardar incluye **N padrones eliminados**.
 
-**Descargar padrones marcados para eliminar (CSV)** baja, generado en el navegador, un CSV con los marcados: `Id actual`, `Tipo`, `Departamento`, `Localidad`, `Padrón`, `Clase`, `Cubierto (%)`, `Reemplazado por`, `Referencias`, `Latitud` y `Longitud`. Úselo para eliminarlos después, fuera de esta herramienta, revisando antes sus referencias.
+En la ventana del mapa y en la columna **Eliminación** de la tabla, cada padrón muestra **Se eliminará**, **No se elimina: tiene N direcciones asociadas** o **No se elimina: tiene un par sin resolver**.
 
-Las marcas se borran, junto con las demás decisiones, al cambiar la conexión, un esquema, una tabla o una opción, y con **Nueva carga**.
+Si el análisis no encuentra ninguna tabla que referencie padrones, o el usuario de la base no puede leer alguna, no se elimina ningún padrón y se muestra una advertencia con el motivo; el resto de la actualización sigue igual. Si una referencia aparece entre el análisis y el guardado, ese padrón no se elimina y se cuenta como no eliminado.
+
+El respaldo para revertir incluye los padrones eliminados (se vuelven a insertar). La dirección maestra de un padrón eliminado no se modifica.
 
 ## Aceptar las geometrías pendientes
 
 Una geometría que cambia con un cambio de área igual o superior al umbral queda **Pendiente**. Puede aceptarla para que se aplique de todos modos:
 
 - En la ventana del mapa o en la fila de **Geometrías que cambian**, **Aceptar** la acepta y **Rechazar** quita la aceptación (sin aceptar, sigue pendiente).
-- **Aceptar todos los listados** acepta todas las pendientes de la lista; **Rechazar todos** quita todas las aceptaciones. El contador **N aceptadas de M pendientes (listadas)** cuenta las de la lista. Se aceptan como máximo 5000 geometrías por solicitud: al llegar al límite, una nota lo indica.
+- **Aceptar todos** acepta todas las pendientes de la lista; **Rechazar todos** quita todas las aceptaciones. El contador **N aceptadas de M pendientes (listadas)** cuenta las de la lista. Se aceptan como máximo 5000 geometrías por solicitud: al llegar al límite, una nota lo indica.
 - La columna **Decisión** muestra **Aceptada**, **Pendiente**, **Rechazada** (aplicada en el análisis mostrado porque estaba aceptada, pero ya no lo está: el próximo análisis la deja pendiente) o **Aplicada (bajo el umbral)**.
 - Aceptar no aplica nada todavía. Pulse **Volver a analizar con la selección**: en ese análisis la geometría aparece **Aplicada** y cuenta en **Actualizadas**. Para guardar hay que volver a analizar: si las aceptaciones cambiaron, el botón de guardar queda bloqueado con **Analice de nuevo con las geometrías aceptadas actuales antes de persistir.**
 - Solo se puede aceptar con **Actualizar geometrías** activada. Si una geometría aceptada ya no cambia en el nuevo análisis, las advertencias lo indican (**geometría aceptada no se aplicó**).
@@ -186,9 +188,8 @@ Los banners posibles son "Análisis: la tabla de destino no fue modificada.", "A
 La sección de la tabla de destino trae los contadores de cada clase y listas desplegables:
 
 - **Padrones insertados**, con su id nuevo;
-- **Geometrías que cambian**, con su estado (**Aplicada** o **Pendiente**), el id actual, el área anterior y la nueva en m², el cambio de área en % y la latitud y longitud del centroide. Las pendientes van primero, después por el cambio de área (de mayor a menor), y luego por departamento, localidad y padrón. El contador **Geometrías pendientes** indica el total exacto; para todas las pendientes, vea la sección **Geometrías pendientes del análisis**.
-- **Padrones reclasificados o renumerados**, con el estado de cada par;
-- **Faltantes en destino**, con muestras de clave, y **Padrones que ya no están en el catastro**, con el contador de cada clase y la lista de reemplazos;
+- **Geometrías pendientes**: solo las pendientes (y las que usted aceptó o rechazó); las aplicadas bajo el umbral se cuentan en una línea y están en el CSV de cambios. Cada fila trae el id actual, el área anterior y la nueva en m², el cambio de área en % y la latitud y longitud del centroide. Van ordenadas por el cambio de área (de mayor a menor), y luego por departamento, localidad y padrón. El contador **Geometrías pendientes** indica el total exacto; para todas las pendientes, vea la sección **Geometrías pendientes del análisis**.
+- **Padrones que ya no están en el catastro** (el contador **Faltantes en destino** indica el total), con el contador de cada clase y la lista de reemplazos. Los padrones antiguos de un par pendiente o ambiguo no se listan ahí: una línea indica cuántos esperan una decisión de par;
 - **Ambiguas**, con muestras de clave.
 
 Las listas muestran hasta 500 filas (las muestras, hasta 20). Cuando una lista se corta, su título dice "primeras N de M".
