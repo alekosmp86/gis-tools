@@ -211,3 +211,69 @@ describe("removalViewOf reassignment (AP-115)", () => {
     expect(absent?.reassignedNote).not.toContain("sin punto");
   });
 });
+
+describe("removalViewOf changed padrones (AP-124)", () => {
+  it("should have no changed note when the count is zero or the field is absent", () => {
+    expect(removalViewOf(targetOf({ removed: 1, reassignedChanged: 0 }), true)?.reassignedChangedNote).toBeNull();
+    expect(removalViewOf(targetOf({ removed: 1 }), true)?.reassignedChangedNote).toBeNull();
+  });
+
+  it("should show the section with a changed-only headline when only addresses change padron and nothing is removed", () => {
+    const view = removalViewOf(targetOf({ removed: 0, reassignedChanged: 3 }), true);
+
+    expect(view).not.toBeNull();
+    expect(view?.headline).toBe("Direcciones de padrones que cambiaron de forma");
+    expect(view?.headline).not.toContain("eliminar");
+  });
+
+  it("should keep the removal headline when padrones are removed too", () => {
+    const view = removalViewOf(targetOf({ removed: 2, reassignedChanged: 3 }), true);
+
+    expect(view?.headline).toContain("Padrones que se eliminarán: 2");
+    expect(view?.reassignedChangedNote).not.toBeNull();
+  });
+
+  it("should keep the removal headline when only padrones are held back and addresses change padron", () => {
+    const view = removalViewOf(targetOf({ removed: 0, removalsSkipped: skippedOf(1, 0, 0), reassignedChanged: 1 }), false);
+
+    expect(view?.headline).toContain("Padrones eliminados: 0");
+  });
+
+  it("should use the plural planned wording with the per-table counts in an analysis", () => {
+    const view = removalViewOf(targetOf({ reassignedChanged: 5, reassignedChangedByTable: { "carto.a": 3, "carto.b": 2 } }), true);
+
+    expect(view?.reassignedChangedNote).toBe(
+      "5 direcciones cambiarán de padrón porque su padrón cambió de forma (se reasigna su id_padron) (carto.a: 3; carto.b: 2)"
+    );
+  });
+
+  it("should use the plural done wording in a real run", () => {
+    const view = removalViewOf(targetOf({ reassignedChanged: 4 }), false);
+
+    expect(view?.reassignedChangedNote).toBe("4 direcciones cambian de padrón porque su padrón cambió de forma (se reasigna su id_padron)");
+  });
+
+  it("should use the singular wording for exactly one address, planned and done", () => {
+    const planned = removalViewOf(targetOf({ reassignedChanged: 1 }), true);
+    const done = removalViewOf(targetOf({ reassignedChanged: 1 }), false);
+
+    expect(planned?.reassignedChangedNote).toBe("1 dirección cambiará de padrón porque su padrón cambió de forma (se reasigna su id_padron)");
+    expect(done?.reassignedChangedNote).toBe("1 dirección cambia de padrón porque su padrón cambió de forma (se reasigna su id_padron)");
+  });
+
+  it("should append the ambiguous count and the lowest-id rule only when some rows are ambiguous", () => {
+    const ambiguous = removalViewOf(targetOf({ reassignedChanged: 4, reassignedChangedAmbiguous: 2 }), true);
+    const none = removalViewOf(targetOf({ reassignedChanged: 4, reassignedChangedAmbiguous: 0 }), true);
+
+    expect(ambiguous?.reassignedChangedNote).toBe(
+      "4 direcciones cambiarán de padrón porque su padrón cambió de forma (se reasigna su id_padron); 2 con más de un padrón posible, se asigna el de menor id"
+    );
+    expect(none?.reassignedChangedNote).not.toContain("más de un padrón");
+  });
+
+  it("should never say that an address moves", () => {
+    const view = removalViewOf(targetOf({ reassignedChanged: 2, reassignedChangedAmbiguous: 1, reassignedChangedByTable: { "carto.a": 2 } }), true);
+
+    expect(view?.reassignedChangedNote).not.toMatch(/se mueve|mueven|movi|pasa a/i);
+  });
+});

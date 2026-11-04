@@ -38,10 +38,36 @@ function reassignedNoteOf(target: ActualizarTargetReport, dryRun: boolean): stri
   return byTable.length === 0 ? `${label}: ${reassigned}${noPointText}` : `${label}: ${reassigned} (${byTable.join("; ")})${noPointText}`;
 }
 
+const CHANGED_PLANNED = "cambiarán de padrón";
+const CHANGED_DONE = "cambian de padrón";
+const CHANGED_REASON = "porque su padrón cambió de forma (se reasigna su id_padron)";
+const CHANGED_SINGLE_PLANNED = "cambiará de padrón";
+const CHANGED_SINGLE_DONE = "cambia de padrón";
+const CHANGED_ONLY_HEADLINE = "Direcciones de padrones que cambiaron de forma";
+
+function changedVerbOf(count: number, dryRun: boolean): string {
+  if (count === 1) return dryRun ? CHANGED_SINGLE_PLANNED : CHANGED_SINGLE_DONE;
+  return dryRun ? CHANGED_PLANNED : CHANGED_DONE;
+}
+
+/** AP-124: the rows whose id_padron is reassigned because their padrón kept its key but changed shape, by table, and the ambiguous ones. */
+function reassignedChangedNoteOf(target: ActualizarTargetReport, dryRun: boolean): string | null {
+  const changed = target.reassignedChanged ?? 0;
+  if (changed === 0) return null;
+  const noun = changed === 1 ? "dirección" : "direcciones";
+  const byTable = Object.entries(target.reassignedChangedByTable ?? {}).map(([table, count]) => `${table}: ${count}`);
+  const tableText = byTable.length === 0 ? "" : ` (${byTable.join("; ")})`;
+  const ambiguous = target.reassignedChangedAmbiguous ?? 0;
+  const ambiguousText = ambiguous > 0 ? `; ${ambiguous} con más de un padrón posible, se asigna el de menor id` : "";
+  return `${changed} ${noun} ${changedVerbOf(changed, dryRun)} ${CHANGED_REASON}${tableText}${ambiguousText}`;
+}
+
 export interface RemovalView {
   headline: string;
   /** AP-115: the addresses of the subdivided padrones that move to their parts, by table; null when none. */
   reassignedNote: string | null;
+  /** AP-124: the rows that get another padrón because their padrón changed shape; null when none. */
+  reassignedChangedNote: string | null;
   /** The padrones that are not deleted, one row per reason that applies. */
   notRemoved: ReportRowListRow[];
   blockedReason: string | null;
@@ -55,13 +81,16 @@ export function removalViewOf(target: ActualizarTargetReport, dryRun: boolean): 
   const removed = target.removed ?? 0;
   const skipped = target.removalsSkipped;
   const blockedReason = target.removalBlockedReason ?? null;
-  if (removed === 0 && (skipped?.total ?? 0) === 0 && blockedReason === null) return null;
+  const changedNote = reassignedChangedNoteOf(target, dryRun);
+  const nothingRemoved = removed === 0 && (skipped?.total ?? 0) === 0 && blockedReason === null;
+  if (nothingRemoved && changedNote === null) return null;
   const headline = dryRun ? HEADLINE_PLANNED : HEADLINE_DONE;
   const prefix = dryRun ? NOT_REMOVED_PREFIX_PLANNED : NOT_REMOVED_PREFIX_DONE;
   const rows = target.removedList ?? [];
   return {
-    headline: `${headline}: ${removed} (${HEADLINE_SUFFIX})`,
+    headline: nothingRemoved ? CHANGED_ONLY_HEADLINE : `${headline}: ${removed} (${HEADLINE_SUFFIX})`,
     reassignedNote: reassignedNoteOf(target, dryRun),
+    reassignedChangedNote: changedNote,
     notRemoved: NOT_REMOVED_ORDER.filter((reason) => (skipped?.byReason[reason] ?? 0) > 0).map((reason) => ({
       label: `${prefix}: ${NOT_REMOVED_REASON_TEXT[reason]}`,
       value: skipped?.byReason[reason] ?? 0,

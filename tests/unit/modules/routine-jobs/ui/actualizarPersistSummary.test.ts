@@ -62,3 +62,23 @@ describe("actualizarPersistSummary", () => {
     });
   });
 });
+
+describe("persistSummaryOf changed padrones (AP-124)", () => {
+  it("should sum the subdivided and the changed-padron reassignments in one reassigned count", () => {
+    const summary = persistSummaryOf({ inserted: 0, pairsApplied: 0, updated: 0, removed: 1, reassigned: 5, reassignedChanged: 3 });
+
+    expect(summary.endsWith("1 padrón eliminado, 8 direcciones reasignadas.")).toBe(true);
+  });
+
+  it("should report the changed-padron count alone when nothing else is reassigned", () => {
+    const summary = persistSummaryOf({ inserted: 0, pairsApplied: 0, updated: 0, removed: 0, reassignedChanged: 1 });
+
+    expect(summary.endsWith("0 padrones eliminados, 1 dirección reasignada.")).toBe(true);
+  });
+
+  it("should leave the reassigned text out when both counts are zero or absent", () => {
+    const summary = persistSummaryOf({ inserted: 1, pairsApplied: 1, updated: 1, removed: 1, reassigned: 0, reassignedChanged: 0 });
+
+    expect(summary).not.toContain("reasignad");
+  });
+});

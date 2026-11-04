@@ -24,6 +24,7 @@ export function RemovalSection({ view }: { view: RemovalView }) {
     <section className={sharedStyles.section}>
       <SectionTitle>{view.headline}</SectionTitle>
       {view.reassignedNote !== null && <p className={sharedStyles.hint}>{view.reassignedNote}</p>}
+      {view.reassignedChangedNote !== null && <p className={sharedStyles.hint}>{view.reassignedChangedNote}</p>}
       {view.blockedReason !== null && <p className={sharedStyles.hint}>{view.blockedReason}</p>}
       {view.notRemoved.length > 0 && <ReportRowList rows={view.notRemoved} />}
       {view.rows.length > 0 && (

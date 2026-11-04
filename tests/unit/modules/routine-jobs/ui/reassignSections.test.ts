@@ -55,6 +55,7 @@ describe("ActualizarBackupSection count rows (AP-115)", () => {
 const viewOf = (overrides: Partial<RemovalView> = {}): RemovalView => ({
   headline: "Padrones que se eliminarán: 1 (sin direcciones asociadas o con direcciones reasignadas a sus partes)",
   reassignedNote: null,
+  reassignedChangedNote: null,
   notRemoved: [],
   blockedReason: null,
   listSummary: "Padrones eliminados (0)",
@@ -70,6 +71,14 @@ describe("RemovalSection reassigned note (AP-115)", () => {
     );
 
     expect(html).toContain("Direcciones que pasan a la parte más cercana de su padrón subdividido: 5 (carto.a: 5)");
+  });
+
+  it("should render the changed-padrones note when the view has one", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(RemovalSection, { view: viewOf({ reassignedChangedNote: "2 direcciones cambian de padrón porque su padrón cambió de forma (se reasigna su id_padron)" }) })
+    );
+
+    expect(html).toContain("2 direcciones cambian de padrón porque su padrón cambió de forma");
   });
 
   it("should render no note when the view has none", () => {
