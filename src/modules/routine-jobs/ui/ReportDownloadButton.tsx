@@ -14,6 +14,7 @@ const DOWNLOAD_LABEL: Record<ReportCsvKind, string> = {
   [REPORT_CSV_KIND.INCONSISTENCIES]: "Descargar inconsistencias",
   [REPORT_CSV_KIND.MISSING]: "Descargar padrones faltantes",
   [REPORT_CSV_KIND.PENDING_GEOMETRIES]: "Descargar geometrías pendientes (CSV)",
+  [REPORT_CSV_KIND.LOCALITIES_NOT_FOUND]: "Descargar localidades no encontradas (CSV)",
 };
 const CSV_MIME_TYPE = "text/csv;charset=utf-8";
 const ICON_SIZE = 15;

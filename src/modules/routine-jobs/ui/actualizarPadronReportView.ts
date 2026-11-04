@@ -66,6 +66,7 @@ export interface LocalityRow {
   department: string;
   locality: string;
   count: number;
+  otherDepartments: string[];
 }
 
 export interface SampleView {
@@ -289,7 +290,12 @@ const localityRowsOf = (groups: SkippedLocalityGroup[], reason: SkipReason): Loc
     .filter((group) => group.reason === reason)
     .sort((first, second) => second.count - first.count)
     .slice(0, LIMIT)
-    .map((group) => ({ department: textOf(group.department), locality: textOf(group.locality), count: group.count }));
+    .map((group) => ({
+      department: textOf(group.department),
+      locality: textOf(group.locality),
+      count: group.count,
+      otherDepartments: group.otherDepartments ?? [],
+    }));
 
 const samplesOf = (samples: SkippedSample[]): SampleView[] =>
   samples.slice(0, LIMIT).map((sample) => ({

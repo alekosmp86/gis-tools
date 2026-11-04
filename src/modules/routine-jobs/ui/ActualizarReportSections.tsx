@@ -10,6 +10,7 @@ import type {
 } from "./actualizarPadronReportView";
 import { DataTable } from "./DataTable";
 import { keyedRowsOf } from "./keyedRows";
+import { ReportDownloadActions } from "./ReportDownloadButton";
 import { ReportRowList } from "./ReportRowList";
 import styles from "./ActualizarPadronReport.module.css";
 import sharedStyles from "./CargarPadronesReport.module.css";
@@ -83,11 +84,12 @@ export function GroupTopList({ title, split }: { title: string; split: GroupSpli
   );
 }
 
-export function LocalityTable({ title, rows }: { title: string; rows: LocalityRow[] }) {
+export function LocalityTable({ title, rows, actions }: { title: string; rows: LocalityRow[]; actions?: React.ReactNode }) {
   if (rows.length === 0) return null;
   return (
     <section className={sharedStyles.section}>
       <SectionTitle>{title}</SectionTitle>
+      {actions !== undefined && <ReportDownloadActions>{actions}</ReportDownloadActions>}
       <div className={styles.tableWrap}>
         <DataTable headers={["Departamento", "Localidad", "Padrones"]}>
           {keyedRowsOf(rows, (row) => `${row.department}|${row.locality}`).map(({ key, row }) => (

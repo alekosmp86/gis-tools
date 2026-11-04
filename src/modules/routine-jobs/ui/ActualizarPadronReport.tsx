@@ -38,6 +38,7 @@ import sharedStyles from "./CargarPadronesReport.module.css";
 import { ReportDownloadActions, ReportDownloadButton } from "./ReportDownloadButton";
 import { buildActualizarPadronCsv, buildActualizarPadronInconsistenciasCsv } from "./reportCsv/actualizarPadronCsv";
 import { REPORT_CSV_KIND } from "./reportCsv/filename";
+import { buildLocalitiesNotFoundCsv } from "./reportCsv/localitiesNotFoundCsv";
 import { MonthlyStage } from "./monthlyCartoStages";
 
 const BANNER_CLASS: Record<ActualizarBannerKind, string> = {
@@ -204,7 +205,18 @@ export const ActualizarPadronReport: React.FC<ActualizarPadronReportProps> = ({ 
         <GroupTopList title={SECTION_TITLES.department} split={view.byDepartmentSplit} />
         <GroupTopList title={SECTION_TITLES.locality} split={view.byLocalitySplit} />
       </div>
-      <LocalityTable title={SECTION_TITLES.notFound} rows={view.localitiesNotFound} />
+      <LocalityTable
+        title={SECTION_TITLES.notFound}
+        rows={view.localitiesNotFound}
+        actions={
+          <ReportDownloadButton
+            stageSlug={MonthlyStage.ACTUALIZAR_PADRON}
+            dryRun={result.dryRun}
+            kind={REPORT_CSV_KIND.LOCALITIES_NOT_FOUND}
+            buildCsv={() => buildLocalitiesNotFoundCsv(view.localitiesNotFound)}
+          />
+        }
+      />
       <LocalityTable title={SECTION_TITLES.ambiguous} rows={view.localitiesAmbiguous} />
       <SampleDetails view={view} />
       <CollidingDetails view={view} />
