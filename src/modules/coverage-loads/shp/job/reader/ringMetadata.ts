@@ -63,6 +63,60 @@ export function isHoleRing(meta: RingMetadata, parts: Int32Array, ring: number):
   return (meta.area[ring] as number) > 0 && (parts[ring + 1] as number) - (parts[ring] as number) >= 4;
 }
 
+interface RingScanState {
+  x0: number;
+  y0: number;
+  prx: number;
+  pry: number;
+  sum: number;
+  c: number;
+  mnx: number;
+  mny: number;
+  mxx: number;
+  mxy: number;
+}
+
+function startRing(st: RingScanState, meta: RingMetadata, ring: number, x0: number, y0: number): void {
+  st.x0 = x0;
+  st.y0 = y0;
+  st.mnx = st.mxx = x0;
+  st.mny = st.mxy = y0;
+  st.sum = 0;
+  st.c = 0;
+  st.prx = 0;
+  st.pry = 0;
+  meta.probes[PROBE_STRIDE * ring] = x0;
+  meta.probes[PROBE_STRIDE * ring + 1] = y0;
+}
+
+function addRingPoint(st: RingScanState, meta: RingMetadata, ring: number, li: number, x: number, y: number): void {
+  if (x < st.mnx) st.mnx = x;
+  else if (x > st.mxx) st.mxx = x;
+  if (y < st.mny) st.mny = y;
+  else if (y > st.mxy) st.mxy = y;
+  const rx = x - st.x0;
+  const ry = y - st.y0;
+  const term = st.prx * ry - rx * st.pry - st.c;
+  const total = st.sum + term;
+  st.c = total - st.sum - term;
+  st.sum = total;
+  st.prx = rx;
+  st.pry = ry;
+  if (li < 4) {
+    meta.probes[PROBE_STRIDE * ring + 2 * li] = x;
+    meta.probes[PROBE_STRIDE * ring + 2 * li + 1] = y;
+  }
+}
+
+function finishRing(st: RingScanState, meta: RingMetadata, ring: number, rs: number, re: number): number {
+  meta.area[ring] = 0.5 * st.sum;
+  meta.minX[ring] = st.mnx;
+  meta.minY[ring] = st.mny;
+  meta.maxX[ring] = st.mxx;
+  meta.maxY[ring] = st.mxy;
+  return re - rs >= 4 && (st.prx !== 0 || st.pry !== 0) ? 1 : 0;
+}
+
 /**
  * Pass 1 over one record: streams its points in 1 MiB slices and fills bbox, signed area
  * (shoelace, first vertex subtracted, Kahan) and the first 4 vertices of each ring.
@@ -79,20 +133,10 @@ export async function computeRingMetadata(
   const parts = rec.parts;
   meta.reset(rec.numParts);
   const f = slice.f64;
-  const { minX, minY, maxX, maxY, area, probes } = meta;
   const slicePoints = slice.pointCapacity;
+  const st: RingScanState = { x0: 0, y0: 0, prx: 0, pry: 0, sum: 0, c: 0, mnx: 0, mny: 0, mxx: 0, mxy: 0 };
   let unclosed = 0;
   let ring = 0;
-  let x0 = 0;
-  let y0 = 0;
-  let prx = 0;
-  let pry = 0;
-  let sum = 0;
-  let c = 0;
-  let mnx = 0;
-  let mny = 0;
-  let mxx = 0;
-  let mxy = 0;
   for (let g = 0; g < rec.numPoints; g += slicePoints) {
     signal?.throwIfAborted();
     const cnt = Math.min(slicePoints, rec.numPoints - g);
@@ -109,48 +153,13 @@ export async function computeRingMetadata(
       let k = i;
       let li = gi - rs;
       if (li === 0) {
-        x0 = f[2 * k] as number;
-        y0 = f[2 * k + 1] as number;
-        mnx = mxx = x0;
-        mny = mxy = y0;
-        sum = 0;
-        c = 0;
-        prx = 0;
-        pry = 0;
-        probes[PROBE_STRIDE * ring] = x0;
-        probes[PROBE_STRIDE * ring + 1] = y0;
+        startRing(st, meta, ring, f[2 * k] as number, f[2 * k + 1] as number);
         k++;
         li = 1;
       }
-      for (; k < segEnd; k++, li++) {
-        const x = f[2 * k] as number;
-        const y = f[2 * k + 1] as number;
-        if (x < mnx) mnx = x;
-        else if (x > mxx) mxx = x;
-        if (y < mny) mny = y;
-        else if (y > mxy) mxy = y;
-        const rx = x - x0;
-        const ry = y - y0;
-        const term = prx * ry - rx * pry - c;
-        const total = sum + term;
-        c = total - sum - term;
-        sum = total;
-        prx = rx;
-        pry = ry;
-        if (li < 4) {
-          probes[PROBE_STRIDE * ring + 2 * li] = x;
-          probes[PROBE_STRIDE * ring + 2 * li + 1] = y;
-        }
-      }
+      for (; k < segEnd; k++, li++) addRingPoint(st, meta, ring, li, f[2 * k] as number, f[2 * k + 1] as number);
       i = segEnd;
-      if (g + segEnd === re) {
-        area[ring] = 0.5 * sum;
-        minX[ring] = mnx;
-        minY[ring] = mny;
-        maxX[ring] = mxx;
-        maxY[ring] = mxy;
-        if (re - rs >= 4 && (prx !== 0 || pry !== 0)) unclosed++;
-      }
+      if (g + segEnd === re) unclosed += finishRing(st, meta, ring, rs, re);
     }
     onProgress?.(rec.pointsOffset + 16 * (g + cnt), file.size);
   }
