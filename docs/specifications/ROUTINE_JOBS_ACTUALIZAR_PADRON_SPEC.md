@@ -981,6 +981,8 @@ thousands of pending geometries cannot be accepted. This section adds an accepta
   on, `geometryPending` is 0 and the updates count (AP-48's count check) grows by the formerly pending ones. The digest of AP-89 stays complete
   (no per-row entry is added; the flag is in the fingerprint). The CSV of pending geometries (AP-95) is empty with the flag on.
 - AP-118: UI. The geometry changes section shows the button `Aceptar todas (N)` (Lucide `Check`), N being the total pending count of the analysis
-  (`geometryPending`), in place of the listed-rows `Aceptar todos` for geometry changes. Pressing it sets the flag and re-analyzes with the
-  selection; the section then reads `Todas las geometrías pendientes aceptadas (N)` and offers `Rechazar todas`, which clears the flag. The persist
+  (`geometryPending`), in place of the listed-rows `Aceptar todos` for geometry changes. Pressing it only sets the flag in the wizard state; no
+  analysis starts. The section then reads `Todas las geometrías pendientes aceptadas (N)` (N from the last analysis) and offers `Rechazar todas`,
+  which only clears the flag, again without analyzing. If the last analysis was made with the flag on (empty list), clearing it shows `Volver a
+  analizar con la selección` to reload the list. Re-analysis happens at Persist, where the guard (AP-91) detects the flag differs from the simulated one. The persist
   panel summary (AP-91) already reports the geometry count. The note says the acceptance applies to every pending geometry, not only the listed ones.
