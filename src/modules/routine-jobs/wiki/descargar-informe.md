@@ -118,7 +118,7 @@ El archivo es SQL y corre en una sola transacción (`BEGIN` ... `COMMIT`). Cubre
 | Padrones sin dirección maestra antes del enlace | Quita el enlace y borra solo las direcciones maestras creadas por esa ejecución. |
 | Padrones eliminados | Los vuelve a insertar completos, con su id original. |
 | Direcciones maestras eliminadas | Vuelven a insertarse con su id original. |
-| Direcciones reasignadas | Devuelven a cada fila de otra tabla el `id_padron` del padrón subdividido. |
+| Direcciones reasignadas | Devuelven a cada fila de otra tabla el `id_padron` anterior (del padrón subdividido o del padrón que cambió de forma). |
 
 Orden en que corre el script: primero se deshacen los enlaces y las inserciones, luego se restauran las claves y las geometrías, después las direcciones maestras eliminadas, luego los padrones eliminados y al final las direcciones reasignadas. Las direcciones maestras van antes que los padrones y las direcciones reasignadas después, porque unas y otras dependen de esos registros. Si el archivo no tiene filas de una clase, esa parte no aparece. Las secuencias de id no se revierten.
 

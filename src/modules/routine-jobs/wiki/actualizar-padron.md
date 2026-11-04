@@ -165,7 +165,13 @@ Si el análisis no encuentra ninguna tabla que referencie padrones, o el usuario
 
 Si un padrón faltante está subdividido (sus partes nuevas lo cubren) y todas las tablas que lo referencian tienen clave primaria de una sola columna, la carga real reasigna cada fila referenciante a la parte nueva más cercana a su punto (cero si lo contiene; el empate va a la parte de menor id) y luego elimina el padrón. El análisis muestra cuántas filas se reasignarán, por tabla. Los demás padrones con referencias siguen sin eliminarse.
 
-El respaldo para revertir incluye los padrones eliminados (se vuelven a insertar) y las filas reasignadas. Al eliminar un padrón también se borra su dirección maestra, salvo que otra fila de destino la siga usando.
+### Direcciones de padrones que cambiaron de forma
+
+Si un padrón se conserva pero la carga real le cambia la geometría (o le actualiza la clave por un par), puede ocurrir que el punto de alguna dirección ya no quede dentro de su padrón y sí dentro de otro padrón de la misma provincia. En ese caso la carga real reasigna el `id_padron` de esa dirección al otro padrón (solo cambia su `id_padron`). Si varios padrones contienen el punto, gana el de menor id y la fila se cuenta como ambigua. No se toca una dirección sin punto, cuyo punto no está dentro de ningún padrón o que sigue dentro de su propio padrón: nunca se la asigna al padrón más cercano. Las tablas que no se pueden reasignar (sin clave primaria de una sola columna, sin punto o sin permiso para actualizar `id_padron`), y los padrones que ellas referencian, quedan fuera de esta regla.
+
+Este paso corre después de la reasignación de padrones subdivididos y antes de eliminar padrones: es el paso **Reasignar direcciones de padrones modificados**. El análisis muestra **N direcciones cambiarán de padrón porque su padrón cambió de forma**, por tabla, y cuántas son ambiguas; es una estimación calculada con las geometrías que tendrán los padrones, sin escribir nada. La carga real muestra **N direcciones cambian de padrón porque su padrón cambió de forma** y verifica que las filas actualizadas coincidan con las seleccionadas; si no coinciden, revierte toda la transacción. El resumen del botón de guardar suma estas filas a las **direcciones reasignadas**.
+
+El respaldo para revertir incluye los padrones eliminados (se vuelven a insertar) y las filas reasignadas, tanto las de padrones subdivididos como las de padrones que cambiaron de forma. Al eliminar un padrón también se borra su dirección maestra, salvo que otra fila de destino la siga usando.
 
 ## Aceptar las geometrías pendientes
 

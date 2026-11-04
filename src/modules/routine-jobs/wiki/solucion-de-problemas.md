@@ -49,6 +49,7 @@ Antes de confirmar, cada etapa compara lo que escribió con lo que el análisis 
 - Los padrones sin dirección maestra después del enlace (...) no coinciden con los ambiguos (...) (etapa 4, con la opción de direcciones maestras)
 - Las claves actualizadas (...) no coinciden con los pares aplicables del análisis (...) (etapa 4)
 - Las direcciones reasignadas (...) no coinciden con las del análisis (...) (etapa 4, padrones subdivididos)
+- Las direcciones reasignadas por cambio de forma de su padrón (...) no coinciden con las seleccionadas (...) (etapa 4, padrones que cambiaron de forma)
 - Los padrones eliminados (...) no coinciden con los que seguían siendo eliminables (...) (etapa 4)
 - El respaldo tiene ... filas de ..., se esperaban ... (etapa 4: la copia para revertir no tiene lo mismo que se cambió)
 - Los padrones eliminados guardados (...) no coinciden con los eliminados (...), Las direcciones reasignadas guardadas (...) no coinciden con las reasignadas (...) y Las direcciones maestras guardadas (...) no coinciden con las eliminadas (...) (etapa 4, la misma comprobación de la copia para revertir)
@@ -67,7 +68,7 @@ No quedó nada a medias. Alguien puede haber modificado las tablas mientras corr
 - **Clave de padrón no válida en la tabla de destino**: "La tabla de destino ... tiene N filas con una clave que esta etapa no genera ...". Corrija esas filas (tipo `RURAL` o `URBANO`, sin localidad en rural, número 0 o entero sin ceros a la izquierda) antes de cargar: así la etapa nunca inserta un padrón que ya está escrito de otra forma. Si la columna `number` no es de texto, el mensaje la nombra y hay que cambiarle el tipo.
 - **Tabla de localidades equivocada**: "La tabla de localidades elegida (...) no contiene las localidades que usa la tabla de destino: N de M padrones apuntan a un id que no existe en ella." Los padrones guardan ids de `territorial_unit`: elija esa tabla. Si solo algunos padrones apuntan a un id inexistente, la carga continúa y el informe lo advierte.
 
-Esta etapa elimina de la tabla de destino los padrones que ya no están en el catastro, pero solo cuando nada los referencia; antes reasigna las direcciones de los padrones subdivididos a sus partes. Nunca cambia ids. Si una tabla de destino tiene disparadores o reglas, el análisis se rechaza y el mensaje los nombra: quítelos antes de cargar.
+Esta etapa elimina de la tabla de destino los padrones que ya no están en el catastro, pero solo cuando nada los referencia; antes reasigna las direcciones de los padrones subdivididos a sus partes y el `id_padron` de las direcciones cuyo padrón cambió de forma y que ahora caen dentro de otro padrón. Nunca cambia ids. Si una tabla de destino tiene disparadores o reglas, el análisis se rechaza y el mensaje los nombra: quítelos antes de cargar.
 
 ### Falta el privilegio DELETE
 
