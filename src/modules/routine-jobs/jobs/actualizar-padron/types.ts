@@ -83,6 +83,7 @@ export interface SkippedLocalityGroup {
   locality: string | null;
   reason: string;
   count: number;
+  otherDepartments?: string[];
 }
 
 export interface SkippedSample {

@@ -90,6 +90,7 @@ const toLocalityGroups = (value: unknown): SkippedLocalityGroup[] =>
       locality: textOf(row.locality),
       reason: textOf(row.reason) ?? "",
       count: countOf(row.count),
+      ...(Array.isArray(row.otherDepartments) ? { otherDepartments: textListOf(row.otherDepartments) } : {}),
     }));
 
 const toSkippedSamples = (value: unknown, limit: number): SkippedSample[] =>

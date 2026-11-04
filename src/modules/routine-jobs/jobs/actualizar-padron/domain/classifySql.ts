@@ -73,12 +73,12 @@ function stagedSql({ staging }: PadronLayouts): string {
   return `SELECT row_number() OVER () AS ${q(ROW_ID_COLUMN)}, ${columns} FROM ${qualifiedName(staging)}`;
 }
 
-function provinceSourceSql({ province }: PadronLayouts): string {
+export function provinceSourceSql({ province }: PadronLayouts): string {
   const columns = projection(province, [PROVINCE_COLUMN.ID, PROVINCE_COLUMN.NAME]);
   return `SELECT ${columns} FROM ${qualifiedName(province)}`;
 }
 
-function localitySourceSql({ locality, localityTypeId }: PadronLayouts): string {
+export function localitySourceSql({ locality, localityTypeId }: PadronLayouts): string {
   const logicals = [
     LOCALITY_COLUMN.ID,
     LOCALITY_COLUMN.NAME,
@@ -89,7 +89,7 @@ function localitySourceSql({ locality, localityTypeId }: PadronLayouts): string 
   return `SELECT ${columns} FROM ${qualifiedName(locality)}`;
 }
 
-function localityTypeFilterSql({ localityTypeId }: PadronLayouts): string[] {
+export function localityTypeFilterSql({ localityTypeId }: PadronLayouts): string[] {
   if (localityTypeId === undefined) return [];
   return [`AND ${col("loc", LOCALITY_TYPE_COLUMN.ID_TERRITORIAL_UNIT_TYPE)} = ${localityTypeId}`];
 }

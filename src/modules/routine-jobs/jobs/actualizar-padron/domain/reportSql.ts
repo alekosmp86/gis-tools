@@ -1,7 +1,15 @@
 import { q } from "../../shared/sqlFragments";
 import { DETAIL_LIST_LIMIT, SAMPLE_LIMIT } from "../../shared/limits";
-import { LOCALITY_REASON_GROUP_LIMIT, SKIP_REASON, SKIPPED_GROUP_LIMIT, STAGING_COLUMN, DESTINATION_COLUMN } from "../constants";
-import { buildCandidateWith, DECIDED_CTE, REPAIRED_COLUMN, SKIP_REASON_COLUMN } from "./classifySql";
+import { LOCALITY_REASON_GROUP_LIMIT, OTHER_DEPARTMENTS_LIMIT, SKIP_REASON, SKIPPED_GROUP_LIMIT, STAGING_COLUMN, DESTINATION_COLUMN } from "../constants";
+import {
+  buildCandidateWith,
+  DECIDED_CTE,
+  localitySourceSql,
+  localityTypeFilterSql,
+  provinceSourceSql,
+  REPAIRED_COLUMN,
+  SKIP_REASON_COLUMN,
+} from "./classifySql";
 import type { PadronLayouts } from "../types";
 
 const decided = (column: string): string => `${q(DECIDED_CTE)}.${q(column)}`;
@@ -26,9 +34,18 @@ const groupedTop = (column: string): string =>
 const LOCALITY_REASONS = [SKIP_REASON.LOCALIDAD_NO_ENCONTRADA, SKIP_REASON.LOCALIDAD_AMBIGUA];
 const LOCALITY_REASON_LIST = LOCALITY_REASONS.map((reason) => `'${reason}'`).join(", ");
 
-const localityReasonSql = (): string =>
+const otherDepartmentsSql = (layouts: PadronLayouts): string =>
   [
-    `SELECT "ranked"."department", "ranked"."locality", "ranked"."reason", "ranked"."count"`,
+    `CASE WHEN "ranked"."reason" = '${SKIP_REASON.LOCALIDAD_NO_ENCONTRADA}' THEN ARRAY(`,
+    `SELECT "other"."name" FROM (SELECT DISTINCT "prov"."name" AS "name"`,
+    `FROM (${localitySourceSql(layouts)}) AS "loc" JOIN (${provinceSourceSql(layouts)}) AS "prov" ON "prov"."id" = "loc"."id_province"`,
+    `WHERE upper("loc"."name") = upper("ranked"."locality") AND upper("prov"."name") <> upper("ranked"."department") ${localityTypeFilterSql(layouts).join(" ")}`,
+    `ORDER BY "prov"."name" LIMIT ${OTHER_DEPARTMENTS_LIMIT}) AS "other" ORDER BY "other"."name") END AS "otherDepartments"`,
+  ].join(" ");
+
+const localityReasonSql = (layouts: PadronLayouts): string =>
+  [
+    `SELECT "ranked"."department", "ranked"."locality", "ranked"."reason", "ranked"."count", ${otherDepartmentsSql(layouts)}`,
     `FROM (SELECT ${decided(STAGING_COLUMN.NOMDEPTO)} AS "department", ${decided(STAGING_COLUMN.NOMLOCCAT)} AS "locality", ${REASON} AS "reason", count(*) AS "count"`,
     `, row_number() OVER (PARTITION BY ${REASON} ORDER BY count(*) DESC, ${decided(STAGING_COLUMN.NOMDEPTO)}, ${decided(STAGING_COLUMN.NOMLOCCAT)}) AS "rank"`,
     `${FROM_DECIDED} WHERE ${SKIPPED} AND ${REASON} IN (${LOCALITY_REASON_LIST})`,
@@ -73,7 +90,7 @@ export function buildReportSql(layouts: PadronLayouts): string {
     topList(samplesSql(), "samples"),
     topList(skippedListSql(), "skippedList"),
     topList(collidingListSql(), "collidingKeyList"),
-    topList(localityReasonSql(), "byLocalityAndReason"),
+    topList(localityReasonSql(layouts), "byLocalityAndReason"),
   ];
   return `${buildCandidateWith(layouts, "report")} SELECT ${columns.join(", ")} ${FROM_DECIDED}`;
 }
