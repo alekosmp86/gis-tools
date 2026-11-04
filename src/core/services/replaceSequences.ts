@@ -17,42 +17,57 @@ export interface SequenceDiscovery {
 
 const NEXTVAL_PATTERN = /^\s*nextval\s*\(\s*'((?:[^']|'')*)'\s*(?:::\s*(?:regclass|text))?\s*\)\s*$/i;
 
+interface IdentifierPart {
+  part: string;
+  next: number;
+}
+
+function readQuotedPart(text: string, start: number): IdentifierPart | null {
+  let part = "";
+  let index = start + 1;
+  for (;;) {
+    if (index >= text.length) return null;
+    if (text[index] !== '"') {
+      part += text[index++];
+      continue;
+    }
+    if (text[index + 1] === '"') {
+      part += '"';
+      index += 2;
+      continue;
+    }
+    return { part, next: index + 1 };
+  }
+}
+
+function readUnquotedPart(text: string, start: number): IdentifierPart | null {
+  let part = "";
+  let index = start;
+  while (index < text.length && text[index] !== ".") {
+    if (text[index] === '"') return null;
+    part += text[index++];
+  }
+  const trimmed = part.trim().toLowerCase();
+  if (trimmed === "") return null;
+  return { part: trimmed, next: index };
+}
+
+function skipSeparator(text: string, index: number): number | null {
+  if (index >= text.length) return index;
+  if (text[index] !== ".") return null;
+  return index + 1 >= text.length ? null : index + 1;
+}
+
 function splitIdentifierParts(text: string): string[] | null {
   const parts: string[] = [];
   let index = 0;
   while (index < text.length) {
-    if (text[index] === '"') {
-      let part = "";
-      index++;
-      for (;;) {
-        if (index >= text.length) return null;
-        if (text[index] === '"') {
-          if (text[index + 1] === '"') {
-            part += '"';
-            index += 2;
-            continue;
-          }
-          index++;
-          break;
-        }
-        part += text[index++];
-      }
-      parts.push(part);
-    } else {
-      let part = "";
-      while (index < text.length && text[index] !== ".") {
-        if (text[index] === '"') return null;
-        part += text[index++];
-      }
-      const trimmed = part.trim().toLowerCase();
-      if (trimmed === "") return null;
-      parts.push(trimmed);
-    }
-    if (index < text.length) {
-      if (text[index] !== ".") return null;
-      index++;
-      if (index >= text.length) return null;
-    }
+    const read = text[index] === '"' ? readQuotedPart(text, index) : readUnquotedPart(text, index);
+    if (!read) return null;
+    parts.push(read.part);
+    const next = skipSeparator(text, read.next);
+    if (next === null) return null;
+    index = next;
   }
   return parts.length === 1 || parts.length === 2 ? parts : null;
 }

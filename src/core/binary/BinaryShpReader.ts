@@ -25,6 +25,17 @@ export interface ShpHeader {
   readonly bbox: [number, number, number, number]; // [minX, minY, maxX, maxY]
 }
 
+type CoordinateTransform = (coordinate: [number, number]) => [number, number];
+
+function applyTransform(
+  coordinates: number[][],
+  transformCoordinate?: CoordinateTransform | null
+): number[][] {
+  return transformCoordinate
+    ? coordinates.map(([rawX, rawY]) => transformCoordinate([rawX, rawY]))
+    : coordinates;
+}
+
 export class BinaryShpReader {
   private readonly uint8View: Uint8Array;
   private readonly dataView: DataView;
@@ -108,9 +119,108 @@ export class BinaryShpReader {
     return { offsets, lengths, count };
   }
 
+  private readPoint(
+    offset: number,
+    transformCoordinate?: CoordinateTransform | null
+  ): [number, number] {
+    const rawX = this.dataView.getFloat64(offset, true);
+    const rawY = this.dataView.getFloat64(offset + 8, true);
+    return transformCoordinate ? transformCoordinate([rawX, rawY]) : [rawX, rawY];
+  }
+
+  private readRawParts(
+    recordOffset: number,
+    numParts: number,
+    numPoints: number
+  ): number[][][] {
+    const partsOffset = recordOffset + 44;
+    const pointsOffset = partsOffset + numParts * 4;
+
+    const partIndices: number[] = [];
+    for (let partIndex = 0; partIndex < numParts; partIndex++) {
+      partIndices.push(this.dataView.getInt32(partsOffset + partIndex * 4, true));
+    }
+
+    const parts: number[][][] = [];
+    for (let partIndex = 0; partIndex < numParts; partIndex++) {
+      const startIndex = partIndices[partIndex];
+      const endIndex = partIndex + 1 < numParts ? partIndices[partIndex + 1] : numPoints;
+      const coordinates: number[][] = [];
+
+      for (let pointIndex = startIndex; pointIndex < endIndex; pointIndex++) {
+        const [x, y] = this.readPoint(pointsOffset + pointIndex * 16);
+        coordinates.push([x, y]);
+      }
+      parts.push(coordinates);
+    }
+    return parts;
+  }
+
+  private readPointGeometry(
+    recordOffset: number,
+    transformCoordinate?: CoordinateTransform | null
+  ): Geometry {
+    const [pointX, pointY] = this.readPoint(recordOffset + 4, transformCoordinate);
+    return { type: "Point", coordinates: [pointX, pointY] };
+  }
+
+  private readMultiPointGeometry(
+    recordOffset: number,
+    transformCoordinate?: CoordinateTransform | null
+  ): Geometry {
+    const numPoints = this.dataView.getInt32(recordOffset + 36, true);
+    const pointsOffset = recordOffset + 40;
+    const coordinates: number[][] = [];
+
+    for (let pointIndex = 0; pointIndex < numPoints; pointIndex++) {
+      const [pointX, pointY] = this.readPoint(pointsOffset + pointIndex * 16, transformCoordinate);
+      coordinates.push([pointX, pointY]);
+    }
+
+    return { type: "MultiPoint", coordinates };
+  }
+
+  private readPolyLineGeometry(
+    recordOffset: number,
+    transformCoordinate?: CoordinateTransform | null
+  ): Geometry {
+    const numParts = this.dataView.getInt32(recordOffset + 36, true);
+    const numPoints = this.dataView.getInt32(recordOffset + 40, true);
+    const lines = this.readRawParts(recordOffset, numParts, numPoints).map((line) =>
+      applyTransform(line, transformCoordinate)
+    );
+
+    if (numParts === 1) {
+      return { type: "LineString", coordinates: lines[0] };
+    }
+    return { type: "MultiLineString", coordinates: lines };
+  }
+
+  private readPolygonGeometry(
+    recordOffset: number,
+    transformCoordinate?: CoordinateTransform | null
+  ): Geometry | null {
+    const numParts = this.dataView.getInt32(recordOffset + 36, true);
+    const numPoints = this.dataView.getInt32(recordOffset + 40, true);
+    if (numParts === 0) return null;
+
+    const rings = this.readRawParts(recordOffset, numParts, numPoints);
+    const transformRing = (ring: number[][]): number[][] =>
+      applyTransform(ring, transformCoordinate);
+
+    if (numParts === 1) {
+      return { type: "Polygon", coordinates: rings.map(transformRing) };
+    }
+    // Ring orientation is read on raw coordinates, so assembly runs before the transform.
+    return {
+      type: "MultiPolygon",
+      coordinates: assemblePolygons(rings).map((polygon) => polygon.map(transformRing)),
+    };
+  }
+
   public readGeometry(
     recordIndex: number,
-    transformCoordinate?: ((coordinate: [number, number]) => [number, number]) | null
+    transformCoordinate?: CoordinateTransform | null
   ): Geometry | null {
     if (recordIndex < 0 || recordIndex >= this.recordCount) {
       return null;
@@ -125,128 +235,23 @@ export class BinaryShpReader {
 
       case ShapeType.POINT:
       case ShapeType.POINTZ:
-      case ShapeType.POINTM: {
-        const rawPointX = this.dataView.getFloat64(recordOffset + 4, true);
-        const rawPointY = this.dataView.getFloat64(recordOffset + 12, true);
-        const [pointX, pointY] = transformCoordinate
-          ? transformCoordinate([rawPointX, rawPointY])
-          : [rawPointX, rawPointY];
-        return {
-          type: "Point",
-          coordinates: [pointX, pointY],
-        };
-      }
+      case ShapeType.POINTM:
+        return this.readPointGeometry(recordOffset, transformCoordinate);
 
       case ShapeType.MULTIPOINT:
       case ShapeType.MULTIPOINTZ:
-      case ShapeType.MULTIPOINTM: {
-        const numPoints = this.dataView.getInt32(recordOffset + 36, true);
-        const pointsOffset = recordOffset + 40;
-        const multiPointCoordinates: number[][] = [];
-
-        for (let pointIndex = 0; pointIndex < numPoints; pointIndex++) {
-          const rawPointX = this.dataView.getFloat64(pointsOffset + pointIndex * 16, true);
-          const rawPointY = this.dataView.getFloat64(pointsOffset + pointIndex * 16 + 8, true);
-          const [pointX, pointY] = transformCoordinate
-            ? transformCoordinate([rawPointX, rawPointY])
-            : [rawPointX, rawPointY];
-          multiPointCoordinates.push([pointX, pointY]);
-        }
-
-        return {
-          type: "MultiPoint",
-          coordinates: multiPointCoordinates,
-        };
-      }
+      case ShapeType.MULTIPOINTM:
+        return this.readMultiPointGeometry(recordOffset, transformCoordinate);
 
       case ShapeType.POLYLINE:
       case ShapeType.POLYLINEZ:
-      case ShapeType.POLYLINEM: {
-        const numParts = this.dataView.getInt32(recordOffset + 36, true);
-        const numPoints = this.dataView.getInt32(recordOffset + 40, true);
-        const partsOffset = recordOffset + 44;
-        const pointsOffset = partsOffset + numParts * 4;
-
-        const partIndices: number[] = [];
-        for (let partIndex = 0; partIndex < numParts; partIndex++) {
-          partIndices.push(this.dataView.getInt32(partsOffset + partIndex * 4, true));
-        }
-
-        const lines: number[][][] = [];
-        for (let partIndex = 0; partIndex < numParts; partIndex++) {
-          const startIndex = partIndices[partIndex];
-          const endIndex = partIndex + 1 < numParts ? partIndices[partIndex + 1] : numPoints;
-          const lineCoordinates: number[][] = [];
-
-          for (let pointIndex = startIndex; pointIndex < endIndex; pointIndex++) {
-            const rawCoordinateX = this.dataView.getFloat64(pointsOffset + pointIndex * 16, true);
-            const rawCoordinateY = this.dataView.getFloat64(pointsOffset + pointIndex * 16 + 8, true);
-            const [coordinateX, coordinateY] = transformCoordinate
-              ? transformCoordinate([rawCoordinateX, rawCoordinateY])
-              : [rawCoordinateX, rawCoordinateY];
-            lineCoordinates.push([coordinateX, coordinateY]);
-          }
-          lines.push(lineCoordinates);
-        }
-
-        if (numParts === 1) {
-          return {
-            type: "LineString",
-            coordinates: lines[0],
-          };
-        }
-        return {
-          type: "MultiLineString",
-          coordinates: lines,
-        };
-      }
+      case ShapeType.POLYLINEM:
+        return this.readPolyLineGeometry(recordOffset, transformCoordinate);
 
       case ShapeType.POLYGON:
       case ShapeType.POLYGONZ:
-      case ShapeType.POLYGONM: {
-        const numParts = this.dataView.getInt32(recordOffset + 36, true);
-        const numPoints = this.dataView.getInt32(recordOffset + 40, true);
-        const partsOffset = recordOffset + 44;
-        const pointsOffset = partsOffset + numParts * 4;
-
-        if (numParts === 0) return null;
-
-        const partIndices: number[] = [];
-        for (let partIndex = 0; partIndex < numParts; partIndex++) {
-          partIndices.push(this.dataView.getInt32(partsOffset + partIndex * 4, true));
-        }
-
-        const rings: number[][][] = [];
-        for (let partIndex = 0; partIndex < numParts; partIndex++) {
-          const startIndex = partIndices[partIndex];
-          const endIndex = partIndex + 1 < numParts ? partIndices[partIndex + 1] : numPoints;
-          const ringCoordinates: number[][] = [];
-
-          for (let pointIndex = startIndex; pointIndex < endIndex; pointIndex++) {
-            const rawCoordinateX = this.dataView.getFloat64(pointsOffset + pointIndex * 16, true);
-            const rawCoordinateY = this.dataView.getFloat64(pointsOffset + pointIndex * 16 + 8, true);
-            ringCoordinates.push([rawCoordinateX, rawCoordinateY]);
-          }
-          rings.push(ringCoordinates);
-        }
-
-        const transformRing = (ring: number[][]): number[][] =>
-          transformCoordinate
-            ? ring.map(([rawX, rawY]) => transformCoordinate([rawX, rawY]))
-            : ring;
-
-        if (numParts === 1) {
-          return {
-            type: "Polygon",
-            coordinates: rings.map(transformRing),
-          };
-        }
-        // Ring orientation is read on raw coordinates, so assembly runs before the transform.
-        return {
-          type: "MultiPolygon",
-          coordinates: assemblePolygons(rings).map((polygon) => polygon.map(transformRing)),
-        };
-      }
+      case ShapeType.POLYGONM:
+        return this.readPolygonGeometry(recordOffset, transformCoordinate);
 
       default:
         return null;

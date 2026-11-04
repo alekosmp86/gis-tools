@@ -9,7 +9,9 @@ export type ShpRing = number[][];
 export type ShpRecord =
   | { readonly kind: "null" }
   | { readonly kind: "point"; readonly shapeType: 1 | 11 | 21; readonly point: [number, number] }
-  | { readonly kind: "polygon"; readonly shapeType: 5 | 15 | 25; readonly rings: ShpRing[] };
+  | { readonly kind: "polygon"; readonly shapeType: 5 | 15 | 25; readonly rings: ShpRing[] }
+  | { readonly kind: "polyline"; readonly shapeType: 3; readonly lines: ShpRing[] }
+  | { readonly kind: "multipoint"; readonly shapeType: 8; readonly points: ShpRing };
 
 const HEADER_BYTES = 100;
 const RECORD_HEADER_BYTES = 8;
@@ -21,6 +23,14 @@ export function polygonRecord(rings: ShpRing[], shapeType: 5 | 15 | 25 = 5): Shp
 
 export function pointRecord(point: [number, number], shapeType: 1 | 11 | 21 = 1): ShpRecord {
   return { kind: "point", shapeType, point };
+}
+
+export function polylineRecord(lines: ShpRing[]): ShpRecord {
+  return { kind: "polyline", shapeType: 3, lines };
+}
+
+export function multiPointRecord(points: ShpRing): ShpRecord {
+  return { kind: "multipoint", shapeType: 8, points };
 }
 
 export function nullRecord(): ShpRecord {
@@ -37,6 +47,11 @@ function computePointContentBytes(shapeType: 1 | 11 | 21): number {
 function computeContentBytes(record: ShpRecord): number {
   if (record.kind === "null") return 4;
   if (record.kind === "point") return computePointContentBytes(record.shapeType);
+  if (record.kind === "multipoint") return 4 + 32 + 4 + record.points.length * BYTES_PER_POINT;
+  if (record.kind === "polyline") {
+    const linePoints = record.lines.reduce((total, line) => total + line.length, 0);
+    return 4 + 32 + 4 + 4 + record.lines.length * 4 + linePoints * BYTES_PER_POINT;
+  }
   const pointCount = record.rings.reduce((total, ring) => total + ring.length, 0);
   const baseBytes = 4 + 32 + 4 + 4 + record.rings.length * 4 + pointCount * BYTES_PER_POINT;
   // Z and M blocks (range + one value per point) are zero filled and ignored by the reader.
@@ -99,6 +114,16 @@ export function buildShpBuffer(records: ShpRecord[]): ArrayBuffer {
       view.setInt32(bodyOffset, record.shapeType, true);
       view.setFloat64(bodyOffset + 4, record.point[0], true);
       view.setFloat64(bodyOffset + 12, record.point[1], true);
+    } else if (record.kind === "multipoint") {
+      view.setInt32(bodyOffset, record.shapeType, true);
+      view.setInt32(bodyOffset + 36, record.points.length, true);
+      record.points.forEach(([pointX, pointY], pointIndex) => {
+        view.setFloat64(bodyOffset + 40 + pointIndex * BYTES_PER_POINT, pointX, true);
+        view.setFloat64(bodyOffset + 48 + pointIndex * BYTES_PER_POINT, pointY, true);
+      });
+    } else if (record.kind === "polyline") {
+      view.setInt32(bodyOffset, record.shapeType, true);
+      writePolygonBody(view, bodyOffset, record.lines);
     } else {
       view.setInt32(bodyOffset, record.shapeType, true);
       writePolygonBody(view, bodyOffset, record.rings);

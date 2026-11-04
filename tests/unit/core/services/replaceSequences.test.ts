@@ -228,3 +228,59 @@ describe("discoverTargetSequences", () => {
     });
   });
 });
+
+describe("discoverTargetSequences identifier splitting", () => {
+  const parse = (literal: string, schema = "geo") =>
+    discoverTargetSequences([col("id", `nextval('${literal}'::regclass)`)], [], schema);
+
+  it("should split a quoted schema and a quoted name", () => {
+    expect(parse('"S"."Q"').sequences).toEqual([ref("S", "Q", ["id"])]);
+  });
+
+  it("should mix a quoted schema with an unquoted name and fold only the unquoted part", () => {
+    expect(parse('"Mixed".SeqName').sequences).toEqual([ref("Mixed", "seqname", ["id"])]);
+  });
+
+  it("should mix an unquoted schema with a quoted name and fold only the unquoted part", () => {
+    expect(parse('SchemA."Seq"').sequences).toEqual([ref("schema", "Seq", ["id"])]);
+  });
+
+  it("should keep a dot that sits inside quotes as part of the identifier", () => {
+    expect(parse('"a.b"').sequences).toEqual([ref("geo", "a.b", ["id"])]);
+  });
+
+  it("should keep a dot inside a quoted schema when a second part follows", () => {
+    expect(parse('"a.b".q').sequences).toEqual([ref("a.b", "q", ["id"])]);
+  });
+
+  it("should trim whitespace around unquoted parts", () => {
+    expect(parse(" s . q ").sequences).toEqual([ref("s", "q", ["id"])]);
+  });
+
+  it("should unescape a doubled double-quote at the end of a quoted identifier", () => {
+    expect(parse('"a"""').sequences).toEqual([ref("geo", 'a"', ["id"])]);
+  });
+
+  it.each([
+    ["a trailing dot", "s.q."],
+    ["a leading dot", ".q"],
+    ["two consecutive dots", "s..q"],
+    ["a quote in the middle of an unquoted part", 'ab"c"'],
+    ["text glued after a closing quote", '"a"b'],
+    ["a quoted part followed by a trailing dot", '"a".'],
+    ["only a dot", "."],
+    ["only whitespace", "   "],
+    ["a lone opening quote", '"'],
+    ["four parts", "a.b.c.d"],
+  ])("should report %s as unparsed", (_label, literal) => {
+    const result = parse(literal);
+
+    expect(result.sequences).toEqual([]);
+    expect(result.unparsedDefaults).toHaveLength(1);
+  });
+
+  it("should accept an empty quoted part as a zero-length identifier (documented quirk, PostgreSQL itself rejects it)", () => {
+    expect(parse('""').sequences).toEqual([ref("geo", "", ["id"], false, "geo.")]);
+    expect(parse('"".q').sequences).toEqual([ref("", "q", ["id"], false, "public.q")]);
+  });
+});

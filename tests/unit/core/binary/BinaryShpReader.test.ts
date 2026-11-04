@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
-import type { MultiPolygon, Point, Polygon } from "geojson";
+import type { LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon } from "geojson";
 import { BinaryShpReader } from "@/core/binary/BinaryShpReader";
 import {
   buildShpBuffer,
+  multiPointRecord,
   nullRecord,
   pointRecord,
+  polylineRecord,
   polygonRecord,
   type ShpRing,
 } from "./support/shpBuilder";
@@ -251,6 +253,90 @@ describe("BinaryShpReader", () => {
       );
 
       expect(reader.recordCount).toBe(3);
+    });
+  });
+
+  describe("multipoint records", () => {
+    it("should return a MultiPoint with every point in order", () => {
+      const points = [[1, 2], [3, 4], [-5.5, 6.25]];
+      const reader = new BinaryShpReader(buildShpBuffer([multiPointRecord(points)]));
+
+      const geometry = reader.readGeometry(0) as MultiPoint;
+
+      expect(geometry).toEqual({ type: "MultiPoint", coordinates: points });
+    });
+
+    it("should return an empty MultiPoint when the record has zero points", () => {
+      const reader = new BinaryShpReader(buildShpBuffer([multiPointRecord([])]));
+
+      expect(reader.readGeometry(0)).toEqual({ type: "MultiPoint", coordinates: [] });
+    });
+
+    it("should apply the transform to every point of a MultiPoint", () => {
+      const reader = new BinaryShpReader(buildShpBuffer([multiPointRecord([[1, 2], [3, 4]])]));
+
+      const geometry = reader.readGeometry(0, swapAxes) as MultiPoint;
+
+      expect(geometry.coordinates).toEqual([[2, 1], [4, 3]]);
+    });
+  });
+
+  describe("polyline records", () => {
+    it("should return a LineString when the record has a single part", () => {
+      const line = [[0, 0], [1, 1], [2, 0]];
+      const reader = new BinaryShpReader(buildShpBuffer([polylineRecord([line])]));
+
+      const geometry = reader.readGeometry(0) as LineString;
+
+      expect(geometry).toEqual({ type: "LineString", coordinates: line });
+    });
+
+    it("should return a MultiLineString when the record has several parts", () => {
+      const lineA = [[0, 0], [1, 1]];
+      const lineB = [[10, 10], [11, 11], [12, 10]];
+      const reader = new BinaryShpReader(buildShpBuffer([polylineRecord([lineA, lineB])]));
+
+      const geometry = reader.readGeometry(0) as MultiLineString;
+
+      expect(geometry).toEqual({ type: "MultiLineString", coordinates: [lineA, lineB] });
+    });
+
+    it("should apply the transform to every vertex of a LineString", () => {
+      const reader = new BinaryShpReader(buildShpBuffer([polylineRecord([[[1, 2], [3, 4]]])]));
+
+      const geometry = reader.readGeometry(0, swapAxes) as LineString;
+
+      expect(geometry.coordinates).toEqual([[2, 1], [4, 3]]);
+    });
+
+    it("should apply the transform to every part of a MultiLineString", () => {
+      const reader = new BinaryShpReader(
+        buildShpBuffer([polylineRecord([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])])
+      );
+
+      const geometry = reader.readGeometry(0, swapAxes) as MultiLineString;
+
+      expect(geometry.coordinates).toEqual([[[2, 1], [4, 3]], [[6, 5], [8, 7]]]);
+    });
+  });
+
+  describe("record mix", () => {
+    it("should return null for a null shape and keep reading neighbouring records", () => {
+      const reader = new BinaryShpReader(
+        buildShpBuffer([nullRecord(), multiPointRecord([[1, 1]]), polylineRecord([[[0, 0], [1, 1]]])])
+      );
+
+      expect(reader.readGeometry(0)).toBeNull();
+      expect(reader.readGeometry(1)).toEqual({ type: "MultiPoint", coordinates: [[1, 1]] });
+      expect(reader.readGeometry(2)).toEqual({ type: "LineString", coordinates: [[0, 0], [1, 1]] });
+    });
+
+    it("should return null when the record shape type is unsupported", () => {
+      const buffer = buildShpBuffer([pointRecord([1, 2])]);
+      new DataView(buffer).setInt32(108, 31, true);
+      const reader = new BinaryShpReader(buffer);
+
+      expect(reader.readGeometry(0)).toBeNull();
     });
   });
 });

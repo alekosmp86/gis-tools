@@ -392,3 +392,77 @@ describe("inspectRecordsTable", () => {
     });
   });
 });
+
+describe("inspectRecordsTable SRID resolution order", () => {
+  const geo = (type: string) => [col("geom", "USER-DEFINED", "geometry", type)];
+
+  it("should use the column type SRID when Find_SRID throws and the fallback query finds nothing", async () => {
+    const { client } = makeClient(geo("geometry(Polygon,32721)"), new Error("no find_srid"), "norows");
+
+    const r = await inspectRecordsTable(client, P());
+
+    expect(r.detectedSrid).toBe(32721);
+  });
+
+  it("should use the column type SRID when both SRID queries throw", async () => {
+    const { client } = makeClient(geo("geometry(Point,5381)"), new Error("a"), new Error("b"));
+
+    const r = await inspectRecordsTable(client, P());
+
+    expect(r.detectedSrid).toBe(5381);
+  });
+
+  it("should prefer the fallback SRID over the column type SRID", async () => {
+    const { client } = makeClient(geo("geometry(Point,5381)"), new Error("a"), 3857);
+
+    const r = await inspectRecordsTable(client, P());
+
+    expect(r.detectedSrid).toBe(3857);
+  });
+
+  it("should send the sanitized geometry column and qualified table in the fallback query", async () => {
+    const columns = [col('g"eom', "USER-DEFINED", "geometry", "geometry")];
+    const { client, calls } = makeClient(columns, new Error("boom"), 3857);
+
+    await inspectRecordsTable(client, P({ schema_name: 's"x', table_name: 't"y' }));
+
+    const fallbackSql = calls[2].sql;
+    expect(fallbackSql).toContain('ST_SRID("g""eom")');
+    expect(fallbackSql).toContain('FROM "s""x"."t""y"');
+    expect(calls[2].params).toBeUndefined();
+  });
+
+  it("should pass the raw geometry column name as the Find_SRID parameter", async () => {
+    const { client, calls } = makeClient([col('g"eom', "USER-DEFINED", "geometry", "geometry")], 4326);
+
+    await inspectRecordsTable(client, P({ schema_name: "s", table_name: "t" }));
+
+    expect(calls[1].params).toEqual(["s", "t", 'g"eom']);
+  });
+
+  it("should keep 4326 and an unmodified select clause when the table has no geometry column", async () => {
+    const { client } = makeClient([col("id", "integer")]);
+
+    const r = await inspectRecordsTable(client, P({ fields_to_compare: ["id"] }));
+
+    expect(r.detectedSrid).toBe(4326);
+    expect(r.selectClause).toBe('"id"');
+  });
+
+  it("should leave other selected columns untouched around the geometry expression", async () => {
+    const columns = [col("a"), col("geometry", "USER-DEFINED", "geometry", "geometry(Point,4326)"), col("b")];
+    const { client } = makeClient(columns, 4326);
+
+    const r = await inspectRecordsTable(client, P({ fields_to_compare: ["a", "b"] }));
+
+    expect(r.selectClause).toBe(`"a", "b", ${geoExpr("geometry")}`);
+  });
+
+  it("should use the Find_SRID value over a differing column type SRID", async () => {
+    const { client } = makeClient(geo("geometry(Point,5381)"), 3857);
+
+    const r = await inspectRecordsTable(client, P());
+
+    expect(r.detectedSrid).toBe(3857);
+  });
+});
