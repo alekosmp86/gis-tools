@@ -18,6 +18,77 @@ const SCHEME_OR_ROOTED = /^([a-z][a-z0-9+.-]*:|\/|#)/i;
 /** Raw frontmatter titles keyed by `<tool>/<slug>`; the index falls back to the slug so it cannot prove a title exists. */
 type RawTitles = ReadonlyMap<string, string | undefined>;
 
+type WikiTool = NonNullable<ReturnType<WikiIndex["findTool"]>>;
+type WikiPage = WikiTool["pages"][number];
+
+function routeTargetResolves(index: WikiIndex, rewritten: string): boolean {
+  const [toolSlug, pageSlug] = rewritten.slice(WIKI_ROUTE_PREFIX.length).split("#")[0].split("/");
+  return Boolean(pageSlug ? index.findPage(toolSlug, pageSlug) : index.findTool(toolSlug));
+}
+
+function findLinkProblem(
+  source: WikiSource,
+  tool: WikiTool,
+  where: string,
+  link: string,
+  index: WikiIndex,
+  fileExists: FileExists,
+): string | null {
+  const rewritten = rewriteWikiHref(tool.toolSlug, link);
+  if (rewritten.startsWith(WIKI_ROUTE_PREFIX)) {
+    return routeTargetResolves(index, rewritten) ? null : `${where}: broken link "${link}"`;
+  }
+  if (SCHEME_OR_ROOTED.test(link)) return null;
+  const target = path.resolve(source.contentDir, link.split("#")[0]);
+  return fileExists(target) ? null : `${where}: broken file link "${link}"`;
+}
+
+function findImageProblem(source: WikiSource, where: string, image: string, fileExists: FileExists): string | null {
+  if (SCHEME_OR_ROOTED.test(image)) return null;
+  const resolved = resolveWikiAssetPath(source.contentDir, image.replace(/^\.\//, "").split("/"));
+  return !resolved || !fileExists(resolved) ? `${where}: missing image "${image}"` : null;
+}
+
+function findPageProblems(
+  source: WikiSource,
+  tool: WikiTool,
+  page: WikiPage,
+  index: WikiIndex,
+  rawTitles: RawTitles,
+  fileExists: FileExists,
+): string[] {
+  const where = `${tool.toolSlug}/${page.slug}`;
+  const { links, images } = extractWikiReferences(page.body);
+  const problems: Array<string | null> = [
+    rawTitles.get(where)?.trim() ? null : `${where}: missing frontmatter title`,
+    ...links.map((link) => findLinkProblem(source, tool, where, link, index, fileExists)),
+    ...images.map((image) => findImageProblem(source, where, image, fileExists)),
+  ];
+  return problems.filter((problem): problem is string => problem !== null);
+}
+
+function findToolProblems(tool: WikiTool): string[] {
+  const problems: string[] = [];
+  if (tool.pages.length === 0) problems.push(`${tool.toolSlug}: has no pages`);
+  const slugs = tool.pages.map((page) => page.slug);
+  if (new Set(slugs).size !== slugs.length) problems.push(`${tool.toolSlug}: duplicate page slug`);
+  return problems;
+}
+
+function findSourceProblems(
+  source: WikiSource,
+  index: WikiIndex,
+  rawTitles: RawTitles,
+  fileExists: FileExists,
+): string[] {
+  const tool = index.findTool(source.toolSlug);
+  if (!tool) return [`${source.toolSlug}: tool missing from index`];
+  return [
+    ...findToolProblems(tool),
+    ...tool.pages.flatMap((page) => findPageProblems(source, tool, page, index, rawTitles, fileExists)),
+  ];
+}
+
 /**
  * Returns one human-readable problem per broken link, missing image or missing title.
  * Pure over its inputs so the negative tests can drive it with a fake index.
@@ -28,46 +99,7 @@ function findWikiContentProblems(
   rawTitles: RawTitles,
   fileExists: FileExists,
 ): string[] {
-  const problems: string[] = [];
-
-  for (const source of sources) {
-    const tool = index.findTool(source.toolSlug);
-    if (!tool) {
-      problems.push(`${source.toolSlug}: tool missing from index`);
-      continue;
-    }
-    if (tool.pages.length === 0) problems.push(`${tool.toolSlug}: has no pages`);
-
-    const slugs = tool.pages.map((page) => page.slug);
-    if (new Set(slugs).size !== slugs.length) problems.push(`${tool.toolSlug}: duplicate page slug`);
-
-    for (const page of tool.pages) {
-      const where = `${tool.toolSlug}/${page.slug}`;
-      if (!rawTitles.get(where)?.trim()) problems.push(`${where}: missing frontmatter title`);
-
-      const { links, images } = extractWikiReferences(page.body);
-
-      for (const link of links) {
-        const rewritten = rewriteWikiHref(tool.toolSlug, link);
-        if (rewritten.startsWith(WIKI_ROUTE_PREFIX)) {
-          const [toolSlug, pageSlug] = rewritten.slice(WIKI_ROUTE_PREFIX.length).split("#")[0].split("/");
-          const resolves = pageSlug ? index.findPage(toolSlug, pageSlug) : index.findTool(toolSlug);
-          if (!resolves) problems.push(`${where}: broken link "${link}"`);
-        } else if (!SCHEME_OR_ROOTED.test(link)) {
-          const target = path.resolve(source.contentDir, link.split("#")[0]);
-          if (!fileExists(target)) problems.push(`${where}: broken file link "${link}"`);
-        }
-      }
-
-      for (const image of images) {
-        if (SCHEME_OR_ROOTED.test(image)) continue;
-        const resolved = resolveWikiAssetPath(source.contentDir, image.replace(/^\.\//, "").split("/"));
-        if (!resolved || !fileExists(resolved)) problems.push(`${where}: missing image "${image}"`);
-      }
-    }
-  }
-
-  return problems;
+  return sources.flatMap((source) => findSourceProblems(source, index, rawTitles, fileExists));
 }
 
 async function loadRawTitles(sources: ReadonlyArray<WikiSource>, index: WikiIndex): Promise<RawTitles> {
