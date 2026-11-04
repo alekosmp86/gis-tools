@@ -233,3 +233,29 @@ describe("buildRunWarnings loose pair warning", () => {
     expect(buildRunWarnings(choicesInputOf(0))).toEqual([]);
   });
 });
+
+describe("buildRunWarnings changed-padron reassignment warnings (AP-124)", () => {
+  const withChanged = (reassignedChanged: number | undefined, dryRun: boolean): WarningInput => {
+    const input = removalInputOf(0, removalsSkippedOf(0, 0), { dryRun });
+    return { ...input, target: { ...input.target, reassignedChanged } };
+  };
+
+  it("should warn in the past, plural and singular, when a real run reassigned the padron of addresses", () => {
+    expect(buildRunWarnings(withChanged(3, false))).toContain("3 direcciones cambiaron de padrón (id_padron) porque su padrón cambió de forma.");
+    expect(buildRunWarnings(withChanged(1, false))).toContain("1 dirección cambió de padrón (id_padron) porque su padrón cambió de forma.");
+  });
+
+  it("should warn in the future, plural and singular, in an analysis", () => {
+    expect(buildRunWarnings(withChanged(2, true))).toContain("2 direcciones cambiarán de padrón (id_padron) porque su padrón cambió de forma.");
+    expect(buildRunWarnings(withChanged(1, true))).toContain("1 dirección cambiará de padrón (id_padron) porque su padrón cambió de forma.");
+  });
+
+  it("should produce no such warning when zero or absent", () => {
+    expect(buildRunWarnings(withChanged(0, false)).some((warning) => warning.includes("cambió de forma"))).toBe(false);
+    expect(buildRunWarnings(withChanged(undefined, true)).some((warning) => warning.includes("cambió de forma"))).toBe(false);
+  });
+
+  it("should not say that an address moves", () => {
+    expect(buildRunWarnings(withChanged(2, false)).join(" ")).not.toMatch(/se mueve|mueven|movi/i);
+  });
+});

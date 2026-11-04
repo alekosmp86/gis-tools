@@ -9,6 +9,7 @@ import { buildReportSql } from "@/modules/routine-jobs/jobs/actualizar-padron/do
 import { buildMaxAddressMasterIdSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/revertCapture";
 import { buildPadronReassignSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reassignSql";
 import { buildCreateInsertedIdsTableSql, buildCreateReassignIdsTableSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reassignTables";
+import { buildPadronReassignChangedSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reassignChangedSql";
 import { buildPadronDeleteSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteSql";
 import { buildCreateDeleteIdsTableSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/deleteIdsTable";
 import { referenceScanOf, type ReferenceScanRow } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/referenceScan";
@@ -188,6 +189,7 @@ interface SessionOptions {
   options?: ActualizarPadronOptions;
   classification?: Record<string, unknown>;
   reassignMoved?: { moved: number; byTable?: Record<string, number> };
+  changedMoved?: { moved: number; selected?: number; ambiguous?: number; byTable?: Record<string, number> };
   masterDeleted?: number;
 }
 
@@ -203,6 +205,7 @@ function sessionOf(
     options = OPTIONS,
     classification = {},
     reassignMoved = { moved: 0 },
+    changedMoved = { moved: 0 },
     masterDeleted = 0,
   }: SessionOptions = {}
 ): { session: RunSession; log: string[] } {
@@ -223,6 +226,18 @@ function sessionOf(
     [
       buildPadronReassignSql(layouts, scan.tables),
       [{ moved: reassignMoved.moved, by_table: reassignMoved.byTable ?? {}, padrones: 1, revert_rows: reassignMoved.moved }],
+    ],
+    [
+      buildPadronReassignChangedSql(layouts, scan.tables),
+      [
+        {
+          moved: changedMoved.moved,
+          selected: changedMoved.selected ?? changedMoved.moved,
+          ambiguous: changedMoved.ambiguous ?? 0,
+          by_table: changedMoved.byTable ?? {},
+          revert_rows: changedMoved.moved,
+        },
+      ],
     ],
     [buildPadronApplySql(layouts, options), applyAnswer],
     [buildPadronApplySql(layouts, options, { captureRevert: true, storeInsertedIds: reassignStored }), applyAnswer],
@@ -544,5 +559,131 @@ describe("runActualizarPadron reassignment of subdivided padrones (AP-109 to AP-
 
     expect(JSON.stringify(result)).toContain("Reasignar direcciones de padrones subdivididos");
     expect(JSON.stringify(analysis)).not.toContain("Reasignar direcciones de padrones subdivididos");
+  });
+});
+
+describe("runActualizarPadron reassignment of changed padrones (AP-121 to AP-124)", () => {
+  const REASSIGNABLE_ROWS: ReferenceScanRow[] = [
+    { schema: "carto", table: "access_point", readable: true, updatable: true, primaryKeyColumns: 1, primaryKeyColumn: "gid", geometryColumns: 1, geometryColumn: "geom", geometryType: "geometry" },
+  ];
+  const MASTER_OPTIONS: ActualizarPadronOptions = { ...OPTIONS, linkAddressMaster: true };
+  const MASTER_PARAMS = (overrides: Partial<ActualizarPadronParams> = {}): ActualizarPadronParams =>
+    PARAMS_OF({ addressMasterTable: "addresses_master", options: MASTER_OPTIONS, ...overrides });
+  const CHANGED = { reassigned_changed: 3, reassigned_changed_ambiguous: 1, reassigned_changed_by_table: { "carto.access_point": 3 } };
+  const sessionWithChanged = (overrides: SessionOptions = {}) =>
+    sessionOf(CLASSIFIED_NEW, {
+      layouts: LAYOUTS_WITH_MASTER,
+      options: MASTER_OPTIONS,
+      scanRows: REASSIGNABLE_ROWS,
+      classification: CHANGED,
+      changedMoved: { moved: 3, ambiguous: 1, byTable: { "carto.access_point": 3 } },
+      ...overrides,
+    });
+  const scan = () => scanOf(REASSIGNABLE_ROWS, LAYOUTS_WITH_MASTER);
+  const changedSql = (): string => buildPadronReassignChangedSql(LAYOUTS_WITH_MASTER, scan().tables);
+  const planIdWithMaster = async (): Promise<string> => {
+    const { session } = sessionWithChanged();
+    const result = await runActualizarPadron(MASTER_PARAMS({ dryRun: true, confirm: false }), depsOf(session));
+    return result.planId as string;
+  };
+
+  it("should run the changed-padron statement after the subdivided reassignment and before the delete", async () => {
+    const planId = await planIdWithMaster();
+    const { session, log } = sessionWithChanged();
+
+    await runActualizarPadron(MASTER_PARAMS({ planId }), depsOf(session));
+
+    const order = [
+      log.indexOf(buildPadronApplySql(LAYOUTS_WITH_MASTER, MASTER_OPTIONS, { captureRevert: true, storeInsertedIds: false })),
+      log.indexOf(changedSql()),
+      log.indexOf(buildPadronDeleteSql(LAYOUTS_WITH_MASTER, scan().tables)),
+    ];
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(log).toContain(COMMIT_SQL);
+  });
+
+  it("should run the changed-padron statement right after the subdivided reassign statement when both run", async () => {
+    const planId = await planIdWithMaster();
+    const { session, log } = sessionWithChanged({
+      classification: { ...CHANGED, subdivided_deleted: 1, reassigned: 4, reassigned_by_table: { "carto.access_point": 4 } },
+      removed: 2,
+      reassignMoved: { moved: 4, byTable: { "carto.access_point": 4 } },
+    });
+
+    await runActualizarPadron(MASTER_PARAMS({ planId }), depsOf(session));
+
+    const reassign = log.indexOf(buildPadronReassignSql(LAYOUTS_WITH_MASTER, scan().tables));
+    expect(reassign).toBeGreaterThan(-1);
+    expect(log.indexOf(changedSql())).toBeGreaterThan(reassign);
+    expect(log.indexOf(buildPadronDeleteSql(LAYOUTS_WITH_MASTER, scan().tables))).toBeGreaterThan(log.indexOf(changedSql()));
+  });
+
+  it("should report the rows the statement reassigned, with the ambiguous ones and per table, and a warning in the past", async () => {
+    const planId = await planIdWithMaster();
+    const { session } = sessionWithChanged();
+
+    const result = await runActualizarPadron(MASTER_PARAMS({ planId }), depsOf(session));
+
+    expect(result.target.reassignedChanged).toBe(3);
+    expect(result.target.reassignedChangedAmbiguous).toBe(1);
+    expect(result.target.reassignedChangedByTable).toEqual({ "carto.access_point": 3 });
+    expect(result.warnings).toContain("3 direcciones cambiaron de padrón (id_padron) porque su padrón cambió de forma.");
+  });
+
+  it("should add the changed-padron rows to the subdivided ones in the expected reassigned count of the revert backup", async () => {
+    const planId = await planIdWithMaster();
+    const { session } = sessionWithChanged({
+      classification: { ...CHANGED, subdivided_deleted: 1, reassigned: 4, reassigned_by_table: { "carto.access_point": 4 } },
+      removed: 2,
+      reassignMoved: { moved: 4, byTable: { "carto.access_point": 4 } },
+    });
+
+    await runActualizarPadron(MASTER_PARAMS({ planId }), depsOf(session));
+
+    const request = vi.mocked(writeRevertBackup).mock.calls.at(-1)?.[1];
+    expect(request?.expected.reassigned).toBe(7);
+  });
+
+  it("should ROLLBACK, never COMMIT, and not delete when the rows updated differ from the rows selected", async () => {
+    const planId = await planIdWithMaster();
+    const { session, log } = sessionWithChanged({ changedMoved: { moved: 2, selected: 3 } });
+
+    const failure = await failureOf(runActualizarPadron(MASTER_PARAMS({ planId }), depsOf(session)));
+
+    expect(failure.message).toMatch(/Las direcciones reasignadas por cambio de forma de su padrón \(2\) no coinciden con las seleccionadas \(3\) en carto\.padron/);
+    expect(log[log.length - 1]).toBe(ROLLBACK_SQL);
+    expect(log).not.toContain(COMMIT_SQL);
+    expect(log).not.toContain(buildPadronDeleteSql(LAYOUTS_WITH_MASTER, scan().tables));
+  });
+
+  it("should not run the statement when no referencing table can be reassigned", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(CLASSIFIED_NEW);
+
+    const result = await runActualizarPadron(PARAMS_OF({ planId }), depsOf(session));
+
+    expect(log.some((sql) => sql.includes("reassign_changed"))).toBe(false);
+    expect(result.target.reassignedChanged).toBe(0);
+  });
+
+  it("should plan the changed-padron rows in an analysis without running the statement", async () => {
+    const { session, log } = sessionWithChanged();
+
+    const result = await runActualizarPadron(MASTER_PARAMS({ dryRun: true, confirm: false }), depsOf(session));
+
+    expect(result.target.reassignedChanged).toBe(3);
+    expect(result.target.reassignedChangedAmbiguous).toBe(1);
+    expect(log).not.toContain(changedSql());
+    expect(result.warnings).toContain("3 direcciones cambiarán de padrón (id_padron) porque su padrón cambió de forma.");
+  });
+
+  it("should list the changed-padron step in a real run only", async () => {
+    const planId = await planIdWithMaster();
+    const result = await runActualizarPadron(MASTER_PARAMS({ planId }), depsOf(sessionWithChanged().session));
+    const analysis = await runActualizarPadron(MASTER_PARAMS({ dryRun: true, confirm: false }), depsOf(sessionWithChanged().session));
+
+    expect(JSON.stringify(result)).toContain("Reasignar direcciones de padrones modificados");
+    expect(JSON.stringify(analysis)).not.toContain("Reasignar direcciones de padrones modificados");
   });
 });

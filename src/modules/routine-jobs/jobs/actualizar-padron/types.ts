@@ -259,6 +259,10 @@ export interface PadronCounts {
   reassignedByTable: Record<string, number>;
   /** AP-111: of `reassigned`, the rows with no usable point, sent to the receiver covering most of the old padrón. */
   reassignedWithoutPoint: number;
+  /** AP-123: the rows whose padrón changed shape and that the real run will give another padrón (id_padron), those with several possible padrones, and the rows per table. */
+  reassignedChanged: number;
+  reassignedChangedAmbiguous: number;
+  reassignedChangedByTable: Record<string, number>;
 }
 
 /** Cheap facts of the destination and the staging side, read in the classify statement; the digest covers the planned writes. */
@@ -326,6 +330,14 @@ export interface PadronReassignOutcome {
   padrones: number;
 }
 
+/** The outcome of AP-122's statement: the rows whose id_padron was reassigned, the rows it selected (checked against the moved ones), the ambiguous ones and the rows per table. */
+export interface PadronReassignChangedOutcome {
+  moved: number;
+  selected: number;
+  ambiguous: number;
+  byTable: Record<string, number>;
+}
+
 export interface ActualizarTargetReport {
   table: string;
   schema: string;
@@ -362,6 +374,10 @@ export interface ActualizarTargetReport {
   reassignedByTable?: Record<string, number>;
   /** AP-111: of `reassigned`, the rows moved without a point to the largest receiver. */
   reassignedWithoutPoint?: number;
+  /** AP-124: the rows given another padrón (id_padron) because their padrón changed shape (a real run) or will be (an analysis), the ones with several possible padrones, and how many per `schema.table`; absent in results of older runs. */
+  reassignedChanged?: number;
+  reassignedChangedAmbiguous?: number;
+  reassignedChangedByTable?: Record<string, number>;
   /** Set when the reference scan could not vouch for every referencing table: nothing was deleted (AP-102). */
   removalBlockedReason?: string;
 }

@@ -102,11 +102,17 @@ const reassignedWarningOf = (reassigned: number, dryRun: boolean): string =>
     ? `${plural(reassigned, "dirección de un padrón subdividido pasará", "direcciones de padrones subdivididos pasarán")} a la parte más cercana.`
     : `${plural(reassigned, "dirección de un padrón subdividido pasó", "direcciones de padrones subdivididos pasaron")} a la parte más cercana.`;
 
+const reassignedChangedWarningOf = (changed: number, dryRun: boolean): string =>
+  dryRun
+    ? `${plural(changed, "dirección cambiará", "direcciones cambiarán")} de padrón (id_padron) porque su padrón cambió de forma.`
+    : `${plural(changed, "dirección cambió", "direcciones cambiaron")} de padrón (id_padron) porque su padrón cambió de forma.`;
+
 function removalWarnings(target: ActualizarTargetReport, dryRun: boolean): string[] {
   const warnings: string[] = [];
   if (target.removalBlockedReason !== undefined) warnings.push(target.removalBlockedReason);
   if ((target.removed ?? 0) > 0) warnings.push(removalDoneWarningOf(target.removed ?? 0, target.table, dryRun));
   if ((target.reassigned ?? 0) > 0) warnings.push(reassignedWarningOf(target.reassigned ?? 0, dryRun));
+  if ((target.reassignedChanged ?? 0) > 0) warnings.push(reassignedChangedWarningOf(target.reassignedChanged ?? 0, dryRun));
   if (target.removalsSkipped !== undefined && notDeletedCountOf(target.removalsSkipped) > 0) {
     warnings.push(removalSkippedWarningOf(target.removalsSkipped));
   }

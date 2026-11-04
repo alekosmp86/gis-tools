@@ -32,6 +32,7 @@ import { geometryAcceptsValuesSql } from "./geometryAcceptsSql";
 import { physicalColumn, qualifiedName } from "./layouts";
 import { REVERT_COLUMN, REVERT_KIND, REVERT_TABLE_SQL, revertColumnList } from "./revertCapture";
 import { DELETE_IDS_ID_COLUMN, DELETE_IDS_TABLE_SQL } from "./deleteIdsTable";
+import { plannedReassignChangedCountsSql, plannedReassignChangedCtes } from "./reassignChangedSql";
 import { INSERTED_IDS_TABLE_SQL, SESSION_IDS_COLUMN } from "./reassignTables";
 import { NO_REFERENCE_SCAN, type ReferenceScan } from "./referenceScan";
 import { removedListSql } from "./removedListSql";
@@ -774,6 +775,20 @@ const deleteIdsInsertOf = (persistDeletable: boolean): string[] =>
 
 const labelCtesOf = (report: boolean): string[] => (report ? replacementLabelCtes() : []);
 
+/* AP-123: the padrones the apply would update (applied geometry) or pair, with the geometry each would have afterwards. A pair keeps its geometry unless updateGeometries is on. */
+function postApplyChangedSql(options: ActualizarPadronOptions): string {
+  const pairGeometry = `CASE WHEN ${applyFlag(options)} THEN ${pairOf(CANDIDATE_GEOMETRY)} ELSE ${pairOf(PAIR_COLUMN.TARGET_GEOMETRY)} END`;
+  return [
+    `SELECT ${changedOf(PAIR_COLUMN.TARGET_ID)} AS "id", ${changedOf(CANDIDATE_GEOMETRY)} AS "geometry"`,
+    `FROM ${q(CTE_TARGET.CHANGED_GEOMETRY)} AS ${CHANGED_ALIAS} WHERE ${changedOf(CHANGED_COLUMN.APPLIED)}`,
+    `UNION ALL SELECT ${pairOf(PAIR_COLUMN.TARGET_ID)}, ${pairGeometry}`,
+    `FROM ${q(CTE_TARGET.PAIRS)} AS ${PAIR_ALIAS} WHERE ${appliedCondition()}`,
+  ].join(" ");
+}
+
+const reassignChangedCtesOf = (layouts: PadronLayouts, options: ActualizarPadronOptions, scan: ReferenceScan, report: boolean): string[] =>
+  report ? plannedReassignChangedCtes(layouts, scan.tables, postApplyChangedSql(options)) : [];
+
 function pendingListOf(layouts: PadronLayouts, report: boolean): string[] {
   return report ? [`${jsonArrayOf(geometryListSql(layouts, PENDING_FILTER, null), "pending_geometry_changes")} AS "pending_geometry_changes",`] : [];
 }
@@ -789,11 +804,13 @@ export function buildPadronClassifySql(
       ...classifyCtes(layouts, options),
       ...classificationCtes(layouts.target),
       ...removalCtes(scan),
+      ...reassignChangedCtesOf(layouts, options, scan, report),
       ...deleteIdsInsertOf(persistDeletable),
       ...labelCtesOf(report),
     ]),
     "SELECT",
     `${classificationCountsSql()},`,
+    ...(report ? plannedReassignChangedCountsSql(scan.tables) : []),
     ...missingSqlParts(),
     ...replacementCountsOf(report),
     `${pairCountsSql()},`,

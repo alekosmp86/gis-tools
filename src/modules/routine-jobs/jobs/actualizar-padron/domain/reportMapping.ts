@@ -34,6 +34,7 @@ import type {
   PadronLocation,
   PadronNamedKey,
   PadronPair,
+  PadronReassignChangedOutcome,
   PadronReassignOutcome,
   PadronRemoved,
   RemovalSkippedReport,
@@ -301,6 +302,9 @@ export function toPadronClassification(row: ReportRow): PadronClassification {
       subdividedDeleted: countOf(row.subdivided_deleted),
       reassignedByTable: byTableOf(row.reassigned_by_table),
       reassignedWithoutPoint: countOf(row.reassigned_without_point),
+      reassignedChanged: countOf(row.reassigned_changed),
+      reassignedChangedAmbiguous: countOf(row.reassigned_changed_ambiguous),
+      reassignedChangedByTable: byTableOf(row.reassigned_changed_by_table),
     },
     missingSamples: listOf(row.missing_samples).map(keyOf),
     missingReview: listOf(row.missing_review).map(missingPadronOf),
@@ -346,6 +350,17 @@ export function toPadronReassignOutcome(row: ReportRow): PadronReassignOutcome {
   };
 }
 
+export const NO_REASSIGN_CHANGED_OUTCOME: PadronReassignChangedOutcome = { moved: 0, selected: 0, ambiguous: 0, byTable: {} };
+
+export function toPadronReassignChangedOutcome(row: ReportRow): PadronReassignChangedOutcome {
+  return {
+    moved: countOf(row.moved),
+    selected: countOf(row.selected),
+    ambiguous: countOf(row.ambiguous),
+    byTable: byTableOf(row.by_table),
+  };
+}
+
 interface TargetRemoval {
   removed: number;
   removalsSkipped: RemovalSkippedReport;
@@ -353,6 +368,9 @@ interface TargetRemoval {
   reassigned: number;
   reassignedByTable: Record<string, number>;
   reassignedWithoutPoint: number;
+  reassignedChanged: number;
+  reassignedChangedAmbiguous: number;
+  reassignedChangedByTable: Record<string, number>;
 }
 
 /** An analysis deletes nothing: its removed, removalsSkipped, removedList and reassigned counts are the classification's planned ones (AP-107, AP-112). */
@@ -363,6 +381,9 @@ export const plannedRemovalOf = (classification: PadronClassification): TargetRe
   reassigned: classification.counts.reassigned,
   reassignedByTable: classification.counts.reassignedByTable,
   reassignedWithoutPoint: classification.counts.reassignedWithoutPoint,
+  reassignedChanged: classification.counts.reassignedChanged,
+  reassignedChangedAmbiguous: classification.counts.reassignedChangedAmbiguous,
+  reassignedChangedByTable: classification.counts.reassignedChangedByTable,
 });
 
 /** A real run's actual removed count can be lower than the classify-time estimate: an id newly referenced since is skipped,
@@ -370,7 +391,8 @@ export const plannedRemovalOf = (classification: PadronClassification): TargetRe
 export function actualRemovalCountsOf(
   classification: PadronClassification,
   deleteOutcome: PadronDeleteOutcome,
-  reassignOutcome: PadronReassignOutcome = NO_REASSIGN_OUTCOME
+  reassignOutcome: PadronReassignOutcome = NO_REASSIGN_OUTCOME,
+  changedOutcome: PadronReassignChangedOutcome = NO_REASSIGN_CHANGED_OUTCOME
 ): TargetRemoval {
   const planned = classification.counts.removalsSkipped;
   const newlyReferenced = classification.counts.removed - deleteOutcome.deleted;
@@ -380,6 +402,9 @@ export function actualRemovalCountsOf(
     reassigned: reassignOutcome.moved,
     reassignedByTable: reassignOutcome.byTable,
     reassignedWithoutPoint: reassignOutcome.withoutPoint,
+    reassignedChanged: changedOutcome.moved,
+    reassignedChangedAmbiguous: changedOutcome.ambiguous,
+    reassignedChangedByTable: changedOutcome.byTable,
     removalsSkipped: {
       total: planned.total + newlyReferenced,
       byReason: {
@@ -439,6 +464,9 @@ export function buildPadronTargetReport({
     reassigned: removal.reassigned,
     reassignedByTable: removal.reassignedByTable,
     reassignedWithoutPoint: removal.reassignedWithoutPoint,
+    reassignedChanged: removal.reassignedChanged,
+    reassignedChangedAmbiguous: removal.reassignedChangedAmbiguous,
+    reassignedChangedByTable: removal.reassignedChangedByTable,
     ...(removalBlockedReason === null ? {} : { removalBlockedReason }),
     geometryAcceptsUnapplied: counts.geometryAcceptsUnapplied,
   };

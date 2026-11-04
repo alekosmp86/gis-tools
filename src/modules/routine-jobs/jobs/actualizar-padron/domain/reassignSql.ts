@@ -24,12 +24,12 @@ const PART_COVER = "part_cover";
 const OLD_ALIAS = "o";
 const PART_ALIAS = "n";
 
-interface ReassignedTable {
+export interface ReassignedTable {
   table: ReferenceTable;
   reassign: ReassignTarget;
 }
 
-const reassignedTablesOf = (references: readonly ReferenceTable[]): ReassignedTable[] =>
+export const reassignedTablesOf = (references: readonly ReferenceTable[]): ReassignedTable[] =>
   references.flatMap((table) => (table.reassign === undefined ? [] : [{ table, reassign: table.reassign }]));
 
 const movedName = (index: number): string => `reassign_moved_${index}`;
@@ -91,15 +91,31 @@ function movedCte({ table, reassign }: ReassignedTable, index: number): string {
   );
 }
 
-/* AP-113: kind R keeps the table, its primary key column and value, and the old id_padron (in id). */
-function revertCte({ table, reassign }: ReassignedTable, index: number): string {
+/* AP-113: kind R keeps the table, its primary key column and value, and the old id_padron (in id). AP-122 reuses it for the padrones whose shape changed. */
+export function reassignRevertCte(name: string, movedCteName: string, { table, reassign }: ReassignedTable): string {
   const columns = [REVERT_COLUMN.KIND, REVERT_COLUMN.ID, REVERT_EXTRA_COLUMN.REF_TABLE, REVERT_EXTRA_COLUMN.REF_KEY_COLUMN, REVERT_EXTRA_COLUMN.REF_KEY];
   return cte(
-    revertName(index),
+    name,
     [
       `INSERT INTO ${REVERT_TABLE_SQL} (${columns.map((column) => q(column)).join(", ")})`,
       `SELECT ${literal(REVERT_KIND.REASSIGNED)}, mv.${q(OLD_ID)}::integer, ${literal(refTableSql(table.schema, table.table))}, ${literal(reassign.pkColumn)}, mv."pk"`,
-      `FROM ${q(movedName(index))} AS mv RETURNING ${q(REVERT_COLUMN.KIND)}`,
+      `FROM ${q(movedCteName)} AS mv RETURNING ${q(REVERT_COLUMN.KIND)}`,
+    ].join(" ")
+  );
+}
+
+const revertCte = (item: ReassignedTable, index: number): string => reassignRevertCte(revertName(index), movedName(index), item);
+
+/* AP-122: sets id_padron of the rows a picked CTE (columns pk, old_id, new_id) names, by primary key. */
+export function pickedMoveCte(name: string, { table, reassign }: ReassignedTable, pickedCteName: string): string {
+  const idColumn = q(REPLACEMENT_REFERENCE_COLUMN);
+  const pk = q(reassign.pkColumn);
+  return cte(
+    name,
+    [
+      `UPDATE ${refTableSql(table.schema, table.table)} AS rt SET ${idColumn} = pc.${q("new_id")}`,
+      `FROM ${q(pickedCteName)} AS pc WHERE rt.${pk} = pc."pk"`,
+      `RETURNING pc.${q(OLD_ID)} AS ${q(OLD_ID)}, rt.${pk}::text AS "pk"`,
     ].join(" ")
   );
 }

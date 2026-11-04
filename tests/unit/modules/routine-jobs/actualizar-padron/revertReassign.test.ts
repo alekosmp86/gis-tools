@@ -301,3 +301,28 @@ describe("assertRevertTally reassigned and master checks (AP-72)", () => {
     expect(emptyRevertCounts()).toEqual({ U: 0, P: 0, I: 0, A: 0, D: 0, R: 0, M: 0 });
   });
 });
+
+describe("assertRevertTally with the rows of changed padrones (AP-72, AP-122)", () => {
+  const countsOf = (reassigned: number): RevertCounts => ({ ...emptyRevertCounts(), R: reassigned });
+  const baseExpected = { inserted: 0, updated: 0, paired: 0 };
+
+  it("should pass when the R rows equal the subdivided plus the changed-padron rows reassigned", () => {
+    const counts = countsOf(4 + 3);
+
+    expect(() => assertRevertTally({ ...counts }, counts, { ...baseExpected, reassigned: 4 + 3 })).not.toThrow();
+  });
+
+  it("should throw when the expected count leaves out the changed-padron rows", () => {
+    const counts = countsOf(4 + 3);
+
+    expect(() => assertRevertTally({ ...counts }, counts, { ...baseExpected, reassigned: 4 })).toThrow(
+      /Las direcciones reasignadas guardadas \(7\) no coinciden con las reasignadas \(4\)/
+    );
+  });
+
+  it("should pass for a run that only reassigns changed-padron rows", () => {
+    const counts = countsOf(3);
+
+    expect(() => assertRevertTally({ ...counts }, counts, { ...baseExpected, reassigned: 3 })).not.toThrow();
+  });
+});

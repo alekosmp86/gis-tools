@@ -52,6 +52,7 @@ const POSTGIS_STUBS_SQL = `
   CREATE AGGREGATE ST_Union(geometry) (SFUNC = st_union_sum, STYPE = geometry);
   CREATE FUNCTION ST_Area(geometry) RETURNS float8 AS 'SELECT $1::numeric::float8' LANGUAGE sql;
   CREATE FUNCTION ST_Intersection(geometry, geometry) RETURNS geometry AS 'SELECT least($1::numeric, $2::numeric)::text::geometry' LANGUAGE sql;
+  CREATE FUNCTION ST_Contains(text, text) RETURNS boolean AS 'SELECT false' LANGUAGE sql;
   CREATE FUNCTION ST_Centroid(geometry) RETURNS geometry AS 'SELECT $1' LANGUAGE sql;
   CREATE FUNCTION ST_X(geometry) RETURNS float8 AS 'SELECT $1::numeric::float8' LANGUAGE sql;
   CREATE FUNCTION ST_Y(geometry) RETURNS float8 AS 'SELECT $1::numeric::float8' LANGUAGE sql;

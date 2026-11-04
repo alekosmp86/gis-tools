@@ -7,7 +7,9 @@ import {
   plannedRemovalOf,
   toPadronClassification,
   toPadronDeleteOutcome,
+  toPadronReassignChangedOutcome,
   toPadronReassignOutcome,
+  NO_REASSIGN_CHANGED_OUTCOME,
 } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reportMapping";
 import { plannedStepLabels, STEP } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/plannedSteps";
 import type { PadronClassification } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
@@ -185,6 +187,9 @@ describe("plannedRemovalOf (AP-107)", () => {
       reassigned: 0,
       reassignedByTable: {},
       reassignedWithoutPoint: 0,
+      reassignedChanged: 0,
+      reassignedChangedAmbiguous: 0,
+      reassignedChangedByTable: {},
     });
   });
 
@@ -333,12 +338,97 @@ describe("plannedStepLabels removal step (AP-107)", () => {
   it("should place the delete step after Aplicar cambios de padrones and before Analizar tabla de destino in a real run", () => {
     const labels = plannedStepLabels({ dryRun: false });
 
-    expect(labels.indexOf("Eliminar padrones faltantes sin referencias")).toBe(labels.indexOf("Reasignar direcciones de padrones subdivididos") + 1);
+    expect(labels.indexOf("Eliminar padrones faltantes sin referencias")).toBe(labels.indexOf("Reasignar direcciones de padrones modificados") + 1);
+    expect(labels.indexOf("Reasignar direcciones de padrones modificados")).toBe(labels.indexOf("Reasignar direcciones de padrones subdivididos") + 1);
     expect(labels.indexOf("Reasignar direcciones de padrones subdivididos")).toBe(labels.indexOf("Aplicar cambios de padrones") + 1);
     expect(labels.indexOf("Eliminar padrones faltantes sin referencias")).toBeLessThan(labels.indexOf("Analizar tabla de destino"));
   });
 
   it("should leave the delete step out of an analysis", () => {
     expect(plannedStepLabels({ dryRun: true })).not.toContain("Eliminar padrones faltantes sin referencias");
+  });
+});
+
+describe("changed-padron reassignment mapping (AP-122, AP-123, AP-124)", () => {
+  const deleted = { deleted: 4, surviving: 4, masterDeleted: 0, removedList: [] };
+
+  it("should map the planned counts of the classify row, reading absent columns as zero", () => {
+    const { counts } = classificationOf({ reassigned_changed: "6", reassigned_changed_ambiguous: 2, reassigned_changed_by_table: { "carto.a": "4", "carto.b": 2 } });
+
+    expect(counts.reassignedChanged).toBe(6);
+    expect(counts.reassignedChangedAmbiguous).toBe(2);
+    expect(counts.reassignedChangedByTable).toEqual({ "carto.a": 4, "carto.b": 2 });
+    expect(toPadronClassification({}).counts.reassignedChanged).toBe(0);
+    expect(toPadronClassification({}).counts.reassignedChangedAmbiguous).toBe(0);
+    expect(toPadronClassification({}).counts.reassignedChangedByTable).toEqual({});
+  });
+
+  it("should carry the planned counts on the planned removal and the target report of an analysis", () => {
+    const classification = classificationOf({ reassigned_changed: 3, reassigned_changed_ambiguous: 1, reassigned_changed_by_table: { "carto.a": 3 } });
+
+    const planned = plannedRemovalOf(classification);
+    const report = buildPadronTargetReport({
+      target: TARGET,
+      classification,
+      apply: plannedApplyOf(classification.counts),
+      removal: planned,
+      removalBlockedReason: null,
+      updateGeometries: true,
+    });
+
+    expect(planned.reassignedChanged).toBe(3);
+    expect(report.reassignedChanged).toBe(3);
+    expect(report.reassignedChangedAmbiguous).toBe(1);
+    expect(report.reassignedChangedByTable).toEqual({ "carto.a": 3 });
+  });
+
+  it("should map moved, selected, ambiguous and per-table of the statement row", () => {
+    const outcome = toPadronReassignChangedOutcome({ moved: "5", selected: 5, ambiguous: "1", by_table: { "carto.a": 5 } });
+
+    expect(outcome).toEqual({ moved: 5, selected: 5, ambiguous: 1, byTable: { "carto.a": 5 } });
+  });
+
+  it("should map an empty statement row to the zero outcome", () => {
+    expect(toPadronReassignChangedOutcome({})).toEqual(NO_REASSIGN_CHANGED_OUTCOME);
+    expect(NO_REASSIGN_CHANGED_OUTCOME).toEqual({ moved: 0, selected: 0, ambiguous: 0, byTable: {} });
+  });
+
+  it("should report the rows the statement reassigned instead of the planned ones in a real run", () => {
+    const classification = classificationOf({ reassigned_changed: 9, reassigned_changed_ambiguous: 9, reassigned_changed_by_table: { "carto.z": 9 } });
+
+    const result = actualRemovalCountsOf(classification, deleted, undefined, { moved: 4, selected: 4, ambiguous: 1, byTable: { "carto.a": 4 } });
+
+    expect(result.reassignedChanged).toBe(4);
+    expect(result.reassignedChangedAmbiguous).toBe(1);
+    expect(result.reassignedChangedByTable).toEqual({ "carto.a": 4 });
+  });
+
+  it("should report zero changed-padron reassignments when no outcome is given", () => {
+    const result = actualRemovalCountsOf(classificationOf({ reassigned_changed: 9 }), deleted);
+
+    expect(result.reassignedChanged).toBe(0);
+    expect(result.reassignedChangedAmbiguous).toBe(0);
+    expect(result.reassignedChangedByTable).toEqual({});
+  });
+
+  it("should keep the subdivided and the changed-padron counts separate on the real-run report", () => {
+    const classification = classificationOf();
+    const report = buildPadronTargetReport({
+      target: TARGET,
+      classification,
+      apply: plannedApplyOf(classification.counts),
+      removal: actualRemovalCountsOf(
+        classification,
+        deleted,
+        { moved: 7, byTable: { "carto.s": 7 }, withoutPoint: 0, padrones: 1 },
+        { moved: 2, selected: 2, ambiguous: 0, byTable: { "carto.c": 2 } }
+      ),
+      removalBlockedReason: null,
+      updateGeometries: true,
+    });
+
+    expect(report.reassigned).toBe(7);
+    expect(report.reassignedChanged).toBe(2);
+    expect(report.reassignedChangedByTable).toEqual({ "carto.c": 2 });
   });
 });

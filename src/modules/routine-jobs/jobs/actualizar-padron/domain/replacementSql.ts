@@ -234,6 +234,8 @@ function labelsSql(): string {
   ].join(" ");
 }
 
+export const UNPAIRED_NEW_CTE = UNPAIRED;
+export const UNPAIRED_NEW_GEOMETRY_COLUMN = NEW_GEOMETRY;
 export const MISSING_SCORED_CTE = SCORED;
 export const MISSING_SCORED_CLASS_COLUMN = CLASS;
 
