@@ -99,12 +99,12 @@ Después hay tres tablas: **Rural**, **Urbano** y **Totales**. Cada una tiene es
 | Claves vacías | Filas excluidas porque les falta el departamento, el padrón o, en urbano, la localidad. |
 | Grupos | Filas que se insertan en la tabla destino: una por grupo. |
 | Filas fusionadas | Filas que se unieron en un grupo: filas leídas, menos las claves vacías, menos las filas sin geometría, menos los grupos. |
-| Conflictos de atributos | Grupos cuyas filas tienen valores distintos en algún atributo, por ejemplo dos nombres de departamento escritos de forma diferente. No bloquean la carga. |
+| Conflictos de atributos | Grupos de filas del propio archivo de entrada que comparten la misma clave pero tienen valores distintos en algún atributo, por ejemplo dos nombres de departamento escritos de forma diferente. Se conservan los valores de la primera fila y no bloquean la carga. No es una comparación con la base de datos. |
 | Insertadas | Filas escritas en la tabla destino. Debe coincidir con los grupos: si no coincide, la carga se revierte. |
 
 La tabla **Totales** suma las filas leídas, los grupos, las filas fusionadas y las insertadas de ambos tipos.
 
-El informe incluye también los **conflictos de atributos** (hasta 20 ejemplos), los **códigos de localidad ambiguos**, los **tiempos por paso** y el estado de las **estadísticas** de la base. Debajo hay un botón **Descargar CSV**: vea [Descargar el informe](descargar-informe.md).
+El informe incluye también los **conflictos de atributos** (solo se listan 20 ejemplos; el contador muestra el total), los **códigos de localidad ambiguos**, los **tiempos por paso** y el estado de las **estadísticas** de la base. Debajo hay un botón **Descargar CSV**: vea [Descargar el informe](descargar-informe.md).
 
 ## Advertencias
 

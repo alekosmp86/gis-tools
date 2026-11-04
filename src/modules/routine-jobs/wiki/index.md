@@ -20,7 +20,7 @@ Se abre desde el portal, en la tarjeta **Trabajos de rutina**, o desde el menú.
 | Etapa 4 | [Actualizar padrones](actualizar-padron.md) | Este trabajo |
 | Después | Correr la etapa 4 contra una tabla de prueba y, cuando el análisis esté conforme, contra `carto.padron`. Con la opción de direcciones maestras, la etapa 4 también enlaza los padrones nuevos | Este trabajo |
 
-La etapa 4 puede correrse primero contra una tabla de prueba y después contra `carto.padron`, porque nunca borra filas ni cambia ids. Con la opción **Enlazar direcciones maestras de los padrones** activada, la etapa 4 crea y enlaza la dirección maestra de cada padrón que no la tiene, y la etapa 3 hace lo mismo con cada unidad territorial, así que no hace falta correr ninguna etapa aparte para enlazarlas. La etapa **Completar unidades territoriales** ya no existe: su trabajo lo hace la opción de direcciones maestras de la etapa 3. No hay una etapa aparte para aplicar los padrones.
+La etapa 4 puede correrse primero contra una tabla de prueba y después contra `carto.padron`, porque nunca cambia ids. En la carga real elimina automáticamente los padrones que ya no están en el catastro cuando nada los referencia. Si un padrón se subdividió, primero reasigna sus direcciones a la parte más cercana. Las geometrías pendientes se pueden aceptar todas juntas con **Aceptar todas**. Con la opción **Enlazar direcciones maestras de los padrones** activada, la etapa 4 crea y enlaza la dirección maestra de cada padrón que no la tiene, y la etapa 3 hace lo mismo con cada unidad territorial, así que no hace falta correr ninguna etapa aparte para enlazarlas. La etapa **Completar unidades territoriales** ya no existe: su trabajo lo hace la opción de direcciones maestras de la etapa 3. No hay una etapa aparte para aplicar los padrones.
 
 Las etapas no se encadenan solas: usted abre cada una, revisa su informe y recién entonces pasa a la siguiente.
 
@@ -51,8 +51,8 @@ Ninguna etapa reemplaza, borra ni renumera los ids de `carto.padron`, de las uni
 
 - Las filas nuevas toman su id de la secuencia de la tabla.
 - Las actualizaciones nunca cambian el id.
-- Las filas que existen en el destino pero no en el origen **solo se informan**: nunca se borran.
-- La etapa 4 inserta padrones nuevos y actualiza solo la geometría de los existentes.
+- Las filas que existen en el destino pero no en el origen **solo se informan** en las etapas 1 a 3: nunca se borran. La etapa 4 es la única que elimina filas: los padrones que ya no están en el catastro y no tienen nada que los referencie.
+- La etapa 4 inserta padrones nuevos, actualiza la geometría de los existentes y elimina esos padrones; nunca cambia sus ids.
 
 Esto importa porque otras tablas y las URN dependen de esos ids.
 

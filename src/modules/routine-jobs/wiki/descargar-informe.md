@@ -81,9 +81,46 @@ Un padrón nuevo genera dos filas (la creada y la enlazada); uno que ya tenía r
 
 Si una lista del informe se corta en 500 filas, el CSV termina con una fila que lo avisa: en la columna **Tabla** va la tabla y en **Cambio** un texto como `Lista incompleta: se muestran las primeras 500 de 730 unidades enlazadas`. Así no queda nada oculto. Las demás columnas de esa fila quedan vacías.
 
+## Otros CSV de Actualizar padrones
+
+Además del CSV de cambios y el de inconsistencias, el informe de **Actualizar padrones** puede ofrecer estos botones. Usan el mismo nombre con una palabra antes de la fecha.
+
+| Botón | Nombre | Contenido |
+|---|---|---|
+| **Descargar padrones faltantes** | `carto-actualizar-padron-<simulacion\|real>-faltantes-AAAAMMDD-HHmmss.csv` | Los padrones que ya no están en el catastro: Clase, Tipo, Departamento, Localidad, Padrón, Id actual, Área (m²), Cubierto (%), Reemplazado por, Referencias, Latitud y Longitud. Si la lista se corta, termina con una fila `Lista incompleta: se muestran las primeras N de M padrones faltantes`. |
+| **Descargar geometrías pendientes (CSV)** | `...-geometrias-pendientes-...` | Todas las geometrías pendientes del análisis, de mayor a menor cambio de área. Ver [Etapa 4: Actualizar padrones](actualizar-padron.md). |
+| **Descargar localidades no encontradas (CSV)** | `...-localidades-no-encontradas-...` | Ver abajo. |
+
+### Descargar localidades no encontradas (CSV)
+
+Una fila por cada localidad de la lista **Localidades no encontradas** del informe (hasta 20), con estas columnas:
+
+| Columna | Contenido |
+|---|---|
+| Departamento | El departamento de la fila de origen. |
+| Localidad | La localidad que no se encontró. |
+| Padrones afectados | Cuántos padrones de origen se omitieron por esa localidad. |
+| Motivo | Si existe una localidad con ese nombre en otros departamentos: `No existe en <departamento>; existe en <D1>, <D2>. Revise el código de departamento.` (hasta 5 departamentos). Si no existe en ningún otro: `La localidad no existe en el departamento.` |
+
+El aviso de "Revise el código de departamento" suele indicar un código de departamento equivocado en el archivo de origen. Si la lista llega al tope de 20, el CSV termina con la fila `Lista incompleta: se muestran las primeras 20 localidades no encontradas` (el informe no guarda el total). El botón no aparece si la lista está vacía. El CSV no lista los números de padrón.
+
 ## Respaldo para revertir (no es un CSV)
 
 Una actualización real de **Actualizar padrones** también genera un archivo `padron-revert-<esquema>-<tabla>-AAAAMMDD-HHmmss.sql.gz` para deshacer esa carga. Se descarga solo al terminar y se describe en [Etapa 4: Actualizar padrones](actualizar-padron.md).
+
+El archivo es SQL y corre en una sola transacción (`BEGIN` ... `COMMIT`). Cubre estas clases de filas, y la cabecera del archivo cuenta cuántas hay de cada una:
+
+| Clase | Qué deshace |
+|---|---|
+| Geometrías actualizadas | Devuelve la geometría anterior. |
+| Padrones reclasificados | Devuelve el tipo, la localidad, el número y la geometría anteriores. |
+| Padrones insertados | Los borra (los ids consecutivos se agrupan en un solo rango). |
+| Padrones sin dirección maestra antes del enlace | Quita el enlace y borra solo las direcciones maestras creadas por esa ejecución. |
+| Padrones eliminados | Los vuelve a insertar completos, con su id original. |
+| Direcciones maestras eliminadas | Vuelven a insertarse con su id original. |
+| Direcciones reasignadas | Devuelven a cada fila de otra tabla el `id_padron` del padrón subdividido. |
+
+Orden en que corre el script: primero se deshacen los enlaces y las inserciones, luego se restauran las claves y las geometrías, después las direcciones maestras eliminadas, luego los padrones eliminados y al final las direcciones reasignadas. Las direcciones maestras van antes que los padrones y las direcciones reasignadas después, porque unas y otras dependen de esos registros. Si el archivo no tiene filas de una clase, esa parte no aparece. Las secuencias de id no se revierten.
 
 ## Descargar inconsistencias
 

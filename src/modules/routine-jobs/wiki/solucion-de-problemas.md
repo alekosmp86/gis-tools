@@ -47,6 +47,11 @@ Antes de confirmar, cada etapa compara lo que escribió con lo que el análisis 
 - Los registros de dirección maestra creados para padrones (...) no coinciden con los esperados (...) (etapa 4, con la opción de direcciones maestras)
 - Los padrones enlazados (...) no coinciden con los esperados (...) (etapa 4, con la opción de direcciones maestras)
 - Los padrones sin dirección maestra después del enlace (...) no coinciden con los ambiguos (...) (etapa 4, con la opción de direcciones maestras)
+- Las claves actualizadas (...) no coinciden con los pares aplicables del análisis (...) (etapa 4)
+- Las direcciones reasignadas (...) no coinciden con las del análisis (...) (etapa 4, padrones subdivididos)
+- Los padrones eliminados (...) no coinciden con los que seguían siendo eliminables (...) (etapa 4)
+- El respaldo tiene ... filas de ..., se esperaban ... (etapa 4: la copia para revertir no tiene lo mismo que se cambió)
+- Los padrones eliminados guardados (...) no coinciden con los eliminados (...), Las direcciones reasignadas guardadas (...) no coinciden con las reasignadas (...) y Las direcciones maestras guardadas (...) no coinciden con las eliminadas (...) (etapa 4, la misma comprobación de la copia para revertir)
 
 No quedó nada a medias. Alguien puede haber modificado las tablas mientras corría la carga: espere unos minutos y repita **Analizar sin cargar** y la carga real. Si se repite, avise al responsable de la herramienta con el mensaje completo.
 
@@ -62,7 +67,36 @@ No quedó nada a medias. Alguien puede haber modificado las tablas mientras corr
 - **Clave de padrón no válida en la tabla de destino**: "La tabla de destino ... tiene N filas con una clave que esta etapa no genera ...". Corrija esas filas (tipo `RURAL` o `URBANO`, sin localidad en rural, número 0 o entero sin ceros a la izquierda) antes de cargar: así la etapa nunca inserta un padrón que ya está escrito de otra forma. Si la columna `number` no es de texto, el mensaje la nombra y hay que cambiarle el tipo.
 - **Tabla de localidades equivocada**: "La tabla de localidades elegida (...) no contiene las localidades que usa la tabla de destino: N de M padrones apuntan a un id que no existe en ella." Los padrones guardan ids de `territorial_unit`: elija esa tabla. Si solo algunos padrones apuntan a un id inexistente, la carga continúa y el informe lo advierte.
 
-Esta etapa no borra filas. Si una tabla de destino tiene disparadores o reglas, el análisis se rechaza y el mensaje los nombra: quítelos antes de cargar.
+Esta etapa elimina de la tabla de destino los padrones que ya no están en el catastro, pero solo cuando nada los referencia; antes reasigna las direcciones de los padrones subdivididos a sus partes. Nunca cambia ids. Si una tabla de destino tiene disparadores o reglas, el análisis se rechaza y el mensaje los nombra: quítelos antes de cargar.
+
+### Falta el privilegio DELETE
+
+> No tiene privilegio DELETE sobre la tabla ...
+
+Para eliminar padrones, el usuario de la base necesita **DELETE** sobre la tabla de destino. El análisis se rechaza antes de escribir nada. Pida el permiso al administrador de la base.
+
+### No se elimina: ...
+
+En la sección de padrones que se eliminarán (y en la columna **Eliminación** del mapa) algunos padrones muestran **No se elimina** con un motivo. No es un error: el padrón queda en la tabla y el resto de la actualización sigue.
+
+| Motivo | Qué significa | Qué hacer |
+|---|---|---|
+| tiene un par sin resolver | El padrón podría ser el antiguo de un par pendiente o ambiguo (reclasificado o renumerado). | Resuelva el par (vea [Etapa 4](actualizar-padron.md)) y analice de nuevo. |
+| tiene N direcciones asociadas | Otras tablas todavía lo referencian y no se pueden mover a una parte, o la referencia apareció entre el análisis y el guardado. | Revise las tablas nombradas entre paréntesis. Si el padrón debe desaparecer, corrija esas direcciones y repita. |
+| no se pueden reasignar sus direcciones | El padrón está subdividido, pero alguna tabla que lo referencia no permite mover sus filas. El motivo por tabla es uno de: "sin clave primaria de una sola columna", "sin una única columna de geometría", "sin permiso para actualizar id_padron" o "no hay tabla de direcciones maestras". | Pida al administrador la clave primaria, la geometría o el permiso UPDATE que falta, o elija la tabla de direcciones maestras en la etapa. Luego analice de nuevo. |
+| no se pudieron verificar sus referencias | El análisis no encontró tablas que referencien padrones ("No se encontraron tablas que referencien padrones: no se eliminan padrones faltantes.") o no pudo leer alguna ("No se pueden leer las tablas que referencian padrones (...): no se eliminan padrones faltantes."). | Pida al administrador permiso de lectura sobre esas tablas y repita. Mientras tanto no se elimina ningún padrón. |
+
+## permission denied for sequence
+
+> permission denied for sequence ...
+
+Es un error directo de la base, en el análisis y en la carga real: al insertar filas nuevas, las columnas con valor por defecto `nextval` toman su número de una secuencia y el usuario no tiene permiso sobre ella. No se escribió nada. Pida al administrador que dé al usuario **USAGE** sobre esas secuencias. Con **Reiniciar secuencias del destino** activada también hacen falta **UPDATE** y **SELECT**. Texto para el administrador:
+
+```
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE <esquema>.<secuencia> TO <rol>;
+```
+
+El nombre de la secuencia es el que aparece en el mensaje.
 
 ## Error de serialización
 
