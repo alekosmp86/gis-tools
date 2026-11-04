@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GEOMETRY_STATE } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { PadronGeometryChange } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import { GeometryChangesSection, type GeometryChangesSectionProps } from "@/modules/routine-jobs/ui/GeometryChangesSection";
+import { RESIMULATE_LABEL } from "@/modules/routine-jobs/ui/PairChoiceGroups";
 import { readOnlyAcceptsOf, type GeometryAcceptSelection } from "@/modules/routine-jobs/ui/reviewDecisions";
 
 const changeOf = (overrides: Partial<PadronGeometryChange> = {}): PadronGeometryChange => ({
@@ -128,6 +129,62 @@ describe("GeometryChangesSection with the accept-all flag on (AP-118)", () => {
     const html = render({ selection: editableOf({ acceptAll: true, acceptAllCount: 3 }) });
 
     expect(html).toContain("La aceptación aplica a todas las geometrías pendientes, no solo a las listadas.");
+  });
+});
+
+describe("GeometryChangesSection reload branch after an accept-all analysis (AP-118)", () => {
+  const RELOAD_NOTE = "El análisis mostrado se hizo con todas las geometrías aceptadas, por eso no hay lista. Vuelva a analizar con la selección para recargarla.";
+  const RESIMULATE = RESIMULATE_LABEL;
+
+  const renderReload = (selection: GeometryAcceptSelection, canResimulate: boolean, onResimulate: (() => void) | undefined): string =>
+    renderToStaticMarkup(
+      React.createElement(GeometryChangesSection, {
+        changes: [],
+        summary: "Geometrías pendientes",
+        pendingTotal: 0,
+        selection,
+        canResimulate,
+        onResimulate,
+        onOpenReview: vi.fn(),
+      }),
+    );
+
+  it("should show the re-analyze button and the note when the list is empty, the flag off and the submitted run had it on", () => {
+    const html = renderReload(editableOf({ acceptAll: false, submittedAcceptAll: true }), true, vi.fn());
+
+    expect(html).toContain(RELOAD_NOTE);
+    expect(buttonsOf(html)).toHaveLength(1);
+    expect(buttonsOf(html)[0]).not.toContain("disabled");
+    expect(html).not.toContain("<table");
+  });
+
+  it("should disable the re-analyze button when it cannot resimulate", () => {
+    const html = renderReload(editableOf({ submittedAcceptAll: true }), false, vi.fn());
+
+    expect(html).toContain(RELOAD_NOTE);
+    expect(buttonsOf(html)[0]).toContain("disabled");
+  });
+
+  it("should render nothing when the submitted run did not have the flag on", () => {
+    expect(renderReload(editableOf({ submittedAcceptAll: false }), true, vi.fn())).toBe("");
+    expect(renderReload(editableOf(), true, vi.fn())).toBe("");
+  });
+
+  it("should render nothing when there is no resimulate callback", () => {
+    expect(renderReload(editableOf({ submittedAcceptAll: true }), true, undefined)).toBe("");
+  });
+
+  it("should show the banner, not the reload note, while the flag is on again", () => {
+    const html = renderReload(editableOf({ acceptAll: true, acceptAllCount: 5, submittedAcceptAll: true }), true, vi.fn());
+
+    expect(html).toContain("Todas las geometrías pendientes aceptadas (5)");
+    expect(html).not.toContain(RELOAD_NOTE);
+  });
+
+  it("should label the button with the shared resimulate label", () => {
+    const html = renderReload(editableOf({ submittedAcceptAll: true }), true, vi.fn());
+
+    expect(html).toContain(RESIMULATE);
   });
 });
 

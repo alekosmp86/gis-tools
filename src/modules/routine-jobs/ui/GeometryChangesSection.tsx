@@ -1,6 +1,9 @@
 "use client";
 
 import React from "react";
+import { RefreshCw } from "lucide-react";
+import { Button } from "@/ui-kit/components/ui/Button";
+import { ButtonVariant } from "@/ui-kit/types/ui";
 import type { AcceptedGeometry, PadronGeometryChange } from "../jobs/actualizar-padron/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import { DataTable } from "./DataTable";
@@ -13,12 +16,16 @@ import { GEOMETRY_DECISION_LABEL, GeometryDecisionState, isDecidableGeometry } f
 import { geometryReviewItemsOf, type OpenReview } from "./padronReviewItems";
 import type { GeometryAcceptSelection } from "./reviewDecisions";
 import { GEOMETRY_COLUMNS, keyContentOf } from "./targetColumns";
+import { RESIMULATE_LABEL } from "./PairChoiceGroups";
+import groupStyles from "./PairChoiceGroups.module.css";
 import own from "./PendingPairsSection.module.css";
 import reportStyles from "./ActualizarPadronReport.module.css";
 
 const MAP_HEADER = "Mapa";
 const DECISION_HEADER = "Decisión";
 const ACTIONS_HEADER = "Acciones";
+const ICON_SIZE = 15;
+const RELOAD_NOTE = "El análisis mostrado se hizo con todas las geometrías aceptadas, por eso no hay lista. Vuelva a analizar con la selección para recargarla.";
 
 const STATE_CLASS: Record<GeometryDecisionState, string> = {
   [GeometryDecisionState.ACCEPTED]: own.stateAccepted,
@@ -74,7 +81,22 @@ export function GeometryChangesSection({ changes: allChanges, summary, pendingTo
   const editable = onAcceptMany !== undefined && onRejectMany !== undefined;
   const { changes, states, acceptance, decidable, acceptedListed } = useGeometryChangesModel(allChanges, selection);
   const openReview = (index: number) => onOpenReview(geometryReviewItemsOf(changes), index);
-  if (changes.length === 0 && !acceptAll) return null;
+  if (changes.length === 0 && !acceptAll) {
+    if (selection.submittedAcceptAll !== true || onResimulate === undefined) return null;
+    return (
+      <CollapsibleSection summary={summary}>
+        <div className={own.toolbar}>
+          <div className={own.actions}>
+            <Button variant={ButtonVariant.SECONDARY} onClick={onResimulate} disabled={!canResimulate}>
+              <RefreshCw size={ICON_SIZE} />
+              <span>{RESIMULATE_LABEL}</span>
+            </Button>
+          </div>
+        </div>
+        <p className={groupStyles.note}>{RELOAD_NOTE}</p>
+      </CollapsibleSection>
+    );
+  }
   if (acceptAll) {
     return (
       <CollapsibleSection summary={summary}>

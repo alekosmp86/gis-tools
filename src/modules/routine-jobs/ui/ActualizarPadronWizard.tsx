@@ -180,12 +180,7 @@ export default function ActualizarPadronWizard({
     if (canRunNow(state, DRY_RUN) && !isRunActive) startRun(toStartRequest(state, DRY_RUN));
   };
 
-  const setAcceptAllAndAnalyze = (value: boolean, count?: number) => {
-    const action = { type: "acceptAllGeometriesSet", value, count } as const;
-    dispatch(action);
-    const next = wizardReducer(state, action);
-    if (canRunNow(next, DRY_RUN) && !isRunActive) startRun(toStartRequest(next, DRY_RUN));
-  };
+  const setAcceptAll = (value: boolean, count?: number) => dispatch({ type: "acceptAllGeometriesSet", value, count });
 
   const persistDecision = persistDecisionOf(state, analysisPlanId);
 
@@ -291,8 +286,8 @@ export default function ActualizarPadronWizard({
               acceptAll: state.acceptAllGeometries,
               submittedAcceptAll: snapshot.plan?.acceptAllGeometries === true,
               acceptAllCount: state.acceptAllCount,
-              onAcceptAll: (pendingTotal) => setAcceptAllAndAnalyze(true, pendingTotal),
-              onRejectAll: () => setAcceptAllAndAnalyze(false),
+              onAcceptAll: (pendingTotal) => setAcceptAll(true, pendingTotal),
+              onRejectAll: () => setAcceptAll(false),
             }}
             mapBase={geometryMapBaseOf(state)}
             persist={{

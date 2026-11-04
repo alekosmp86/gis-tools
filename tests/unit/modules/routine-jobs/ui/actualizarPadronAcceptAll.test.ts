@@ -197,6 +197,59 @@ describe("accept-all geometries simulation (AP-117)", () => {
   });
 });
 
+describe("accept-all buttons only flag the choice (AP-118)", () => {
+  it("should hold the flag and the pending total after Aceptar todas, leaving the step and run flags untouched", () => {
+    const before = stateOf();
+
+    const next = wizardReducer(before, { type: "acceptAllGeometriesSet", value: true, count: 12 });
+
+    expect(next.acceptAllGeometries).toBe(true);
+    expect(next.acceptAllCount).toBe(12);
+    expect(next.step).toBe(before.step);
+    expect(next.simulatedAcceptAllGeometries).toBe(before.simulatedAcceptAllGeometries);
+    expect(next.simulatedChoices).toEqual(before.simulatedChoices);
+  });
+
+  it("should not mark the flag as simulated, since no analysis ran", () => {
+    const next = wizardReducer(stateOf(), { type: "acceptAllGeometriesSet", value: true, count: 12 });
+
+    expect(next.simulatedAcceptAllGeometries).toBe(false);
+  });
+
+  it("should clear the flag with count 0 after Rechazar todas", () => {
+    const on = wizardReducer(stateOf(), { type: "acceptAllGeometriesSet", value: true, count: 12 });
+
+    const off = wizardReducer(on, { type: "acceptAllGeometriesSet", value: false });
+
+    expect(off.acceptAllGeometries).toBe(false);
+    expect(off.acceptAllCount).toBe(0);
+    expect(off.step).toBe(on.step);
+  });
+
+  it("should decide to analyze then persist after Aceptar todas on a fresh analysis", () => {
+    const next = wizardReducer(stateOf(), { type: "acceptAllGeometriesSet", value: true, count: 12 });
+
+    expect(persistDecisionOf(next, PLAN_ID).kind).toBe(PersistDecisionKind.ANALYZE_THEN_PERSIST);
+  });
+
+  it("should carry acceptAllGeometries true in the persist request built from the state after Aceptar todas", () => {
+    const next = wizardReducer(stateOf(), { type: "acceptAllGeometriesSet", value: true, count: 12 });
+
+    const request = toPersistRequest(next, PLAN_ID);
+
+    expect(request.dryRun).toBe(false);
+    expect(request.options.acceptAllGeometries).toBe(true);
+  });
+
+  it("should decide to analyze then persist after Rechazar todas following an analysis that had the flag on", () => {
+    const analyzed = stateOf({ acceptAllGeometries: true, acceptAllCount: 12, simulatedAcceptAllGeometries: true });
+
+    const next = wizardReducer(analyzed, { type: "acceptAllGeometriesSet", value: false });
+
+    expect(persistDecisionOf(next, PLAN_ID).kind).toBe(PersistDecisionKind.ANALYZE_THEN_PERSIST);
+  });
+});
+
 describe("accept-all geometries on a reopened wizard (AP-117)", () => {
   it("should report the flag of a DONE dry run", () => {
     expect(completedDryRunAcceptAllOf(dryRunSnapshotOf(RunPhase.DONE, true))).toBe(true);
