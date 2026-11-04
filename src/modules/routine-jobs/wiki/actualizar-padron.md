@@ -255,4 +255,6 @@ Se omiten todas las filas con clave duplicada porque quedarse con una sola serí
 
 El informe agrupa los omitidos por departamento y por localidad, y lista las **Localidades no encontradas** y **Localidades ambiguas** (hasta 20), además de ejemplos de filas omitidas y claves que chocan.
 
+Cada localidad no encontrada indica en qué otros departamentos existe una localidad con el mismo nombre (hasta 5), porque casi siempre es un código de departamento equivocado en el archivo. **Descargar localidades no encontradas (CSV)** baja esa lista con las columnas Departamento, Localidad, Padrones afectados y Motivo ("No existe en X; existe en Y. Revise el código de departamento." o "La localidad no existe en el departamento."). Si la lista llega al tope de 20, el CSV termina con una fila que lo avisa. El CSV no lista los números de padrón.
+
 El botón **Descargar CSV** se explica en [Descargar el informe](descargar-informe.md).
