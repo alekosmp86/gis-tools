@@ -37,8 +37,12 @@ export async function keyFormatIssuesOf(session: CatalogQuerySession, target: Wr
   return bad === 0 ? typeIssues : [...typeIssues, keyFormatIssue(label, bad, row?.example as KeyFormatExample)];
 }
 
-export async function addressMasterIssuesFor(session: CatalogQuerySession, layouts: PadronLayouts): Promise<string[]> {
-  return layouts.addressMaster === undefined ? [] : addressMasterIssuesOf(session, layouts.addressMaster);
+export async function addressMasterIssuesFor(
+  session: CatalogQuerySession,
+  layouts: PadronLayouts,
+  repairSequences: boolean
+): Promise<string[]> {
+  return layouts.addressMaster === undefined ? [] : addressMasterIssuesOf(session, layouts.addressMaster, repairSequences);
 }
 
 export async function localityReferenceVerdictOf(session: CatalogQuerySession, layouts: PadronLayouts): Promise<LocalityReferenceVerdict> {

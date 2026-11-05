@@ -27,19 +27,25 @@ export const UNIT_ADDRESS_MASTER_PASS_STEPS: AddressMasterPassSteps = {
 export interface UnitPlannedStepsInput {
   dryRun: boolean;
   linkAddressMaster?: boolean;
+  repairSequences: boolean;
 }
 
-export function plannedUnitStepLabels({ dryRun, linkAddressMaster = false }: UnitPlannedStepsInput): string[] {
+export function plannedUnitStepLabels({ dryRun, linkAddressMaster = false, repairSequences }: UnitPlannedStepsInput): string[] {
   return [
     UNIT_STEP.VALIDATE,
     UNIT_STEP.TARGET,
     UNIT_STEP.COUNT,
     UNIT_STEP.RESOLVE,
     UNIT_STEP.CLASSIFY,
-    UNIT_STEP.SEQUENCES,
+    ...(repairSequences ? [UNIT_STEP.SEQUENCES] : []),
     UNIT_STEP.APPLY,
     ...(linkAddressMaster
-      ? [UNIT_STEP.ADDRESS_SEQUENCES, UNIT_STEP.ADDRESS_CLASSIFY, UNIT_STEP.ADDRESS_APPLY, UNIT_STEP.ADDRESS_VERIFY]
+      ? [
+          ...(repairSequences ? [UNIT_STEP.ADDRESS_SEQUENCES] : []),
+          UNIT_STEP.ADDRESS_CLASSIFY,
+          UNIT_STEP.ADDRESS_APPLY,
+          UNIT_STEP.ADDRESS_VERIFY,
+        ]
       : []),
     UNIT_STEP.ANALYZE,
     UNIT_STEP.REPORT,

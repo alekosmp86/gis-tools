@@ -23,6 +23,7 @@ export interface LocalidadesRunRequest {
 export interface CargarLocalidadesRunPlan {
   dryRun: boolean;
   tables: string[];
+  repairSequences: boolean;
   targets: LocalidadesRunTarget[];
 }
 
@@ -47,6 +48,7 @@ const MESSAGES: RunMessages = {
 const planOf = (run: LocalidadesRunRequest): CargarLocalidadesRunPlan => ({
   dryRun: run.request.dryRun,
   tables: run.targets.map((target) => `${target.schema}.${target.table}`),
+  repairSequences: run.request.options.repairSequences,
   targets: run.targets,
 });
 

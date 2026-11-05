@@ -7,6 +7,7 @@ import { AlertType } from "@/ui-kit/types/ui";
 import type { UnidadStartRequest } from "../clientTypes";
 import { UNIT_GEOMETRY_OVERWRITE_WARNING, type UnidadConfirmation } from "../unidadTerritorialWizardState";
 import { PASSWORD_LABEL, ReviewRunActions } from "./reviewParts";
+import { SEQUENCE_REPAIR_LABEL } from "./SequenceRepairField";
 import styles from "./WizardSteps.module.css";
 
 const BUSY_NOTE = "Hay una actualización de unidades territoriales en curso. Espere a que termine para iniciar otra.";
@@ -66,6 +67,8 @@ export const UnidadReviewStep: React.FC<UnidadReviewStepProps> = ({
         <dd>{options.updateGeometries ? YES : NO}</dd>
         <dt>Enlazar direcciones maestras de las unidades</dt>
         <dd>{options.linkAddressMaster ? YES : NO}</dd>
+        <dt>{SEQUENCE_REPAIR_LABEL}</dt>
+        <dd>{options.repairSequences ? YES : NO}</dd>
         {request.addressMasterTable !== undefined && (
           <>
             <dt>Tabla de direcciones maestras</dt>

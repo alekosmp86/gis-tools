@@ -111,7 +111,7 @@ const LAYOUTS: PadronLayouts = {
 const OPTIONS: ActualizarPadronOptions = {
   tolerance: 1,
   geometryAreaThreshold: 0.05,
-  updateGeometries: true,
+  updateGeometries: true, repairSequences: true,
   linkAddressMaster: false,
   pairChoices: [],
 };
@@ -1323,7 +1323,7 @@ describe("actualizar-padron geometry of a CHANGED row with a NULL destination ge
   it("should apply the NULL-geometry change, counted in updates and written, when updateGeometries is on", async () => {
     const before = await readPadron(database);
 
-    const { classification, apply } = await runStage(database, { ...GEOMETRY_FILL_OPTIONS, updateGeometries: true });
+    const { classification, apply } = await runStage(database, { ...GEOMETRY_FILL_OPTIONS, updateGeometries: true, repairSequences: true });
     const after = await readPadron(database);
     const geometryChanges = classification.geometry_changes as Array<{ number: string; state: string }>;
 
@@ -1336,7 +1336,7 @@ describe("actualizar-padron geometry of a CHANGED row with a NULL destination ge
   });
 
   it("should keep a CHANGED row with an old geometry pending when its area ratio is at or above the threshold", async () => {
-    const { classification, apply } = await runStage(database, { ...GEOMETRY_FILL_OPTIONS, updateGeometries: true });
+    const { classification, apply } = await runStage(database, { ...GEOMETRY_FILL_OPTIONS, updateGeometries: true, repairSequences: true });
     const after = await readPadron(database);
     const geometryChanges = classification.geometry_changes as Array<{ number: string; state: string }>;
 
@@ -1349,7 +1349,7 @@ describe("actualizar-padron geometry of a CHANGED row with a NULL destination ge
   it("should leave the NULL-geometry change pending and write nothing when updateGeometries is off", async () => {
     const before = await readPadron(database);
 
-    const { classification, apply } = await runStage(database, { ...GEOMETRY_FILL_OPTIONS, updateGeometries: false });
+    const { classification, apply } = await runStage(database, { ...GEOMETRY_FILL_OPTIONS, updateGeometries: false, repairSequences: true });
     const after = await readPadron(database);
     const geometryChanges = classification.geometry_changes as Array<{ number: string; state: string }>;
 
@@ -1438,7 +1438,7 @@ describe("actualizar-padron accepted geometry changes (AP-100, AP-92)", () => {
   it("should not apply an accepted key when updateGeometries is off, and count it as unapplied", async () => {
     const before = await readPadron(database);
 
-    const { classification, apply } = await runStage(database, withAccepted([ACCEPTED_URBANO_200], { ...GATE_OPTIONS, updateGeometries: false }));
+    const { classification, apply } = await runStage(database, withAccepted([ACCEPTED_URBANO_200], { ...GATE_OPTIONS, updateGeometries: false, repairSequences: true }));
     const after = await readPadron(database);
 
     expect(Number(classification.updates)).toBe(0);
@@ -2049,7 +2049,7 @@ describe("actualizar-padron accept-all geometries (AP-116, AP-117)", () => {
   it("should apply nothing and write no geometry when the flag is on but updateGeometries is off", async () => {
     const before = await readPadron(database);
 
-    const { classification, apply } = await runStage(database, everyOf({ ...GATE_OPTIONS, updateGeometries: false }));
+    const { classification, apply } = await runStage(database, everyOf({ ...GATE_OPTIONS, updateGeometries: false, repairSequences: true }));
     const after = await readPadron(database);
 
     expect(Number(classification.updates)).toBe(0);

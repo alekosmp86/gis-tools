@@ -5,7 +5,7 @@ import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 
 const TABLE = "unidades_destino";
 const TOTALS = { rowsRead: 0, candidates: 0, skipped: 0 };
-const OPTIONS = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true };
+const OPTIONS = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, repairSequences: true };
 const TRUNCATION_WARNING = `Se listan las primeras ${DETAIL_LIST_LIMIT} geometrías que cambian en ${TABLE}.`;
 
 const targetWithChanges = (changed: number): UnitTargetReport => ({

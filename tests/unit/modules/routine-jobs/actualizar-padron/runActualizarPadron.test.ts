@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildSequenceRepairSql } from "@/modules/routine-jobs/jobs/shared/transaction";
 import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { buildPadronApplySql, buildPadronClassifySql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/targetSql";
@@ -18,6 +19,7 @@ import { runActualizarPadron } from "@/modules/routine-jobs/jobs/actualizar-padr
 import type { ActualizarPadronOptions, ActualizarPadronParams, PadronLayouts } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import type { RunDeps, RunSession } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
 import type { WritableTargetLayout } from "@/modules/routine-jobs/jobs/shared/tableResolution";
+import { sequenceStateRows, type FakeSequenceState } from "../shared/sequenceStateFake";
 import { writeRevertBackup } from "@/modules/routine-jobs/jobs/actualizar-padron/services/revertBackup";
 
 /* The plan file lives under os.tmpdir(): the default export is redirected to a fresh temp root per test. */
@@ -104,7 +106,7 @@ const LAYOUTS_WITH_MASTER: PadronLayouts = {
   addressMaster: ADDRESS_MASTER,
 };
 
-const OPTIONS: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: false, pairChoices: [] };
+const OPTIONS: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, repairSequences: true, linkAddressMaster: false, pairChoices: [] };
 
 const PARAMS_OF = (overrides: Partial<ActualizarPadronParams> = {}): ActualizarPadronParams => ({
   config: {
@@ -191,6 +193,7 @@ interface SessionOptions {
   reassignMoved?: { moved: number; byTable?: Record<string, number> };
   changedMoved?: { moved: number; selected?: number; ambiguous?: number; byTable?: Record<string, number> };
   masterDeleted?: number;
+  sequenceStates?: readonly FakeSequenceState[];
 }
 
 function sessionOf(
@@ -207,6 +210,7 @@ function sessionOf(
     reassignMoved = { moved: 0 },
     changedMoved = { moved: 0 },
     masterDeleted = 0,
+    sequenceStates = [],
   }: SessionOptions = {}
 ): { session: RunSession; log: string[] } {
   const log: string[] = [];
@@ -245,11 +249,13 @@ function sessionOf(
   ]);
   activeLayouts.current = layouts;
   const session: RunSession = {
-    async query(sql: string) {
+    async query(sql: string, params?: unknown[]) {
       log.push(sql);
       await Promise.resolve();
       const known = answers.get(sql);
       if (known !== undefined) return { rows: known };
+      const state = sequenceStateRows(sql, params, sequenceStates);
+      if (state !== undefined) return { rows: state };
       if (HAS_TABLE_PRIVILEGE_PATTERN.test(sql)) return { rows: [{ has_privilege: deletePrivilegeGranted }] };
       return { rows: answers.get(sql) ?? [] };
     },
@@ -280,8 +286,8 @@ afterEach(async () => {
 });
 
 /** The analysis of the same parameters, run on its own session, so the real run that follows starts with a clean log. */
-async function analysisPlanIdOf(): Promise<string> {
-  const { session } = sessionOf(CLASSIFIED_NEW);
+async function analysisPlanIdOf(sessionOptions: SessionOptions = {}, applied = CLASSIFIED_NEW): Promise<string> {
+  const { session } = sessionOf(applied, sessionOptions);
   const result = await runActualizarPadron(PARAMS_OF({ dryRun: true, confirm: false }), depsOf(session));
   expect(result.planId).toMatch(PLAN_ID_PATTERN);
   return result.planId as string;
@@ -685,5 +691,109 @@ describe("runActualizarPadron reassignment of changed padrones (AP-121 to AP-124
 
     expect(JSON.stringify(result)).toContain("Reasignar direcciones de padrones modificados");
     expect(JSON.stringify(analysis)).not.toContain("Reasignar direcciones de padrones modificados");
+  });
+});
+
+describe("runActualizarPadron sequence repair option (SQ-2, SQ-3)", () => {
+  const withRepair = (repairSequences: boolean): ActualizarPadronParams => PARAMS_OF({ options: { ...OPTIONS, repairSequences } });
+
+  it("should issue the target setval before the apply when SQ-2 repairSequences is on", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(CLASSIFIED_NEW);
+
+    await runActualizarPadron({ ...withRepair(true), planId }, depsOf(session));
+
+    const repairAt = log.indexOf(buildSequenceRepairSql(TARGET));
+    expect(repairAt).toBeGreaterThan(-1);
+    expect(repairAt).toBeLessThan(log.indexOf(buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true })));
+    expect(log).toContain(COMMIT_SQL);
+  });
+
+  it("should issue no setval and still COMMIT when SQ-3 repairSequences is off", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(CLASSIFIED_NEW);
+
+    const result = await runActualizarPadron({ ...withRepair(false), planId }, depsOf(session));
+
+    expect(log.some((sql) => sql.includes("setval"))).toBe(false);
+    expect(log).toContain(buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }));
+    expect(log).toContain(COMMIT_SQL);
+    expect(result.targetModified).toBe(true);
+  });
+});
+
+describe("runActualizarPadron padron sequence state check (SQ-5, SQ-7)", () => {
+  const off = (overrides: Partial<ActualizarPadronParams> = {}): ActualizarPadronParams =>
+    PARAMS_OF({ options: { ...OPTIONS, repairSequences: false }, ...overrides });
+  const BEHIND: FakeSequenceState = { table: "padron", sequence: "carto.padron_id_seq", lastValue: 5, maxId: 10 };
+  const isStateSql = (sql: string): boolean => !sql.includes("setval") && (sql.includes("pg_sequence_last_value") || sql.startsWith("SELECT max("));
+  const APPLY_SQL = buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true });
+
+  it("should complete the analysis with the warning, READ ONLY and ROLLBACK, when SQ-5 the sequence is behind and the run inserts", async () => {
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { sequenceStates: [BEHIND] });
+
+    const result = await runActualizarPadron(off({ dryRun: true, confirm: false }), depsOf(session));
+
+    expect(result.warnings.some((warning) => warning.includes("carto.padron_id_seq está en 6"))).toBe(true);
+    expect(result.planId).toMatch(PLAN_ID_PATTERN);
+    expect(log).not.toContain(APPLY_SQL);
+    expect(log.at(-1)).toBe(ROLLBACK_SQL);
+  });
+
+  it("should throw at persist time before the repair and the apply, ROLLBACK and never COMMIT, when SQ-5 the sequence is behind", async () => {
+    const planId = await analysisPlanIdOf({ sequenceStates: [BEHIND] });
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { sequenceStates: [BEHIND] });
+
+    const failure = await failureOf(runActualizarPadron(off({ planId }), depsOf(session)));
+
+    expect(failure.message).toContain("carto.padron_id_seq está en 6");
+    expect(failure.message).toContain("carto.padron");
+    expect(failure.message).toContain("Ajustar secuencias de destino");
+    expect(log).not.toContain(APPLY_SQL);
+    expect(log.some((sql) => sql.includes("setval"))).toBe(false);
+    expect(log).not.toContain(COMMIT_SQL);
+    expect(log.at(-1)).toBe(ROLLBACK_SQL);
+  });
+
+  it("should check at persist time, after the plan validation, so a stale plan is refused without reading the sequence", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { sequenceStates: [BEHIND], classification: { new: CLASSIFIED_NEW + 1 } });
+
+    const failure = await failureOf(runActualizarPadron(off({ planId }), depsOf(session)));
+
+    expect(failure.message).not.toContain("está en 6");
+    expect(log.some(isStateSql)).toBe(false);
+  });
+
+  it("should never fail nor read the sequence when SQ-7 nothing is inserted even though the sequence is behind", async () => {
+    const zeroNew = { classification: { new: 0 }, sequenceStates: [BEHIND] };
+    const planId = await analysisPlanIdOf(zeroNew, 0);
+    const { session, log } = sessionOf(0, zeroNew);
+
+    const result = await runActualizarPadron(off({ planId }), depsOf(session));
+
+    expect(log.some(isStateSql)).toBe(false);
+    expect(log).toContain(COMMIT_SQL);
+    expect(result.warnings.some((warning) => warning.includes("está en"))).toBe(false);
+  });
+
+  it("should not read the sequence state when the repair is on", async () => {
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { sequenceStates: [BEHIND] });
+
+    await runActualizarPadron(PARAMS_OF({ dryRun: true, confirm: false }), depsOf(session));
+
+    expect(log.some(isStateSql)).toBe(false);
+  });
+
+  it.each([true, false])("should not read the sequence state in the preflight, before BEGIN, dryRun=%s", async (dryRun) => {
+    const planId = dryRun ? undefined : await analysisPlanIdOf({ sequenceStates: [BEHIND] });
+    const { session, log } = sessionOf(CLASSIFIED_NEW, { sequenceStates: [BEHIND] });
+    const params = dryRun ? off({ dryRun: true, confirm: false }) : off({ planId });
+
+    await runActualizarPadron(params, depsOf(session)).catch(() => undefined);
+
+    const beginAt = log.findIndex((sql) => sql.startsWith("BEGIN"));
+    expect(beginAt).toBeGreaterThan(-1);
+    expect(log.findIndex(isStateSql)).toBeGreaterThan(beginAt);
   });
 });

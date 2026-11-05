@@ -3,7 +3,7 @@ import { plannedStepLabels, STEP } from "@/modules/routine-jobs/jobs/actualizar-
 
 describe("plannedStepLabels DELETE step (AP-107)", () => {
   it("should list STEP.DELETE right after STEP.REASSIGN_CHANGED and before STEP.ANALYZE in a real run with no address master link", () => {
-    const steps = plannedStepLabels({ dryRun: false });
+    const steps = plannedStepLabels({ repairSequences: true, dryRun: false });
 
     expect(steps).toContain(STEP.DELETE);
     const reassignIndex = steps.indexOf(STEP.REASSIGN_CHANGED);
@@ -14,7 +14,7 @@ describe("plannedStepLabels DELETE step (AP-107)", () => {
   });
 
   it("should list STEP.DELETE right after STEP.REASSIGN_CHANGED and before the address-master steps and STEP.ANALYZE when linkAddressMaster is on", () => {
-    const steps = plannedStepLabels({ dryRun: false, linkAddressMaster: true });
+    const steps = plannedStepLabels({ repairSequences: true, dryRun: false, linkAddressMaster: true });
 
     const reassignIndex = steps.indexOf(STEP.REASSIGN_CHANGED);
     const deleteIndex = steps.indexOf(STEP.DELETE);
@@ -26,8 +26,8 @@ describe("plannedStepLabels DELETE step (AP-107)", () => {
   });
 
   it("should never list STEP.DELETE in an analysis, with or without the address master link: an analysis has no delete step", () => {
-    expect(plannedStepLabels({ dryRun: true })).not.toContain(STEP.DELETE);
-    expect(plannedStepLabels({ dryRun: true, linkAddressMaster: true })).not.toContain(STEP.DELETE);
+    expect(plannedStepLabels({ repairSequences: true, dryRun: true })).not.toContain(STEP.DELETE);
+    expect(plannedStepLabels({ repairSequences: true, dryRun: true, linkAddressMaster: true })).not.toContain(STEP.DELETE);
   });
 });
 
@@ -37,7 +37,7 @@ describe("plannedStepLabels REASSIGN step (AP-115)", () => {
   });
 
   it.each([false, true])("should list STEP.REASSIGN right after STEP.APPLY (the pair apply step) then STEP.REASSIGN_CHANGED and STEP.DELETE in a real run, linkAddressMaster=%s", (linkAddressMaster) => {
-    const steps = plannedStepLabels({ dryRun: false, linkAddressMaster });
+    const steps = plannedStepLabels({ repairSequences: true, dryRun: false, linkAddressMaster });
 
     expect(steps.indexOf(STEP.REASSIGN)).toBe(steps.indexOf(STEP.APPLY) + 1);
     expect(steps.indexOf(STEP.REASSIGN_CHANGED)).toBe(steps.indexOf(STEP.REASSIGN) + 1);
@@ -45,7 +45,7 @@ describe("plannedStepLabels REASSIGN step (AP-115)", () => {
   });
 
   it.each([false, true])("should never list STEP.REASSIGN in an analysis, linkAddressMaster=%s", (linkAddressMaster) => {
-    expect(plannedStepLabels({ dryRun: true, linkAddressMaster })).not.toContain(STEP.REASSIGN);
+    expect(plannedStepLabels({ repairSequences: true, dryRun: true, linkAddressMaster })).not.toContain(STEP.REASSIGN);
   });
 });
 
@@ -55,6 +55,6 @@ describe("plannedStepLabels REASSIGN_CHANGED step (AP-122)", () => {
   });
 
   it.each([false, true])("should never list STEP.REASSIGN_CHANGED in an analysis, linkAddressMaster=%s", (linkAddressMaster) => {
-    expect(plannedStepLabels({ dryRun: true, linkAddressMaster })).not.toContain(STEP.REASSIGN_CHANGED);
+    expect(plannedStepLabels({ repairSequences: true, dryRun: true, linkAddressMaster })).not.toContain(STEP.REASSIGN_CHANGED);
   });
 });

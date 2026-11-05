@@ -6,6 +6,7 @@ import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType } from "@/ui-kit/types/ui";
 import { GEOMETRY_OVERWRITE_WARNING, type ActualizarOptionsDraft } from "../actualizarPadronWizardState";
 import { GeometryOptionFields } from "./GeometryOptionFields";
+import { SequenceRepairField } from "./SequenceRepairField";
 import styles from "./WizardSteps.module.css";
 
 const LOCALITY_TYPE_LABEL = "Tipo de localidad";
@@ -54,6 +55,7 @@ export const ActualizarOptionsStep: React.FC<ActualizarOptionsStepProps> = ({
         <p className={styles.hint}>{AREA_THRESHOLD_HINT}</p>
       </>
     )}
+    <SequenceRepairField checked={options.repairSequences} onChange={(repairSequences) => onChange({ repairSequences })} />
     {blockingReason ? <AlertMessage type={AlertType.WARNING} text={blockingReason} /> : null}
   </div>
 );

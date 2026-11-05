@@ -11,6 +11,7 @@ import {
   type TransactionOutcome,
 } from "../../shared/transaction";
 import type { WritableTargetLayout } from "../../shared/tableResolution";
+import { sequenceStateWarnings } from "../../shared/targetPreflight";
 import { UNIT_ADDRESS_MASTER_PASS_STEPS, UNIT_STEP } from "../domain/plannedSteps";
 import { buildUnitTargetReport, toUnitApplyOutcome, toUnitClassification, toUnitSourceReport } from "../domain/reportMapping";
 import { buildUnitSourceReportSql } from "../domain/sourceSql";
@@ -21,6 +22,7 @@ export interface UnitWriteOutcome {
   source: UnitSourceReport;
   target: UnitTargetReport;
   addressMaster?: AddressMasterReport;
+  sequenceWarnings: string[];
   targetModified: boolean;
   outcomeUnknown: boolean;
   commitError?: string;
@@ -30,6 +32,7 @@ interface UnitTransactionBody {
   source: UnitSourceReport;
   target: UnitTargetReport;
   addressMaster?: AddressMasterReport;
+  sequenceWarnings: string[];
 }
 
 const UNIT_TRANSACTION: TransactionMessages = {
@@ -77,26 +80,46 @@ function assertCountsMatch(target: WritableTargetLayout, classification: UnitCla
   }
 }
 
+interface AddressMasterStage {
+  report: AddressMasterReport | undefined;
+  sequenceWarnings: string[];
+}
+
 /** Links the units without a dirección maestra; it sees the rows the upsert inserted, in the same transaction. */
 async function runAddressMasterStage(
   session: RunSession,
   layouts: UnitLayouts,
+  params: UnitParams,
   timer: StepTimer
-): Promise<AddressMasterReport | undefined> {
+): Promise<AddressMasterStage> {
   const { addressMaster } = layouts;
-  if (addressMaster === undefined) return undefined;
+  const sequenceWarnings: string[] = [];
+  if (addressMaster === undefined) return { report: undefined, sequenceWarnings };
+  const { repairSequences } = params.options;
   // Ordered: the address master sequence is repaired before its inserts of the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  await timer.run(UNIT_STEP.ADDRESS_SEQUENCES, () => session.query(buildSequenceRepairSql(addressMaster)));
+  if (repairSequences) {
+    await timer.run(UNIT_STEP.ADDRESS_SEQUENCES, () => session.query(buildSequenceRepairSql(addressMaster)));
+  }
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const pass = await runAddressMasterLinkPass(
     session,
     { subject: layouts.target, addressMaster },
     UNIT_SUBJECT_SPEC,
     UNIT_ADDRESS_MASTER_PASS_STEPS,
-    timer
+    timer,
+    async (classification) => {
+      sequenceWarnings.push(
+        ...(await sequenceStateWarnings(session, {
+          target: addressMaster,
+          inserts: classification.counts.created,
+          repairSequences,
+          dryRun: params.dryRun,
+        }))
+      );
+    }
   );
-  return buildAddressMasterReport(addressMaster, pass);
+  return { report: buildAddressMasterReport(addressMaster, pass), sequenceWarnings };
 }
 
 async function analyzeTargets(session: RunSession, layouts: UnitLayouts): Promise<void> {
@@ -116,14 +139,22 @@ async function runTransactionBody(
   // Ordered reads on the transaction's snapshot: the analysis follows the source report step.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const classification = await timer.run(UNIT_STEP.CLASSIFY, () => readClassification(session, layouts, params.options));
+  const unitSequenceWarnings = await sequenceStateWarnings(session, {
+    target: layouts.target,
+    inserts: classification.counts.inserted,
+    repairSequences: params.options.repairSequences,
+    dryRun: params.dryRun,
+  });
   // Ordered: the sequence is repaired after the analysis and before the insert of the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  await timer.run(UNIT_STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.target)));
+  if (params.options.repairSequences) {
+    await timer.run(UNIT_STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.target)));
+  }
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const apply = await timer.run(UNIT_STEP.APPLY, () => readApply(session, layouts, params.options));
   assertCountsMatch(layouts.target, classification, apply);
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const addressMaster = await runAddressMasterStage(session, layouts, timer);
+  const addressMaster = await runAddressMasterStage(session, layouts, params, timer);
   await timer.run(UNIT_STEP.ANALYZE, () => analyzeTargets(session, layouts));
   const target = await timer.run(UNIT_STEP.REPORT, () =>
     Promise.resolve(
@@ -135,7 +166,12 @@ async function runTransactionBody(
       })
     )
   );
-  return { source, target, addressMaster };
+  return {
+    source,
+    target,
+    addressMaster: addressMaster.report,
+    sequenceWarnings: [...unitSequenceWarnings, ...addressMaster.sequenceWarnings],
+  };
 }
 
 export async function runUnitWriteTransaction(

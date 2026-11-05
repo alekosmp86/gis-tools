@@ -71,7 +71,7 @@ const startBody = (): Body => ({
   targetTable: "padron_tmp_actualizacion",
   provinceTable: "province",
   localityTable: "cadastral_locality",
-  options: { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: false },
+  options: { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, repairSequences: true, linkAddressMaster: false },
   dryRun: false,
   confirm: true,
   planId: PLAN_ID,
@@ -120,7 +120,7 @@ describe("createActualizarPadronHandlers lock", () => {
     await wiring.settle();
 
     expect(response.status).toBe(200);
-    expect(wiring.tryStart).toHaveBeenCalledWith([LOCK_KEY], false, plannedStepLabels({ dryRun: false }));
+    expect(wiring.tryStart).toHaveBeenCalledWith([LOCK_KEY], false, plannedStepLabels({ repairSequences: true, dryRun: false }));
   });
 
   it("should answer 409 with the Spanish message for a second start on the same destination, even with another staging table", async () => {

@@ -30,7 +30,12 @@ export function createUnidadTerritorialHandlers(
       conflictMessage: "Ya hay una actualización de unidades territoriales en curso para esta tabla.",
       parse: parseUnidadTerritorialStartRequest,
       lockKeysOf: lockKeysOfUnit,
-      plannedSteps: (params) => plannedUnitStepLabels({ dryRun: params.dryRun, linkAddressMaster: linksAddressMasterOf(params) }),
+      plannedSteps: (params) =>
+        plannedUnitStepLabels({
+          dryRun: params.dryRun,
+          linkAddressMaster: linksAddressMasterOf(params),
+          repairSequences: params.options.repairSequences,
+        }),
       run: runUnidadTerritorial,
     },
     overrides

@@ -22,6 +22,7 @@ function parseLocalityOptions(body: JsonRecord): LocalityOptions {
   return {
     tolerance: readTolerance(options),
     updateGeometries: readBoolean(options, "updateGeometries"),
+    repairSequences: readBoolean(options, "repairSequences"),
   };
 }
 

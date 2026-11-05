@@ -23,7 +23,11 @@ export function createCargarLocalidadesHandlers(
       conflictMessage: "Ya hay una carga de localidades en curso para esta tabla.",
       parse: parseCargarLocalidadesStartRequest,
       lockKeysOf: (params) => params.targets.map((target) => tableLockKey(params.config, target.schema, target.table)),
-      plannedSteps: (params) => plannedLocalityStepLabels({ dryRun: params.dryRun, tables: targetLabelsOf(params) }),
+      plannedSteps: (params) => plannedLocalityStepLabels({
+          dryRun: params.dryRun,
+          tables: targetLabelsOf(params),
+          repairSequences: params.options.repairSequences,
+        }),
       run: runCargarLocalidades,
     },
     overrides

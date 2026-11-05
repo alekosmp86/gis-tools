@@ -74,13 +74,13 @@ describe("assertTargetReady DELETE privilege check (AP-5, AP-106)", () => {
   it("should resolve when the connecting role has DELETE on the destination, along with every other preflight check", async () => {
     const { session } = sessionOf();
 
-    await expect(assertTargetReady(session, LAYOUTS)).resolves.toEqual([]);
+    await expect(assertTargetReady(session, LAYOUTS, true)).resolves.toEqual([]);
   });
 
   it("should check DELETE the same way as INSERT, UPDATE and SELECT: one has_table_privilege call bound to the destination and the privilege name", async () => {
     const { session, query } = sessionOf();
 
-    await assertTargetReady(session, LAYOUTS);
+    await assertTargetReady(session, LAYOUTS, true);
 
     const deleteCalls = query.mock.calls.filter(
       ([sql, values]) => sql.includes("has_table_privilege") && values?.[2] === "DELETE"
@@ -92,7 +92,7 @@ describe("assertTargetReady DELETE privilege check (AP-5, AP-106)", () => {
   it("should refuse in Spanish, naming DELETE and the destination table, when the privilege is missing", async () => {
     const { session } = sessionOf({ denied: ["padron.DELETE"] });
 
-    expect(await messageOf(assertTargetReady(session, LAYOUTS))).toContain(
+    expect(await messageOf(assertTargetReady(session, LAYOUTS, true))).toContain(
       "No tiene privilegio DELETE sobre la tabla carto.padron."
     );
   });
@@ -100,7 +100,7 @@ describe("assertTargetReady DELETE privilege check (AP-5, AP-106)", () => {
   it("should check DELETE only after assertWriteTargetsReady's own INSERT/UPDATE/SELECT checks pass, so an earlier missing privilege is reported alone", async () => {
     const { session, query } = sessionOf({ denied: ["padron.DELETE", "padron.INSERT"] });
 
-    const message = await messageOf(assertTargetReady(session, LAYOUTS));
+    const message = await messageOf(assertTargetReady(session, LAYOUTS, true));
 
     expect(message).toBe("No tiene privilegio INSERT sobre la tabla carto.padron.");
     const deleteCalls = query.mock.calls.filter(([sql, values]) => sql.includes("has_table_privilege") && values?.[2] === "DELETE");
@@ -110,7 +110,7 @@ describe("assertTargetReady DELETE privilege check (AP-5, AP-106)", () => {
   it("should never ask for TRUNCATE on the destination: AP-5 says TRUNCATE is never used", async () => {
     const { session, query } = sessionOf();
 
-    await assertTargetReady(session, LAYOUTS);
+    await assertTargetReady(session, LAYOUTS, true);
 
     const truncateCalls = query.mock.calls.filter(([sql, values]) => sql.includes("has_table_privilege") && values?.[2] === "TRUNCATE");
     expect(truncateCalls).toHaveLength(0);

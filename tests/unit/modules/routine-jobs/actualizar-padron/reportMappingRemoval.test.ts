@@ -336,7 +336,7 @@ describe("plannedStepLabels removal step (AP-107)", () => {
   });
 
   it("should place the delete step after Aplicar cambios de padrones and before Analizar tabla de destino in a real run", () => {
-    const labels = plannedStepLabels({ dryRun: false });
+    const labels = plannedStepLabels({ repairSequences: true, dryRun: false });
 
     expect(labels.indexOf("Eliminar padrones faltantes sin referencias")).toBe(labels.indexOf("Reasignar direcciones de padrones modificados") + 1);
     expect(labels.indexOf("Reasignar direcciones de padrones modificados")).toBe(labels.indexOf("Reasignar direcciones de padrones subdivididos") + 1);
@@ -345,7 +345,7 @@ describe("plannedStepLabels removal step (AP-107)", () => {
   });
 
   it("should leave the delete step out of an analysis", () => {
-    expect(plannedStepLabels({ dryRun: true })).not.toContain("Eliminar padrones faltantes sin referencias");
+    expect(plannedStepLabels({ repairSequences: true, dryRun: true })).not.toContain("Eliminar padrones faltantes sin referencias");
   });
 });
 

@@ -60,6 +60,7 @@ function buildResult(
       collidingKeyCount: source.skipped.collidingKeyCount,
       localityWarnings,
       commitError: outcome.commitError,
+      sequenceWarnings: outcome.sequenceWarnings,
     }),
     stepTimings,
   };
@@ -68,6 +69,7 @@ function buildResult(
 const plannedInputOf = (params: ActualizarPadronParams): PlannedStepsInput => ({
   dryRun: params.dryRun,
   linkAddressMaster: params.options.linkAddressMaster,
+  repairSequences: params.options.repairSequences,
 });
 
 const timerOf = (params: ActualizarPadronParams, deps: RunDeps, onProgress?: (progress: RunProgress) => void): StepTimer =>
@@ -79,7 +81,7 @@ const timerOf = (params: ActualizarPadronParams, deps: RunDeps, onProgress?: (pr
 
 async function prepareRun(session: RunSession, params: ActualizarPadronParams, timer: StepTimer): Promise<PreparedRun> {
   const layouts: PadronLayouts = await timer.run(STEP.VALIDATE, () => resolvePadronLayouts(session, params));
-  const localityWarnings = await timer.run(STEP.TARGET, () => assertTargetReady(session, layouts));
+  const localityWarnings = await timer.run(STEP.TARGET, () => assertTargetReady(session, layouts, params.options.repairSequences));
   await timer.run(STEP.COUNT, () => assertSourceTablesReady(session, sourceTablesSpecOf(layouts)));
   return { layouts, localityWarnings };
 }

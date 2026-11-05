@@ -76,6 +76,7 @@ const sourceSpec = (): SourceTablesSpec => ({
 const writeSpec = (targets: WritableTargetLayout[], readTables: TableLayout[]): WriteTargetsSpec => ({
   targets,
   writtenColumns: ["urn"],
+  repairSequences: true,
   title: "de destino",
   readTables,
 });

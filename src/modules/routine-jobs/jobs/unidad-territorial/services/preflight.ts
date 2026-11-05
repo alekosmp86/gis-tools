@@ -33,11 +33,12 @@ export async function resolveUnitTypeId(
   return unitTypeId;
 }
 
-const writeTargetsSpecOf = (layouts: UnitLayouts): WriteTargetsSpec => ({
+const writeTargetsSpecOf = (layouts: UnitLayouts, repairSequences: boolean): WriteTargetsSpec => ({
   targets: [layouts.target],
   writtenColumns: UNIT_TARGET_WRITTEN_COLUMNS,
   title: UNIT_TARGET_TITLE,
   readTables: [layouts.locality, layouts.type],
+  repairSequences,
 });
 
 export const sourceTablesSpecOf = (layouts: UnitLayouts): SourceTablesSpec => ({
@@ -45,9 +46,13 @@ export const sourceTablesSpecOf = (layouts: UnitLayouts): SourceTablesSpec => ({
   geometry: { layout: layouts.locality, column: UNIT_SOURCE_COLUMN.GEOMETRY },
 });
 
-export async function assertUnitTargetsReady(session: CatalogQuerySession, layouts: UnitLayouts): Promise<void> {
-  await assertWriteTargetsReady(session, writeTargetsSpecOf(layouts));
+export async function assertUnitTargetsReady(
+  session: CatalogQuerySession,
+  layouts: UnitLayouts,
+  repairSequences: boolean
+): Promise<void> {
+  await assertWriteTargetsReady(session, writeTargetsSpecOf(layouts, repairSequences));
   if (layouts.addressMaster !== undefined) {
-    throwIfIssues(await addressMasterIssuesOf(session, layouts.addressMaster));
+    throwIfIssues(await addressMasterIssuesOf(session, layouts.addressMaster, repairSequences));
   }
 }

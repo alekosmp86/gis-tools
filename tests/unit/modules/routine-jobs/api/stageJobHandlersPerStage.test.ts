@@ -42,7 +42,7 @@ const unitBody = (overrides: Record<string, unknown> = {}): Record<string, unkno
   typeTable: "tipo_unidad",
   targetSchema: "carto",
   targetTable: "territorial_unit",
-  options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true },
+  options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, repairSequences: true },
   dryRun: true,
   confirm: false,
   ...overrides,
@@ -56,7 +56,7 @@ const localityBody = (overrides: Record<string, unknown> = {}): Record<string, u
   provinceSchema: "carto",
   provinceTable: "province",
   targets: [{ ...TARGET }],
-  options: { tolerance: 1, updateGeometries: false },
+  options: { tolerance: 1, updateGeometries: false, repairSequences: true },
   dryRun: true,
   confirm: false,
   ...overrides,
@@ -111,7 +111,7 @@ describe("unidad-territorial handlers through the shared stage job handlers", ()
 
     const view = (await jsonOf(await harness.status(started.jobId))).job;
 
-    expect(view.steps).toEqual(plannedUnitStepLabels({ dryRun: true }));
+    expect(view.steps).toEqual(plannedUnitStepLabels({ repairSequences: true, dryRun: true }));
     gate.resolve({ outcomeUnknown: false } as unknown as UnitResult);
     await harness.settle();
   });
@@ -187,7 +187,7 @@ describe("cargar-localidades handlers through the shared stage job handlers", ()
     const started = await jsonOf(await harness.start(body));
     const view = (await jsonOf(await harness.status(started.jobId))).job;
 
-    expect(view.steps).toEqual(plannedLocalityStepLabels({ dryRun: true, tables: targetLabelsOf(parseCargarLocalidadesStartRequest(body)) }));
+    expect(view.steps).toEqual(plannedLocalityStepLabels({ repairSequences: true, dryRun: true, tables: targetLabelsOf(parseCargarLocalidadesStartRequest(body)) }));
     gate.resolve({ outcomeUnknown: false } as unknown as CargarLocalidadesResult);
     await harness.settle();
   });

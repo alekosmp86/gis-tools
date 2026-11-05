@@ -16,6 +16,7 @@ export interface WriteTargetsSpec {
   writtenColumns: readonly string[];
   title: string;
   readTables: readonly TableLayout[];
+  repairSequences: boolean;
 }
 
 export interface SourceTablesSpec {
@@ -41,7 +42,7 @@ async function writeTargetIssues(session: CatalogQuerySession, spec: WriteTarget
     // One pg client: catalog reads are awaited in turn, so they never overlap.
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     issues.push(...(await targetStructureIssuesOf(session, target, spec.writtenColumns, spec.title)));
-    issues.push(...(await writeTargetPrivilegeIssues(session, target)));
+    issues.push(...(await writeTargetPrivilegeIssues(session, target, spec.repairSequences)));
   }
   return issues;
 }

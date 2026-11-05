@@ -21,6 +21,7 @@ export interface WarningInput {
   collidingKeyCount: number;
   localityWarnings: string[];
   commitError: string | undefined;
+  sequenceWarnings?: readonly string[];
 }
 
 export const DRY_RUN_WARNING =
@@ -173,11 +174,13 @@ export function buildRunWarnings({
   collidingKeyCount,
   localityWarnings,
   commitError,
+  sequenceWarnings = [],
 }: WarningInput): string[] {
   return [
     ...(dryRun ? [DRY_RUN_WARNING] : []),
     ...(dryRun && addressMaster !== undefined ? [ADDRESS_MASTER_PLAN_WARNING] : []),
     ...localityWarnings,
+    ...sequenceWarnings,
     ...totalsWarnings(totals, collidingKeyCount),
     ...targetWarnings(target, options, dryRun),
     ...addressMasterWarningsOf(target, addressMaster, dryRun),

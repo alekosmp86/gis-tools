@@ -9,6 +9,7 @@ export interface WarningInput {
   unmatchedPadronTotal: number;
   targets: readonly TargetReport[];
   commitError?: string;
+  sequenceWarnings?: readonly string[];
 }
 
 export const DRY_RUN_WARNING = "Análisis: las tablas de localidades no fueron modificadas.";
@@ -62,9 +63,10 @@ function targetWarnings(target: TargetReport, updateGeometries: boolean): string
   return warnings;
 }
 
-export function buildWarnings({ dryRun, updateGeometries, totals, unmatchedPadronTotal, targets, commitError }: WarningInput): string[] {
+export function buildWarnings({ dryRun, updateGeometries, totals, unmatchedPadronTotal, targets, commitError, sequenceWarnings = [] }: WarningInput): string[] {
   return [
     ...(dryRun ? [DRY_RUN_WARNING] : []),
+    ...sequenceWarnings,
     ...sourceWarnings(totals),
     ...unmatchedPadronWarnings(unmatchedPadronTotal),
     ...targets.flatMap((target) => targetWarnings(target, updateGeometries)),

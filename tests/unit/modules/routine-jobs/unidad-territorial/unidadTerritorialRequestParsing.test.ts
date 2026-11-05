@@ -28,7 +28,7 @@ const startBody = (overrides: Body = {}): Body => ({
   typeTable: TYPE.table,
   targetSchema: TARGET.schema,
   targetTable: TARGET.table,
-  options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true },
+  options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, repairSequences: true },
   dryRun: true,
   confirm: false,
   ...overrides,
@@ -65,7 +65,7 @@ describe("parseUnidadTerritorialStartRequest", () => {
         typeTable: TYPE.table,
         targetSchema: TARGET.schema,
         targetTable: TARGET.table,
-        options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true },
+        options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, repairSequences: true },
         dryRun: true,
         confirm: false,
       });
@@ -80,7 +80,7 @@ describe("parseUnidadTerritorialStartRequest", () => {
     });
 
     it("should accept a tolerance of exactly 0 as the lower boundary", () => {
-      const params = parse(startBody({ options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 0, updateGeometries: false } }));
+      const params = parse(startBody({ options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 0, updateGeometries: false, repairSequences: true } }));
 
       expect(params.options.tolerance).toBe(0);
     });
@@ -122,11 +122,11 @@ describe("parseUnidadTerritorialStartRequest", () => {
 
   describe("options", () => {
     it("should reject a negative tolerance", () => {
-      expectRejected(startBody({ options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: -0.5, updateGeometries: true } }), /tolerance/);
+      expectRejected(startBody({ options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: -0.5, updateGeometries: true, repairSequences: true } }), /tolerance/);
     });
 
     it("should reject a tolerance sent as text instead of a number", () => {
-      expectRejected(startBody({ options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: "1", updateGeometries: true } }), /tolerance/);
+      expectRejected(startBody({ options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: "1", updateGeometries: true, repairSequences: true } }), /tolerance/);
     });
 
     it("should reject a request without an options object", () => {
@@ -137,7 +137,7 @@ describe("parseUnidadTerritorialStartRequest", () => {
     });
 
     it("should reject a blank locality type name", () => {
-      expectRejected(startBody({ options: { localityTypeName: " ", tolerance: 1, updateGeometries: true } }), /localityTypeName/);
+      expectRejected(startBody({ options: { localityTypeName: " ", tolerance: 1, updateGeometries: true, repairSequences: true } }), /localityTypeName/);
     });
   });
 
@@ -162,7 +162,7 @@ describe("parseUnidadTerritorialStartRequest", () => {
 
 describe("address master link option (UT-11)", () => {
   const ADDRESS_MASTER = { schema: "carto", table: "addresses_master" };
-  const LINKED_OPTIONS = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, linkAddressMaster: true };
+  const LINKED_OPTIONS = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, repairSequences: true, linkAddressMaster: true };
   const OFF_OPTIONS = { ...LINKED_OPTIONS, linkAddressMaster: false };
 
   it("should default the link off, carry the nested address master table only when the link is on, and refuse a toggle that disagrees with the table at run time", async () => {
@@ -195,4 +195,25 @@ describe("address master link option (UT-11)", () => {
     );
     expect(deps.openSession).not.toHaveBeenCalled();
   });
+});
+
+describe("parseUnidadTerritorialStartRequest repairSequences (SQ-1)", () => {
+  const optionsOf = (extra: Body) => ({ localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, ...extra });
+
+  it.each([true, false])("should carry repairSequences=%s into the parsed options when SQ-1 gives a boolean", (value) => {
+    const params = parse(startBody({ options: optionsOf({ repairSequences: value }) }));
+
+    expect(params.options.repairSequences).toBe(value);
+  });
+
+  it("should answer 400 naming repairSequences when SQ-1 option is missing", () => {
+    expectRejected(startBody({ options: optionsOf({}) }), /repairSequences/);
+  });
+
+  it.each([["a string", "true"], ["a number", 1], ["null", null], ["an object", {}]])(
+    "should answer 400 naming repairSequences when SQ-1 option is %s",
+    (_label, value) => {
+      expectRejected(startBody({ options: optionsOf({ repairSequences: value }) }), /repairSequences/);
+    }
+  );
 });

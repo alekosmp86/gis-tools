@@ -6,6 +6,7 @@ import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType } from "@/ui-kit/types/ui";
 import { UNIT_GEOMETRY_OVERWRITE_WARNING, type UnidadOptionsDraft } from "../unidadTerritorialWizardState";
 import { GeometryOptionFields } from "./GeometryOptionFields";
+import { SequenceRepairField } from "./SequenceRepairField";
 import styles from "./WizardSteps.module.css";
 
 const TYPE_NAME_LABEL = "Nombre del tipo de localidad";
@@ -31,6 +32,8 @@ export const UnidadOptionsStep: React.FC<UnidadOptionsStepProps> = ({ options, o
       updateHint={UPDATE_HINT}
       overwriteWarning={UNIT_GEOMETRY_OVERWRITE_WARNING}
     />
+
+    <SequenceRepairField checked={options.repairSequences} onChange={(repairSequences) => onChange({ repairSequences })} />
 
     {blockingReason !== null && <AlertMessage type={AlertType.WARNING} text={blockingReason} />}
   </div>

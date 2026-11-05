@@ -10,6 +10,7 @@ export interface UnitOptions {
   tolerance: number;
   updateGeometries: boolean;
   linkAddressMaster?: boolean;
+  repairSequences: boolean;
 }
 
 export interface UnitAddressMasterTable {

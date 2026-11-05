@@ -46,8 +46,8 @@ const targetLayout: LocalityTargetLayout = {
   catalog: [],
 };
 
-const withUpdates: LocalityOptions = { tolerance: 1, updateGeometries: true };
-const withoutUpdates: LocalityOptions = { tolerance: 1, updateGeometries: false };
+const withUpdates: LocalityOptions = { tolerance: 1, updateGeometries: true, repairSequences: true };
+const withoutUpdates: LocalityOptions = { tolerance: 1, updateGeometries: false, repairSequences: true };
 
 const insertColumnsOf = (sql: string): string[] => {
   const match = /INSERT INTO\s+[^(]+\(([^)]*)\)/i.exec(sql);

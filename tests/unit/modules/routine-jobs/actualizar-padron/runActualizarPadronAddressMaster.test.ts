@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildSequenceRepairSql } from "@/modules/routine-jobs/jobs/shared/transaction";
 import { DESTINATION_COLUMN, LOCALITY_COLUMN, PROVINCE_COLUMN, STAGING_COLUMN } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 import { buildReportSql } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/reportSql";
@@ -20,6 +21,7 @@ import {
 } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSql";
 import { PADRON_SUBJECT_SPEC } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSpec";
 import type { WritableTargetLayout } from "@/modules/routine-jobs/jobs/shared/tableResolution";
+import { sequenceStateRows, type FakeSequenceState } from "../shared/sequenceStateFake";
 
 /* The plan file lives under os.tmpdir(): the default export is redirected to a fresh temp root per test. */
 const tempRoot = vi.hoisted(() => ({ directory: "" }));
@@ -93,7 +95,7 @@ const LAYOUTS: PadronLayouts = {
   addressMaster: ADDRESS_MASTER,
 };
 
-const OPTIONS: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: true, pairChoices: [] };
+const OPTIONS: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, repairSequences: true, linkAddressMaster: true, pairChoices: [] };
 
 const ADDRESS_LAYOUTS = { subject: TARGET, addressMaster: ADDRESS_MASTER };
 
@@ -163,7 +165,9 @@ const SCAN = referenceScanOf(SCAN_ROWS);
 /** The session answers the statements of the padron stage and of the address master pass; the address master apply reports the given counts. */
 function sessionOf(
   appliedAddressMaster: Record<string, unknown>,
-  maxIdAnswer: Array<Record<string, unknown>> = [{ max_id: 0 }]
+  maxIdAnswer: Array<Record<string, unknown>> = [{ max_id: 0 }],
+  sequenceStates: readonly FakeSequenceState[] = [],
+  addressClassification: Record<string, unknown> = ADDRESS_CLASSIFICATION_ROW
 ): { session: RunSession; log: string[] } {
   const log: string[] = [];
   const applyAnswer = [{ inserted: CLASSIFIED_NEW, updated: 0, inserted_list: [] }];
@@ -175,17 +179,19 @@ function sessionOf(
     [buildPadronDeleteSql(LAYOUTS, SCAN.tables), [{ surviving: 0, deleted: 0, revert_rows: 0, removed_list: [] }]],
     [buildPadronApplySql(LAYOUTS, OPTIONS), applyAnswer],
     [buildPadronApplySql(LAYOUTS, OPTIONS, { captureRevert: true }), applyAnswer],
-    [buildAddressMasterClassifySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC), [ADDRESS_CLASSIFICATION_ROW]],
+    [buildAddressMasterClassifySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC), [addressClassification]],
     [buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC), [appliedAddressMaster]],
     [buildAddressMasterRemainingSql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC), [ADDRESS_REMAINING_ROW]],
     [buildMaxAddressMasterIdSql(ADDRESS_MASTER), maxIdAnswer],
   ]);
   const session: RunSession = {
-    async query(sql: string) {
+    async query(sql: string, params?: unknown[]) {
       log.push(sql);
       await Promise.resolve();
       const known = answers.get(sql);
       if (known !== undefined) return { rows: known };
+      const state = sequenceStateRows(sql, params, sequenceStates);
+      if (state !== undefined) return { rows: state };
       if (/has_table_privilege/i.test(sql)) return { rows: [{ has_privilege: true }] };
       return { rows: answers.get(sql) ?? [] };
     },
@@ -296,5 +302,100 @@ describe("runActualizarPadron deletion before the address master pass (AP-106)",
     expect(applyIndex).toBeGreaterThan(-1);
     expect(deleteIndex).toBeGreaterThan(applyIndex);
     expect(addressApplyIndex).toBeGreaterThan(deleteIndex);
+  });
+});
+
+describe("runActualizarPadron address master sequence repair option (SQ-2, SQ-3)", () => {
+  const withRepair = (repairSequences: boolean): ActualizarPadronParams => PARAMS_OF({ options: { ...OPTIONS, repairSequences } });
+
+  it("should issue the target and the address master setval when SQ-2 repairSequences is on", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf({ created: 1, linked: 2, linked_list: [] });
+
+    await runActualizarPadron({ ...withRepair(true), planId }, depsOf(session));
+
+    expect(log).toContain(buildSequenceRepairSql(TARGET));
+    expect(log).toContain(buildSequenceRepairSql(ADDRESS_MASTER));
+    expect(log.indexOf(buildSequenceRepairSql(ADDRESS_MASTER))).toBeLessThan(log.indexOf(buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC)));
+  });
+
+  it("should issue no setval but still run the link pass and COMMIT when SQ-3 repairSequences is off", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf({ created: 1, linked: 2, linked_list: [] });
+
+    await runActualizarPadron({ ...withRepair(false), planId }, depsOf(session));
+
+    expect(log.some((sql) => sql.includes("setval"))).toBe(false);
+    expect(log).toContain(buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC));
+    expect(log).toContain(COMMIT_SQL);
+  });
+});
+
+describe("runActualizarPadron address master sequence state check (SQ-5, SQ-7)", () => {
+  const off = (overrides: Partial<ActualizarPadronParams> = {}): ActualizarPadronParams =>
+    PARAMS_OF({ options: { ...OPTIONS, repairSequences: false }, ...overrides });
+  const APPLIED = { created: 1, linked: 2, linked_list: [] };
+  const MASTER_SEQUENCE = ADDRESS_MASTER.idSequence as string;
+  const MASTER_BEHIND: FakeSequenceState = { table: ADDRESS_MASTER_TABLE, sequence: MASTER_SEQUENCE, lastValue: 5, maxId: 10 };
+  const PADRON_BEHIND: FakeSequenceState = { table: "padron", sequence: "carto.padron_id_seq", lastValue: 5, maxId: 10 };
+  const LINK_APPLY_SQL = buildAddressMasterApplySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC);
+  const isMasterStateSql = (sql: string): boolean => sql.startsWith("SELECT max(") && sql.includes(`"${ADDRESS_MASTER_TABLE}"`);
+
+  it("should complete the analysis with the master warning when SQ-5 the master sequence is behind and the link creates records", async () => {
+    const { session, log } = sessionOf(APPLIED, [{ max_id: 0 }], [MASTER_BEHIND]);
+
+    const result = await runActualizarPadron(off({ dryRun: true, confirm: false }), depsOf(session));
+
+    expect(result.warnings.some((warning) => warning.includes(`${MASTER_SEQUENCE} está en 6`))).toBe(true);
+    expect(log).not.toContain(LINK_APPLY_SQL);
+    expect(log.at(-1)).toBe(ROLLBACK_SQL);
+  });
+
+  it("should throw at persist time after the link classification and before the link apply, ROLLBACK, when SQ-5 the master sequence is behind", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(APPLIED, [{ max_id: 0 }], [MASTER_BEHIND]);
+
+    const failure = await failureOf(runActualizarPadron(off({ planId }), depsOf(session)));
+
+    expect(failure.message).toContain(`${MASTER_SEQUENCE} está en 6`);
+    expect(failure.message).toContain(ADDRESS_MASTER_TABLE);
+    expect(failure.message).toContain("Ajustar secuencias de destino");
+    expect(log).toContain(buildAddressMasterClassifySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC));
+    expect(log).not.toContain(LINK_APPLY_SQL);
+    expect(log).not.toContain(COMMIT_SQL);
+    expect(log.at(-1)).toBe(ROLLBACK_SQL);
+  });
+
+  it("should fail on the padron table before the address master hook when both sequences are behind", async () => {
+    const planId = await analysisPlanIdOf();
+    const { session, log } = sessionOf(APPLIED, [{ max_id: 0 }], [MASTER_BEHIND, PADRON_BEHIND]);
+
+    const failure = await failureOf(runActualizarPadron(off({ planId }), depsOf(session)));
+
+    expect(failure.message).toContain("carto.padron_id_seq está en 6");
+    expect(log).not.toContain(buildAddressMasterClassifySql(ADDRESS_LAYOUTS, PADRON_SUBJECT_SPEC));
+  });
+
+  it("should never read the master sequence nor fail when SQ-7 the link creates no records, in an analysis and in a real run", async () => {
+    const noCreate = { ...ADDRESS_CLASSIFICATION_ROW, to_create: 0 };
+    const applied = { created: 0, linked: 2, linked_list: [] };
+    const dry = sessionOf(applied, [{ max_id: 0 }], [MASTER_BEHIND], noCreate);
+    await runActualizarPadron(off({ dryRun: true, confirm: false }), depsOf(dry.session));
+    const planId = await analysisPlanIdOf();
+    const real = sessionOf(applied, [{ max_id: 0 }], [MASTER_BEHIND], noCreate);
+
+    await runActualizarPadron(off({ planId }), depsOf(real.session));
+
+    expect(dry.log.some(isMasterStateSql)).toBe(false);
+    expect(real.log.some(isMasterStateSql)).toBe(false);
+    expect(real.log).toContain(COMMIT_SQL);
+  });
+
+  it("should not read any sequence state when the repair is on", async () => {
+    const { session, log } = sessionOf(APPLIED, [{ max_id: 0 }], [MASTER_BEHIND, PADRON_BEHIND]);
+
+    await runActualizarPadron(PARAMS_OF({ dryRun: true, confirm: false }), depsOf(session));
+
+    expect(log.some((sql) => !sql.includes("setval") && (sql.includes("pg_sequence_last_value") || sql.startsWith("SELECT max(")))).toBe(false);
   });
 });

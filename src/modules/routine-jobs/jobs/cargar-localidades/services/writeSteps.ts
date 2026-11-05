@@ -1,6 +1,7 @@
 import { buildAnalyzeStatement } from "@/core/services/sqlStatements";
 import type { StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunSession } from "../../cargar-padrones/types";
+import { sequenceStateWarnings } from "../../shared/targetPreflight";
 import { buildSequenceRepairSql, runTransaction, type TransactionMessages } from "../../shared/transaction";
 import { applyStepLabel, classifyStepLabel, LOCALITY_STEP } from "../domain/plannedSteps";
 import { toSourceReport, toTargetApplyOutcome, toTargetClassification } from "../domain/reportMapping";
@@ -20,6 +21,7 @@ import type {
 export interface WriteOutcome {
   source: SourceReport;
   targets: TargetReport[];
+  sequenceWarnings: string[];
   targetsModified: boolean;
   outcomeUnknown: boolean;
   commitError?: string;
@@ -28,6 +30,7 @@ export interface WriteOutcome {
 interface TransactionBody {
   source: SourceReport;
   targets: TargetReport[];
+  sequenceWarnings: string[];
 }
 
 const LOCALITY_TRANSACTION: TransactionMessages = {
@@ -101,10 +104,31 @@ async function classifyTargets(
   return classifications;
 }
 
-async function repairSequences(session: RunSession, layouts: LocalityLayouts): Promise<void> {
+async function repairTargetSequences(session: RunSession, layouts: LocalityLayouts): Promise<void> {
   for (const target of layouts.targets) {
     await session.query(buildSequenceRepairSql(target));
   }
+}
+
+async function sequenceWarningsOf(
+  session: RunSession,
+  layouts: LocalityLayouts,
+  params: CargarLocalidadesParams,
+  classifications: readonly TargetClassification[]
+): Promise<string[]> {
+  const warnings: string[] = [];
+  for (const [index, target] of layouts.targets.entries()) {
+    // Ordered reads on one transactional connection, before the first write.
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
+    const found = await sequenceStateWarnings(session, {
+      target,
+      inserts: classifications[index].counts.inserted,
+      repairSequences: params.options.repairSequences,
+      dryRun: params.dryRun,
+    });
+    warnings.push(...found);
+  }
+  return warnings;
 }
 
 async function applyTargets(
@@ -158,15 +182,18 @@ async function runTransactionBody(
   // Ordered reads on the transaction's snapshot: the analysis follows the source report step.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const classifications = await classifyTargets(session, layouts, params, timer);
+  const sequenceWarnings = await sequenceWarningsOf(session, layouts, params, classifications);
   // Ordered: sequences are repaired after the analysis and before any insert of the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  await timer.run(LOCALITY_STEP.SEQUENCES, () => repairSequences(session, layouts));
+  if (params.options.repairSequences) {
+    await timer.run(LOCALITY_STEP.SEQUENCES, () => repairTargetSequences(session, layouts));
+  }
   const applies = await applyTargets(session, layouts, params, classifications, timer);
   await timer.run(LOCALITY_STEP.ANALYZE, () => analyzeTargets(session, layouts));
   const targets = await timer.run(LOCALITY_STEP.REPORT, () =>
     Promise.resolve(buildTargetReports(layouts, classifications, applies, params))
   );
-  return { source, targets };
+  return { source, targets, sequenceWarnings };
 }
 
 export async function runWriteTransaction(

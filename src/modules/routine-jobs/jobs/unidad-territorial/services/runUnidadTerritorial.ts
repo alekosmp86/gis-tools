@@ -28,6 +28,7 @@ function buildResult(params: UnitParams, outcome: UnitWriteOutcome, stepTimings:
       target,
       addressMaster,
       commitError: outcome.commitError,
+      sequenceWarnings: outcome.sequenceWarnings,
     }),
     stepTimings,
   };
@@ -36,6 +37,7 @@ function buildResult(params: UnitParams, outcome: UnitWriteOutcome, stepTimings:
 const plannedInputOf = (params: UnitParams): UnitPlannedStepsInput => ({
   dryRun: params.dryRun,
   linkAddressMaster: linksAddressMasterOf(params),
+  repairSequences: params.options.repairSequences,
 });
 
 async function runOnSession(
@@ -50,7 +52,7 @@ async function runOnSession(
     onProgress,
   });
   const layouts = await timer.run(UNIT_STEP.VALIDATE, () => resolveUnitLayouts(session, params));
-  await timer.run(UNIT_STEP.TARGET, () => assertUnitTargetsReady(session, layouts));
+  await timer.run(UNIT_STEP.TARGET, () => assertUnitTargetsReady(session, layouts, params.options.repairSequences));
   await timer.run(UNIT_STEP.COUNT, () => assertSourceTablesReady(session, sourceTablesSpecOf(layouts)));
   const outcome = await runUnitWriteTransaction(session, params, layouts, timer);
   return buildResult(params, outcome, timer.timings);

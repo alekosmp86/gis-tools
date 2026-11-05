@@ -12,6 +12,7 @@ export interface UnitWarningInput {
   target: UnitTargetReport;
   addressMaster?: AddressMasterReport;
   commitError?: string;
+  sequenceWarnings?: readonly string[];
 }
 
 export const DRY_RUN_WARNING = "Análisis: la tabla de unidades territoriales no fue modificada.";
@@ -49,9 +50,10 @@ function addressMasterWarningsOf(target: UnitTargetReport, addressMaster: Addres
   return addressMaster === undefined ? [] : addressMasterCountWarnings(UNIT_SUBJECT_SPEC, target.table, addressMaster.counts);
 }
 
-export function buildUnitWarnings({ dryRun, options, totals, target, addressMaster, commitError }: UnitWarningInput): string[] {
+export function buildUnitWarnings({ dryRun, options, totals, target, addressMaster, commitError, sequenceWarnings = [] }: UnitWarningInput): string[] {
   return [
     ...(dryRun ? [DRY_RUN_WARNING] : []),
+    ...sequenceWarnings,
     ...sourceWarnings(totals),
     ...targetWarnings(target, options.updateGeometries),
     ...addressMasterWarningsOf(target, addressMaster),

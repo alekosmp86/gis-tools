@@ -184,9 +184,11 @@ export async function runAddressMasterLinkPass(
   layouts: AddressMasterLinkLayouts,
   spec: AddressMasterSubjectSpec,
   steps: AddressMasterPassSteps,
-  timer: StepTimer
+  timer: StepTimer,
+  beforeApply?: (classification: AddressMasterClassification) => Promise<void>
 ): Promise<AddressMasterPassBody> {
   const classification = await timer.run(steps.classify, () => readAddressMasterClassification(session, layouts, spec));
+  if (beforeApply !== undefined) await beforeApply(classification);
   // Ordered: classify must run before apply in the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const apply = await timer.run(steps.apply, () => readApply(session, layouts, spec));

@@ -52,7 +52,7 @@ const stateOf = (overrides: Partial<ActualizarWizardState> = {}): ActualizarWiza
     [ActualizarTableKey.TYPE]: false,
     [ActualizarTableKey.ADDRESS_MASTER]: false,
   },
-  options: { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false },
+  options: { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false, repairSequences: false },
   confirmation: { password: PASSWORD, typedTable: TARGET_TABLE },
   simulatedChoices: [],
   simulatedAcceptedGeometries: [],

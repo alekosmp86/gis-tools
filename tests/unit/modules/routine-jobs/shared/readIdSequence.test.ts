@@ -280,7 +280,7 @@ const unitParams = (): UnitParams => ({
   typeTable: TYPE_TABLE,
   targetSchema: TARGET_SCHEMA,
   targetTable: TARGET_TABLE,
-  options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true },
+  options: { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, repairSequences: true },
   dryRun: false,
   confirm: true,
 });

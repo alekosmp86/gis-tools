@@ -8,6 +8,7 @@ import type { LocalidadesConfirmation, LocalidadesIncludedTarget } from "../carg
 import { DESTINATION_TITLE, GEOMETRY_OVERWRITE_WARNING } from "../cargarLocalidadesWizardState";
 import type { LocalidadesStartRequest } from "../clientTypes";
 import { PASSWORD_LABEL, ReviewRunActions } from "./reviewParts";
+import { SEQUENCE_REPAIR_LABEL } from "./SequenceRepairField";
 import styles from "./WizardSteps.module.css";
 
 const BUSY_NOTE = "Hay una carga de localidades en curso. Espere a que termine para iniciar otra.";
@@ -76,6 +77,8 @@ export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
         <dd>{String(options.tolerance)}</dd>
         <dt>Actualizar geometrías</dt>
         <dd>{options.updateGeometries ? YES : NO}</dd>
+        <dt>{SEQUENCE_REPAIR_LABEL}</dt>
+        <dd>{options.repairSequences ? YES : NO}</dd>
       </dl>
 
       {options.updateGeometries && <AlertMessage type={AlertType.WARNING} text={GEOMETRY_OVERWRITE_WARNING} />}

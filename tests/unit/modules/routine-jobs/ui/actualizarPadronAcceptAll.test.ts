@@ -21,7 +21,7 @@ const PASSWORD = "s3cret-pw";
 const TARGET_TABLE = "padron_tmp_actualizacion";
 const PLAN_ID = "3ab12cd9e8f7d6c5b4a39281706f5e4d";
 const MESSAGE_ACCEPTS_STALE = "Analice de nuevo con las geometrías aceptadas actuales antes de persistir.";
-const OPTIONS = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false };
+const OPTIONS = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false, repairSequences: false };
 const ACCEPT_RURAL: AcceptedGeometry = { typePadron: "RURAL", provinceId: 6, localityId: null, number: "501" };
 
 const stateOf = (overrides: Partial<ActualizarWizardState> = {}): ActualizarWizardState => ({
@@ -55,7 +55,7 @@ const stateOf = (overrides: Partial<ActualizarWizardState> = {}): ActualizarWiza
 
 const dryRunSnapshotOf = (phase: RunPhase, acceptAllGeometries: boolean | undefined, dryRun = true): ActualizarPadronRunSnapshot => ({
   phase,
-  plan: { dryRun, destinationTable: TARGET_TABLE, linkAddressMaster: false, pairChoices: [], acceptedGeometries: [], acceptAllGeometries },
+  plan: { dryRun, destinationTable: TARGET_TABLE, linkAddressMaster: false, repairSequences: false, pairChoices: [], acceptedGeometries: [], acceptAllGeometries },
 });
 
 describe("accept-all geometries wizard state (AP-116)", () => {

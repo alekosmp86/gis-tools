@@ -14,16 +14,16 @@ const startBody = (overrides: Body = {}): Body => ({
   targetTable: "padron_tmp_actualizacion",
   provinceTable: "province",
   localityTable: "cadastral_locality",
-  options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false },
+  options: { tolerance: 1, updateGeometries: true, repairSequences: true, linkAddressMaster: false },
   dryRun: true,
   confirm: false,
   ...overrides,
 });
 
-const withTolerance = (tolerance: unknown): Body => startBody({ options: { tolerance, updateGeometries: true, linkAddressMaster: false } });
+const withTolerance = (tolerance: unknown): Body => startBody({ options: { tolerance, updateGeometries: true, repairSequences: true, linkAddressMaster: false } });
 
 const withPairChoices = (pairChoices: unknown): Body =>
-  startBody({ options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false, pairChoices } });
+  startBody({ options: { tolerance: 1, updateGeometries: true, repairSequences: true, linkAddressMaster: false, pairChoices } });
 
 function errorOf(body: Body): Error {
   try {
@@ -53,7 +53,7 @@ describe("parseActualizarStartRequest", () => {
         targetTable: "padron_tmp_actualizacion",
         provinceTable: "province",
         localityTable: "cadastral_locality",
-        options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false },
+        options: { tolerance: 1, updateGeometries: true, repairSequences: true, linkAddressMaster: false },
         dryRun: true,
         confirm: false,
       });
@@ -67,7 +67,7 @@ describe("parseActualizarStartRequest", () => {
 
   describe("automatic removal (AP-101)", () => {
     it("should ignore a stale removalMarks option sent by an old client, never carrying it into the parsed options", () => {
-      const body = startBody({ options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false, removalMarks: [500, 600] } });
+      const body = startBody({ options: { tolerance: 1, updateGeometries: true, repairSequences: true, linkAddressMaster: false, removalMarks: [500, 600] } });
 
       const params = parseActualizarStartRequest(body as Parameters<typeof parseActualizarStartRequest>[0]);
 
@@ -75,7 +75,7 @@ describe("parseActualizarStartRequest", () => {
     });
 
     it("should not reject a malformed removalMarks option, as marks no longer exist", () => {
-      const body = startBody({ options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false, removalMarks: "not-a-list" } });
+      const body = startBody({ options: { tolerance: 1, updateGeometries: true, repairSequences: true, linkAddressMaster: false, removalMarks: "not-a-list" } });
 
       expect(() => parseActualizarStartRequest(body as Parameters<typeof parseActualizarStartRequest>[0])).not.toThrow();
     });
@@ -259,7 +259,7 @@ describe("parseActualizarStartRequest", () => {
 
   describe("geometry area threshold (AP-92)", () => {
     const withThreshold = (geometryAreaThreshold: unknown): Body =>
-      startBody({ options: { tolerance: 1, geometryAreaThreshold, updateGeometries: true, linkAddressMaster: false } });
+      startBody({ options: { tolerance: 1, geometryAreaThreshold, updateGeometries: true, repairSequences: true, linkAddressMaster: false } });
 
     it("should default the geometry area threshold to 0.05 when the option is absent", () => {
       const params = parseActualizarStartRequest(startBody() as Parameters<typeof parseActualizarStartRequest>[0]);
@@ -282,7 +282,7 @@ describe("parseActualizarStartRequest", () => {
     const parse = (body: Body) => parseActualizarStartRequest(body as Parameters<typeof parseActualizarStartRequest>[0]);
 
     const withAccepts = (acceptedGeometries: unknown): Body =>
-      startBody({ options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false, acceptedGeometries } });
+      startBody({ options: { tolerance: 1, updateGeometries: true, repairSequences: true, linkAddressMaster: false, acceptedGeometries } });
 
     const KEY_URBANO = { typePadron: "URBANO", provinceId: 1, localityId: 10, number: "200" };
     const KEY_RURAL = { typePadron: "RURAL", provinceId: 1, localityId: null, number: "501" };
@@ -374,7 +374,7 @@ describe("parseActualizarStartRequest accept all geometries (AP-116)", () => {
   const parse = (body: Body) => parseActualizarStartRequest(body as Parameters<typeof parseActualizarStartRequest>[0]);
 
   const withFlag = (acceptAllGeometries: unknown): Body =>
-    startBody({ options: { tolerance: 1, updateGeometries: true, linkAddressMaster: false, acceptAllGeometries } });
+    startBody({ options: { tolerance: 1, updateGeometries: true, repairSequences: true, linkAddressMaster: false, acceptAllGeometries } });
 
   it("should default the flag to false when the request omits it", () => {
     expect(parse(startBody()).options.acceptAllGeometries).toBe(false);
@@ -395,4 +395,32 @@ describe("parseActualizarStartRequest accept all geometries (AP-116)", () => {
   ])("should reject the flag sent as %s with the Spanish message naming acceptAllGeometries", (_label, value) => {
     expectRejected(withFlag(value), /^El campo acceptAllGeometries debe ser verdadero o falso\.$/);
   });
+});
+
+describe("parseActualizarStartRequest repairSequences (SQ-1)", () => {
+  const optionsWith = (repairSequences: unknown): Body => ({ tolerance: 1, updateGeometries: true, linkAddressMaster: false, repairSequences });
+  const optionsWithout = (): Body => ({ tolerance: 1, updateGeometries: true, linkAddressMaster: false });
+
+  it.each([true, false])("should carry repairSequences=%s into the parsed options when SQ-1 gives a boolean", (value) => {
+    const params = parseActualizarStartRequest(startBody({ options: optionsWith(value) }) as Parameters<typeof parseActualizarStartRequest>[0]);
+
+    expect(params.options.repairSequences).toBe(value);
+  });
+
+  it("should answer 400 naming repairSequences when SQ-1 option is missing", () => {
+    const error = errorOf(startBody({ options: optionsWithout() }));
+
+    expect(error).toBeInstanceOf(RequestInvalidError);
+    expect(error.message).toMatch(/repairSequences/);
+  });
+
+  it.each([["a string", "true"], ["a number", 1], ["null", null], ["an object", {}]])(
+    "should answer 400 naming repairSequences when SQ-1 option is %s",
+    (_label, value) => {
+      const error = errorOf(startBody({ options: optionsWith(value) }));
+
+      expect(error).toBeInstanceOf(RequestInvalidError);
+      expect(error.message).toMatch(/repairSequences/);
+    }
+  );
 });

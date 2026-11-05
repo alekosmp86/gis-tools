@@ -33,6 +33,7 @@ interface Scenario {
   commitFails?: boolean;
   unowned?: boolean;
   idDefault?: string | null;
+  sequence?: { lastValue: number | null; maxId: number | null };
 }
 
 const column = (name: string, dataType: string, overrides: Partial<DbColumnMetadata> = {}): Row => ({
@@ -116,6 +117,8 @@ function answerOf(scenario: Scenario, sql: string, values: unknown[] | undefined
   if (sql.includes("pg_trigger") || sql.includes("pg_rewrite") || sql.includes("attidentity")) return [];
   if (sql.includes("pg_get_serial_sequence")) return scenario.unowned ? [{ sequence_name: null }] : [{ sequence_name: TARGET_SEQUENCE }];
   if (sql.includes("to_regclass")) return regclassRowOf(values);
+  if (sql.includes("pg_sequence_last_value")) return [{ readable: true, last_value: scenario.sequence === undefined ? 100 : scenario.sequence.lastValue }];
+  if (sql.startsWith("SELECT max(")) return [{ max_id: scenario.sequence === undefined ? 10 : scenario.sequence.maxId }];
   if (sql.includes("has_table_privilege") || sql.includes("has_sequence_privilege")) return [{ has_privilege: true }];
   if (sql.includes("AS present")) return [{ present: true }];
   if (sql.includes('AS "unsupported"')) return [{ unsupported: 0 }];
@@ -160,7 +163,7 @@ const defaultParams = (overrides: Partial<CargarLocalidadesParams> = {}): Cargar
   provinceSchema: SCHEMA_CARTO,
   provinceTable: PROVINCE,
   targets: [{ schema: SCHEMA_CARTO, table: TARGET }],
-  options: { tolerance: 1, updateGeometries: false },
+  options: { tolerance: 1, updateGeometries: false, repairSequences: true },
   dryRun: false,
   confirm: true,
   ...overrides,
@@ -264,7 +267,7 @@ describe("runCargarLocalidades transaction end (MJ-13)", () => {
       const harness = createHarness({ changedLocalities: 2, appliedUpdates: 1 });
 
       const failure = await failureOf(
-        runCargarLocalidades(defaultParams({ options: { tolerance: 1, updateGeometries: true } }), harness.deps)
+        runCargarLocalidades(defaultParams({ options: { tolerance: 1, updateGeometries: true, repairSequences: true } }), harness.deps)
       );
 
       expect(failure.message).toMatch(/no coinciden/);
@@ -321,5 +324,92 @@ describe("runCargarLocalidades transaction end (MJ-13)", () => {
 
       expect(JSON.stringify(result)).not.toContain(PASSWORD);
     });
+  });
+});
+
+describe("runCargarLocalidades sequence repair option (SQ-2, SQ-3)", () => {
+  const withRepair = (repairSequences: boolean): CargarLocalidadesParams =>
+    defaultParams({ options: { tolerance: 1, updateGeometries: false, repairSequences } });
+
+  it("should issue the setval before the insert when SQ-2 repairSequences is on", async () => {
+    const harness = createHarness();
+
+    await runCargarLocalidades(withRepair(true), harness.deps);
+
+    const repairAt = harness.log.findIndex((sql) => sql.includes("setval"));
+    const insertAt = harness.log.findIndex((sql) => sql.includes('AS "inserted_list"'));
+    expect(repairAt).toBeGreaterThan(-1);
+    expect(repairAt).toBeLessThan(insertAt);
+  });
+
+  it("should issue no setval and still COMMIT when SQ-3 repairSequences is off and the sequence is ahead of the ids", async () => {
+    const harness = createHarness();
+
+    const result = await runCargarLocalidades(withRepair(false), harness.deps);
+
+    expect(harness.log.some((sql) => sql.includes("setval"))).toBe(false);
+    expect(endsWith(harness.log, COMMIT_SQL)).toBe(true);
+    expect(result.targetsModified).toBe(true);
+  });
+});
+
+describe("runCargarLocalidades sequence state check after the classification (SQ-5, SQ-7)", () => {
+  const off = (): CargarLocalidadesParams => defaultParams({ options: { tolerance: 1, updateGeometries: false, repairSequences: false } });
+  const offDry = (): CargarLocalidadesParams => dryRunParams({ options: { tolerance: 1, updateGeometries: false, repairSequences: false } });
+  const BEHIND = { lastValue: 5, maxId: 10 };
+  const isStateSql = (sql: string): boolean => !sql.includes("setval") && (sql.includes("pg_sequence_last_value") || sql.startsWith("SELECT max("));
+  const isWriteSql = (sql: string): boolean => sql.includes('AS "inserted_list"') || sql.includes("setval");
+
+  it("should throw before any write, ROLLBACK and never COMMIT when SQ-5 the sequence is behind and the run inserts", async () => {
+    const harness = createHarness({ newLocalities: 2, sequence: BEHIND });
+
+    const failure = await failureOf(runCargarLocalidades(off(), harness.deps));
+
+    expect(failure.message).toContain(`${TARGET_SEQUENCE} está en 6`);
+    expect(failure.message).toContain(TARGET);
+    expect(failure.message).toContain("Ajustar secuencias de destino");
+    expect(harness.log.some(isWriteSql)).toBe(false);
+    expect(harness.log).not.toContain(COMMIT_SQL);
+    expect(endsWith(harness.log, ROLLBACK_SQL)).toBe(true);
+  });
+
+  it("should complete the analysis with the warning when SQ-5 the sequence is behind", async () => {
+    const harness = createHarness({ newLocalities: 2, sequence: BEHIND });
+
+    const result = await runCargarLocalidades(offDry(), harness.deps);
+
+    expect(result.warnings.some((warning) => warning.includes(`${TARGET_SEQUENCE} está en 6`))).toBe(true);
+    expect(harness.log).not.toContain(COMMIT_SQL);
+    expect(endsWith(harness.log, ROLLBACK_SQL)).toBe(true);
+  });
+
+  it("should not fail nor read the sequence when SQ-7 nothing is inserted even though the sequence is behind", async () => {
+    const harness = createHarness({ newLocalities: 0, sequence: BEHIND });
+
+    const result = await runCargarLocalidades(off(), harness.deps);
+
+    expect(harness.log.some(isStateSql)).toBe(false);
+    expect(endsWith(harness.log, COMMIT_SQL)).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("está en"))).toBe(false);
+  });
+
+  it("should not read the sequence when the repair is on", async () => {
+    const harness = createHarness({ newLocalities: 2, sequence: BEHIND });
+
+    await runCargarLocalidades(defaultParams(), harness.deps);
+
+    expect(harness.log.some(isStateSql)).toBe(false);
+  });
+
+  it.each([false, true])("should not read the sequence state in the preflight, before BEGIN, dryRun=%s", async (dryRun) => {
+    const harness = createHarness({ newLocalities: 2, sequence: BEHIND });
+    const params = dryRun ? offDry() : off();
+
+    await runCargarLocalidades(params, harness.deps).catch(() => undefined);
+
+    const beginAt = harness.log.findIndex((sql) => sql.startsWith("BEGIN"));
+    const firstStateAt = harness.log.findIndex(isStateSql);
+    expect(beginAt).toBeGreaterThan(-1);
+    expect(firstStateAt).toBeGreaterThan(beginAt);
   });
 });

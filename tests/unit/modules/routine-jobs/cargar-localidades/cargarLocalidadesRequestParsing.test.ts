@@ -29,7 +29,7 @@ const startBody = (overrides: Body = {}): Body => ({
   provinceSchema: "carto",
   provinceTable: PROVINCE,
   targets: [{ ...TARGET }],
-  options: { tolerance: 1, updateGeometries: false },
+  options: { tolerance: 1, updateGeometries: false, repairSequences: true },
   dryRun: true,
   confirm: false,
   ...overrides,
@@ -66,7 +66,7 @@ describe("parseCargarLocalidadesStartRequest", () => {
         provinceSchema: "carto",
         provinceTable: PROVINCE,
         targets: [TARGET],
-        options: { tolerance: 1, updateGeometries: false },
+        options: { tolerance: 1, updateGeometries: false, repairSequences: true },
         dryRun: true,
         confirm: false,
       });
@@ -144,7 +144,7 @@ describe("parseCargarLocalidadesStartRequest", () => {
       ["zero", 0],
       ["a fraction", 0.5],
     ])("should accept %s as the tolerance", (_label, tolerance) => {
-      expect(parse(startBody({ options: { tolerance, updateGeometries: false } })).options.tolerance).toBe(tolerance);
+      expect(parse(startBody({ options: { tolerance, updateGeometries: false, repairSequences: true } })).options.tolerance).toBe(tolerance);
     });
 
     it.each([
@@ -155,11 +155,11 @@ describe("parseCargarLocalidadesStartRequest", () => {
       ["null", null],
       ["a boolean", true],
     ])("should answer 400 naming tolerance when the tolerance is %s", (_label, tolerance) => {
-      expectRejected(startBody({ options: { tolerance, updateGeometries: false } }), /tolerance/);
+      expectRejected(startBody({ options: { tolerance, updateGeometries: false, repairSequences: true } }), /tolerance/);
     });
 
     it("should answer 400 naming tolerance when the tolerance is missing", () => {
-      expectRejected(startBody({ options: { updateGeometries: false } }), /tolerance/);
+      expectRejected(startBody({ options: { updateGeometries: false, repairSequences: true } }), /tolerance/);
     });
 
     it("should answer 400 naming options when the options object is missing", () => {
@@ -198,4 +198,23 @@ describe("parseCargarLocalidadesStartRequest", () => {
       expectRejected(startBody({ confirm: "true" }), /confirm/);
     });
   });
+});
+
+describe("parseCargarLocalidadesStartRequest repairSequences (SQ-1)", () => {
+  it.each([true, false])("should carry repairSequences=%s into the parsed options when SQ-1 gives a boolean", (value) => {
+    const params = parse(startBody({ options: { tolerance: 1, updateGeometries: false, repairSequences: value } }));
+
+    expect(params.options.repairSequences).toBe(value);
+  });
+
+  it("should answer 400 naming repairSequences when SQ-1 option is missing", () => {
+    expectRejected(startBody({ options: { tolerance: 1, updateGeometries: false } }), /repairSequences/);
+  });
+
+  it.each([["a string", "true"], ["a number", 1], ["null", null], ["an object", {}]])(
+    "should answer 400 naming repairSequences when SQ-1 option is %s",
+    (_label, value) => {
+      expectRejected(startBody({ options: { tolerance: 1, updateGeometries: false, repairSequences: value } }), /repairSequences/);
+    }
+  );
 });

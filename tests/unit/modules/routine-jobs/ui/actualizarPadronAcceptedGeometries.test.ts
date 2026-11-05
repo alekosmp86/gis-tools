@@ -24,7 +24,7 @@ const MESSAGE_ACCEPTS_STALE = "Analice de nuevo con las geometrías aceptadas ac
 const MESSAGE_SIMULATION_STALE = "Analice de nuevo con la selección de pares actual antes de persistir.";
 const MESSAGE_PLAN_MISSING = "El análisis no dejó un plan para guardar: vuelva a analizar.";
 
-const OPTIONS = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false };
+const OPTIONS = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false, repairSequences: false };
 
 const ACCEPT_RURAL: AcceptedGeometry = { typePadron: "RURAL", provinceId: 6, localityId: null, number: "501" };
 const ACCEPT_URBANO: AcceptedGeometry = { typePadron: "URBANO", provinceId: 6, localityId: 120, number: "502" };
@@ -221,7 +221,7 @@ describe("simulation of the accepted geometries (AP-100)", () => {
   it("should seed the simulated acceptances from a completed dry run when the wizard reopens on its result", () => {
     const snapshot: ActualizarPadronRunSnapshot = {
       phase: RunPhase.DONE,
-      plan: { dryRun: true, destinationTable: TARGET_TABLE, linkAddressMaster: false, pairChoices: [], acceptedGeometries: [ACCEPT_RURAL] },
+      plan: { dryRun: true, destinationTable: TARGET_TABLE, linkAddressMaster: false, repairSequences: false, pairChoices: [], acceptedGeometries: [ACCEPT_RURAL] },
     };
 
     const next = initialWizardStateFor(snapshot);

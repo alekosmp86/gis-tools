@@ -40,6 +40,7 @@ export interface ActualizarPadronOptions {
   geometryAreaThreshold: number;
   updateGeometries: boolean;
   linkAddressMaster: boolean;
+  repairSequences: boolean;
   pairChoices: readonly PairChoice[];
   /** Absent means none: the request parser always fills it. */
   acceptedGeometries?: readonly AcceptedGeometry[];

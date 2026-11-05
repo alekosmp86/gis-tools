@@ -32,7 +32,7 @@ const LAYOUTS: PadronLayouts = {
   locality: tableOf("carto", "loc", Object.values(LOCALITY_COLUMN)),
 };
 
-const OPTIONS: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: false, pairChoices: [] };
+const OPTIONS: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, repairSequences: true, linkAddressMaster: false, pairChoices: [] };
 
 const ACCESS_POINT: ReferenceTable = {
   schema: "carto",
@@ -255,7 +255,7 @@ describe("buildPadronClassifySql changed-padron wiring (AP-123)", () => {
 
   it("should use the staging geometry of a pair when updateGeometries is on and keep the target's when it is off", () => {
     const on = buildPadronClassifySql(LAYOUTS, OPTIONS, scanOf([ACCESS_POINT]), { report: true });
-    const off = buildPadronClassifySql(LAYOUTS, { ...OPTIONS, updateGeometries: false }, scanOf([ACCESS_POINT]), { report: true });
+    const off = buildPadronClassifySql(LAYOUTS, { ...OPTIONS, updateGeometries: false, repairSequences: true }, scanOf([ACCESS_POINT]), { report: true });
 
     expect(on).not.toBe(off);
     const postOf = (sql: string): string => sql.slice(sql.indexOf('"reassign_changed_post" AS'), sql.indexOf('"reassign_changed_all" AS'));

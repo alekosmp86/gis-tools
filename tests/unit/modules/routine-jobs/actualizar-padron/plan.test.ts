@@ -32,7 +32,7 @@ const paramsOf = (): ActualizarPadronParams => ({
     localityType: "Localidad",
     tolerance: 1,
     geometryAreaThreshold: 0.05,
-    updateGeometries: true,
+    updateGeometries: true, repairSequences: true,
     linkAddressMaster: true,
     pairChoices: [CHOICE_A, CHOICE_B],
   },

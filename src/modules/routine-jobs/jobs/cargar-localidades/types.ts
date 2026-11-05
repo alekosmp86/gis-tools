@@ -7,6 +7,7 @@ import type { LocalitySkipReason } from "./constants";
 export interface LocalityOptions {
   tolerance: number;
   updateGeometries: boolean;
+  repairSequences: boolean;
 }
 
 export interface LocalityTableRef {

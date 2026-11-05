@@ -17,16 +17,17 @@ export const applyStepLabel = (table: string): string => `Aplicar cambios: ${tab
 export interface LocalityPlannedStepsInput {
   dryRun: boolean;
   tables: readonly string[];
+  repairSequences: boolean;
 }
 
-export function plannedLocalityStepLabels({ dryRun, tables }: LocalityPlannedStepsInput): string[] {
+export function plannedLocalityStepLabels({ dryRun, tables, repairSequences }: LocalityPlannedStepsInput): string[] {
   return [
     LOCALITY_STEP.VALIDATE,
     LOCALITY_STEP.TARGETS,
     LOCALITY_STEP.COUNT,
     LOCALITY_STEP.RESOLVE,
     ...tables.map(classifyStepLabel),
-    LOCALITY_STEP.SEQUENCES,
+    ...(repairSequences ? [LOCALITY_STEP.SEQUENCES] : []),
     ...tables.map(applyStepLabel),
     LOCALITY_STEP.ANALYZE,
     LOCALITY_STEP.REPORT,

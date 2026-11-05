@@ -12,11 +12,12 @@ const ADDRESS_MASTER_PRIVILEGES: readonly string[] = [...READ_PRIVILEGES, "INSER
 
 export async function addressMasterIssuesOf(
   session: CatalogQuerySession,
-  addressMaster: WritableTargetLayout
+  addressMaster: WritableTargetLayout,
+  repairSequences: boolean
 ): Promise<string[]> {
   return [
     ...(await targetStructureIssuesOf(session, addressMaster, ADDRESS_MASTER_WRITTEN_COLUMNS, ADDRESS_MASTER_TITLE)),
     ...(await tablePrivilegeIssues(session, addressMaster, ADDRESS_MASTER_PRIVILEGES)),
-    ...(await sequenceIssuesOf(session, addressMaster)),
+    ...(await sequenceIssuesOf(session, addressMaster, repairSequences)),
   ];
 }

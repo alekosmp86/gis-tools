@@ -42,6 +42,7 @@ export function parseOptions(body: JsonRecord, typeTable: string | undefined): A
     geometryAreaThreshold: readGeometryAreaThreshold(options),
     updateGeometries: readBoolean(options, "updateGeometries"),
     linkAddressMaster: readBoolean(options, "linkAddressMaster"),
+    repairSequences: readBoolean(options, "repairSequences"),
     pairChoices: readPairChoices(options),
     acceptedGeometries: readAcceptedGeometries(options),
     acceptAllGeometries: readAcceptAllGeometries(options),

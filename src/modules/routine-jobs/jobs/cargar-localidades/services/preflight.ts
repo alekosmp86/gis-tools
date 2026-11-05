@@ -6,11 +6,12 @@ import type { LocalityLayouts } from "../types";
 export const CONFIRM_REQUIRED_MESSAGE =
   "Confirme la carga de localidades para escribir en las tablas de destino. Sin confirmación solo se permite el análisis sin cargar.";
 
-export const writeTargetsSpecOf = (layouts: LocalityLayouts): WriteTargetsSpec => ({
+export const writeTargetsSpecOf = (layouts: LocalityLayouts, repairSequences: boolean): WriteTargetsSpec => ({
   targets: layouts.targets,
   writtenColumns: TARGET_WRITTEN_COLUMNS,
   title: TARGET_TITLE,
   readTables: [layouts.padron, layouts.localities, layouts.province],
+  repairSequences,
 });
 
 export const sourceTablesSpecOf = (layouts: LocalityLayouts): SourceTablesSpec => ({

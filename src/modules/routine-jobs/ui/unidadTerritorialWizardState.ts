@@ -37,6 +37,7 @@ export interface UnidadOptionsDraft {
   tolerance: string;
   updateGeometries: boolean;
   linkAddressMaster: boolean;
+  repairSequences: boolean;
 }
 
 export interface UnidadConfirmation {
@@ -125,6 +126,7 @@ function initialState(seed: UnidadWizardSeed): UnidadTerritorialWizardState {
       tolerance: DEFAULT_TOLERANCE_TEXT,
       updateGeometries: DEFAULT_UPDATE_GEOMETRIES,
       linkAddressMaster: DEFAULT_LINK_ADDRESS_MASTER,
+      repairSequences: false,
     },
     confirmation: emptyConfirmation(),
   };
@@ -228,6 +230,7 @@ export function toUnidadStartRequest(state: UnidadTerritorialWizardState, flags:
       tolerance: toleranceOf(state.options.tolerance),
       updateGeometries: state.options.updateGeometries,
       linkAddressMaster: state.options.linkAddressMaster,
+      repairSequences: state.options.repairSequences,
     },
     dryRun: flags.dryRun,
     confirm: !flags.dryRun,

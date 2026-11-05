@@ -5,6 +5,7 @@ import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType } from "@/ui-kit/types/ui";
 import { GEOMETRY_OVERWRITE_WARNING, type LocalidadesOptionsDraft } from "../cargarLocalidadesWizardState";
+import { SequenceRepairField } from "./SequenceRepairField";
 import styles from "./WizardSteps.module.css";
 
 const TOLERANCE_LABEL = "Tolerancia (m)";
@@ -35,6 +36,8 @@ export const LocalidadesOptionsStep: React.FC<LocalidadesOptionsStepProps> = ({ 
     </label>
     <p className={styles.hint}>{UPDATE_HINT}</p>
     {options.updateGeometries && <AlertMessage type={AlertType.WARNING} text={GEOMETRY_OVERWRITE_WARNING} />}
+
+    <SequenceRepairField checked={options.repairSequences} onChange={(repairSequences) => onChange({ repairSequences })} />
 
     {blockingReason !== null && <AlertMessage type={AlertType.WARNING} text={blockingReason} />}
   </div>

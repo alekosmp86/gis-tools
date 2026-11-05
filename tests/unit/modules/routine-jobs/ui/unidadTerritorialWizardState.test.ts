@@ -115,8 +115,8 @@ describe("unidadTerritorialWizardState", () => {
 
   describe("planned steps", () => {
     it("should add the four address master steps between apply and analyze only when the link is on", () => {
-      const linked = plannedUnitStepLabels({ dryRun: false, linkAddressMaster: true });
-      const unlinked = plannedUnitStepLabels({ dryRun: false, linkAddressMaster: false });
+      const linked = plannedUnitStepLabels({ repairSequences: true, dryRun: false, linkAddressMaster: true });
+      const unlinked = plannedUnitStepLabels({ repairSequences: true, dryRun: false, linkAddressMaster: false });
       const addressMasterSteps = [
         "Ajustar secuencia de direcciones maestras",
         "Clasificar unidades sin dirección maestra",

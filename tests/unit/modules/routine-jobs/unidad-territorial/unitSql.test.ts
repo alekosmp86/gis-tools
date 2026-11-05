@@ -52,8 +52,8 @@ const layoutsWith = (unitTypeId: number): UnitLayouts => ({
 
 const layouts = layoutsWith(RESOLVED_TYPE_ID);
 
-const withUpdates: UnitOptions = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true };
-const withoutUpdates: UnitOptions = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: false };
+const withUpdates: UnitOptions = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, repairSequences: true };
+const withoutUpdates: UnitOptions = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: false, repairSequences: true };
 
 const insertColumnsOf = (sql: string): string[] => {
   const match = /INSERT INTO\s+[^(]+\(([^)]*)\)/i.exec(sql);

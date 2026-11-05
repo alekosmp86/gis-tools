@@ -9,6 +9,7 @@ import {
 import { buildAddressMasterReport } from "../../shared/addressMasterLinkReport";
 import { PADRON_SUBJECT_SPEC } from "../../shared/addressMasterLinkSpec";
 import type { WritableTargetLayout } from "../../shared/tableResolution";
+import { sequenceStateWarnings } from "../../shared/targetPreflight";
 import {
   buildSequenceRepairSql,
   runTransaction,
@@ -69,6 +70,7 @@ export interface PadronWriteOutcome {
   backup?: ActualizarPadronBackup;
   snapshot: PlanSnapshot;
   pendingGeometryChanges: PadronGeometryChange[];
+  sequenceWarnings: string[];
   targetModified: boolean;
   outcomeUnknown: boolean;
   commitError?: string;
@@ -81,6 +83,7 @@ interface PadronTransactionBody {
   backup?: ActualizarPadronBackup;
   snapshot: PlanSnapshot;
   pendingGeometryChanges: PadronGeometryChange[];
+  sequenceWarnings: string[];
 }
 
 const PADRON_TRANSACTION: TransactionMessages = {
@@ -267,40 +270,68 @@ function assertDeleteCountsMatch(target: WritableTargetLayout, deleteOutcome: Pa
   }
 }
 
-/** Links the target's padrones without a dirección maestra; it sees the rows the upsert inserted, in the same transaction. */
+interface AddressMasterStage {
+  report: ActualizarAddressMasterReport | undefined;
+  sequenceWarnings: string[];
+}
+
+/** Links the target's padrones without a dirección maestra; it sees the rows the upsert inserted, in the same transaction.
+    The sequence state check runs once the link classification knows how many address masters it creates, before their insert. */
 async function runAddressMasterStage(
   session: RunSession,
   layouts: PadronLayouts,
+  params: ActualizarPadronParams,
   timer: StepTimer
-): Promise<ActualizarAddressMasterReport | undefined> {
+): Promise<AddressMasterStage> {
   const { addressMaster } = layouts;
-  if (addressMaster === undefined) return undefined;
+  const sequenceWarnings: string[] = [];
+  if (addressMaster === undefined) return { report: undefined, sequenceWarnings };
+  const { repairSequences } = params.options;
   // Ordered: the address master sequence is repaired before its inserts of the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  await timer.run(STEP.ADDRESS_SEQUENCES, () => session.query(buildSequenceRepairSql(addressMaster)));
+  if (repairSequences) {
+    await timer.run(STEP.ADDRESS_SEQUENCES, () => session.query(buildSequenceRepairSql(addressMaster)));
+  }
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const pass = await runAddressMasterLinkPass(
     session,
     { subject: layouts.target, addressMaster },
     PADRON_SUBJECT_SPEC,
     ADDRESS_MASTER_PASS_STEPS,
-    timer
+    timer,
+    async (classification) => {
+      sequenceWarnings.push(
+        ...(await sequenceStateWarnings(session, {
+          target: addressMaster,
+          inserts: classification.counts.created,
+          repairSequences,
+          dryRun: params.dryRun,
+        }))
+      );
+    }
   );
-  return buildAddressMasterReport(addressMaster, pass);
+  return { report: buildAddressMasterReport(addressMaster, pass), sequenceWarnings };
 }
 
 /** The analysis only classifies the links: the rows the padron insert will add are not in the destination yet, so they are not counted. */
 async function runAddressMasterPlan(
   session: RunSession,
   layouts: PadronLayouts,
+  params: ActualizarPadronParams,
   timer: StepTimer
-): Promise<ActualizarAddressMasterReport | undefined> {
+): Promise<AddressMasterStage> {
   const { addressMaster } = layouts;
-  if (addressMaster === undefined) return undefined;
+  if (addressMaster === undefined) return { report: undefined, sequenceWarnings: [] };
   const classification = await timer.run(ADDRESS_MASTER_PASS_STEPS.classify, () =>
     readAddressMasterClassification(session, { subject: layouts.target, addressMaster }, PADRON_SUBJECT_SPEC)
   );
-  return buildAddressMasterReport(addressMaster, planAddressMasterPass(classification));
+  const sequenceWarnings = await sequenceStateWarnings(session, {
+    target: addressMaster,
+    inserts: classification.counts.created,
+    repairSequences: params.options.repairSequences,
+    dryRun: true,
+  });
+  return { report: buildAddressMasterReport(addressMaster, planAddressMasterPass(classification)), sequenceWarnings };
 }
 
 async function analyzeTargets(session: RunSession, layouts: PadronLayouts): Promise<void> {
@@ -320,7 +351,15 @@ async function runAnalysisBody(
   // Ordered reads on the transaction's snapshot: the analysis follows the source report step.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const { classification, scan } = await timer.run(STEP.CLASSIFY, () => readAnalysisClassification(session, layouts, params.options));
-  const addressMaster = await runAddressMasterPlan(session, layouts, timer);
+  const targetSequenceWarnings = await sequenceStateWarnings(session, {
+    target: layouts.target,
+    inserts: classification.counts.inserted,
+    repairSequences: params.options.repairSequences,
+    dryRun: true,
+  });
+  // Ordered: the address master plan follows the padron classification.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const addressMaster = await runAddressMasterPlan(session, layouts, params, timer);
   // Ordered: the report step keeps its planned place after the link classification.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const target = await timer.run(STEP.REPORT, async () =>
@@ -336,9 +375,10 @@ async function runAnalysisBody(
   return {
     source,
     target,
-    addressMaster,
+    addressMaster: addressMaster.report,
     snapshot: snapshotOf(classification),
     pendingGeometryChanges: classification.pendingGeometryChanges,
+    sequenceWarnings: [...targetSequenceWarnings, ...addressMaster.sequenceWarnings],
   };
 }
 
@@ -358,9 +398,17 @@ async function runPersistBody(
   );
   const snapshot = snapshotOf(classification);
   assertPlanStillValid(plan, snapshot);
+  const targetSequenceWarnings = await sequenceStateWarnings(session, {
+    target: layouts.target,
+    inserts: classification.counts.inserted,
+    repairSequences: params.options.repairSequences,
+    dryRun: false,
+  });
   // Ordered: the sequence is repaired after the classification and before the insert of the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  await timer.run(STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.target)));
+  if (params.options.repairSequences) {
+    await timer.run(STEP.SEQUENCES, () => session.query(buildSequenceRepairSql(layouts.target)));
+  }
   const apply = await timer.run(STEP.APPLY, () =>
     applyPadronChanges(session, layouts, params.options, classification.counts.subdividedDeleted > 0)
   );
@@ -380,7 +428,7 @@ async function runPersistBody(
   const revertAddressMaster = await captureAddressMasterRevert(session, layouts);
   // Ordered: the revert capture reads the unlinked rows before the link pass links them.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const addressMaster = await runAddressMasterStage(session, layouts, timer);
+  const addressMaster = await runAddressMasterStage(session, layouts, params, timer);
   await timer.run(STEP.ANALYZE, () => analyzeTargets(session, layouts));
   const target = await timer.run(STEP.REPORT, async () =>
     buildPadronTargetReport({
@@ -397,7 +445,15 @@ async function runPersistBody(
   const backup = await timer.run(STEP.BACKUP, () =>
     writeRevertBackup(session, revertRequestOf(layouts, apply, deleteOutcome, reassignOutcome, changedOutcome, revertAddressMaster))
   );
-  return { source, target, addressMaster, backup, snapshot, pendingGeometryChanges: classification.pendingGeometryChanges };
+  return {
+    source,
+    target,
+    addressMaster: addressMaster.report,
+    backup,
+    snapshot,
+    pendingGeometryChanges: classification.pendingGeometryChanges,
+    sequenceWarnings: [...targetSequenceWarnings, ...addressMaster.sequenceWarnings],
+  };
 }
 
 const toWriteOutcome = (outcome: TransactionOutcome<PadronTransactionBody>): PadronWriteOutcome => ({

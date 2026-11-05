@@ -13,6 +13,7 @@ import {
 } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkSql";
 import { buildSequenceRepairSql } from "@/modules/routine-jobs/jobs/shared/transaction";
 import type { WritableTargetLayout } from "@/modules/routine-jobs/jobs/shared/tableResolution";
+import { sequenceStateRows, type FakeSequenceState } from "../shared/sequenceStateFake";
 import {
   UNIT_SOURCE_COLUMN,
   UNIT_TARGET_COLUMN,
@@ -44,7 +45,7 @@ const PASSWORD = "Unidad-pw!7";
 const UNIT_SCHEMA = "carto";
 const UNIT_TABLE = "territorial_unit";
 const ADDRESS_MASTER_TABLE = "addresses_master";
-const OPTIONS: UnitOptions = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: false, linkAddressMaster: true };
+const OPTIONS: UnitOptions = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: false, repairSequences: true, linkAddressMaster: true };
 
 type Row = Record<string, unknown>;
 
@@ -128,21 +129,25 @@ const PARAMS_OF = (overrides: Partial<UnitParams> = {}): UnitParams => ({
 });
 
 /** The session answers the statements of the unit pass and of the address master link pass by their exact text; every other statement answers nothing. */
-function harnessOf(addressApplied: Row = ADDRESS_APPLIED_ROW): { deps: RunDeps; log: string[] } {
+function harnessOf(
+  addressApplied: Row = ADDRESS_APPLIED_ROW,
+  sequenceStates: readonly FakeSequenceState[] = [],
+  addressClassify: Row = ADDRESS_CLASSIFY_ROW
+): { deps: RunDeps; log: string[] } {
   const log: string[] = [];
   const answers = new Map<string, Row[]>([
     [buildUnitSourceReportSql({ locality: LAYOUTS.locality }), [SOURCE_ROW]],
     [buildUnitClassifySql(LAYOUTS, OPTIONS), [CLASSIFY_ROW]],
     [buildUnitApplySql(LAYOUTS, OPTIONS), [APPLY_ROW]],
-    [buildAddressMasterClassifySql(ADDRESS_LAYOUTS, UNIT_SUBJECT_SPEC), [ADDRESS_CLASSIFY_ROW]],
+    [buildAddressMasterClassifySql(ADDRESS_LAYOUTS, UNIT_SUBJECT_SPEC), [addressClassify]],
     [buildAddressMasterApplySql(ADDRESS_LAYOUTS, UNIT_SUBJECT_SPEC), [addressApplied]],
     [buildAddressMasterRemainingSql(ADDRESS_LAYOUTS, UNIT_SUBJECT_SPEC), [ADDRESS_REMAINING_ROW]],
   ]);
   const session: RunSession = {
-    async query(sql: string) {
+    async query(sql: string, params?: unknown[]) {
       log.push(sql);
       await Promise.resolve();
-      return { rows: answers.get(sql) ?? [] };
+      return { rows: answers.get(sql) ?? sequenceStateRows(sql, params, sequenceStates) ?? [] };
     },
     async close() {},
   };
@@ -196,5 +201,86 @@ describe("runUnidadTerritorial address master link transaction (UT-8, UT-13, UT-
     expect(failure.message).toMatch(/Los registros de dirección maestra creados \(0\) no coinciden con los esperados \(1\)/);
     expect(mismatch.log.at(-1)).toBe(ROLLBACK_SQL);
     expect(mismatch.log).not.toContain(COMMIT_SQL);
+  });
+});
+
+describe("runUnidadTerritorial address master sequence repair option (SQ-2, SQ-3)", () => {
+  const withRepair = (repairSequences: boolean): UnitParams => PARAMS_OF({ options: { ...OPTIONS, repairSequences } });
+
+  it("should issue the target and the address master setval when SQ-2 repairSequences is on", async () => {
+    const { deps, log } = harnessOf();
+
+    await runUnidadTerritorial(withRepair(true), deps);
+
+    expect(log).toContain(buildSequenceRepairSql(LAYOUTS.target));
+    expect(log).toContain(buildSequenceRepairSql(ADDRESS_MASTER));
+  });
+
+  it("should issue no setval but still link the address master and COMMIT when SQ-3 repairSequences is off", async () => {
+    const { deps, log } = harnessOf();
+
+    await runUnidadTerritorial(withRepair(false), deps);
+
+    expect(log.some((sql) => sql.includes("setval"))).toBe(false);
+    expect(log).toContain(buildAddressMasterApplySql(ADDRESS_LAYOUTS, UNIT_SUBJECT_SPEC));
+    expect(log.at(-1)).toBe(COMMIT_SQL);
+  });
+});
+
+describe("runUnidadTerritorial address master sequence state check in the link pass (SQ-5, SQ-7)", () => {
+  const off = (): UnitParams => PARAMS_OF({ options: { ...OPTIONS, repairSequences: false } });
+  const MASTER_BEHIND: FakeSequenceState = { table: ADDRESS_MASTER_TABLE, sequence: ADDRESS_MASTER.idSequence as string, lastValue: 5, maxId: 10 };
+  const UNIT_BEHIND: FakeSequenceState = { table: UNIT_TABLE, sequence: TARGET.idSequence as string, lastValue: 5, maxId: 10 };
+  const isMasterStateSql = (sql: string): boolean => sql.startsWith("SELECT max(") && sql.includes(`"${ADDRESS_MASTER_TABLE}"`);
+  const NO_CREATE: Row = { ...ADDRESS_CLASSIFY_ROW, to_create: 0 };
+  const NO_CREATE_APPLIED: Row = { created: 0, linked: 2, linked_list: [] };
+
+  it("should throw after the classification and before the link apply, ROLLBACK, when SQ-5 the master sequence is behind and the link creates records", async () => {
+    const { deps, log } = harnessOf(ADDRESS_APPLIED_ROW, [MASTER_BEHIND]);
+
+    const failure = await failureOf(runUnidadTerritorial(off(), deps));
+
+    expect(failure.message).toContain(`${ADDRESS_MASTER.idSequence} está en 6`);
+    expect(failure.message).toContain(ADDRESS_MASTER_TABLE);
+    expect(failure.message).toContain("Ajustar secuencias de destino");
+    expect(log).toContain(buildAddressMasterClassifySql(ADDRESS_LAYOUTS, UNIT_SUBJECT_SPEC));
+    expect(log).not.toContain(buildAddressMasterApplySql(ADDRESS_LAYOUTS, UNIT_SUBJECT_SPEC));
+    expect(log).not.toContain(COMMIT_SQL);
+    expect(log.at(-1)).toBe(ROLLBACK_SQL);
+  });
+
+  it("should complete the analysis with the master warning when SQ-5 the master sequence is behind", async () => {
+    const { deps, log } = harnessOf(ADDRESS_APPLIED_ROW, [MASTER_BEHIND]);
+
+    const result = await runUnidadTerritorial(PARAMS_OF({ dryRun: true, confirm: false, options: { ...OPTIONS, repairSequences: false } }), deps);
+
+    expect(result.warnings.some((warning) => warning.includes(`${ADDRESS_MASTER.idSequence} está en 6`))).toBe(true);
+    expect(log.at(-1)).toBe(ROLLBACK_SQL);
+  });
+
+  it("should never read the master sequence when SQ-7 the link creates no records, even if the sequence is behind", async () => {
+    const { deps, log } = harnessOf(NO_CREATE_APPLIED, [MASTER_BEHIND], NO_CREATE);
+
+    await runUnidadTerritorial(off(), deps);
+
+    expect(log.some(isMasterStateSql)).toBe(false);
+    expect(log.at(-1)).toBe(COMMIT_SQL);
+  });
+
+  it("should fail on the unit table first and never reach the address master classification when the unit sequence is behind", async () => {
+    const { deps, log } = harnessOf(ADDRESS_APPLIED_ROW, [UNIT_BEHIND]);
+
+    const failure = await failureOf(runUnidadTerritorial(off(), deps));
+
+    expect(failure.message).toContain(`${TARGET.idSequence} está en 6`);
+    expect(log).not.toContain(buildAddressMasterClassifySql(ADDRESS_LAYOUTS, UNIT_SUBJECT_SPEC));
+  });
+
+  it("should not read any sequence state when the repair is on", async () => {
+    const { deps, log } = harnessOf(ADDRESS_APPLIED_ROW, [MASTER_BEHIND, UNIT_BEHIND]);
+
+    await runUnidadTerritorial(PARAMS_OF(), deps);
+
+    expect(log.some((sql) => !sql.includes("setval") && (sql.includes("pg_sequence_last_value") || sql.startsWith("SELECT max(")))).toBe(false);
   });
 });

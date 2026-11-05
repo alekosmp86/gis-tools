@@ -82,8 +82,8 @@ const REASSIGN_TABLE: ReferenceTable = {
   reassign: { pkColumn: "gid", geometryColumn: "geom", geography: false },
 };
 
-const withUpdates: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: false, pairChoices: [] };
-const withoutUpdates: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: false, linkAddressMaster: false, pairChoices: [] };
+const withUpdates: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, repairSequences: true, linkAddressMaster: false, pairChoices: [] };
+const withoutUpdates: ActualizarPadronOptions = { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: false, repairSequences: true, linkAddressMaster: false, pairChoices: [] };
 
 const insertColumnsOf = (sql: string): string[] => {
   const match = /INSERT INTO\s+"carto"\."padron"\s*\(([^)]*)\)/i.exec(sql);

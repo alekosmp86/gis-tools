@@ -149,7 +149,7 @@ const LAYOUTS: PadronLayouts = {
 const OPTIONS: ActualizarPadronOptions = {
   tolerance: 1,
   geometryAreaThreshold: 0.05,
-  updateGeometries: true,
+  updateGeometries: true, repairSequences: true,
   linkAddressMaster: false,
   pairChoices: [],
 };

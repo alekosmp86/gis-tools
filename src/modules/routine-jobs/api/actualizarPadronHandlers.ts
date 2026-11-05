@@ -31,7 +31,12 @@ export function createActualizarPadronHandlers(
       conflictMessage: "Ya hay una actualización en curso para esta tabla.",
       parse: parseActualizarStartRequest,
       lockKeysOf: lockKeysOfActualizar,
-      plannedSteps: (params) => plannedStepLabels({ dryRun: params.dryRun, linkAddressMaster: params.options.linkAddressMaster }),
+      plannedSteps: (params) =>
+        plannedStepLabels({
+          dryRun: params.dryRun,
+          linkAddressMaster: params.options.linkAddressMaster,
+          repairSequences: params.options.repairSequences,
+        }),
       run: runActualizarPadron,
     },
     overrides

@@ -31,6 +31,7 @@ export { actualizarExcludedFor, ActualizarTableKey, roleOfTableKey, schemaFieldO
 export interface ActualizarOptionsDraft extends GeometryOptionsDraft {
   localityType: string;
   linkAddressMaster: boolean;
+  repairSequences: boolean;
   geometryAreaThresholdPercent: string;
 }
 
@@ -168,6 +169,7 @@ const defaultOptions = (): ActualizarOptionsDraft => ({
   tolerance: DEFAULT_TOLERANCE_TEXT,
   updateGeometries: DEFAULT_UPDATE_GEOMETRIES,
   linkAddressMaster: false,
+  repairSequences: false,
   geometryAreaThresholdPercent: DEFAULT_GEOMETRY_AREA_THRESHOLD_PERCENT_TEXT,
 });
 
@@ -371,6 +373,7 @@ function baseStartRequest(state: ActualizarWizardState, flags: { dryRun: boolean
       geometryAreaThreshold: geometryAreaThresholdOf(state.options.geometryAreaThresholdPercent),
       updateGeometries: state.options.updateGeometries,
       linkAddressMaster: state.options.linkAddressMaster,
+      repairSequences: state.options.repairSequences,
     },
     dryRun: flags.dryRun,
     confirm: !flags.dryRun,

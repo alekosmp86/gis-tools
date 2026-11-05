@@ -47,6 +47,7 @@ export function parseUnidadTerritorialStartRequest(body: JsonRecord): UnitParams
       tolerance: readTolerance(options),
       updateGeometries: readBoolean(options, "updateGeometries"),
       linkAddressMaster,
+      repairSequences: readBoolean(options, "repairSequences"),
     },
     dryRun: readBoolean(body, "dryRun"),
     confirm: readBoolean(body, "confirm"),

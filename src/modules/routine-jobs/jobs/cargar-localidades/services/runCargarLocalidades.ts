@@ -32,6 +32,7 @@ function buildResult(
       unmatchedPadronTotal: source.unmatchedPadrons.total,
       targets,
       commitError: outcome.commitError,
+      sequenceWarnings: outcome.sequenceWarnings,
     }),
     stepTimings,
   };
@@ -45,11 +46,11 @@ async function runOnSession(
 ): Promise<CargarLocalidadesResult> {
   const timer: StepTimer = createStepTimer({
     now: deps.now,
-    total: plannedLocalityStepLabels({ dryRun: params.dryRun, tables: targetLabelsOf(params) }).length,
+    total: plannedLocalityStepLabels({ dryRun: params.dryRun, tables: targetLabelsOf(params), repairSequences: params.options.repairSequences }).length,
     onProgress,
   });
   const layouts = await timer.run(LOCALITY_STEP.VALIDATE, () => resolveLocalityLayouts(session, params));
-  await timer.run(LOCALITY_STEP.TARGETS, () => assertWriteTargetsReady(session, writeTargetsSpecOf(layouts)));
+  await timer.run(LOCALITY_STEP.TARGETS, () => assertWriteTargetsReady(session, writeTargetsSpecOf(layouts, params.options.repairSequences)));
   await timer.run(LOCALITY_STEP.COUNT, () => assertSourceTablesReady(session, sourceTablesSpecOf(layouts)));
   const outcome = await runWriteTransaction(session, params, layouts, timer);
   return buildResult(params, outcome, timer.timings);

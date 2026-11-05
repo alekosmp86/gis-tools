@@ -55,6 +55,7 @@ export interface ActualizarJobOptions {
   geometryAreaThreshold: number;
   updateGeometries: boolean;
   linkAddressMaster: boolean;
+  repairSequences: boolean;
   pairChoices?: PairChoice[];
   acceptedGeometries?: AcceptedGeometry[];
   acceptAllGeometries?: boolean;
@@ -111,6 +112,7 @@ export interface UnitClientOptions {
   tolerance: number;
   updateGeometries: boolean;
   linkAddressMaster: boolean;
+  repairSequences: boolean;
 }
 
 export interface UnidadStartRequest {

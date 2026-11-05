@@ -37,7 +37,7 @@ const targetOf = (pairsLoose: number): ActualizarTargetReport => ({
 
 const inputOf = (pairsLoose: number): WarningInput => ({
   dryRun: false,
-  options: { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, linkAddressMaster: false, pairChoices: [] },
+  options: { tolerance: 1, geometryAreaThreshold: 0.05, updateGeometries: true, repairSequences: true, linkAddressMaster: false, pairChoices: [] },
   totals: { rowsRead: 0, candidates: 0, repaired: 0, skipped: 0 },
   target: targetOf(pairsLoose),
   collidingKeyCount: 0,

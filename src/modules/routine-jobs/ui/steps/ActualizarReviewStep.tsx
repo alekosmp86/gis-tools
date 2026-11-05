@@ -10,6 +10,7 @@ import { MONTHLY_TABLES } from "../../config/monthlyTables";
 import { GEOMETRY_OVERWRITE_WARNING, type ActualizarWizardConfirmation } from "../actualizarPadronWizardState";
 import type { ActualizarStartRequest } from "../clientTypes";
 import { PASSWORD_LABEL } from "./reviewParts";
+import { SEQUENCE_REPAIR_LABEL } from "./SequenceRepairField";
 import styles from "./WizardSteps.module.css";
 
 const BUSY_NOTE = "Hay un análisis en curso. Espere a que termine para iniciar otro.";
@@ -106,6 +107,8 @@ export const ActualizarReviewStep: React.FC<ActualizarReviewStepProps> = ({
         <dd>{options.updateGeometries ? YES : NO}</dd>
         <dt>Enlazar direcciones maestras de padrones</dt>
         <dd>{options.linkAddressMaster ? YES : NO}</dd>
+        <dt>{SEQUENCE_REPAIR_LABEL}</dt>
+        <dd>{options.repairSequences ? YES : NO}</dd>
         {request.addressMasterTable !== undefined && (
           <>
             <dt>Tabla de direcciones maestras</dt>

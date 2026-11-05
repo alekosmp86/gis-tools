@@ -11,7 +11,7 @@ import type { UnitTargetReport } from "@/modules/routine-jobs/jobs/unidad-territ
 const TABLE = "carto.territorial_unit";
 const ADDRESS_MASTER_TABLE = "carto.addresses_master";
 const TOTALS = { rowsRead: 0, candidates: 0, skipped: 0 };
-const OPTIONS = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true };
+const OPTIONS = { localityTypeName: "LOCALIDAD CATASTRAL", tolerance: 1, updateGeometries: true, repairSequences: true };
 const TARGET: UnitTargetReport = {
   table: TABLE,
   inserted: 0,

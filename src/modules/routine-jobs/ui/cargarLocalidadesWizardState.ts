@@ -55,6 +55,7 @@ export interface LocalidadesIncludedTarget {
 export interface LocalidadesOptionsDraft {
   tolerance: string;
   updateGeometries: boolean;
+  repairSequences: boolean;
 }
 
 /** Typed table names are keyed by destination; only the included destinations ask for one. */
@@ -157,7 +158,7 @@ function initialWizardState(seed: LocalidadesWizardSeed): LocalidadesWizardState
       [LocalidadesDestination.BDJ_CARTO]: targetDraftOf(MONTHLY_TABLES.cargarLocalidades.targetBdjCarto, true),
       [LocalidadesDestination.CARTO]: targetDraftOf(MONTHLY_TABLES.cargarLocalidades.targetCarto, false),
     },
-    options: { tolerance: DEFAULT_TOLERANCE_M, updateGeometries: true },
+    options: { tolerance: DEFAULT_TOLERANCE_M, updateGeometries: true, repairSequences: false },
     confirmation: emptyConfirmation(),
   };
 }
@@ -297,7 +298,11 @@ export function toStartRequest(state: LocalidadesWizardState, flags: { dryRun: b
     provinceSchema: state.provinceSchema.trim(),
     provinceTable: state.tables.province.trim(),
     targets: includedTargetsOf(state).map(({ schema, table }) => ({ schema, table })),
-    options: { tolerance: Number(state.options.tolerance.trim()), updateGeometries: state.options.updateGeometries },
+    options: {
+      tolerance: Number(state.options.tolerance.trim()),
+      updateGeometries: state.options.updateGeometries,
+      repairSequences: state.options.repairSequences,
+    },
     dryRun: flags.dryRun,
     confirm: !flags.dryRun,
   };

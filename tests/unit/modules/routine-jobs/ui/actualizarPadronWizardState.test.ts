@@ -155,7 +155,7 @@ describe("actualizarPadronWizardState", () => {
 
   describe("start request", () => {
     it("should send the two schemas, the five tables and no type table when none is chosen", () => {
-      const request = toStartRequest(tablesStep({ options: { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false } }), {
+      const request = toStartRequest(tablesStep({ options: { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false, repairSequences: false } }), {
         dryRun: true,
       });
 
@@ -173,7 +173,7 @@ describe("actualizarPadronWizardState", () => {
     });
 
     it("should send the geometry area threshold as the typed percent divided by 100 (AP-92)", () => {
-      const options = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "12.5", updateGeometries: true, linkAddressMaster: false };
+      const options = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "12.5", updateGeometries: true, linkAddressMaster: false, repairSequences: false };
 
       const request = toStartRequest(tablesStep({ options }), { dryRun: true });
 
@@ -198,7 +198,7 @@ describe("actualizarPadronWizardState", () => {
     it("should clear the address master table when the link is turned off", () => {
       const linked = wizardReducer(tablesStep(), { type: "optionsChanged", patch: { linkAddressMaster: true } });
 
-      const next = wizardReducer(linked, { type: "optionsChanged", patch: { linkAddressMaster: false } });
+      const next = wizardReducer(linked, { type: "optionsChanged", patch: { linkAddressMaster: false, repairSequences: false } });
 
       expect(next.options.linkAddressMaster).toBe(false);
       expect(next.tables[ActualizarTableKey.ADDRESS_MASTER]).toBe("");
@@ -224,7 +224,7 @@ describe("actualizarPadronWizardState", () => {
   describe("pair choices", () => {
     const PAIR_CHOICE: PairChoice = { typePadron: "RURAL", provinceId: 6, localityId: 120, number: "100", oldId: 7 };
     const NOT_PAIRED_CHOICE: PairChoice = { typePadron: "RURAL", provinceId: 6, localityId: 120, number: "200", oldId: null };
-    const OPTIONS = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false };
+    const OPTIONS = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false, repairSequences: false };
 
     it("should store a chosen pair candidate in the pair choices", () => {
       const next = wizardReducer(tablesStep(), { type: "pairChoiceChosen", choice: PAIR_CHOICE });
@@ -392,11 +392,11 @@ describe("actualizarPadronWizardState", () => {
   describe("pair choice removal and simulated choices", () => {
     const CHOICE_ONE: PairChoice = { typePadron: "RURAL", provinceId: 6, localityId: 120, number: "100", oldId: 7 };
     const CHOICE_TWO: PairChoice = { typePadron: "RURAL", provinceId: 6, localityId: 120, number: "200", oldId: 8 };
-    const OPTIONS = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false };
+    const OPTIONS = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false, repairSequences: false };
 
     const dryRunSnapshotOf = (phase: RunPhase, pairChoices: PairChoice[], dryRun = true): ActualizarPadronRunSnapshot => ({
       phase,
-      plan: { dryRun, destinationTable: TARGET_TABLE, linkAddressMaster: false, pairChoices },
+      plan: { dryRun, destinationTable: TARGET_TABLE, linkAddressMaster: false, repairSequences: false, pairChoices },
     });
 
     it("should start with no simulated choices when the wizard opens", () => {
@@ -501,7 +501,7 @@ describe("actualizarPadronWizardState", () => {
 
   describe("persisting a completed analysis", () => {
     const CHOICE: PairChoice = { typePadron: "RURAL", provinceId: 6, localityId: 120, number: "100", oldId: 7 };
-    const OPTIONS = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false };
+    const OPTIONS = { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false, repairSequences: false };
     const JOB_ID = "job-analysis-1";
 
     const persistableState = (overrides: Partial<ActualizarWizardState> = {}): ActualizarWizardState =>
@@ -518,7 +518,7 @@ describe("actualizarPadronWizardState", () => {
       options: { dryRun?: boolean; result?: ActualizarPadronResult } = {},
     ): ActualizarPadronRunSnapshot => ({
       phase,
-      plan: { dryRun: options.dryRun ?? true, destinationTable: TARGET_TABLE, linkAddressMaster: false, pairChoices: [CHOICE] },
+      plan: { dryRun: options.dryRun ?? true, destinationTable: TARGET_TABLE, linkAddressMaster: false, repairSequences: false, pairChoices: [CHOICE] },
       ...(options.result === undefined
         ? {}
         : {
