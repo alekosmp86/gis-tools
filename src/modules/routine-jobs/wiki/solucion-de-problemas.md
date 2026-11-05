@@ -15,9 +15,14 @@ La tabla destino no tiene una secuencia detrás de su columna `id`, y el trabajo
 
 ## Falta un privilegio sobre una secuencia
 
-> No tiene privilegio UPDATE sobre la secuencia ..., necesario para ajustar los ids de ...
+> No tiene privilegio UPDATE sobre la secuencia ..., necesario para ajustar los ids de ... Puede desactivar "Ajustar secuencias de destino" ...
 
-El usuario de la base no puede ajustar la secuencia de la tabla destino. Pida el permiso al administrador. En la etapa 1 también puede desactivar **Reiniciar secuencias del destino** si no tiene esos privilegios.
+El usuario de la base no puede ajustar la secuencia de la tabla destino. Hay dos salidas:
+
+- Desactivar **Ajustar secuencias de destino** (etapas 2, 3 y 4; viene desactivada por defecto) si la secuencia ya está por encima del mayor id de la tabla. Entonces basta el privilegio **USAGE**. Si la secuencia no está por encima y la ejecución va a insertar filas en esa tabla, la ejecución real falla antes de escribir con un mensaje como _La secuencia ... está en N y la tabla ... ya tiene ids hasta M: active "Ajustar secuencias de destino"_ (el análisis lo muestra como advertencia); en ese caso hay que activar la opción y pedir el permiso. Si no hay filas por insertar en esa tabla, la secuencia no se comprueba.
+- Pedir al administrador el privilegio **UPDATE** sobre la secuencia (el nombre aparece en el mensaje).
+
+En la etapa 1 también puede desactivar **Reiniciar secuencias del destino** si no tiene esos privilegios.
 
 ## Ya hay una carga en curso
 
