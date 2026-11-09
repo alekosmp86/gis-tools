@@ -48,7 +48,7 @@ Esta etapa **no corrige solapes** entre localidades: eso se resuelve en el front
 
 ## Revisar y cargar
 
-El paso **Revisar** resume las tablas y las opciones. **Analizar sin cargar** clasifica las localidades y revierte todo. **Cargar localidades** escribe en los destinos y pide escribir de nuevo la contraseña y el nombre de cada tabla destino.
+El paso **Revisar** resume las tablas y las opciones. **Analizar sin cargar** clasifica las localidades y revierte todo. **Cargar localidades** escribe en los destinos y pide escribir de nuevo la contraseña.
 
 Después del paso **Revisar** vienen **Ejecución** (el progreso) e **Informe**.
 

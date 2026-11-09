@@ -66,11 +66,9 @@ El paso **Revisar** muestra el resumen completo: el servidor, la base, el esquem
 Hay dos botones:
 
 - **Analizar sin cargar**: ejecuta la carga completa, cuenta las filas y después revierte todo. No necesita confirmación adicional.
-- **Cargar ahora**: escribe los datos en la tabla destino. Solo se habilita cuando se cumplen las dos confirmaciones:
-  1. escribir de nuevo la **contraseña** de la base de datos;
-  2. escribir de nuevo el **nombre de la tabla destino**, exactamente como aparece en el paso **Tablas**.
+- **Cargar ahora**: escribe los datos en la tabla destino. Solo se habilita cuando se escribe de nuevo la **contraseña** de la base de datos.
 
-La confirmación escrita se borra cuando cambia la conexión, el esquema o la tabla destino, y también después de cada carga. Hay que escribirla otra vez.
+La contraseña escrita en este paso se borra cuando cambia la conexión, el esquema o la tabla destino, y también después de cada carga. Hay que escribirla otra vez.
 
 ### 4. Resultado
 

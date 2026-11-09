@@ -39,7 +39,7 @@ Las tablas vienen preelegidas: la de localidades es la que eligió en la etapa 2
 
 ### Revisar
 
-**Analizar sin cargar** clasifica las unidades y revierte todo. **Actualizar unidades territoriales** escribe en la tabla destino y pide escribir de nuevo la contraseña y el nombre de la tabla de unidades territoriales.
+**Analizar sin cargar** clasifica las unidades y revierte todo. **Actualizar unidades territoriales** escribe en la tabla destino y pide escribir de nuevo la contraseña.
 
 ## Direcciones maestras
 

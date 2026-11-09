@@ -56,7 +56,7 @@ Es una casilla del paso **Tablas**, desactivada por defecto. Con ella activada, 
 
 Hay un solo botón, **Analizar**, y hace falta la contraseña para conectarse. El análisis solo lee: no modifica la base de datos, no escribe en la tabla de destino ni avanza su secuencia de ids, y guarda un plan de la carga durante tres días.
 
-Los cambios se guardan después, desde el resultado del análisis. Ahí aparece el panel **Persistir cambios revisados**, con un resumen de lo que se aplicará (padrones nuevos, pares actualizados y geometrías actualizadas), la contraseña, que queda escrita desde el análisis, y el nombre de la tabla de destino, que debe escribir de nuevo. El botón queda bloqueado y muestra el motivo si falta el plan, si falta el nombre de la tabla o la contraseña, o si las elecciones de par cambiaron desde el análisis.
+Los cambios se guardan después, desde el resultado del análisis. Ahí aparece el panel **Persistir cambios revisados**, con un resumen de lo que se aplicará (padrones nuevos, pares actualizados y geometrías actualizadas), y la contraseña, que queda escrita desde el análisis. El botón queda bloqueado y muestra el motivo si falta el plan o la contraseña, o si las elecciones de par cambiaron desde el análisis.
 
 El servidor también rechaza el guardado si el plan caducó o cambió, o si las tablas u opciones no son las del análisis: el motivo aparece en pantalla y el botón **Volver a analizar** lleva a la revisión. Un plan se usa una sola vez.
 

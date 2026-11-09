@@ -41,7 +41,7 @@ Todas las etapas tienen los mismos dos botones en el paso **Revisar**:
 | Botón | Qué hace |
 |---|---|
 | **Analizar sin cargar** | Hace todo el trabajo, cuenta y clasifica, y después revierte. No cambia ninguna tabla. Pide la contraseña. |
-| Botón de carga (**Cargar ahora**, **Cargar localidades**, **Actualizar unidades territoriales** o **Actualizar padrones**, según la etapa) | Escribe los datos. Pide escribir de nuevo la contraseña y el nombre de la tabla destino. |
+| Botón de carga (**Cargar ahora**, **Cargar localidades**, **Actualizar unidades territoriales** o **Actualizar padrones**, según la etapa) | Escribe los datos. Pide escribir de nuevo la contraseña. |
 
 Conviene hacer siempre el análisis antes de la carga real: muestra qué se insertaría y qué cambiaría, sin tocar nada.
 
