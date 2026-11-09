@@ -5,14 +5,14 @@ import type { AppModuleManifest } from "@/ui-kit/modules/contracts";
 import routeDeclarations from "./module.routes.json";
 import { createCoverageLoadsHandlers } from "./api/handlers";
 import { CoverageLoadsDashboard } from "./ui/CoverageLoadsDashboard";
-import { CoverageLoadsHomeCard } from "./ui/CoverageLoadsHomeCard";
+import { CoverageLoadsJob } from "./ui/CoverageLoadsJob";
 import { ShpStatusChip } from "./shp/ui/ShpStatusChip";
 
 /**
  * Cargas de Coberturas. Four parts: Indicadores LTE (`indicators/`), Cargas SHP (`shp/`),
  * Avance FTTH (`avance-ftth/`, the two CSV planillas that rebuild the Avance table) and Capas
  * SIGRA (`sigra-layers/`, the WFS layers that replace their final tables). The page (a
- * stage workflow) and the home card are optional contributions and leave with the module.
+ * stage workflow) and the routine-jobs card are optional contributions and leave with the module.
  */
 const handlers = createCoverageLoadsHandlers();
 
@@ -53,10 +53,13 @@ export const coverageLoadsModule: AppModuleManifest = {
   ],
   ui: [
     {
-      slot: UiSlot.HOME_TOOL_GRID,
-      id: "coverage-loads.card",
+      slot: UiSlot.ROUTINE_JOBS_LIST,
+      id: "coverage-loads.job",
       order: 120,
-      Component: CoverageLoadsHomeCard,
+      label: "Cargas de Coberturas",
+      description:
+        "Carga de los indicadores LTE, las capas SHP, el Avance FTTH y las capas SIGRA, con revisión antes de escribir.",
+      Component: CoverageLoadsJob,
     },
     {
       slot: UiSlot.APP_STATUS,

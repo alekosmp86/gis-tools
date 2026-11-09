@@ -116,7 +116,7 @@ const { moduleRegistry } = await import("@/app/modules.registry");
 const routeDeclarations = (await import("@/modules/coverage-loads/module.routes.json")).default;
 
 /** Slots a host actually renders today. Contributing anywhere else renders nowhere, silently. */
-const MOUNTED_SLOTS: ReadonlyArray<UiSlot> = [UiSlot.HOME_TOOL_GRID, UiSlot.FILE_SOURCE_TABS, UiSlot.APP_STATUS];
+const MOUNTED_SLOTS: ReadonlyArray<UiSlot> = [UiSlot.ROUTINE_JOBS_LIST, UiSlot.APP_STATUS];
 
 const API = "coverage-loads/indicators";
 const AVANCE_API = "coverage-loads/avance-ftth";
@@ -479,20 +479,21 @@ describe("coverage loads manifest", () => {
       expect(navigation[0]).toMatchObject({ label: "Cargas de Coberturas", href: "/tools/m/coverage-loads" });
     });
 
-    it("should contribute one HOME_TOOL_GRID card after the existing ones plus one APP_STATUS chip, into mounted slots", () => {
+    it("CJ-2: should contribute one ROUTINE_JOBS_LIST job plus one APP_STATUS chip and no HOME_TOOL_GRID card, into mounted slots", () => {
       // Arrange & Act
       const all = coverageLoadsModule.ui ?? [];
-      const contributions = all.filter((c) => c.slot === UiSlot.HOME_TOOL_GRID);
+      const jobs = all.filter((c) => c.slot === UiSlot.ROUTINE_JOBS_LIST);
 
       // Assert
       expect(all).toHaveLength(2);
       expect(all.filter((c) => c.slot === UiSlot.APP_STATUS)).toHaveLength(1);
+      expect(all.filter((c) => c.slot === UiSlot.HOME_TOOL_GRID)).toHaveLength(0);
       expect(all.every((c) => MOUNTED_SLOTS.includes(c.slot))).toBe(true);
-      expect(contributions).toHaveLength(1);
-      expect(contributions[0].slot).toBe(UiSlot.HOME_TOOL_GRID);
-      expect(MOUNTED_SLOTS).toContain(contributions[0].slot);
-      expect(contributions[0].order).toBeGreaterThan(110);
-      expect(typeof contributions[0].Component).toBe("function");
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].id).toBe("coverage-loads.job");
+      expect(jobs[0].label).toBe("Cargas de Coberturas");
+      expect(jobs[0].description).toBeTruthy();
+      expect(typeof jobs[0].Component).toBe("function");
     });
 
     it("should offer four stages in order: Indicadores LTE, Cargas SHP, Capas SIGRA, then Avance FTTH", () => {
