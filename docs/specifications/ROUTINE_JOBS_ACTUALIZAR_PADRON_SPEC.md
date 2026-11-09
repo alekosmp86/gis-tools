@@ -161,8 +161,8 @@ The wizard and the request carry two schema fields:
   because `nextval` (the inserts) and `setval` (AP-47) are not transactional and a rolled-back real run keeps its ids spent (as UT-23 (a)
   of the monthly spec, for the units).
 - AP-18: A real run needs `confirm: true` and the password. In the wizard the password stays filled from the analysis (the dry run keeps it so
-  "Volver a analizar con la selección" works), and the destination table name must be typed again (AP-31). The persist is refused with the
-  message naming what is missing: the table name when the password is filled, the password when only it is missing, both when neither is.
+  "Volver a analizar con la selección" works). The destination table name is not typed again (RC-1). The persist is refused with the
+  message asking for the password when it is missing.
   A real run also needs a usable plan from an analysis of the same parameters (AP-89, AP-90).
   The per-target lock is keyed on the destination: `host:port|db|cartoSchema|targetTable` (host trimmed and lowercased, port normalised, as in
   AC-24 of Cargar padrones). A second run on the same destination answers `409`.
@@ -357,10 +357,10 @@ The wizard and the request carry two schema fields:
   keeps it, and the digest check refuses it after any committed change.
 
 - AP-91: Wizard flow of the analysis and the persist (UI). The review step (AP-31) has one primary button, `Analizar` (`dryRun: true`), and the
-  password that connecting needs. It has no real-run button and no typed table name: the only field is the password that connecting needs. On the result of a completed
+  password that connecting needs. It has no real-run button: the only field is the password that connecting needs. On the result of a completed
   analysis (a DONE job with `dryRun: true`) the top of the screen is the panel `Persistir cambios revisados`: a one-line summary built from
   the planned counts of the report, `Se aplicarán: N padrones nuevos, M pares actualizados, K geometrías actualizadas.` (`target.inserted`,
-  `target.pairsApplied`, `target.updated`), the password (still filled from the analysis, AP-18) and the destination table name typed again (the validation of AP-18), and the
+  `target.pairsApplied`, `target.updated`), the password (still filled from the analysis, AP-18), and the
   button `Persistir cambios revisados` with the Database icon. The button is disabled, and the reason is shown, when the result carries no
   `planId` (the plan of AP-89) or when the confirmation is incomplete. When the pair choices (AP-86) or the accepted geometries (AP-100) differ
   from those of the last completed analysis (guard `simulationBlockingReason`) the button stays enabled and a note under it reads "Se volverá a analizar con su
@@ -377,7 +377,7 @@ The wizard and the request carry two schema fields:
   (3) if the result carries a `planId` and both `choicesUnapplied` and `geometryAcceptsUnapplied` are zero, starts the real run with `dryRun: false`, `confirm: true`,
   the same choices and acceptances and the NEW `planId`, and the usual real-run checklist follows. In any other case it does not write: a failed or unknown
   analysis shows its error, a result without `planId` or with unapplied choices or acceptances (even though that is not an error) shows the new analysis result with its warnings and the persist panel
-  again. Resetting the run (`Nueva carga`) or leaving the wizard cancels the pending persist. The typed table name is cleared by the analysis, so after a stop the user types it again.
+  again. Resetting the run (`Nueva carga`) or leaving the wizard cancels the pending persist.
   `Volver a analizar con la selección` stays for reviewing the new figures first.
 
 - AP-92: Geometry gate. `options.geometryAreaThreshold` (a number from 0 to 1, default 0.05; the wizard sends the `Umbral de cambio de área
@@ -421,7 +421,7 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 - AP-27: Wizard (`ui/ActualizarPadronWizard.tsx`), five steps with `WizardOrchestrator`: (1) Conexión, (2) Tablas, (3) Opciones, (4) Revisar,
   (5) Resultado. The reducer is pure (`ui/actualizarPadronWizardState.ts`). `canContinue` requires: connection fields valid; the two schemas
   chosen; the required tables chosen, distinct and valid (the type table is optional); when a type table is selected, a non-blank locality
-  type; a valid tolerance. The typed destination table name and the password that a real run needs are checked by the persist panel of
+  type; a valid tolerance. The password that a real run needs is checked by the persist panel of
   AP-91, not by the review step. Changing the connection resets the schemas
   and table choices. Changing a schema resets only the table choices that live in that schema (`stagingSchema`: staging table; `cartoSchema`:
   destination, province, locality and type tables).
@@ -440,7 +440,7 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 - AP-31: Review step: summary of the selected tables (the type table and the locality type only when a type table is selected), the tolerance
   and the geometry option. The info line "Inserta los padrones nuevos y actualiza la geometría de los existentes. Nunca borra filas ni cambia
   ids." is always shown. When `Actualizar geometrías` is on, the overwrite warning is shown. The only action is "Analizar" (the analysis,
-  `dryRun: true`, password required); the review has no real-run button and no typed table name (AP-91). The info line "El análisis no modifica
+  `dryRun: true`, password required); the review has no real-run button (AP-91). The info line "El análisis no modifica
   la base de datos. Los cambios se guardan después, desde el resultado del análisis." is always shown. With the link option on, the review
   also shows the option and the address master table, and the warning of AP-59 when the destination is not named `padron`.
 - AP-32: Result step: planned-step checklist (every planned step listed at once, done / current / pending, planned steps sent by the server in
@@ -555,7 +555,7 @@ shared one of `jobs/shared/addressMasterLink*` that stage 3 also uses, so both s
   gets its marker (MJ-14) for the created and for the linked lists. No metadata rows.
 - AP-59: Safety warning: when the option is on and the destination table name is not `padron`, the review step shows a visible warning,
   in Spanish: "La tabla de destino no es «padron»: se crearán direcciones maestras reales para los ids de esa tabla." It does not block
-  the run; the typed confirmation of AP-18 is unchanged.
+  the run; the password confirmation of AP-18 is unchanged.
 - AP-60: Legacy script rules, noted for review: the link never renumbers, never deletes, never writes the address master id, and never
   overwrites a non-null `id_address_master`. A second run finds nothing to link except the ambiguous padrones.
 

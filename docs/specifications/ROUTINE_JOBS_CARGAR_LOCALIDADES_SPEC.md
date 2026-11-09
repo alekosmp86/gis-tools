@@ -177,7 +177,7 @@ and are passed as bound parameters or constants.
   sequence; it never resets it and never renumbers ids. The id sequence must exist (preflight, CL-10) and the role needs `UPDATE` on it.
   `setval` and `nextval` are not transactional, so values consumed by a dry run or by a rolled-back real run stay consumed (gaps). This is
   harmless for uniqueness. No sequence reset option exists in this version.
-- CL-30: A real run needs `confirm: true`, the password again, and the carto target table name typed again in the wizard (CL-47). The option
+- CL-30: A real run needs `confirm: true`, and the password again; the wizard asks for the password only (CL-47, RC-1). The option
   "Actualizar geometrías" (`updateGeometries`, default ON) turns off the geometry UPDATE only; the INSERTs still run in a real run.
 - CL-31: Any failure before `COMMIT` rolls back both targets: both are left as they were before the run. A `COMMIT` that throws gives
   `outcomeUnknown: true`; the UI asks the user to verify both target tables before retrying (AC-21 of Cargar padrones).
@@ -253,8 +253,7 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 
 - CL-42: Wizard (`ui/CargarLocalidadesWizard.tsx`) with `WizardOrchestrator`, five steps: (1) Conexión, (2) Tablas, (3) Opciones, (4) Revisar,
   (5) Resultado. The reducer is pure (`ui/cargarLocalidadesWizardState.ts`). `canContinue` requires: connection fields valid; the three schemas
-  chosen; the five tables chosen, distinct and all valid; options valid; for a real run, the typed carto target table name and the password
-  match.
+  chosen; the five tables chosen, distinct and all valid; options valid; for a real run, the password matches.
 - CL-43: Dependency resets: changing the connection resets schemas and tables. Changing `stagingSchema` resets the two staging tables;
   `cartoSchema` resets the province and carto target tables; `bdjSchema` resets the BDJ target table.
 - CL-44: Connection step uses the shared saved-connection selector (`ProfileSelect` over `core/services/localStorageDbConfig.ts`); profiles
@@ -265,7 +264,7 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 - CL-46: Options step: "Tolerancia (m)" numeric field (default 1.0), and the toggle "Actualizar geometrías" (default ON), with the warning
   text of CL-48 next to it. Repair, sequence reset and font type are not options.
 - CL-47: Review step: summary of the five tables, the tolerance and the toggle; "Analizar sin cargar" = dry run (password required);
-  "Cargar localidades" = real run (password and carto target table name typed again). The warning of CL-48 is shown on the toggle and again
+  "Cargar localidades" = real run (password typed again). The warning of CL-48 is shown on the toggle and again
   on the real-run confirmation.
 - CL-48: Overwrite warning (Spanish, shown on Opciones and Revisar): "Actualizar geometrías reemplaza la geometría de las localidades que
   cambiaron. Si corregiste geometrías a mano (por ejemplo solapes) directamente en estas tablas, esas correcciones se perderán. El análisis

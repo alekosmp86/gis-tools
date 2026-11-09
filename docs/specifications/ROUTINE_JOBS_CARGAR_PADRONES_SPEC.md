@@ -155,8 +155,8 @@ Part A
 Part B
 - AC-32: the wizard (`ui/CargarPadronesWizard.tsx`) uses `WizardOrchestrator`: (1) Conexión (host, port, database, user, password, test by listing the tables of the schema typed in step 2 is NOT
   needed: it validates fields and keeps the connection in memory), (2) Tablas (schema field + three `TableSelector`: rural, urbano, destino; destination excludes the two sources), (3) Opciones
-  (repair on by default, clear mode DELETE / TRUNCATE with the privilege note, sequence reset on by default), (4) Revisar (summary; "Analizar sin cargar" = dry run; "Cargar ahora" needs the password and the
-  destination table label typed again and a destructive-style warning), (5) Resultado (progress from the run store: step label, `current / total` and elapsed time while running; the report afterwards).
+  (repair on by default, clear mode DELETE / TRUNCATE with the privilege note, sequence reset on by default), (4) Revisar (summary; "Analizar sin cargar" = dry run; "Cargar ahora" needs the password only (RC-1)
+  and a destructive-style warning), (5) Resultado (progress from the run store: step label, `current / total` and elapsed time while running; the report afterwards).
   A saved profile can be loaded and saved from step 1/2.
 - AC-33: page contribution at `/tools/m/routine-jobs` (title "Trabajos de rutina") with the job list (today only "Cargar padrones") that opens the wizard; a home card and a navigation entry in the
   module manifest; `module.routes.json` declares the page; `npm run modules:routes:check` passes.
