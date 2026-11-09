@@ -17,7 +17,12 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 },
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 900 },
+        deviceScaleFactor: 1,
+        ...(process.env.WIKI_BROWSER_CHANNEL ? { channel: process.env.WIKI_BROWSER_CHANNEL } : {}),
+      },
     },
   ],
   webServer: {
