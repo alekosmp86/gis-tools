@@ -7,7 +7,7 @@ order: 1
 
 Esta herramienta carga a PostgreSQL los datos que se actualizan cada mes y genera los reportes que se derivan de ellos. Trabaja siempre contra una base de datos (por ejemplo la de desarrollo o la de producción) y **antes de escribir cualquier dato le muestra qué va a cambiar**.
 
-Se abre desde el portal, en la tarjeta **Cargas de Coberturas**.
+Se abre desde el portal, en la lista de **Trabajos de rutina** (tarjeta **Cargas de Coberturas**, botón **Abrir**), o desde su propia página en el menú.
 
 ## Tipos de carga
 
