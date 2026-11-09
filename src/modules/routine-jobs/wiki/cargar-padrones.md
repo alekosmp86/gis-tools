@@ -42,6 +42,8 @@ Escriba el **esquema** donde están las tablas. Después elija las tres tablas:
 
 Al elegir cada tabla, el asistente comprueba sus columnas y muestra cada una como encontrada (con el nombre real que tiene la tabla) o como faltante o ambigua. Si alguna columna necesaria falta o es ambigua, la tabla no sirve para la carga y no se puede continuar.
 
+![Paso Tablas: las tres tablas con sus columnas comprobadas](images/01-padrones-tablas.png)
+
 ### 2. Opciones
 
 - **Reparar geometrías inválidas**: activada por defecto. Con la opción activada, cada geometría inválida se corrige antes de agrupar y las geometrías válidas no se tocan. Con la opción desactivada no se corrige nada antes de agrupar: un grupo de una sola fila conserva su geometría tal cual está, aunque sea inválida, y un grupo de varias filas se une con la corrección aplicada solo dentro de la unión.
@@ -59,6 +61,8 @@ Con esta opción activada, el usuario necesita los privilegios **USAGE y UPDATE*
 
 Con la opción desactivada la carga no reinicia nada, pero cada fila nueva toma su número de las secuencias de las columnas con valor por defecto (`nextval`). Por eso la carga sigue necesitando **USAGE** (o UPDATE) sobre esas secuencias.
 
+![Paso Opciones: reparar geometrías, vaciar tabla destino y reiniciar secuencias](images/02-padrones-opciones.png)
+
 ### 3. Revisar
 
 El paso **Revisar** muestra el resumen completo: el servidor, la base, el esquema, las tres tablas y las opciones elegidas. Antes de cargar, lea la advertencia que indica qué tabla se va a vaciar y con qué modo.
@@ -69,6 +73,8 @@ Hay dos botones:
 - **Cargar ahora**: escribe los datos en la tabla destino. Solo se habilita cuando se escribe de nuevo la **contraseña** de la base de datos.
 
 La contraseña escrita en este paso se borra cuando cambia la conexión, el esquema o la tabla destino, y también después de cada carga. Hay que escribirla otra vez.
+
+![Paso Revisar: resumen, contraseña y botones Analizar sin cargar y Cargar ahora](images/03-padrones-revisar.png)
 
 ### 4. Resultado
 
@@ -101,6 +107,10 @@ Después hay tres tablas: **Rural**, **Urbano** y **Totales**. Cada una tiene es
 | Insertadas | Filas escritas en la tabla destino. Debe coincidir con los grupos: si no coincide, la carga se revierte. |
 
 La tabla **Totales** suma las filas leídas, los grupos, las filas fusionadas y las insertadas de ambos tipos.
+
+![Informe de una simulación: banner, tablas Rural, Urbano y Totales, advertencias](images/04-padrones-resultado-simulacion.png)
+
+![Informe de una carga confirmada: banner verde y las mismas tablas](images/05-padrones-resultado-carga.png)
 
 El informe incluye también los **conflictos de atributos** (solo se listan 20 ejemplos; el contador muestra el total), los **códigos de localidad ambiguos**, los **tiempos por paso** y el estado de las **estadísticas** de la base. Debajo hay un botón **Descargar CSV**: vea [Descargar el informe](descargar-informe.md).
 

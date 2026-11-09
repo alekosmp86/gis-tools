@@ -32,6 +32,8 @@ Se eligen dos esquemas y estas tablas. El **Esquema de origen** contiene la tabl
 
 **Cómo probar sin tocar carto.padron**: elija como **Tabla de destino** una tabla de prueba, por ejemplo `padron_tmp_actualizacion`. Como esta etapa nunca borra filas ni cambia ids, la misma tabla puede usarse después como `carto.padron` cuando usted lo decida, con el análisis ya revisado.
 
+![Paso Tablas: origen, destino, provincias, localidades y tipos de unidad](images/06-actualizar-tablas.png)
+
 ### Opciones
 
 - **Tipo de localidad**: valor de la columna de tipo de unidad que marca las localidades, escrito tal cual aparece en la tabla de tipos. Solo aparece si eligió una tabla de tipos.
@@ -39,6 +41,8 @@ Se eligen dos esquemas y estas tablas. El **Esquema de origen** contiene la tabl
 - **Actualizar geometrías**: si está activada, la geometría de los padrones existentes se reemplaza por la del catastro cuando cambió más allá de la tolerancia y su área cambió menos que el umbral de abajo. Predeterminado: activada. Con la opción desactivada, el análisis lista esos cambios como "detectados" pero no los aplica.
 - **Ajustar secuencias de destino**: desactivada por defecto. Activada, la actualización real ajusta la secuencia de ids de la tabla de destino (y la de direcciones maestras, si se enlazan) a `max(id) + 1` antes de insertar, y hace falta el privilegio **UPDATE** sobre ellas. Desactivada, no se ajusta nada: basta **USAGE** (o UPDATE), pero, si la actualización va a insertar filas en una tabla (padrones nuevos, o direcciones maestras por crear), su secuencia ya debe estar por encima del mayor id de esa tabla. Esa comprobación no es parte de la validación de la tabla de destino: se hace después de clasificar y solo para las tablas con inserciones; una tabla sin inserciones nunca falla por su secuencia. El análisis no falla por esto: muestra el texto como advertencia (y también si no se pudo leer la secuencia). La actualización real, al guardar, falla antes de escribir (la transacción se revierte sin tocar nada) con un mensaje que nombra la secuencia y la tabla y pide activar **Ajustar secuencias de destino**. Con la opción desactivada los pasos de ajuste de secuencias no aparecen en el avance.
 - **Umbral de cambio de área para aplicar (%)**: proporción del área que puede cambiar una geometría para que se aplique el reemplazo. La proporción es la parte del área que no coincide entre la geometría antigua y la nueva, respecto de su unión (0 % significa igual; 100 % significa que no se tocan). Predeterminado: 5 %. Un cambio con una proporción igual o mayor queda **pendiente**: no se escribe y se informa.
+
+![Paso Opciones, con Ajustar secuencias de destino desactivada](images/07-actualizar-opciones.png)
 
 ### Enlazar direcciones maestras de los padrones (opcional)
 
@@ -56,13 +60,19 @@ Es una casilla del paso **Tablas**, desactivada por defecto. Con ella activada, 
 
 Hay un solo botón, **Analizar**, y hace falta la contraseña para conectarse. El análisis solo lee: no modifica la base de datos, no escribe en la tabla de destino ni avanza su secuencia de ids, y guarda un plan de la carga durante tres días.
 
+![Paso Revisar: resumen y contraseña, con el botón Analizar](images/08-actualizar-revisar.png)
+
 Los cambios se guardan después, desde el resultado del análisis. Ahí aparece el panel **Persistir cambios revisados**, con un resumen de lo que se aplicará (padrones nuevos, pares actualizados y geometrías actualizadas), y la contraseña, que queda escrita desde el análisis. El botón queda bloqueado y muestra el motivo si falta el plan o la contraseña, o si las elecciones de par cambiaron desde el análisis.
+
+![Panel Persistir cambios revisados, con el resumen y la contraseña](images/10-actualizar-persistir.png)
 
 El servidor también rechaza el guardado si el plan caducó o cambió, o si las tablas u opciones no son las del análisis: el motivo aparece en pantalla y el botón **Volver a analizar** lleva a la revisión. Un plan se usa una sola vez.
 
 ## Cómo se clasifica cada padrón
 
 Cada padrón del origen se busca en la tabla de destino por su clave: tipo de padrón, provincia, localidad (vacía en rural) y número.
+
+![Resultado del análisis: tarjetas, tabla de destino, geometrías y pares pendientes](images/09-actualizar-analisis.png)
 
 | Clase | Qué significa | Qué hace la carga real |
 |---|---|---|
@@ -96,7 +106,7 @@ Un grupo ambiguo solo se resuelve con una elección explícita. En el análisis,
 
 Elegir un padrón antiguo también lo quita de los candidatos de los otros grupos: si eso deja a otro grupo con una sola pareja, esa pareja se aplica. El nuevo análisis lo muestra, así que una elección puede resolver grupos que no tocó.
 
-Guardar exige que las elecciones (y las geometrías aceptadas) coincidan con las del último análisis completado. Si cambió la selección, el botón queda bloqueado con el aviso **Analice de nuevo con la selección de pares actual antes de persistir.** y hay que volver a analizar. En la revisión, **Elecciones de par incluidas** cuenta las elecciones que se enviarán.
+Guardar exige que las elecciones (y las geometrías aceptadas) coincidan con las del último análisis completado. Si cambió la selección, el botón queda bloqueado con el aviso **Analice de nuevo con la selección de pares actual antes de persistir.** y hay que volver a analizar. En la revisión, **Elecciones de par** cuenta las elecciones que se enviarán.
 
 El informe ya no lista las elecciones aparte: cada caso aparece en una sola lista. El grupo de una elección no aplicada se marca con **Elección no aplicada** solo si la elección que se envió en esa ejecución no se aplicó: una elección hecha después de la ejecución no se marca.
 
@@ -243,6 +253,8 @@ REFRESH MATERIALIZED VIEW "carto"."mv_padron_wms";
 ```
 
 Refresque primero `mv_padron`, porque `mv_padron_wms` se construye sobre ella. El esquema es el de la tabla de destino. Ejecútelas usted, o pídale a quien tenga el permiso que lo haga. Hasta entonces, el mapa y el WMS siguen mostrando las geometrías anteriores. Un análisis o una actualización sin cambios no muestra la sugerencia.
+
+![Resultado de una actualización real: respaldo para revertir y siguiente paso sugerido](images/11-actualizar-resultado.png)
 
 ## Filas omitidas
 
