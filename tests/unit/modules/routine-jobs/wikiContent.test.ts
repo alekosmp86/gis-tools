@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { getWikiSources } from "@/app/wiki/wikiSources";
 import { buildWikiIndex } from "@/core/wiki/buildWikiIndex";
@@ -104,10 +106,15 @@ describe("routine-jobs wiki content", () => {
     }
   });
 
-  it("AC-34: should carry no screenshots", () => {
+  it("AC-34: should reference screenshots only as relative images/*.png files that exist on disk", () => {
     expect(pages).toHaveLength(EXPECTED_PAGES.length);
+    const imagesDir = path.resolve(process.cwd(), "src/modules/routine-jobs/wiki/images");
     for (const candidate of pages) {
-      expect(candidate.body, candidate.slug).not.toMatch(/!\[[^\]]*\]\(/);
+      for (const match of candidate.body.matchAll(/!\[[^\]]*\]\(([^)\s]*)[^)]*\)/g)) {
+        const target = match[1];
+        expect(target, `${candidate.slug}: ${target}`).toMatch(/^images\/[A-Za-z0-9._-]+\.png$/);
+        expect(fs.existsSync(path.join(imagesDir, target.slice("images/".length))), `${candidate.slug}: ${target}`).toBe(true);
+      }
     }
   });
 
