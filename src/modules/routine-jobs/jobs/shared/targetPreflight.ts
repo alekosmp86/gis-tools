@@ -12,7 +12,9 @@ const SEQUENCE_UPDATE_SQL = "SELECT has_sequence_privilege(current_user, $1::tex
 const SEQUENCE_USE_SQL = "SELECT has_sequence_privilege(current_user, $1::text, 'USAGE,UPDATE') AS has_privilege";
 const SEQUENCE_STATE_SQL =
   "SELECT has_sequence_privilege(current_user, $1::text, 'USAGE,SELECT') AS readable, CASE WHEN has_sequence_privilege(current_user, $1::text, 'USAGE,SELECT') THEN pg_sequence_last_value($1::text::regclass) END AS last_value";
-const REPAIR_OPTION = `"Ajustar secuencias de destino"`;
+const SEQUENCE_LOCATION_SQL =
+  "SELECT n.nspname AS schema_name, c.relname AS sequence_name, has_sequence_privilege(current_user, c.oid, 'SELECT') AS can_select FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.oid = $1::text::regclass";
+const REPAIR_OPTION =`"Ajustar secuencias de destino"`;
 
 const WRITE_PRIVILEGES: readonly string[] = ["INSERT", "UPDATE", "SELECT"];
 export const READ_PRIVILEGES: readonly string[] = ["SELECT"];
@@ -78,6 +80,18 @@ async function hasSequencePrivilege(session: CatalogQuerySession, sql: string, i
   return Boolean(result.rows[0]?.has_privilege);
 }
 
+async function nextValueOfUncalled(session: CatalogQuerySession, idSequence: string): Promise<number> {
+  const located = await session.query(SEQUENCE_LOCATION_SQL, [idSequence]);
+  const row = located.rows[0];
+  if (row === undefined || !row.can_select) return 1;
+  const state = await session.query(
+    `SELECT last_value, is_called FROM ${quoteIdentifier(String(row.schema_name))}.${quoteIdentifier(String(row.sequence_name))}`
+  );
+  const current = state.rows[0];
+  if (current === undefined) return 1;
+  return current.is_called === true ? Number(current.last_value) + 1 : Number(current.last_value);
+}
+
 async function sequenceAheadIssues(
   session: CatalogQuerySession,
   target: WritableTargetLayout,
@@ -91,7 +105,10 @@ async function sequenceAheadIssues(
       return [`No tiene privilegio USAGE ni SELECT sobre la secuencia ${name}, necesario para comprobar que está por encima de los ids de ${label}.`];
     }
     const lastValue = state.rows[0]?.last_value;
-    const next = lastValue === null || lastValue === undefined ? 1 : Number(lastValue) + 1;
+    const next =
+      lastValue === null || lastValue === undefined
+        ? await nextValueOfUncalled(session, idSequence)
+        : Number(lastValue) + 1;
     const maxima = await session.query(`SELECT max(${quoteIdentifier(target.idColumn)}) AS max_id FROM ${qualifiedName(target)}`);
     const maxId = maxima.rows[0]?.max_id;
     if (maxId === null || maxId === undefined || next > Number(maxId)) return [];
