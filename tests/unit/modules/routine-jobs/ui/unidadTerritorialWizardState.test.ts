@@ -5,6 +5,7 @@ import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
 import {
   activeSlotsOf,
   blockingReason,
+  canRunNow,
   initialUnidadWizardStateFor,
   toUnidadStartRequest,
   unidadWizardReducer,
@@ -45,7 +46,7 @@ describe("unidadTerritorialWizardState", () => {
         table: TARGET_TABLE,
         valid: true,
       });
-      const typed = unidadWizardReducer(targetValid, { type: "confirmationChanged", patch: { typedTable: TARGET_TABLE } });
+      const typed = unidadWizardReducer(targetValid, { type: "confirmationChanged", patch: { password: "pw" } });
       const unchanged = withLink(typed, true);
       expect(unchanged.slots[UnitSlot.TARGET].valid).toBe(true);
 
@@ -53,7 +54,7 @@ describe("unidadTerritorialWizardState", () => {
       expect(off.options.linkAddressMaster).toBe(false);
       expect(off.slots[UnitSlot.ADDRESS_MASTER]).toEqual({ schema: "carto", table: "", valid: false });
       expect(off.slots[UnitSlot.TARGET]).toEqual({ schema: "carto", table: TARGET_TABLE, valid: false });
-      expect(off.confirmation.typedTable).toBe(TARGET_TABLE);
+      expect(off.confirmation.password).toBe("pw");
 
       const chosenWhileOff = unidadWizardReducer(off, {
         type: "slotTableChosen",
@@ -67,7 +68,7 @@ describe("unidadTerritorialWizardState", () => {
       const on = withLink(off, true);
       expect(on.slots[UnitSlot.ADDRESS_MASTER]).toEqual({ ...ADDRESS_MASTER, valid: false });
       expect(on.slots[UnitSlot.TARGET]).toEqual({ schema: "carto", table: TARGET_TABLE, valid: false });
-      expect(on.confirmation.typedTable).toBe(TARGET_TABLE);
+      expect(on.confirmation.password).toBe("pw");
     });
 
     it("should count the address master table in the distinct-name rule only while the link is on", () => {
@@ -129,6 +130,33 @@ describe("unidadTerritorialWizardState", () => {
         addressMasterSteps
       );
       expect(unlinked.filter((label) => addressMasterSteps.includes(label))).toEqual([]);
+    });
+  });
+
+  describe("password-only confirmation of a real run", () => {
+    const PASSWORD = "Unidad-pw!7";
+    const ready = (password: string): UnidadTerritorialWizardState => {
+      const state = withActiveTablesValid(initialState());
+      return unidadWizardReducer(state, { type: "confirmationChanged", patch: { password } });
+    };
+
+    it("should allow a real run with the password alone", () => {
+      expect(canRunNow(ready(PASSWORD), { dryRun: false })).toBe(true);
+    });
+
+    it("should allow a dry run with the password alone", () => {
+      expect(canRunNow(ready(PASSWORD), { dryRun: true })).toBe(true);
+    });
+
+    it("should block a real run and a dry run without the password", () => {
+      expect(canRunNow(ready(""), { dryRun: false })).toBe(false);
+      expect(canRunNow(ready(""), { dryRun: true })).toBe(false);
+    });
+
+    it("should keep the password when the target table changes", () => {
+      const next = unidadWizardReducer(ready(PASSWORD), { type: "slotTableChosen", key: UnitSlot.TARGET, table: "otra", valid: true });
+
+      expect(next.confirmation).toEqual({ password: PASSWORD });
     });
   });
 });

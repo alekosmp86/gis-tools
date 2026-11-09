@@ -18,7 +18,7 @@ const CLEAR_MODE_NAME: Record<ClearMode, string> = {
 };
 const BUSY_NOTE = "Hay una carga en curso. Espere a que termine para iniciar otra.";
 const DRY_RUN_HINT = "Analizar sin cargar ejecuta la carga, cuenta las filas y revierte todo: la tabla destino no cambia.";
-const RUN_HINT = "Cargar ahora modifica la tabla destino. Hace falta escribir de nuevo la contraseña y el nombre de la tabla destino.";
+const RUN_HINT = "Cargar ahora modifica la tabla destino. Hace falta escribir de nuevo la contraseña.";
 
 const booleanText = (value: boolean): string => (value ? YES : NO);
 
@@ -82,11 +82,6 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
           type="password"
           value={confirmation.password}
           onChange={(password) => onConfirmationChange({ password })}
-        />
-        <FormField
-          label="Vuelva a escribir el nombre de la tabla destino"
-          value={confirmation.targetLabel}
-          onChange={(targetLabel) => onConfirmationChange({ targetLabel })}
         />
       </div>
 

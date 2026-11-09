@@ -14,14 +14,12 @@ const BUSY_NOTE = "Hay una actualización de unidades territoriales en curso. Es
 const DRY_RUN_HINT =
   "Analizar sin cargar cuenta y clasifica las unidades, y revierte todo: la tabla de unidades territoriales no cambia.";
 const RUN_HINT =
-  "Actualizar unidades territoriales modifica la tabla destino. Hace falta escribir de nuevo la contraseña y el nombre de la tabla destino.";
-const TYPED_TABLE_LABEL = "Vuelva a escribir el nombre de la tabla de unidades territoriales";
+  "Actualizar unidades territoriales modifica la tabla destino. Hace falta escribir de nuevo la contraseña.";
 const YES = "Sí";
 const NO = "No";
 
 export interface UnidadReviewStepProps {
   request: UnidadStartRequest;
-  confirmation: UnidadConfirmation;
   canDryRun: boolean;
   canRun: boolean;
   busy: boolean;
@@ -33,7 +31,6 @@ export interface UnidadReviewStepProps {
 
 export const UnidadReviewStep: React.FC<UnidadReviewStepProps> = ({
   request,
-  confirmation,
   canDryRun,
   canRun,
   busy,
@@ -81,11 +78,6 @@ export const UnidadReviewStep: React.FC<UnidadReviewStepProps> = ({
 
       <div className={styles.gridAligned}>
         <FormField label={PASSWORD_LABEL} type="password" onChange={(password) => onConfirmationChange({ password })} />
-        <FormField
-          label={TYPED_TABLE_LABEL}
-          value={confirmation.typedTable}
-          onChange={(typedTable) => onConfirmationChange({ typedTable })}
-        />
       </div>
 
       <ReviewRunActions

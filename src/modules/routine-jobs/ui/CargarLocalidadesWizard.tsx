@@ -124,17 +124,16 @@ export const CargarLocalidadesWizard: React.FC<CargarLocalidadesWizardProps> = (
           <LocalidadesReviewStep
             request={toStartRequest(state, REAL_RUN)}
             targets={includedTargetsOf(state)}
-            confirmation={state.confirmation}
-            canDryRun={canRunNow(state, DRY_RUN)}
-            canRun={canRunNow(state, REAL_RUN)}
+            canDryRun={canRunNow(state)}
+            canRun={canRunNow(state)}
             busy={isRunActive}
             runBlockedReason={runBlockedReason(state)}
             onConfirmationChange={(patch) => dispatch({ type: "confirmationChanged", patch })}
             onDryRun={() => {
-              if (canRunNow(state, DRY_RUN)) startRun(toRunRequest(state, DRY_RUN));
+              if (canRunNow(state)) startRun(toRunRequest(state, DRY_RUN));
             }}
             onRun={() => {
-              if (canRunNow(state, REAL_RUN)) startRun(toRunRequest(state, REAL_RUN));
+              if (canRunNow(state)) startRun(toRunRequest(state, REAL_RUN));
             }}
           />
         );

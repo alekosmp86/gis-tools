@@ -118,7 +118,6 @@ export const UnidadTerritorialWizard: React.FC<UnidadTerritorialWizardProps> = (
         return (
           <UnidadReviewStep
             request={toUnidadStartRequest(state, REAL_RUN)}
-            confirmation={state.confirmation}
             canDryRun={canRunNow(state, DRY_RUN)}
             canRun={canRunNow(state, REAL_RUN)}
             busy={isRunActive}

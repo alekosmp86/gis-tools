@@ -63,7 +63,7 @@ const reviewStep = (overrides: Partial<ActualizarWizardState> = {}): ActualizarW
 
 const decided = (overrides: Partial<ActualizarWizardState> = {}): ActualizarWizardState =>
   reviewStep({
-    confirmation: { password: PASSWORD, typedTable: TARGET_TABLE },
+    confirmation: { password: PASSWORD },
     acceptedGeometries: [ACCEPT_RURAL],
     simulatedAcceptedGeometries: [ACCEPT_RURAL],
     ...overrides,

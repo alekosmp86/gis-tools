@@ -7,10 +7,7 @@ export interface FakeSequenceState {
   maxId: number | null;
 }
 
-export const AHEAD_SEQUENCE = { lastValue: 1000, maxId: 10 } as const;
-export const BEHIND_SEQUENCE = { lastValue: 5, maxId: 10 } as const;
-
-export const isSequenceStateSql = (sql: string): boolean => sql.includes("pg_sequence_last_value") || sql.startsWith("SELECT max(");
+const AHEAD_SEQUENCE = { lastValue: 1000, maxId: 10 } as const;
 
 /** Returns the rows for a sequence-state statement, or undefined when the statement is something else. A table without a configured state is ahead of its ids. */
 export function sequenceStateRows(
@@ -29,5 +26,3 @@ export function sequenceStateRows(
   }
   return undefined;
 }
-
-export const stateQueriesOf = (log: readonly string[]): string[] => log.filter(isSequenceStateSql);

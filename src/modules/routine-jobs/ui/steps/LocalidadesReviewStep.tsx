@@ -14,15 +14,13 @@ import styles from "./WizardSteps.module.css";
 const BUSY_NOTE = "Hay una carga de localidades en curso. Espere a que termine para iniciar otra.";
 const DRY_RUN_HINT = "Analizar sin cargar cuenta y clasifica las localidades, y revierte todo: las tablas de localidades no cambian.";
 const RUN_HINT =
-  "Cargar localidades modifica las tablas de localidades destino. Hace falta escribir de nuevo la contraseña y el nombre de cada tabla destino.";
-const TYPED_TABLE_LABEL = (destinationTitle: string): string => `Vuelva a escribir el nombre de la tabla (${destinationTitle})`;
+  "Cargar localidades modifica las tablas de localidades destino. Hace falta escribir de nuevo la contraseña.";
 const YES = "Sí";
 const NO = "No";
 
 export interface LocalidadesReviewStepProps {
   request: LocalidadesStartRequest;
   targets: LocalidadesIncludedTarget[];
-  confirmation: LocalidadesConfirmation;
   canDryRun: boolean;
   canRun: boolean;
   busy: boolean;
@@ -37,7 +35,6 @@ const routeOf = (target: LocalidadesIncludedTarget): string => `${target.schema}
 export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
   request,
   targets,
-  confirmation,
   canDryRun,
   canRun,
   busy,
@@ -85,16 +82,6 @@ export const LocalidadesReviewStep: React.FC<LocalidadesReviewStepProps> = ({
 
       <div className={styles.gridAligned}>
         <FormField label={PASSWORD_LABEL} type="password" onChange={(password) => onConfirmationChange({ password })} />
-        {targets.map((target) => (
-          <FormField
-            key={target.destination}
-            label={TYPED_TABLE_LABEL(DESTINATION_TITLE[target.destination])}
-            value={confirmation.typedTables[target.destination]}
-            onChange={(value) =>
-              onConfirmationChange({ typedTables: { ...confirmation.typedTables, [target.destination]: value } })
-            }
-          />
-        ))}
       </div>
 
       <ReviewRunActions

@@ -151,7 +151,7 @@ describe("cargar-localidades destinations (stage 2)", () => {
 
       expect(canContinue(state)).toBe(false);
       expect(runBlockedReason(state)).toContain(NO_DESTINATION_MESSAGE);
-      expect(canRunNow(state, { dryRun: true })).toBe(false);
+      expect(canRunNow(state)).toBe(false);
     });
 
     it("should send no targets when no destination is included", () => {
@@ -159,73 +159,40 @@ describe("cargar-localidades destinations (stage 2)", () => {
     });
   });
 
-  describe("typed confirmation per destination", () => {
+  describe("password-only confirmation", () => {
     const reviewWithBoth = (): LocalidadesWizardState => dispatch(readyWithBoth(), { type: "goTo", step: "review" });
 
-    it("should allow a dry run with only the password typed, whatever the destinations", () => {
+    it("should allow running with only the password typed, whatever the destinations", () => {
       const state = dispatch(reviewWithBoth(), { type: "confirmationChanged", patch: { password: PASSWORD } });
 
-      expect(canRunNow(state, { dryRun: true })).toBe(true);
+      expect(canRunNow(state)).toBe(true);
     });
 
-    it("should refuse a real run until every included destination has its table typed", () => {
-      const state = dispatch(reviewWithBoth(), {
-        type: "confirmationChanged",
-        patch: { password: PASSWORD, typedTables: { bdjCarto: BDJ_TABLE, carto: "" } },
-      });
+    it("should allow running with only the password typed when a single destination is included", () => {
+      const review = dispatch(readyWithBdj(), { type: "goTo", step: "review" });
+      const state = dispatch(review, { type: "confirmationChanged", patch: { password: PASSWORD } });
 
-      expect(canRunNow(state, { dryRun: false })).toBe(false);
+      expect(canRunNow(state)).toBe(true);
     });
 
-    it("should refuse a real run when a typed table belongs to another destination", () => {
-      const state = dispatch(reviewWithBoth(), {
-        type: "confirmationChanged",
-        patch: { password: PASSWORD, typedTables: { bdjCarto: CARTO_TABLE, carto: BDJ_TABLE } },
-      });
-
-      expect(canRunNow(state, { dryRun: false })).toBe(false);
+    it("should refuse to run without the password", () => {
+      expect(canRunNow(reviewWithBoth())).toBe(false);
     });
 
-    it("should allow a real run once each included destination has its own table typed", () => {
-      const state = dispatch(reviewWithBoth(), {
-        type: "confirmationChanged",
-        patch: { password: PASSWORD, typedTables: { bdjCarto: BDJ_TABLE, carto: CARTO_TABLE } },
-      });
+    it("should refuse to run with a wrong password", () => {
+      const state = dispatch(reviewWithBoth(), { type: "confirmationChanged", patch: { password: PASSWORD + "x" } });
 
-      expect(canRunNow(state, { dryRun: false })).toBe(true);
+      expect(canRunNow(state)).toBe(false);
     });
 
-    it("should not require the table of an excluded destination for a real run", () => {
-      const state = dispatch(readyWithBdj(), { type: "goTo", step: "review" });
-      const typed = dispatch(state, {
-        type: "confirmationChanged",
-        patch: { password: PASSWORD, typedTables: { bdjCarto: BDJ_TABLE, carto: "" } },
-      });
-
-      expect(canRunNow(typed, { dryRun: false })).toBe(true);
-    });
-
-    it("should clear the typed table of a destination whose table is changed", () => {
-      const typed = dispatch(reviewWithBoth(), {
-        type: "confirmationChanged",
-        patch: { password: PASSWORD, typedTables: { bdjCarto: BDJ_TABLE, carto: CARTO_TABLE } },
-      });
+    it("should keep the typed password when a destination table changes or is excluded", () => {
+      const typed = dispatch(reviewWithBoth(), { type: "confirmationChanged", patch: { password: PASSWORD } });
 
       const changed = dispatch(typed, { type: "targetChosen", destination: CARTO, table: "otra_tabla", valid: true });
+      const excluded = dispatch(changed, { type: "targetIncludedChanged", destination: CARTO, included: false });
 
-      expect(changed.confirmation.typedTables.carto).toBe("");
-      expect(changed.confirmation.typedTables.bdjCarto).toBe(BDJ_TABLE);
-    });
-
-    it("should clear the typed table of a destination when it is excluded", () => {
-      const typed = dispatch(reviewWithBoth(), {
-        type: "confirmationChanged",
-        patch: { typedTables: { bdjCarto: BDJ_TABLE, carto: CARTO_TABLE } },
-      });
-
-      const excluded = dispatch(typed, { type: "targetIncludedChanged", destination: CARTO, included: false });
-
-      expect(excluded.confirmation.typedTables.carto).toBe("");
+      expect(changed.confirmation).toEqual({ password: PASSWORD });
+      expect(excluded.confirmation).toEqual({ password: PASSWORD });
     });
   });
 });

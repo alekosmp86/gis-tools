@@ -68,7 +68,7 @@ describe("cargarPadronesWizardState", () => {
         tables: { rural: "catastro_paisrural", urbano: "catastro_paisurbano", target: "paispadron" },
         tableValidity: { rural: false, urbano: false, target: false },
         options: { repair: true, clearMode: "delete", resetSequences: true },
-        confirmation: { password: "", targetLabel: "" },
+        confirmation: { password: "" },
       });
     });
 
@@ -229,13 +229,13 @@ describe("cargarPadronesWizardState", () => {
     it.each(["host", "port", "db_name", "user"] as const)(
       "AC-30: should clear tables, validity and confirmation when %s changes but keep the schema",
       (field) => {
-        const state = withTables({ confirmation: { password: "abc", targetLabel: "destino" } });
+        const state = withTables({ confirmation: { password: "abc" } });
 
         const next = wizardReducer(state, { type: "connectionChanged", field, value: "otro" });
 
         expect(next.tables).toEqual({ rural: "", urbano: "", target: "" });
         expect(next.tableValidity).toEqual({ rural: false, urbano: false, target: false });
-        expect(next.confirmation).toEqual({ password: "", targetLabel: "" });
+        expect(next.confirmation).toEqual({ password: "" });
         expect(next.schema).toBe("carto");
       },
     );
@@ -250,11 +250,11 @@ describe("cargarPadronesWizardState", () => {
     });
 
     it("AC-30: should clear only the confirmation when the password changes", () => {
-      const state = withTables({ confirmation: { password: "abc", targetLabel: "destino" } });
+      const state = withTables({ confirmation: { password: "abc" } });
 
       const next = wizardReducer(state, { type: "connectionChanged", field: "password", value: "otra" });
 
-      expect(next.confirmation).toEqual({ password: "", targetLabel: "" });
+      expect(next.confirmation).toEqual({ password: "" });
     });
 
     it("AC-30: should clear the three tables and their validity when the schema changes", () => {
@@ -306,9 +306,9 @@ describe("cargarPadronesWizardState", () => {
 
     it("AC-30: should merge a confirmation patch", () => {
       const first = wizardReducer(initialWizardState(), { type: "confirmationChanged", patch: { password: "abc" } });
-      const next = wizardReducer(first, { type: "confirmationChanged", patch: { targetLabel: "destino" } });
+      const next = wizardReducer(first, { type: "confirmationChanged", patch: { password: "abd" } });
 
-      expect(next.confirmation).toEqual({ password: "abc", targetLabel: "destino" });
+      expect(next.confirmation).toEqual({ password: "abd" });
     });
   });
 
@@ -384,7 +384,7 @@ describe("cargarPadronesWizardState", () => {
   describe("wizardReducer: reset", () => {
     it("AC-30: should return to the initial state on reset", () => {
       const next = wizardReducer(
-        { ...withTables(), step: WizardStep.RESULT, confirmation: { password: PASSWORD, targetLabel: "destino" } },
+        { ...withTables(), step: WizardStep.RESULT, confirmation: { password: PASSWORD } },
         { type: "reset" },
       );
 
@@ -396,7 +396,7 @@ describe("cargarPadronesWizardState", () => {
     const confirmed = (confirmation: Partial<WizardState["confirmation"]>, state = withTables()): WizardState => ({
       ...state,
       step: WizardStep.REVIEW,
-      confirmation: { password: PASSWORD, targetLabel: "destino", ...confirmation },
+      confirmation: { password: PASSWORD, ...confirmation },
     });
 
     it("AC-30: should confirm when password and target label match exactly", () => {
@@ -416,17 +416,14 @@ describe("cargarPadronesWizardState", () => {
       expect(isRealRunConfirmed(confirmed({ password: `${PASSWORD} ` }))).toBe(false);
     });
 
-    it("AC-30: should not confirm a different target label", () => {
-      expect(isRealRunConfirmed(confirmed({ targetLabel: "otra" }))).toBe(false);
+    it("AC-30: should confirm with the password alone, without any typed table name", () => {
+      expect(isRealRunConfirmed(confirmed({}))).toBe(true);
     });
 
-    it("AC-30: should not confirm a target label that differs only by case or trailing space", () => {
-      expect(isRealRunConfirmed(confirmed({ targetLabel: "DESTINO" }))).toBe(false);
-      expect(isRealRunConfirmed(confirmed({ targetLabel: "destino " }))).toBe(false);
-    });
+    it("AC-30: should not confirm when the target table is blank even with the right password", () => {
+      const state = withTables();
 
-    it("AC-30: should not confirm with an empty target label", () => {
-      expect(isRealRunConfirmed(confirmed({ targetLabel: "" }))).toBe(false);
+      expect(isRealRunConfirmed(confirmed({}, { ...state, tables: { ...state.tables, target: "  " } }))).toBe(false);
     });
 
     it("AC-30: should confirm an empty password only when the connection password is empty", () => {
@@ -475,7 +472,7 @@ describe("cargarPadronesWizardState", () => {
     });
 
     it("AC-30: should send the connection password, never the confirmation password", () => {
-      const state: WizardState = { ...review(), confirmation: { password: "otra", targetLabel: "destino" } };
+      const state: WizardState = { ...review(), confirmation: { password: "otra" } };
 
       expect(toStartRequest(state, { dryRun: false }).connection.password).toBe(PASSWORD);
     });
@@ -502,14 +499,14 @@ describe("cargarPadronesWizardState", () => {
     const reviewState = (): WizardState =>
       withTables({
         step: WizardStep.REVIEW,
-        confirmation: { password: PASSWORD, targetLabel: "destino" },
+        confirmation: { password: PASSWORD },
         options: { repair: false, clearMode: "truncate", resetSequences: false },
       });
 
     it("AC-30: should empty the confirmation and move to the result step", () => {
       const next = wizardReducer(reviewState(), { type: "runStarted" });
 
-      expect(next.confirmation).toEqual({ password: "", targetLabel: "" });
+      expect(next.confirmation).toEqual({ password: "" });
       expect(next.step).toBe(WizardStep.RESULT);
     });
 
@@ -529,7 +526,7 @@ describe("cargarPadronesWizardState", () => {
       const state = deepFreeze(reviewState());
 
       expect(() => wizardReducer(state, { type: "runStarted" })).not.toThrow();
-      expect(state.confirmation).toEqual({ password: PASSWORD, targetLabel: "destino" });
+      expect(state.confirmation).toEqual({ password: PASSWORD });
       expect(state.step).toBe(WizardStep.REVIEW);
     });
 

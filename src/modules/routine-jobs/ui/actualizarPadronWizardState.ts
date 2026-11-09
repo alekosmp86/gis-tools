@@ -42,7 +42,6 @@ const MAX_PERCENT = 100;
 
 export interface ActualizarWizardConfirmation {
   password: string;
-  typedTable: string;
 }
 
 export const GEOMETRY_OVERWRITE_WARNING =
@@ -119,9 +118,7 @@ const MESSAGES = {
   tolerance: "La tolerancia debe ser un número mayor o igual que 0.",
   geometryAreaThreshold: "El umbral de cambio de área debe ser un número entre 0 y 100.",
   planMissing: "El análisis no dejó un plan para guardar: vuelva a analizar.",
-  confirmationTableMissing: "Escriba de nuevo el nombre de la tabla de destino para persistir.",
   confirmationPasswordMissing: "Escriba de nuevo la contraseña para persistir.",
-  confirmationBothMissing: "Escriba de nuevo la contraseña y el nombre de la tabla de destino para persistir.",
   simulationStale: "Analice de nuevo con la selección de pares actual antes de persistir.",
   acceptsStale: "Analice de nuevo con las geometrías aceptadas actuales antes de persistir.",
 } as const;
@@ -147,12 +144,11 @@ const clearedFor = <Value>(
 ): Record<ActualizarTableKey, Value> =>
   Object.fromEntries(TABLE_KEYS.map((key) => [key, keys.includes(key) ? cleared : record[key]])) as Record<ActualizarTableKey, Value>;
 
-const emptyConfirmation = (): ActualizarWizardConfirmation => ({ password: "", typedTable: "" });
+const emptyConfirmation = (): ActualizarWizardConfirmation => ({ password: "" });
 
-/** Only the password outlives the review: an analysis runs with it, the typed table name never survives a change. */
+/** Only the password outlives the review: an analysis runs with it, it never survives a change. */
 const keepPasswordOnly = (state: ActualizarWizardState): ActualizarWizardConfirmation => ({
   password: state.confirmation.password,
-  typedTable: "",
 });
 
 const defaultTables = (): Record<ActualizarTableKey, string> => ({
@@ -322,20 +318,9 @@ export function canContinue(state: ActualizarWizardState): boolean {
 const isPasswordTyped = (state: ActualizarWizardState): boolean =>
   state.confirmation.password !== "" && state.confirmation.password === state.connection.password;
 
-const isTableTyped = (state: ActualizarWizardState): boolean => {
-  const targetTable = state.tables.target.trim();
-  return targetTable !== "" && state.confirmation.typedTable === targetTable;
-};
-
 export function isRealRunConfirmed(state: ActualizarWizardState): boolean {
-  return isTableTyped(state) && isPasswordTyped(state);
+  return isPasswordTyped(state);
 }
-
-/** The dry run keeps the password filled, so a persist usually only asks for the table name again. */
-const confirmationMissingOf = (state: ActualizarWizardState): string => {
-  if (isPasswordTyped(state)) return MESSAGES.confirmationTableMissing;
-  return isTableTyped(state) ? MESSAGES.confirmationPasswordMissing : MESSAGES.confirmationBothMissing;
-};
 
 /** Pair choices and accepted geometries change the planned writes, so a persist needs the ones its completed analysis simulated (none when both are empty). */
 export function simulationBlockingReason(state: ActualizarWizardState): string | null {
@@ -349,7 +334,7 @@ export function persistBlockedReason(state: ActualizarWizardState, planId: strin
   const inputReason = runBlockedReason(state);
   if (inputReason !== null) return inputReason;
   if (planId === null) return MESSAGES.planMissing;
-  if (!isRealRunConfirmed(state)) return confirmationMissingOf(state);
+  if (!isRealRunConfirmed(state)) return MESSAGES.confirmationPasswordMissing;
   return simulationBlockingReason(state);
 }
 
@@ -445,7 +430,7 @@ function landingStepOf(state: ActualizarWizardState, target: WizardStep): Wizard
   return target;
 }
 
-/** The typed confirmation lives only while the review is on screen: leaving the review or its result clears the table name. */
+/** The typed confirmation lives only while the review is on screen: leaving the review or its result clears it. */
 function moveTo(state: ActualizarWizardState, step: WizardStep): ActualizarWizardState {
   const landing = landingStepOf(state, step);
   const leavesGate = (state.step === RUN_GATE_STEP || state.step === RUN_START_STEP) && landing !== RUN_GATE_STEP;

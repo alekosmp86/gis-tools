@@ -11,7 +11,6 @@ import { PASSWORD_LABEL } from "./reviewParts";
 import styles from "./ActualizarPersistPanel.module.css";
 
 const TITLE = "Persistir cambios revisados";
-const TYPED_TABLE_LABEL = "Vuelva a escribir el nombre de la tabla de destino";
 const BUTTON_LABEL = "Persistir cambios revisados";
 const ICON_SIZE = 15;
 
@@ -43,11 +42,6 @@ export const ActualizarPersistPanel: React.FC<ActualizarPersistPanelProps> = ({
         type="password"
         value={confirmation.password}
         onChange={(password) => onConfirmationChange({ password })}
-      />
-      <FormField
-        label={TYPED_TABLE_LABEL}
-        value={confirmation.typedTable}
-        onChange={(typedTable) => onConfirmationChange({ typedTable })}
       />
     </div>
     {blockedReason !== null && <AlertMessage type={AlertType.WARNING} text={blockedReason} />}

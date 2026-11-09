@@ -16,7 +16,7 @@ type Props = React.ComponentProps<typeof ReviewStep>;
 function render(overrides: Partial<Props> = {}): string {
   const props: Props = {
     request: requestOf(),
-    confirmation: { password: "", targetLabel: "" },
+    confirmation: { password: "" },
     confirmed: false,
     busy: false,
     runBlockedReason: null,
@@ -76,13 +76,13 @@ describe("ReviewStep", () => {
     });
 
     it("AC-32: should never print the password in the summary", () => {
-      const html = render({ request: requestOf(), confirmation: { password: "", targetLabel: "" } });
+      const html = render({ request: requestOf(), confirmation: { password: "" } });
 
       expect(html).not.toContain(SECRET);
     });
 
     it("AC-32: should never show a retyped password as visible text", () => {
-      const html = render({ confirmation: { password: "retyped-pw-7", targetLabel: "" } });
+      const html = render({ confirmation: { password: "retyped-pw-7" } });
 
       expect(withoutValueAttributes(html)).not.toContain("retyped-pw-7");
     });
@@ -174,11 +174,11 @@ describe("ReviewStep", () => {
       expect(openingTags(html, "input").filter((tag) => tag.includes('type="password"'))).toHaveLength(1);
     });
 
-    it("AC-32: should ask to retype the destination table name", () => {
-      const html = render({ confirmation: { password: "", targetLabel: "padron_tecleado" } });
+    it("should not ask to retype the destination table name", () => {
+      const html = render();
 
-      expect(html).toMatch(/tabla destino/i);
-      expect(html).toContain('value="padron_tecleado"');
+      expect(html).not.toMatch(/escriba.*nombre de la tabla/i);
+      expect(openingTags(html, "input").filter((tag) => tag.includes('type="text"'))).toHaveLength(0);
     });
   });
 

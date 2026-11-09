@@ -30,9 +30,7 @@ const MESSAGE_TABLES_DISTINCT = "Las tablas elegidas deben ser distintas dentro 
 const MESSAGE_CARTO_SCHEMA = "Indique el esquema de carto: destino, provincias, localidades y tipos.";
 const MESSAGE_TOLERANCE = "La tolerancia debe ser un número mayor o igual que 0.";
 const MESSAGE_PLAN_MISSING = "El análisis no dejó un plan para guardar: vuelva a analizar.";
-const MESSAGE_CONFIRMATION_TABLE_MISSING = "Escriba de nuevo el nombre de la tabla de destino para persistir.";
 const MESSAGE_CONFIRMATION_PASSWORD_MISSING = "Escriba de nuevo la contraseña para persistir.";
-const MESSAGE_CONFIRMATION_BOTH_MISSING = "Escriba de nuevo la contraseña y el nombre de la tabla de destino para persistir.";
 const MESSAGE_SIMULATION_STALE = "Analice de nuevo con la selección de pares actual antes de persistir.";
 
 const tablesStep = (overrides: Partial<ActualizarWizardState> = {}): ActualizarWizardState => ({
@@ -112,44 +110,45 @@ describe("actualizarPadronWizardState", () => {
     });
   });
 
-  describe("typed confirmation of a real run", () => {
-    it("should allow a dry run once the password is typed on the review, without the table name", () => {
-      const state = reviewStep({ confirmation: { password: PASSWORD, typedTable: "" } });
+  describe("password confirmation of a real run", () => {
+    it("should allow a dry run once the password is typed on the review", () => {
+      const state = reviewStep({ confirmation: { password: PASSWORD } });
 
       expect(canRunNow(state, { dryRun: true })).toBe(true);
     });
 
     it("should refuse a dry run without the password typed on the review", () => {
-      const state = reviewStep({ confirmation: { password: "", typedTable: "" } });
+      const state = reviewStep({ confirmation: { password: "" } });
 
       expect(canRunNow(state, { dryRun: true })).toBe(false);
     });
 
-    it("should allow a real run only when the target table name and the password are both typed", () => {
-      const state = reviewStep({ confirmation: { password: PASSWORD, typedTable: TARGET_TABLE } });
+    it("should allow a real run with the password alone", () => {
+      const state = reviewStep({ confirmation: { password: PASSWORD } });
 
       expect(isRealRunConfirmed(state)).toBe(true);
       expect(canRunNow(state, { dryRun: false })).toBe(true);
     });
 
-    it("should refuse a real run when the typed table name differs in case from the target table", () => {
-      const state = reviewStep({ confirmation: { password: PASSWORD, typedTable: TARGET_TABLE.toUpperCase() } });
+    it("should refuse a real run without the password", () => {
+      const state = reviewStep({ confirmation: { password: "" } });
+
+      expect(isRealRunConfirmed(state)).toBe(false);
+      expect(canRunNow(state, { dryRun: false })).toBe(false);
+    });
+
+    it("should refuse a real run when the typed password differs from the connection password", () => {
+      const state = reviewStep({ confirmation: { password: PASSWORD + "x" } });
 
       expect(canRunNow(state, { dryRun: false })).toBe(false);
     });
 
-    it("should refuse a real run without the typed table name even when the password is typed", () => {
-      const state = reviewStep({ confirmation: { password: PASSWORD, typedTable: "" } });
-
-      expect(canRunNow(state, { dryRun: false })).toBe(false);
-    });
-
-    it("should clear the typed table name when the target table changes", () => {
-      const state = reviewStep({ confirmation: { password: PASSWORD, typedTable: TARGET_TABLE } });
+    it("should keep the password when the target table changes", () => {
+      const state = reviewStep({ confirmation: { password: PASSWORD } });
 
       const next = wizardReducer(state, { type: "tableChosen", key: ActualizarTableKey.TARGET, table: "padron_otro", valid: true });
 
-      expect(next.confirmation.typedTable).toBe("");
+      expect(next.confirmation).toEqual({ password: PASSWORD });
     });
   });
 
@@ -306,34 +305,34 @@ describe("actualizarPadronWizardState", () => {
       expect(request.options.pairChoices).toEqual([NOT_PAIRED_CHOICE]);
     });
 
-    it("should keep only the password when a dry run starts and drop the typed table name", () => {
-      const state = reviewStep({ confirmation: { password: PASSWORD, typedTable: TARGET_TABLE } });
+    it("should keep only the password when a dry run starts and keep it afterwards", () => {
+      const state = reviewStep({ confirmation: { password: PASSWORD } });
 
       const next = wizardReducer(state, { type: "runStarted", dryRun: true });
 
       expect(next.step).toBe(WizardStep.RESULT);
-      expect(next.confirmation).toEqual({ password: PASSWORD, typedTable: "" });
+      expect(next.confirmation).toEqual({ password: PASSWORD });
     });
 
     it("should clear the typed confirmation when a real run starts", () => {
-      const state = reviewStep({ confirmation: { password: PASSWORD, typedTable: TARGET_TABLE } });
+      const state = reviewStep({ confirmation: { password: PASSWORD } });
 
       const next = wizardReducer(state, { type: "runStarted", dryRun: false });
 
       expect(next.step).toBe(WizardStep.RESULT);
-      expect(next.confirmation).toEqual({ password: "", typedTable: "" });
+      expect(next.confirmation).toEqual({ password: "" });
     });
   });
 
-  describe("typed table name lifetime: only the password survives a change", () => {
-    const TYPED = { password: PASSWORD, typedTable: TARGET_TABLE };
+  describe("confirmation lifetime: only the password survives a change", () => {
+    const TYPED = { password: PASSWORD };
 
     it("should keep only the password when an option changes", () => {
       const state = reviewStep({ confirmation: TYPED });
 
       const next = wizardReducer(state, { type: "optionsChanged", patch: { tolerance: "2.5" } });
 
-      expect(next.confirmation).toEqual({ password: PASSWORD, typedTable: "" });
+      expect(next.confirmation).toEqual({ password: PASSWORD });
     });
 
     it("should keep only the password when a table is chosen under a new name", () => {
@@ -341,7 +340,7 @@ describe("actualizarPadronWizardState", () => {
 
       const next = wizardReducer(state, { type: "tableChosen", key: ActualizarTableKey.PROVINCE, table: "provincia_nueva", valid: true });
 
-      expect(next.confirmation).toEqual({ password: PASSWORD, typedTable: "" });
+      expect(next.confirmation).toEqual({ password: PASSWORD });
     });
 
     it("should keep only the password when the carto schema changes", () => {
@@ -349,7 +348,7 @@ describe("actualizarPadronWizardState", () => {
 
       const next = wizardReducer(state, { type: "schemaChanged", field: "cartoSchema", value: "otro_carto" });
 
-      expect(next.confirmation).toEqual({ password: PASSWORD, typedTable: "" });
+      expect(next.confirmation).toEqual({ password: PASSWORD });
     });
 
     it("should keep only the password when the review goes back to the options step", () => {
@@ -358,7 +357,7 @@ describe("actualizarPadronWizardState", () => {
       const next = wizardReducer(state, { type: "back" });
 
       expect(next.step).toBe(WizardStep.OPTIONS);
-      expect(next.confirmation).toEqual({ password: PASSWORD, typedTable: "" });
+      expect(next.confirmation).toEqual({ password: PASSWORD });
     });
 
     it("should keep only the password when the review jumps back to the tables step", () => {
@@ -367,7 +366,7 @@ describe("actualizarPadronWizardState", () => {
       const next = wizardReducer(state, { type: "goTo", step: WizardStep.TABLES });
 
       expect(next.step).toBe(WizardStep.TABLES);
-      expect(next.confirmation).toEqual({ password: PASSWORD, typedTable: "" });
+      expect(next.confirmation).toEqual({ password: PASSWORD });
     });
 
     it("should keep only the password when the result jumps back to the tables step", () => {
@@ -376,10 +375,10 @@ describe("actualizarPadronWizardState", () => {
       const next = wizardReducer(state, { type: "goTo", step: WizardStep.TABLES });
 
       expect(next.step).toBe(WizardStep.TABLES);
-      expect(next.confirmation).toEqual({ password: PASSWORD, typedTable: "" });
+      expect(next.confirmation).toEqual({ password: PASSWORD });
     });
 
-    it("should keep the typed table name when the result goes back to the review, which is still on screen", () => {
+    it("should keep the typed confirmation when the result goes back to the review, which is still on screen", () => {
       const state = { ...reviewStep({ confirmation: TYPED }), step: WizardStep.RESULT };
 
       const next = wizardReducer(state, { type: "back" });
@@ -412,7 +411,7 @@ describe("actualizarPadronWizardState", () => {
     });
 
     it("should block a real run when pair choices exist and no dry run completed (simulated choices null)", () => {
-      const state = reviewStep({ options: OPTIONS, pairChoices: [CHOICE_ONE], simulatedChoices: null, confirmation: { password: PASSWORD, typedTable: TARGET_TABLE } });
+      const state = reviewStep({ options: OPTIONS, pairChoices: [CHOICE_ONE], simulatedChoices: null, confirmation: { password: PASSWORD } });
 
       expect(simulationBlockingReason(state)).toBe(MESSAGE_SIMULATION_STALE);
       expect(canRunNow(state, { dryRun: false })).toBe(false);
@@ -423,7 +422,7 @@ describe("actualizarPadronWizardState", () => {
         options: OPTIONS,
         pairChoices: [CHOICE_ONE],
         simulatedChoices: [{ ...CHOICE_ONE, oldId: 99 }],
-        confirmation: { password: PASSWORD, typedTable: TARGET_TABLE },
+        confirmation: { password: PASSWORD },
       });
 
       expect(simulationBlockingReason(state)).toBe(MESSAGE_SIMULATION_STALE);
@@ -435,7 +434,7 @@ describe("actualizarPadronWizardState", () => {
         options: OPTIONS,
         pairChoices: [],
         simulatedChoices: [CHOICE_ONE],
-        confirmation: { password: PASSWORD, typedTable: TARGET_TABLE },
+        confirmation: { password: PASSWORD },
       });
 
       expect(simulationBlockingReason(state)).toBe(MESSAGE_SIMULATION_STALE);
@@ -447,7 +446,7 @@ describe("actualizarPadronWizardState", () => {
         options: OPTIONS,
         pairChoices: [CHOICE_ONE, CHOICE_TWO],
         simulatedChoices: [CHOICE_ONE],
-        confirmation: { password: PASSWORD, typedTable: TARGET_TABLE },
+        confirmation: { password: PASSWORD },
       });
 
       expect(canRunNow(state, { dryRun: false })).toBe(false);
@@ -458,7 +457,7 @@ describe("actualizarPadronWizardState", () => {
         options: OPTIONS,
         pairChoices: [CHOICE_ONE, CHOICE_TWO],
         simulatedChoices: [CHOICE_TWO, CHOICE_ONE],
-        confirmation: { password: PASSWORD, typedTable: TARGET_TABLE },
+        confirmation: { password: PASSWORD },
       });
 
       expect(simulationBlockingReason(state)).toBeNull();
@@ -466,14 +465,14 @@ describe("actualizarPadronWizardState", () => {
     });
 
     it("should not require a simulation for a real run when there are no pair choices", () => {
-      const state = reviewStep({ options: OPTIONS, simulatedChoices: null, confirmation: { password: PASSWORD, typedTable: TARGET_TABLE } });
+      const state = reviewStep({ options: OPTIONS, simulatedChoices: null, confirmation: { password: PASSWORD } });
 
       expect(simulationBlockingReason(state)).toBeNull();
       expect(canRunNow(state, { dryRun: false })).toBe(true);
     });
 
     it("should not block a dry run on the simulation, since a dry run is the simulation", () => {
-      const state = reviewStep({ options: OPTIONS, pairChoices: [CHOICE_ONE], simulatedChoices: null, confirmation: { password: PASSWORD, typedTable: "" } });
+      const state = reviewStep({ options: OPTIONS, pairChoices: [CHOICE_ONE], simulatedChoices: null, confirmation: { password: PASSWORD } });
 
       expect(canRunNow(state, { dryRun: true })).toBe(true);
     });
@@ -509,7 +508,7 @@ describe("actualizarPadronWizardState", () => {
         options: OPTIONS,
         pairChoices: [CHOICE],
         simulatedChoices: [CHOICE],
-        confirmation: { password: PASSWORD, typedTable: TARGET_TABLE },
+        confirmation: { password: PASSWORD },
         ...overrides,
       });
 
@@ -538,7 +537,7 @@ describe("actualizarPadronWizardState", () => {
         const state = persistableState({
           options: { ...OPTIONS, tolerance: "abc" },
           simulatedChoices: null,
-          confirmation: { password: "", typedTable: "" },
+          confirmation: { password: "" },
         });
 
         expect(persistBlockedReason(state, null)).toBe(MESSAGE_TOLERANCE);
@@ -547,7 +546,7 @@ describe("actualizarPadronWizardState", () => {
       it("should report the run blocker first when a required table is missing, before the plan and the confirmation", () => {
         const state = persistableState({
           tables: { ...tablesStep().tables, [ActualizarTableKey.LOCALITY]: "" },
-          confirmation: { password: "", typedTable: "" },
+          confirmation: { password: "" },
         });
 
         expect(persistBlockedReason(state, null)).toBe(MESSAGE_TABLES_MISSING);
@@ -556,37 +555,31 @@ describe("actualizarPadronWizardState", () => {
       it("should report the missing plan before the confirmation and the simulation", () => {
         const state = persistableState({
           simulatedChoices: null,
-          confirmation: { password: "", typedTable: "" },
+          confirmation: { password: "" },
         });
 
         expect(persistBlockedReason(state, null)).toBe(MESSAGE_PLAN_MISSING);
       });
 
-      it("should report the missing table name before the simulation when the password is typed and the plan is present", () => {
+      it("should report the missing password before the simulation when the plan is present", () => {
         const state = persistableState({
           simulatedChoices: null,
-          confirmation: { password: PASSWORD, typedTable: "" },
-        });
-
-        expect(persistBlockedReason(state, PLAN_ID)).toBe(MESSAGE_CONFIRMATION_TABLE_MISSING);
-      });
-
-      it("should report the missing password before the simulation when the table name is typed and the plan is present", () => {
-        const state = persistableState({
-          simulatedChoices: null,
-          confirmation: { password: "", typedTable: TARGET_TABLE },
+          confirmation: { password: "" },
         });
 
         expect(persistBlockedReason(state, PLAN_ID)).toBe(MESSAGE_CONFIRMATION_PASSWORD_MISSING);
       });
 
-      it("should report both the missing password and table name before the simulation when neither is typed and the plan is present", () => {
-        const state = persistableState({
-          simulatedChoices: null,
-          confirmation: { password: "", typedTable: "" },
-        });
+      it("should report the missing password and never a table name message when the password is wrong", () => {
+        const state = persistableState({ confirmation: { password: PASSWORD + "x" } });
 
-        expect(persistBlockedReason(state, PLAN_ID)).toBe(MESSAGE_CONFIRMATION_BOTH_MISSING);
+        expect(persistBlockedReason(state, PLAN_ID)).toBe(MESSAGE_CONFIRMATION_PASSWORD_MISSING);
+      });
+
+      it("should allow the persist with the password alone", () => {
+        const state = persistableState({ confirmation: { password: PASSWORD } });
+
+        expect(persistBlockedReason(state, PLAN_ID)).toBeNull();
       });
 
       it("should report the stale simulation last when the choices differ from the analysed ones", () => {

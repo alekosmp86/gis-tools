@@ -149,7 +149,6 @@ describe("Review steps show repairSequences as Sí or No (SQ-8)", () => {
       React.createElement(LocalidadesReviewStep, {
         request,
         targets: [],
-        confirmation: { password: "", typedTables: {} } as never,
         canDryRun: true,
         canRun: false,
         busy: false,
@@ -172,7 +171,6 @@ describe("Review steps show repairSequences as Sí or No (SQ-8)", () => {
     const markup = renderToStaticMarkup(
       React.createElement(UnidadReviewStep, {
         request,
-        confirmation: { password: "", typedTable: "" },
         canDryRun: true,
         canRun: false,
         busy: false,

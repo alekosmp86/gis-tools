@@ -47,7 +47,7 @@ const stateOf = (overrides: Partial<ActualizarWizardState> = {}): ActualizarWiza
     [ActualizarTableKey.ADDRESS_MASTER]: false,
   },
   options: OPTIONS,
-  confirmation: { password: PASSWORD, typedTable: TARGET_TABLE },
+  confirmation: { password: PASSWORD },
   simulatedChoices: [],
   simulatedAcceptedGeometries: [],
   ...overrides,

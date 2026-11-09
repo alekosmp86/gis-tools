@@ -53,7 +53,7 @@ const stateOf = (overrides: Partial<ActualizarWizardState> = {}): ActualizarWiza
     [ActualizarTableKey.ADDRESS_MASTER]: false,
   },
   options: { localityType: "LOCALIDAD CATASTRAL", tolerance: "1.0", geometryAreaThresholdPercent: "5", updateGeometries: true, linkAddressMaster: false, repairSequences: false },
-  confirmation: { password: PASSWORD, typedTable: TARGET_TABLE },
+  confirmation: { password: PASSWORD },
   simulatedChoices: [],
   simulatedAcceptedGeometries: [],
   ...overrides,
@@ -102,7 +102,7 @@ describe("persistDecisionOf", () => {
   });
 
   it("should stay blocked when the confirmation is incomplete even when the selection is stale", () => {
-    const state = stateOf({ pairChoices: [PAIR], confirmation: { password: PASSWORD, typedTable: "" } });
+    const state = stateOf({ pairChoices: [PAIR], confirmation: { password: "" } });
 
     const decision = persistDecisionOf(state, PLAN_ID);
 

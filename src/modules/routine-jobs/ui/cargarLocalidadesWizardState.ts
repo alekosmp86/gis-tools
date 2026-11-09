@@ -58,10 +58,8 @@ export interface LocalidadesOptionsDraft {
   repairSequences: boolean;
 }
 
-/** Typed table names are keyed by destination; only the included destinations ask for one. */
 export interface LocalidadesConfirmation {
   password: string;
-  typedTables: Record<LocalidadesDestination, string>;
 }
 
 export interface LocalidadesWizardState {
@@ -135,12 +133,7 @@ const targetDraftOf = (defaultTable: MonthlyTable, included: boolean): Localidad
   included,
 });
 
-const emptyTypedTables = (): Record<LocalidadesDestination, string> => ({
-  [LocalidadesDestination.BDJ_CARTO]: "",
-  [LocalidadesDestination.CARTO]: "",
-});
-
-const emptyConfirmation = (): LocalidadesConfirmation => ({ password: "", typedTables: emptyTypedTables() });
+const emptyConfirmation = (): LocalidadesConfirmation => ({ password: "" });
 
 function initialWizardState(seed: LocalidadesWizardSeed): LocalidadesWizardState {
   return {
@@ -275,18 +268,9 @@ export function canContinue(state: LocalidadesWizardState): boolean {
 const isPasswordTyped = (state: LocalidadesWizardState): boolean =>
   state.confirmation.password !== "" && state.confirmation.password === state.connection.password;
 
-function isRealRunConfirmed(state: LocalidadesWizardState): boolean {
-  return (
-    isPasswordTyped(state) &&
-    includedTargetsOf(state).every(
-      (target) => target.table !== "" && state.confirmation.typedTables[target.destination].trim() === target.table,
-    )
-  );
-}
-
-export function canRunNow(state: LocalidadesWizardState, flags: { dryRun: boolean }): boolean {
+export function canRunNow(state: LocalidadesWizardState): boolean {
   if (runBlockedReason(state) !== null) return false;
-  return flags.dryRun ? isPasswordTyped(state) : isRealRunConfirmed(state);
+  return isPasswordTyped(state);
 }
 
 export function toStartRequest(state: LocalidadesWizardState, flags: { dryRun: boolean }): LocalidadesStartRequest {
@@ -336,11 +320,6 @@ function moveTo(state: LocalidadesWizardState, step: LocalidadesStep): Localidad
 
 const stepAfter = (step: LocalidadesStep, delta: number): LocalidadesStep => STEP_ORDER[indexOfStep(step) + delta] ?? step;
 
-const clearTypedFor = (confirmation: LocalidadesConfirmation, destination: LocalidadesDestination): LocalidadesConfirmation => ({
-  ...confirmation,
-  typedTables: { ...confirmation.typedTables, [destination]: "" },
-});
-
 function updateTarget(
   state: LocalidadesWizardState,
   destination: LocalidadesDestination,
@@ -366,8 +345,7 @@ function provinceSchemaReducer(state: LocalidadesWizardState, schema: string): L
 }
 
 function targetSchemaReducer(state: LocalidadesWizardState, destination: LocalidadesDestination, schema: string): LocalidadesWizardState {
-  const next = updateTarget(state, destination, { schema, table: "", valid: false });
-  return { ...next, confirmation: clearTypedFor(next.confirmation, destination) };
+  return updateTarget(state, destination, { schema, table: "", valid: false });
 }
 
 function targetChosenReducer(
@@ -376,10 +354,7 @@ function targetChosenReducer(
   table: string,
   valid: boolean,
 ): LocalidadesWizardState {
-  const changed = table !== state.targets[destination].table;
-  const next = updateTarget(state, destination, { table, valid });
-  if (!changed) return next;
-  return { ...next, confirmation: clearTypedFor(next.confirmation, destination) };
+  return updateTarget(state, destination, { table, valid });
 }
 
 function targetIncludedReducer(
@@ -387,8 +362,7 @@ function targetIncludedReducer(
   destination: LocalidadesDestination,
   included: boolean,
 ): LocalidadesWizardState {
-  const next = updateTarget(state, destination, { included });
-  return { ...next, confirmation: clearTypedFor(next.confirmation, destination) };
+  return updateTarget(state, destination, { included });
 }
 
 export function localidadesWizardReducer(state: LocalidadesWizardState, action: LocalidadesWizardAction): LocalidadesWizardState {

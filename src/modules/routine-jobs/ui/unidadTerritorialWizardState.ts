@@ -42,7 +42,6 @@ export interface UnidadOptionsDraft {
 
 export interface UnidadConfirmation {
   password: string;
-  typedTable: string;
 }
 
 export interface UnidadTerritorialWizardState {
@@ -101,12 +100,7 @@ const isBlank = (value: string): boolean => value.trim() === "";
 
 const defaultSlot = (defaultTable: MonthlyTable): UnitSlotDraft => ({ schema: defaultTable.schema, table: defaultTable.table, valid: false });
 
-const emptyConfirmation = (): UnidadConfirmation => ({ password: "", typedTable: "" });
-
-const clearedTypedTable = (state: UnidadTerritorialWizardState): UnidadTerritorialWizardState => ({
-  ...state,
-  confirmation: { ...state.confirmation, typedTable: "" },
-});
+const emptyConfirmation = (): UnidadConfirmation => ({ password: "" });
 
 function initialState(seed: UnidadWizardSeed): UnidadTerritorialWizardState {
   return {
@@ -199,7 +193,7 @@ const isPasswordTyped = (state: UnidadTerritorialWizardState): boolean =>
 
 const isRealRunConfirmed = (state: UnidadTerritorialWizardState): boolean => {
   const targetTable = state.slots[UnitSlot.TARGET].table.trim();
-  return targetTable !== "" && state.confirmation.typedTable === targetTable && isPasswordTyped(state);
+  return targetTable !== "" && isPasswordTyped(state);
 };
 
 export function canRunNow(state: UnidadTerritorialWizardState, flags: { dryRun: boolean }): boolean {
@@ -262,10 +256,8 @@ function moveTo(state: UnidadTerritorialWizardState, step: UnidadStep): UnidadTe
 
 const stepAfter = (step: UnidadStep, delta: number): UnidadStep => STEP_ORDER[indexOfStep(step) + delta] ?? step;
 
-/** Only the target's typed name is confirmed: changing the target's schema or table asks for it again. */
 function slotSchemaReducer(state: UnidadTerritorialWizardState, key: UnitSlot, schema: string): UnidadTerritorialWizardState {
-  const next = { ...state, slots: { ...state.slots, [key]: { schema, table: "", valid: false } } };
-  return key === UnitSlot.TARGET ? clearedTypedTable(next) : next;
+  return { ...state, slots: { ...state.slots, [key]: { schema, table: "", valid: false } } };
 }
 
 function slotTableReducer(
@@ -274,9 +266,7 @@ function slotTableReducer(
   table: string,
   valid: boolean
 ): UnidadTerritorialWizardState {
-  const changed = table !== state.slots[key].table;
-  const next = { ...state, slots: { ...state.slots, [key]: { ...state.slots[key], table, valid } } };
-  return changed && key === UnitSlot.TARGET ? clearedTypedTable(next) : next;
+  return { ...state, slots: { ...state.slots, [key]: { ...state.slots[key], table, valid } } };
 }
 
 /** Turning the link on suggests the default address master table; turning it off drops that table, so a table nobody reads is never sent. */

@@ -25,7 +25,6 @@ const STEP_ORDER: readonly WizardStep[] = [
 
 export interface WizardConfirmation {
   password: string;
-  targetLabel: string;
 }
 
 /** A connection validated by the hub: the wizard then starts on the tables step and never shows its own connection step. */
@@ -84,7 +83,7 @@ const defaultTables = (): Record<TableRole, string> => ({
   target: MONTHLY_TABLES.cargarPadrones.target,
 });
 const noTableValidity = (): Record<TableRole, boolean> => ({ rural: false, urbano: false, target: false });
-const emptyConfirmation = (): WizardConfirmation => ({ password: "", targetLabel: "" });
+const emptyConfirmation = (): WizardConfirmation => ({ password: "" });
 
 const seedFieldsOf = (seed: WizardSeed): Partial<WizardState> =>
   seed.connection === undefined ? {} : { connection: seed.connection, step: WizardStep.TABLES };
@@ -97,7 +96,7 @@ export function initialWizardState(seed: WizardSeed = {}): WizardState {
     tables: defaultTables(),
     tableValidity: noTableValidity(),
     options: { repair: true, clearMode: "delete", resetSequences: true },
-    confirmation: { password: "", targetLabel: "" },
+    confirmation: { password: "" },
     ...seedFieldsOf(seed),
   };
 }
@@ -230,7 +229,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
         tables: { ...state.tables, [action.role]: action.table },
         tableValidity: { ...state.tableValidity, [action.role]: action.valid },
       };
-      return targetChanged ? { ...next, confirmation: { password: "", targetLabel: "" } } : next;
+      return targetChanged ? { ...next, confirmation: { password: "" } } : next;
     }
     case "optionsChanged":
       return { ...state, options: { ...state.options, ...action.patch } };
@@ -257,11 +256,7 @@ export function stagingSelectionOf(state: WizardState): StagingSelection | null 
 
 export function isRealRunConfirmed(state: WizardState): boolean {
   const target = state.tables.target.trim();
-  return (
-    target !== "" &&
-    state.confirmation.targetLabel === target &&
-    state.confirmation.password === state.connection.password
-  );
+  return target !== "" && state.confirmation.password === state.connection.password;
 }
 
 export function toStartRequest(state: WizardState, flags: { dryRun: boolean }): StartRequest {
