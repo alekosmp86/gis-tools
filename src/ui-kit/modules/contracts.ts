@@ -38,6 +38,13 @@ export const UiSlot = {
    * status to show, and the host draws nothing at all when nothing is contributed.
    */
   APP_STATUS: "app.status",
+  /**
+   * Extra job cards in the routine-jobs dashboard.
+   *
+   * Hosted by the `routine-jobs` dashboard, which reads `label`, `description` and `Component`
+   * (the job's view, shown in the job panel on "Abrir").
+   */
+  ROUTINE_JOBS_LIST: "routineJobs.list",
 } as const;
 
 export type UiSlot = (typeof UiSlot)[keyof typeof UiSlot];
@@ -54,6 +61,8 @@ export interface UiContribution {
    * slots that render contributions bare.
    */
   readonly label?: string;
+  /** Card text for hosts that list contributions as cards; ignored elsewhere. */
+  readonly description?: string;
   /** Icon for that same chrome. */
   readonly Icon?: React.ComponentType<{ size?: number }>;
 }
