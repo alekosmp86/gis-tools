@@ -2,20 +2,15 @@ import type { Geometry } from "geojson";
 import { extractShapefileZip } from "@/core/binary/ZipShapefileExtractor";
 import { BinaryDbfReader } from "@/core/binary/BinaryDbfReader";
 import { BinaryShpReader } from "@/core/binary/BinaryShpReader";
+import type { ReplaceRecordRow, ReplaceRecordSource } from "@/core/services/server/shpReplace/replaceRecordSource";
 
 export { SHP_GEOMETRY_SOURCE } from "@/core/types/shpReplace";
 
 const DEFAULT_DBF_ENCODING = "windows-1252";
 
-export interface ShpRecordRow {
-  readonly rec: number;
-  readonly values: Record<string, string | null>;
-  readonly geometryJson: string | null;
-}
+export type ShpRecordRow = ReplaceRecordRow;
 
-export interface OpenShapefile {
-  readonly fieldNames: string[];
-  readonly recordCount: number;
+export interface OpenShapefile extends ReplaceRecordSource {
   readonly shapeRecordCount: number;
   readonly prjText: string | null;
   records(): Generator<ShpRecordRow, void, undefined>;

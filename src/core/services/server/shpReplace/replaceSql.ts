@@ -38,6 +38,7 @@ export interface GeometryPlan {
 export const GeometrySourceKind = {
   JSON: "json",
   NATIVE: "native",
+  TEXT: "text",
 } as const;
 
 export type GeometrySourceKind = (typeof GeometrySourceKind)[keyof typeof GeometrySourceKind];
@@ -88,20 +89,41 @@ const buildSourceExpression = (stageColumn: string, dataType: string): string =>
 const assertSafeTargetSridNumber = (value: unknown): number =>
   value === UNCONSTRAINED_SRID ? UNCONSTRAINED_SRID : assertSafeSridNumber(value);
 
-const buildReprojectedGeometry = (sourceGeometry: string, sourceSrid: number, targetSrid: number): string =>
-  targetSrid === UNCONSTRAINED_SRID || sourceSrid === targetSrid
+const buildReprojectedGeometry = (
+  sourceGeometry: string,
+  sourceSrid: number,
+  targetSrid: number,
+  sourceSridIsFixed: boolean
+): string =>
+  targetSrid === UNCONSTRAINED_SRID || (sourceSridIsFixed && sourceSrid === targetSrid)
     ? sourceGeometry
     : `ST_Transform(${sourceGeometry},${targetSrid})`;
 
-const buildSourceGeometry = (source: InsertSource, sourceSrid: number): string =>
-  source.geometry === GeometrySourceKind.NATIVE
-    ? quoteIdentifier(PROCESSED_GEOMETRY_COLUMN)
-    : `ST_SetSRID(ST_GeomFromGeoJSON(NULLIF(${quoteIdentifier(GEOMETRY_STAGE_COLUMN)},'')),${sourceSrid})`;
+export const buildTextGeometryParse = (): string => {
+  const cell = `NULLIF(${quoteIdentifier(GEOMETRY_STAGE_COLUMN)},'')`;
+  return `CASE WHEN ${cell} ~ '^[0-9A-Fa-f]+$' THEN ST_GeomFromEWKB(decode(${cell},'hex')) ELSE ST_GeomFromEWKT(${cell}) END`;
+};
+
+const buildTextSourceGeometry = (sourceSrid: number): string => {
+  const parsed = buildTextGeometryParse();
+  return `ST_SetSRID(${parsed},COALESCE(NULLIF(ST_SRID(${parsed}),0),${sourceSrid}))`;
+};
+
+const buildSourceGeometry = (source: InsertSource, sourceSrid: number): string => {
+  if (source.geometry === GeometrySourceKind.NATIVE) return quoteIdentifier(PROCESSED_GEOMETRY_COLUMN);
+  if (source.geometry === GeometrySourceKind.TEXT) return buildTextSourceGeometry(sourceSrid);
+  return `ST_SetSRID(ST_GeomFromGeoJSON(NULLIF(${quoteIdentifier(GEOMETRY_STAGE_COLUMN)},'')),${sourceSrid})`;
+};
 
 const buildGeometryExpression = (geometry: GeometryPlan, source: InsertSource): string => {
   const sourceSrid = assertSafeSridNumber(geometry.sourceSrid);
   const targetSrid = assertSafeTargetSridNumber(geometry.targetSrid);
-  const reprojected = buildReprojectedGeometry(buildSourceGeometry(source, sourceSrid), sourceSrid, targetSrid);
+  const reprojected = buildReprojectedGeometry(
+    buildSourceGeometry(source, sourceSrid),
+    sourceSrid,
+    targetSrid,
+    source.geometry !== GeometrySourceKind.TEXT
+  );
   return geometry.multi ? `ST_Multi(${reprojected})` : reprojected;
 };
 

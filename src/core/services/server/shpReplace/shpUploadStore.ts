@@ -9,10 +9,8 @@ import { randomUUID } from "node:crypto";
 
 export const MAX_UPLOAD_BYTES = 1024 ** 3;
 
-const DEFAULT_UPLOAD_DIR = path.join(os.tmpdir(), "gis-tools-shp-replace");
-const UPLOAD_EXTENSION = ".zip";
+const UPLOAD_LIMIT_MESSAGE = "El archivo supera el límite de 1 GiB.";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ZIP_NAME_PATTERN = /\.zip$/i;
 
 export class UploadInvalidError extends Error {
   override readonly name = "UploadInvalidError";
@@ -26,7 +24,29 @@ export class UploadTooLargeError extends Error {
   override readonly name = "UploadTooLargeError";
 }
 
+export interface UploadProfile {
+  readonly dir: string;
+  readonly extension: string;
+  readonly namePattern: RegExp;
+  readonly nameError: string;
+}
+
+const ZIP_UPLOAD_PROFILE: UploadProfile = {
+  dir: path.join(os.tmpdir(), "gis-tools-shp-replace"),
+  extension: ".zip",
+  namePattern: /\.zip$/i,
+  nameError: "Solo se admiten archivos .zip.",
+};
+
+export const CSV_UPLOAD_PROFILE: UploadProfile = {
+  dir: path.join(os.tmpdir(), "gis-tools-csv-replace"),
+  extension: ".csv",
+  namePattern: /\.(csv|txt)$/i,
+  nameError: "Solo se admiten archivos .csv o .txt.",
+};
+
 export interface UploadStoreOptions {
+  profile?: UploadProfile;
   dir?: string;
   maxBytes?: number;
   now?: () => number;
@@ -37,13 +57,18 @@ export interface SavedUpload {
   size: number;
 }
 
-const uploadPathOf = (dir: string, uploadId: string): string => path.join(dir, `${uploadId}${UPLOAD_EXTENSION}`);
+const profileOf = (options: UploadStoreOptions): UploadProfile => options.profile ?? ZIP_UPLOAD_PROFILE;
+
+const dirOf = (options: UploadStoreOptions): string => options.dir ?? profileOf(options).dir;
+
+const uploadPathOf = (dir: string, uploadId: string, extension: string): string =>
+  path.join(dir, `${uploadId}${extension}`);
 
 const isUploadId = (uploadId: string): boolean => UUID_PATTERN.test(uploadId);
 
-function assertZipName(fileName: string): void {
-  if (!ZIP_NAME_PATTERN.test(fileName)) {
-    throw new UploadInvalidError("Solo se admiten archivos .zip.");
+function assertUploadName(fileName: string, profile: UploadProfile): void {
+  if (!profile.namePattern.test(fileName)) {
+    throw new UploadInvalidError(profile.nameError);
   }
 }
 
@@ -53,7 +78,7 @@ function byteLimit(maxBytes: number): Transform {
     transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback) {
       total += chunk.length;
       if (total > maxBytes) {
-        callback(new UploadTooLargeError("El archivo supera el límite de 1 GiB."));
+        callback(new UploadTooLargeError(UPLOAD_LIMIT_MESSAGE));
         return;
       }
       callback(null, chunk);
@@ -66,15 +91,16 @@ export async function saveUpload(
   fileName: string,
   options: UploadStoreOptions = {}
 ): Promise<SavedUpload> {
-  assertZipName(fileName);
+  const profile = profileOf(options);
+  assertUploadName(fileName, profile);
   if (body === null) {
     throw new UploadInvalidError("La petición no contiene datos.");
   }
-  const dir = options.dir ?? DEFAULT_UPLOAD_DIR;
+  const dir = dirOf(options);
   const maxBytes = options.maxBytes ?? MAX_UPLOAD_BYTES;
   await mkdir(dir, { recursive: true });
   const uploadId = randomUUID();
-  const filePath = uploadPathOf(dir, uploadId);
+  const filePath = uploadPathOf(dir, uploadId, profile.extension);
   try {
     await pipeline(
       Readable.fromWeb(body as unknown as NodeWebReadableStream<Uint8Array>),
@@ -85,16 +111,34 @@ export async function saveUpload(
     await rm(filePath, { force: true });
     throw error;
   }
-  const { size } = await stat(filePath);
+  const { size } = await stat(/*turbopackIgnore: true*/ filePath);
   return { uploadId, size };
 }
 
-export async function readUpload(uploadId: string, options: UploadStoreOptions = {}): Promise<Uint8Array> {
+function resolveUploadPath(uploadId: string, options: UploadStoreOptions): string {
   if (!isUploadId(uploadId)) {
     throw new UploadNotFoundError("No existe la subida solicitada.");
   }
+  return uploadPathOf(dirOf(options), uploadId, profileOf(options).extension);
+}
+
+export async function locateUpload(uploadId: string, options: UploadStoreOptions = {}): Promise<string> {
+  const filePath = resolveUploadPath(uploadId, options);
   try {
-    return await readFile(uploadPathOf(options.dir ?? DEFAULT_UPLOAD_DIR, uploadId));
+    await stat(/*turbopackIgnore: true*/ filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new UploadNotFoundError("No existe la subida solicitada.");
+    }
+    throw error;
+  }
+  return filePath;
+}
+
+export async function readUpload(uploadId: string, options: UploadStoreOptions = {}): Promise<Uint8Array> {
+  const filePath = resolveUploadPath(uploadId, options);
+  try {
+    return await readFile(/*turbopackIgnore: true*/ filePath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       throw new UploadNotFoundError("No existe la subida solicitada.");
@@ -104,10 +148,7 @@ export async function readUpload(uploadId: string, options: UploadStoreOptions =
 }
 
 export async function deleteUpload(uploadId: string, options: UploadStoreOptions = {}): Promise<void> {
-  if (!isUploadId(uploadId)) {
-    throw new UploadNotFoundError("No existe la subida solicitada.");
-  }
-  await rm(uploadPathOf(options.dir ?? DEFAULT_UPLOAD_DIR, uploadId), { force: true });
+  await rm(resolveUploadPath(uploadId, options), { force: true });
 }
 
 async function listUploadFiles(dir: string): Promise<string[]> {
@@ -122,12 +163,13 @@ async function listUploadFiles(dir: string): Promise<string[]> {
 const isStale = (mtimeMs: number, now: number, maxAgeMs: number): boolean => now - mtimeMs > maxAgeMs;
 
 export async function sweepUploads(maxAgeMs: number, options: UploadStoreOptions = {}): Promise<number> {
-  const dir = options.dir ?? DEFAULT_UPLOAD_DIR;
+  const dir = dirOf(options);
+  const extension = profileOf(options).extension;
   const now = (options.now ?? Date.now)();
   let removed = 0;
   for (const fileName of await listUploadFiles(dir)) {
-    const uploadId = fileName.slice(0, -UPLOAD_EXTENSION.length);
-    if (!fileName.endsWith(UPLOAD_EXTENSION) || !isUploadId(uploadId)) continue;
+    const uploadId = fileName.slice(0, -extension.length);
+    if (!fileName.endsWith(extension) || !isUploadId(uploadId)) continue;
     const filePath = path.join(/*turbopackIgnore: true*/ dir, fileName);
     const { mtimeMs } = await stat(/*turbopackIgnore: true*/ filePath);
     if (isStale(mtimeMs, now, maxAgeMs)) {

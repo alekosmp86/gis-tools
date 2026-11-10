@@ -20,7 +20,14 @@ import {
   type InsertSource,
 } from "@/core/services/server/shpReplace/replaceSql";
 import { encodeCopyRow } from "@/core/services/server/shpReplace/copyText";
-import type { OpenShapefile, ShpRecordRow } from "@/core/services/server/shpReplace/shpRecordSource";
+import {
+  hasSourceGeometry,
+  wordingOf,
+  type ReplaceRecordRow,
+  type ReplaceRecordSource,
+} from "@/core/services/server/shpReplace/replaceRecordSource";
+import type { OpenShapefile } from "@/core/services/server/shpReplace/shpRecordSource";
+import { assertStagedGeometriesParse } from "@/core/services/server/shpReplace/geometryTextCheck";
 import {
   buildReplacePlan,
   loadTargetCatalog,
@@ -95,14 +102,22 @@ const emitStep = (params: RunShpReplaceParams, phase: ShpReplacePhase, steps: re
 const activeProcessingOf = (params: RunShpReplaceParams): GeometryProcessingOptions | undefined =>
   params.processing && isProcessingActive(params.processing) ? params.processing : undefined;
 
-function assertReadableShapefile(shapefile: OpenShapefile): void {
-  if (shapefile.recordCount === 0) {
+const isShapefileSource = (source: ReplaceRecordSource): source is OpenShapefile => "shapeRecordCount" in source;
+
+function assertReadableSource(source: ReplaceRecordSource): void {
+  if (source.recordCount === 0) {
     throw new Error("El archivo no contiene registros.");
   }
-  if (shapefile.shapeRecordCount !== shapefile.recordCount) {
+  if (isShapefileSource(source) && source.shapeRecordCount !== source.recordCount) {
     throw new Error(
-      `El .shp tiene ${shapefile.shapeRecordCount} registros y el .dbf tiene ${shapefile.recordCount}: los archivos no coinciden.`
+      `El .shp tiene ${source.shapeRecordCount} registros y el .dbf tiene ${source.recordCount}: los archivos no coinciden.`
     );
+  }
+}
+
+function assertGeometryAvailable(source: ReplaceRecordSource, catalog: TargetCatalog): void {
+  if (catalog.geometry !== undefined && !hasSourceGeometry(source)) {
+    throw new Error(wordingOf(source).noGeometry);
   }
 }
 
@@ -130,7 +145,7 @@ async function countRows(session: ShpQuerySession, qualifiedTable: string): Prom
   return Number(result.rows[0]?.count);
 }
 
-function buildCopyCells(row: ShpRecordRow, stageFields: string[], hasGeometry: boolean): Array<string | null> {
+function buildCopyCells(row: ReplaceRecordRow, stageFields: string[], hasGeometry: boolean): Array<string | null> {
   const fieldCells = stageFields.map((field) => row.values[field] ?? null);
   return [String(row.rec), ...fieldCells, ...(hasGeometry ? [row.geometryJson] : [])];
 }
@@ -168,6 +183,9 @@ async function stageRecords(session: ShpReplaceSession, params: RunShpReplacePar
     buildCopyLines(params, plan)
   );
   await assertStagedRows(session, copiedRows);
+  if (hasGeometry && params.shapefile.geometryFormat === GeometrySourceKind.TEXT) {
+    await assertStagedGeometriesParse(session);
+  }
   return copiedRows;
 }
 
@@ -332,9 +350,15 @@ async function measureDryRun(
   };
 }
 
+const stagedInsertSourceOf = (source: ReplaceRecordSource): InsertSource | undefined =>
+  source.geometryFormat === GeometrySourceKind.TEXT
+    ? { table: STAGE_TABLE, geometry: GeometrySourceKind.TEXT }
+    : undefined;
+
 async function replaceRows(session: ShpReplaceSession, params: RunShpReplaceParams): Promise<SwapOutcome> {
-  assertReadableShapefile(params.shapefile);
+  assertReadableSource(params.shapefile);
   const catalog = await loadTargetCatalog(session, params);
+  assertGeometryAvailable(params.shapefile, catalog);
   const processing = activeProcessingOf(params);
   assertProcessingGeometry(processing, catalog);
   const plan = buildReplacePlan(params, catalog);
@@ -342,7 +366,7 @@ async function replaceRows(session: ShpReplaceSession, params: RunShpReplacePara
   const stagedRows = await stageRecords(session, params, plan);
   const prepared: PreparedRows = processing
     ? await processStagedRows(session, params, plan, catalog, processing)
-    : { rows: stagedRows };
+    : { rows: stagedRows, insertSource: stagedInsertSourceOf(params.shapefile) };
   return params.dryRun
     ? measureDryRun(session, params, prepared)
     : swapAndFinalize(session, params, plan, sequences, prepared);

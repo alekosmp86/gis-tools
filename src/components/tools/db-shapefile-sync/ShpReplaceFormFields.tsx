@@ -1,42 +1,44 @@
 import React from "react";
 import { Eye, EyeOff, Globe, Lock } from "lucide-react";
 import { parseSourceSrid, type ShpReplaceWorkflow } from "./useShpReplaceWorkflow";
-import { buildCrsHint } from "./shpCrsHint";
 import styles from "./ShpReplaceFormFields.module.css";
 
 export interface ShpReplaceFormFieldsProps {
   workflow: ShpReplaceWorkflow;
-  prjText: string | undefined;
+  sridHint: string;
+  showSrid?: boolean;
   targetUser: string;
 }
 
 const INVALID_SRID_HINT = "Ingrese un SRID entero entre 1 y 998999.";
 
-export const ShpReplaceFormFields: React.FC<ShpReplaceFormFieldsProps> = ({ workflow, prjText, targetUser }) => {
+export const ShpReplaceFormFields: React.FC<ShpReplaceFormFieldsProps> = ({ workflow, sridHint, showSrid = true, targetUser }) => {
   const isSridInvalid = workflow.sridText.trim() !== "" && parseSourceSrid(workflow.sridText) === null;
   return (
     <div className={styles.fields}>
-      <div className={styles.formGroup}>
-        <label htmlFor="shpReplaceSridInput" className={styles.formLabel}>
-          <Globe size={15} />
-          <span>SRID de origen</span>
-        </label>
-        <input
-          id="shpReplaceSridInput"
-          type="number"
-          inputMode="numeric"
-          step={1}
-          min={1}
-          value={workflow.sridText}
-          onChange={(event) => workflow.setSridText(event.target.value)}
-          placeholder="Ej. 32721"
-          className={`${styles.input} ${isSridInvalid ? styles.inputInvalid : ""}`}
-          autoComplete="off"
-        />
-        <span className={isSridInvalid ? styles.errorHint : styles.hint}>
-          {isSridInvalid ? INVALID_SRID_HINT : buildCrsHint(prjText)}
-        </span>
-      </div>
+      {showSrid && (
+        <div className={styles.formGroup}>
+          <label htmlFor="shpReplaceSridInput" className={styles.formLabel}>
+            <Globe size={15} />
+            <span>SRID de origen</span>
+          </label>
+          <input
+            id="shpReplaceSridInput"
+            type="number"
+            inputMode="numeric"
+            step={1}
+            min={1}
+            value={workflow.sridText}
+            onChange={(event) => workflow.setSridText(event.target.value)}
+            placeholder="Ej. 32721"
+            className={`${styles.input} ${isSridInvalid ? styles.inputInvalid : ""}`}
+            autoComplete="off"
+          />
+          <span className={isSridInvalid ? styles.errorHint : styles.hint}>
+            {isSridInvalid ? INVALID_SRID_HINT : sridHint}
+          </span>
+        </div>
+      )}
 
       <label className={styles.checkboxRow}>
         <input

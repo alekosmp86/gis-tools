@@ -1,7 +1,7 @@
 import type { ReplaceColumnMapping } from "@/core/services/replaceColumnMapping";
 import type { SequenceRef } from "@/core/services/replaceSequences";
 import type { AnalyzeOutcome, SequenceAdjustment } from "@/core/types/replace";
-import type { OpenShapefile } from "@/core/services/server/shpReplace/shpRecordSource";
+import type { ReplaceRecordSource } from "@/core/services/server/shpReplace/replaceRecordSource";
 import type { GeometryProcessingOptions, GeometryProcessingReport } from "@/core/types/geometryProcessing";
 import { ShpReplacePhase } from "@/core/types/shpReplace";
 
@@ -37,7 +37,7 @@ export interface ShpReplaceTarget {
 
 export interface RunShpReplaceParams {
   target: ShpReplaceTarget;
-  shapefile: OpenShapefile;
+  shapefile: ReplaceRecordSource;
   mapping: ReplaceColumnMapping;
   sourceSrid: number;
   resetSequences: boolean;

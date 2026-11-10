@@ -8,6 +8,7 @@ import styles from "./ShpReplaceSummary.module.css";
 
 export interface ShpReplaceSummaryProps {
   result: ShpReplaceResult;
+  sourceLabel?: string;
 }
 
 interface KpiProps {
@@ -48,14 +49,14 @@ const AnalysisSummary: React.FC<ShpReplaceSummaryProps> = ({ result }) => (
   </div>
 );
 
-export const ShpReplaceSummary: React.FC<ShpReplaceSummaryProps> = ({ result }) => {
+export const ShpReplaceSummary: React.FC<ShpReplaceSummaryProps> = ({ result, sourceLabel = "Shapefile" }) => {
   if (result.dryRun) return <AnalysisSummary result={result} />;
   const analyzeMessage = describeAnalyze(result.analyze);
   return (
     <div className={styles.summary}>
       <AlertMessage
         type={AlertType.SUCCESS}
-        text="Reemplazo completado: la tabla destino contiene los registros del Shapefile."
+        text={`Reemplazo completado: la tabla destino contiene los registros del ${sourceLabel}.`}
       />
 
       <div className={styles.kpiGrid}>

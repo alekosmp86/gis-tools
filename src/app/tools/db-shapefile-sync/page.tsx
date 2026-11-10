@@ -62,7 +62,8 @@ export default function DbShapefileSyncToolPage() {
   const [shapefileData, setShapefileData] = useState<ParsedShapefileData | null>(null);
   const [shapefileFile, setShapefileFile] = useState<File | null>(null);
   const [syncMode, setSyncMode] = useState<SyncMode>(SyncMode.COMPARE);
-  const { status: replaceRunStatus, uploadId } = useShpReplaceRun();
+  const replaceRun = useShpReplaceRun();
+  const { status: replaceRunStatus, uploadId } = replaceRun;
 
   const replaceUnavailableReason = getShpReplaceUnavailableReason(shapefileFile);
   const effectiveMode = replaceUnavailableReason ? SyncMode.COMPARE : syncMode;
@@ -234,9 +235,13 @@ export default function DbShapefileSyncToolPage() {
         <WizardOrchestrator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
       ) : (
         <ShpReplaceRunPanel
-          processing={geometry.analyzedOptions ?? geometry.options}
-          onRerun={handleRerun}
-          onReconfigure={handleReconfigure}
+          run={replaceRun}
+          onNewOperation={() => resetShpReplaceRun()}
+          followUp={{
+            processing: geometry.analyzedOptions ?? geometry.options,
+            onRerun: handleRerun,
+            onReconfigure: handleReconfigure,
+          }}
         />
       )}
     </ToolWorkspaceLayout>

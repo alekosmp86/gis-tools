@@ -9,12 +9,7 @@ import { parseAnyGeometryString } from "@/core/spatial/WktGeometryParser";
 import { normalizeCoordinate } from "@/core/spatial/EwkbGeometryParser";
 import { yieldToMainThread } from "@/core/common/mainThreadYield";
 import { PARSE_PROGRESS_CHUNK_SIZE } from "@/core/constants/parserConstants";
-
-interface SpatialColumnHeaders {
-  geomColHeader?: string;
-  latColHeader?: string;
-  lngColHeader?: string;
-}
+import { detectCsvDelimiter, resolveSpatialColumnHeaders, type SpatialColumnHeaders } from "@/core/services/parsers/csvDialect";
 
 export class CsvParser implements ISpatialFileParser {
   readonly formatName = "CSV (Valores Separados por Comas)";
@@ -34,9 +29,9 @@ export class CsvParser implements ISpatialFileParser {
       throw new Error("El archivo CSV está vacío.");
     }
 
-    const delimiter = this.detectDelimiter(lines[0]);
+    const delimiter = detectCsvDelimiter(lines[0]);
     const headers = this.extractHeaders(lines[0], delimiter);
-    const spatialCols = this.resolveSpatialColumnHeaders(headers);
+    const spatialCols = resolveSpatialColumnHeaders(headers);
 
     const { recordsMap, geojsonFeatures } = await this.processRows(
       lines,
@@ -66,32 +61,6 @@ export class CsvParser implements ISpatialFileParser {
   private cleanAndSplitLines(rawText: string): string[] {
     const textWithoutBom = rawText.replace(/^\uFEFF/, "");
     return textWithoutBom.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  }
-
-  /**
-   * Analyzes the header line outside quotation marks to auto-detect whether the CSV
-   * is delimited by semicolon (;), tab (\t), or standard comma (,).
-   */
-  private detectDelimiter(sampleLine: string): string {
-    let commaCount = 0;
-    let semiCount = 0;
-    let tabCount = 0;
-    let inQuotes = false;
-
-    for (let charIndex = 0; charIndex < sampleLine.length; charIndex++) {
-      const char = sampleLine[charIndex];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (!inQuotes) {
-        if (char === ",") commaCount++;
-        else if (char === ";") semiCount++;
-        else if (char === "\t") tabCount++;
-      }
-    }
-
-    if (semiCount > commaCount && semiCount > tabCount) return ";";
-    if (tabCount > commaCount && tabCount > semiCount) return "\t";
-    return ",";
   }
 
   /**
@@ -128,23 +97,6 @@ export class CsvParser implements ISpatialFileParser {
       throw new Error("No se pudieron detectar las columnas de encabezado en el archivo CSV.");
     }
     return headers;
-  }
-
-  /**
-   * Detects explicit geometry or coordinate (lat/lng) column names in the headers.
-   */
-  private resolveSpatialColumnHeaders(headers: string[]): SpatialColumnHeaders {
-    const geomColHeader = headers.find((header) =>
-      /^(geom|geometry|wkt|wkb_geometry|the_geom|geom_wkt|geom_wkb)$/i.test(header.trim())
-    );
-    const latColHeader = headers.find((header) =>
-      /^(lat|latitude|latitud|y_coord|y)$/i.test(header.trim())
-    );
-    const lngColHeader = headers.find((header) =>
-      /^(lng|lon|long|longitude|longitud|x_coord|x)$/i.test(header.trim())
-    );
-
-    return { geomColHeader, latColHeader, lngColHeader };
   }
 
   /**

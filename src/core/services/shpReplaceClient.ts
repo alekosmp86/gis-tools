@@ -91,15 +91,21 @@ function readUploadResult(xhr: XMLHttpRequest): ShpUploadResult {
   return { uploadId: String(payload.uploadId), size: Number(payload.size) };
 }
 
-export function uploadShapefileZip(
+export interface ReplaceUploadTarget {
+  route: string;
+  fileName: string;
+}
+
+export function uploadReplaceFile(
+  target: ReplaceUploadTarget,
   file: Blob,
   onProgress?: ShpUploadProgress,
   deps: ShpUploadDeps = {}
 ): Promise<ShpUploadResult> {
   return new Promise<ShpUploadResult>((resolve, reject) => {
     const xhr = (deps.createXhr ?? createDefaultXhr)();
-    xhr.open("POST", SHP_UPLOAD_ROUTE);
-    xhr.setRequestHeader(FILE_NAME_HEADER, SHP_UPLOAD_FILE_NAME);
+    xhr.open("POST", target.route);
+    xhr.setRequestHeader(FILE_NAME_HEADER, target.fileName);
     xhr.upload.onprogress = (event: ProgressEvent) => {
       if (event.lengthComputable) onProgress?.(event.loaded, event.total);
     };
@@ -130,8 +136,20 @@ async function readJsonOrThrow(response: Response, fallback: string): Promise<Js
   return payload;
 }
 
-export async function startShpReplace(body: ShpStartBody, deps: ShpFetchDeps = {}): Promise<ShpStartResult> {
-  const response = await sendRequest(deps.fetchImpl ?? defaultFetch, SHP_START_ROUTE, {
+const SHP_UPLOAD_TARGET: ReplaceUploadTarget = { route: SHP_UPLOAD_ROUTE, fileName: SHP_UPLOAD_FILE_NAME };
+
+export const uploadShapefileZip = (
+  file: Blob,
+  onProgress?: ShpUploadProgress,
+  deps: ShpUploadDeps = {}
+): Promise<ShpUploadResult> => uploadReplaceFile(SHP_UPLOAD_TARGET, file, onProgress, deps);
+
+export async function startReplaceJob(
+  route: string,
+  body: ShpStartBody,
+  deps: ShpFetchDeps = {}
+): Promise<ShpStartResult> {
+  const response = await sendRequest(deps.fetchImpl ?? defaultFetch, route, {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(body),
@@ -141,9 +159,19 @@ export async function startShpReplace(body: ShpStartBody, deps: ShpFetchDeps = {
   return { jobId: payload.jobId };
 }
 
-export async function fetchShpReplaceStatus(jobId: string, deps: ShpFetchDeps = {}): Promise<ShpJobSnapshot> {
-  const url = `${SHP_STATUS_ROUTE}?jobId=${encodeURIComponent(jobId)}`;
+export const startShpReplace = (body: ShpStartBody, deps: ShpFetchDeps = {}): Promise<ShpStartResult> =>
+  startReplaceJob(SHP_START_ROUTE, body, deps);
+
+export async function fetchReplaceJobStatus(
+  statusRoute: string,
+  jobId: string,
+  deps: ShpFetchDeps = {}
+): Promise<ShpJobSnapshot> {
+  const url = `${statusRoute}?jobId=${encodeURIComponent(jobId)}`;
   const response = await sendRequest(deps.fetchImpl ?? defaultFetch, url);
   const payload = await readJsonOrThrow(response, STATUS_FALLBACK_MESSAGE);
   return (isRecord(payload.job) ? payload.job : payload) as unknown as ShpJobSnapshot;
 }
+
+export const fetchShpReplaceStatus = (jobId: string, deps: ShpFetchDeps = {}): Promise<ShpJobSnapshot> =>
+  fetchReplaceJobStatus(SHP_STATUS_ROUTE, jobId, deps);

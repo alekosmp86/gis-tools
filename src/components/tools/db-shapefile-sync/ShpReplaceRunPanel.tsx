@@ -1,5 +1,5 @@
 import React from "react";
-import { ShpReplaceRunStatus, reset } from "@/core/services/shpReplaceRunStore";
+import { ShpReplaceRunStatus, type ShpReplaceRunState } from "@/core/services/replaceRunTypes";
 import type { GeometryProcessingOptions } from "@/core/types/geometryProcessing";
 import { GeometryReportPanel } from "@/components/tools/db-sync-common/geometry-processing/GeometryReportPanel";
 import { ShpReplaceSummary } from "./ShpReplaceSummary";
@@ -7,18 +7,23 @@ import { ShpReplaceFollowUp, type ShpRerunRequest } from "./ShpReplaceFollowUp";
 import { ShpReplaceRunHeader } from "./ShpReplaceRunHeader";
 import { ShpNewOperationButton, ShpRunFooter } from "./ShpRunFooter";
 import { ShpRunStatusNotices } from "./ShpRunStatusNotices";
-import { useShpReplaceRun } from "./useShpReplaceRun";
 import { shpRunWording } from "./shpReplaceLabels";
 import styles from "./ShpReplaceRunPanel.module.css";
 
-export interface ShpReplaceRunPanelProps {
+export interface ShpReplaceFollowUpActions {
   processing: GeometryProcessingOptions;
   onRerun: (request: ShpRerunRequest) => void;
   onReconfigure: () => void;
 }
 
-export const ShpReplaceRunPanel: React.FC<ShpReplaceRunPanelProps> = ({ processing, onRerun, onReconfigure }) => {
-  const run = useShpReplaceRun();
+export interface ShpReplaceRunPanelProps {
+  run: ShpReplaceRunState;
+  onNewOperation: () => void;
+  sourceLabel?: string;
+  followUp?: ShpReplaceFollowUpActions;
+}
+
+export const ShpReplaceRunPanel: React.FC<ShpReplaceRunPanelProps> = ({ run, onNewOperation, sourceLabel, followUp }) => {
   const { status, result, context, report, dryRun } = run;
   if (!context) return null;
 
@@ -26,7 +31,7 @@ export const ShpReplaceRunPanel: React.FC<ShpReplaceRunPanelProps> = ({ processi
   const isFailed = status === ShpReplaceRunStatus.FAILED;
   const isDoneAnalysis = status === ShpReplaceRunStatus.DONE && dryRun;
   const geometryReport = result?.geometry ?? report;
-  const showFollowUp = !isBusy && geometryReport !== null && (isDoneAnalysis || isFailed);
+  const showFollowUp = followUp !== undefined && !isBusy && geometryReport !== null && (isDoneAnalysis || isFailed);
 
   return (
     <div className={styles.panel}>
@@ -46,24 +51,24 @@ export const ShpReplaceRunPanel: React.FC<ShpReplaceRunPanelProps> = ({ processi
         jobId={run.jobId}
       />
 
-      {result && <ShpReplaceSummary result={result} />}
+      {result && <ShpReplaceSummary result={result} sourceLabel={sourceLabel} />}
 
-      {geometryReport && <GeometryReportPanel report={geometryReport} options={processing} />}
+      {followUp && geometryReport && <GeometryReportPanel report={geometryReport} options={followUp.processing} />}
 
       {showFollowUp && (
         <ShpReplaceFollowUp
           report={geometryReport}
-          processing={processing}
+          processing={followUp.processing}
           targetLabel={context.targetLabel}
           canReplace={isDoneAnalysis}
-          onRerun={onRerun}
-          onReconfigure={onReconfigure}
-          onNewOperation={() => reset()}
+          onRerun={followUp.onRerun}
+          onReconfigure={followUp.onReconfigure}
+          onNewOperation={onNewOperation}
         />
       )}
 
       {!isBusy && !showFollowUp && (
-        <ShpRunFooter leading={<ShpNewOperationButton onClick={() => reset()} />} />
+        <ShpRunFooter leading={<ShpNewOperationButton onClick={onNewOperation} />} />
       )}
     </div>
   );

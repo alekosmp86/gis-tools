@@ -1,15 +1,11 @@
 import { openShapefileZip, type OpenShapefile } from "@/core/services/server/shpReplace/shpRecordSource";
-import {
-  GeometryOptionsInvalidError,
-  parseGeometryProcessingOptions,
-} from "@/core/services/geometryProcessingOptions";
+import { parseGeometryProcessingOptions } from "@/core/services/geometryProcessingOptions";
 import type { GeometryProcessingOptions } from "@/core/types/geometryProcessing";
 import { openPgShpSession, type PgShpConfig } from "@/core/services/server/shpReplace/pgShpSession";
 import { getShpJobStore, type ShpJobStore } from "@/core/services/server/shpReplace/shpReplaceJobStore";
 import {
   parseStartRequest,
   parseStatusJobId,
-  ShpRequestInvalidError,
   type ShpStartRequest,
 } from "@/core/services/server/shpReplace/shpReplaceRequest";
 import { runShpReplace } from "@/core/services/server/shpReplace/runShpReplace";
@@ -26,11 +22,21 @@ import {
   readUpload,
   saveUpload,
   sweepUploads,
-  UploadInvalidError,
-  UploadNotFoundError,
-  UploadTooLargeError,
   type SavedUpload,
 } from "@/core/services/server/shpReplace/shpUploadStore";
+import {
+  CONFLICT_MESSAGE,
+  errorResponse,
+  errorTextOf,
+  failureResponse,
+  FILE_NAME_HEADER,
+  jsonResponse,
+  readJsonBody,
+  scrubSecret,
+  sweepJobsStale,
+  sweepUploadsStale,
+  tableKeyOf,
+} from "@/core/services/server/shpReplace/replaceHttp";
 
 export interface ShpUploadDeps {
   save(body: ReadableStream<Uint8Array> | null, fileName: string): Promise<SavedUpload>;
@@ -47,15 +53,7 @@ export interface ShpReplaceHandlerDeps {
   runReplace(open: ShpReplaceSessionOpener, params: RunShpReplaceParams): Promise<ShpReplaceResult>;
 }
 
-const FILE_NAME_HEADER = "x-file-name";
-const HOUR_MS = 60 * 60 * 1000;
-const UPLOAD_MAX_AGE_MS = 2 * HOUR_MS;
-const JOB_MAX_AGE_MS = HOUR_MS;
-const REDACTION = "***";
-const INTERNAL_ERROR_MESSAGE = "Error interno al procesar la solicitud.";
-const CONFLICT_MESSAGE = "Ya hay un reemplazo en curso para esta tabla.";
 const JOB_NOT_FOUND_MESSAGE = "No existe un trabajo con ese identificador.";
-const UNKNOWN_ERROR_MESSAGE = "Error desconocido.";
 
 function defaultShpReplaceDeps(): ShpReplaceHandlerDeps {
   return {
@@ -71,47 +69,6 @@ function defaultShpReplaceDeps(): ShpReplaceHandlerDeps {
     runReplace: runShpReplace,
   };
 }
-
-const jsonResponse = (status: number, body: object): Response => Response.json(body, { status });
-
-const errorResponse = (status: number, message: string): Response =>
-  jsonResponse(status, { success: false, error: message });
-
-const errorTextOf = (error: unknown): string => (error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE);
-
-const scrubSecret = (text: string, secret: string): string => text.split(secret).join(REDACTION);
-
-function statusOf(error: unknown): number {
-  if (error instanceof UploadTooLargeError) return 413;
-  if (error instanceof UploadNotFoundError) return 404;
-  if (error instanceof UploadInvalidError || error instanceof ShpRequestInvalidError) return 400;
-  if (error instanceof GeometryOptionsInvalidError) return 400;
-  return 500;
-}
-
-function failureResponse(error: unknown): Response {
-  const status = statusOf(error);
-  return errorResponse(status, status === 500 ? INTERNAL_ERROR_MESSAGE : errorTextOf(error));
-}
-
-async function sweepUploadsStale(uploads: ShpUploadDeps): Promise<void> {
-  await uploads.sweep?.(UPLOAD_MAX_AGE_MS).catch(() => 0);
-}
-
-function sweepJobsStale(store: ShpJobStore): void {
-  store.sweep(JOB_MAX_AGE_MS);
-}
-
-async function readJsonBody(request: Request): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    throw new ShpRequestInvalidError("El cuerpo de la petición no es JSON válido.");
-  }
-}
-
-const tableKeyOf = (start: ShpStartRequest): string =>
-  `${start.connection.host}:${start.connection.port}|${start.connection.db_name}|${start.target.schema_name}|${start.target.table_name}`;
 
 async function readZipOrFail(deps: ShpReplaceHandlerDeps, jobId: string, uploadId: string): Promise<Uint8Array> {
   try {

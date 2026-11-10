@@ -1,6 +1,6 @@
 import React from "react";
 import { AlertTriangle, ScanSearch } from "lucide-react";
-import type { ShpReplaceRunContext } from "@/core/services/shpReplaceRunStore";
+import type { ShpReplaceRunContext } from "@/core/services/replaceRunTypes";
 import styles from "./ShpReplaceRunPanel.module.css";
 
 export interface ShpReplaceRunHeaderProps {

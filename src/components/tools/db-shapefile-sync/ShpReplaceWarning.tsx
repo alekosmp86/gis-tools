@@ -10,9 +10,15 @@ export interface ShpReplaceWarningProps {
   target: DbConfig;
   targetRowCount: number;
   recordCount: number;
+  sourceLabel?: string;
 }
 
-export const ShpReplaceWarning: React.FC<ShpReplaceWarningProps> = ({ target, targetRowCount, recordCount }) => (
+export const ShpReplaceWarning: React.FC<ShpReplaceWarningProps> = ({
+  target,
+  targetRowCount,
+  recordCount,
+  sourceLabel = "Shapefile",
+}) => (
   <div className={styles.container}>
     <div className={styles.dangerBanner}>
       <AlertTriangle size={36} className={styles.dangerIcon} />
@@ -23,7 +29,7 @@ export const ShpReplaceWarning: React.FC<ShpReplaceWarningProps> = ({ target, ta
         <span className={styles.table}>{buildQualifiedTableLabel(target.schema_name, target.table_name)}</span>
         <span className={styles.label}>Registros actuales en la tabla destino</span>
         <span className={styles.count}>{formatNumber(targetRowCount)}</span>
-        <span className={styles.label}>Registros del Shapefile que se cargarán</span>
+        <span className={styles.label}>Registros del {sourceLabel} que se cargarán</span>
         <span className={styles.count}>{formatNumber(recordCount)}</span>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { start } from "@/core/services/shpReplaceRunStore";
 import { buildQualifiedTableLabel } from "@/core/services/sqlStatements";
 import type { ReplaceColumnMapping } from "@/core/services/replaceColumnMapping";
+import type { ShpReplaceRunParams } from "@/core/services/replaceRunTypes";
 import type { DbConfig } from "@/core/types/db";
 import type { GeometryProcessingController } from "@/components/tools/db-sync-common/geometry-processing/useGeometryProcessingOptions";
 import { isProcessingActive } from "@/core/services/geometryProcessingOptions";
@@ -23,11 +23,20 @@ export interface UseShpReplaceWorkflowParams {
   file: File | null;
   mapping: ReplaceColumnMapping;
   detectedSrid: number | null;
-  geometry: GeometryProcessingController;
+  geometry?: GeometryProcessingController;
   uploadId: string | null;
+  startRun: (params: ShpReplaceRunParams) => Promise<void>;
 }
 
-export function useShpReplaceWorkflow({ target, file, mapping, detectedSrid, geometry, uploadId }: UseShpReplaceWorkflowParams) {
+export function useShpReplaceWorkflow({
+  target,
+  file,
+  mapping,
+  detectedSrid,
+  geometry,
+  uploadId,
+  startRun,
+}: UseShpReplaceWorkflowParams) {
   const [confirmValue, setConfirmValue] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -41,8 +50,8 @@ export function useShpReplaceWorkflow({ target, file, mapping, detectedSrid, geo
     hasFile: Boolean(file),
     sridValid: sourceSrid !== null,
     passwordFilled: password.trim() !== "",
-    processingValid: geometry.isValid,
-    processingActive: isProcessingActive(geometry.options),
+    processingValid: geometry?.isValid ?? true,
+    processingActive: geometry ? isProcessingActive(geometry.options) : false,
     confirmMatches: confirmValue === confirmText,
   });
 
@@ -50,15 +59,15 @@ export function useShpReplaceWorkflow({ target, file, mapping, detectedSrid, geo
     if (!target || !file || sourceSrid === null) return;
     const runPassword = password;
     setPassword("");
-    geometry.prepareRun(geometry.options, dryRun);
-    void start({
+    geometry?.prepareRun(geometry.options, dryRun);
+    void startRun({
       file,
       fileName: file.name,
       connection: { ...target, password: runPassword },
       mapping,
       sourceSrid,
       resetSequences,
-      processing: geometry.options,
+      processing: geometry?.options,
       dryRun,
       uploadId: uploadId ?? undefined,
     });

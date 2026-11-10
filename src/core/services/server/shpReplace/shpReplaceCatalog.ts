@@ -17,6 +17,7 @@ import {
 import { SHP_GEOMETRY_SOURCE } from "@/core/types/shpReplace";
 import type { RunShpReplaceParams, ShpQuerySession, ShpReplaceTarget } from "@/core/services/server/shpReplace/shpReplaceTypes";
 import type { GeometryProcessingOptions } from "@/core/types/geometryProcessing";
+import { wordingOf, type ReplaceRecordSource, type ReplaceSourceWording } from "@/core/services/server/shpReplace/replaceRecordSource";
 
 export type TargetColumn = DbColumnMetadata & { udt_name: string; cast_type: string };
 
@@ -168,11 +169,11 @@ const castTypeOf = (column: TargetColumn): string =>
 
 const joinNames = (names: string[]): string => names.join(", ");
 
-function assertSingleGeometryTarget(mapping: ReplaceColumnMapping): void {
+function assertSingleGeometryTarget(mapping: ReplaceColumnMapping, wording: ReplaceSourceWording): void {
   const geometryColumns = findGeometryTargetColumns(mapping);
   if (geometryColumns.length > 1) {
     throw new Error(
-      `Solo se puede mapear una columna destino a la geometría del SHP. Columnas mapeadas: ${joinNames(geometryColumns)}.`
+      `Solo se puede mapear una columna destino a la geometría del ${wording.geometryName}. Columnas mapeadas: ${joinNames(geometryColumns)}.`
     );
   }
 }
@@ -193,13 +194,16 @@ function assertMappedTargetsExist(mapping: ReplaceColumnMapping, columns: Target
   }
 }
 
-function assertMappedSourcesExist(insertColumns: ReplaceInsertColumn[], fieldNames: string[]): void {
-  const known = new Set(fieldNames);
+function assertMappedSourcesExist(
+  insertColumns: ReplaceInsertColumn[],
+  source: ReplaceRecordSource
+): void {
+  const known = new Set(source.fieldNames);
   const unknown = insertColumns
     .map((column) => column.sourceColumn)
     .filter((source): source is string => source !== null && source !== SHP_GEOMETRY_SOURCE && !known.has(source));
   if (unknown.length > 0) {
-    throw new Error(`Campos del DBF no encontrados: ${joinNames(unknown)}.`);
+    throw new Error(`${wordingOf(source).missingFields} no encontrados: ${joinNames(unknown)}.`);
   }
 }
 
@@ -213,16 +217,16 @@ function assertRequiredColumnsCovered(insertColumns: ReplaceInsertColumn[], colu
 function resolveValidInsertColumns(
   mapping: ReplaceColumnMapping,
   columns: TargetColumn[],
-  fieldNames: string[]
+  source: ReplaceRecordSource
 ): ReplaceInsertColumn[] {
   assertTargetColumnsExist(columns);
-  assertSingleGeometryTarget(mapping);
+  assertSingleGeometryTarget(mapping, wordingOf(source));
   assertMappedTargetsExist(mapping, columns);
   const insertColumns = resolveInsertColumns(mapping, columns.map((column) => column.column_name));
   if (insertColumns.length === 0) {
     throw new Error("No hay columnas mapeadas: defina al menos una columna destino para insertar.");
   }
-  assertMappedSourcesExist(insertColumns, fieldNames);
+  assertMappedSourcesExist(insertColumns, source);
   assertRequiredColumnsCovered(insertColumns, columns);
   return insertColumns;
 }
@@ -275,7 +279,7 @@ export function buildReplacePlan(
   params: Pick<RunShpReplaceParams, "mapping" | "shapefile" | "processing">,
   catalog: TargetCatalog
 ): ReplacePlan {
-  const insertColumns = resolveValidInsertColumns(params.mapping, catalog.columns, params.shapefile.fieldNames);
+  const insertColumns = resolveValidInsertColumns(params.mapping, catalog.columns, params.shapefile);
   const mappedFields = collectMappedFields(insertColumns);
   const keyFields = unifyKeyFieldsOf(params.processing);
   assertKeyFieldsExist(keyFields, params.shapefile.fieldNames);

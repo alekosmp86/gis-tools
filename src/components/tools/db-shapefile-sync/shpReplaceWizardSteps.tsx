@@ -6,7 +6,9 @@ import type { ReplaceColumnMapping } from "@/core/services/replaceColumnMapping"
 import type { InsertFieldDefault } from "@/core/types/comparison";
 import type { DbColumnMetadata, DbConfig } from "@/core/types/db";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
+import { start as startShpRun } from "@/core/services/shpReplaceRunStore";
 import { ShpReplaceStep } from "./ShpReplaceStep";
+import { buildCrsHint } from "./shpCrsHint";
 
 export interface BuildShpReplaceStepsParams {
   sourceColumns: string[];
@@ -100,10 +102,11 @@ export function buildShpReplaceSteps(params: BuildShpReplaceStepsParams): Wizard
           file={params.file}
           recordCount={params.recordCount}
           detectedSrid={params.detectedSrid}
-          prjText={params.prjText}
+          sridHint={buildCrsHint(params.prjText)}
           mapping={params.mapping}
           geometry={params.geometry}
           uploadId={params.uploadId}
+          startRun={startShpRun}
         />
       ),
       onBack: () => params.goToStep(5),
