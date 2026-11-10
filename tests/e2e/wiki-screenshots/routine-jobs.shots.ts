@@ -19,7 +19,8 @@ async function shot(page: Page, name: string): Promise<void> {
 
 async function openStage(page: Page, title: string): Promise<void> {
   await page.goto(TOOL_URL);
-  await page.getByRole("button", { name: "Abrir" }).click();
+  const jobCard = page.locator("article").filter({ has: page.getByRole("heading", { name: "Carga de padrones", exact: true }) });
+  await jobCard.getByRole("button", { name: "Abrir" }).click();
   await page.getByLabel("Servidor", { exact: true }).fill(FAKE_CONNECTION.host);
   await page.getByLabel("Base de datos", { exact: true }).fill(FAKE_CONNECTION.db_name);
   await page.getByLabel("Usuario", { exact: true }).fill(FAKE_CONNECTION.user);
