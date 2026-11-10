@@ -1,4 +1,4 @@
-# Routine jobs: Actualización mensual de carto (staged job)
+# Routine jobs: Carga de padrones, formerly Actualización mensual de carto (staged job)
 
 Replaces the separate dashboard jobs "Cargar padrones" and "Actualizar padrones" with ONE job made of ordered stages. Stage logic, SQL and reports stay as specified in:
 - `ROUTINE_JOBS_CARGAR_PADRONES_SPEC.md` (stage 1)
@@ -24,7 +24,7 @@ unidades" / "Enlazar direcciones maestras de los padrones"), so no address maste
 
 ## Requirements
 
-- MJ-1: One dashboard entry "Actualización mensual de carto"; the two old entries and wizards are removed.
+- MJ-1: One dashboard entry "Carga de padrones" (renamed from "Actualización mensual de carto"; the job id `actualizacion-mensual-carto` is unchanged); the two old entries and wizards are removed.
 - MJ-2: One wizard. Step "Conexión" asks host, port, database, user, password once (saved-connection profile selector); the connection is shared by every stage.
 - MJ-3: After the connection, a stage hub lists the stages in order with status (pending, done this session, failed). Any stage can be opened; a stage whose precondition is unmet shows why it is blocked.
 - MJ-4: Each stage asks for its own schema(s) and tables when opened, never up front.
