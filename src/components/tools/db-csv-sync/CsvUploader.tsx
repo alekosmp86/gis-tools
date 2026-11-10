@@ -17,7 +17,7 @@ const SpatialMapPreview = dynamic(
 );
 
 interface CsvUploaderProps {
-  onSuccess: (data: ParsedFileDataset) => void;
+  onSuccess: (data: ParsedFileDataset, file: File) => void;
   onDiscard: () => void;
   loadedData?: ParsedFileDataset | null;
 }
