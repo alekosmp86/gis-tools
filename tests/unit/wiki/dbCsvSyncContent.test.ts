@@ -11,7 +11,7 @@ import { MarkdownRenderer } from "@/ui-kit/components/wiki/MarkdownRenderer";
 
 const TOOL = "db-csv-sync";
 const IMAGES_DIR = path.join(process.cwd(), "src", "wiki", TOOL, "images");
-const EXPECTED_PAGES = ["index", "base-de-datos", "archivo-csv", "comparar", "preguntas-frecuentes"];
+const EXPECTED_PAGES = ["index", "base-de-datos", "archivo-csv", "comparar", "reemplazo-completo", "preguntas-frecuentes"];
 
 function render(page: WikiPage): string {
   return renderToStaticMarkup(React.createElement(MarkdownRenderer, { body: page.body, toolSlug: TOOL }));
@@ -26,7 +26,7 @@ describe("db-csv-sync wiki content", () => {
     pages = index.findTool(TOOL)?.pages ?? [];
   });
 
-  it("should expose exactly the five real pages in reading order", () => {
+  it("should expose exactly the six real pages in reading order", () => {
     expect(pages.map((p) => p.slug)).toEqual(EXPECTED_PAGES);
   });
 

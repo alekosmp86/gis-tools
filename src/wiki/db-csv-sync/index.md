@@ -16,9 +16,11 @@ Se abre desde el portal, en la tarjeta **Sincronización de Datos DB vs. CSV**.
 - El CSV trae geometrías (en texto WKT, en EWKB hexadecimal o como columnas de latitud/longitud) y quiere compararlas también.
 
 > [!NOTE]
-> La herramienta **no elimina datos**: los registros que existen solo en la base se informan, pero no se borran. Los parches solo actualizan e insertan, y solo se ejecutan cuando usted lo decide.
+> En el modo **Comparar** la herramienta **no elimina datos**: los registros que existen solo en la base se informan, pero no se borran. Los parches solo actualizan e insertan, y solo se ejecutan cuando usted lo decide. El modo **Reemplazo completo** sí borra todos los registros de la tabla destino (vea más abajo).
 
-Si necesita comparar dos tablas de bases de datos en lugar de un archivo, use [Sincronización DB vs. DB](/wiki/db-db-sync). Si necesita **vaciar y recargar** una tabla completa, esa opción existe en esa herramienta (*Reemplazo completo*), no en esta.
+Si necesita comparar dos tablas de bases de datos en lugar de un archivo, use [Sincronización DB vs. DB](/wiki/db-db-sync).
+
+Si necesita **vaciar y recargar** una tabla completa con el contenido del CSV (por ejemplo, una tabla de trabajo que debe quedar igual al archivo), use el modo **Reemplazo completo**: vea [Modo Reemplazo completo](reemplazo-completo.md).
 
 ## Qué necesita antes de empezar
 
@@ -39,9 +41,12 @@ Si necesita comparar dos tablas de bases de datos en lugar de un archivo, use [S
 | 4 | Parámetros | Ajustar la tolerancia de codificación, la optimización de `UPDATE` y los valores por defecto. |
 | 5 | Resultados | Revisar discrepancias, ver el mapa y aplicar los parches SQL. |
 
+Después de cargar el archivo, la pantalla ofrece un paso **Modo** para elegir entre **Comparar** (los pasos de arriba, que pasan a numerarse 4 a 6) y **Reemplazo completo** (mapeo de columnas y confirmación, pasos 4 y 5).
+
 ## Siguientes páginas
 
 1. [Paso 1: conectar la base de datos](base-de-datos.md)
 2. [Paso 2: preparar y cargar el archivo CSV](archivo-csv.md)
 3. [Pasos 3 a 5: comparar y aplicar los parches](comparar.md)
-4. [Preguntas frecuentes y problemas comunes](preguntas-frecuentes.md)
+4. [Modo Reemplazo completo: vaciar y recargar la tabla con el CSV](reemplazo-completo.md)
+5. [Preguntas frecuentes y problemas comunes](preguntas-frecuentes.md)

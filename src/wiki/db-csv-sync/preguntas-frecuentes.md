@@ -1,6 +1,6 @@
 ---
 title: "Preguntas frecuentes y problemas comunes"
-order: 5
+order: 6
 ---
 
 # Preguntas frecuentes y problemas comunes
