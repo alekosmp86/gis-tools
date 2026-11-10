@@ -11,6 +11,8 @@ import styles from "./WizardSteps.module.css";
 
 const SCHEMA_LABEL = "Esquema";
 const SCHEMA_HINT = "Escriba el esquema que contiene las tablas y después elija cada una.";
+const STAGING_REQUIRED_MESSAGE =
+  "Las tablas de staging catastro_paisrural y catastro_paisurbano deben estar cargadas antes de cargar los padrones.";
 const CATALOG_ERROR_MESSAGE = "No se pudo consultar la base. Revise servidor, puerto, usuario y contraseña en el paso 1.";
 
 const SELECTORS: ReadonlyArray<{ role: TableRole; label: string }> = [
@@ -51,6 +53,7 @@ export const TablesStep: React.FC<TablesStepProps> = ({
 }) => {
   return (
     <div className={styles.stack}>
+      <AlertMessage type={AlertType.WARNING} text={STAGING_REQUIRED_MESSAGE} />
       <div className={styles.schemaBlock}>
         <SchemaDraftField label={SCHEMA_LABEL} initial={schema} committed={committedSchema} onCommit={onSchemaCommit} />
         <p className={styles.schemaHint}>{SCHEMA_HINT}</p>

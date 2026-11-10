@@ -9,6 +9,9 @@ Esta etapa carga el padrón a partir de las dos tablas catastrales de origen, la
 
 Antes de empezar, las tablas rural y urbana (`pais*`) tienen que estar cargadas en la base con la herramienta de sincronización de shapefiles en modo de reemplazo.
 
+> [!WARNING]
+> Las tablas de staging `catastro_paisrural` y `catastro_paisurbano` **deben estar cargadas antes** de cargar los padrones: el padrón se genera a partir de ellas. Complete ese paso primero.
+
 > [!NOTE]
 > Esta etapa unifica las claves duplicadas del padrón en la tabla de staging. Las etapas siguientes (cargar localidades y actualizar padrones) deben leer **la tabla de staging**, no la tabla original `catastro_paispadron`.
 
