@@ -1,11 +1,11 @@
 ---
-title: "Actualización mensual de carto"
+title: "Carga de padrones"
 order: 1
 ---
 
-# Actualización mensual de carto
+# Carga de padrones
 
-Esta herramienta reúne los trabajos de base de datos que se repiten cada mes. Hoy tiene un solo trabajo, **Actualización mensual de carto**, que lleva los datos del catastro a las tablas de carto en **etapas ordenadas**. Cada etapa tiene su propio asistente y su propio informe.
+Esta herramienta reúne los trabajos de base de datos que se repiten cada mes. Su trabajo principal es **Carga de padrones**, que lleva los datos del catastro a las tablas de carto en **etapas ordenadas**. Cada etapa tiene su propio asistente y su propio informe.
 
 Se abre desde el portal, en la tarjeta **Trabajos de rutina**, o desde el menú. **Cargas de Coberturas** también se abre desde esta lista de Trabajos de rutina (y sigue teniendo su propia página). La página lista los trabajos; con **Abrir** se entra al trabajo y con **Volver a la lista** se regresa.
 

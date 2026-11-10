@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/RoutineJobsDashboard";
 import { MONTHLY_CARTO_JOB_ID, ROUTINE_JOBS } from "@/modules/routine-jobs/ui/jobs";
 
-const MONTHLY_TITLE = "Actualización mensual de carto";
+const MONTHLY_TITLE = "Carga de padrones";
 
 const renderDashboard = (props: { selectedJobId?: string } = {}): string =>
   renderToStaticMarkup(React.createElement(RoutineJobsDashboard, props));

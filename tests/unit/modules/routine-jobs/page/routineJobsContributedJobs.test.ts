@@ -5,7 +5,7 @@ import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/RoutineJobsDashb
 import { ModuleContributionsProvider } from "@/ui-kit/modules/ModuleContributionsContext";
 import { UiSlot } from "@/ui-kit/modules/contracts";
 
-const MONTHLY_TITLE = "Actualización mensual de carto";
+const MONTHLY_TITLE = "Carga de padrones";
 const JOB_ID = "x.job";
 
 const Job: React.FC = () => React.createElement("span", null, "contributed-body");
