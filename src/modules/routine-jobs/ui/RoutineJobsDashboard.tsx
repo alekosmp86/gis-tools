@@ -9,7 +9,8 @@ import { useModuleContributions } from "@/ui-kit/modules/ModuleContributionsCont
 import { ModuleErrorBoundary } from "@/ui-kit/modules/ModuleErrorBoundary";
 import { UiSlot } from "@/ui-kit/modules/contracts";
 import { MonthlyCartoUpdate } from "./MonthlyCartoUpdate";
-import { MONTHLY_CARTO_JOB_ID, ROUTINE_JOBS, type RoutineJob } from "./jobs";
+import { EjesCallesWizard } from "./EjesCallesWizard";
+import { EJES_CALLES_JOB_ID, MONTHLY_CARTO_JOB_ID, ROUTINE_JOBS, type RoutineJob } from "./jobs";
 import styles from "./RoutineJobsDashboard.module.css";
 
 const PAGE_TITLE = "Trabajos de rutina";
@@ -22,6 +23,7 @@ const NO_JOB = "";
 /** The wizard behind each job id. A job without an entry here shows only its list row. */
 const JOB_VIEWS: Partial<Record<string, React.FC>> = {
   [MONTHLY_CARTO_JOB_ID]: MonthlyCartoUpdate,
+  [EJES_CALLES_JOB_ID]: EjesCallesWizard,
 };
 
 const LAST = Number.MAX_SAFE_INTEGER;

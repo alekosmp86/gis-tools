@@ -3,6 +3,8 @@ import type { CargarPadronesResult } from "../jobs/cargar-padrones/types";
 import type { AcceptedGeometry, ActualizarPadronResult, GeometryMapItem, PairChoice } from "../jobs/actualizar-padron/types";
 import type { CargarLocalidadesResult, LocalityOptions, LocalityTableRef } from "../jobs/cargar-localidades/types";
 import type { UnitAddressMasterTable, UnitResult } from "../jobs/unidad-territorial/types";
+import type { EjesTableRole } from "../jobs/ejes-calles/constants";
+import type { EjesResult, EjesTableRef } from "../jobs/ejes-calles/types";
 
 export type JobOptions = LoadOptions;
 
@@ -130,3 +132,11 @@ export interface UnidadStartRequest {
 }
 
 export type UnidadJobStatusView = JobStatusBase<UnitResult>;
+
+export interface EjesStartRequest {
+  connection: ClientConnection;
+  tables: Record<EjesTableRole, EjesTableRef>;
+  dryRun: boolean;
+}
+
+export type EjesJobStatusView = JobStatusBase<EjesResult>;

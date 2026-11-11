@@ -14,8 +14,8 @@ const renderDashboard = (props: { selectedJobId?: string } = {}): string =>
 const countOf = (html: string, needle: string): number => html.split(needle).length - 1;
 
 describe("ROUTINE_JOBS", () => {
-  it("AP-35: should list the single Carga de padrones job", () => {
-    expect(ROUTINE_JOBS).toHaveLength(1);
+  it("AP-35: should list Carga de padrones first, then Carga de ejes de calles", () => {
+    expect(ROUTINE_JOBS).toHaveLength(2);
     expect(ROUTINE_JOBS[0].id).toBe("actualizacion-mensual-carto");
     expect(ROUTINE_JOBS[0].title).toBe("Carga de padrones");
   });

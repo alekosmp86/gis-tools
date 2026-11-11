@@ -4,10 +4,13 @@ import type { ActualizarTableRole } from "../jobs/actualizar-padron/constants";
 import type { GeometryMapFeature } from "../jobs/actualizar-padron/types";
 import type { LocalidadesTableRole } from "../jobs/cargar-localidades/constants";
 import type { UnitTableRole } from "../jobs/unidad-territorial/constants";
+import type { EjesTableRole } from "../jobs/ejes-calles/constants";
 import type {
   ActualizarJobStatusView,
   ActualizarStartRequest,
   ClientConnection,
+  EjesJobStatusView,
+  EjesStartRequest,
   GeometryMapRequest,
   JobStatusView,
   LocalidadesJobStatusView,
@@ -28,6 +31,8 @@ const LOCALIDADES_START_ROUTE = `${BASE_ROUTE}/cargar-localidades/start`;
 const LOCALIDADES_STATUS_ROUTE = `${BASE_ROUTE}/cargar-localidades/status`;
 const UNIDAD_START_ROUTE = `${BASE_ROUTE}/unidad-territorial/start`;
 const UNIDAD_STATUS_ROUTE = `${BASE_ROUTE}/unidad-territorial/status`;
+const EJES_START_ROUTE = `${BASE_ROUTE}/ejes-calles/start`;
+const EJES_STATUS_ROUTE = `${BASE_ROUTE}/ejes-calles/status`;
 const ACTUALIZAR_BACKUP_ROUTE = `${BASE_ROUTE}/actualizar-padron/backup`;
 const ACTUALIZAR_PENDING_CSV_ROUTE = `${BASE_ROUTE}/actualizar-padron/pending-csv`;
 const ACTUALIZAR_GEOMETRIES_ROUTE = `${BASE_ROUTE}/actualizar-padron/geometries`;
@@ -42,7 +47,7 @@ const STATUS_TIMEOUT_MESSAGE = "La consulta del estado tardó demasiado tiempo. 
 type JsonRecord = Record<string, unknown>;
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-export type ColumnRole = TableRole | ActualizarTableRole | LocalidadesTableRole | UnitTableRole;
+export type ColumnRole = TableRole | ActualizarTableRole | LocalidadesTableRole | UnitTableRole | EjesTableRole;
 
 export interface RoutineJobsClientDeps {
   fetch?: FetchLike;
@@ -65,6 +70,8 @@ export interface RoutineJobsClient {
   readLocalidadesStatus(jobId: string): Promise<LocalidadesJobStatusView>;
   startUnidad(request: UnidadStartRequest): Promise<StartResult>;
   readUnidadStatus(jobId: string): Promise<UnidadJobStatusView>;
+  startEjes(request: EjesStartRequest): Promise<StartResult>;
+  readEjesStatus(jobId: string): Promise<EjesJobStatusView>;
   fetchActualizarBackup(token: string): Promise<Blob>;
   fetchPendingGeometryCsv(planId: string): Promise<Blob>;
   fetchGeometryMap(request: GeometryMapRequest): Promise<GeometryMapFeature[]>;
@@ -216,6 +223,10 @@ export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): Routi
     startUnidad: (request) => postStart(fetchImpl, UNIDAD_START_ROUTE, request),
 
     readUnidadStatus: (jobId) => readJobStatus<UnidadJobStatusView>(fetchImpl, timers, UNIDAD_STATUS_ROUTE, jobId),
+
+    startEjes: (request) => postStart(fetchImpl, EJES_START_ROUTE, request),
+
+    readEjesStatus: (jobId) => readJobStatus<EjesJobStatusView>(fetchImpl, timers, EJES_STATUS_ROUTE, jobId),
 
     async fetchActualizarBackup(token) {
       const url = `${ACTUALIZAR_BACKUP_ROUTE}?token=${encodeURIComponent(token)}`;
