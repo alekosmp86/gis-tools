@@ -28,7 +28,7 @@ function stagingRowsCte(layout: TableLayout, textColumns: readonly string[]): st
 
 const countWhere = (condition: string): string => `(SELECT count(*) FROM ${q(ROWS_CTE)} WHERE ${condition})`;
 
-export const bySubsistemaSql = (source: string, subsistemaColumn: string, alias: string): string =>
+const bySubsistemaSql = (source: string, subsistemaColumn: string, alias: string): string =>
   jsonArrayOf(
     `SELECT x.${subsistemaColumn}::text AS "value", count(*) AS "rows" FROM ${source} AS x GROUP BY x.${subsistemaColumn} ORDER BY x.${subsistemaColumn} NULLS LAST`,
     alias

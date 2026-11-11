@@ -19,6 +19,105 @@ interface WatchedSourceCardProps {
   onRemove: (sourceId: string) => void;
 }
 
+const CardBadge: React.FC<{ isDirect: boolean; summary?: SourceSummary }> = ({ isDirect, summary }) => {
+  if (isDirect) return <SourceStatusBadge status={SourceBadgeState.ON_DEMAND} />;
+  if (summary) return <SourceStatusBadge status={summary.status} />;
+  return <span className={styles.pendingLabel}>Consultando...</span>;
+};
+
+const Metric: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className={styles.metric}>
+    <dt className={styles.metricLabel}>{label}</dt>
+    <dd className={styles.metricValue}>{value}</dd>
+  </div>
+);
+
+const SourceMetrics: React.FC<{ summary?: SourceSummary }> = ({ summary }) => (
+  <dl className={styles.metrics}>
+    <Metric label="Recursos" value={summary?.totalResources ?? "—"} />
+    <Metric label="Novedades" value={summary ? describePendingCount(summary.pendingCount) : "—"} />
+    <Metric label="Última consulta" value={summary ? formatPublicationDate(summary.checkedAt) : "—"} />
+  </dl>
+);
+
+const SourceWarnings: React.FC<{ warnings: readonly string[] }> = ({ warnings }) => (
+  <>
+    {warnings.map((warning) => (
+      <p key={warning} className={styles.warningMessage}>
+        <AlertTriangle size={14} />
+        {warning}
+      </p>
+    ))}
+  </>
+);
+
+interface CardActionsProps {
+  source: WatchedSource;
+  isDirect: boolean;
+  isBusy: boolean;
+  onEdit: () => void;
+  onRemove: (sourceId: string) => void;
+}
+
+const CardActions: React.FC<CardActionsProps> = ({ source, isDirect, isBusy, onEdit, onRemove }) => (
+  <div className={styles.actionsGroup}>
+    <button type="button" className={styles.editButton} onClick={onEdit} disabled={isBusy}>
+      <Pencil size={14} />
+      Editar
+    </button>
+
+    {!source.isDefault && (
+      <button type="button" className={styles.removeButton} onClick={() => onRemove(source.id)} disabled={isBusy}>
+        <Trash2 size={14} />
+        {isDirect ? "Eliminar" : "Dejar de vigilar"}
+      </button>
+    )}
+  </div>
+);
+
+interface CardBodyProps {
+  source: WatchedSource;
+  summary?: SourceSummary;
+  isDirect: boolean;
+  isEditing: boolean;
+  isUpdating: boolean;
+  portalUrl: string;
+  onSubmit: (changes: SourceEditChanges) => Promise<void>;
+  onCancel: () => void;
+}
+
+const CardBody: React.FC<CardBodyProps> = ({
+  source,
+  summary,
+  isDirect,
+  isEditing,
+  isUpdating,
+  portalUrl,
+  onSubmit,
+  onCancel,
+}) => {
+  if (isEditing) {
+    return (
+      <EditSourceForm
+        initialUrl={portalUrl}
+        initialTitle={isDirect ? source.title : undefined}
+        isSubmitting={isUpdating}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+      />
+    );
+  }
+  if (isDirect) {
+    return (
+      <p className={styles.host}>
+        <Globe size={14} />
+        {source.portalHost}
+      </p>
+    );
+  }
+  return <SourceMetrics summary={summary} />;
+};
+
 export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
   source,
   summary,
@@ -33,71 +132,33 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
     : `https://${source.portalHost}/dataset/${source.datasetSlug}`;
   const [isEditing, setIsEditing] = useState(false);
 
-  const handleStartEditing = () => {
-    setIsEditing(true);
+  const handleSubmit = async (changes: SourceEditChanges) => {
+    // Closing only after the await resolves is what keeps a rejected edit on screen.
+    await onUpdate(source.id, changes);
+    setIsEditing(false);
   };
 
   return (
     <article className={`glass-panel ${styles.card}`}>
       <header className={styles.header}>
         <h3 className={styles.title}>{source.title}</h3>
-        {isDirect ? (
-          <SourceStatusBadge status={SourceBadgeState.ON_DEMAND} />
-        ) : summary ? (
-          <SourceStatusBadge status={summary.status} />
-        ) : (
-          <span className={styles.pendingLabel}>Consultando...</span>
-        )}
+        <CardBadge isDirect={isDirect} summary={summary} />
       </header>
 
       {source.description && <p className={styles.description}>{source.description}</p>}
 
-      {isEditing ? (
-        <EditSourceForm
-          initialUrl={portalUrl}
-          initialTitle={isDirect ? source.title : undefined}
-          isSubmitting={isUpdating}
-          onSubmit={async (changes) => {
-            // Closing only after the await resolves is what keeps a rejected edit on screen.
-            await onUpdate(source.id, changes);
-            setIsEditing(false);
-          }}
-          onCancel={() => setIsEditing(false)}
-        />
-      ) : isDirect ? (
-        <p className={styles.host}>
-          <Globe size={14} />
-          {source.portalHost}
-        </p>
-      ) : (
-        <dl className={styles.metrics}>
-          <div className={styles.metric}>
-            <dt className={styles.metricLabel}>Recursos</dt>
-            <dd className={styles.metricValue}>{summary?.totalResources ?? "—"}</dd>
-          </div>
-          <div className={styles.metric}>
-            <dt className={styles.metricLabel}>Novedades</dt>
-            <dd className={styles.metricValue}>
-              {summary ? describePendingCount(summary.pendingCount) : "—"}
-            </dd>
-          </div>
-          <div className={styles.metric}>
-            <dt className={styles.metricLabel}>Última consulta</dt>
-            <dd className={styles.metricValue}>
-              {summary ? formatPublicationDate(summary.checkedAt) : "—"}
-            </dd>
-          </div>
-        </dl>
-      )}
+      <CardBody
+        source={source}
+        summary={summary}
+        isDirect={isDirect}
+        isEditing={isEditing}
+        isUpdating={isUpdating}
+        portalUrl={portalUrl}
+        onSubmit={handleSubmit}
+        onCancel={() => setIsEditing(false)}
+      />
 
-      {isDirect &&
-        !isEditing &&
-        (source.warnings ?? []).map((warning) => (
-          <p key={warning} className={styles.warningMessage}>
-            <AlertTriangle size={14} />
-            {warning}
-          </p>
-        ))}
+      {isDirect && !isEditing && <SourceWarnings warnings={source.warnings ?? []} />}
 
       {summary?.status === SourceBadgeState.ERROR && summary.errorMessage && (
         <p className={styles.errorMessage}>{summary.errorMessage}</p>
@@ -107,40 +168,19 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
         {isDirect ? (
           <span />
         ) : (
-          <a
-            className={styles.portalLink}
-            href={portalUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
+          <a className={styles.portalLink} href={portalUrl} target="_blank" rel="noreferrer noopener">
             <ExternalLink size={14} />
             Ver en el portal
           </a>
         )}
 
-        <div className={styles.actionsGroup}>
-          <button
-            type="button"
-            className={styles.editButton}
-            onClick={handleStartEditing}
-            disabled={isUpdating || isRemoving}
-          >
-            <Pencil size={14} />
-            Editar
-          </button>
-
-          {!source.isDefault && (
-            <button
-              type="button"
-              className={styles.removeButton}
-              onClick={() => onRemove(source.id)}
-              disabled={isRemoving || isUpdating}
-            >
-              <Trash2 size={14} />
-              {isDirect ? "Eliminar" : "Dejar de vigilar"}
-            </button>
-          )}
-        </div>
+        <CardActions
+          source={source}
+          isDirect={isDirect}
+          isBusy={isUpdating || isRemoving}
+          onEdit={() => setIsEditing(true)}
+          onRemove={onRemove}
+        />
       </footer>
     </article>
   );

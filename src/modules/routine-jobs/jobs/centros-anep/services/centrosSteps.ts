@@ -76,6 +76,8 @@ async function readAnalysis(
   timer: StepTimer
 ): Promise<{ staging: CentrosStagingReport; comparison: CentrosComparison; current: CentrosFinalCounts }> {
   const staging = await timer.run(CENTROS_STEP.STAGING, () => readStagingReport(session, resolved));
+  // One pg client: reads are awaited in turn, so they never overlap.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const current = await timer.run(CENTROS_STEP.COMPARE, () => readFinalCounts(session, resolved));
   return { staging, current, comparison: compareWithFinal(current, staging) };
 }
@@ -90,7 +92,10 @@ async function replaceBody(session: RunSession, resolved: CentrosResolved, timer
   await timer.run(CENTROS_STEP.LOCK, () => session.query(buildLockFinalSql(resolved.final)));
   const { staging, current, comparison } = await readAnalysis(session, resolved, timer);
   throwIfIssues(stagingBlockersOf(staging));
+  // One transaction on one pg client: backup, delete and insert must run in order.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await, react-doctor/async-parallel
   const backup = await timer.run(CENTROS_STEP.BACKUP, () => writeCentrosRevertBackup(session, resolved.final, current.rows));
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await, react-doctor/async-parallel
   const deleted = await timer.run(CENTROS_STEP.DELETE, () =>
     readWrittenCount(session, buildDeleteFinalSql(resolved.final), "deleted")
   );

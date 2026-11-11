@@ -21,6 +21,20 @@ const DESTRUCTIVE_WARNING =
   "La carga real vacía la tabla final con DELETE y la vuelve a llenar con los datos de staging, en una sola transacción. Antes de escribir se genera un respaldo para revertir.";
 const ICON_SIZE = 15;
 
+const ActionLabel: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
+  <>
+    {icon}
+    <span>{label}</span>
+  </>
+);
+
+const SummaryRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <>
+    <dt>{label}</dt>
+    <dd>{value}</dd>
+  </>
+);
+
 export interface CentrosAnepReviewStepProps {
   request: CentrosAnepStartRequest;
   acknowledged: boolean;
@@ -50,17 +64,15 @@ export const CentrosAnepReviewStep: React.FC<CentrosAnepReviewStepProps> = ({
   return (
     <div className={styles.stack}>
       <dl className={styles.summary}>
-        <dt>Servidor</dt>
-        <dd>{`${connection.host}:${connection.port}`}</dd>
-        <dt>Base de datos</dt>
-        <dd>{connection.db_name}</dd>
-        <dt>Usuario</dt>
-        <dd>{connection.user}</dd>
+        <SummaryRow label="Servidor" value={`${connection.host}:${connection.port}`} />
+        <SummaryRow label="Base de datos" value={connection.db_name} />
+        <SummaryRow label="Usuario" value={connection.user} />
         {CENTROS_ROLES.map((role) => (
-          <React.Fragment key={role}>
-            <dt>{CENTROS_ROLE_TITLES[role]}</dt>
-            <dd>{`${tables[role].schema}.${tables[role].table}`}</dd>
-          </React.Fragment>
+          <SummaryRow
+            key={role}
+            label={CENTROS_ROLE_TITLES[role]}
+            value={`${tables[role].schema}.${tables[role].table}`}
+          />
         ))}
       </dl>
 
@@ -84,12 +96,10 @@ export const CentrosAnepReviewStep: React.FC<CentrosAnepReviewStepProps> = ({
       {runBlockedReason !== null && <AlertMessage type={AlertType.WARNING} text={runBlockedReason} />}
       <div className={styles.actions}>
         <Button variant={ButtonVariant.SECONDARY} isDisabled={blocked || !canAnalyze} onClick={onAnalyze}>
-          <Search size={ICON_SIZE} />
-          <span>Analizar</span>
+          <ActionLabel icon={<Search size={ICON_SIZE} />} label="Analizar" />
         </Button>
         <Button isDisabled={blocked || !canLoad} onClick={onLoad}>
-          <DatabaseZap size={ICON_SIZE} />
-          <span>Cargar ahora</span>
+          <ActionLabel icon={<DatabaseZap size={ICON_SIZE} />} label="Cargar ahora" />
         </Button>
       </div>
     </div>
