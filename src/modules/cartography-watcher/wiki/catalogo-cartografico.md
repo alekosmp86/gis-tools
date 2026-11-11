@@ -29,6 +29,13 @@ Si una fuente no publica ningún archivo de ese tipo, aparece en la lista con el
    - una marca **En caché** si ya está descargado.
 5. El archivo se descarga y se carga en la herramienta, como si lo hubiera subido desde su PC. A partir de ahí, siga con los pasos normales de la herramienta.
 
+## URL directa en el catálogo
+
+Las fuentes de tipo **URL directa** (por ejemplo, la capa de centros de ANEP de IDEuy) aparecen como un grupo con un único archivo `<título>.zip`, de formato `SHP`, sin tamaño ni fecha conocidos. Solo se listan en **DB vs. Shapefile**. Al elegirlas, el servidor descarga el ZIP desde la URL y lo entrega a la herramienta.
+
+> [!NOTE]
+> Ese archivo **se descarga en cada uso y nunca se guarda** en el servidor, por lo que no lleva la marca **En caché**. Si el servicio no responde, no devuelve un ZIP o el ZIP no trae un shapefile completo, aparece el motivo arriba de la lista. Si falta el `.prj`, la herramienta pedirá el SRID al cargar.
+
 ## Qué ve mientras se descarga
 
 - En la fila del archivo aparece **Descargando...** y, cuando el tamaño es conocido, el porcentaje (por ejemplo `42%`).
