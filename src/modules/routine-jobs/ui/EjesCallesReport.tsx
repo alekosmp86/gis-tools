@@ -34,6 +34,10 @@ const REMOVAL_COLUMNS: TableColumn<EjesRemovalRow>[] = [
 const STREET_COLUMNS: TableColumn<EjesNewStreetRow>[] = [
   { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
   { header: "Nombre", cell: (row) => textOrNoData(row.name) },
+  { header: "Nombre corto", cell: (row) => textOrNoData(row.shortName) },
+  { header: "Departamento", cell: (row) => textOrNoData(row.departments) },
+  { header: "Localidad", cell: (row) => textOrNoData(row.localities) },
+  { header: "Tipo de vía", cell: (row) => textOrNoData(row.tipos) },
   { header: "Tramos nuevos", cell: (row) => String(row.sections) },
 ];
 

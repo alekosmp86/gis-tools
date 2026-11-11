@@ -107,6 +107,11 @@ describe("buildEjesAnalysisSql", () => {
       expect(sql).toContain('AS "plain_held"');
     });
 
+    it("should describe each new street with its departments, localities and type", () => {
+      for (const alias of ["tipos", "departments", "localities"]) expect(sql).toContain(`AS "${alias}"`);
+      expect(sql).toContain("string_agg(DISTINCT c.localidad");
+    });
+
     it("should report access points of each removed section", () => {
       expect(sql).toContain('LEFT JOIN "ap" AS ap ON ap.ref = s.ref');
       expect(sql).toContain("count(*) AS points");

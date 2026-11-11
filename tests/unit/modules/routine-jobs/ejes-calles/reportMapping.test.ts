@@ -62,7 +62,16 @@ describe("toEjesAnalysis", () => {
       [ANALYSIS_LIST_ALIAS.SPLITS]: [{ old_ref: 10, idcalle: "5", new_refs: ["11", "12"], points: "3", coverage: 0.98 }],
       [ANALYSIS_LIST_ALIAS.MERGES]: [{ new_ref: "20", idcalle: "6", old_refs: ["21", "22"], points: 0, coverage: null }],
       [ANALYSIS_LIST_ALIAS.PLAIN]: [{ ref: "30", idcalle: null, points: 2 }],
-      [ANALYSIS_LIST_ALIAS.STREETS]: [{ idcalle: "7", name: "Rivera", sections: 2 }],
+      [ANALYSIS_LIST_ALIAS.STREETS]: [
+        {
+          idcalle: "7",
+          name: "Rivera",
+          sections: 2,
+          tipos: "CALLE",
+          departments: "RIVERA",
+          localities: "VICHADERO",
+        },
+      ],
       [ANALYSIS_LIST_ALIAS.ATTRS]: [
         {
           ref: "40",
@@ -97,7 +106,17 @@ describe("toEjesAnalysis", () => {
       { newRef: "20", idcalle: "6", oldRefs: ["21", "22"], points: 0, coverage: null },
     ]);
     expect(analysis.plainRemovals).toEqual([{ ref: "30", idcalle: null, points: 2 }]);
-    expect(analysis.newStreets).toEqual([{ idcalle: "7", name: "Rivera", sections: 2 }]);
+    expect(analysis.newStreets).toEqual([
+      {
+        idcalle: "7",
+        name: "Rivera",
+        shortName: "Rivera",
+        sections: 2,
+        tipos: "CALLE",
+        departments: "RIVERA",
+        localities: "VICHADERO",
+      },
+    ]);
     expect(analysis.attrChanges[0]).toMatchObject({
       ref: "40",
       name: "A",

@@ -1,4 +1,5 @@
 import { listOf, nullableNumber, numberOf, textOf, type Row } from "../../shared/rowMapping";
+import { shortNameOf } from "./shortName";
 import { ANALYSIS_LIST_ALIAS } from "./analysisSql";
 import type {
   EjesAnalysis,
@@ -37,11 +38,18 @@ const removalOf = (row: Row): EjesRemovalRow => ({
   points: numberOf(row.points),
 });
 
-const streetOf = (row: Row): EjesNewStreetRow => ({
-  idcalle: textOf(row.idcalle),
-  name: textOf(row.name),
-  sections: numberOf(row.sections),
-});
+const streetOf = (row: Row): EjesNewStreetRow => {
+  const name = textOf(row.name);
+  return {
+    idcalle: textOf(row.idcalle),
+    name,
+    shortName: name === null ? null : shortNameOf(name),
+    sections: numberOf(row.sections),
+    tipos: textOf(row.tipos),
+    departments: textOf(row.departments),
+    localities: textOf(row.localities),
+  };
+};
 
 const attrOf = (row: Row): EjesAttrRow => ({
   ref: String(row.ref),

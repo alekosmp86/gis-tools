@@ -62,6 +62,7 @@ function stagingCtes(layouts: EjesLayouts): string[] {
         `${trimmed(column(STAGING_COLUMN.TIPO_VIALIDAD))} AS tipo,`,
         `${trimmed(column(STAGING_COLUMN.FUENTE))} AS fuente,`,
         `${trimmed(column(STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
+        `${trimmed(column(STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `${geometry} AS geom`,
         `FROM ${staging} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry})`,
         `AND ${reference} ~ '${INTEGER_PATTERN}') AS raw ORDER BY raw.ref`,
@@ -105,7 +106,7 @@ function classifiedCtes(): string[] {
     cte(
       "matched",
       [
-        "SELECT s.ref, s.idcalle, s.nombre, s.geom, s.departamento,",
+        "SELECT s.ref, s.idcalle, s.nombre, s.geom, s.departamento, s.localidad, s.tipo, s.fuente,",
         "c.id AS cur_id, c.idcalle AS cur_idcalle, w.name AS cur_name, c.type_id AS cur_type_id, c.font_id AS cur_font_id, c.geometry AS cur_geometry,",
         "tm.id::text AS new_type_id, fm.id::text AS new_font_id",
         `FROM ${q("stg")} AS s`,
@@ -186,7 +187,7 @@ function remainderCtes(): string[] {
     ),
     cte(
       "new_streets",
-      `SELECT c.idcalle, c.nombre AS name, count(*) AS sections FROM ${q("classified")} AS c WHERE c.is_new AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle IS NOT DISTINCT FROM c.idcalle AND p.name IS NOT DISTINCT FROM c.nombre) GROUP BY c.idcalle, c.nombre`
+      `SELECT c.idcalle, c.nombre AS name, count(*) AS sections, string_agg(DISTINCT c.tipo, ', ') AS tipos, string_agg(DISTINCT c.departamento, ', ') AS departments, string_agg(DISTINCT c.localidad, ', ') AS localities FROM ${q("classified")} AS c WHERE c.is_new AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle IS NOT DISTINCT FROM c.idcalle AND p.name IS NOT DISTINCT FROM c.nombre) GROUP BY c.idcalle, c.nombre`
     ),
   ];
 }
@@ -225,7 +226,7 @@ function listColumns(): string[] {
   const splitSelect = `SELECT s.ref AS "old_ref", s.idcalle AS "idcalle", s.new_refs AS "new_refs", COALESCE(ap.points, 0) AS "points", s.covered / NULLIF(s.len, 0) AS "coverage" FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref ORDER BY s.ref`;
   const mergeSelect = `SELECT m.new_ref AS "new_ref", m.idcalle AS "idcalle", m.old_refs AS "old_refs", m.points AS "points", m.coverage AS "coverage" FROM ${q("merges")} AS m ORDER BY m.new_ref`;
   const plainSelect = `SELECT p.ref AS "ref", p.idcalle AS "idcalle", COALESCE(ap.points, 0) AS "points" FROM ${q("plain")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.ref ORDER BY COALESCE(ap.points, 0) DESC, p.ref`;
-  const streetSelect = `SELECT n.idcalle AS "idcalle", n.name AS "name", n.sections AS "sections" FROM ${q("new_streets")} AS n ORDER BY n.idcalle, n.name`;
+  const streetSelect = `SELECT n.idcalle AS "idcalle", n.name AS "name", n.sections AS "sections", n.tipos AS "tipos", n.departments AS "departments", n.localities AS "localities" FROM ${q("new_streets")} AS n ORDER BY n.idcalle, n.name`;
   const attrSelect = [
     'SELECT c.ref AS "ref", c.nombre AS "name", c.cur_name AS "current_name", c.idcalle AS "idcalle", c.cur_idcalle AS "current_idcalle",',
     'c.new_type_id AS "type_id", c.cur_type_id AS "current_type_id", c.new_font_id AS "font_id", c.cur_font_id AS "current_font_id"',

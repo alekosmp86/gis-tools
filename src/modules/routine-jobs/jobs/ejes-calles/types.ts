@@ -84,7 +84,11 @@ export interface EjesRemovalRow {
 export interface EjesNewStreetRow {
   idcalle: string | null;
   name: string | null;
+  shortName: string | null;
   sections: number;
+  tipos: string | null;
+  departments: string | null;
+  localities: string | null;
 }
 
 export interface EjesAttrRow {
