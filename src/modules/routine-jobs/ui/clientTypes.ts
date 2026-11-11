@@ -5,6 +5,8 @@ import type { CargarLocalidadesResult, LocalityOptions, LocalityTableRef } from 
 import type { UnitAddressMasterTable, UnitResult } from "../jobs/unidad-territorial/types";
 import type { EjesTableRole } from "../jobs/ejes-calles/constants";
 import type { EjesResult, EjesTableRef } from "../jobs/ejes-calles/types";
+import type { CentrosTableRole } from "../jobs/centros-anep/constants";
+import type { CentrosResult, CentrosTableRef } from "../jobs/centros-anep/types";
 
 export type JobOptions = LoadOptions;
 
@@ -140,3 +142,12 @@ export interface EjesStartRequest {
 }
 
 export type EjesJobStatusView = JobStatusBase<EjesResult>;
+
+export interface CentrosAnepStartRequest {
+  connection: ClientConnection;
+  tables: Record<CentrosTableRole, CentrosTableRef>;
+  dryRun: boolean;
+  confirm: boolean;
+}
+
+export type CentrosAnepJobStatusView = JobStatusBase<CentrosResult>;

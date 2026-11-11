@@ -8,7 +8,7 @@ const countOf = (html: string, needle: string): number => html.split(needle).len
 
 describe("ejes-calles job card (EJ-1)", () => {
   it("should be the second job, after Carga de padrones, with the spec id and title", () => {
-    expect(ROUTINE_JOBS.map((job) => job.id)).toEqual([MONTHLY_CARTO_JOB_ID, "ejes-calles"]);
+    expect(ROUTINE_JOBS.map((job) => job.id)).toEqual([MONTHLY_CARTO_JOB_ID, "ejes-calles", "centros-anep"]);
     expect(EJES_CALLES_JOB_ID).toBe("ejes-calles");
     expect(ROUTINE_JOBS[1].title).toBe("Carga de ejes de calles");
   });
@@ -23,7 +23,7 @@ describe("ejes-calles job card (EJ-1)", () => {
     const html = renderToStaticMarkup(React.createElement(RoutineJobsDashboard, {}));
 
     expect(html).toContain("Carga de ejes de calles");
-    expect(countOf(html, "Abrir")).toBe(2);
+    expect(countOf(html, "Abrir")).toBe(3);
   });
 
   it("should open its own wizard, with Conexión and a way back to the list", () => {

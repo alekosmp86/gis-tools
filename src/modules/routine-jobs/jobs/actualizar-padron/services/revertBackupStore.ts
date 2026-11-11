@@ -6,7 +6,7 @@ import path from "node:path";
 
 const BACKUP_DIRECTORY_NAME = "gis-tools-routine-jobs";
 const PRIVATE_DIRECTORY_MODE = 0o700;
-const BACKUP_FILE_PATTERN = /^padron-revert-.*\.sql\.gz$/;
+const BACKUP_FILE_PATTERN = /^(padron|centros-anep)-revert-.*\.sql\.gz$/;
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const REGISTRY_KEY = "__gisToolsRevertBackups";
 

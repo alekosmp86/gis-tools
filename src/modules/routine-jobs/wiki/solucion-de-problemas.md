@@ -1,6 +1,6 @@
 ---
 title: "Solución de problemas"
-order: 7
+order: 8
 ---
 
 # Solución de problemas

@@ -12,9 +12,9 @@ const renderDashboard = (props: { selectedJobId?: string } = {}): string =>
 const countOf = (html: string, needle: string): number => html.split(needle).length - 1;
 
 describe("RoutineJobsDashboard with the monthly carto job", () => {
-  it("AP-35: should list the monthly carto job followed by the ejes de calles job", () => {
-    expect(ROUTINE_JOBS.map((job) => job.id)).toEqual([MONTHLY_CARTO_JOB_ID, "ejes-calles"]);
-    expect(ROUTINE_JOBS.map((job) => job.title)).toEqual([MONTHLY_TITLE, "Carga de ejes de calles"]);
+  it("AP-35: should list the monthly carto job followed by the ejes de calles and centros ANEP jobs", () => {
+    expect(ROUTINE_JOBS.map((job) => job.id)).toEqual([MONTHLY_CARTO_JOB_ID, "ejes-calles", "centros-anep"]);
+    expect(ROUTINE_JOBS.map((job) => job.title)).toEqual([MONTHLY_TITLE, "Carga de ejes de calles", "Carga de centros ANEP"]);
   });
 
   it("AP-35: should show the job title in the list", () => {
@@ -22,7 +22,7 @@ describe("RoutineJobsDashboard with the monthly carto job", () => {
   });
 
   it("AP-35: should offer one Abrir button per job", () => {
-    expect(countOf(renderDashboard(), "Abrir")).toBe(2);
+    expect(countOf(renderDashboard(), "Abrir")).toBe(3);
   });
 
   it("AP-35: should open the monthly carto hub for its job id instead of the list", () => {
@@ -36,6 +36,6 @@ describe("RoutineJobsDashboard with the monthly carto job", () => {
   it("AP-35: should fall back to the list of the job for an unknown job id", () => {
     const html = renderDashboard({ selectedJobId: "no-existe" });
 
-    expect(countOf(html, "Abrir")).toBe(2);
+    expect(countOf(html, "Abrir")).toBe(3);
   });
 });

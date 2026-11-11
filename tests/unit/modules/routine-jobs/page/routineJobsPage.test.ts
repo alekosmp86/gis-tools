@@ -14,10 +14,12 @@ const renderDashboard = (props: { selectedJobId?: string } = {}): string =>
 const countOf = (html: string, needle: string): number => html.split(needle).length - 1;
 
 describe("ROUTINE_JOBS", () => {
-  it("AP-35: should list Carga de padrones first, then Carga de ejes de calles", () => {
-    expect(ROUTINE_JOBS).toHaveLength(2);
+  it("AP-35: should list Carga de padrones first, then ejes de calles and centros ANEP", () => {
+    expect(ROUTINE_JOBS).toHaveLength(3);
     expect(ROUTINE_JOBS[0].id).toBe("actualizacion-mensual-carto");
     expect(ROUTINE_JOBS[0].title).toBe("Carga de padrones");
+    expect(ROUTINE_JOBS[2].id).toBe("centros-anep");
+    expect(ROUTINE_JOBS[2].title).toBe("Carga de centros ANEP");
   });
 
   it("AC-33: should give every job a non-empty Spanish description and a unique id", () => {

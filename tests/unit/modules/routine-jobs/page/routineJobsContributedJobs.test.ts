@@ -44,7 +44,7 @@ describe("RoutineJobsDashboard contributed jobs", () => {
 
     expect(html).toContain("Trabajo X");
     expect(html).toContain("Descripcion X");
-    expect(countOf(html, "Abrir")).toBe(3);
+    expect(countOf(html, "Abrir")).toBe(4);
     expect(html.indexOf(MONTHLY_TITLE)).toBeGreaterThanOrEqual(0);
     expect(html.indexOf(MONTHLY_TITLE)).toBeLessThan(html.indexOf("Trabajo X"));
     expect(html).not.toContain("contributed-body");
@@ -54,14 +54,14 @@ describe("RoutineJobsDashboard contributed jobs", () => {
     const html = renderDashboard([]);
 
     expect(html).toContain(MONTHLY_TITLE);
-    expect(countOf(html, "Abrir")).toBe(2);
+    expect(countOf(html, "Abrir")).toBe(3);
   });
 
   it("CJ-9: should ignore contributions of other slots", () => {
     const html = renderDashboard([jobContribution({ slot: UiSlot.HOME_TOOL_GRID })] as Contributions);
 
     expect(html).not.toContain("Trabajo X");
-    expect(countOf(html, "Abrir")).toBe(2);
+    expect(countOf(html, "Abrir")).toBe(3);
   });
 
   it("CJ-3: should order contributed cards by order and place unordered ones last", () => {
@@ -79,7 +79,7 @@ describe("RoutineJobsDashboard contributed jobs", () => {
     const html = renderDashboard([jobContribution({ label: undefined, description: undefined })] as Contributions);
 
     expect(html).toContain(JOB_ID);
-    expect(countOf(html, "Abrir")).toBe(3);
+    expect(countOf(html, "Abrir")).toBe(4);
   });
 
   it("CJ-4: should open the contributed component in the job panel with a back button instead of the list", () => {
@@ -96,7 +96,7 @@ describe("RoutineJobsDashboard contributed jobs", () => {
     const html = renderDashboard([], JOB_ID);
 
     expect(html).not.toContain("contributed-body");
-    expect(countOf(html, "Abrir")).toBe(2);
+    expect(countOf(html, "Abrir")).toBe(3);
   });
 
   it("CJ-5: should accept a description on contributions of other slots without rendering it in the dashboard", () => {

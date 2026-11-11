@@ -13,6 +13,7 @@ const EXPECTED_PAGES = [
   "cargar-localidades",
   "unidad-territorial",
   "actualizar-padron",
+  "centros-anep",
   "descargar-informe",
   "solucion-de-problemas",
 ];

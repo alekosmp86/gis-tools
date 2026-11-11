@@ -31,6 +31,7 @@ export interface ConnectionStepProps {
   onSaveProfile: (name: string) => void;
   onDeleteProfile: (profileId: string) => void;
   blockingReason: string | null;
+  note?: React.ReactNode;
 }
 
 export const ConnectionStep: React.FC<ConnectionStepProps> = ({
@@ -42,6 +43,7 @@ export const ConnectionStep: React.FC<ConnectionStepProps> = ({
   onSaveProfile,
   onDeleteProfile,
   blockingReason,
+  note,
 }) => {
   const [profileName, setProfileName] = useState("");
   const canSave = profileName.trim() !== "";
@@ -90,6 +92,8 @@ export const ConnectionStep: React.FC<ConnectionStepProps> = ({
         </Button>
       </div>
       <p className={styles.hint}>El perfil guarda el servidor, la base y el usuario. La contraseña se escribe en cada carga.</p>
+
+      {note}
 
       {blockingReason !== null && <AlertMessage type={AlertType.WARNING} text={blockingReason} />}
     </div>
