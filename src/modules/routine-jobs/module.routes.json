@@ -13,7 +13,9 @@
     { "path": "cargar-localidades/start", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "cargar-localidades/status", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
     { "path": "unidad-territorial/start", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
-    { "path": "unidad-territorial/status", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" }
+    { "path": "unidad-territorial/status", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "ejes-calles/start", "method": "POST", "runtime": "nodejs", "dynamic": "force-dynamic" },
+    { "path": "ejes-calles/status", "method": "GET", "runtime": "nodejs", "dynamic": "force-dynamic" }
   ],
   "pages": [
     { "path": "", "title": "Trabajos de rutina" }
