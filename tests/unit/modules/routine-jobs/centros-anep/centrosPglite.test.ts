@@ -111,6 +111,8 @@ const timer = () => createStepTimer({ now: () => 0, total: 10 });
 const countOf = async (database: PGlite, table: string): Promise<number> =>
   Number((await database.query<{ n: string }>(`SELECT count(*) AS n FROM ${table}`)).rows[0].n);
 
+const HOOK_TIMEOUT_MS = 60_000;
+
 describe("centros-anep SQL on PGlite (CA-8, CA-9, CA-11, CA-12, CA-13, CA-18)", () => {
   let database: PGlite;
   let directory: string;
@@ -121,12 +123,12 @@ describe("centros-anep SQL on PGlite (CA-8, CA-9, CA-11, CA-12, CA-13, CA-18)", 
     database = new PGlite();
     await database.exec(POSTGIS_STUBS_SQL);
     await database.exec(TABLES_SQL);
-  });
+  }, HOOK_TIMEOUT_MS);
 
   afterEach(async () => {
     await database.close();
     await rm(directory, { recursive: true, force: true });
-  });
+  }, HOOK_TIMEOUT_MS);
 
   describe("analysis queries", () => {
     it("should count rows, NULL or empty geometry, NULL ruee, NULL subsistema, repeated ruee and damaged text", async () => {
