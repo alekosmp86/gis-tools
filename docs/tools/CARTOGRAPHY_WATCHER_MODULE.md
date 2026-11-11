@@ -145,7 +145,27 @@ Every card on the dashboard (including the shipped defaults) offers an **"Editar
   resources and rewriting their sidecar paths. If the destination already exists, both directories are left untouched to prevent overwriting
   existing files.
 
-## 8. Deliberately not built
+## 8. Direct URL sources
+
+A source with `kind: "direct-url"` (rows without `kind` are `"ckan"`) is a bare service URL, e.g.
+the ANEP centres layer, that no CKAN dataset or WFS capabilities lists. It carries `directUrl`, and
+its `datasetSlug` equals its `id`. It is **downloaded on every use and never stored in the vault**:
+no delta rules, no cache.
+
+- `POST sources` with `{ kind: "direct-url", title, url }` and `POST sources/update` with
+  `{ sourceId, title?, url? }` validate by downloading once (`DirectUrlDownloader`): `http(s)` only,
+  HTTP 2xx, 60 s timeout, 100 MB cap (`constants.ts`), `PK\x03\x04` signature and a complete
+  `.shp` + `.dbf` + `.shx` set read from the ZIP central directory (`domain/directUrl.ts`). A missing
+  `.prj` is a warning, stored in the source's `warnings` and returned as `warnings`. An unchanged
+  URL is not downloaded again; a `kind` change through `update` is refused (400).
+- `GET catalog` lists the source as one `SHP` resource (`id` = source id, `<title>.zip`) for `ALL`
+  and `SHP`, without calling the URL. `GET summaries` reports `ON_DEMAND` with no network call.
+- `GET catalog/file` (`WatcherOrchestrator.getCatalogFile`) downloads and validates on each call and
+  returns `<id>.zip` as an attachment; failures are a 500 with a Spanish message.
+- Risk: the server fetches a user-typed URL. Scheme, size and timeout bound it; there is no host
+  allow-list because the tool is internal.
+
+## 9. Deliberately not built
 
 - **Auto-load by query parameter.** The dashboard does not hand a file to a sync tool through a URL
   parameter, which would require core uploaders to know about an extension contract. The catalogue

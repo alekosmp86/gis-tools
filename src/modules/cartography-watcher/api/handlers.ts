@@ -1,4 +1,6 @@
 import { parseFormatFilter } from "../domain/catalogMapping";
+import { parseDirectUrl } from "../domain/directUrl";
+import { WatchedSourceKind } from "../types";
 import { WatcherOrchestrator } from "../services/WatcherOrchestrator";
 import type { ModuleEndpointHandler } from "@/core/modules/contracts";
 
@@ -45,9 +47,81 @@ function failure(message: string, status: number): Response {
 }
 
 /** Turns anything thrown into a response, so a portal outage never becomes an unhandled rejection. */
-function toErrorResponse(error: unknown, fallbackMessage: string): Response {
+function toErrorResponse(
+  error: unknown,
+  fallbackMessage: string,
+  status: number = HTTP_STATUS.SERVER_ERROR
+): Response {
   const message = error instanceof Error ? error.message : fallbackMessage;
-  return failure(message, HTTP_STATUS.SERVER_ERROR);
+  return failure(message, status);
+}
+
+function isSourceKind(value: unknown): value is WatchedSourceKind {
+  return Object.values(WatchedSourceKind).includes(value as WatchedSourceKind);
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function addDirectSource(
+  orchestrator: WatcherOrchestrator,
+  body: Record<string, unknown>,
+  rawUrl: string
+): Promise<Response> {
+  if (readString(body.title).length === 0) {
+    return failure('Indique el título de la fuente en el campo "title".', HTTP_STATUS.BAD_REQUEST);
+  }
+  if (rawUrl.trim().length === 0) {
+    return failure('Indique la URL del servicio en el campo "url".', HTTP_STATUS.BAD_REQUEST);
+  }
+
+  try {
+    parseDirectUrl(rawUrl);
+  } catch (error: unknown) {
+    return toErrorResponse(error, "La URL no es válida.", HTTP_STATUS.BAD_REQUEST);
+  }
+
+  try {
+    const result = await orchestrator.addDirectSource(readString(body.title), rawUrl);
+    return jsonResponse({ success: true, ...result });
+  } catch (error: unknown) {
+    return toErrorResponse(error, "No se pudo agregar la fuente.");
+  }
+}
+
+async function updateDirectSource(
+  orchestrator: WatcherOrchestrator,
+  sourceId: string,
+  body: Record<string, unknown>
+): Promise<Response> {
+  const title = readString(body.title);
+  const url = readString(body.url);
+
+  if (title.length === 0 && url.length === 0) {
+    return failure(
+      'Indique al menos uno de los campos "title" o "url".',
+      HTTP_STATUS.BAD_REQUEST
+    );
+  }
+
+  if (url.length > 0) {
+    try {
+      parseDirectUrl(url);
+    } catch (error: unknown) {
+      return toErrorResponse(error, "La URL no es válida.", HTTP_STATUS.BAD_REQUEST);
+    }
+  }
+
+  try {
+    const result = await orchestrator.updateDirectSource(sourceId, {
+      ...(title.length > 0 ? { title } : {}),
+      ...(url.length > 0 ? { url } : {}),
+    });
+    return jsonResponse({ success: true, ...result });
+  } catch (error: unknown) {
+    return toErrorResponse(error, "No se pudo actualizar la fuente.");
+  }
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
@@ -87,30 +161,12 @@ export function createWatcherHandlers(
       const body = await readJsonBody(request);
       const rawUrl = typeof body.url === "string" ? body.url : "";
 
-      if (rawUrl.trim().length === 0) {
-        return failure(
-          'Indique la URL o el identificador del conjunto de datos en el campo "url".',
-          HTTP_STATUS.BAD_REQUEST
-        );
+      if (body.kind !== undefined && !isSourceKind(body.kind)) {
+        return failure("El tipo de fuente no es válido.", HTTP_STATUS.BAD_REQUEST);
       }
 
-      try {
-        return jsonResponse({ success: true, sources: await orchestrator.addSource(rawUrl) });
-      } catch (error: unknown) {
-        return toErrorResponse(error, "No se pudo agregar la fuente.");
-      }
-    },
-
-    updateSource: async (request) => {
-      const body = await readJsonBody(request);
-      const sourceId = typeof body.sourceId === "string" ? body.sourceId : "";
-      const rawUrl = typeof body.url === "string" ? body.url : "";
-
-      if (sourceId.trim().length === 0) {
-        return failure(
-          'Indique el identificador de la fuente en el campo "sourceId".',
-          HTTP_STATUS.BAD_REQUEST
-        );
+      if (body.kind === WatchedSourceKind.DIRECT_URL) {
+        return addDirectSource(orchestrator, body, rawUrl);
       }
 
       if (rawUrl.trim().length === 0) {
@@ -123,7 +179,52 @@ export function createWatcherHandlers(
       try {
         return jsonResponse({
           success: true,
-          sources: await orchestrator.updateSource(sourceId.trim(), rawUrl.trim()),
+          sources: await orchestrator.addSource(rawUrl),
+          warnings: [],
+        });
+      } catch (error: unknown) {
+        return toErrorResponse(error, "No se pudo agregar la fuente.");
+      }
+    },
+
+    updateSource: async (request) => {
+      const body = await readJsonBody(request);
+      const sourceId = typeof body.sourceId === "string" ? body.sourceId.trim() : "";
+
+      if (sourceId.length === 0) {
+        return failure(
+          'Indique el identificador de la fuente en el campo "sourceId".',
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
+      const existing = (await orchestrator.listSources()).find((source) => source.id === sourceId);
+      const existingKind = existing?.kind ?? WatchedSourceKind.CKAN;
+
+      if (body.kind !== undefined && body.kind !== existingKind) {
+        return failure(
+          "No se puede cambiar el tipo de una fuente existente.",
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
+      if (existingKind === WatchedSourceKind.DIRECT_URL) {
+        return updateDirectSource(orchestrator, sourceId, body);
+      }
+
+      const rawUrl = typeof body.url === "string" ? body.url : "";
+      if (rawUrl.trim().length === 0) {
+        return failure(
+          'Indique la URL o el identificador del conjunto de datos en el campo "url".',
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
+      try {
+        return jsonResponse({
+          success: true,
+          sources: await orchestrator.updateSource(sourceId, rawUrl.trim()),
+          warnings: [],
         });
       } catch (error: unknown) {
         return toErrorResponse(error, "No se pudo actualizar la fuente.");
@@ -180,8 +281,7 @@ export function createWatcherHandlers(
       }
 
       try {
-        const { meta, content } = await orchestrator.getResourceFile(datasetSlug, resourceId);
-        const filename = meta.relativeFilePath.slice(meta.relativeFilePath.lastIndexOf("/") + 1);
+        const { filename, content } = await orchestrator.getCatalogFile(datasetSlug, resourceId);
 
         // Served as a download so the browser hands the sync tool a real File.
         return new Response(new Uint8Array(content), {

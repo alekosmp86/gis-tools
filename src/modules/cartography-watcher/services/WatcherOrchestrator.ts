@@ -1,20 +1,33 @@
+import { DIRECT_CATALOG_FORMAT, DIRECT_ZIP_EXTENSION } from "../constants";
 import {
   buildErrorSummary,
+  buildOnDemandSummary,
   deriveSourceBadge,
   matchesFormatFilter,
   toCatalogResourceItem,
+  toDirectCatalogGroup,
 } from "../domain/catalogMapping";
 import { countPendingResources, evaluateResourceDelta } from "../domain/deltaEvaluation";
-import { CatalogFormatFilter, DeltaStatus, VaultRenameResult } from "../types";
+import { findSourceWithDirectUrl, parseDirectUrl } from "../domain/directUrl";
+import { isDirectSource } from "../domain/sourceKind";
+import {
+  CatalogFormatFilter,
+  DeltaStatus,
+  VaultRenameResult,
+  WatchedSourceKind,
+} from "../types";
 import { formatTitleFromSlug, parsePortalReference, sanitizeSlug } from "../domain/sourceNaming";
 import { sourceNotFoundMessage } from "../domain/sourceOverrides";
 import { CkanPortalClient } from "./CkanPortalClient";
+import { DirectUrlDownloader } from "./DirectUrlDownloader";
 import { VaultStorageService } from "./VaultStorageService";
 import { WatchedSourcesStorageService } from "./WatchedSourcesStorageService";
 import type {
   CatalogResourceItem,
   CatalogSourceGroup,
   ResourceDelta,
+  SourceEditChanges,
+  SourceMutationResult,
   SourceSummary,
   VaultResourceMeta,
   WatchedSource,
@@ -31,15 +44,18 @@ export class WatcherOrchestrator {
   private readonly portal: CkanPortalClient;
   private readonly vault: VaultStorageService;
   private readonly sourcesStorage: WatchedSourcesStorageService;
+  private readonly directDownloader: DirectUrlDownloader;
 
   constructor(
     portal: CkanPortalClient = new CkanPortalClient(),
     vault: VaultStorageService = new VaultStorageService(),
-    sourcesStorage: WatchedSourcesStorageService = new WatchedSourcesStorageService()
+    sourcesStorage: WatchedSourcesStorageService = new WatchedSourcesStorageService(),
+    directDownloader: DirectUrlDownloader = new DirectUrlDownloader()
   ) {
     this.portal = portal;
     this.vault = vault;
     this.sourcesStorage = sourcesStorage;
+    this.directDownloader = directDownloader;
   }
 
   public async listSources(): Promise<WatchedSource[]> {
@@ -74,6 +90,81 @@ export class WatcherOrchestrator {
     });
   }
 
+  /**
+   * Adds a direct-URL source after one trial download proves it serves a zipped shapefile. The
+   * bytes are discarded: a direct source is never stored in the vault.
+   */
+  public async addDirectSource(title: string, rawUrl: string): Promise<SourceMutationResult> {
+    const trimmedTitle = title.trim();
+    if (trimmedTitle.length === 0) {
+      throw new Error("El título de la fuente no puede estar vacío.");
+    }
+
+    const { url, host } = parseDirectUrl(rawUrl);
+    const sources = await this.sourcesStorage.loadSources();
+    const derivedId = sanitizeSlug(trimmedTitle);
+
+    if (sources.some((source) => source.id === derivedId || source.datasetSlug === derivedId)) {
+      throw new Error(`Ya existe una fuente vigilada con identificador "${derivedId}".`);
+    }
+    this.assertDirectUrlIsFree(sources, url);
+
+    const { warnings } = await this.directDownloader.downloadShapefileZip(url);
+
+    const updatedSources = await this.sourcesStorage.addSource({
+      id: derivedId,
+      title: trimmedTitle,
+      datasetSlug: derivedId,
+      portalHost: host,
+      isDefault: false,
+      kind: WatchedSourceKind.DIRECT_URL,
+      directUrl: url,
+      warnings,
+    });
+    return { sources: updatedSources, warnings };
+  }
+
+  /**
+   * Edits a direct-URL source. Nothing is saved unless every requested change validates, and an
+   * unchanged URL is not downloaded again.
+   */
+  public async updateDirectSource(
+    sourceId: string,
+    changes: SourceEditChanges
+  ): Promise<SourceMutationResult> {
+    const sources = await this.sourcesStorage.loadSources();
+    const existing = sources.find((source) => source.id === sourceId);
+    if (!existing) {
+      throw new Error(sourceNotFoundMessage(sourceId));
+    }
+    if (!isDirectSource(existing)) {
+      throw new Error(`La fuente "${sourceId}" no es una URL directa.`);
+    }
+
+    const newTitle = changes.title?.trim();
+    if (newTitle !== undefined && newTitle.length === 0) {
+      throw new Error("El título de la fuente no puede estar vacío.");
+    }
+
+    let warnings: ReadonlyArray<string> = existing.warnings ?? [];
+    let urlChanges: Partial<WatchedSource> = {};
+
+    if (changes.url !== undefined) {
+      const { url, host } = parseDirectUrl(changes.url);
+      if (url !== existing.directUrl) {
+        this.assertDirectUrlIsFree(sources, url, sourceId);
+        warnings = (await this.directDownloader.downloadShapefileZip(url)).warnings;
+        urlChanges = { directUrl: url, portalHost: host, warnings };
+      }
+    }
+
+    const updatedSources = await this.sourcesStorage.updateSource(sourceId, {
+      ...urlChanges,
+      ...(newTitle !== undefined ? { title: newTitle } : {}),
+    });
+    return { sources: updatedSources, warnings };
+  }
+
   public async removeSource(sourceId: string): Promise<WatchedSource[]> {
     return this.sourcesStorage.removeSource(sourceId);
   }
@@ -85,6 +176,11 @@ export class WatcherOrchestrator {
     const existing = sources.find((source) => source.id === sourceId);
     if (!existing) {
       throw new Error(sourceNotFoundMessage(sourceId));
+    }
+    if (isDirectSource(existing)) {
+      throw new Error(
+        `La fuente "${sourceId}" es una URL directa y no se edita con un conjunto CKAN.`
+      );
     }
 
     this.assertReferenceIsFree(sources, portalHost, datasetSlug, sourceId);
@@ -131,6 +227,9 @@ export class WatcherOrchestrator {
 
     return Promise.all(
       sources.map(async (source) => {
+        if (isDirectSource(source)) {
+          return buildOnDemandSummary(source, checkedAt);
+        }
         try {
           const deltas = await this.inspectSource(source);
           return {
@@ -159,6 +258,11 @@ export class WatcherOrchestrator {
 
     const groups = await Promise.all(
       sources.map(async (source): Promise<CatalogSourceGroup | null> => {
+        if (isDirectSource(source)) {
+          return matchesFormatFilter(DIRECT_CATALOG_FORMAT, formatFilter)
+            ? toDirectCatalogGroup(source)
+            : null;
+        }
         try {
           const [ckanPackage, storedMeta] = await Promise.all([
             this.portal.fetchPackage(source.datasetSlug, source.portalHost),
@@ -190,6 +294,44 @@ export class WatcherOrchestrator {
     );
 
     return groups.filter((group): group is CatalogSourceGroup => group !== null);
+  }
+
+  /**
+   * The file behind a catalogue entry, with the name it is served under. A direct source is
+   * downloaded and validated on every call and never touches the vault.
+   */
+  public async getCatalogFile(
+    datasetSlug: string,
+    resourceId: string
+  ): Promise<{ filename: string; content: Buffer }> {
+    const sources = await this.sourcesStorage.loadSources();
+    const directSource = sources.find(
+      (source) => isDirectSource(source) && source.datasetSlug === datasetSlug
+    );
+
+    if (directSource) {
+      return this.downloadDirectSource(directSource, resourceId);
+    }
+
+    const { meta, content } = await this.getResourceFile(datasetSlug, resourceId);
+    return {
+      filename: meta.relativeFilePath.slice(meta.relativeFilePath.lastIndexOf("/") + 1),
+      content,
+    };
+  }
+
+  private async downloadDirectSource(
+    source: WatchedSource,
+    resourceId: string
+  ): Promise<{ filename: string; content: Buffer }> {
+    if (resourceId !== source.id || !source.directUrl) {
+      throw new Error(
+        `El recurso "${resourceId}" no figura en la fuente "${source.datasetSlug}".`
+      );
+    }
+
+    const { content } = await this.directDownloader.downloadShapefileZip(source.directUrl);
+    return { filename: `${source.id}${DIRECT_ZIP_EXTENSION}`, content };
   }
 
   /**
@@ -267,6 +409,17 @@ export class WatcherOrchestrator {
       portalHost,
       isDefault: false,
     };
+  }
+
+  private assertDirectUrlIsFree(
+    sources: ReadonlyArray<WatchedSource>,
+    url: string,
+    exceptSourceId?: string
+  ): void {
+    const collision = findSourceWithDirectUrl(sources, url, exceptSourceId);
+    if (collision) {
+      throw new Error(`Esa URL ya pertenece a la fuente vigilada "${collision.title}".`);
+    }
   }
 
   /**

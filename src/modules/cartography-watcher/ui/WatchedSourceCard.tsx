@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, ExternalLink, Globe, Pencil, Trash2 } from "lucide-react";
 import { EditSourceForm } from "./EditSourceForm";
 import { SourceStatusBadge } from "./SourceStatusBadge";
 import { describePendingCount, formatPublicationDate } from "../domain/formatters";
+import { isDirectSource } from "../domain/sourceKind";
 import { SourceBadgeState } from "../types";
-import type { SourceSummary, WatchedSource } from "../types";
+import type { SourceEditChanges, SourceSummary, WatchedSource } from "../types";
 import styles from "./WatchedSourceCard.module.css";
 
 interface WatchedSourceCardProps {
@@ -14,7 +15,7 @@ interface WatchedSourceCardProps {
   summary?: SourceSummary;
   isRemoving: boolean;
   isUpdating: boolean;
-  onUpdate: (sourceId: string, url: string) => Promise<void>;
+  onUpdate: (sourceId: string, changes: SourceEditChanges) => Promise<void>;
   onRemove: (sourceId: string) => void;
 }
 
@@ -26,7 +27,10 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
   onUpdate,
   onRemove,
 }) => {
-  const portalUrl = `https://${source.portalHost}/dataset/${source.datasetSlug}`;
+  const isDirect = isDirectSource(source);
+  const portalUrl = isDirect
+    ? (source.directUrl ?? "")
+    : `https://${source.portalHost}/dataset/${source.datasetSlug}`;
   const [isEditing, setIsEditing] = useState(false);
 
   const handleStartEditing = () => {
@@ -37,7 +41,9 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
     <article className={`glass-panel ${styles.card}`}>
       <header className={styles.header}>
         <h3 className={styles.title}>{source.title}</h3>
-        {summary ? (
+        {isDirect ? (
+          <SourceStatusBadge status={SourceBadgeState.ON_DEMAND} />
+        ) : summary ? (
           <SourceStatusBadge status={summary.status} />
         ) : (
           <span className={styles.pendingLabel}>Consultando...</span>
@@ -49,14 +55,20 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
       {isEditing ? (
         <EditSourceForm
           initialUrl={portalUrl}
+          initialTitle={isDirect ? source.title : undefined}
           isSubmitting={isUpdating}
-          onSubmit={async (url) => {
+          onSubmit={async (changes) => {
             // Closing only after the await resolves is what keeps a rejected edit on screen.
-            await onUpdate(source.id, url);
+            await onUpdate(source.id, changes);
             setIsEditing(false);
           }}
           onCancel={() => setIsEditing(false)}
         />
+      ) : isDirect ? (
+        <p className={styles.host}>
+          <Globe size={14} />
+          {source.portalHost}
+        </p>
       ) : (
         <dl className={styles.metrics}>
           <div className={styles.metric}>
@@ -78,20 +90,33 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
         </dl>
       )}
 
+      {isDirect &&
+        !isEditing &&
+        (source.warnings ?? []).map((warning) => (
+          <p key={warning} className={styles.warningMessage}>
+            <AlertTriangle size={14} />
+            {warning}
+          </p>
+        ))}
+
       {summary?.status === SourceBadgeState.ERROR && summary.errorMessage && (
         <p className={styles.errorMessage}>{summary.errorMessage}</p>
       )}
 
       <footer className={styles.footer}>
-        <a
-          className={styles.portalLink}
-          href={portalUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-        >
-          <ExternalLink size={14} />
-          Ver en el portal
-        </a>
+        {isDirect ? (
+          <span />
+        ) : (
+          <a
+            className={styles.portalLink}
+            href={portalUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            <ExternalLink size={14} />
+            Ver en el portal
+          </a>
+        )}
 
         <div className={styles.actionsGroup}>
           <button
@@ -112,7 +137,7 @@ export const WatchedSourceCard: React.FC<WatchedSourceCardProps> = ({
               disabled={isRemoving || isUpdating}
             >
               <Trash2 size={14} />
-              Dejar de vigilar
+              {isDirect ? "Eliminar" : "Dejar de vigilar"}
             </button>
           )}
         </div>

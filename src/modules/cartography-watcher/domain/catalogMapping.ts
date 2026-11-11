@@ -1,9 +1,12 @@
+import { DIRECT_CATALOG_FORMAT, DIRECT_ZIP_EXTENSION } from "../constants";
 import { CatalogFormatFilter, DeltaStatus, SourceBadgeState } from "../types";
 import type {
   CatalogResourceItem,
+  CatalogSourceGroup,
   CkanResource,
   ResourceDelta,
   SourceSummary,
+  WatchedSource,
 } from "../types";
 
 /**
@@ -116,5 +119,38 @@ export function buildErrorSummary(
     pendingCount: 0,
     checkedAt,
     errorMessage,
+  };
+}
+
+/** The single-file group a direct URL source contributes; building it never calls the URL. */
+export function toDirectCatalogGroup(source: WatchedSource): CatalogSourceGroup {
+  return {
+    sourceId: source.id,
+    datasetSlug: source.datasetSlug,
+    title: source.title,
+    description: source.description,
+    resources: [
+      {
+        id: source.id,
+        name: `${source.title}${DIRECT_ZIP_EXTENSION}`,
+        format: DIRECT_CATALOG_FORMAT,
+        sizeBytes: null,
+        lastModified: null,
+        isCached: false,
+      },
+    ],
+  };
+}
+
+/** Direct sources are fetched per use, so there is nothing to compare and nothing pending. */
+export function buildOnDemandSummary(source: WatchedSource, checkedAt: string): SourceSummary {
+  return {
+    sourceId: source.id,
+    datasetSlug: source.datasetSlug,
+    title: source.title,
+    status: SourceBadgeState.ON_DEMAND,
+    totalResources: 1,
+    pendingCount: 0,
+    checkedAt,
   };
 }

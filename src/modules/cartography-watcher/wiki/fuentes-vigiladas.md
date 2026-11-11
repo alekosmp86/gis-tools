@@ -27,6 +27,24 @@ Si la fuente no se puede agregar, aparece el motivo arriba del panel. Los más c
 | *Ya existe una fuente vigilada para el conjunto...* | Ese conjunto ya está en la lista. No se duplica. |
 | *No se pudo agregar la fuente.* | El portal no respondió o la consulta falló. Espere y reintente. |
 
+## Agregar una URL directa
+
+Algunas capas se publican solo como una dirección de servicio y no figuran en ningún conjunto del catálogo. Para esos casos, en **Agregar una fuente** elija **URL directa** en el selector (la otra opción es **Conjunto CKAN**) y complete:
+
+- **Título**: el nombre que verá en el panel y en el Catálogo Cartográfico.
+- **URL**: la dirección `http://` o `https://` que devuelve el shapefile comprimido en ZIP.
+
+Ejemplo, la capa de centros de ANEP de IDEuy:
+
+```
+https://mapas.ide.uy/geoserver-vectorial/INE_NO_SEGURO_CLON_NS/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=INE_NO_SEGURO_CLON_NS:centros_anep_2&outputFormat=SHAPE-ZIP
+```
+
+Al presionar **Vigilar fuente**, el servidor descarga la URL una vez para comprobarla: debe responder bien, ser un ZIP, no superar los 100 MB y contener un shapefile completo (`.shp`, `.dbf` y `.shx` con el mismo nombre). Si falta una parte, el mensaje la nombra, por ejemplo *El ZIP no contiene el archivo .dbf del shapefile.* Si falta el `.prj` se acepta, con el aviso *Sin archivo .prj: se pedirá el SRID al cargar.*
+
+> [!NOTE]
+> Una URL directa **se descarga en cada uso y nunca se guarda** en el servidor: no tiene caché, ni estado de actualización, ni novedades. Su tarjeta muestra el título, el servidor y la etiqueta *Se descarga en cada uso*, con los botones **Editar** y **Eliminar**. **Editar** permite cambiar el título y la URL; una URL nueva se vuelve a comprobar, y una URL repetida de otra fuente se rechaza.
+
 ## Qué muestra cada tarjeta
 
 | Elemento | Significado |
