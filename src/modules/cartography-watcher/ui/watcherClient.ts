@@ -1,6 +1,10 @@
+import { WatchedSourceKind } from "../types";
 import type {
+  AddSourceRequest,
   CatalogFormatFilter,
   CatalogSourceGroup,
+  SourceEditChanges,
+  SourceMutationResult,
   SourceSummary,
   WatchedSource,
 } from "../types";
@@ -17,9 +21,22 @@ import { DOWNLOAD_PROGRESS_BYTE_INTERVAL } from "../constants";
 
 const API_BASE = "/api/m/cartography-watcher";
 
+/** The server's own Spanish message when the error body is JSON, otherwise the status line. */
+async function describeFailure(response: Response, context: string): Promise<string> {
+  try {
+    const payload = (await response.json()) as { error?: unknown };
+    if (typeof payload.error === "string" && payload.error.length > 0) {
+      return payload.error;
+    }
+  } catch {
+    // An HTML error page has no message worth showing.
+  }
+  return `${context} (HTTP ${response.status}).`;
+}
+
 async function readJson<TPayload>(response: Response, context: string): Promise<TPayload> {
   if (!response.ok) {
-    throw new Error(`${context} (HTTP ${response.status}).`);
+    throw new Error(await describeFailure(response, context));
   }
 
   const payload = (await response.json()) as TPayload & { success?: boolean; error?: string };
@@ -40,46 +57,49 @@ export async function fetchSources(): Promise<ReadonlyArray<WatchedSource>> {
   return payload.sources;
 }
 
-export async function addSource(url: string): Promise<ReadonlyArray<WatchedSource>> {
-  const response = await fetch(`${API_BASE}/sources`, {
+async function postSourceChange(
+  path: string,
+  body: Record<string, unknown>,
+  context: string
+): Promise<SourceMutationResult> {
+  const response = await fetch(`${API_BASE}/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify(body),
   });
-  const payload = await readJson<{ sources: WatchedSource[] }>(
+  const payload = await readJson<{ sources: WatchedSource[]; warnings?: string[] }>(
     response,
-    "No se pudo agregar la fuente"
+    context
   );
-  return payload.sources;
+  return { sources: payload.sources, warnings: payload.warnings ?? [] };
+}
+
+export async function addSource(request: AddSourceRequest): Promise<SourceMutationResult> {
+  const body =
+    request.kind === WatchedSourceKind.DIRECT_URL
+      ? { kind: request.kind, title: request.title, url: request.url }
+      : { url: request.url };
+  return postSourceChange("sources", body, "No se pudo agregar la fuente");
 }
 
 export async function removeSource(sourceId: string): Promise<ReadonlyArray<WatchedSource>> {
-  const response = await fetch(`${API_BASE}/sources/remove`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sourceId }),
-  });
-  const payload = await readJson<{ sources: WatchedSource[] }>(
-    response,
+  const { sources } = await postSourceChange(
+    "sources/remove",
+    { sourceId },
     "No se pudo eliminar la fuente"
   );
-  return payload.sources;
+  return sources;
 }
 
 export async function updateSource(
   sourceId: string,
-  url: string
-): Promise<ReadonlyArray<WatchedSource>> {
-  const response = await fetch(`${API_BASE}/sources/update`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sourceId, url }),
-  });
-  const payload = await readJson<{ sources: WatchedSource[] }>(
-    response,
+  changes: SourceEditChanges
+): Promise<SourceMutationResult> {
+  return postSourceChange(
+    "sources/update",
+    { sourceId, ...changes },
     "No se pudo actualizar la fuente"
   );
-  return payload.sources;
 }
 
 export async function fetchSummaries(): Promise<ReadonlyArray<SourceSummary>> {
@@ -117,7 +137,9 @@ export async function fetchCatalogFile(
   );
 
   if (!response.ok) {
-    throw new Error(`No se pudo obtener el archivo del catálogo (HTTP ${response.status}).`);
+    throw new Error(
+      await describeFailure(response, "No se pudo obtener el archivo del catálogo")
+    );
   }
 
   const disposition = response.headers.get("Content-Disposition") ?? "";

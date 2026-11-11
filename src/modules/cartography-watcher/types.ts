@@ -34,7 +34,15 @@ export interface CkanPackageResponse {
   readonly error?: { readonly message?: string };
 }
 
-/** A portal dataset the user is watching. */
+/** How a watched source is reached. A row persisted without `kind` is a CKAN dataset. */
+export const WatchedSourceKind = {
+  CKAN: "ckan",
+  DIRECT_URL: "direct-url",
+} as const;
+
+export type WatchedSourceKind = (typeof WatchedSourceKind)[keyof typeof WatchedSourceKind];
+
+/** A portal dataset, or a direct service URL, the user is watching. */
 export interface WatchedSource {
   readonly id: string;
   readonly title: string;
@@ -43,6 +51,32 @@ export interface WatchedSource {
   readonly description?: string;
   /** Shipped with the module and not removable, as opposed to one the user added. */
   readonly isDefault: boolean;
+  readonly kind?: WatchedSourceKind;
+  /** Only for `direct-url` sources: the `http(s)` URL that serves the zipped shapefile. */
+  readonly directUrl?: string;
+  /** Non-blocking findings from the last validation of a `direct-url` source. */
+  readonly warnings?: ReadonlyArray<string>;
+}
+
+/** Body the client sends to add a source. */
+export type AddSourceRequest =
+  | { readonly kind: typeof WatchedSourceKind.CKAN; readonly url: string }
+  | {
+      readonly kind: typeof WatchedSourceKind.DIRECT_URL;
+      readonly title: string;
+      readonly url: string;
+    };
+
+/** Fields of a source the user may change through an edit. */
+export interface SourceEditChanges {
+  readonly title?: string;
+  readonly url?: string;
+}
+
+/** A source list plus the non-blocking warnings the operation produced. */
+export interface SourceMutationResult {
+  readonly sources: ReadonlyArray<WatchedSource>;
+  readonly warnings: ReadonlyArray<string>;
 }
 
 /** Sidecar metadata written beside every file the vault stores. */
@@ -89,6 +123,7 @@ export const SourceBadgeState = {
   UP_TO_DATE: "UP_TO_DATE",
   UPDATE_AVAILABLE: "UPDATE_AVAILABLE",
   NOT_DOWNLOADED: "NOT_DOWNLOADED",
+  ON_DEMAND: "ON_DEMAND",
   ERROR: "ERROR",
 } as const;
 

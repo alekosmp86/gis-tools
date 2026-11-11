@@ -15,7 +15,7 @@ import {
   updateSource,
 } from "./watcherClient";
 import { describePendingCount } from "../domain/formatters";
-import type { SourceSummary } from "../types";
+import type { SourceEditChanges, SourceSummary } from "../types";
 import styles from "./WatcherDashboard.module.css";
 
 /**
@@ -68,14 +68,14 @@ export const WatcherDashboard: React.FC = () => {
   });
 
   const updateSourceMutation = useMutation({
-    mutationFn: ({ sourceId, url }: { sourceId: string; url: string }) =>
-      updateSource(sourceId, url),
+    mutationFn: ({ sourceId, changes }: { sourceId: string; changes: SourceEditChanges }) =>
+      updateSource(sourceId, changes),
     onSuccess: invalidateAll,
   });
 
   const summariesBySourceId = indexSummariesBySourceId(summariesQuery.data);
   const totalPending = sumPendingResources(summariesQuery.data);
-  const mutationError = addSourceMutation.error ?? removeSourceMutation.error;
+  const mutationError = removeSourceMutation.error;
   const isSummariesBusy = isQueryBusy(summariesQuery);
 
   return (
@@ -116,7 +116,7 @@ export const WatcherDashboard: React.FC = () => {
         <h3 className={styles.sectionTitle}>Agregar una fuente</h3>
         <AddSourceForm
           isSubmitting={addSourceMutation.isPending}
-          onSubmit={(portalUrl) => addSourceMutation.mutate(portalUrl)}
+          onSubmit={async (request) => (await addSourceMutation.mutateAsync(request)).warnings}
         />
         {mutationError && (
           <p className={styles.errorMessage}>
@@ -152,8 +152,8 @@ export const WatcherDashboard: React.FC = () => {
                 updateSourceMutation.isPending &&
                 updateSourceMutation.variables?.sourceId === source.id
               }
-              onUpdate={async (sourceId, url) => {
-                await updateSourceMutation.mutateAsync({ sourceId, url });
+              onUpdate={async (sourceId, changes) => {
+                await updateSourceMutation.mutateAsync({ sourceId, changes });
               }}
               onRemove={(sourceId) => removeSourceMutation.mutate(sourceId)}
             />

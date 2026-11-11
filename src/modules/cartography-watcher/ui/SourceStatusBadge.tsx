@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, CheckCircle2, CloudDownload, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CloudDownload, Download, RefreshCw } from "lucide-react";
+import { ON_DEMAND_LABEL } from "../constants";
 import { SourceBadgeState } from "../types";
 import styles from "./SourceStatusBadge.module.css";
 
@@ -25,6 +26,11 @@ const BADGE_PRESENTATION = {
     label: "Pendiente de descarga",
     className: "notDownloaded",
     Icon: CloudDownload,
+  },
+  [SourceBadgeState.ON_DEMAND]: {
+    label: ON_DEMAND_LABEL,
+    className: "onDemand",
+    Icon: Download,
   },
   [SourceBadgeState.ERROR]: {
     label: "Sin respuesta",
