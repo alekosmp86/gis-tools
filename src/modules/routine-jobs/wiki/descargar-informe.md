@@ -1,6 +1,6 @@
 ---
 title: "Descargar el informe"
-order: 6
+order: 7
 ---
 
 # Descargar el informe

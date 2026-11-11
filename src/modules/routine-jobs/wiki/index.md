@@ -22,6 +22,8 @@ Se abre desde el portal, en la tarjeta **Trabajos de rutina**, o desde el menú.
 
 La etapa 4 puede correrse primero contra una tabla de prueba y después contra `carto.padron`, porque nunca cambia ids. En la carga real elimina automáticamente los padrones que ya no están en el catastro cuando nada los referencia. Si un padrón se subdividió, primero reasigna sus direcciones a la parte más cercana. Si un padrón conservado cambia de forma, reasigna el `id_padron` de las direcciones que quedan dentro de otro padrón. Las geometrías pendientes se pueden aceptar todas juntas con **Aceptar todas**. Con la opción **Enlazar direcciones maestras de los padrones** activada, la etapa 4 crea y enlaza la dirección maestra de cada padrón que no la tiene, y la etapa 3 hace lo mismo con cada unidad territorial, así que no hace falta correr ninguna etapa aparte para enlazarlas. La etapa **Completar unidades territoriales** ya no existe: su trabajo lo hace la opción de direcciones maestras de la etapa 3. No hay una etapa aparte para aplicar los padrones.
 
+Fuera del orden del mes hay trabajos que se corren cuando hace falta, como la [Carga de centros ANEP](centros-anep.md), que reemplaza la tabla de centros educativos con los datos del WFS de IDEuy.
+
 Las etapas no se encadenan solas: usted abre cada una, revisa su informe y recién entonces pasa a la siguiente.
 
 ## Cómo se usa
