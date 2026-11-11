@@ -12,7 +12,7 @@ import type {
 import { SpatialComparisonEngine } from "./comparison/SpatialComparisonEngine";
 import { SqlPatchGenerator } from "./comparison/SqlPatchGenerator";
 import { BinaryShpReader } from "@/core/binary/BinaryShpReader";
-import { ProjectionEngine } from "@/core/spatial/ProjectionEngine";
+import { resolveFileSridForSql } from "@/core/spatial/FileSridResolver";
 
 const comparisonEngine = new SpatialComparisonEngine();
 
@@ -70,9 +70,7 @@ self.onmessage = (event: MessageEvent<WorkerInputMessage>) => {
         ? new BinaryShpReader(fileDataset.shpBuffer)
         : null;
 
-      const fileSrid = fileDataset.prjText
-        ? ProjectionEngine.extractEpsg(fileDataset.prjText) ?? undefined
-        : undefined;
+      const fileSrid = resolveFileSridForSql(fileDataset);
 
       const sqlPatchGenerator = new SqlPatchGenerator({
         dbSchemaName,

@@ -7,7 +7,8 @@ import {
 import type { SerializableFileDataset } from "@/core/types/workerMessages";
 import { BinaryDbfReader, type DbfFieldDescriptor } from "@/core/binary/BinaryDbfReader";
 import { BinaryShpReader } from "@/core/binary/BinaryShpReader";
-import { createProjectionConverter, ProjectionEngine } from "@/core/spatial/ProjectionEngine";
+import { createProjectionConverter } from "@/core/spatial/ProjectionEngine";
+import { resolveFileSridForSql } from "@/core/spatial/FileSridResolver";
 import { FileDatasetIndexer } from "./FileDatasetIndexer";
 import { SuidKeyResolver, type SuidKeyOptions } from "./SuidKeyResolver";
 import { NullRecordHandler } from "./NullRecordHandler";
@@ -216,7 +217,7 @@ export class SpatialComparisonEngine {
     let dbfReader: BinaryDbfReader | null = null;
     let shpReader: BinaryShpReader | null = null;
     let transformCoordinate: ((coordinate: [number, number]) => [number, number]) | null = null;
-    let fileSrid: number | undefined;
+    const fileSrid = resolveFileSridForSql(fileDataset);
 
     if (fileDataset.dbfBuffer) {
       dbfReader = new BinaryDbfReader(fileDataset.dbfBuffer, fileDataset.cpgText || "windows-1252");
@@ -224,7 +225,6 @@ export class SpatialComparisonEngine {
     if (fileDataset.shpBuffer) {
       shpReader = new BinaryShpReader(fileDataset.shpBuffer);
       if (fileDataset.prjText) {
-        fileSrid = ProjectionEngine.extractEpsg(fileDataset.prjText) || undefined;
         transformCoordinate = createProjectionConverter(fileDataset.prjText);
       }
     }
