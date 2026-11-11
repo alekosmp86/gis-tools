@@ -79,19 +79,19 @@ describe("buildEjesReportView (EJ-12)", () => {
   });
 
   it("should expose cards for staging checks, classification and cloc counts", () => {
-    const kpis = Object.fromEntries(buildEjesReportView(resultOf()).kpis.map((kpi) => [kpi.label, kpi.value]));
+    const kpis = Object.fromEntries(buildEjesReportView(resultOf()).kpiGroups.flatMap((group) => group.kpis).map((kpi) => [kpi.label, kpi.value]));
 
-    expect(kpis["Filas de origen"]).toBe(100);
-    expect(kpis["reftramo distintos"]).toBe(98);
-    expect(kpis["reftramo repetidos (grupos)"]).toBe(1);
-    expect(kpis["Tipo de vialidad desconocido"]).toBe(3);
-    expect(kpis["Filas con caracteres dañados"]).toBe(4);
-    expect(kpis["Nuevos (NEW)"]).toBe(5);
-    expect(kpis["Sin cambios (UNCHANGED)"]).toBe(80);
-    expect(kpis["Divisiones (SPLIT)"]).toBe(1);
-    expect(kpis["Uniones (MERGE)"]).toBe(1);
-    expect(kpis["cloc_iso con localidad"]).toBe(6);
-    expect(kpis["cloc_iso solo departamento"]).toBe(2);
+    expect(kpis["Filas"]).toBe(100);
+    expect(kpis["Tramos distintos"]).toBe(98);
+    expect(kpis["Tramos con más de una fila"]).toBe(1);
+    expect(kpis["Filas con tipo de vía desconocido"]).toBe(3);
+    expect(kpis["Filas con caracteres dañados (�)"]).toBe(4);
+    expect(kpis["Nuevos"]).toBe(5);
+    expect(kpis["Sin cambios"]).toBe(80);
+    expect(kpis["Divididos en varios nuevos"]).toBe(1);
+    expect(kpis["Unidos en uno nuevo"]).toBe(1);
+    expect(kpis["Con localidad"]).toBe(6);
+    expect(kpis["Solo con departamento"]).toBe(2);
   });
 
   it("should pass blockers and privilege information through", () => {
@@ -112,8 +112,8 @@ describe("buildEjesReportView (EJ-12)", () => {
     const cut = buildEjesReportView(resultOf({ counts: { ...COUNTS, splits: 700 } }));
     const full = buildEjesReportView(resultOf({ counts: { ...COUNTS, splits: 0 } }));
 
-    expect(cut.summaries.splits).toBe("Divisiones (SPLIT) (primeras 0 de 700)");
-    expect(full.summaries.splits).toBe("Divisiones (SPLIT) (0)");
+    expect(cut.summaries.splits).toBe("Tramos divididos (primeras 0 de 700)");
+    expect(full.summaries.splits).toBe("Tramos divididos (0)");
   });
 
   it("should describe attribute changes per row", () => {

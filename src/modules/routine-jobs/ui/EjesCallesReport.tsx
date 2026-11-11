@@ -70,7 +70,12 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result }) =>
   return (
     <div className={sharedStyles.report}>
       <OutcomeBanners banners={view.banners} />
-      <KpiCards kpis={view.kpis} />
+      {view.kpiGroups.map((group) => (
+        <section key={group.title} className={sharedStyles.section}>
+          <SectionTitle>{group.title}</SectionTitle>
+          {group.kpis.length > 0 ? <KpiCards kpis={group.kpis} /> : <p>{group.emptyText}</p>}
+        </section>
+      ))}
       <TextList title="Bloqueos para la carga" items={view.blockers} />
       <TextList title="Privilegios de escritura (información del análisis)" items={view.privilegeInfo} />
       <section className={sharedStyles.section}>

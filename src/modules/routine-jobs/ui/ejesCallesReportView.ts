@@ -20,9 +20,15 @@ export interface EjesAttrRowView extends EjesAttrRow {
   changes: string;
 }
 
+export interface EjesKpiGroup {
+  title: string;
+  kpis: ReportKpiView[];
+  emptyText?: string;
+}
+
 export interface EjesReportView {
   banners: ReportBannerView[];
-  kpis: ReportKpiView[];
+  kpiGroups: EjesKpiGroup[];
   blockers: string[];
   privilegeInfo: string[];
   unknownTipos: string[];
@@ -38,48 +44,73 @@ const unknownTextOf = (entry: EjesUnknownValue): string => `${entry.value ?? "si
 export const coverageTextOf = (coverage: number | null): string =>
   coverage === null ? "sin dato" : `${Math.round(coverage * PERCENT_SCALE)}%`;
 
-function kpisOf(result: EjesResult): ReportKpiView[] {
+const kpi = (label: string, value: number): ReportKpiView => ({ label, value });
+
+function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
   const { staging, counts, cloc } = result;
+  const problems = [
+    kpi("reftramo que no es un número", staging.nonIntegerRefs),
+    kpi("Filas sin geometría", staging.emptyGeometry),
+    kpi("Filas sin idcalle", staging.emptyIdcalle),
+    kpi("Filas con caracteres dañados (�)", staging.damagedTextRows),
+    kpi("Filas con tipo de vía desconocido", staging.unknownTipoRows),
+    kpi("Filas con fuente desconocida", staging.unknownFuenteRows),
+  ].filter((entry) => entry.value > 0);
   return [
-    { label: "Filas de origen", value: staging.rows },
-    { label: "reftramo distintos", value: staging.distinctRefs },
-    { label: "reftramo repetidos (grupos)", value: staging.repeatedGroups },
-    { label: "reftramo repetidos (filas)", value: staging.repeatedRows },
-    { label: "reftramo no entero", value: staging.nonIntegerRefs },
-    { label: "Geometría nula o vacía", value: staging.emptyGeometry },
-    { label: "idcalle vacío", value: staging.emptyIdcalle },
-    { label: "Filas con caracteres dañados", value: staging.damagedTextRows },
-    { label: "Tipo de vialidad desconocido", value: staging.unknownTipoRows },
-    { label: "Fuente desconocida", value: staging.unknownFuenteRows },
-    { label: "Nuevos (NEW)", value: counts.newSections },
-    { label: "Sin cambios (UNCHANGED)", value: counts.unchanged },
-    { label: "Atributos (ATTR)", value: counts.attr },
-    { label: "Geometría (GEOM)", value: counts.geom },
-    { label: "Atributos y geometría", value: counts.both },
-    { label: "Quitados (REMOVED)", value: counts.removed },
-    { label: "Divisiones (SPLIT)", value: counts.splits },
-    { label: "Uniones (MERGE)", value: counts.merges },
-    { label: "Quitados sin reemplazo", value: counts.plainRemovals },
-    { label: "Calles nuevas", value: counts.newStreets },
-    { label: "cloc_iso con localidad", value: cloc.withLocality },
-    { label: "cloc_iso solo departamento", value: cloc.onlyDepartment },
-    { label: "cloc_iso sin código", value: cloc.withoutCode },
+    {
+      title: "Archivo cargado en el origen",
+      kpis: [
+        kpi("Filas", staging.rows),
+        kpi("Tramos distintos", staging.distinctRefs),
+        kpi("Tramos con más de una fila", staging.repeatedGroups),
+        kpi("Filas de esos tramos", staging.repeatedRows),
+      ],
+    },
+    { title: "Problemas en el archivo", kpis: problems, emptyText: "Sin problemas." },
+    {
+      title: "Tramos del archivo frente a los actuales",
+      kpis: [
+        kpi("Nuevos", counts.newSections),
+        kpi("Sin cambios", counts.unchanged),
+        kpi("Cambió nombre, calle, tipo o fuente", counts.attr),
+        kpi("Cambió el trazado", counts.geom),
+        kpi("Cambió todo", counts.both),
+      ],
+    },
+    {
+      title: "Tramos actuales que ya no vienen en el archivo",
+      kpis: [
+        kpi("Total", counts.removed),
+        kpi("Divididos en varios nuevos", counts.splits),
+        kpi("Unidos en uno nuevo", counts.merges),
+        kpi("Sin reemplazo", counts.plainRemovals),
+      ],
+    },
+    {
+      title: "Calles y localidades de los tramos nuevos o con trazado distinto",
+      kpis: [
+        kpi("Calles nuevas", counts.newStreets),
+        kpi("Con localidad", cloc.withLocality),
+        kpi("Solo con departamento", cloc.onlyDepartment),
+        kpi("Sin código", cloc.withoutCode),
+      ],
+    },
   ];
 }
 
 const summariesOf = (result: EjesResult): EjesListSummaries => ({
-  splits: listSummaryOf("Divisiones (SPLIT)", result.splits.length, result.counts.splits),
-  merges: listSummaryOf("Uniones (MERGE)", result.merges.length, result.counts.merges),
-  plainRemovals: listSummaryOf("Quitados sin reemplazo", result.plainRemovals.length, result.counts.plainRemovals),
+  splits: listSummaryOf("Tramos divididos", result.splits.length, result.counts.splits),
+  merges: listSummaryOf("Tramos unidos", result.merges.length, result.counts.merges),
+  plainRemovals: listSummaryOf("Tramos quitados sin reemplazo", result.plainRemovals.length, result.counts.plainRemovals),
   newStreets: listSummaryOf("Calles nuevas", result.newStreets.length, result.counts.newStreets),
-  attrChanges: listSummaryOf("Cambios de atributos (ATTR)", result.attrChanges.length, result.counts.attr),
+  attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
 });
 
 export function buildEjesReportView(result: EjesResult): EjesReportView {
   const { timings, totalSeconds } = timingsViewOf(result.stepTimings);
   return {
     banners: [{ kind: "dryRun", text: EJES_DRY_RUN_BANNER }],
-    kpis: kpisOf(result),
+    kpiGroups: kpiGroupsOf(result),
     blockers: result.blockers,
     privilegeInfo: result.privilegeInfo,
     unknownTipos: result.staging.unknownTipos.map(unknownTextOf),
