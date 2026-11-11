@@ -23,7 +23,7 @@ El archivo no tiene contenido. Exporte el archivo de nuevo y cárguelo otra vez.
 
 ### Los acentos o la ñ se ven mal
 
-El archivo probablemente no está en UTF-8. Guárdelo o expórtelo en UTF-8 y vuelva a cargarlo. Si ya no puede regenerarlo, deje activado *Tolerar caracteres corruptos* en el paso 4: repara las fallas de codificación conocidas al comparar.
+El archivo se lee como UTF-8 y, si no lo es, como Windows-1252 (Latin-1), sin que usted haga nada. Si igual se ven mal (aparece el carácter �), el archivo ya venía dañado de origen: expórtelo de nuevo. Si no puede regenerarlo, deje activado *Tolerar caracteres corruptos* en el paso 4: repara las fallas de codificación conocidas al comparar.
 
 ### Las columnas aparecen todas juntas o mal separadas
 

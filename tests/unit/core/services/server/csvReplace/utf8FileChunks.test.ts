@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { readFirstLine, readUtf8Chunks } from "@/core/services/server/csvReplace/utf8FileChunks";
+import { readFirstLine, readTextChunks } from "@/core/services/server/csvReplace/utf8FileChunks";
 
 const CHUNK_BYTES = 64 * 1024;
 
@@ -23,9 +23,9 @@ describe("utf8FileChunks", () => {
     return filePath;
   };
 
-  const readAll = (filePath: string): string => Array.from(readUtf8Chunks(filePath)).join("");
+  const readAll = (filePath: string): string => Array.from(readTextChunks(filePath)).join("");
 
-  describe("CR-4: readUtf8Chunks", () => {
+  describe("CR-4: readTextChunks", () => {
     it("should return the whole text when the file is small and valid UTF-8", () => {
       const filePath = writeBytes("a.csv", "id,nombre\n1,Ñandú\n");
 
@@ -61,29 +61,46 @@ describe("utf8FileChunks", () => {
     it("should return several chunks when the file is larger than one chunk", () => {
       const filePath = writeBytes("big.csv", "x".repeat(CHUNK_BYTES * 2 + 10));
 
-      const chunks = Array.from(readUtf8Chunks(filePath));
+      const chunks = Array.from(readTextChunks(filePath));
 
       expect(chunks.length).toBeGreaterThan(2);
       expect(chunks.join("")).toHaveLength(CHUNK_BYTES * 2 + 10);
     });
 
-    it("should throw a Spanish UTF-8 error when the file holds a Latin-1 byte", () => {
-      const filePath = writeBytes("latin1.csv", Buffer.from([0x69, 0x64, 0x2c, 0xe9, 0x0a]));
+    it("should decode a Latin-1 file as windows-1252 when it holds non-UTF-8 bytes", () => {
+      const filePath = writeBytes("latin1.csv", Buffer.from([0x69, 0x64, 0x2c, 0xd1, 0xd3, 0xdc, 0xe9, 0x0a]));
 
-      expect(() => readAll(filePath)).toThrowError(/UTF-8/);
+      const text = readAll(filePath);
+
+      expect(text).toBe("id,ÑÓÜé\n");
+      expect(text).not.toContain("�");
     });
 
-    it("should throw the UTF-8 error when the invalid byte sits beyond the first chunk", () => {
-      const bytes = Buffer.concat([Buffer.from("a".repeat(CHUNK_BYTES * 2)), Buffer.from([0xff]), Buffer.from("\n")]);
+    it("should decode as windows-1252 when the invalid byte sits beyond the first chunk", () => {
+      const bytes = Buffer.concat([Buffer.from("a".repeat(CHUNK_BYTES * 2)), Buffer.from([0xd1]), Buffer.from("\n")]);
       const filePath = writeBytes("late.csv", bytes);
 
-      expect(() => readAll(filePath)).toThrowError(/UTF-8/);
+      expect(readAll(filePath)).toBe(`${"a".repeat(CHUNK_BYTES * 2)}Ñ\n`);
     });
 
-    it("should throw the UTF-8 error when the file ends in the middle of a multi-byte character", () => {
+    it("should keep a windows-1252 file intact when non-ASCII bytes sit on the chunk boundary", () => {
+      const padding = "a".repeat(CHUNK_BYTES - 1);
+      const bytes = Buffer.concat([Buffer.from(padding), Buffer.from([0xd1, 0xd3]), Buffer.from("\n")]);
+      const filePath = writeBytes("latin-straddle.csv", bytes);
+
+      expect(readAll(filePath)).toBe(`${padding}ÑÓ\n`);
+    });
+
+    it("should decode a file ending in a truncated multi-byte sequence as windows-1252", () => {
       const filePath = writeBytes("truncated.csv", Buffer.from([0x61, 0xc3]));
 
-      expect(() => readAll(filePath)).toThrowError(/UTF-8/);
+      expect(readAll(filePath)).toBe("aÃ");
+    });
+
+    it("should read a header with a Latin-1 character through readFirstLine", () => {
+      const filePath = writeBytes("latin-header.csv", Buffer.from([0x61, 0x2c, 0xd1, 0x0a, 0x31]));
+
+      expect(readFirstLine(filePath)).toBe("a,Ñ");
     });
 
     it("should throw when the file does not exist", () => {

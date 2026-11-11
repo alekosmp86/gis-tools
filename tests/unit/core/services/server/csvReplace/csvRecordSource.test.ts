@@ -33,15 +33,20 @@ describe("csvRecordSource", () => {
       expect(source.fieldNames).toEqual(["id", "nombre"]);
     });
 
-    it("should refuse a Latin-1 file with a Spanish UTF-8 error when the source is opened", () => {
-      expect(() => open(Buffer.from("id,nombre\n1,Mu\xf1oz\n", "latin1"))).toThrowError(/UTF-8/);
+    it("should decode a Latin-1 file instead of refusing it so that the n-tilde survives", () => {
+      const rows = rowsOf(Buffer.from("id,nombre\n1,Mu\xf1oz\n", "latin1"));
+
+      expect(rows[0].values.nombre).toBe("Muñoz");
     });
 
-    it("should refuse the file at open time even when the invalid byte is on the last line of a large file", () => {
+    it("should decode a Latin-1 file without replacement characters when the non-UTF-8 byte is on the last line of a large file", () => {
       const body = Buffer.from("1,fila\n".repeat(20000));
-      const bytes = Buffer.concat([Buffer.from("id,nombre\n"), body, Buffer.from([0x39, 0x2c, 0xe9, 0x0a])]);
+      const bytes = Buffer.concat([Buffer.from("id,nombre\n"), body, Buffer.from([0x39, 0x2c, 0xd1, 0x0a])]);
 
-      expect(() => open(bytes)).toThrowError(/UTF-8/);
+      const rows = rowsOf(bytes);
+
+      expect(rows[rows.length - 1].values.nombre).toBe("Ñ");
+      expect(rows.every((row) => !row.values.nombre?.includes("�"))).toBe(true);
     });
 
     it("should keep accents and ñ intact when the file is UTF-8", () => {

@@ -13,7 +13,7 @@ El modo **Reemplazo completo** deja la tabla destino con **exactamente las filas
 ## Qué necesita
 
 - La conexión a la base y el archivo CSV cargados (pasos 1 y 2, igual que al comparar).
-- Un archivo CSV en **UTF-8**, con una fila de encabezados. La herramienta detecta sola el separador (coma, punto y coma o tabulador), ignora las líneas en blanco y admite campos entre comillas con separadores, comillas o saltos de línea adentro.
+- Un archivo CSV en **UTF-8 o Windows-1252** (la codificación se detecta sola), con una fila de encabezados. La herramienta detecta sola el separador (coma, punto y coma o tabulador), ignora las líneas en blanco y admite campos entre comillas con separadores, comillas o saltos de línea adentro.
 - Un usuario con permiso de `DELETE` e `INSERT` sobre la tabla destino (y `UPDATE` sobre sus secuencias si reinicia secuencias).
 
 ## Paso 3: elegir el modo
@@ -43,7 +43,7 @@ El recuadro rojo muestra **qué tabla será vaciada** (servidor y `esquema.tabla
 
 ## Qué ocurre al ejecutar
 
-1. Se sube el archivo al servidor y se revisa completo **antes de tocar la base**: debe ser UTF-8, tener al menos una fila de datos, y cada fila debe tener tantos campos como el encabezado (si no, se informa el número de línea).
+1. Se sube el archivo al servidor y se revisa completo **antes de tocar la base**: tener al menos una fila de datos, y cada fila debe tener tantos campos como el encabezado (si no, se informa el número de línea).
 2. Se cargan todas las filas en una tabla temporal y se comprueba que se copiaron todas. Si hay geometrías, se comprueba que todas se puedan interpretar (si no, se informa la fila).
 3. En **una sola transacción** se bloquea la tabla destino, se borran todas sus filas con `DELETE` (nunca `TRUNCATE`) y se insertan las del CSV. Si la cantidad insertada no coincide, se revierte todo.
 4. Se confirma la transacción, se ajustan las secuencias y se ejecuta `ANALYZE` sobre la tabla.
@@ -62,7 +62,6 @@ El panel muestra el avance: **Cargando registros** (con el conteo de filas), **R
 
 | Mensaje | Qué hacer |
 |---|---|
-| El archivo no está codificado en UTF-8 | Guarde el CSV como *CSV UTF-8* y vuelva a cargarlo. |
 | La línea N tiene X campos y el encabezado tiene Y | Revise esa línea: falta o sobra un separador, o hay una comilla sin cerrar. |
 | Columnas del CSV no encontradas | Una columna mapeada ya no está en el encabezado: vuelva a cargar el archivo y revise el mapeo. |
 | La geometría de la fila N no se pudo interpretar | Esa fila tiene un EWKB o WKT inválido: corríjala en el archivo. |

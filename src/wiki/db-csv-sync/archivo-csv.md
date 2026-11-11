@@ -11,7 +11,7 @@ En el paso 2 se carga el archivo CSV con el que se va a comparar la tabla. El ar
 
 - Un archivo `.csv` con una **primera fila de encabezados**.
 - El separador se detecta solo (coma, punto y coma o tabulador). Las celdas con comillas se interpretan correctamente.
-- Los acentos y la `ñ` deben estar codificados en UTF-8. Si el archivo trae una marca de orden de bytes (BOM), se descarta automáticamente.
+- Los acentos y la `ñ` pueden venir en UTF-8 o Windows-1252 (se detecta automáticamente). Si el archivo trae una marca de orden de bytes (BOM), se descarta automáticamente.
 - Debe incluir una columna que identifique cada registro y que exista también en la tabla (el **SUID**, por ejemplo `padron`). Los nombres de columna no tienen por qué coincidir: en el paso 3 se indica a qué columna de la base corresponde cada una.
 
 ### Geometrías en el CSV (opcional)
