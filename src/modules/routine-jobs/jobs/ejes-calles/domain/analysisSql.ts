@@ -142,7 +142,7 @@ function splitCtes(): string[] {
         "SELECT r.id, r.ref, r.idcalle, r.len, count(n.ref) AS new_count,",
         `ST_Length(ST_Intersection(r.geometry, ST_Buffer(ST_Collect(n.geom), ${tolerance}))) AS covered,`,
         "array_agg(n.ref ORDER BY n.ref) AS new_refs",
-        `FROM ${q("removed")} AS r JOIN ${q("new_sections")} AS n ON ST_DWithin(r.geometry, n.geom, ${tolerance})`,
+        `FROM ${q("removed")} AS r JOIN ${q("new_sections")} AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
         "WHERE r.len > 0 GROUP BY r.id, r.ref, r.idcalle, r.len, r.geometry",
       ].join(" ")
     ),
