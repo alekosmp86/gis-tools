@@ -28,7 +28,7 @@ Facts read from preprod (not rules):
 | Vías de circulación | `carto.circulation_way` | write | `id`, `name`, `short_name`, `id_road_type`, `id_font`, `id_calle` |
 | Direcciones maestras | `carto.addresses_master` | write | `addresses_master_id`, `urn`, `latitud`, `longitud` |
 | Vértices de ruteo | `carto.road_section_vertices_pgr` | write | `id`, `the_geom` |
-| Puntos de acceso | `carto.access_point` | write | `id_road_section`, `geometry` |
+| Puntos de acceso | `carto.access_point` | write | `id`, `id_road_section` |
 | Localidades INE | `bdj_carto.ine_localidades_pg` | read | `cloc_iso`, `geom` |
 | Departamentos | `carto.mv_country_province` | read | `iso_code_dpto`, `name_dpto` |
 

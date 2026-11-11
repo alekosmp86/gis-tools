@@ -69,8 +69,8 @@ export const VERTICES_COLUMN = {
 } as const;
 
 export const ACCESS_POINT_COLUMN = {
+  ID: "id",
   ROAD_SECTION: "id_road_section",
-  GEOMETRY: "geometry",
 } as const;
 
 export const LOCALITIES_COLUMN = {
