@@ -107,13 +107,26 @@ export class SqlScriptBuilder {
 
     const isMultiTarget = targetType ? targetType.includes("multi") : false;
 
-    const geomObj = geometry as { type?: string };
+    const geomObj = geometry as { type?: string; coordinates?: unknown };
     const isSingleType =
       geomObj &&
       (geomObj.type === "Polygon" || geomObj.type === "LineString" || geomObj.type === "Point");
 
     if (isMultiTarget && isSingleType) {
       return `ST_Multi(${baseExpr})`;
+    }
+
+    const isSingleTarget =
+      Boolean(targetType) && !isMultiTarget && /(point|linestring|polygon)/.test(targetType ?? "");
+    const isOnePartMulti =
+      geomObj &&
+      typeof geomObj.type === "string" &&
+      geomObj.type.startsWith("Multi") &&
+      Array.isArray(geomObj.coordinates) &&
+      geomObj.coordinates.length === 1;
+
+    if (isSingleTarget && isOnePartMulti) {
+      return `ST_GeometryN(${baseExpr}, 1)`;
     }
 
     return baseExpr;

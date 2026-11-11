@@ -149,6 +149,93 @@ describe("SqlScriptBuilder", () => {
   describe("buildPostgisGeomExpr", () => {
     const setSrid = (srid: number) => `ST_SetSRID(ST_GeomFromGeoJSON('${pointJson}'), ${srid})`;
 
+    describe("CSV/GeoJSON SRID and Multi/single shape handling", () => {
+      const lineCoords = [[-56.1, -34.9], [-56.2, -34.8]];
+      const line = { type: "LineString", coordinates: lineCoords };
+      const oneMulti = { type: "MultiLineString", coordinates: [lineCoords] };
+      const twoMulti = {
+        type: "MultiLineString",
+        coordinates: [lineCoords, [[-56.3, -34.7], [-56.4, -34.6]]],
+      };
+      const inner = (geom: object, srid: number) =>
+        `ST_SetSRID(ST_GeomFromGeoJSON('${JSON.stringify(geom)}'), ${srid})`;
+      const multiLineColumn = { geom: "geometry(MultiLineString,32721)" };
+
+      it("SRID-16: should transform a 4326 MultiLineString into a geometry(MultiLineString,32721) column", () => {
+        const builder = new SqlScriptBuilder("public", "t", multiLineColumn, 32721);
+
+        expect(builder.buildPostgisGeomExpr(twoMulti, "geom", 4326)).toBe(
+          `ST_Transform(${inner(twoMulti, 4326)}, 32721)`
+        );
+      });
+
+      it("SRID-17: should wrap a 4326 LineString in ST_Multi and transform it for a multi column", () => {
+        const builder = new SqlScriptBuilder("public", "t", multiLineColumn, 32721);
+
+        expect(builder.buildPostgisGeomExpr(line, "geom", 4326)).toBe(
+          `ST_Multi(ST_Transform(${inner(line, 4326)}, 32721))`
+        );
+      });
+
+      it("SRID-18: should wrap a one-part MultiLineString in ST_GeometryN(...,1) for a LineString column", () => {
+        const builder = new SqlScriptBuilder("public", "t", { geom: "geometry(LineString,32721)" }, 32721);
+
+        expect(builder.buildPostgisGeomExpr(oneMulti, "geom", 4326)).toBe(
+          `ST_GeometryN(ST_Transform(${inner(oneMulti, 4326)}, 32721), 1)`
+        );
+      });
+
+      it("SRID-19: should not wrap a two-part MultiLineString for a LineString column", () => {
+        const builder = new SqlScriptBuilder("public", "t", { geom: "geometry(LineString,32721)" }, 32721);
+
+        const expr = builder.buildPostgisGeomExpr(twoMulti, "geom", 4326);
+
+        expect(expr).toBe(`ST_Transform(${inner(twoMulti, 4326)}, 32721)`);
+        expect(expr).not.toContain("ST_GeometryN");
+      });
+
+      it.each([
+        ["geometry(Geometry,32721)"],
+        ["geometry(GeometryCollection,32721)"],
+        ["geometry(MultiLineString,32721)"],
+      ])("SRID-20: should leave a one-part Multi untouched for a %s column", (columnType) => {
+        const builder = new SqlScriptBuilder("public", "t", { geom: columnType }, 32721);
+
+        const expr = builder.buildPostgisGeomExpr(oneMulti, "geom", 4326);
+
+        expect(expr).toBe(`ST_Transform(${inner(oneMulti, 4326)}, 32721)`);
+      });
+
+      it("SRID-21: should wrap one-part MultiPoint and MultiPolygon for Point and Polygon columns", () => {
+        const multiPoint = { type: "MultiPoint", coordinates: [[-56.1, -34.9]] };
+        const multiPolygon = {
+          type: "MultiPolygon",
+          coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]],
+        };
+        const pointBuilder = new SqlScriptBuilder("public", "t", { geom: "geometry(Point,4326)" });
+        const polyBuilder = new SqlScriptBuilder("public", "t", { geom: "geometry(Polygon,4326)" });
+
+        expect(pointBuilder.buildPostgisGeomExpr(multiPoint, "geom", 4326)).toBe(
+          `ST_GeometryN(${inner(multiPoint, 4326)}, 1)`
+        );
+        expect(polyBuilder.buildPostgisGeomExpr(multiPolygon, "geom", 4326)).toBe(
+          `ST_GeometryN(${inner(multiPolygon, 4326)}, 1)`
+        );
+      });
+
+      it("SRID-22: should not wrap a one-part Multi when the column type is unknown", () => {
+        const builder = new SqlScriptBuilder("public", "t");
+
+        expect(builder.buildPostgisGeomExpr(oneMulti)).toBe(inner(oneMulti, 4326));
+      });
+
+      it("SRID-23: should assume the origin equals the target SRID when sourceSrid is undefined (shapefile without .prj)", () => {
+        const builder = new SqlScriptBuilder("public", "t", multiLineColumn, 32721);
+
+        expect(builder.buildPostgisGeomExpr(twoMulti, "geom", undefined)).toBe(inner(twoMulti, 32721));
+      });
+    });
+
     it("should set SRID 4326 without transform when the default builder has no source SRID", () => {
       const builder = new SqlScriptBuilder("public", "t");
 

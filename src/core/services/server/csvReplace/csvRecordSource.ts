@@ -6,7 +6,7 @@ import type {
   ReplaceSourceWording,
 } from "@/core/services/server/shpReplace/replaceRecordSource";
 import { readCsvRecords, type CsvRecord } from "@/core/services/server/csvReplace/csvRecordReader";
-import { readFirstLine, readUtf8Chunks } from "@/core/services/server/csvReplace/utf8FileChunks";
+import { readFirstLine, readTextChunks } from "@/core/services/server/csvReplace/utf8FileChunks";
 
 const CSV_WORDING: ReplaceSourceWording = {
   missingFields: "Columnas del CSV",
@@ -70,7 +70,7 @@ interface ScannedCsv {
 function scanCsv(filePath: string, delimiter: string): ScannedCsv {
   let headers: string[] | null = null;
   let recordCount = 0;
-  for (const record of readCsvRecords(readUtf8Chunks(filePath), delimiter)) {
+  for (const record of readCsvRecords(readTextChunks(filePath), delimiter)) {
     if (headers === null) {
       headers = record.fields.map((field) => field.trim());
       validateHeaders(headers);
@@ -106,7 +106,7 @@ function* iterateRows(
 ): Generator<ReplaceRecordRow, void, undefined> {
   let dataRow = 0;
   let isHeader = true;
-  for (const record of readCsvRecords(readUtf8Chunks(filePath), delimiter)) {
+  for (const record of readCsvRecords(readTextChunks(filePath), delimiter)) {
     if (isHeader) {
       isHeader = false;
       continue;

@@ -512,7 +512,7 @@ describe("csvReplaceHandlers", () => {
 
     it("should fail the job without opening a session when the csv cannot be opened, keeping the upload and the lock free", async () => {
       harness.openCsvImpl.current = () => {
-        throw new Error("El archivo no está codificado en UTF-8. Guárdelo como CSV UTF-8 e inténtelo de nuevo.");
+        throw new Error("No se pudo leer el archivo CSV.");
       };
 
       const { status, body } = await readJson(await handleCsvStart(startRequest(validStartBody()), harness.deps));
@@ -520,7 +520,7 @@ describe("csvReplaceHandlers", () => {
 
       expect(status).toBe(200);
       expect(harness.store.get(body.jobId as string)).toMatchObject({ state: ShpJobState.FAILED, outcomeUnknown: false });
-      expect(harness.store.get(body.jobId as string)?.error).toContain("UTF-8");
+      expect(harness.store.get(body.jobId as string)?.error).toContain("No se pudo leer el archivo CSV.");
       expect(harness.runCalls).toHaveLength(0);
       expect(harness.sessionsOpened).toEqual([]);
       expect(harness.deleted).toEqual([]);

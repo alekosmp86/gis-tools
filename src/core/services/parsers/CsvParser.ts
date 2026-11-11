@@ -7,6 +7,7 @@ import {
 } from "@/core/types/parsers";
 import { parseAnyGeometryString } from "@/core/spatial/WktGeometryParser";
 import { normalizeCoordinate } from "@/core/spatial/EwkbGeometryParser";
+import { decodeCsvBytes } from "@/core/common/csvTextDecoding";
 import { yieldToMainThread } from "@/core/common/mainThreadYield";
 import { PARSE_PROGRESS_CHUNK_SIZE } from "@/core/constants/parserConstants";
 import { detectCsvDelimiter, resolveSpatialColumnHeaders, type SpatialColumnHeaders } from "@/core/services/parsers/csvDialect";
@@ -22,7 +23,7 @@ export class CsvParser implements ISpatialFileParser {
   async parse(file: File, onProgress?: ProgressCallback): Promise<ParsedFileDataset> {
     const fileName = file.name;
     const fileSize = file.size;
-    const rawText = await file.text();
+    const rawText = decodeCsvBytes(new Uint8Array(await file.arrayBuffer()));
 
     const lines = this.cleanAndSplitLines(rawText);
     if (lines.length === 0) {

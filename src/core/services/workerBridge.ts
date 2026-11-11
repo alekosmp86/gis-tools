@@ -71,20 +71,18 @@ export async function generateSqlPatchesInWorker(
   onProgress?: ProgressCallback
 ): Promise<SqlPatchSummary> {
   if (typeof Worker === "undefined") {
-    const [{ SqlPatchGenerator }, { BinaryShpReader }, { ProjectionEngine }] =
+    const [{ SqlPatchGenerator }, { BinaryShpReader }, { resolveFileSridForSql }] =
       await Promise.all([
         import("../workers/comparison/SqlPatchGenerator"),
         import("../binary/BinaryShpReader"),
-        import("../spatial/ProjectionEngine"),
+        import("../spatial/FileSridResolver"),
       ]);
 
     const shpReader = input.fileDataset.shpBuffer
       ? new BinaryShpReader(input.fileDataset.shpBuffer)
       : null;
 
-    const fileSrid = input.fileDataset.prjText
-      ? ProjectionEngine.extractEpsg(input.fileDataset.prjText) ?? undefined
-      : undefined;
+    const fileSrid = resolveFileSridForSql(input.fileDataset);
 
     const generator = new SqlPatchGenerator({
       dbSchemaName: input.dbSchemaName,

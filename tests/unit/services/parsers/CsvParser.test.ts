@@ -129,4 +129,34 @@ describe("CsvParser", () => {
       total: rowCount,
     });
   });
+
+  describe("encoding", () => {
+    it("should decode a Latin-1 file so that the n-tilde is correct and no replacement character appears", async () => {
+      const bytes = new Uint8Array([...Buffer.from("id,nombre\n1,", "latin1"), 0xd1, ...Buffer.from("ANDU\n", "latin1")]);
+      const file = new File([bytes], "latin1.csv", { type: "text/csv" });
+
+      const parsed = await parser.parse(file);
+
+      expect(parsed.recordsMap.get("1")?.nombre).toBe("ÑANDU");
+      expect(JSON.stringify([...parsed.recordsMap.values()])).not.toContain("�");
+    });
+
+    it("should decode a UTF-8 file keeping the n-tilde and no replacement character", async () => {
+      const file = new File(["id,nombre\n1,ÑANDÚ\n"], "utf8.csv", { type: "text/csv" });
+
+      const parsed = await parser.parse(file);
+
+      expect(parsed.recordsMap.get("1")?.nombre).toBe("ÑANDÚ");
+      expect(JSON.stringify([...parsed.recordsMap.values()])).not.toContain("�");
+    });
+
+    it("should drop the UTF-8 BOM so the first header keeps its clean name", async () => {
+      const bytes = new Uint8Array([0xef, 0xbb, 0xbf, ...Buffer.from("id,nombre\n1,a\n")]);
+      const file = new File([bytes], "bom.csv", { type: "text/csv" });
+
+      const parsed = await parser.parse(file);
+
+      expect(parsed.attributes).toEqual(["id", "nombre"]);
+    });
+  });
 });

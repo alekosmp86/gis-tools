@@ -237,7 +237,7 @@ describe("workerBridge generateSqlPatchesInWorker (no Worker)", () => {
     expect(generatePatches).toHaveBeenCalledWith([{ id: 1 }], onProgress, true);
   });
 
-  it("should use null reader, undefined srid and isBinaryDbf false when buffers and prj are absent", async () => {
+  it("SRID-12: should use null reader, 4326 srid and isBinaryDbf false when buffers and prj are absent (CSV/GeoJSON)", async () => {
     generatePatches.mockResolvedValue("s");
 
     await generateSqlPatchesInWorker(makeInput({}));
@@ -246,7 +246,7 @@ describe("workerBridge generateSqlPatchesInWorker (no Worker)", () => {
     expect(extractEpsg).not.toHaveBeenCalled();
     const opts = sqlCtor.mock.calls[0][0];
     expect(opts.shpReader).toBeNull();
-    expect(opts.fileSrid).toBeUndefined();
+    expect(opts.fileSrid).toBe(4326);
     expect(opts.isBinaryDbf).toBe(false);
     expect(generatePatches).toHaveBeenCalledWith([{ id: 1 }], undefined, true);
   });
@@ -255,9 +255,35 @@ describe("workerBridge generateSqlPatchesInWorker (no Worker)", () => {
     extractEpsg.mockReturnValue(null);
     generatePatches.mockResolvedValue("s");
 
-    await generateSqlPatchesInWorker(makeInput({ prjText: "PRJ" }));
+    await generateSqlPatchesInWorker(makeInput({ shpBuffer: new Uint8Array([1]), prjText: "PRJ" }));
 
     expect(sqlCtor.mock.calls[0][0].fileSrid).toBeUndefined();
+  });
+
+  it("SRID-13: should keep the .prj EPSG for a shapefile with a .prj", async () => {
+    extractEpsg.mockReturnValue(32721);
+    generatePatches.mockResolvedValue("s");
+
+    await generateSqlPatchesInWorker(makeInput({ shpBuffer: new Uint8Array([1]), prjText: "PRJ" }));
+
+    expect(sqlCtor.mock.calls[0][0].fileSrid).toBe(32721);
+  });
+
+  it("SRID-14: should leave fileSrid undefined for a shapefile without a .prj", async () => {
+    generatePatches.mockResolvedValue("s");
+
+    await generateSqlPatchesInWorker(makeInput({ shpBuffer: new Uint8Array([1]) }));
+
+    expect(sqlCtor.mock.calls[0][0].fileSrid).toBeUndefined();
+  });
+
+  it("SRID-15: should ignore a stray prjText and use 4326 when there is no shpBuffer", async () => {
+    extractEpsg.mockReturnValue(32721);
+    generatePatches.mockResolvedValue("s");
+
+    await generateSqlPatchesInWorker(makeInput({ prjText: "PRJ" }));
+
+    expect(sqlCtor.mock.calls[0][0].fileSrid).toBe(4326);
   });
 
   it("should treat an empty dbfBuffer object as binary (Boolean of a truthy typed array)", async () => {

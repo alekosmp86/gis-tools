@@ -144,8 +144,8 @@ export class SpatialGeometryComparator {
     }
 
     // Fallback for Points / LineStrings: compare coordinates with rounded tolerance
-    const dbCoords = "coordinates" in dbGeom ? dbGeom.coordinates : null;
-    const fileCoords = "coordinates" in fileGeom ? fileGeom.coordinates : null;
+    const dbCoords = this.extractSinglePartCoordinates(dbGeom);
+    const fileCoords = this.extractSinglePartCoordinates(fileGeom);
 
     const isCoordsMatch =
       JSON.stringify(this.roundDeep(dbCoords)) === JSON.stringify(this.roundDeep(fileCoords));
@@ -168,6 +168,14 @@ export class SpatialGeometryComparator {
       dbGeomNormalized: dbGeom,
       fileGeomNormalized: fileGeom,
     };
+  }
+
+  private extractSinglePartCoordinates(geometry: Geometry): unknown {
+    if (!("coordinates" in geometry)) return null;
+    const isMulti = geometry.type.startsWith("Multi");
+    return isMulti && geometry.coordinates.length === 1
+      ? geometry.coordinates[0]
+      : geometry.coordinates;
   }
 
   private roundDeep(obj: unknown): unknown {
