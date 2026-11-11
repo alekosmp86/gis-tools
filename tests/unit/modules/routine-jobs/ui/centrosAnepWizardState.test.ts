@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CENTROS_DEFAULT_TABLES, CENTROS_ROLES } from "@/modules/routine-jobs/jobs/centros-anep/constants";
-import type { CentrosResult } from "@/modules/routine-jobs/jobs/centros-anep/types";
 import { centrosAnepAnalysisKeyOf } from "@/modules/routine-jobs/ui/centrosAnepAnalysisKey";
-import type { CentrosAnepRunSnapshot } from "@/modules/routine-jobs/ui/centrosAnepRunStore";
 import {
   blockingReason,
   canAnalyzeNow,

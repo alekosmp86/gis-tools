@@ -45,7 +45,7 @@ export function buildZip(entryNames: ReadonlyArray<string>): Buffer {
   return Buffer.concat([...localParts, centralDirectory, end]);
 }
 
-export const FULL_SHAPEFILE_ENTRIES = [
+const FULL_SHAPEFILE_ENTRIES = [
   "centros.shp",
   "centros.dbf",
   "centros.shx",

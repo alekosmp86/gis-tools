@@ -33,7 +33,7 @@ export const finalCatalog = (): DbColumnMetadata[] => [
   ...stagingCatalog(),
 ];
 
-export const identityOf = (names: readonly string[]): Record<string, string> =>
+const identityOf = (names: readonly string[]): Record<string, string> =>
   Object.fromEntries(names.map((name) => [name, name]));
 
 const LOGICAL = ["ruee", "subsistema", "nombre", "geom"];
