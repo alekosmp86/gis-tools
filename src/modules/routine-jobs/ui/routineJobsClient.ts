@@ -5,9 +5,12 @@ import type { GeometryMapFeature } from "../jobs/actualizar-padron/types";
 import type { LocalidadesTableRole } from "../jobs/cargar-localidades/constants";
 import type { UnitTableRole } from "../jobs/unidad-territorial/constants";
 import type { EjesTableRole } from "../jobs/ejes-calles/constants";
+import type { CentrosTableRole } from "../jobs/centros-anep/constants";
 import type {
   ActualizarJobStatusView,
   ActualizarStartRequest,
+  CentrosAnepJobStatusView,
+  CentrosAnepStartRequest,
   ClientConnection,
   EjesJobStatusView,
   EjesStartRequest,
@@ -33,6 +36,8 @@ const UNIDAD_START_ROUTE = `${BASE_ROUTE}/unidad-territorial/start`;
 const UNIDAD_STATUS_ROUTE = `${BASE_ROUTE}/unidad-territorial/status`;
 const EJES_START_ROUTE = `${BASE_ROUTE}/ejes-calles/start`;
 const EJES_STATUS_ROUTE = `${BASE_ROUTE}/ejes-calles/status`;
+const CENTROS_ANEP_START_ROUTE = `${BASE_ROUTE}/centros-anep/start`;
+const CENTROS_ANEP_STATUS_ROUTE = `${BASE_ROUTE}/centros-anep/status`;
 const ACTUALIZAR_BACKUP_ROUTE = `${BASE_ROUTE}/actualizar-padron/backup`;
 const ACTUALIZAR_PENDING_CSV_ROUTE = `${BASE_ROUTE}/actualizar-padron/pending-csv`;
 const ACTUALIZAR_GEOMETRIES_ROUTE = `${BASE_ROUTE}/actualizar-padron/geometries`;
@@ -47,7 +52,7 @@ const STATUS_TIMEOUT_MESSAGE = "La consulta del estado tardó demasiado tiempo. 
 type JsonRecord = Record<string, unknown>;
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-export type ColumnRole = TableRole | ActualizarTableRole | LocalidadesTableRole | UnitTableRole | EjesTableRole;
+export type ColumnRole = TableRole | ActualizarTableRole | LocalidadesTableRole | UnitTableRole | EjesTableRole | CentrosTableRole;
 
 export interface RoutineJobsClientDeps {
   fetch?: FetchLike;
@@ -72,6 +77,8 @@ export interface RoutineJobsClient {
   readUnidadStatus(jobId: string): Promise<UnidadJobStatusView>;
   startEjes(request: EjesStartRequest): Promise<StartResult>;
   readEjesStatus(jobId: string): Promise<EjesJobStatusView>;
+  startCentrosAnep(request: CentrosAnepStartRequest): Promise<StartResult>;
+  readCentrosAnepStatus(jobId: string): Promise<CentrosAnepJobStatusView>;
   fetchActualizarBackup(token: string): Promise<Blob>;
   fetchPendingGeometryCsv(planId: string): Promise<Blob>;
   fetchGeometryMap(request: GeometryMapRequest): Promise<GeometryMapFeature[]>;
@@ -227,6 +234,11 @@ export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): Routi
     startEjes: (request) => postStart(fetchImpl, EJES_START_ROUTE, request),
 
     readEjesStatus: (jobId) => readJobStatus<EjesJobStatusView>(fetchImpl, timers, EJES_STATUS_ROUTE, jobId),
+
+    startCentrosAnep: (request) => postStart(fetchImpl, CENTROS_ANEP_START_ROUTE, request),
+
+    readCentrosAnepStatus: (jobId) =>
+      readJobStatus<CentrosAnepJobStatusView>(fetchImpl, timers, CENTROS_ANEP_STATUS_ROUTE, jobId),
 
     async fetchActualizarBackup(token) {
       const url = `${ACTUALIZAR_BACKUP_ROUTE}?token=${encodeURIComponent(token)}`;

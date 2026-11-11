@@ -9,6 +9,7 @@ import { readActualizarGeometryMap } from "./api/actualizarGeometryMap";
 import { createCargarLocalidadesHandlers } from "./api/cargarLocalidadesHandlers";
 import { createUnidadTerritorialHandlers } from "./api/unidadTerritorialHandlers";
 import { createEjesCallesHandlers } from "./api/ejesCallesHandlers";
+import { createCentrosAnepHandlers } from "./api/centrosAnepHandlers";
 import { RoutineJobsDashboard } from "./ui/RoutineJobsDashboard";
 import { RoutineJobsHomeCard } from "./ui/RoutineJobsHomeCard";
 
@@ -23,6 +24,7 @@ const actualizarHandlers = createActualizarPadronHandlers();
 const localidadesHandlers = createCargarLocalidadesHandlers();
 const unidadHandlers = createUnidadTerritorialHandlers();
 const ejesHandlers = createEjesCallesHandlers();
+const centrosHandlers = createCentrosAnepHandlers();
 
 export const routineJobsModule: AppModuleManifest = {
   id: routeDeclarations.moduleId,
@@ -46,6 +48,8 @@ export const routineJobsModule: AppModuleManifest = {
     "GET unidad-territorial/status": unidadHandlers.readUnidadTerritorialStatus,
     "POST ejes-calles/start": ejesHandlers.startEjesCalles,
     "GET ejes-calles/status": ejesHandlers.readEjesCallesStatus,
+    "POST centros-anep/start": centrosHandlers.startCentrosAnep,
+    "GET centros-anep/status": centrosHandlers.readCentrosAnepStatus,
   }),
   pages: definePageContributions(routeDeclarations, {
     "": RoutineJobsDashboard,

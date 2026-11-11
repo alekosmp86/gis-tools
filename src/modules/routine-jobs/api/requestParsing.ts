@@ -20,6 +20,7 @@ import type { PgRunConnection } from "../jobs/cargar-padrones/services/openPgSes
 import type { CargarPadronesParams } from "../jobs/cargar-padrones/types";
 import { UNIT_REQUIRED_COLUMNS_BY_ROLE, type UnitTableRole } from "../jobs/unidad-territorial/constants";
 import { EJES_REQUIRED_COLUMNS_BY_ROLE, type EjesTableRole } from "../jobs/ejes-calles/constants";
+import { CENTROS_REQUIRED_COLUMNS_BY_ROLE, type CentrosTableRole } from "../jobs/centros-anep/constants";
 
 export class RequestInvalidError extends Error {
   override readonly name = "RequestInvalidError";
@@ -32,7 +33,7 @@ export interface CatalogRequest {
   schema: string;
 }
 
-export type ColumnsRole = TableRole | ActualizarTableRole | LocalidadesTableRole | UnitTableRole | EjesTableRole;
+export type ColumnsRole = TableRole | ActualizarTableRole | LocalidadesTableRole | UnitTableRole | EjesTableRole | CentrosTableRole;
 
 export interface ColumnsRequest extends CatalogRequest {
   table: string;
@@ -49,6 +50,7 @@ const COLUMNS_BY_ROLE: Readonly<Record<string, readonly string[]>> = {
   ...LOCALIDADES_REQUIRED_COLUMNS_BY_ROLE,
   ...UNIT_REQUIRED_COLUMNS_BY_ROLE,
   ...EJES_REQUIRED_COLUMNS_BY_ROLE,
+  ...CENTROS_REQUIRED_COLUMNS_BY_ROLE,
 };
 const ROLE_NAMES: readonly string[] = Object.keys(COLUMNS_BY_ROLE);
 const CLEAR_MODES: readonly string[] = Object.values(CLEAR_MODE);

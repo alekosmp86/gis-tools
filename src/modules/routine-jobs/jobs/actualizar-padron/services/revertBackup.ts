@@ -38,20 +38,20 @@ const SAFE_IDENTIFIER_CHARACTERS = /[^A-Za-z0-9_-]/g;
 const EMPTY_FILE_MESSAGE = "el archivo de respaldo está vacío";
 const BACKUP_FILE_MODE = 0o600;
 /* Plain SQL, no psql meta-commands, so psql, pgAdmin and any SQL client run the file as is. */
-const SQL_PREAMBLE: readonly string[] = ["SET client_encoding = 'UTF8';"];
+export const SQL_PREAMBLE: readonly string[] = ["SET client_encoding = 'UTF8';"];
 
 const pad = (value: number): string => String(value).padStart(2, "0");
 
-const stampOf = (date: Date): string =>
+export const stampOf = (date: Date): string =>
   `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 
-const safeIdentifier = (identifier: string): string => identifier.replace(SAFE_IDENTIFIER_CHARACTERS, "_");
+export const safeIdentifier = (identifier: string): string => identifier.replace(SAFE_IDENTIFIER_CHARACTERS, "_");
 
 function revertFileName(target: WritableTargetLayout, now: Date): string {
   return `padron-revert-${safeIdentifier(target.schema)}-${safeIdentifier(target.table)}-${stampOf(now)}.sql.gz`;
 }
 
-function revertBackupError(error: unknown): Error {
+export function revertBackupError(error: unknown): Error {
   const detail = (error instanceof Error ? error.message : String(error)).replace(/[.\s]+$/, "");
   return new Error(`No se pudo generar el respaldo para revertir: ${detail}.`);
 }
@@ -65,7 +65,7 @@ export async function guardRevertStep<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-const isExistingFileError = (error: unknown): boolean => error instanceof Error && "code" in error && error.code === "EEXIST";
+export const isExistingFileError = (error: unknown): boolean => error instanceof Error && "code" in error && error.code === "EEXIST";
 
 /** Writes the revert script of the run, verifies it and registers it. Any failure leaves no file behind. */
 export async function writeRevertBackup(
@@ -124,14 +124,18 @@ async function* textOfLines(lines: AsyncIterable<RevertLine>, tally: RevertCount
 }
 
 async function writeGzipFile(lines: AsyncIterable<RevertLine>, tally: RevertCounts, filePath: string): Promise<void> {
+  await writeGzipText(textOfLines(lines, tally), filePath);
+}
+
+export async function writeGzipText(chunks: AsyncIterable<string>, filePath: string): Promise<void> {
   await pipeline(
-    Readable.from(textOfLines(lines, tally)),
+    Readable.from(chunks),
     createGzip(),
     createWriteStream(filePath, { flags: "wx", mode: BACKUP_FILE_MODE })
   );
 }
 
-async function syncedSize(filePath: string): Promise<number> {
+export async function syncedSize(filePath: string): Promise<number> {
   const handle = await open(filePath, "r+");
   try {
     await handle.sync();

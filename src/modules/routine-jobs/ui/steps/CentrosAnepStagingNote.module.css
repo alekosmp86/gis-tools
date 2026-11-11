@@ -1,0 +1,13 @@
+.note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.url {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
