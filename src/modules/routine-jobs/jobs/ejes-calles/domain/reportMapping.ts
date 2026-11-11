@@ -84,6 +84,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       splits: numberOf(row.splits),
       merges: numberOf(row.merges),
       plainRemovals: numberOf(row.plain_removals),
+      plainHeld: numberOf(row.plain_held),
       newStreets: numberOf(row.new_streets),
     },
     cloc: {

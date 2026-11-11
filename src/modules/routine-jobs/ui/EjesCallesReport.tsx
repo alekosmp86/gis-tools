@@ -28,6 +28,7 @@ const REMOVAL_COLUMNS: TableColumn<EjesRemovalRow>[] = [
   { header: "reftramo", cell: (row) => row.ref },
   { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
   { header: "Puntos de acceso", cell: (row) => String(row.points) },
+  { header: "Qué pasa", cell: (row) => (row.points > 0 ? "No se quita: tiene puntos de acceso" : "Se quita") },
 ];
 
 const STREET_COLUMNS: TableColumn<EjesNewStreetRow>[] = [

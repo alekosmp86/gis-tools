@@ -224,7 +224,7 @@ const listOf = (alias: string, name: string, select: string): string =>
 function listColumns(): string[] {
   const splitSelect = `SELECT s.ref AS "old_ref", s.idcalle AS "idcalle", s.new_refs AS "new_refs", COALESCE(ap.points, 0) AS "points", s.covered / NULLIF(s.len, 0) AS "coverage" FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref ORDER BY s.ref`;
   const mergeSelect = `SELECT m.new_ref AS "new_ref", m.idcalle AS "idcalle", m.old_refs AS "old_refs", m.points AS "points", m.coverage AS "coverage" FROM ${q("merges")} AS m ORDER BY m.new_ref`;
-  const plainSelect = `SELECT p.ref AS "ref", p.idcalle AS "idcalle", COALESCE(ap.points, 0) AS "points" FROM ${q("plain")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.ref ORDER BY p.ref`;
+  const plainSelect = `SELECT p.ref AS "ref", p.idcalle AS "idcalle", COALESCE(ap.points, 0) AS "points" FROM ${q("plain")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.ref ORDER BY COALESCE(ap.points, 0) DESC, p.ref`;
   const streetSelect = `SELECT n.idcalle AS "idcalle", n.name AS "name", n.sections AS "sections" FROM ${q("new_streets")} AS n ORDER BY n.idcalle, n.name`;
   const attrSelect = [
     'SELECT c.ref AS "ref", c.nombre AS "name", c.cur_name AS "current_name", c.idcalle AS "idcalle", c.cur_idcalle AS "current_idcalle",',
@@ -251,6 +251,7 @@ function countColumns(): string[] {
     `${countOf("splits")} AS "splits"`,
     `${countOf("merges")} AS "merges"`,
     `${countOf("plain")} AS "plain_removals"`,
+    `(SELECT count(*) FROM ${q("plain")} AS p WHERE EXISTS (SELECT 1 FROM ${q("ap")} AS ap WHERE ap.ref = p.ref AND ap.points > 0)) AS "plain_held"`,
     `${countOf("new_streets")} AS "new_streets"`,
     `${countOf("located", "cloc IS NOT NULL")} AS "with_locality"`,
     `${countOf("located", "cloc IS NULL AND dept_code IS NOT NULL")} AS "only_department"`,

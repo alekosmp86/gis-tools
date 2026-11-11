@@ -56,7 +56,7 @@ Facts read from preprod (not rules):
 - EJ-18: ATTR and GEOM sections update only the changed columns; a GEOM change recomputes `distance` and clears `source` and `target` so the topology step (EJ-20) reassigns them.
 - EJ-19: Accepted SPLIT and MERGE: the new sections are inserted as NEW; the `access_point` rows of each old section are reassigned (`id_road_section` = `reftramo` of the new section) to the new section nearest to the point (`ST_Distance`, tie broken by the lower `reftramo`); then the old sections and their address masters are deleted. The result lists every reassigned point (old and new `reftramo`, distance). No row is deleted before its points are reassigned.
 - EJ-20: Topology: for sections with a NULL `source` or `target`, `pgr_createTopology` with `rows_where` over the new and changed rows (tolerance 0.1 m), reusing existing vertices; afterwards vertices that no section uses are deleted. The job checks `pgr_version()` first; a version without `pgr_createTopology` is a blocker.
-- EJ-21: Plain removals (a section with no replacement): the section is NOT deleted until the user confirms the policy for its access points (pending decision). Until then the job reports them and leaves them untouched.
+- EJ-21: Plain removals (a section with no replacement): an accepted section with no `access_point` rows is deleted together with its address master. A section that holds access points is never deleted: it is skipped and reported with its `reftramo`, `idcalle` and number of access points, as padrones reports what it cannot change.
 - EJ-22: After the apply the result shows "Siguiente paso sugerido": an administrator must refresh `bdj_ejes` (while it exists), `mv_road_section`, `mv_road_section2` and `mv_addresses_2_0`, with the command text like padrones.
 - EJ-23: The `short_name` abbreviation rules (taken from `CirculationWay22.sql`) are one constant list in the job, applied only to the new `circulation_way` rows.
 
@@ -71,7 +71,6 @@ Facts read from preprod (not rules):
 ## Out of scope
 
 - Redefining `bdj_ejes`, `mv_road_section`, `mv_road_section2` (admin).
-- The policy for access points of plain removals (EJ-21), pending.
 - Dropping `ide_ejevisualizador` (the user does it).
 - CSV download of the report.
 

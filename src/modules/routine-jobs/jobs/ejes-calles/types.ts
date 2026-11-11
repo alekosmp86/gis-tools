@@ -49,6 +49,7 @@ export interface EjesCounts {
   splits: number;
   merges: number;
   plainRemovals: number;
+  plainHeld: number;
   newStreets: number;
 }
 

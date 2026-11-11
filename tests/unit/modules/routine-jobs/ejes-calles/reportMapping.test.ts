@@ -54,6 +54,7 @@ describe("toEjesAnalysis", () => {
       splits: 1,
       merges: 1,
       plain_removals: 2,
+      plain_held: 1,
       new_streets: 1,
       with_locality: 2,
       only_department: 1,
@@ -87,6 +88,7 @@ describe("toEjesAnalysis", () => {
       splits: 1,
       merges: 1,
       plainRemovals: 2,
+      plainHeld: 1,
       newStreets: 1,
     });
     expect(analysis.cloc).toEqual({ withLocality: 2, onlyDepartment: 1, withoutCode: 0 });

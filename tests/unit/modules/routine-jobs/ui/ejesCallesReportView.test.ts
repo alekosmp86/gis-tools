@@ -16,6 +16,7 @@ const COUNTS = {
   splits: 1,
   merges: 1,
   plainRemovals: 2,
+  plainHeld: 1,
   newStreets: 1,
 };
 
@@ -90,6 +91,8 @@ describe("buildEjesReportView (EJ-12)", () => {
     expect(kpis["Sin cambios"]).toBe(80);
     expect(kpis["Divididos en varios nuevos"]).toBe(1);
     expect(kpis["Unidos en uno nuevo"]).toBe(1);
+    expect(kpis["Sin reemplazo, se quitarían"]).toBe(1);
+    expect(kpis["Sin reemplazo, con puntos de acceso: no se quitan"]).toBe(1);
     expect(kpis["Con localidad"]).toBe(6);
     expect(kpis["Solo con departamento"]).toBe(2);
   });

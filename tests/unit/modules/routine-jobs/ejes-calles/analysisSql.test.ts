@@ -102,6 +102,11 @@ describe("buildEjesAnalysisSql", () => {
       );
     });
 
+    it("should list plain removals with access points first and count them as held", () => {
+      expect(sql).toContain("ORDER BY COALESCE(ap.points, 0) DESC, p.ref");
+      expect(sql).toContain('AS "plain_held"');
+    });
+
     it("should report access points of each removed section", () => {
       expect(sql).toContain('LEFT JOIN "ap" AS ap ON ap.ref = s.ref');
       expect(sql).toContain("count(*) AS points");
@@ -143,6 +148,7 @@ describe("buildEjesAnalysisSql", () => {
       "splits",
       "merges",
       "plain_removals",
+      "plain_held",
       "new_streets",
     ])("should select count %s", (alias) => {
       expect(sql).toContain(`AS "${alias}"`);

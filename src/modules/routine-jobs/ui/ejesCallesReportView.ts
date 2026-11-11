@@ -83,7 +83,8 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
         kpi("Total", counts.removed),
         kpi("Divididos en varios nuevos", counts.splits),
         kpi("Unidos en uno nuevo", counts.merges),
-        kpi("Sin reemplazo", counts.plainRemovals),
+        kpi("Sin reemplazo, se quitarían", counts.plainRemovals - counts.plainHeld),
+        kpi("Sin reemplazo, con puntos de acceso: no se quitan", counts.plainHeld),
       ],
     },
     {
@@ -101,7 +102,7 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
 const summariesOf = (result: EjesResult): EjesListSummaries => ({
   splits: listSummaryOf("Tramos divididos", result.splits.length, result.counts.splits),
   merges: listSummaryOf("Tramos unidos", result.merges.length, result.counts.merges),
-  plainRemovals: listSummaryOf("Tramos quitados sin reemplazo", result.plainRemovals.length, result.counts.plainRemovals),
+  plainRemovals: listSummaryOf("Tramos sin reemplazo (primero los que tienen puntos de acceso)", result.plainRemovals.length, result.counts.plainRemovals),
   newStreets: listSummaryOf("Calles nuevas", result.newStreets.length, result.counts.newStreets),
   attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
 });
