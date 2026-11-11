@@ -10,7 +10,7 @@ import { buildShapefileZip, buildZip } from "./support/zipFixtures";
 const TARGET_URL = "https://mapas.example/wfs?x=1";
 
 function okFetch(body: Uint8Array | string, init: ResponseInit = { status: 200 }) {
-  return vi.fn(async (_url: string, _init?: RequestInit) => new Response(body as BodyInit, init));
+  return vi.fn<typeof fetch>(async () => new Response(body as BodyInit, init));
 }
 
 describe("DirectUrlDownloader constants", () => {
