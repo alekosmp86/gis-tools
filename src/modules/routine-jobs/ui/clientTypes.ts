@@ -4,7 +4,7 @@ import type { AcceptedGeometry, ActualizarPadronResult, GeometryMapItem, PairCho
 import type { CargarLocalidadesResult, LocalityOptions, LocalityTableRef } from "../jobs/cargar-localidades/types";
 import type { UnitAddressMasterTable, UnitResult } from "../jobs/unidad-territorial/types";
 import type { EjesTableRole } from "../jobs/ejes-calles/constants";
-import type { EjesResult, EjesTableRef } from "../jobs/ejes-calles/types";
+import type { EjesMapItem, EjesResult, EjesTableRef } from "../jobs/ejes-calles/types";
 import type { CentrosTableRole } from "../jobs/centros-anep/constants";
 import type { CentrosResult, CentrosTableRef } from "../jobs/centros-anep/types";
 
@@ -142,6 +142,16 @@ export interface EjesStartRequest {
 }
 
 export type EjesJobStatusView = JobStatusBase<EjesResult>;
+
+/** The connection and the two tables the ejes map reads: the wizard's, with no option and no plan. */
+export interface EjesGeometryMapBase {
+  connection: ClientConnection;
+  tables: Pick<Record<EjesTableRole, EjesTableRef>, "ejes-origen" | "ejes-tramos">;
+}
+
+export interface EjesGeometryMapRequest extends EjesGeometryMapBase {
+  items: EjesMapItem[];
+}
 
 export interface CentrosAnepStartRequest {
   connection: ClientConnection;

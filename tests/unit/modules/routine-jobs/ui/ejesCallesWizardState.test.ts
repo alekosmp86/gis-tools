@@ -10,6 +10,7 @@ import {
   canLoadNow,
   ejesWizardReducer,
   EjesStep,
+  ejesGeometryMapBaseOf,
   excludedEjesTablesOf,
   initialEjesWizardState,
   initialEjesWizardStateFor,
@@ -147,6 +148,31 @@ describe("ejes wizard state", () => {
       expect(request.tables["ejes-origen"]).toEqual({ schema: "s", table: "t" });
       expect(request.connection.host).toBe("h");
       expect(Object.keys(request.tables)).toHaveLength(8);
+    });
+  });
+
+  describe("ejesGeometryMapBaseOf (EM-15)", () => {
+    it("should be null while the wizard holds no password", () => {
+      const state = validState();
+      state.connection = { ...state.connection, password: "" };
+
+      expect(ejesGeometryMapBaseOf(state)).toBeNull();
+    });
+
+    it("should carry the trimmed connection and only the staging and road section tables", () => {
+      const state = validState();
+      state.slots["ejes-origen"] = { schema: " s ", table: " t ", valid: true };
+      state.slots["ejes-tramos"] = { schema: " carto ", table: " road_section ", valid: true };
+      state.connection = { ...state.connection, host: " h " };
+
+      const base = ejesGeometryMapBaseOf(state);
+
+      expect(base?.connection.host).toBe("h");
+      expect(base?.connection.password).toBe(PASSWORD);
+      expect(base?.tables).toEqual({
+        "ejes-origen": { schema: "s", table: "t" },
+        "ejes-tramos": { schema: "carto", table: "road_section" },
+      });
     });
   });
 

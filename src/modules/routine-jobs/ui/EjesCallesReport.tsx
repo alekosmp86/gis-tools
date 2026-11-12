@@ -1,8 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type { EjesMergeRow, EjesNewStreetRow, EjesRemovalRow, EjesResult, EjesSplitRow } from "../jobs/ejes-calles/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
+import type { EjesGeometryMapBase } from "./clientTypes";
+import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
+import { subjectOfMerge, subjectOfSplit } from "./ejesMapSubject";
 import { buildEjesReportView, coverageTextOf, metersTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
 import { KpiCards, OutcomeBanners, RowsTable, SectionTitle, TimingsSection, type TableColumn } from "./ReportParts";
 import { textOrNoData } from "./reportFormat";
@@ -74,10 +77,15 @@ function TextList({ title, items }: { title: string; items: string[] }) {
 
 export interface EjesCallesReportProps {
   result: EjesResult;
+  /** The connection of the wizard for the map; null when the wizard holds no password. */
+  mapBase: EjesGeometryMapBase | null;
 }
 
-export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result }) => {
+export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapBase }) => {
   const view = buildEjesReportView(result);
+  const [review, setReview] = useState<EjesMapReview | null>(null);
+  const splitSubjects = result.splits.map(subjectOfSplit);
+  const mergeSubjects = result.merges.map(subjectOfMerge);
   return (
     <div className={sharedStyles.report}>
       <OutcomeBanners banners={view.banners} />
@@ -93,12 +101,22 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result }) =>
         <SectionTitle>{LIST_SECTION_TITLE}</SectionTitle>
         {result.splits.length > 0 && (
           <CollapsibleSection summary={view.summaries.splits}>
-            <RowsTable columns={SPLIT_COLUMNS} rows={result.splits} rowKey={(row) => row.oldRef} />
+            <RowsTable
+              columns={SPLIT_COLUMNS}
+              rows={result.splits}
+              rowKey={(row) => row.oldRef}
+              onShowOnMap={(row) => setReview({ subjects: splitSubjects, index: result.splits.indexOf(row) })}
+            />
           </CollapsibleSection>
         )}
         {result.merges.length > 0 && (
           <CollapsibleSection summary={view.summaries.merges}>
-            <RowsTable columns={MERGE_COLUMNS} rows={result.merges} rowKey={(row) => row.newRef} />
+            <RowsTable
+              columns={MERGE_COLUMNS}
+              rows={result.merges}
+              rowKey={(row) => row.newRef}
+              onShowOnMap={(row) => setReview({ subjects: mergeSubjects, index: result.merges.indexOf(row) })}
+            />
           </CollapsibleSection>
         )}
         {result.plainRemovals.length > 0 && (
@@ -120,6 +138,12 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result }) =>
       <TextList title="Tipos de vialidad fuera de la tabla" items={view.unknownTipos} />
       <TextList title="Fuentes fuera de la tabla" items={view.unknownFuentes} />
       <TimingsSection timings={view.timings} totalSeconds={view.totalSeconds} />
+      <EjesMapModal
+        review={review}
+        base={mapBase}
+        onNavigate={(index) => setReview((current) => (current === null ? null : { ...current, index }))}
+        onClose={() => setReview(null)}
+      />
     </div>
   );
 };

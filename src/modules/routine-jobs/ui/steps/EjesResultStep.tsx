@@ -4,6 +4,7 @@ import React from "react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import { EjesCallesReport } from "../EjesCallesReport";
+import type { EjesGeometryMapBase } from "../clientTypes";
 import type { EjesRunSnapshot } from "../ejesCallesRunStore";
 import { RunPhase } from "../jobRunStore";
 import { RunProgressStatus, RunResultActions } from "./RunResultParts";
@@ -19,6 +20,8 @@ const UNKNOWN_ADVICE = "Hay que verificar las tablas de ejes de calles antes de 
 export interface EjesResultStepProps {
   snapshot: EjesRunSnapshot;
   nowMs: number;
+  /** The connection of the wizard for the map; null when the wizard holds no password. */
+  mapBase: EjesGeometryMapBase | null;
   onNewRun: () => void;
   onBackToReview: () => void;
 }
@@ -37,7 +40,7 @@ function Checklist({ snapshot }: { snapshot: EjesRunSnapshot }) {
   );
 }
 
-export const EjesResultStep: React.FC<EjesResultStepProps> = ({ snapshot, nowMs, onNewRun, onBackToReview }) => {
+export const EjesResultStep: React.FC<EjesResultStepProps> = ({ snapshot, nowMs, mapBase, onNewRun, onBackToReview }) => {
   const actions = <RunResultActions onNewRun={onNewRun} onBackToReview={onBackToReview} />;
   switch (snapshot.phase) {
     case RunPhase.IDLE:
@@ -58,7 +61,7 @@ export const EjesResultStep: React.FC<EjesResultStepProps> = ({ snapshot, nowMs,
       const result = snapshot.job?.result;
       return (
         <div className={styles.stack}>
-          {result ? <EjesCallesReport result={result} /> : <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />}
+          {result ? <EjesCallesReport result={result} mapBase={mapBase} /> : <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />}
           {actions}
         </div>
       );

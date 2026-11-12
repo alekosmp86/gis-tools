@@ -2,6 +2,7 @@ import type { ResolvedColumn, TableListing } from "@/core/types/tableCatalog";
 import type { TableRole } from "../jobs/cargar-padrones/constants";
 import type { ActualizarTableRole } from "../jobs/actualizar-padron/constants";
 import type { GeometryMapFeature } from "../jobs/actualizar-padron/types";
+import type { EjesMapFeature } from "../jobs/ejes-calles/types";
 import type { LocalidadesTableRole } from "../jobs/cargar-localidades/constants";
 import type { UnitTableRole } from "../jobs/unidad-territorial/constants";
 import type { EjesTableRole } from "../jobs/ejes-calles/constants";
@@ -14,6 +15,7 @@ import type {
   ClientConnection,
   EjesJobStatusView,
   EjesStartRequest,
+  EjesGeometryMapRequest,
   GeometryMapRequest,
   JobStatusView,
   LocalidadesJobStatusView,
@@ -41,6 +43,7 @@ const CENTROS_ANEP_STATUS_ROUTE = `${BASE_ROUTE}/centros-anep/status`;
 const ACTUALIZAR_BACKUP_ROUTE = `${BASE_ROUTE}/actualizar-padron/backup`;
 const ACTUALIZAR_PENDING_CSV_ROUTE = `${BASE_ROUTE}/actualizar-padron/pending-csv`;
 const ACTUALIZAR_GEOMETRIES_ROUTE = `${BASE_ROUTE}/actualizar-padron/geometries`;
+const EJES_GEOMETRY_MAP_ROUTE = `${BASE_ROUTE}/ejes-calles/geometry-map`;
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const NETWORK_MESSAGE = "No se pudo conectar con el servidor.";
 const INVALID_RESPONSE_MESSAGE = "El servidor devolvió una respuesta no válida.";
@@ -82,6 +85,7 @@ export interface RoutineJobsClient {
   fetchActualizarBackup(token: string): Promise<Blob>;
   fetchPendingGeometryCsv(planId: string): Promise<Blob>;
   fetchGeometryMap(request: GeometryMapRequest): Promise<GeometryMapFeature[]>;
+  fetchEjesGeometryMap(request: EjesGeometryMapRequest): Promise<EjesMapFeature[]>;
 }
 
 export class RoutineJobsApiError extends Error {
@@ -254,6 +258,12 @@ export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): Routi
       const payload = await postJson(fetchImpl, ACTUALIZAR_GEOMETRIES_ROUTE, request);
       if (!Array.isArray(payload.features)) throw invalidResponse();
       return payload.features as GeometryMapFeature[];
+    },
+
+    async fetchEjesGeometryMap(request) {
+      const payload = await postJson(fetchImpl, EJES_GEOMETRY_MAP_ROUTE, request);
+      if (!Array.isArray(payload.features)) throw invalidResponse();
+      return payload.features as EjesMapFeature[];
     },
   };
 }

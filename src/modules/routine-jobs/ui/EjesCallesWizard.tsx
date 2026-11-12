@@ -14,6 +14,7 @@ import {
   blockingReason,
   canAnalyzeNow,
   canLoadNow,
+  ejesGeometryMapBaseOf,
   ejesWizardReducer,
   EjesStep,
   excludedEjesTablesOf,
@@ -136,6 +137,7 @@ export const EjesCallesWizard: React.FC = () => {
           <EjesResultStep
             snapshot={snapshot}
             nowMs={nowMs}
+            mapBase={ejesGeometryMapBaseOf(state)}
             onNewRun={newRun}
             onBackToReview={() => dispatch({ type: "goTo", step: EjesStep.REVIEW })}
           />

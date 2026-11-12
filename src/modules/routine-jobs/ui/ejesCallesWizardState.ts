@@ -1,6 +1,6 @@
-import { EJES_DEFAULT_TABLES, EJES_ROLES, type EjesTableRole } from "../jobs/ejes-calles/constants";
+import { EJES_DEFAULT_TABLES, EJES_ROLES, EJES_TABLE_ROLE, type EjesTableRole } from "../jobs/ejes-calles/constants";
 import { connectionBlockingReason, type ConnectionField } from "./cargarPadronesWizardState";
-import type { ClientConnection, EjesStartRequest } from "./clientTypes";
+import type { ClientConnection, EjesGeometryMapBase, EjesStartRequest } from "./clientTypes";
 import { trimConnection } from "./connectionProfiles";
 import { ejesAnalysisKeyOf } from "./ejesCallesAnalysisKey";
 import type { EjesRunSnapshot } from "./ejesCallesRunStore";
@@ -128,6 +128,16 @@ export function toEjesStartRequest(state: EjesWizardState, flags: { dryRun: bool
     EJES_ROLES.map((role) => [role, { schema: state.slots[role].schema.trim(), table: state.slots[role].table.trim() }])
   ) as EjesStartRequest["tables"];
   return { connection: trimConnection(state.connection), tables, dryRun: flags.dryRun };
+}
+
+/** The connection and the two tables the map reads; null while the wizard holds no password. */
+export function ejesGeometryMapBaseOf(state: EjesWizardState): EjesGeometryMapBase | null {
+  if (state.connection.password === "") return null;
+  const { tables } = toEjesStartRequest(state, { dryRun: true });
+  return {
+    connection: trimConnection(state.connection),
+    tables: { [EJES_TABLE_ROLE.STAGING]: tables[EJES_TABLE_ROLE.STAGING], [EJES_TABLE_ROLE.ROAD_SECTION]: tables[EJES_TABLE_ROLE.ROAD_SECTION] },
+  };
 }
 
 /** "Cargar ahora" needs an analysis of this same connection and tables that finished with no blocker. */
