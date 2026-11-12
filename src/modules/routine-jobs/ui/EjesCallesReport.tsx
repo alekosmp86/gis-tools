@@ -3,7 +3,7 @@
 import React from "react";
 import type { EjesMergeRow, EjesNewStreetRow, EjesRemovalRow, EjesResult, EjesSplitRow } from "../jobs/ejes-calles/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
-import { buildEjesReportView, coverageTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
+import { buildEjesReportView, coverageTextOf, metersTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
 import { KpiCards, OutcomeBanners, RowsTable, SectionTitle, TimingsSection, type TableColumn } from "./ReportParts";
 import { textOrNoData } from "./reportFormat";
 import sharedStyles from "./CargarPadronesReport.module.css";
@@ -14,6 +14,9 @@ const SPLIT_COLUMNS: TableColumn<EjesSplitRow>[] = [
   { header: "reftramo nuevos", cell: (row) => row.newRefs.join(", ") },
   { header: "Puntos de acceso", cell: (row) => String(row.points) },
   { header: "Cobertura", cell: (row) => coverageTextOf(row.coverage) },
+  { header: "Largo anterior (m)", cell: (row) => metersTextOf(row.oldLength) },
+  { header: "Largo nuevo (m)", cell: (row) => metersTextOf(row.newLength) },
+  { header: "Nuevo fuera del anterior (m)", cell: (row) => metersTextOf(row.outsideLength) },
 ];
 
 const MERGE_COLUMNS: TableColumn<EjesMergeRow>[] = [
@@ -22,6 +25,9 @@ const MERGE_COLUMNS: TableColumn<EjesMergeRow>[] = [
   { header: "reftramo quitados", cell: (row) => row.oldRefs.join(", ") },
   { header: "Puntos de acceso", cell: (row) => String(row.points) },
   { header: "Cobertura", cell: (row) => coverageTextOf(row.coverage) },
+  { header: "Largo anterior (m)", cell: (row) => metersTextOf(row.oldLength) },
+  { header: "Largo nuevo (m)", cell: (row) => metersTextOf(row.newLength) },
+  { header: "Nuevo fuera del anterior (m)", cell: (row) => metersTextOf(row.outsideLength) },
 ];
 
 const REMOVAL_COLUMNS: TableColumn<EjesRemovalRow>[] = [

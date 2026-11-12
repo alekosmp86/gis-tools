@@ -112,6 +112,12 @@ describe("buildEjesAnalysisSql", () => {
       expect(sql).toContain("string_agg(DISTINCT c.localidad");
     });
 
+    it("should measure the old length, the new length and the new length outside the old section of splits and merges", () => {
+      for (const alias of ["old_length", "new_length", "outside_length"]) expect(sql).toContain(`AS "${alias}"`);
+      expect(sql).toContain("ST_Difference(ST_Union(n.geom)");
+      expect(sql).toContain("ST_Difference((array_agg(p.new_geom))[1]");
+    });
+
     it("should report access points of each removed section", () => {
       expect(sql).toContain('LEFT JOIN "ap" AS ap ON ap.ref = s.ref');
       expect(sql).toContain("count(*) AS points");

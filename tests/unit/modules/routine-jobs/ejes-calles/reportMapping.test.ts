@@ -59,8 +59,8 @@ describe("toEjesAnalysis", () => {
       with_locality: 2,
       only_department: 1,
       without_code: 0,
-      [ANALYSIS_LIST_ALIAS.SPLITS]: [{ old_ref: 10, idcalle: "5", new_refs: ["11", "12"], points: "3", coverage: 0.98 }],
-      [ANALYSIS_LIST_ALIAS.MERGES]: [{ new_ref: "20", idcalle: "6", old_refs: ["21", "22"], points: 0, coverage: null }],
+      [ANALYSIS_LIST_ALIAS.SPLITS]: [{ old_ref: 10, idcalle: "5", new_refs: ["11", "12"], points: "3", coverage: 0.98, old_length: 100.5, new_length: "130", outside_length: 29.5 }],
+      [ANALYSIS_LIST_ALIAS.MERGES]: [{ new_ref: "20", idcalle: "6", old_refs: ["21", "22"], points: 0, coverage: null, old_length: 80, new_length: 80, outside_length: 0 }],
       [ANALYSIS_LIST_ALIAS.PLAIN]: [{ ref: "30", idcalle: null, points: 2 }],
       [ANALYSIS_LIST_ALIAS.STREETS]: [
         {
@@ -101,9 +101,9 @@ describe("toEjesAnalysis", () => {
       newStreets: 1,
     });
     expect(analysis.cloc).toEqual({ withLocality: 2, onlyDepartment: 1, withoutCode: 0 });
-    expect(analysis.splits).toEqual([{ oldRef: "10", idcalle: "5", newRefs: ["11", "12"], points: 3, coverage: 0.98 }]);
+    expect(analysis.splits).toEqual([{ oldRef: "10", idcalle: "5", newRefs: ["11", "12"], points: 3, coverage: 0.98, oldLength: 100.5, newLength: 130, outsideLength: 29.5 }]);
     expect(analysis.merges).toEqual([
-      { newRef: "20", idcalle: "6", oldRefs: ["21", "22"], points: 0, coverage: null },
+      { newRef: "20", idcalle: "6", oldRefs: ["21", "22"], points: 0, coverage: null, oldLength: 80, newLength: 80, outsideLength: 0 },
     ]);
     expect(analysis.plainRemovals).toEqual([{ ref: "30", idcalle: null, points: 2 }]);
     expect(analysis.newStreets).toEqual([

@@ -4,6 +4,7 @@ import {
   buildEjesReportView,
   coverageTextOf,
   EJES_DRY_RUN_BANNER,
+  metersTextOf,
 } from "@/modules/routine-jobs/ui/ejesCallesReportView";
 
 const COUNTS = {
@@ -146,6 +147,14 @@ describe("buildEjesReportView (EJ-12)", () => {
       expect(coverageTextOf(1)).toBe("100%");
       expect(coverageTextOf(0)).toBe("0%");
       expect(coverageTextOf(null)).toBe("sin dato");
+    });
+  });
+
+  describe("metersTextOf", () => {
+    it("should show one decimal and sin dato for null", () => {
+      expect(metersTextOf(1087.7644)).toBe("1087.8");
+      expect(metersTextOf(0)).toBe("0.0");
+      expect(metersTextOf(null)).toBe("sin dato");
     });
   });
 });

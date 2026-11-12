@@ -22,6 +22,9 @@ const splitOf = (row: Row): EjesSplitRow => ({
   newRefs: textsOf(row.new_refs),
   points: numberOf(row.points),
   coverage: nullableNumber(row.coverage),
+  oldLength: nullableNumber(row.old_length),
+  newLength: nullableNumber(row.new_length),
+  outsideLength: nullableNumber(row.outside_length),
 });
 
 const mergeOf = (row: Row): EjesMergeRow => ({
@@ -30,6 +33,9 @@ const mergeOf = (row: Row): EjesMergeRow => ({
   oldRefs: textsOf(row.old_refs),
   points: numberOf(row.points),
   coverage: nullableNumber(row.coverage),
+  oldLength: nullableNumber(row.old_length),
+  newLength: nullableNumber(row.new_length),
+  outsideLength: nullableNumber(row.outside_length),
 });
 
 const removalOf = (row: Row): EjesRemovalRow => ({

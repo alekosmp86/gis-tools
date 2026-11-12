@@ -142,7 +142,9 @@ function splitCtes(): string[] {
       [
         "SELECT r.id, r.ref, r.idcalle, r.len, count(n.ref) AS new_count,",
         `ST_Length(ST_Intersection(r.geometry, ST_Buffer(ST_Collect(n.geom), ${tolerance}))) AS covered,`,
-        "array_agg(n.ref ORDER BY n.ref) AS new_refs",
+        "array_agg(n.ref ORDER BY n.ref) AS new_refs,",
+        `ST_Length(ST_Union(n.geom)) AS new_len,`,
+        `ST_Length(ST_Difference(ST_Union(n.geom), ST_Buffer(r.geometry, ${tolerance}))) AS outside_len`,
         `FROM ${q("removed")} AS r JOIN ${q("new_sections")} AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
         "WHERE r.len > 0 GROUP BY r.id, r.ref, r.idcalle, r.len, r.geometry",
       ].join(" ")
@@ -157,7 +159,7 @@ function mergeCtes(): string[] {
     cte(
       "merge_pairs",
       [
-        "SELECT n.ref AS new_ref, n.idcalle AS idcalle, r.id, r.ref AS old_ref, r.len,",
+        "SELECT n.ref AS new_ref, n.idcalle AS idcalle, r.id, r.ref AS old_ref, r.len, n.geom AS new_geom, r.geometry AS old_geom,",
         `ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, ${tolerance}))) AS covered`,
         `FROM ${q("new_sections")} AS n JOIN ${q("removed")} AS r ON r.idcalle = n.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
         `WHERE r.len > 0 AND r.id NOT IN (SELECT id FROM ${q("splits")})`,
@@ -167,7 +169,8 @@ function mergeCtes(): string[] {
       "merges",
       [
         "SELECT p.new_ref, min(p.idcalle) AS idcalle, array_agg(p.old_ref ORDER BY p.old_ref) AS old_refs,",
-        "sum(p.covered) / NULLIF(sum(p.len), 0) AS coverage,",
+        "sum(p.covered) / NULLIF(sum(p.len), 0) AS coverage, sum(p.len) AS old_len, ST_Length((array_agg(p.new_geom))[1]) AS new_len,",
+        `ST_Length(ST_Difference((array_agg(p.new_geom))[1], ST_Buffer(ST_Collect(p.old_geom), ${tolerance}))) AS outside_len,`,
         `COALESCE(sum(ap.points), 0) AS points FROM ${q("merge_pairs")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.old_ref`,
         `WHERE p.covered > 0 GROUP BY p.new_ref HAVING count(*) >= 2 AND ${coverageThresholdSql("sum(p.covered)", "sum(p.len)")}`,
       ].join(" ")
@@ -223,8 +226,8 @@ const listOf = (alias: string, name: string, select: string): string =>
   `${jsonArrayOf(limited(select), name)} AS ${q(alias)}`;
 
 function listColumns(): string[] {
-  const splitSelect = `SELECT s.ref AS "old_ref", s.idcalle AS "idcalle", s.new_refs AS "new_refs", COALESCE(ap.points, 0) AS "points", s.covered / NULLIF(s.len, 0) AS "coverage" FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref ORDER BY s.ref`;
-  const mergeSelect = `SELECT m.new_ref AS "new_ref", m.idcalle AS "idcalle", m.old_refs AS "old_refs", m.points AS "points", m.coverage AS "coverage" FROM ${q("merges")} AS m ORDER BY m.new_ref`;
+  const splitSelect = `SELECT s.ref AS "old_ref", s.idcalle AS "idcalle", s.new_refs AS "new_refs", COALESCE(ap.points, 0) AS "points", s.covered / NULLIF(s.len, 0) AS "coverage", s.len AS "old_length", s.new_len AS "new_length", s.outside_len AS "outside_length" FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref ORDER BY s.ref`;
+  const mergeSelect = `SELECT m.new_ref AS "new_ref", m.idcalle AS "idcalle", m.old_refs AS "old_refs", m.points AS "points", m.coverage AS "coverage", m.old_len AS "old_length", m.new_len AS "new_length", m.outside_len AS "outside_length" FROM ${q("merges")} AS m ORDER BY m.new_ref`;
   const plainSelect = `SELECT p.ref AS "ref", p.idcalle AS "idcalle", COALESCE(ap.points, 0) AS "points" FROM ${q("plain")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.ref ORDER BY COALESCE(ap.points, 0) DESC, p.ref`;
   const streetSelect = `SELECT n.idcalle AS "idcalle", n.name AS "name", n.sections AS "sections", n.tipos AS "tipos", n.departments AS "departments", n.localities AS "localities" FROM ${q("new_streets")} AS n ORDER BY n.idcalle, n.name`;
   const attrSelect = [

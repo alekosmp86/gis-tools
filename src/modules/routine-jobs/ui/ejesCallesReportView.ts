@@ -44,6 +44,10 @@ const unknownTextOf = (entry: EjesUnknownValue): string => `${entry.value ?? "si
 export const coverageTextOf = (coverage: number | null): string =>
   coverage === null ? "sin dato" : `${Math.round(coverage * PERCENT_SCALE)}%`;
 
+const METER_DECIMALS = 1;
+
+export const metersTextOf = (meters: number | null): string => (meters === null ? "sin dato" : meters.toFixed(METER_DECIMALS));
+
 const kpi = (label: string, value: number): ReportKpiView => ({ label, value });
 
 function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {

@@ -65,6 +65,9 @@ export interface EjesSplitRow {
   newRefs: string[];
   points: number;
   coverage: number | null;
+  oldLength: number | null;
+  newLength: number | null;
+  outsideLength: number | null;
 }
 
 export interface EjesMergeRow {
@@ -73,6 +76,9 @@ export interface EjesMergeRow {
   oldRefs: string[];
   points: number;
   coverage: number | null;
+  oldLength: number | null;
+  newLength: number | null;
+  outsideLength: number | null;
 }
 
 export interface EjesRemovalRow {
