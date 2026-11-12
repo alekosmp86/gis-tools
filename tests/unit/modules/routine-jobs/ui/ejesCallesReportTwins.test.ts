@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TWIN_CLASS } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
-import type { EjesResult, EjesTwinRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
+import type { EjesInvalidGeometryRow, EjesResult, EjesTwinRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import { EjesCallesReport } from "@/modules/routine-jobs/ui/EjesCallesReport";
 
 const COUNTS = {
@@ -52,7 +52,7 @@ const TWINS: EjesTwinRow[] = [
   },
 ];
 
-const resultOf = (twins: EjesTwinRow[]): EjesResult =>
+const resultOf = (twins: EjesTwinRow[], invalid: EjesInvalidGeometryRow[] = []): EjesResult =>
   ({
     dryRun: true,
     targetModified: false,
@@ -70,6 +70,9 @@ const resultOf = (twins: EjesTwinRow[]): EjesResult =>
       unknownFuenteRows: 0,
       unknownTipos: [],
       unknownFuentes: [],
+      invalidGeometryRows: invalid.length,
+      invalidGeometryRefs: new Set(invalid.map((row) => row.ref)).size,
+      invalidGeometries: invalid,
     },
     counts: { ...COUNTS, twins: twins.length },
     cloc: { withLocality: 0, onlyDepartment: 0, withoutCode: 0 },
@@ -85,8 +88,46 @@ const resultOf = (twins: EjesTwinRow[]): EjesResult =>
     stepTimings: [],
   }) as unknown as EjesResult;
 
-const render = (twins: EjesTwinRow[]): string =>
-  renderToStaticMarkup(React.createElement(EjesCallesReport, { result: resultOf(twins), mapBase: null }));
+const render = (twins: EjesTwinRow[], invalid: EjesInvalidGeometryRow[] = []): string =>
+  renderToStaticMarkup(React.createElement(EjesCallesReport, { result: resultOf(twins, invalid), mapBase: null }));
+
+describe("EjesCallesReport invalid geometries (ET-18)", () => {
+  const INVALID: EjesInvalidGeometryRow[] = [
+    { ref: "1001", idcalle: "72006", localidad: "TRINIDAD", departamento: "FLORES" },
+    { ref: "1002", idcalle: null, localidad: null, departamento: null },
+  ];
+
+  it("should show a collapsible list titled Tramos con geometría inválida (se omiten) with the four columns and the rows", () => {
+    const html = render([], INVALID);
+
+    expect(html).toContain("Tramos con geometría inválida (se omiten)");
+    for (const header of ["reftramo", "idcalle", "Localidad", "Departamento"]) {
+      expect(html).toContain(`>${header}</th>`);
+    }
+    expect(html).toContain("1001");
+    expect(html).toContain("TRINIDAD");
+    expect(html).toContain("FLORES");
+    expect(html).toContain("sin dato");
+  });
+
+  it("should offer no map button for the invalid rows", () => {
+    expect(render([], INVALID)).not.toContain("Ver en mapa");
+  });
+
+  it("should show the two KPIs of the file problems", () => {
+    const html = render([], INVALID);
+
+    expect(html).toContain("Filas con geometría inválida (se omiten)");
+    expect(html).toContain("Tramos con geometría inválida");
+  });
+
+  it("should hide the list and the KPIs when there are none", () => {
+    const html = render([], []);
+
+    expect(html).not.toContain("Tramos con geometría inválida");
+    expect(html).not.toContain("Filas con geometría inválida");
+  });
+});
 
 describe("EjesCallesReport twins (ET-6)", () => {
   it("should show the KPI group Tramos repetidos por localidad with its eight cards", () => {

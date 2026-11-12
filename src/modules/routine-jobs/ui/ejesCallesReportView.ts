@@ -16,6 +16,7 @@ export interface EjesListSummaries {
   newStreets: string;
   attrChanges: string;
   twins: string;
+  invalidGeometries: string;
 }
 
 export interface EjesAttrRowView extends EjesAttrRow {
@@ -72,6 +73,8 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
     kpi("reftramo que no es un número", staging.nonIntegerRefs),
     kpi("Filas sin geometría", staging.emptyGeometry),
     kpi("Filas sin idcalle", staging.emptyIdcalle),
+    kpi("Filas con geometría inválida (se omiten)", staging.invalidGeometryRows),
+    kpi("Tramos con geometría inválida", staging.invalidGeometryRefs),
     kpi("Filas con caracteres dañados (�)", staging.damagedTextRows),
     kpi("Filas con tipo de vía desconocido", staging.unknownTipoRows),
     kpi("Filas con fuente desconocida", staging.unknownFuenteRows),
@@ -138,6 +141,7 @@ const summariesOf = (result: EjesResult): EjesListSummaries => ({
   plainRemovals: listSummaryOf("Tramos sin reemplazo (primero los que tienen puntos de acceso)", result.plainRemovals.length, result.counts.plainRemovals),
   newStreets: listSummaryOf("Calles nuevas", result.newStreets.length, result.counts.newStreets),
   attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
+  invalidGeometries: listSummaryOf("Tramos con geometría inválida (se omiten)", result.staging.invalidGeometries.length, result.staging.invalidGeometryRows),
   twins: listSummaryOf("Tramos repetidos por localidad (primero los que se deciden en el mapa)", result.twins.length, result.counts.twins),
 });
 

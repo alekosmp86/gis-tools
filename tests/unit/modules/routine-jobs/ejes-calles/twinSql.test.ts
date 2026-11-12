@@ -22,6 +22,12 @@ describe("twinSql module (ET-13)", () => {
     expect(sql.split('"twin_located" AS (')).toHaveLength(2);
   });
 
+  it("should read only valid, non-empty geometries into twin_raw (ET-18)", () => {
+    const raw = twinGroupCtes(layouts)[0];
+
+    expect(raw).toContain('s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsValid(s."geom"), true)');
+  });
+
   it("should build the list column under the given alias, limited and ordered", () => {
     const column = twinListColumn("some_alias");
 

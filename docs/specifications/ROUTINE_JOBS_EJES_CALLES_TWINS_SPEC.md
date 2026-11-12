@@ -126,7 +126,9 @@ extended to 15 m).
 - **ET-18** Staging rows whose geometry is invalid (`NOT ST_IsValid`) are skipped by the whole analysis: the section classification
   (new, unchanged, changed, removed, split, merge), the new streets, the locality computation and the twin analysis never see them,
   so a degenerate line (on dev 795 rows, 615 distinct `reftramo`, all of zero length, e.g. a two-point line with identical points)
-  is never classified, dropped, kept or counted as a new section. They are reported in the file-problems part of the report: a KPI
+  is never classified, dropped, kept or counted as a new section. The `reftramo` still counts as present in the file: a current
+  section whose only staging rows are invalid is left as it is and is NOT reported as removed (on dev 557 of the 615 invalid
+  `reftramo` exist in `carto` with a valid geometry; reporting them as removed would flag 557 sections for a file error). They are reported in the file-problems part of the report: a KPI
   "Filas con geometría inválida (se omiten)" (rows) and "Tramos con geometría inválida" (distinct `reftramo`), and a collapsible list
   of up to `DETAIL_LIST_LIMIT` rows with `reftramo`, `idcalle`, locality and department. The raw file counts (`rows`, distinct refs,
   repeated groups) are unchanged. It is a warning, not a blocker. The criterion is validity, never a length threshold: short but

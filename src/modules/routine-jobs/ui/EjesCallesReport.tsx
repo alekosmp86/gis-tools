@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import type { EjesMergeRow, EjesNewStreetRow, EjesRemovalRow, EjesResult, EjesSplitRow, EjesTwinRow } from "../jobs/ejes-calles/types";
+import type { EjesInvalidGeometryRow, EjesMergeRow, EjesNewStreetRow, EjesRemovalRow, EjesResult, EjesSplitRow, EjesTwinRow } from "../jobs/ejes-calles/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import type { EjesGeometryMapBase } from "./clientTypes";
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
@@ -48,6 +48,13 @@ const STREET_COLUMNS: TableColumn<EjesNewStreetRow>[] = [
   { header: "Localidad", cell: (row) => textOrNoData(row.localities) },
   { header: "Tipo de vía", cell: (row) => textOrNoData(row.tipos) },
   { header: "Tramos nuevos", cell: (row) => String(row.sections) },
+];
+
+const INVALID_GEOMETRY_COLUMNS: TableColumn<EjesInvalidGeometryRow>[] = [
+  { header: "reftramo", cell: (row) => row.ref },
+  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
+  { header: "Localidad", cell: (row) => textOrNoData(row.localidad) },
+  { header: "Departamento", cell: (row) => textOrNoData(row.departamento) },
 ];
 
 const ATTR_COLUMNS: TableColumn<EjesAttrRowView>[] = [
@@ -150,6 +157,15 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
         {result.newStreets.length > 0 && (
           <CollapsibleSection summary={view.summaries.newStreets}>
             <RowsTable columns={STREET_COLUMNS} rows={result.newStreets} rowKey={(row) => `${row.idcalle}|${row.name}`} />
+          </CollapsibleSection>
+        )}
+        {result.staging.invalidGeometries.length > 0 && (
+          <CollapsibleSection summary={view.summaries.invalidGeometries}>
+            <RowsTable
+              columns={INVALID_GEOMETRY_COLUMNS}
+              rows={result.staging.invalidGeometries}
+              rowKey={(row) => `${row.ref}|${row.localidad}|${row.departamento}`}
+            />
           </CollapsibleSection>
         )}
         {view.attrRows.length > 0 && (

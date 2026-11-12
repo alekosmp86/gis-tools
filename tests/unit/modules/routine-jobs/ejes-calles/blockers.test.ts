@@ -15,12 +15,21 @@ const cleanStaging = (overrides: Partial<EjesStagingReport> = {}): EjesStagingRe
   unknownFuenteRows: 0,
   unknownTipos: [],
   unknownFuentes: [],
+  invalidGeometryRows: 0,
+  invalidGeometryRefs: 0,
+  invalidGeometries: [],
   ...overrides,
 });
 
 describe("ejesBlockersOf (EJ-8)", () => {
   it("should return no blockers for clean staging data", () => {
     expect(ejesBlockersOf(cleanStaging())).toEqual([]);
+  });
+
+  it("should not block on invalid geometries: they are skipped and reported as a warning (ET-18)", () => {
+    const invalid = { ref: "1", idcalle: "2", localidad: "A", departamento: "B" };
+
+    expect(ejesBlockersOf(cleanStaging({ invalidGeometryRows: 795, invalidGeometryRefs: 615, invalidGeometries: [invalid] }))).toEqual([]);
   });
 
   it("should not treat plain counts (rows, distinct refs) as blockers", () => {

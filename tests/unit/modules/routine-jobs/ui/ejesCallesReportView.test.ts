@@ -65,6 +65,9 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
         { value: null, rows: 1 },
       ],
       unknownFuentes: [{ value: "XYZ", rows: 1 }],
+      invalidGeometryRows: 0,
+      invalidGeometryRefs: 0,
+      invalidGeometries: [],
     },
     counts: COUNTS,
     cloc: { withLocality: 6, onlyDepartment: 2, withoutCode: 0 },
@@ -205,6 +208,53 @@ describe("buildEjesReportView (EJ-12)", () => {
       [TWIN_CLASS.NEITHER, "Lejos de padrones: sin regla"],
     ])("should describe the class %s as %s", (twinClass, text) => {
       expect(twinCaseTextOf(twinClass)).toBe(text);
+    });
+  });
+
+  describe("invalid geometries (ET-18)", () => {
+    const withInvalid = (rows: number, refs: number, list: EjesResult["staging"]["invalidGeometries"] = []): EjesResult => {
+      const base = resultOf();
+      return { ...base, staging: { ...base.staging, invalidGeometryRows: rows, invalidGeometryRefs: refs, invalidGeometries: list } };
+    };
+    const kpiLabels = (result: EjesResult): string[] => buildEjesReportView(result).kpiGroups.flatMap((group) => group.kpis.map((kpi) => kpi.label));
+
+    it("should show both invalid-geometry KPIs with their values when there are invalid rows", () => {
+      const kpis = Object.fromEntries(
+        buildEjesReportView(withInvalid(795, 615)).kpiGroups.flatMap((group) => group.kpis).map((kpi) => [kpi.label, kpi.value])
+      );
+
+      expect(kpis["Filas con geometría inválida (se omiten)"]).toBe(795);
+      expect(kpis["Tramos con geometría inválida"]).toBe(615);
+    });
+
+    it("should show neither KPI when there are no invalid geometries", () => {
+      const labels = kpiLabels(withInvalid(0, 0));
+
+      expect(labels).not.toContain("Filas con geometría inválida (se omiten)");
+      expect(labels).not.toContain("Tramos con geometría inválida");
+    });
+
+    it("should show the KPIs in the file-problems part, next to the other file problems", () => {
+      const problems = buildEjesReportView(withInvalid(3, 2)).kpiGroups.find((group) => group.kpis.some((kpi) => kpi.label === "Tramos con geometría inválida"));
+      const labels = problems?.kpis.map((kpi) => kpi.label) ?? [];
+
+      expect(labels).toContain("Filas con caracteres dañados (�)");
+      expect(labels).toContain("Filas con geometría inválida (se omiten)");
+    });
+
+    it("should summarize the list with the shown rows and the row total, noting a cut list", () => {
+      const row = { ref: "1", idcalle: "2", localidad: "A", departamento: "B" };
+
+      expect(buildEjesReportView(withInvalid(1, 1, [row])).summaries.invalidGeometries).toBe("Tramos con geometría inválida (se omiten) (1)");
+      expect(buildEjesReportView(withInvalid(795, 615, [row])).summaries.invalidGeometries).toBe(
+        "Tramos con geometría inválida (se omiten) (primeras 1 de 795)"
+      );
+    });
+
+    it("should not make invalid geometries a blocker or change the other counts", () => {
+      const view = buildEjesReportView(withInvalid(3, 2));
+
+      expect(view.blockers).toEqual(["bloqueo uno"]);
     });
   });
 

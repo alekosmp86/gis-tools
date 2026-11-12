@@ -13,7 +13,7 @@ import {
 import type { EjesLayouts } from "../types";
 import { col, countOf, listOf, table, trimmed } from "./layoutSql";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
-import { INTEGER_PATTERN } from "./stagingSql";
+import { INTEGER_PATTERN, validGeometrySql } from "./stagingSql";
 import { twinCountColumns, twinCtes, twinGroupCtes, twinListColumn } from "./twinSql";
 
 const SNAP_GRID = 10 ** -GEOMETRY_EQUALITY_DECIMALS;
@@ -55,7 +55,7 @@ function stagingCtes(layouts: EjesLayouts): string[] {
         `${trimmed(column(STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
         `${trimmed(column(STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `${geometry} AS geom`,
-        `FROM ${staging} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry})`,
+        `FROM ${staging} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry)}`,
         `AND ${reference} ~ '${INTEGER_PATTERN}') AS raw ORDER BY raw.ref`,
       ].join(" ")
     ),

@@ -32,11 +32,42 @@ describe("toEjesStagingReport", () => {
     expect(report.unknownFuentes).toEqual([{ value: null, rows: 6 }]);
   });
 
+  it("should map the invalid geometry counts and rows as text (ET-18)", () => {
+    const report = toEjesStagingReport({
+      invalid_geometry_rows: "795",
+      invalid_geometry_refs: 615,
+      invalid_geometries: [{ ref: 12, idcalle: "5", localidad: "TRINIDAD", departamento: "FLORES" }],
+    });
+
+    expect(report.invalidGeometryRows).toBe(795);
+    expect(report.invalidGeometryRefs).toBe(615);
+    expect(report.invalidGeometries).toEqual([{ ref: "12", idcalle: "5", localidad: "TRINIDAD", departamento: "FLORES" }]);
+  });
+
+  it("should map null locality, department and idcalle of an invalid row to null", () => {
+    const report = toEjesStagingReport({ invalid_geometries: [{ ref: "1", idcalle: null, localidad: null, departamento: null }] });
+
+    expect(report.invalidGeometries).toEqual([{ ref: "1", idcalle: null, localidad: null, departamento: null }]);
+  });
+
+  it.each([[null], [undefined], ["oops"], [{}], [5]])("should map invalid_geometries %j to an empty list", (value) => {
+    expect(toEjesStagingReport({ invalid_geometries: value }).invalidGeometries).toEqual([]);
+  });
+
+  it("should keep the raw counts as they are when invalid rows are reported", () => {
+    const report = toEjesStagingReport({ rows: 7, distinct_refs: 5, repeated_groups: 2, invalid_geometry_rows: 3 });
+
+    expect(report).toMatchObject({ rows: 7, distinctRefs: 5, repeatedGroups: 2, invalidGeometryRows: 3 });
+  });
+
   it("should default to zeros and empty lists for an empty row", () => {
     const report = toEjesStagingReport({});
 
     expect(report.rows).toBe(0);
     expect(report.damagedTextRows).toBe(0);
+    expect(report.invalidGeometryRows).toBe(0);
+    expect(report.invalidGeometryRefs).toBe(0);
+    expect(report.invalidGeometries).toEqual([]);
     expect(report.unknownTipos).toEqual([]);
     expect(report.unknownFuentes).toEqual([]);
   });

@@ -25,6 +25,13 @@ export interface EjesUnknownValue {
   rows: number;
 }
 
+export interface EjesInvalidGeometryRow {
+  ref: string;
+  idcalle: string | null;
+  localidad: string | null;
+  departamento: string | null;
+}
+
 export interface EjesStagingReport {
   rows: number;
   distinctRefs: number;
@@ -33,6 +40,9 @@ export interface EjesStagingReport {
   nonIntegerRefs: number;
   emptyGeometry: number;
   emptyIdcalle: number;
+  invalidGeometryRows: number;
+  invalidGeometryRefs: number;
+  invalidGeometries: EjesInvalidGeometryRow[];
   damagedTextRows: number;
   unknownTipoRows: number;
   unknownFuenteRows: number;

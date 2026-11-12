@@ -5,6 +5,7 @@ import { ANALYSIS_LIST_ALIAS } from "./analysisSql";
 import type {
   EjesAnalysis,
   EjesAttrRow,
+  EjesInvalidGeometryRow,
   EjesMergeRow,
   EjesNewStreetRow,
   EjesRemovalRow,
@@ -59,6 +60,13 @@ const streetOf = (row: Row): EjesNewStreetRow => {
   };
 };
 
+const invalidGeometryOf = (row: Row): EjesInvalidGeometryRow => ({
+  ref: String(row.ref),
+  idcalle: textOf(row.idcalle),
+  localidad: textOf(row.localidad),
+  departamento: textOf(row.departamento),
+});
+
 const attrOf = (row: Row): EjesAttrRow => ({
   ref: String(row.ref),
   name: textOf(row.name),
@@ -95,6 +103,9 @@ export function toEjesStagingReport(row: Row): EjesStagingReport {
     nonIntegerRefs: numberOf(row.non_integer_refs),
     emptyGeometry: numberOf(row.empty_geometry),
     emptyIdcalle: numberOf(row.empty_idcalle),
+    invalidGeometryRows: numberOf(row.invalid_geometry_rows),
+    invalidGeometryRefs: numberOf(row.invalid_geometry_refs),
+    invalidGeometries: listOf(row.invalid_geometries).map(invalidGeometryOf),
     damagedTextRows: numberOf(row.damaged_text_rows),
     unknownTipoRows: numberOf(row.unknown_tipo_rows),
     unknownFuenteRows: numberOf(row.unknown_fuente_rows),

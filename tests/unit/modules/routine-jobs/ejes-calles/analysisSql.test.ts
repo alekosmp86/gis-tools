@@ -304,6 +304,32 @@ describe("buildEjesAnalysisSql", () => {
     });
   });
 
+  describe("ET-18 invalid geometries", () => {
+    const stgKeys = sql.slice(sql.indexOf('"stg_keys" AS ('), sql.indexOf('"stg" AS ('));
+    const stg = sql.slice(sql.indexOf('"stg" AS ('), sql.indexOf(",\n", sql.indexOf('"stg" AS (')));
+
+    it("should skip invalid geometries in stg, next to the null and empty conditions", () => {
+      expect(stg).toContain('s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsValid(s."geom"), true)');
+    });
+
+    it("should not filter stg_keys on validity or on geometry at all, so a reftramo with only invalid rows stays present", () => {
+      expect(stgKeys).not.toContain("ST_IsValid");
+      expect(stgKeys).not.toContain("ST_IsEmpty");
+      expect(stgKeys).not.toContain("geom");
+      expect(stgKeys).toContain("WHERE NULLIF(btrim(s.\"reftramo\"::text), '') IS NOT NULL");
+    });
+
+    it("should still compare the current sections with stg_keys when looking for removed ones", () => {
+      expect(sql).toContain('NOT EXISTS (SELECT 1 FROM "stg_keys" AS k WHERE k.ref = c.ref)');
+    });
+
+    it("should use the validity predicate in the twin analysis too", () => {
+      const twinRaw = sql.slice(sql.indexOf('"twin_raw" AS ('), sql.indexOf('"twin_groups" AS ('));
+
+      expect(twinRaw).toContain('COALESCE(ST_IsValid(s."geom"), true)');
+    });
+  });
+
   describe("ET-12 locality names", () => {
     it("should collect in inside_localities the distinct upper-cased trimmed names of the locality polygons the twin intersects, only for the class NEITHER", () => {
       expect(sql).toContain(

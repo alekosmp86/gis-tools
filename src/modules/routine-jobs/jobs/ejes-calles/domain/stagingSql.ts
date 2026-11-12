@@ -12,6 +12,9 @@ const DAMAGED_COLUMNS = [STAGING_COLUMN.NOMBRE, STAGING_COLUMN.LOCALIDAD, STAGIN
 const textOf = (layouts: EjesLayouts, column: string): string =>
   `NULLIF(btrim(s.${physicalColumn(layouts[EJES_TABLE_ROLE.STAGING], column)}::text), '')`;
 
+/** A NULL or empty geometry is not an invalid one: those have their own counts. */
+export const validGeometrySql = (geometry: string): string => `COALESCE(ST_IsValid(${geometry}), true)`;
+
 export function stagingRowsCte(layouts: EjesLayouts): string {
   const staging = layouts[EJES_TABLE_ROLE.STAGING];
   const geometry = `s.${physicalColumn(staging, STAGING_COLUMN.GEOM)}`;
@@ -23,12 +26,24 @@ export function stagingRowsCte(layouts: EjesLayouts): string {
       `${textOf(layouts, STAGING_COLUMN.IDCALLE)} AS idcalle,`,
       `${textOf(layouts, STAGING_COLUMN.TIPO_VIALIDAD)} AS tipo,`,
       `${textOf(layouts, STAGING_COLUMN.FUENTE)} AS fuente,`,
+      `${textOf(layouts, STAGING_COLUMN.LOCALIDAD)} AS localidad,`,
+      `${textOf(layouts, STAGING_COLUMN.DEPARTAMENTO)} AS departamento,`,
       `(${geometry} IS NULL OR ST_IsEmpty(${geometry})) AS empty_geometry,`,
+      `(NOT ${validGeometrySql(geometry)}) AS invalid_geometry,`,
       `(${DAMAGED_COLUMNS.map((column) => `position(chr(65533) in COALESCE(s.${physicalColumn(staging, column)}::text, '')) > 0`).join(" OR ")}) AS damaged_text`,
       `FROM ${qualifiedName(staging)} AS s`,
     ].join(" ")
   );
 }
+
+const invalidListSql = (): string =>
+  jsonArrayOf(
+    [
+      `SELECT x.ref AS "ref", x.idcalle AS "idcalle", x.localidad AS "localidad", x.departamento AS "departamento" FROM ${q("s")} AS x`,
+      `WHERE x.invalid_geometry ORDER BY x.ref, x.localidad LIMIT ${DETAIL_LIST_LIMIT}`,
+    ].join(" "),
+    "invalid_geometry_list"
+  );
 
 function unknownValuesSql(column: string, mapName: string): string {
   return jsonArrayOf(
@@ -63,6 +78,9 @@ export function buildStagingChecksSql(layouts: EjesLayouts): string {
     `(SELECT COALESCE(sum(rows), 0) FROM ${q("dup")}) AS "repeated_rows",`,
     `(SELECT count(*) FROM ${q("s")} WHERE ref IS NULL OR ref !~ '${INTEGER_PATTERN}') AS "non_integer_refs",`,
     `(SELECT count(*) FROM ${q("s")} WHERE empty_geometry) AS "empty_geometry",`,
+    `(SELECT count(*) FROM ${q("s")} WHERE invalid_geometry) AS "invalid_geometry_rows",`,
+    `(SELECT count(DISTINCT ref) FROM ${q("s")} WHERE invalid_geometry) AS "invalid_geometry_refs",`,
+    `${invalidListSql()} AS "invalid_geometries",`,
     `(SELECT count(*) FROM ${q("s")} WHERE damaged_text) AS "damaged_text_rows",`,
     `(SELECT count(*) FROM ${q("s")} WHERE idcalle IS NULL) AS "empty_idcalle",`,
     `${unknownRowsSql("tipo", TIPO_MAP_CTE_NAME)} AS "unknown_tipo_rows",`,

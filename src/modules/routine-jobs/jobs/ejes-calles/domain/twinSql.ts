@@ -12,7 +12,7 @@ import {
 } from "../constants";
 import type { EjesLayouts } from "../types";
 import { col, countOf, listOf, table, trimmed } from "./layoutSql";
-import { INTEGER_PATTERN } from "./stagingSql";
+import { INTEGER_PATTERN, validGeometrySql } from "./stagingSql";
 
 export function twinGroupCtes(layouts: EjesLayouts): string[] {
   const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
@@ -28,7 +28,7 @@ export function twinGroupCtes(layouts: EjesLayouts): string[] {
         `${trimmed(column(STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
         `${trimmed(column(STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `ST_SetSRID(${geometry}, ${EJES_SRID}) AS geom`,
-        `FROM ${table(layouts, "STAGING")} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry})`,
+        `FROM ${table(layouts, "STAGING")} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry)}`,
         `AND ${reference} ~ '${INTEGER_PATTERN}'`,
       ].join(" ")
     ),
