@@ -6,6 +6,8 @@ import { CalendarClock } from "lucide-react";
 import { HomeCardFrame } from "@/ui-kit/components/HomeCardFrame";
 import { Badge } from "@/ui-kit/components/ui/Badge";
 import { BadgeVariant } from "@/ui-kit/types/ui";
+import { useModuleContributions } from "@/ui-kit/modules/ModuleContributionsContext";
+import { UiSlot } from "@/ui-kit/modules/contracts";
 import { ROUTINE_JOBS } from "./jobs";
 import styles from "./RoutineJobsHomeCard.module.css";
 
@@ -17,7 +19,10 @@ const WIKI_SLUG = "routine-jobs";
 const WIKI_LABEL = "Trabajos de rutina";
 const DASHBOARD_ROUTE = "/tools/m/routine-jobs";
 
-export const RoutineJobsHomeCard: React.FC = () => (
+export const RoutineJobsHomeCard: React.FC = () => {
+  const contributions = useModuleContributions();
+  const contributedCount = contributions.filter((contribution) => contribution.slot === UiSlot.ROUTINE_JOBS_LIST).length;
+  return (
   <HomeCardFrame wikiSlug={WIKI_SLUG} wikiLabel={WIKI_LABEL}>
     <Link href={DASHBOARD_ROUTE} className={`glass-panel ${styles.card}`}>
       <div className={styles.cardHeader}>
@@ -32,8 +37,9 @@ export const RoutineJobsHomeCard: React.FC = () => (
         <p className={styles.cardDesc}>
           Trabajos de base de datos que se repiten, como la carga mensual de los padrones catastrales.
         </p>
-        <p className={styles.statusLine}>{`Trabajos disponibles: ${ROUTINE_JOBS.length}`}</p>
+        <p className={styles.statusLine}>{`Trabajos disponibles: ${ROUTINE_JOBS.length + contributedCount}`}</p>
       </div>
     </Link>
   </HomeCardFrame>
-);
+  );
+};
