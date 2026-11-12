@@ -4,7 +4,7 @@ import React, { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { ButtonVariant } from "@/ui-kit/types/ui";
-import styles from "./PadronReview.module.css";
+import styles from "./ReviewNavigation.module.css";
 
 const ICON_SIZE = 15;
 const PREVIOUS_LABEL = "Anterior";

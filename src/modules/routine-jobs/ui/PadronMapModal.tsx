@@ -1,13 +1,12 @@
 "use client";
 
 import React from "react";
-import { Modal } from "@/ui-kit/components/Modal";
 import type { GeometryMapBase } from "./clientTypes";
+import { OutlineMapModal } from "./map/OutlineMapModal";
 import { PadronMapBody } from "./PadronMapBody";
 import { PadronReviewDecision } from "./PadronReviewDecision";
 import type { PadronReview } from "./padronReviewItems";
 import type { ReviewDecisions } from "./reviewDecisions";
-import { ReviewNavigation } from "./ReviewNavigation";
 
 export interface PadronMapModalProps {
   /** The rows of the table the modal was opened from and the one on screen; null while closed. */
@@ -28,9 +27,12 @@ export function PadronMapModal({ review, base, decisions, onNavigate, onClose }:
   const item = review.items[review.index];
   if (item === undefined) return null;
   return (
-    <Modal title={item.subject.title} onClose={onClose}>
-      <ReviewNavigation index={review.index} total={review.items.length} onNavigate={onNavigate} />
+    <OutlineMapModal
+      title={item.subject.title}
+      navigation={{ index: review.index, total: review.items.length, onNavigate }}
+      onClose={onClose}
+    >
       <PadronMapBody subject={item.subject} base={base} aside={<PadronReviewDecision item={item} decisions={decisions} />} />
-    </Modal>
+    </OutlineMapModal>
   );
 }

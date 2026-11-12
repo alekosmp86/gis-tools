@@ -5,7 +5,7 @@ import { CollapsibleSection } from "./ActualizarReportSections";
 import { DataTable } from "./DataTable";
 import { keyedRowsOf } from "./keyedRows";
 import { secondsText } from "./reportFormat";
-import { ShowOnMapButton } from "./ShowOnMapButton";
+import { ShowOnMapButton } from "./map/ShowOnMapButton";
 import sharedStyles from "./CargarPadronesReport.module.css";
 import styles from "./ActualizarPadronReport.module.css";
 

@@ -6,7 +6,7 @@ import { choiceFor, choiceOfGroup, takenOldIds, type AmbiguousGroupView } from "
 import { PairCandidateRow } from "./PairCandidateRow";
 import { MAP_CANDIDATE_LIMIT } from "./padronMapSubject";
 import { textOrNoData } from "./reportFormat";
-import { ShowOnMapButton } from "./ShowOnMapButton";
+import { ShowOnMapButton } from "./map/ShowOnMapButton";
 import styles from "./PairChoiceGroups.module.css";
 
 const NO_PAIR_LABEL = "No emparejar (insertar como nuevo)";

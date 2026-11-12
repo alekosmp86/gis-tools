@@ -11,7 +11,7 @@ import type { PairChoiceSelection } from "./PairChoiceGroups";
 import { PendingBulkControls, usePendingBulk } from "./PendingBulkControls";
 import own from "./PendingPairsSection.module.css";
 import reportStyles from "./ActualizarPadronReport.module.css";
-import { ShowOnMapButton } from "./ShowOnMapButton";
+import { ShowOnMapButton } from "./map/ShowOnMapButton";
 import type { PairRowView } from "./actualizarPadronReportView";
 import { pairReviewItemsOf, type OpenReview } from "./padronReviewItems";
 import { PENDING_CHOICE_STATE_LABEL, PendingChoiceState } from "./pendingPairChoices";

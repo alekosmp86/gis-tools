@@ -7,7 +7,7 @@ import { ButtonVariant } from "@/ui-kit/types/ui";
 import type { AcceptedGeometry, PadronGeometryChange } from "../jobs/actualizar-padron/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import { DataTable } from "./DataTable";
-import { ShowOnMapButton } from "./ShowOnMapButton";
+import { ShowOnMapButton } from "./map/ShowOnMapButton";
 import { GeometryDecisionButtons } from "./GeometryDecisionButtons";
 import { GeometryAcceptEveryBanner } from "./GeometryAcceptEveryBanner";
 import { GeometryChangesToolbar } from "./GeometryChangesToolbar";
