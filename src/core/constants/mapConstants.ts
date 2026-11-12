@@ -60,6 +60,18 @@ export const MAP_ROLE_TYPE = {
   NEW: "PADRON_NUEVO",
 } as const;
 
+export const MAP_SECTION_TYPE = {
+  OLD: "TRAMO_ANTERIOR",
+  NEW: "TRAMO_NUEVO",
+  URBAN_ZONE: "PADRON_ZONA_URBANA",
+  RURAL_ZONE: "PADRON_ZONA_RURAL",
+} as const;
+
+/** Outline types drawn as the underlay of a comparison: thicker, so the outline over them stays visible. */
+export const MAP_UNDERLAY_TYPES: readonly string[] = [MAP_ROLE_TYPE.OLD, MAP_SECTION_TYPE.OLD];
+
+export const MAP_UNDERLAY_EXTRA_WEIGHT = 5;
+
 /** Candidate outlines of one comparison (several old outlines competing for one new one), each in its own colour, in candidate order. */
 export const MAP_CANDIDATE_TYPES = [
   "PADRON_CANDIDATO_1",
@@ -79,6 +91,10 @@ const DISCREPANCY_COLORS: Record<string, string> = {
   FILE_FEATURE: "#ff0055",
   [MAP_ROLE_TYPE.OLD]: "#fb7185",
   [MAP_ROLE_TYPE.NEW]: "#34d399",
+  [MAP_SECTION_TYPE.OLD]: "#1d4ed8",
+  [MAP_SECTION_TYPE.NEW]: "#f97316",
+  [MAP_SECTION_TYPE.URBAN_ZONE]: "#c026d3",
+  [MAP_SECTION_TYPE.RURAL_ZONE]: "#92400e",
   ...candidateRecordOf((index) => CANDIDATE_COLORS[index]),
   [DiscrepancyType.GEOMETRY_MISMATCH]: "#ff0055",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#f59e0b",
@@ -101,6 +117,10 @@ const DISCREPANCY_LABELS: Record<string, string> = {
   FILE_FEATURE: "Geometría Archivo (Shapefile / CSV)",
   [MAP_ROLE_TYPE.OLD]: "Padrón anterior",
   [MAP_ROLE_TYPE.NEW]: "Padrón nuevo",
+  [MAP_SECTION_TYPE.OLD]: "Tramo anterior",
+  [MAP_SECTION_TYPE.NEW]: "Tramo nuevo",
+  [MAP_SECTION_TYPE.URBAN_ZONE]: "Padrones urbanos cercanos",
+  [MAP_SECTION_TYPE.RURAL_ZONE]: "Padrones rurales cercanos",
   ...candidateRecordOf((index) => `Candidato ${index + 1}`),
   [DiscrepancyType.GEOMETRY_MISMATCH]: "Discrepancia Geométrica",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "Discrepancia de Atributos",

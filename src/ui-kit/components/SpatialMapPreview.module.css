@@ -263,6 +263,22 @@
   background-color: #34d399;
 }
 
+.legendDot[data-color-type="TRAMO_ANTERIOR"] {
+  background-color: #1d4ed8;
+}
+
+.legendDot[data-color-type="TRAMO_NUEVO"] {
+  background-color: #f97316;
+}
+
+.legendDot[data-color-type="PADRON_ZONA_URBANA"] {
+  background-color: #c026d3;
+}
+
+.legendDot[data-color-type="PADRON_ZONA_RURAL"] {
+  background-color: #92400e;
+}
+
 .legendDot[data-color-type="PADRON_CANDIDATO_1"] {
   background-color: #f59e0b;
 }

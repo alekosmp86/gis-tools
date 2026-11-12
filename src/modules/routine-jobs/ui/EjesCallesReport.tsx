@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import type { EjesMergeRow, EjesNewStreetRow, EjesRemovalRow, EjesResult, EjesSplitRow } from "../jobs/ejes-calles/types";
+import type { EjesMergeRow, EjesNewStreetRow, EjesRemovalRow, EjesResult, EjesSplitRow, EjesTwinRow } from "../jobs/ejes-calles/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import type { EjesGeometryMapBase } from "./clientTypes";
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
-import { subjectOfMerge, subjectOfSplit } from "./ejesMapSubject";
-import { buildEjesReportView, coverageTextOf, metersTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
+import { subjectOfMerge, subjectOfSplit, subjectOfTwin } from "./ejesMapSubject";
+import { buildEjesReportView, coverageTextOf, metersTextOf, twinCaseTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
 import { KpiCards, OutcomeBanners, RowsTable, SectionTitle, TimingsSection, type TableColumn } from "./ReportParts";
 import { textOrNoData } from "./reportFormat";
 import sharedStyles from "./CargarPadronesReport.module.css";
@@ -59,6 +59,17 @@ const ATTR_COLUMNS: TableColumn<EjesAttrRowView>[] = [
   { header: "idcalle nuevo", cell: (row) => textOrNoData(row.idcalle) },
 ];
 
+const TWIN_COLUMNS: TableColumn<EjesTwinRow>[] = [
+  { header: "reftramo", cell: (row) => row.ref },
+  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
+  { header: "Departamento", cell: (row) => textOrNoData(row.department) },
+  { header: "Localidades", cell: (row) => row.localities.join(", ") },
+  { header: "Caso", cell: (row) => twinCaseTextOf(row.class) },
+  { header: "Largo (m)", cell: (row) => metersTextOf(row.length) },
+  { header: "Cerca de urbanos (m)", cell: (row) => metersTextOf(row.urbanLength) },
+  { header: "Cerca de rurales (m)", cell: (row) => metersTextOf(row.ruralLength) },
+];
+
 const LIST_SECTION_TITLE = "Listas";
 
 function TextList({ title, items }: { title: string; items: string[] }) {
@@ -86,6 +97,7 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
   const [review, setReview] = useState<EjesMapReview | null>(null);
   const splitSubjects = result.splits.map(subjectOfSplit);
   const mergeSubjects = result.merges.map(subjectOfMerge);
+  const twinSubjects = result.twins.map(subjectOfTwin);
   return (
     <div className={sharedStyles.report}>
       <OutcomeBanners banners={view.banners} />
@@ -116,6 +128,16 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
               rows={result.merges}
               rowKey={(row) => row.newRef}
               onShowOnMap={(row) => setReview({ subjects: mergeSubjects, index: result.merges.indexOf(row) })}
+            />
+          </CollapsibleSection>
+        )}
+        {result.twins.length > 0 && (
+          <CollapsibleSection summary={view.summaries.twins}>
+            <RowsTable
+              columns={TWIN_COLUMNS}
+              rows={result.twins}
+              rowKey={(row) => row.ref}
+              onShowOnMap={(row) => setReview({ subjects: twinSubjects, index: result.twins.indexOf(row) })}
             />
           </CollapsibleSection>
         )}

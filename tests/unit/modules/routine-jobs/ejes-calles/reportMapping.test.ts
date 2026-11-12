@@ -56,6 +56,12 @@ describe("toEjesAnalysis", () => {
       plain_removals: 2,
       plain_held: 1,
       new_streets: 1,
+      twins: "6",
+      twins_urban: 1,
+      twins_rural: 2,
+      twins_both: 3,
+      twins_neither: "4",
+      twins_cross_department: 5,
       with_locality: 2,
       only_department: 1,
       without_code: 0,
@@ -99,6 +105,12 @@ describe("toEjesAnalysis", () => {
       plainRemovals: 2,
       plainHeld: 1,
       newStreets: 1,
+      twins: 6,
+      twinsUrban: 1,
+      twinsRural: 2,
+      twinsBoth: 3,
+      twinsNeither: 4,
+      twinsCrossDepartment: 5,
     });
     expect(analysis.cloc).toEqual({ withLocality: 2, onlyDepartment: 1, withoutCode: 0 });
     expect(analysis.splits).toEqual([{ oldRef: "10", idcalle: "5", newRefs: ["11", "12"], points: 3, coverage: 0.98, oldLength: 100.5, newLength: 130, outsideLength: 29.5 }]);
@@ -137,6 +149,9 @@ describe("toEjesAnalysis", () => {
     expect(analysis.plainRemovals).toEqual([]);
     expect(analysis.newStreets).toEqual([]);
     expect(analysis.attrChanges).toEqual([]);
+    expect(analysis.twins).toEqual([]);
+    expect(analysis.counts.twins).toBe(0);
+    expect(analysis.counts.twinsCrossDepartment).toBe(0);
   });
 
   it("should ignore non-array new_refs and old_refs", () => {
@@ -147,5 +162,63 @@ describe("toEjesAnalysis", () => {
 
     expect(analysis.splits[0].newRefs).toEqual([]);
     expect(analysis.merges[0].oldRefs).toEqual([]);
+  });
+});
+
+describe("toEjesAnalysis twins (ET-4)", () => {
+  const twinRow = {
+    ref: 1035386,
+    idcalle: "72006",
+    department: "FLORES",
+    localities: ["FLORES RURAL", "TRINIDAD"],
+    class: "BOTH",
+    length: "250.25",
+    urban_length: 120.5,
+    rural_length: "30",
+  };
+
+  it("should map a twin row with its reftramo as text, every locality and the three lengths as numbers", () => {
+    const analysis = toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: [twinRow] });
+
+    expect(analysis.twins).toEqual([
+      {
+        ref: "1035386",
+        idcalle: "72006",
+        department: "FLORES",
+        localities: ["FLORES RURAL", "TRINIDAD"],
+        class: "BOTH",
+        length: 250.25,
+        urbanLength: 120.5,
+        ruralLength: 30,
+      },
+    ]);
+  });
+
+  it.each(["URBAN", "RURAL", "BOTH", "NEITHER"])("should keep the class %s", (twinClass) => {
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: [{ ...twinRow, class: twinClass }] }).twins[0].class).toBe(twinClass);
+  });
+
+  it("should map null lengths, idcalle and department to null", () => {
+    const [twin] = toEjesAnalysis({
+      [ANALYSIS_LIST_ALIAS.TWINS]: [{ ...twinRow, idcalle: null, department: null, length: null, urban_length: null, rural_length: null }],
+    }).twins;
+
+    expect(twin).toMatchObject({ idcalle: null, department: null, length: null, urbanLength: null, ruralLength: null });
+  });
+
+  it("should map a missing or non-array localities to an empty list", () => {
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: [{ ...twinRow, localities: null }] }).twins[0].localities).toEqual([]);
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: [{ ...twinRow, localities: "x" }] }).twins[0].localities).toEqual([]);
+  });
+
+  it("should keep the order of the rows", () => {
+    const rows = [{ ...twinRow, ref: "3" }, { ...twinRow, ref: "1" }, { ...twinRow, ref: "2" }];
+
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: rows }).twins.map((twin) => twin.ref)).toEqual(["3", "1", "2"]);
+  });
+
+  it("should return no twin rows when the list is missing or not an array", () => {
+    expect(toEjesAnalysis({}).twins).toEqual([]);
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: "oops" }).twins).toEqual([]);
   });
 });

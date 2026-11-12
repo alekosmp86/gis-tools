@@ -14,8 +14,8 @@ import type { EjesAttrRow } from "@/modules/routine-jobs/jobs/ejes-calles/types"
 import { ejesTables } from "./ejesFixtures";
 
 describe("EJ-4 table roles", () => {
-  it("should define eight roles with the spec default tables", () => {
-    expect(EJES_ROLES).toHaveLength(8);
+  it("should define nine roles with the spec default tables", () => {
+    expect(EJES_ROLES).toHaveLength(9);
     expect(EJES_DEFAULT_TABLES[EJES_TABLE_ROLE.STAGING]).toEqual({
       schema: "bdj_carto",
       table: "ide_ejesviacirculacion",
@@ -31,11 +31,32 @@ describe("EJ-4 table roles", () => {
     });
   });
 
-  it("should treat staging, localities and departments as read roles and the five carto tables as write roles", () => {
+  it("should treat staging, localities, departments and padrones as read roles and the five carto tables as write roles", () => {
     expect([...EJES_READ_ROLES].sort()).toEqual(
-      [EJES_TABLE_ROLE.STAGING, EJES_TABLE_ROLE.LOCALITIES, EJES_TABLE_ROLE.DEPARTMENTS].sort()
+      [EJES_TABLE_ROLE.STAGING, EJES_TABLE_ROLE.LOCALITIES, EJES_TABLE_ROLE.DEPARTMENTS, EJES_TABLE_ROLE.PADRONES].sort()
     );
     expect(EJES_WRITE_ROLES).toHaveLength(5);
+  });
+
+  describe("ET-1 ejes-padrones role", () => {
+    it("should be named ejes-padrones, default to carto.padron and require type_padron and geometry", () => {
+      expect(EJES_TABLE_ROLE.PADRONES).toBe("ejes-padrones");
+      expect(EJES_ROLES).toContain("ejes-padrones");
+      expect(EJES_DEFAULT_TABLES[EJES_TABLE_ROLE.PADRONES]).toEqual({ schema: "carto", table: "padron" });
+      expect(EJES_REQUIRED_COLUMNS_BY_ROLE[EJES_TABLE_ROLE.PADRONES]).toEqual(["type_padron", "geometry"]);
+    });
+
+    it("should be a read role and never a write role", () => {
+      expect(EJES_READ_ROLES).toContain(EJES_TABLE_ROLE.PADRONES);
+      expect(EJES_WRITE_ROLES).not.toContain(EJES_TABLE_ROLE.PADRONES);
+    });
+
+    it("should be part of the distinct-tables check", () => {
+      const tables = ejesTables();
+      tables["ejes-padrones"] = { ...tables["ejes-tramos"] };
+
+      expect(() => assertDistinctEjesTables({ tables })).toThrow(/distinta/);
+    });
   });
 
   it("should require the spec logical columns per role", () => {

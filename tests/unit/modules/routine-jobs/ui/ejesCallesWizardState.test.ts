@@ -147,7 +147,7 @@ describe("ejes wizard state", () => {
       expect(request.dryRun).toBe(true);
       expect(request.tables["ejes-origen"]).toEqual({ schema: "s", table: "t" });
       expect(request.connection.host).toBe("h");
-      expect(Object.keys(request.tables)).toHaveLength(8);
+      expect(Object.keys(request.tables)).toHaveLength(9);
     });
   });
 
@@ -159,10 +159,11 @@ describe("ejes wizard state", () => {
       expect(ejesGeometryMapBaseOf(state)).toBeNull();
     });
 
-    it("should carry the trimmed connection and only the staging and road section tables", () => {
+    it("should carry the trimmed connection and only the staging, road section and padrones tables (ET-7, ET-8)", () => {
       const state = validState();
       state.slots["ejes-origen"] = { schema: " s ", table: " t ", valid: true };
       state.slots["ejes-tramos"] = { schema: " carto ", table: " road_section ", valid: true };
+      state.slots["ejes-padrones"] = { schema: " carto ", table: " padron ", valid: true };
       state.connection = { ...state.connection, host: " h " };
 
       const base = ejesGeometryMapBaseOf(state);
@@ -172,7 +173,38 @@ describe("ejes wizard state", () => {
       expect(base?.tables).toEqual({
         "ejes-origen": { schema: "s", table: "t" },
         "ejes-tramos": { schema: "carto", table: "road_section" },
+        "ejes-padrones": { schema: "carto", table: "padron" },
       });
+    });
+  });
+
+  describe("ejes-padrones slot (ET-1)", () => {
+    it("should start with the default carto.padron table, invalid until checked", () => {
+      expect(initialEjesWizardState().slots["ejes-padrones"]).toEqual({ schema: "carto", table: "padron", valid: false });
+    });
+
+    it("should carry the padrones table, trimmed, in the start request", () => {
+      const state = validState();
+      state.slots["ejes-padrones"] = { schema: " s ", table: " p ", valid: true };
+
+      expect(toEjesStartRequest(state, { dryRun: true }).tables["ejes-padrones"]).toEqual({ schema: "s", table: "p" });
+    });
+
+    it("should exclude the tables of the other roles in the same schema from the padrones choices", () => {
+      const state = validState();
+      state.slots["ejes-padrones"] = { ...state.slots["ejes-tramos"] };
+
+      expect(excludedEjesTablesOf(state)["ejes-padrones"]).toContain("road_section");
+    });
+
+    it("should change the analysis key when the padrones table changes", () => {
+      const state = validState();
+      const changed = validState();
+      changed.slots["ejes-padrones"] = { ...changed.slots["ejes-padrones"], table: "otra" };
+
+      expect(ejesAnalysisKeyOf(toEjesStartRequest(changed, { dryRun: true }))).not.toBe(
+        ejesAnalysisKeyOf(toEjesStartRequest(state, { dryRun: true }))
+      );
     });
   });
 

@@ -93,13 +93,16 @@ const settle = async (): Promise<void> => {
   for (let turn = 0; turn < 5; turn++) await Promise.resolve();
 };
 
+/** The hook under test, called by the hand-written shim below (no component tree exists in the node environment). */
+const hookUnderTest = useOutlineMapFeatures;
+
 /** Renders the hook again until no state changes and no effect is left to run. */
 function renderHook<Item>(items: readonly Item[], scope: string, fetchOutlines: FetchOutlines<Item>) {
   const render = () => {
     let result!: ReturnType<typeof useOutlineMapFeatures>;
     for (let pass = 0; pass < 25; pass++) {
       runtime.begin();
-      result = useOutlineMapFeatures(items, scope, fetchOutlines);
+      result = hookUnderTest(items, scope, fetchOutlines);
       const effects = runtime.takeEffects();
       effects.forEach((effect) => effect());
       if (!runtime.takeDirty() && effects.length === 0) break;

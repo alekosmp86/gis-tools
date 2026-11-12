@@ -1,8 +1,10 @@
 import { physicalColumn, qualifiedName, type TableLayout } from "../../actualizar-padron/domain/layouts";
-import { EJES_SRID, ROAD_SECTION_COLUMN, STAGING_COLUMN } from "../constants";
+import { GEOMETRY_MAP_ROLE } from "../../actualizar-padron/constants";
+import { EJES_SRID, PADRON_COLUMN, ROAD_SECTION_COLUMN, STAGING_COLUMN, TWIN_PADRON_DISTANCE_M } from "../constants";
 
 export const EJES_MAP_ITEMS_LIMIT = 30;
 export const EJES_MAP_STATEMENT_TIMEOUT = "20s";
+export const EJES_MAP_ROLE = { ...GEOMETRY_MAP_ROLE, ZONE: "zone" } as const;
 const WGS84_SRID = 4326;
 const SIMPLIFY_TOLERANCE_M = 2;
 const STAGING_ALIAS = "s";
@@ -33,5 +35,25 @@ export function newSectionOutlineSql(staging: TableLayout): string {
     `FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
     `WHERE trim(${column(STAGING_COLUMN.REFTRAMO)}::text) = $1 AND ${column(STAGING_COLUMN.GEOM)} IS NOT NULL`,
     `AND NOT ST_IsEmpty(${column(STAGING_COLUMN.GEOM)}) LIMIT 1`,
+  ].join(" ");
+}
+
+/**
+ * The padrones of one type within `TWIN_PADRON_DISTANCE_M` of a new section, dissolved into one outline. `$1` is the staging
+ * `reftramo`, `$2` the padron type. No padron near, or no such section: no row.
+ */
+export function zoneOutlineSql(staging: TableLayout, padrones: TableLayout): string {
+  const column = (logical: string): string => `${STAGING_ALIAS}.${physicalColumn(staging, logical)}`;
+  const geometry = `p.${physicalColumn(padrones, PADRON_COLUMN.GEOMETRY)}`;
+  const section = [
+    `SELECT ST_SetSRID(${column(STAGING_COLUMN.GEOM)}, ${EJES_SRID}) FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
+    `WHERE trim(${column(STAGING_COLUMN.REFTRAMO)}::text) = $1 AND ${column(STAGING_COLUMN.GEOM)} IS NOT NULL`,
+    `AND NOT ST_IsEmpty(${column(STAGING_COLUMN.GEOM)}) LIMIT 1`,
+  ].join(" ");
+  return [
+    `SELECT ${outlineGeoJsonSql(`ST_Union(ST_MakeValid(${geometry}))`)} AS "geojson"`,
+    `FROM ${qualifiedName(padrones)} AS p`,
+    `WHERE upper(btrim(p.${physicalColumn(padrones, PADRON_COLUMN.TYPE)}::text)) = $2::text`,
+    `AND ST_DWithin(${geometry}, (${section}), ${TWIN_PADRON_DISTANCE_M}) HAVING count(*) > 0`,
   ].join(" ");
 }

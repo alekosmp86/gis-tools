@@ -130,13 +130,17 @@ export function toEjesStartRequest(state: EjesWizardState, flags: { dryRun: bool
   return { connection: trimConnection(state.connection), tables, dryRun: flags.dryRun };
 }
 
-/** The connection and the two tables the map reads; null while the wizard holds no password. */
+/** The connection and the tables the map reads; null while the wizard holds no password. */
 export function ejesGeometryMapBaseOf(state: EjesWizardState): EjesGeometryMapBase | null {
   if (state.connection.password === "") return null;
   const { tables } = toEjesStartRequest(state, { dryRun: true });
   return {
     connection: trimConnection(state.connection),
-    tables: { [EJES_TABLE_ROLE.STAGING]: tables[EJES_TABLE_ROLE.STAGING], [EJES_TABLE_ROLE.ROAD_SECTION]: tables[EJES_TABLE_ROLE.ROAD_SECTION] },
+    tables: {
+      [EJES_TABLE_ROLE.STAGING]: tables[EJES_TABLE_ROLE.STAGING],
+      [EJES_TABLE_ROLE.ROAD_SECTION]: tables[EJES_TABLE_ROLE.ROAD_SECTION],
+      [EJES_TABLE_ROLE.PADRONES]: tables[EJES_TABLE_ROLE.PADRONES],
+    },
   };
 }
 

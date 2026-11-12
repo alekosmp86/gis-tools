@@ -7,6 +7,7 @@ export const EJES_TABLE_ROLE = {
   ACCESS_POINT: "ejes-accesos",
   LOCALITIES: "ejes-localidades",
   DEPARTMENTS: "ejes-departamentos",
+  PADRONES: "ejes-padrones",
 } as const;
 
 export type EjesTableRole = (typeof EJES_TABLE_ROLE)[keyof typeof EJES_TABLE_ROLE];
@@ -83,6 +84,30 @@ export const DEPARTMENTS_COLUMN = {
   NAME: "name_dpto",
 } as const;
 
+export const PADRON_COLUMN = {
+  TYPE: "type_padron",
+  GEOMETRY: "geometry",
+} as const;
+
+export const PADRON_TYPE = {
+  URBAN: "URBANO",
+  RURAL: "RURAL",
+} as const;
+
+export type PadronType = (typeof PADRON_TYPE)[keyof typeof PADRON_TYPE];
+
+export const TWIN_CLASS = {
+  BOTH: "BOTH",
+  URBAN: "URBAN",
+  RURAL: "RURAL",
+  NEITHER: "NEITHER",
+} as const;
+
+export type TwinClass = (typeof TWIN_CLASS)[keyof typeof TWIN_CLASS];
+
+export const TWIN_PADRON_DISTANCE_M = 15;
+export const TWIN_NEAR_RATIO = 0.1;
+
 export const EJES_REQUIRED_COLUMNS_BY_ROLE: Record<EjesTableRole, readonly string[]> = {
   [EJES_TABLE_ROLE.STAGING]: Object.values(STAGING_COLUMN),
   [EJES_TABLE_ROLE.ROAD_SECTION]: Object.values(ROAD_SECTION_COLUMN),
@@ -92,6 +117,7 @@ export const EJES_REQUIRED_COLUMNS_BY_ROLE: Record<EjesTableRole, readonly strin
   [EJES_TABLE_ROLE.ACCESS_POINT]: Object.values(ACCESS_POINT_COLUMN),
   [EJES_TABLE_ROLE.LOCALITIES]: Object.values(LOCALITIES_COLUMN),
   [EJES_TABLE_ROLE.DEPARTMENTS]: Object.values(DEPARTMENTS_COLUMN),
+  [EJES_TABLE_ROLE.PADRONES]: Object.values(PADRON_COLUMN),
 };
 
 export const EJES_ID_LOGICAL_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
@@ -110,6 +136,7 @@ export const EJES_DEFAULT_TABLES: Record<EjesTableRole, { schema: string; table:
   [EJES_TABLE_ROLE.ACCESS_POINT]: { schema: "carto", table: "access_point" },
   [EJES_TABLE_ROLE.LOCALITIES]: { schema: "bdj_carto", table: "ine_localidades_pg" },
   [EJES_TABLE_ROLE.DEPARTMENTS]: { schema: "carto", table: "mv_country_province" },
+  [EJES_TABLE_ROLE.PADRONES]: { schema: "carto", table: "padron" },
 };
 
 export const EJES_SRID = 32721;

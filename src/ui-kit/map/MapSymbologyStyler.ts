@@ -1,6 +1,6 @@
 import L from "leaflet";
 import type { Feature } from "geojson";
-import { getDiscrepancyColor, getDashArrayFromPattern } from "@/core/constants/mapConstants";
+import { getDiscrepancyColor, getDashArrayFromPattern, MAP_UNDERLAY_EXTRA_WEIGHT, MAP_UNDERLAY_TYPES } from "@/core/constants/mapConstants";
 import type { MapFeatureStyle } from "@/core/types/map";
 
 /** Cache key used for features that carry no discrepancy type. */
@@ -70,7 +70,7 @@ class MapSymbologyStyler {
     return {
       renderer: canvasRenderer ?? undefined,
       color: strokeColor,
-      weight: Math.max(currentStyle.weight, 3),
+      weight: Math.max(currentStyle.weight, 3) + (MAP_UNDERLAY_TYPES.includes(discrepancyType) ? MAP_UNDERLAY_EXTRA_WEIGHT : 0),
       opacity: currentStyle.opacity,
       fillColor,
       fillOpacity: featureFillOpacity,

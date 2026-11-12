@@ -3,7 +3,7 @@ import type { DbConfig } from "@/core/types/db";
 import type { TableLayout } from "../actualizar-padron/domain/layouts";
 import type { StepTiming } from "../cargar-padrones/types";
 import type { WritableTargetLayout } from "../shared/tableResolution";
-import type { EjesTableRole } from "./constants";
+import type { EjesTableRole, PadronType, TwinClass } from "./constants";
 
 export interface EjesTableRef {
   schema: string;
@@ -52,6 +52,12 @@ export interface EjesCounts {
   plainRemovals: number;
   plainHeld: number;
   newStreets: number;
+  twins: number;
+  twinsUrban: number;
+  twinsRural: number;
+  twinsBoth: number;
+  twinsNeither: number;
+  twinsCrossDepartment: number;
 }
 
 export interface EjesClocReport {
@@ -110,6 +116,17 @@ export interface EjesAttrRow {
   currentFontId: number | null;
 }
 
+export interface EjesTwinRow {
+  ref: string;
+  idcalle: string | null;
+  department: string | null;
+  localities: string[];
+  class: TwinClass;
+  length: number | null;
+  urbanLength: number | null;
+  ruralLength: number | null;
+}
+
 export interface EjesAnalysis {
   counts: EjesCounts;
   cloc: EjesClocReport;
@@ -118,6 +135,7 @@ export interface EjesAnalysis {
   plainRemovals: EjesRemovalRow[];
   newStreets: EjesNewStreetRow[];
   attrChanges: EjesAttrRow[];
+  twins: EjesTwinRow[];
 }
 
 export interface EjesResolvedLayouts {
@@ -136,15 +154,17 @@ export interface EjesResult extends EjesAnalysis {
   stepTimings: StepTiming[];
 }
 
-/** One outline to draw: an old section by its `reftramo_ideuy`, or a new one by its staging `reftramo`. */
+/** One outline to draw: an old section by its `reftramo_ideuy`, a new one by its staging `reftramo`, or the padrones of a type near a new one. */
 export interface EjesMapItem {
   oldRef?: number;
   newRef?: string;
+  zoneOf?: string;
+  type?: PadronType;
 }
 
 export interface EjesMapFeature {
   itemIndex: number;
-  role: "old" | "new";
+  role: "old" | "new" | "zone";
   label: string;
   geometry: Geometry;
 }
@@ -153,5 +173,6 @@ export interface EjesGeometryMapParams {
   config: DbConfig;
   staging: EjesTableRef;
   roadSection: EjesTableRef;
+  padrones: EjesTableRef;
   items: EjesMapItem[];
 }

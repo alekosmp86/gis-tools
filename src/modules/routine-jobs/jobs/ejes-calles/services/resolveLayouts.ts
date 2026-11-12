@@ -13,6 +13,7 @@ import {
   EJES_TABLE_ROLE,
   EJES_WRITE_ROLES,
   LOCALITIES_COLUMN,
+  PADRON_COLUMN,
   ROAD_SECTION_COLUMN,
   STAGING_COLUMN,
   type EjesTableRole,
@@ -25,17 +26,20 @@ const GEOMETRY_LOGICAL_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
   [EJES_TABLE_ROLE.LOCALITIES]: LOCALITIES_COLUMN.GEOM,
 };
 
-export function sridIssuesOf(resolved: ResolvedTable, logicalGeometry: string): string[] {
+export function sridIssuesOf(resolved: ResolvedTable, logicalGeometry: string, allowGeneric = true): string[] {
   const column = resolved.layout.columns[logicalGeometry];
   const dataType = resolved.dataTypes[logicalGeometry];
   if (column === undefined || dataType === undefined) return [];
   const typing = parseGeometryType(dataType);
   if (typing === undefined) return [`La columna "${column}" de la tabla ${resolved.label} no es de tipo geometría.`];
-  if (typing.srid === GENERIC_SRID || typing.srid === EJES_SRID) return [];
+  if (typing.srid === EJES_SRID || (allowGeneric && typing.srid === GENERIC_SRID)) return [];
   return [`La columna "${column}" de la tabla ${resolved.label} tiene SRID ${typing.srid}; debe ser ${EJES_SRID}.`];
 }
 
+export const padronSridIssuesOf = (resolved: ResolvedTable): string[] => sridIssuesOf(resolved, PADRON_COLUMN.GEOMETRY, false);
+
 function geometryIssuesOf(role: EjesTableRole, resolved: ResolvedTable): string[] {
+  if (role === EJES_TABLE_ROLE.PADRONES) return padronSridIssuesOf(resolved);
   const logical = GEOMETRY_LOGICAL_BY_ROLE[role];
   return logical === undefined ? [] : sridIssuesOf(resolved, logical);
 }

@@ -1,5 +1,6 @@
 import { listOf, nullableNumber, numberOf, textOf, type Row } from "../../shared/rowMapping";
 import { shortNameOf } from "./shortName";
+import { TWIN_CLASS, type TwinClass } from "../constants";
 import { ANALYSIS_LIST_ALIAS } from "./analysisSql";
 import type {
   EjesAnalysis,
@@ -8,6 +9,7 @@ import type {
   EjesNewStreetRow,
   EjesRemovalRow,
   EjesSplitRow,
+  EjesTwinRow,
   EjesStagingReport,
   EjesUnknownValue,
 } from "../types";
@@ -69,6 +71,20 @@ const attrOf = (row: Row): EjesAttrRow => ({
   currentFontId: nullableNumber(row.current_font_id),
 });
 
+const twinClassOf = (value: unknown): TwinClass =>
+  Object.values(TWIN_CLASS).find((twinClass) => twinClass === value) ?? TWIN_CLASS.NEITHER;
+
+const twinOf = (row: Row): EjesTwinRow => ({
+  ref: String(row.ref),
+  idcalle: textOf(row.idcalle),
+  department: textOf(row.department),
+  localities: textsOf(row.localities),
+  class: twinClassOf(row.class),
+  length: nullableNumber(row.length),
+  urbanLength: nullableNumber(row.urban_length),
+  ruralLength: nullableNumber(row.rural_length),
+});
+
 export function toEjesStagingReport(row: Row): EjesStagingReport {
   return {
     rows: numberOf(row.rows),
@@ -100,6 +116,12 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       plainRemovals: numberOf(row.plain_removals),
       plainHeld: numberOf(row.plain_held),
       newStreets: numberOf(row.new_streets),
+      twins: numberOf(row.twins),
+      twinsUrban: numberOf(row.twins_urban),
+      twinsRural: numberOf(row.twins_rural),
+      twinsBoth: numberOf(row.twins_both),
+      twinsNeither: numberOf(row.twins_neither),
+      twinsCrossDepartment: numberOf(row.twins_cross_department),
     },
     cloc: {
       withLocality: numberOf(row.with_locality),
@@ -111,5 +133,6 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
     plainRemovals: listOf(row[ANALYSIS_LIST_ALIAS.PLAIN]).map(removalOf),
     newStreets: listOf(row[ANALYSIS_LIST_ALIAS.STREETS]).map(streetOf),
     attrChanges: listOf(row[ANALYSIS_LIST_ALIAS.ATTRS]).map(attrOf),
+    twins: listOf(row[ANALYSIS_LIST_ALIAS.TWINS]).map(twinOf),
   };
 }

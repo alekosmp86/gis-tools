@@ -8,7 +8,7 @@ import type { EjesMapOutline, EjesMapSubject } from "./ejesMapSubject";
 import { OutlineMapBody } from "./map/OutlineMapBody";
 import { OutlineMapModal } from "./map/OutlineMapModal";
 
-export const EJES_PASSWORD_NOTICE = "Escriba la contraseña de la conexión en el paso de conexión para ver el mapa.";
+export const EJES_CONNECTION_NOTICE = "Escriba la contraseña de la conexión en el paso de conexión para ver el mapa.";
 
 /** The rows of the table the modal was opened from and the one on screen. */
 export interface EjesMapReview {
@@ -44,14 +44,19 @@ export function EjesMapModal({ review, base, onNavigate, onClose }: EjesMapModal
     >
       <OutlineMapBody
         subject={subject}
-        notice={base === null ? EJES_PASSWORD_NOTICE : null}
+        notice={base === null ? EJES_CONNECTION_NOTICE : null}
         renderMap={(selectedOutlineIndex, onSelectOutline) =>
           base === null ? null : (
             <EjesMapView subject={subject} base={base} selectedOutlineIndex={selectedOutlineIndex} onSelectOutline={onSelectOutline} />
           )
         }
-        renderDetails={(selectedOutlineIndex) => (
-          <EjesMapDetails subject={subject} outline={outlineAt(subject.outlines, selectedOutlineIndex)} />
+        renderDetails={(selectedOutlineIndex, onSelectOutline) => (
+          <EjesMapDetails
+            subject={subject}
+            outline={outlineAt(subject.outlines, selectedOutlineIndex)}
+            selectedOutlineIndex={selectedOutlineIndex}
+            onSelectOutline={onSelectOutline}
+          />
         )}
       />
     </OutlineMapModal>

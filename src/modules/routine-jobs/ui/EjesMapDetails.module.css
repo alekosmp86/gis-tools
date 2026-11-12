@@ -45,3 +45,61 @@
   overflow-wrap: anywhere;
   text-align: left;
 }
+
+.outlineList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.outlineButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.outlineButton:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.outlineButton[aria-pressed="true"] {
+  border-color: currentColor;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.swatch[data-role="old"] {
+  background-color: #1d4ed8;
+}
+
+.swatch[data-role="new"] {
+  background-color: #f97316;
+}
+
+.swatch[data-map-type="PADRON_ZONA_URBANA"] {
+  background-color: #c026d3;
+}
+
+.swatch[data-map-type="PADRON_ZONA_RURAL"] {
+  background-color: #92400e;
+}

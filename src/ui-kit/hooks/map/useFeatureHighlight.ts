@@ -4,6 +4,9 @@ import type { FeatureCollection } from "geojson";
 import { getDiscrepancyColor } from "@/core/constants/mapConstants";
 import { buildPopupHtml } from "@/ui-kit/map/MapPopupPresenter";
 
+const HALO_COLOR = "#ffffff";
+const HALO_WEIGHT = 13;
+
 export function useFeatureHighlight(
   mapInstanceRef: React.RefObject<L.Map | null>,
   geojson: FeatureCollection,
@@ -36,13 +39,22 @@ export function useFeatureHighlight(
     const highlightGroup = L.featureGroup().addTo(mapInstance);
     highlightLayerRef.current = highlightGroup;
 
+    if (keepTypeColor && targetFeature.geometry && targetFeature.geometry.type !== "Point") {
+      highlightGroup.addLayer(
+        L.geoJSON(targetFeature as import("geojson").GeoJsonObject, {
+          style: () => ({ color: HALO_COLOR, weight: HALO_WEIGHT, opacity: 0.95, fill: false }),
+          interactive: false,
+        })
+      );
+    }
+
     const highlightSubLayer = L.geoJSON(targetFeature as import("geojson").GeoJsonObject, {
       style: () => {
         if (!keepTypeColor) {
           return { color: "#38bdf8", weight: 7, opacity: 1, fillColor: "#0284c7", fillOpacity: 0.5 };
         }
         const typeColor = getDiscrepancyColor(targetFeature.properties?._discrepancyType);
-        return { color: typeColor, weight: 7, opacity: 1, fillColor: typeColor, fillOpacity: 0.5 };
+        return { color: typeColor, weight: 6, opacity: 1, fillColor: typeColor, fillOpacity: 0.5 };
       },
       pointToLayer: (_feature, latlng) => {
         return L.circleMarker(latlng, {

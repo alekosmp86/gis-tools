@@ -1,3 +1,4 @@
+import { TWIN_CLASS, type TwinClass } from "../jobs/ejes-calles/constants";
 import { ejesAttrChangesOf } from "../jobs/ejes-calles/domain/attrChanges";
 import type { EjesAttrRow, EjesResult, EjesUnknownValue } from "../jobs/ejes-calles/types";
 import { plural } from "../jobs/shared/text";
@@ -14,6 +15,7 @@ export interface EjesListSummaries {
   plainRemovals: string;
   newStreets: string;
   attrChanges: string;
+  twins: string;
 }
 
 export interface EjesAttrRowView extends EjesAttrRow {
@@ -47,6 +49,15 @@ export const coverageTextOf = (coverage: number | null): string =>
 const METER_DECIMALS = 1;
 
 export const metersTextOf = (meters: number | null): string => (meters === null ? "sin dato" : meters.toFixed(METER_DECIMALS));
+
+const TWIN_CASE_TEXT: Record<TwinClass, string> = {
+  [TWIN_CLASS.URBAN]: "Cerca de padrones urbanos",
+  [TWIN_CLASS.RURAL]: "Cerca de padrones rurales: sin regla",
+  [TWIN_CLASS.BOTH]: "Cerca de ambos: se mantienen las dos",
+  [TWIN_CLASS.NEITHER]: "Lejos de padrones: decidir en el mapa",
+};
+
+export const twinCaseTextOf = (twinClass: TwinClass): string => TWIN_CASE_TEXT[twinClass];
 
 const kpi = (label: string, value: number): ReportKpiView => ({ label, value });
 
@@ -92,6 +103,17 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
       ],
     },
     {
+      title: "Tramos repetidos por localidad",
+      kpis: [
+        kpi("Total", counts.twins),
+        kpi("Cerca de urbanos solamente", counts.twinsUrban),
+        kpi("Cerca de rurales solamente", counts.twinsRural),
+        kpi("Cerca de ambos", counts.twinsBoth),
+        kpi("Lejos de ambos", counts.twinsNeither),
+        kpi("En más de un departamento: sin regla", counts.twinsCrossDepartment),
+      ],
+    },
+    {
       title: "Calles y localidades de los tramos nuevos o con trazado distinto",
       kpis: [
         kpi("Calles nuevas", counts.newStreets),
@@ -109,6 +131,7 @@ const summariesOf = (result: EjesResult): EjesListSummaries => ({
   plainRemovals: listSummaryOf("Tramos sin reemplazo (primero los que tienen puntos de acceso)", result.plainRemovals.length, result.counts.plainRemovals),
   newStreets: listSummaryOf("Calles nuevas", result.newStreets.length, result.counts.newStreets),
   attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
+  twins: listSummaryOf("Tramos repetidos por localidad (primero los que se deciden en el mapa)", result.twins.length, result.counts.twins),
 });
 
 export function buildEjesReportView(result: EjesResult): EjesReportView {

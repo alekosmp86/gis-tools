@@ -14,7 +14,7 @@ export interface OutlineMapBodyProps {
   /** Shown instead of the map when it cannot be drawn (for example no connection password); null when the map can be drawn. */
   notice: string | null;
   renderMap: (selectedOutlineIndex: number | null, onSelectOutline: (outlineIndex: number | null) => void) => React.ReactNode;
-  renderDetails: (selectedOutlineIndex: number | null) => React.ReactNode;
+  renderDetails: (selectedOutlineIndex: number | null, onSelectOutline: (outlineIndex: number | null) => void) => React.ReactNode;
   /** Controls of the subject, shown above its details. */
   aside?: React.ReactNode;
 }
@@ -34,7 +34,7 @@ export function OutlineMapBody({ subject, notice, renderMap, renderDetails, asid
       </div>
       <div className={styles.detailsColumn}>
         {aside}
-        {renderDetails(selectedOutlineIndex)}
+        {renderDetails(selectedOutlineIndex, selectOutline)}
       </div>
     </div>
   );

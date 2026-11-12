@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { EjesResult } from "@/modules/routine-jobs/jobs/ejes-calles/types";
+import { TWIN_CLASS } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
+import type { EjesResult, EjesTwinRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import {
   buildEjesReportView,
   coverageTextOf,
   EJES_DRY_RUN_BANNER,
   metersTextOf,
+  twinCaseTextOf,
 } from "@/modules/routine-jobs/ui/ejesCallesReportView";
 
 const COUNTS = {
@@ -19,6 +21,23 @@ const COUNTS = {
   plainRemovals: 2,
   plainHeld: 1,
   newStreets: 1,
+  twins: 6,
+  twinsUrban: 1,
+  twinsRural: 2,
+  twinsBoth: 3,
+  twinsNeither: 4,
+  twinsCrossDepartment: 5,
+};
+
+const TWIN: EjesTwinRow = {
+  ref: "1035386",
+  idcalle: "72006",
+  department: "FLORES",
+  localities: ["FLORES RURAL", "TRINIDAD"],
+  class: TWIN_CLASS.BOTH,
+  length: 250.25,
+  urbanLength: 120.5,
+  ruralLength: 30,
 };
 
 const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
@@ -49,6 +68,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     merges: [],
     plainRemovals: [],
     newStreets: [],
+    twins: [],
     attrChanges: [
       {
         ref: "1",
@@ -139,6 +159,47 @@ describe("buildEjesReportView (EJ-12)", () => {
 
     expect(view.blockers).toEqual([]);
     expect(view.totalSeconds).toBe(0);
+  });
+
+  describe("twins (ET-6)", () => {
+    it("should have a KPI group Tramos repetidos por localidad with total, the four classes and the cross-department count, in order", () => {
+      const group = buildEjesReportView(resultOf()).kpiGroups.find((candidate) => candidate.title === "Tramos repetidos por localidad");
+
+      expect(group?.kpis).toEqual([
+        { label: "Total", value: 6 },
+        { label: "Cerca de urbanos solamente", value: 1 },
+        { label: "Cerca de rurales solamente", value: 2 },
+        { label: "Cerca de ambos", value: 3 },
+        { label: "Lejos de ambos", value: 4 },
+        { label: "En más de un departamento: sin regla", value: 5 },
+      ]);
+    });
+
+    it("should show zeros in the KPI group when there are no twin groups", () => {
+      const zero = { ...COUNTS, twins: 0, twinsUrban: 0, twinsRural: 0, twinsBoth: 0, twinsNeither: 0, twinsCrossDepartment: 0 };
+      const group = buildEjesReportView(resultOf({ counts: zero })).kpiGroups.find(
+        (candidate) => candidate.title === "Tramos repetidos por localidad"
+      );
+
+      expect(group?.kpis.map((kpi) => kpi.value)).toEqual([0, 0, 0, 0, 0, 0]);
+    });
+
+    it("should summarize the list with the shown rows and the total, noting a cut list", () => {
+      const full = buildEjesReportView(resultOf({ twins: [TWIN], counts: { ...COUNTS, twins: 1 } }));
+      const cut = buildEjesReportView(resultOf({ twins: [TWIN], counts: { ...COUNTS, twins: 700 } }));
+
+      expect(full.summaries.twins).toBe("Tramos repetidos por localidad (primero los que se deciden en el mapa) (1)");
+      expect(cut.summaries.twins).toBe("Tramos repetidos por localidad (primero los que se deciden en el mapa) (primeras 1 de 700)");
+    });
+
+    it.each([
+      [TWIN_CLASS.URBAN, "Cerca de padrones urbanos"],
+      [TWIN_CLASS.RURAL, "Cerca de padrones rurales: sin regla"],
+      [TWIN_CLASS.BOTH, "Cerca de ambos: se mantienen las dos"],
+      [TWIN_CLASS.NEITHER, "Lejos de padrones: decidir en el mapa"],
+    ])("should describe the class %s as %s", (twinClass, text) => {
+      expect(twinCaseTextOf(twinClass)).toBe(text);
+    });
   });
 
   describe("coverageTextOf", () => {

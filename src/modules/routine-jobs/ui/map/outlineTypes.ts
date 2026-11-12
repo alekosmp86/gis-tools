@@ -3,6 +3,7 @@ import type { Geometry } from "geojson";
 export const OUTLINE_ROLE = {
   OLD: "old",
   NEW: "new",
+  ZONE: "zone",
 } as const;
 
 export type OutlineRole = (typeof OUTLINE_ROLE)[keyof typeof OUTLINE_ROLE];

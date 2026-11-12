@@ -27,12 +27,12 @@ function messageOf(body: Body): string {
 }
 
 describe("parseEjesCallesStartRequest", () => {
-  it("should return the params of a dry run with config and eight tables", () => {
+  it("should return the params of a dry run with config and nine tables", () => {
     const params = parse(startBody());
 
     expect(params.dryRun).toBe(true);
     expect(params.config).toMatchObject({ host: "db.local", port: "5432", db_name: "gis", user: "gis_user" });
-    expect(Object.keys(params.tables)).toHaveLength(8);
+    expect(Object.keys(params.tables)).toHaveLength(9);
     expect(params.tables["ejes-origen"]).toEqual({ schema: "bdj_carto", table: "ide_ejesviacirculacion" });
   });
 

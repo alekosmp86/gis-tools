@@ -1,10 +1,12 @@
-import { EJES_TABLE_ROLE } from "../jobs/ejes-calles/constants";
+import { EJES_TABLE_ROLE, PADRON_TYPE, type PadronType } from "../jobs/ejes-calles/constants";
 import { EJES_MAP_ITEMS_LIMIT } from "../jobs/ejes-calles/domain/geometryMap";
 import type { EjesGeometryMapParams, EjesMapItem, EjesTableRef } from "../jobs/ejes-calles/types";
 import { invalid, isRecord, parseConnection, readRecord, readRequiredText, toDbConfig, type JsonRecord } from "./requestParsing";
 
 const MAP_ITEMS_MESSAGE = `El campo items debe ser una lista de 1 a ${EJES_MAP_ITEMS_LIMIT} elementos.`;
-const MAP_ITEM_MESSAGE = "Cada elemento de items necesita oldRef o newRef.";
+const MAP_ITEM_MESSAGE = "Cada elemento de items necesita oldRef, newRef o zoneOf.";
+const ZONE_TYPE_MESSAGE = `El campo items.type debe ser ${Object.values(PADRON_TYPE).join(" o ")}.`;
+const PADRON_TYPES: readonly unknown[] = Object.values(PADRON_TYPE);
 const REFERENCE_PATTERN = /^\d+$/;
 const INT4_MAX = 2147483647;
 
@@ -21,14 +23,23 @@ function readOldRef(value: unknown): number {
   return reference;
 }
 
+function readZoneType(value: unknown): PadronType {
+  if (!PADRON_TYPES.includes(value)) throw invalid(ZONE_TYPE_MESSAGE);
+  return value as PadronType;
+}
+
+const isPresent = (value: unknown): boolean => value !== undefined && value !== null;
+
 function readMapItem(entry: unknown): EjesMapItem {
   if (!isRecord(entry)) throw invalid("Cada elemento de items debe ser un objeto.");
-  const hasOld = entry.oldRef !== undefined && entry.oldRef !== null;
-  const hasNew = entry.newRef !== undefined && entry.newRef !== null;
-  if (!hasOld && !hasNew) throw invalid(MAP_ITEM_MESSAGE);
+  const hasOld = isPresent(entry.oldRef);
+  const hasNew = isPresent(entry.newRef);
+  const hasZone = isPresent(entry.zoneOf);
+  if (!hasOld && !hasNew && !hasZone) throw invalid(MAP_ITEM_MESSAGE);
   return {
     ...(hasOld ? { oldRef: readOldRef(entry.oldRef) } : {}),
     ...(hasNew ? { newRef: referenceOf(entry.newRef, "newRef") } : {}),
+    ...(hasZone ? { zoneOf: referenceOf(entry.zoneOf, "zoneOf"), type: readZoneType(entry.type) } : {}),
   };
 }
 
@@ -43,13 +54,14 @@ function readTableRef(tables: JsonRecord, role: string): EjesTableRef {
   return { schema: readRequiredText(entry, "schema"), table: readRequiredText(entry, "table") };
 }
 
-/** The map request: the connection and the staging and road section tables of the start request; the map reads no other table. */
+/** The map request: the connection and the staging, road section and padrones tables of the start request; the map reads no other table. */
 export function parseEjesGeometryMapRequest(body: JsonRecord): EjesGeometryMapParams {
   const tables = readRecord(body, "tables");
   return {
     config: toDbConfig(parseConnection(body)),
     staging: readTableRef(tables, EJES_TABLE_ROLE.STAGING),
     roadSection: readTableRef(tables, EJES_TABLE_ROLE.ROAD_SECTION),
+    padrones: readTableRef(tables, EJES_TABLE_ROLE.PADRONES),
     items: readMapItems(body),
   };
 }

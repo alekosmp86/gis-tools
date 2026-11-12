@@ -14,6 +14,7 @@ const mapBody = (overrides: Body = {}): Body => ({
   tables: {
     "ejes-origen": { schema: "bdj_carto", table: "ide_ejesviacirculacion" },
     "ejes-tramos": { schema: "carto", table: "road_section" },
+    "ejes-padrones": { schema: "carto", table: "padron" },
   },
   items: [{ oldRef: 1001634 }],
   ...overrides,
@@ -38,13 +39,14 @@ function expectRejected(body: Body, mention: RegExp): void {
 }
 
 describe("parseEjesGeometryMapRequest", () => {
-  it("should read the connection, the two tables and the items", () => {
+  it("should read the connection, the staging, road section and padrones tables and the items", () => {
     const params = parseEjesGeometryMapRequest(mapBody({ items: [{ oldRef: 1001634 }, { newRef: "1035386" }] }));
 
     expect(params.config.db_name).toBe("gis");
     expect(params.config.password).toBe(PASSWORD);
     expect(params.staging).toEqual({ schema: "bdj_carto", table: "ide_ejesviacirculacion" });
     expect(params.roadSection).toEqual({ schema: "carto", table: "road_section" });
+    expect(params.padrones).toEqual({ schema: "carto", table: "padron" });
     expect(params.items).toEqual([{ oldRef: 1001634 }, { newRef: "1035386" }]);
   });
 
@@ -64,7 +66,7 @@ describe("parseEjesGeometryMapRequest", () => {
   });
 
   it("should refuse an item without oldRef or newRef", () => {
-    expectRejected(mapBody({ items: [{}] }), /oldRef o newRef/);
+    expectRejected(mapBody({ items: [{}] }), /oldRef, newRef o zoneOf/);
   });
 
   it("should refuse an item that is not an object", () => {
@@ -84,10 +86,77 @@ describe("parseEjesGeometryMapRequest", () => {
     expectRejected(mapBody({ items: [{ newRef: HOSTILE }] }), /entero/);
   });
 
-  it("should refuse a request without the two tables", () => {
+  it("should refuse a request without one of the three tables", () => {
     expect(() => parseEjesGeometryMapRequest(mapBody({ tables: {} }))).toThrow(RequestInvalidError);
     expect(() => parseEjesGeometryMapRequest(mapBody({ tables: { "ejes-origen": { schema: "a", table: "b" } } }))).toThrow(
       RequestInvalidError
     );
+  });
+
+  describe("zone items (ET-7)", () => {
+    it("should accept a zone item of each padron type, with the reference as text or number", () => {
+      const params = parseEjesGeometryMapRequest(
+        mapBody({ items: [{ zoneOf: "1035386", type: "URBANO" }, { zoneOf: 7, type: "RURAL" }] })
+      );
+
+      expect(params.items).toEqual([
+        { zoneOf: "1035386", type: "URBANO" },
+        { zoneOf: "7", type: "RURAL" },
+      ]);
+    });
+
+    it("should accept zone items mixed with old and new items", () => {
+      const items = [{ oldRef: 1 }, { newRef: "2" }, { zoneOf: "2", type: "URBANO" }];
+
+      expect(parseEjesGeometryMapRequest(mapBody({ items })).items).toEqual(items);
+    });
+
+    it.each([["urbano"], ["PADRON"], [""], [null], [undefined], [1], [true]])("should refuse the zone type %j", (type) => {
+      expectRejected(mapBody({ items: [{ zoneOf: "1", type }] }), /URBANO o RURAL/);
+    });
+
+    it("should refuse a zone item without a type", () => {
+      expectRejected(mapBody({ items: [{ zoneOf: "1" }] }), /URBANO o RURAL/);
+    });
+
+    it.each([["abc"], ["12.5"], ["-3"], [""], [true]])("should refuse a zone reference that is not an integer: %j", (reference) => {
+      expectRejected(mapBody({ items: [{ zoneOf: reference, type: "URBANO" }] }), /entero/);
+    });
+
+    it("should never pass a hostile zone reference on", () => {
+      expectRejected(mapBody({ items: [{ zoneOf: HOSTILE, type: "RURAL" }] }), /entero/);
+    });
+
+    it("should still refuse an item with none of oldRef, newRef or zoneOf", () => {
+      expectRejected(mapBody({ items: [{ type: "URBANO" }] }), /oldRef, newRef o zoneOf/);
+    });
+
+    it("should keep the limit of 30 items with zone items", () => {
+      const zone = { zoneOf: "1", type: "RURAL" };
+
+      expect(parseEjesGeometryMapRequest(mapBody({ items: itemsOf(EJES_MAP_ITEMS_LIMIT, zone) })).items).toHaveLength(30);
+      expectRejected(mapBody({ items: itemsOf(EJES_MAP_ITEMS_LIMIT + 1, zone) }), /1 a 30/);
+    });
+  });
+
+  describe("padrones table (ET-1, ET-7)", () => {
+    it("should refuse a request whose tables carry no ejes-padrones", () => {
+      const tables = {
+        "ejes-origen": { schema: "bdj_carto", table: "ide_ejesviacirculacion" },
+        "ejes-tramos": { schema: "carto", table: "road_section" },
+      };
+
+      expectRejected(mapBody({ tables }), /ejes-padrones/);
+    });
+
+    it("should refuse an ejes-padrones entry without schema or table", () => {
+      const tables = {
+        "ejes-origen": { schema: "bdj_carto", table: "ide_ejesviacirculacion" },
+        "ejes-tramos": { schema: "carto", table: "road_section" },
+        "ejes-padrones": { schema: "carto" },
+      };
+
+      expect(() => parseEjesGeometryMapRequest(mapBody({ tables }))).toThrow(RequestInvalidError);
+    });
   });
 });

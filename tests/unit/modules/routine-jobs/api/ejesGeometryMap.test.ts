@@ -14,11 +14,13 @@ const READ_ONLY_STATEMENT = /^(BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY|S
 const WRITE_KEYWORD = /\b(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|COMMIT)\b/i;
 const STAGING_TABLE = "ide_ejesviacirculacion";
 const ROAD_SECTION_TABLE = "road_section";
+const PADRONES_TABLE = "padron";
 const METRE_SPATIAL_REF = {
   srtext: 'PROJCS["WGS 84 / UTM zone 21S",UNIT["metre",1]]',
   proj4text: "+proj=utm +zone=21 +south +datum=WGS84 +units=m +no_defs",
 };
 const OLD_OUTLINE = { type: "LineString", coordinates: [[-56.1, -34.9], [-56.0, -34.9]] };
+const ZONE_OUTLINE = { type: "Polygon", coordinates: [[[-56.1, -34.9], [-56.0, -34.9], [-56.0, -34.8], [-56.1, -34.9]]] };
 const NEW_OUTLINE = { type: "LineString", coordinates: [[-56.1, -34.9], [-56.05, -34.9]] };
 
 type Row = Record<string, unknown>;
@@ -32,6 +34,7 @@ interface FakeSession {
 interface FakeOptions {
   oldRows?: Row[];
   newRows?: Row[];
+  zoneRows?: Row[];
   failOn?: (sql: string) => Error | undefined;
 }
 
@@ -61,9 +64,12 @@ const ROAD_SECTION_COLUMNS: Row[] = [
   column("geometry", "geometry(LineString,32721)"),
 ];
 
+const PADRONES_COLUMNS: Row[] = [column("type_padron"), column("geometry", "geometry(MultiPolygon,32721)")];
+
 const columnsOf = (table: string): Row[] => {
   if (table === STAGING_TABLE) return STAGING_COLUMNS;
   if (table === ROAD_SECTION_TABLE) return ROAD_SECTION_COLUMNS;
+  if (table === PADRONES_TABLE) return PADRONES_COLUMNS;
   return [];
 };
 
@@ -71,7 +77,7 @@ const columnsOf = (table: string): Row[] => {
  * A scripted session: the catalog answers for the two tables, the old-section query answers `oldRows`, the new-section
  * query (the one that labels the SRID) answers `newRows`, and every other statement answers no row. Every statement is recorded.
  */
-function fakeSessionOf({ oldRows = [], newRows = [], failOn }: FakeOptions = {}): FakeSession {
+function fakeSessionOf({ oldRows = [], newRows = [], zoneRows = [], failOn }: FakeOptions = {}): FakeSession {
   const statements: string[] = [];
   let closed = false;
   const session: RunSession = {
@@ -81,7 +87,10 @@ function fakeSessionOf({ oldRows = [], newRows = [], failOn }: FakeOptions = {})
       if (failure !== undefined) throw failure;
       if (sql.includes("format_type(a.atttypid")) return { rows: columnsOf(String(values?.[1])) };
       if (sql.includes("FROM spatial_ref_sys")) return { rows: [METRE_SPATIAL_REF] };
-      if (sql.includes("ST_AsGeoJSON")) return { rows: sql.includes("ST_SetSRID") ? newRows : oldRows };
+      if (sql.includes("ST_AsGeoJSON")) {
+        if (sql.includes("ST_Union")) return { rows: zoneRows };
+        return { rows: sql.includes("ST_SetSRID") ? newRows : oldRows };
+      }
       return { rows: [] };
     },
     async close() {
@@ -114,6 +123,7 @@ const validBody = (items: unknown[] = [{ oldRef: 1001634 }]): Record<string, unk
   tables: {
     "ejes-origen": { schema: "bdj_carto", table: STAGING_TABLE },
     "ejes-tramos": { schema: "carto", table: ROAD_SECTION_TABLE },
+    "ejes-padrones": { schema: "carto", table: PADRONES_TABLE },
   },
   items,
 });
@@ -150,6 +160,200 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
       expect(fake.statements.length).toBeGreaterThan(0);
       expect(fake.statements.every((sql) => READ_ONLY_STATEMENT.test(sql))).toBe(true);
       expect(fake.statements.some((sql) => WRITE_KEYWORD.test(sql))).toBe(false);
+    });
+  });
+
+  describe("zone items (ET-7)", () => {
+    const zoneItem = (type: string): Record<string, unknown> => ({ zoneOf: "1035386", type });
+
+    it("should answer 200 with a feature of role zone, its item index and the label of the padron type", async () => {
+      const urban = fakeSessionOf({ zoneRows: [{ geojson: ZONE_OUTLINE }] });
+      const rural = fakeSessionOf({ newRows: [{ idcalle: "1", geojson: NEW_OUTLINE }], zoneRows: [{ geojson: ZONE_OUTLINE }] });
+
+      const urbanResponse = await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("URBANO")])), depsOf(urban));
+      const ruralResponse = await readEjesCallesGeometryMap(mapRequestOf(validBody([{ newRef: "1" }, zoneItem("RURAL")])), depsOf(rural));
+
+      expect(urbanResponse.status).toBe(200);
+      expect(await bodyOf(urbanResponse)).toEqual({
+        success: true,
+        features: [{ itemIndex: 0, role: "zone", label: "Padrones urbanos cercanos", geometry: ZONE_OUTLINE }],
+      });
+      expect(await bodyOf(ruralResponse)).toEqual({
+        success: true,
+        features: [
+          { itemIndex: 0, role: "new", label: "Tramo nuevo 1", geometry: NEW_OUTLINE },
+          { itemIndex: 1, role: "zone", label: "Padrones rurales cercanos", geometry: ZONE_OUTLINE },
+        ],
+      });
+    });
+
+    it("should answer 200 with no feature and no error when no padron is near", async () => {
+      const fake = fakeSessionOf({ zoneRows: [] });
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("URBANO")])), depsOf(fake));
+
+      expect(response.status).toBe(200);
+      expect(await bodyOf(response)).toEqual({ success: true, features: [] });
+    });
+
+    it("should answer 200 with no feature when the union comes back as a null outline", async () => {
+      const fake = fakeSessionOf({ zoneRows: [{ geojson: null }] });
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("RURAL")])), depsOf(fake));
+
+      expect(response.status).toBe(200);
+      expect(await bodyOf(response)).toEqual({ success: true, features: [] });
+    });
+
+    it("should keep the other features of the row when one zone has no padron near", async () => {
+      const fake = fakeSessionOf({ newRows: [{ idcalle: "1", geojson: NEW_OUTLINE }], zoneRows: [] });
+
+      const response = await readEjesCallesGeometryMap(
+        mapRequestOf(validBody([zoneItem("URBANO"), { newRef: "1035386" }])),
+        depsOf(fake)
+      );
+
+      expect((await bodyOf(response)).features).toEqual([
+        { itemIndex: 1, role: "new", label: "Tramo nuevo 1035386", geometry: NEW_OUTLINE },
+      ]);
+    });
+
+    it("should pass the reftramo and the type as parameters, never inside the statement", async () => {
+      const values: unknown[][] = [];
+      const fake = fakeSessionOf({ zoneRows: [{ geojson: ZONE_OUTLINE }] });
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) => {
+        if (sql.includes("ST_Union")) values.push(params ?? []);
+        return inner(sql, params);
+      };
+
+      await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("URBANO")])), depsOf(fake));
+
+      expect(values).toEqual([["1035386", "URBANO"]]);
+      expect(fake.statements.filter((sql) => sql.includes("ST_Union"))[0]).not.toContain("1035386");
+    });
+
+    it("should read the padrones table inside the same read-only transaction and issue no write", async () => {
+      const fake = fakeSessionOf({ zoneRows: [{ geojson: ZONE_OUTLINE }] });
+
+      await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("URBANO")])), depsOf(fake));
+
+      expect(fake.statements[0]).toBe(BEGIN_READ_ONLY);
+      expect(fake.statements.at(-1)).toBe("ROLLBACK");
+      expect(fake.statements.some((sql) => sql.includes('"carto"."padron"'))).toBe(true);
+      expect(fake.statements.every((sql) => READ_ONLY_STATEMENT.test(sql))).toBe(true);
+      expect(fake.statements.some((sql) => WRITE_KEYWORD.test(sql))).toBe(false);
+    });
+
+    it("should answer 500 and never show the password when a zone item meets a generic SRID 0 padrones geometry", async () => {
+      const generic = [column("type_padron"), column("geometry", "geometry(MultiPolygon,0)")];
+      const fake = fakeSessionOf();
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) =>
+        sql.includes("format_type(a.atttypid") && params?.[1] === PADRONES_TABLE ? { rows: generic } : inner(sql, params);
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("URBANO")])), depsOf(fake));
+      const text = await response.text();
+
+      expect(response.status).toBe(500);
+      expect(text).toContain("SRID 0");
+      expect(text).not.toContain(PASSWORD);
+    });
+
+    it("should answer 500 and never show the password when a zone item meets a padrones table that does not exist", async () => {
+      const fake = fakeSessionOf();
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) =>
+        sql.includes("format_type(a.atttypid") && params?.[1] === PADRONES_TABLE ? { rows: [] } : inner(sql, params);
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("URBANO")])), depsOf(fake));
+      const text = await response.text();
+
+      expect(response.status).toBe(500);
+      expect(text).toContain("carto.padron");
+      expect(text).not.toContain(PASSWORD);
+    });
+
+    it("should not touch the padrones table when the request has only old and new items, even if that table is broken", async () => {
+      const wrong = [column("geometry", "geometry(MultiPolygon,4326)")];
+      const fake = fakeSessionOf({
+        oldRows: [{ idcalle: "72006", geojson: OLD_OUTLINE }],
+        newRows: [{ idcalle: "72006", geojson: NEW_OUTLINE }],
+      });
+      const inner = fake.session.query.bind(fake.session);
+      const asked: unknown[] = [];
+      fake.session.query = async (sql: string, params?: unknown[]) => {
+        if (sql.includes("format_type(a.atttypid")) asked.push(params?.[1]);
+        return sql.includes("format_type(a.atttypid") && params?.[1] === PADRONES_TABLE ? { rows: wrong } : inner(sql, params);
+      };
+
+      const response = await readEjesCallesGeometryMap(
+        mapRequestOf(validBody([{ oldRef: 1001634 }, { newRef: "1035386" }])),
+        depsOf(fake)
+      );
+
+      expect(response.status).toBe(200);
+      expect((await bodyOf(response)).features).toHaveLength(2);
+      expect(asked).not.toContain(PADRONES_TABLE);
+      expect(fake.statements.some((sql) => sql.includes("ST_Union"))).toBe(false);
+    });
+
+    it("should succeed for old and new items when the padrones table is missing from the catalog", async () => {
+      const fake = fakeSessionOf({ oldRows: [{ idcalle: "72006", geojson: OLD_OUTLINE }] });
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) =>
+        sql.includes("format_type(a.atttypid") && params?.[1] === PADRONES_TABLE ? { rows: [] } : inner(sql, params);
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody()), depsOf(fake));
+
+      expect(response.status).toBe(200);
+    });
+
+    it("should check the padrones table once a zone item is mixed with old and new items", async () => {
+      const wrong = [column("type_padron"), column("geometry", "geometry(MultiPolygon,4326)")];
+      const fake = fakeSessionOf({ oldRows: [{ idcalle: "1", geojson: OLD_OUTLINE }] });
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) =>
+        sql.includes("format_type(a.atttypid") && params?.[1] === PADRONES_TABLE ? { rows: wrong } : inner(sql, params);
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([{ oldRef: 1 }, zoneItem("RURAL")])), depsOf(fake));
+
+      expect(response.status).toBe(500);
+    });
+
+    it("should answer 500 naming the table and never the password when the padrones table has a wrong SRID", async () => {
+      const wrong = [column("type_padron"), column("geometry", "geometry(MultiPolygon,4326)")];
+      const fake = fakeSessionOf();
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) =>
+        sql.includes("format_type(a.atttypid") && params?.[1] === PADRONES_TABLE ? { rows: wrong } : inner(sql, params);
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("URBANO")])), depsOf(fake));
+      const text = await response.text();
+
+      expect(response.status).toBe(500);
+      expect(text).toContain("SRID 4326");
+      expect(text).not.toContain(PASSWORD);
+    });
+
+    it("should answer 400 and open no session when the request carries no padrones table", async () => {
+      const fake = fakeSessionOf();
+      const body = validBody([zoneItem("URBANO")]);
+      body.tables = { "ejes-origen": { schema: "bdj_carto", table: STAGING_TABLE }, "ejes-tramos": { schema: "carto", table: ROAD_SECTION_TABLE } };
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(body), depsOf(fake));
+
+      expect(response.status).toBe(400);
+      expect(fake.statements).toEqual([]);
+    });
+
+    it("should answer 400 for a zone type outside URBANO and RURAL", async () => {
+      const fake = fakeSessionOf();
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("COMERCIAL")])), depsOf(fake));
+
+      expect(response.status).toBe(400);
+      expect(fake.statements).toEqual([]);
     });
   });
 

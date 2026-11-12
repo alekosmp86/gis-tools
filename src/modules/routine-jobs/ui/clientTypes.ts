@@ -143,10 +143,10 @@ export interface EjesStartRequest {
 
 export type EjesJobStatusView = JobStatusBase<EjesResult>;
 
-/** The connection and the two tables the ejes map reads: the wizard's, with no option and no plan. */
+/** The connection and the tables the ejes map reads: the wizard's, with no option and no plan. */
 export interface EjesGeometryMapBase {
   connection: ClientConnection;
-  tables: Pick<Record<EjesTableRole, EjesTableRef>, "ejes-origen" | "ejes-tramos">;
+  tables: Pick<Record<EjesTableRole, EjesTableRef>, "ejes-origen" | "ejes-tramos" | "ejes-padrones">;
 }
 
 export interface EjesGeometryMapRequest extends EjesGeometryMapBase {
