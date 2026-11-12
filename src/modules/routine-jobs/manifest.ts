@@ -9,6 +9,7 @@ import { readActualizarGeometryMap } from "./api/actualizarGeometryMap";
 import { createCargarLocalidadesHandlers } from "./api/cargarLocalidadesHandlers";
 import { createUnidadTerritorialHandlers } from "./api/unidadTerritorialHandlers";
 import { createEjesCallesHandlers } from "./api/ejesCallesHandlers";
+import { readEjesCallesGeometryMap } from "./api/ejesGeometryMap";
 import { createCentrosAnepHandlers } from "./api/centrosAnepHandlers";
 import { RoutineJobsDashboard } from "./ui/RoutineJobsDashboard";
 import { RoutineJobsHomeCard } from "./ui/RoutineJobsHomeCard";
@@ -48,6 +49,7 @@ export const routineJobsModule: AppModuleManifest = {
     "GET unidad-territorial/status": unidadHandlers.readUnidadTerritorialStatus,
     "POST ejes-calles/start": ejesHandlers.startEjesCalles,
     "GET ejes-calles/status": ejesHandlers.readEjesCallesStatus,
+    "POST ejes-calles/geometry-map": readEjesCallesGeometryMap,
     "POST centros-anep/start": centrosHandlers.startCentrosAnep,
     "GET centros-anep/status": centrosHandlers.readCentrosAnepStatus,
   }),

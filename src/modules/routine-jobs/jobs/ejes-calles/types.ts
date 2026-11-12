@@ -1,3 +1,4 @@
+import type { Geometry } from "geojson";
 import type { DbConfig } from "@/core/types/db";
 import type { TableLayout } from "../actualizar-padron/domain/layouts";
 import type { StepTiming } from "../cargar-padrones/types";
@@ -133,4 +134,24 @@ export interface EjesResult extends EjesAnalysis {
   privilegeInfo: string[];
   tables: Record<EjesTableRole, string>;
   stepTimings: StepTiming[];
+}
+
+/** One outline to draw: an old section by its `reftramo_ideuy`, or a new one by its staging `reftramo`. */
+export interface EjesMapItem {
+  oldRef?: number;
+  newRef?: string;
+}
+
+export interface EjesMapFeature {
+  itemIndex: number;
+  role: "old" | "new";
+  label: string;
+  geometry: Geometry;
+}
+
+export interface EjesGeometryMapParams {
+  config: DbConfig;
+  staging: EjesTableRef;
+  roadSection: EjesTableRef;
+  items: EjesMapItem[];
 }
