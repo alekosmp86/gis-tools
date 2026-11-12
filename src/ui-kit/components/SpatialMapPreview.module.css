@@ -416,3 +416,11 @@
   border: 1px solid var(--map-label-color, rgba(15, 23, 42, 0.2));
   border-left: 5px solid var(--map-label-color, rgba(15, 23, 42, 0.2));
 }
+
+.legendDot[data-color-type="TRAMO_SE_QUEDA"] {
+  background-color: #2563eb;
+}
+
+.legendDot[data-color-type="TRAMO_SE_QUITA"] {
+  background-color: #dc2626;
+}

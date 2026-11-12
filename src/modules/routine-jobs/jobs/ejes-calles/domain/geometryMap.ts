@@ -25,16 +25,19 @@ export function oldSectionOutlineSql(roadSection: TableLayout): string {
 
 /**
  * A new section by its staging `reftramo`. `$1` is the reference. Several staging rows can share a `reftramo` (one per locality or
- * department the section crosses) with the same geometry, so one of them is enough.
+ * department the section crosses) with the same geometry, so one of them is enough. With `byLocality`, `$2` is the trimmed
+ * `localidad` and the record of that copy is read.
  */
-export function newSectionOutlineSql(staging: TableLayout): string {
+export function newSectionOutlineSql(staging: TableLayout, byLocality = false): string {
   const column = (logical: string): string => `${STAGING_ALIAS}.${physicalColumn(staging, logical)}`;
   const geometry = `ST_SetSRID(${column(STAGING_COLUMN.GEOM)}, ${EJES_SRID})`;
   return [
     `SELECT ${column(STAGING_COLUMN.IDCALLE)} AS "idcalle", ${outlineGeoJsonSql(geometry)} AS "geojson"`,
     `FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
     `WHERE trim(${column(STAGING_COLUMN.REFTRAMO)}::text) = $1 AND ${column(STAGING_COLUMN.GEOM)} IS NOT NULL`,
-    `AND NOT ST_IsEmpty(${column(STAGING_COLUMN.GEOM)}) LIMIT 1`,
+    `AND NOT ST_IsEmpty(${column(STAGING_COLUMN.GEOM)})`,
+    byLocality ? `AND trim(${column(STAGING_COLUMN.LOCALIDAD)}::text) = $2` : "",
+    "LIMIT 1",
   ].join(" ");
 }
 

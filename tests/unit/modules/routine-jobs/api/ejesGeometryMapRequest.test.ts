@@ -139,6 +139,68 @@ describe("parseEjesGeometryMapRequest", () => {
     });
   });
 
+  describe("locality on a new-section item (ET-14)", () => {
+    it("should accept a locality with newRef and trim it", () => {
+      const params = parseEjesGeometryMapRequest(mapBody({ items: [{ newRef: "1035386", locality: "  FLORES RURAL " }] }));
+
+      expect(params.items).toEqual([{ newRef: "1035386", locality: "FLORES RURAL" }]);
+    });
+
+    it("should remove only leading and trailing spaces: a tab or a non-breaking space is kept", () => {
+      const tab = "\tFLORES RURAL";
+      const nbsp = "FLORES\u00a0RURAL";
+      const inside = "FLORES  RURAL";
+
+      const items = parseEjesGeometryMapRequest(
+        mapBody({ items: [{ newRef: "1", locality: ` ${tab} ` }, { newRef: "1", locality: `  ${nbsp}` }, { newRef: "1", locality: inside }] })
+      ).items;
+
+      expect(items.map((item) => item.locality)).toEqual([tab, nbsp, inside]);
+    });
+
+    it("should refuse a locality of only spaces but keep one that is only a tab", () => {
+      expectRejected(mapBody({ items: [{ newRef: "1", locality: "     " }] }), /locality/);
+      expect(parseEjesGeometryMapRequest(mapBody({ items: [{ newRef: "1", locality: "\t" }] })).items).toEqual([
+        { newRef: "1", locality: "\t" },
+      ]);
+    });
+
+    it("should leave an item without locality as it was", () => {
+      expect(parseEjesGeometryMapRequest(mapBody({ items: [{ newRef: "7" }] })).items).toEqual([{ newRef: "7" }]);
+      expect(parseEjesGeometryMapRequest(mapBody({ items: [{ newRef: "7", locality: null }] })).items).toEqual([{ newRef: "7" }]);
+    });
+
+    it("should refuse a locality on an old item or on a zone item", () => {
+      expectRejected(mapBody({ items: [{ oldRef: 1, locality: "A" }] }), /locality/);
+      expectRejected(mapBody({ items: [{ zoneOf: "1", type: "URBANO", locality: "A" }] }), /locality/);
+    });
+
+    it.each([[""], ["   "], [5], [true], [{}], [["A"]]])("should refuse the locality %j", (locality) => {
+      expectRejected(mapBody({ items: [{ newRef: "1", locality }] }), /locality/);
+    });
+
+    it("should accept items with and without locality in one request", () => {
+      const items = [{ oldRef: 1 }, { newRef: "2", locality: "A" }, { newRef: "2", locality: "B" }, { zoneOf: "2", type: "RURAL" }];
+
+      expect(parseEjesGeometryMapRequest(mapBody({ items })).items).toEqual(items);
+    });
+
+    it("should keep the limit of 30 items with locality items", () => {
+      const item = { newRef: "1", locality: "A" };
+
+      expect(parseEjesGeometryMapRequest(mapBody({ items: itemsOf(EJES_MAP_ITEMS_LIMIT, item) })).items).toHaveLength(30);
+      expectRejected(mapBody({ items: itemsOf(EJES_MAP_ITEMS_LIMIT + 1, item) }), /1 a 30/);
+    });
+
+    it("should pass a hostile locality on as a plain string, which only ever reaches a bound parameter", () => {
+      const hostile = "A'; DROP TABLE x; --";
+
+      expect(parseEjesGeometryMapRequest(mapBody({ items: [{ newRef: "1", locality: hostile }] })).items).toEqual([
+        { newRef: "1", locality: hostile },
+      ]);
+    });
+  });
+
   describe("padrones table (ET-1, ET-7)", () => {
     it("should refuse a request whose tables carry no ejes-padrones", () => {
       const tables = {

@@ -163,6 +163,94 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
     });
   });
 
+  describe("copy items by locality (ET-14)", () => {
+    const copyItem = (locality: string): Record<string, unknown> => ({ newRef: "1035386", locality });
+
+    it("should run the by-locality statement with the reference and the locality as parameters, never inlined", async () => {
+      const calls: Array<{ sql: string; values: unknown[] }> = [];
+      const fake = fakeSessionOf({ newRows: [{ idcalle: "1", geojson: NEW_OUTLINE }] });
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) => {
+        if (sql.includes("ST_AsGeoJSON")) calls.push({ sql, values: params ?? [] });
+        return inner(sql, params);
+      };
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([copyItem("FLORES RURAL")])), depsOf(fake));
+
+      expect(response.status).toBe(200);
+      expect(calls).toHaveLength(1);
+      expect(calls[0].values).toEqual(["1035386", "FLORES RURAL"]);
+      expect(calls[0].sql).toContain('trim(s."localidad"::text) = $2');
+      expect(calls[0].sql).not.toContain("FLORES RURAL");
+      expect(calls[0].sql).not.toContain("1035386");
+    });
+
+    it("should answer one feature per copy, each with its own item index", async () => {
+      const fake = fakeSessionOf({ newRows: [{ idcalle: "1", geojson: NEW_OUTLINE }] });
+
+      const response = await readEjesCallesGeometryMap(
+        mapRequestOf(validBody([copyItem("FLORES RURAL"), copyItem("TRINIDAD")])),
+        depsOf(fake)
+      );
+      const features = (await bodyOf(response)).features as Array<{ itemIndex: number; role: string }>;
+
+      expect(features.map((feature) => [feature.itemIndex, feature.role])).toEqual([
+        [0, "new"],
+        [1, "new"],
+      ]);
+    });
+
+    it("should keep the plain new-section statement, with one parameter, for an item without locality", async () => {
+      const valuesSeen: unknown[][] = [];
+      const fake = fakeSessionOf({ newRows: [{ idcalle: "1", geojson: NEW_OUTLINE }] });
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) => {
+        if (sql.includes("ST_AsGeoJSON")) valuesSeen.push(params ?? []);
+        return inner(sql, params);
+      };
+
+      await readEjesCallesGeometryMap(mapRequestOf(validBody([{ newRef: "1035386" }])), depsOf(fake));
+
+      expect(valuesSeen).toEqual([["1035386"]]);
+    });
+
+    it("should answer 404 naming the reftramo when no record has that locality", async () => {
+      const fake = fakeSessionOf({ newRows: [] });
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([copyItem("NINGUNA")])), depsOf(fake));
+
+      expect(response.status).toBe(404);
+      expect((await bodyOf(response)).error).toContain("1035386");
+    });
+
+    it("should not resolve the padrones table for copy items alone, and issue no write", async () => {
+      const asked: unknown[] = [];
+      const fake = fakeSessionOf({ newRows: [{ idcalle: "1", geojson: NEW_OUTLINE }] });
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) => {
+        if (sql.includes("format_type(a.atttypid")) asked.push(params?.[1]);
+        return inner(sql, params);
+      };
+
+      await readEjesCallesGeometryMap(mapRequestOf(validBody([copyItem("A")])), depsOf(fake));
+
+      expect(asked).not.toContain(PADRONES_TABLE);
+      expect(fake.statements.every((sql) => READ_ONLY_STATEMENT.test(sql))).toBe(true);
+      expect(fake.statements.some((sql) => WRITE_KEYWORD.test(sql))).toBe(false);
+    });
+
+    it("should answer 400 and open no session for a locality on an old item or an empty locality", async () => {
+      const fake = fakeSessionOf();
+
+      const withOld = await readEjesCallesGeometryMap(mapRequestOf(validBody([{ oldRef: 1, locality: "A" }])), depsOf(fake));
+      const empty = await readEjesCallesGeometryMap(mapRequestOf(validBody([copyItem("  ")])), depsOf(fake));
+
+      expect(withOld.status).toBe(400);
+      expect(empty.status).toBe(400);
+      expect(fake.statements).toEqual([]);
+    });
+  });
+
   describe("zone items (ET-7)", () => {
     const zoneItem = (type: string): Record<string, unknown> => ({ zoneOf: "1035386", type });
 

@@ -18,7 +18,7 @@ const ROAD_SECTION: TableLayout = {
 const STAGING: TableLayout = {
   schema: "bdj_carto",
   table: "ide_ejesviacirculacion",
-  columns: { reftramo: "reftramo", idcalle: "idcalle", geom: "geom" },
+  columns: { reftramo: "reftramo", idcalle: "idcalle", localidad: "localidad", geom: "geom" },
 };
 
 const PADRONES: TableLayout = {
@@ -72,6 +72,35 @@ describe("ejes geometry map", () => {
     it("should skip a row with an empty or null geometry", () => {
       expect(sql).toContain('s."geom" IS NOT NULL');
       expect(sql).toContain('NOT ST_IsEmpty(s."geom")');
+    });
+  });
+
+  describe("newSectionOutlineSql by locality (ET-14)", () => {
+    const byLocality = newSectionOutlineSql(STAGING, true);
+
+    it("should keep the default form unchanged: one parameter, no localidad condition", () => {
+      const plain = newSectionOutlineSql(STAGING);
+
+      expect(plain).toBe(newSectionOutlineSql(STAGING, false));
+      expect(plain).not.toContain("$2");
+      expect(plain).not.toContain("localidad");
+      expect(plain).toMatch(/LIMIT 1$/);
+    });
+
+    it("should read the record of one copy: the same reftramo and the trimmed localidad bound as $2", () => {
+      expect(byLocality).toContain('trim(s."reftramo"::text) = $1');
+      expect(byLocality).toContain('AND trim(s."localidad"::text) = $2');
+      expect(byLocality).toMatch(/LIMIT 1$/);
+    });
+
+    it("should still skip an empty or null geometry and label the SRID", () => {
+      expect(byLocality).toContain('s."geom" IS NOT NULL');
+      expect(byLocality).toContain('NOT ST_IsEmpty(s."geom")');
+      expect(byLocality).toContain('ST_SetSRID(s."geom", 32721)');
+    });
+
+    it("should put the localidad condition before the LIMIT", () => {
+      expect(byLocality.indexOf("$2")).toBeLessThan(byLocality.indexOf("LIMIT 1"));
     });
   });
 

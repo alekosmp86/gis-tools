@@ -8,7 +8,7 @@ vi.mock("leaflet", () => ({
 
 import type { Feature } from "geojson";
 import { createStyleResolver } from "@/ui-kit/map/MapSymbologyStyler";
-import { DEFAULT_MAP_FEATURE_STYLE, getDiscrepancyColor } from "@/core/constants/mapConstants";
+import { DEFAULT_MAP_FEATURE_STYLE, getDiscrepancyColor, MAP_SECTION_TYPE, MAP_UNDERLAY_EXTRA_WEIGHT } from "@/core/constants/mapConstants";
 import { MapStrokePattern, type MapFeatureStyle } from "@/core/types/map";
 
 const style = (over: Partial<MapFeatureStyle> = {}): MapFeatureStyle => ({
@@ -106,6 +106,25 @@ describe("MapSymbologyStyler", () => {
       const r = path(feat("FILE_FEATURE"), style({ overrideDiscrepancyColors: true }));
 
       expect(r).toMatchObject({ color: "#111111", dashArray: "6, 6", fillOpacity: 0.25 });
+    });
+
+    it("should draw the dropped copy of a repeated section wider by the underlay extra weight and the kept copy at the base weight", () => {
+      const dropped = path(feat(MAP_SECTION_TYPE.COPY_DROPPED), style({ weight: 2 }));
+      const kept = path(feat(MAP_SECTION_TYPE.COPY_KEPT), style({ weight: 2 }));
+
+      expect(dropped.weight).toBe(3 + MAP_UNDERLAY_EXTRA_WEIGHT);
+      expect(kept.weight).toBe(3);
+      expect(dropped.weight).toBeGreaterThan(kept.weight as number);
+    });
+
+    it("should keep the colour of each decision type", () => {
+      expect(path(feat(MAP_SECTION_TYPE.COPY_KEPT), style()).color).toBe(getDiscrepancyColor("TRAMO_SE_QUEDA"));
+      expect(path(feat(MAP_SECTION_TYPE.COPY_DROPPED), style()).color).toBe(getDiscrepancyColor("TRAMO_SE_QUITA"));
+    });
+
+    it("should add no per-type bonus to an ordinary type", () => {
+      expect(path(feat("ATTRIBUTE_MISMATCH"), style({ weight: 2 })).weight).toBe(3);
+      expect(path(feat(MAP_SECTION_TYPE.NEW), style({ weight: 2 })).weight).toBe(3);
     });
 
     it("should enforce a minimum weight of 3 and keep larger weights", () => {

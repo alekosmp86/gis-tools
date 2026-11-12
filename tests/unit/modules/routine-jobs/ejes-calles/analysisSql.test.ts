@@ -6,7 +6,7 @@ import {
   coverageThresholdSql,
   geometriesDifferSql,
 } from "@/modules/routine-jobs/jobs/ejes-calles/domain/analysisSql";
-import { TWIN_NEAR_RATIO, TWIN_PADRON_DISTANCE_M } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
+import { RURAL_LOCALITY_SUFFIX, TWIN_NEAR_MIN_LENGTH_M, TWIN_PADRON_DISTANCE_M } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { ejesLayouts } from "./ejesFixtures";
 
@@ -226,13 +226,13 @@ describe("buildEjesAnalysisSql", () => {
   });
 
   describe("ET-3 near lengths and class", () => {
-    it("should take the distance and the ratio from the constants", () => {
+    it("should take the distance and the minimum near length from the constants", () => {
       expect(TWIN_PADRON_DISTANCE_M).toBe(15);
-      expect(TWIN_NEAR_RATIO).toBe(0.1);
+      expect(TWIN_NEAR_MIN_LENGTH_M).toBe(1);
       expect(sql).toContain(`ST_DWithin(p."geometry", g.geom, ${TWIN_PADRON_DISTANCE_M})`);
       expect(sql).toContain(`ST_Buffer(p."geometry", ${TWIN_PADRON_DISTANCE_M})`);
-      expect(sql).toContain(`m.urban_len >= ${TWIN_NEAR_RATIO} * m.len`);
-      expect(sql).toContain(`m.rural_len >= ${TWIN_NEAR_RATIO} * m.len`);
+      expect(sql).toContain(`m.urban_len >= ${TWIN_NEAR_MIN_LENGTH_M}`);
+      expect(sql).toContain(`m.rural_len >= ${TWIN_NEAR_MIN_LENGTH_M}`);
     });
 
     it("should measure the length of the section inside the union of the buffers, 0 when no padron is near", () => {
@@ -253,13 +253,17 @@ describe("buildEjesAnalysisSql", () => {
 
       expect(order.every((index) => index > 0)).toBe(true);
       expect([...order].sort((first, second) => first - second)).toEqual(order);
-      expect(caseSql).toContain("WHEN (m.len > 0 AND m.urban_len >= 0.1 * m.len) AND (m.len > 0 AND m.rural_len >= 0.1 * m.len) THEN 'BOTH'");
+      expect(caseSql).toContain(
+        `WHEN m.urban_len >= ${TWIN_NEAR_MIN_LENGTH_M} AND m.rural_len >= ${TWIN_NEAR_MIN_LENGTH_M} THEN 'BOTH' WHEN m.urban_len >= ${TWIN_NEAR_MIN_LENGTH_M} THEN 'URBAN' WHEN m.rural_len >= ${TWIN_NEAR_MIN_LENGTH_M} THEN 'RURAL' ELSE 'NEITHER' END AS class`
+      );
       expect(caseSql).toContain("ELSE 'NEITHER' END AS class");
     });
 
-    it("should never call a zero-length section near anything", () => {
-      expect(sql).toContain("(m.len > 0 AND m.urban_len");
-      expect(sql).toContain("(m.len > 0 AND m.rural_len");
+    it("should decide near by an absolute length, with no ratio to the section length left in the twin CASE", () => {
+      const caseSql = sql.slice(sql.indexOf("SELECT m.*, CASE"), sql.indexOf('FROM "twin_measured" AS m'));
+
+      expect(caseSql).not.toContain("0.1 *");
+      expect(caseSql).not.toContain("m.len");
     });
   });
 
@@ -297,6 +301,113 @@ describe("buildEjesAnalysisSql", () => {
     it("should list a section once however many copies it has, because the list reads the groups, not the staging rows", () => {
       expect(sql).toContain('FROM "twins" AS t');
       expect(sql).not.toContain('FROM "twin_raw" AS t ORDER BY');
+    });
+  });
+
+  describe("ET-12 locality names", () => {
+    it("should collect in inside_localities the distinct upper-cased trimmed names of the locality polygons the twin intersects, only for the class NEITHER", () => {
+      expect(sql).toContain(
+        `CASE WHEN k.class = 'NEITHER' THEN ARRAY(SELECT DISTINCT upper(btrim(l."nomloc"::text)) FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom)) ELSE ARRAY[]::text[] END AS inside_localities`
+      );
+    });
+
+    it("should compute inside_localities in its own twin_located CTE after the classification and before the drop rule", () => {
+      const classed = sql.indexOf('"twin_classed" AS (');
+      const located = sql.indexOf('"twin_located" AS (');
+      const twins = sql.indexOf('"twins" AS (');
+
+      expect(classed).toBeGreaterThan(0);
+      expect(located).toBeGreaterThan(classed);
+      expect(twins).toBeGreaterThan(located);
+      expect(sql.slice(located, twins)).toContain("AS inside_localities");
+      expect(sql.slice(located, twins)).toContain('FROM "twin_classed" AS k');
+    });
+
+    it("should not touch the localities polygons while measuring or classifying", () => {
+      const early = sql.slice(sql.indexOf('"twin_measured" AS ('), sql.indexOf('"twin_located" AS ('));
+
+      expect(early).not.toContain("ine_localidades_pg");
+      expect(early).not.toContain("ST_Intersects");
+    });
+
+    it("should carry the section geometry through twin_measured so the located step can intersect it", () => {
+      const measured = sql.slice(sql.indexOf('"twin_measured" AS ('), sql.indexOf('"twin_classed" AS ('));
+
+      expect(measured).toContain("g.geom");
+    });
+
+    it("should use the physical nomloc and geom names of the localities layout", () => {
+      const layouts = ejesLayouts();
+      layouts["ejes-localidades"] = { schema: "x", table: "loc2", columns: { cloc_iso: "c", nomloc: "nombre_loc", geom: "the_geom" } };
+
+      const renamed = buildEjesAnalysisSql(layouts);
+
+      expect(renamed).toContain('l."nombre_loc"');
+      expect(renamed).toContain('ST_Intersects(l."the_geom", k.geom)');
+    });
+
+    it("should throw when the localities layout has no nomloc column", () => {
+      const layouts = ejesLayouts();
+      delete layouts["ejes-localidades"].columns.nomloc;
+
+      expect(() => buildEjesAnalysisSql(layouts)).toThrow(/nomloc/);
+    });
+  });
+
+  describe("ET-10 localities to drop", () => {
+    const dropSql = sql.slice(sql.indexOf('"twins" AS ('), sql.indexOf('"twins" AS (') + 2500);
+    const rural = (alias: string): string => `upper(btrim(${alias})) LIKE '%${RURAL_LOCALITY_SUFFIX}'`;
+
+    it("should take the rural suffix from the constant", () => {
+      expect(RURAL_LOCALITY_SUFFIX).toBe(" RURAL");
+      expect(sql).toContain(rural("l"));
+    });
+
+    it("should drop the rural-named localities of an URBAN row only when the group has a non-rural-named one", () => {
+      expect(dropSql).toContain(
+        `WHEN c.class = 'URBAN' AND EXISTS (SELECT 1 FROM unnest(c.localities) AS h WHERE NOT ${rural("h")}) THEN ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE ${rural("l")} ORDER BY l)`
+      );
+    });
+
+    it("should drop from a RURAL row the non-rural-named localities and every rural-named one but the first by name, when it has a rural-named one", () => {
+      expect(dropSql).toContain(
+        `WHEN (c.class = 'RURAL' OR (c.class = 'NEITHER' AND cardinality(c.inside_localities) = 0)) AND EXISTS (SELECT 1 FROM unnest(c.localities) AS h WHERE ${rural("h")}) THEN ARRAY(SELECT l FROM unnest(c.localities) AS l`
+      );
+      expect(dropSql).toContain(
+        `WHERE NOT ${rural("l")} OR l <> (SELECT min(r) FROM unnest(c.localities) AS r WHERE ${rural("r")}) ORDER BY l)`
+      );
+    });
+
+    it("should give an empty array to every other class, so BOTH and NEITHER drop nothing", () => {
+      expect(dropSql).toContain("ELSE ARRAY[]::text[] END AS drop_localities");
+      expect(dropSql).not.toContain("c.class = 'BOTH'");
+    });
+
+    it("should treat a NEITHER row inside no locality polygon like a RURAL row", () => {
+      expect(dropSql).toContain("(c.class = 'RURAL' OR (c.class = 'NEITHER' AND cardinality(c.inside_localities) = 0))");
+    });
+
+    it("should drop from a NEITHER row inside some locality the copies whose name is not among the inside ones, only if a copy is inside", () => {
+      expect(dropSql).toContain(
+        "WHEN c.class = 'NEITHER' AND NOT cardinality(c.inside_localities) = 0 AND EXISTS (SELECT 1 FROM unnest(c.localities) AS h WHERE upper(btrim(h)) = ANY(c.inside_localities))"
+      );
+      expect(dropSql).toContain(
+        "THEN ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE NOT upper(btrim(l)) = ANY(c.inside_localities) ORDER BY l)"
+      );
+    });
+
+    it("should guard each branch so a drop list is never every locality of the group", () => {
+      expect(dropSql.split("AND EXISTS (SELECT 1 FROM unnest(c.localities)")).toHaveLength(4);
+    });
+
+    it("should read the classed twins and select drop_localities in the list", () => {
+      expect(dropSql).toContain('FROM "twin_located" AS c');
+      expect(sql).toContain('t.drop_localities AS "drop_localities"');
+    });
+
+    it("should count twins_drop as the rows with a non-empty list and twins_keep as the rows with none", () => {
+      expect(sql).toContain('(SELECT count(*) FROM "twins" WHERE cardinality(drop_localities) > 0) AS "twins_drop"');
+      expect(sql).toContain('(SELECT count(*) FROM "twins" WHERE cardinality(drop_localities) = 0) AS "twins_keep"');
     });
   });
 

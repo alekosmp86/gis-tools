@@ -76,6 +76,7 @@ export const ACCESS_POINT_COLUMN = {
 
 export const LOCALITIES_COLUMN = {
   CLOC_ISO: "cloc_iso",
+  NAME: "nomloc",
   GEOM: "geom",
 } as const;
 
@@ -106,7 +107,8 @@ export const TWIN_CLASS = {
 export type TwinClass = (typeof TWIN_CLASS)[keyof typeof TWIN_CLASS];
 
 export const TWIN_PADRON_DISTANCE_M = 15;
-export const TWIN_NEAR_RATIO = 0.1;
+export const TWIN_NEAR_MIN_LENGTH_M = 1;
+export const RURAL_LOCALITY_SUFFIX = " RURAL";
 
 export const EJES_REQUIRED_COLUMNS_BY_ROLE: Record<EjesTableRole, readonly string[]> = {
   [EJES_TABLE_ROLE.STAGING]: Object.values(STAGING_COLUMN),

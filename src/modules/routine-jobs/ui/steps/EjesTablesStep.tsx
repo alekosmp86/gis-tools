@@ -31,7 +31,7 @@ const COPY_BY_ROLE: Record<EjesTableRole, Omit<SlotCopy<EjesTableRole, EjesTable
     tableLabel: "Tabla de puntos de acceso",
   },
   [EJES_TABLE_ROLE.LOCALITIES]: {
-    note: "Calcula el cloc_iso de los tramos. Solo se lee.",
+    note: "Calcula el cloc_iso de los tramos y, con nomloc, decide los tramos repetidos lejos de los padrones. Solo se lee.",
     tableLabel: "Tabla de localidades INE",
   },
   [EJES_TABLE_ROLE.DEPARTMENTS]: {

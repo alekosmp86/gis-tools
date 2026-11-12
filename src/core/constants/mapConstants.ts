@@ -65,10 +65,12 @@ export const MAP_SECTION_TYPE = {
   NEW: "TRAMO_NUEVO",
   URBAN_ZONE: "PADRON_ZONA_URBANA",
   RURAL_ZONE: "PADRON_ZONA_RURAL",
+  COPY_KEPT: "TRAMO_SE_QUEDA",
+  COPY_DROPPED: "TRAMO_SE_QUITA",
 } as const;
 
 /** Outline types drawn as the underlay of a comparison: thicker, so the outline over them stays visible. */
-export const MAP_UNDERLAY_TYPES: readonly string[] = [MAP_ROLE_TYPE.OLD, MAP_SECTION_TYPE.OLD];
+export const MAP_UNDERLAY_TYPES: readonly string[] = [MAP_ROLE_TYPE.OLD, MAP_SECTION_TYPE.OLD, MAP_SECTION_TYPE.COPY_DROPPED];
 
 export const MAP_UNDERLAY_EXTRA_WEIGHT = 5;
 
@@ -96,6 +98,8 @@ const DISCREPANCY_COLORS: Record<string, string> = {
   [MAP_SECTION_TYPE.URBAN_ZONE]: "#c026d3",
   [MAP_SECTION_TYPE.RURAL_ZONE]: "#92400e",
   ...candidateRecordOf((index) => CANDIDATE_COLORS[index]),
+  [MAP_SECTION_TYPE.COPY_KEPT]: "#2563eb",
+  [MAP_SECTION_TYPE.COPY_DROPPED]: "#dc2626",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "#ff0055",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#f59e0b",
   [DiscrepancyType.ONLY_IN_SHP]: "#a855f7",
@@ -122,6 +126,8 @@ const DISCREPANCY_LABELS: Record<string, string> = {
   [MAP_SECTION_TYPE.URBAN_ZONE]: "Padrones urbanos cercanos",
   [MAP_SECTION_TYPE.RURAL_ZONE]: "Padrones rurales cercanos",
   ...candidateRecordOf((index) => `Candidato ${index + 1}`),
+  [MAP_SECTION_TYPE.COPY_KEPT]: "Se queda",
+  [MAP_SECTION_TYPE.COPY_DROPPED]: "Se quitaría",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "Discrepancia Geométrica",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "Discrepancia de Atributos",
   [DiscrepancyType.ONLY_IN_SHP]: "Solo en Archivo Fuente",

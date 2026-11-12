@@ -6,7 +6,7 @@ import { CollapsibleSection } from "./ActualizarReportSections";
 import type { EjesGeometryMapBase } from "./clientTypes";
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
 import { subjectOfMerge, subjectOfSplit, subjectOfTwin } from "./ejesMapSubject";
-import { buildEjesReportView, coverageTextOf, metersTextOf, twinCaseTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
+import { buildEjesReportView, coverageTextOf, metersTextOf, twinCaseTextOf, twinDecisionTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
 import { KpiCards, OutcomeBanners, RowsTable, SectionTitle, TimingsSection, type TableColumn } from "./ReportParts";
 import { textOrNoData } from "./reportFormat";
 import sharedStyles from "./CargarPadronesReport.module.css";
@@ -68,6 +68,7 @@ const TWIN_COLUMNS: TableColumn<EjesTwinRow>[] = [
   { header: "Largo (m)", cell: (row) => metersTextOf(row.length) },
   { header: "Cerca de urbanos (m)", cell: (row) => metersTextOf(row.urbanLength) },
   { header: "Cerca de rurales (m)", cell: (row) => metersTextOf(row.ruralLength) },
+  { header: "Qué pasa", cell: twinDecisionTextOf },
 ];
 
 const LIST_SECTION_TITLE = "Listas";

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { OUTLINE_ROLE } from "./map/outlineTypes";
-import { coverageTextOf, metersTextOf, twinCaseTextOf } from "./ejesCallesReportView";
+import { coverageTextOf, metersTextOf, twinCaseTextOf, twinDecisionTextOf } from "./ejesCallesReportView";
 import { truncationNoteOf, type EjesMapOutline, type EjesMapSubject, type EjesTwinFacts } from "./ejesMapSubject";
 import { textOrNoData } from "./reportFormat";
 import styles from "./EjesMapDetails.module.css";
@@ -22,6 +22,7 @@ const twinFactsOf = (idcalle: string | null, twin: EjesTwinFacts): DetailRow[] =
   ["Departamento", textOrNoData(twin.department)],
   ["Localidades", twin.localities.join(", ")],
   ["Caso", twinCaseTextOf(twin.twinClass)],
+  ["Qué pasa", twinDecisionTextOf({ class: twin.twinClass, dropLocalities: twin.dropLocalities })],
   ["Largo (m)", metersTextOf(twin.length)],
   ["Cerca de urbanos (m)", metersTextOf(twin.urbanLength)],
   ["Cerca de rurales (m)", metersTextOf(twin.ruralLength)],
@@ -42,6 +43,8 @@ const rowFactsOf = (subject: EjesMapSubject): DetailRow[] =>
 const outlineFactsOf = (outline: EjesMapOutline): DetailRow[] => [
   ["reftramo", outline.ref],
   ["Tramo", ROLE_TEXT[outline.role]],
+  ...(outline.locality === undefined ? [] : [["Localidad", outline.locality] as DetailRow]),
+  ...(outline.dropped === undefined ? [] : [["Copia", outline.dropped ? "Se quitaría" : "Se queda"] as DetailRow]),
 ];
 
 function DetailList({ rows }: { rows: DetailRow[] }) {
@@ -80,7 +83,7 @@ function OutlineList({ outlines, selectedOutlineIndex, onSelectOutline }: Outlin
       <h4 className={styles.sectionTitle}>{LIST_TITLE}</h4>
       <ul className={styles.outlineList}>
         {outlines.map((outline, index) => (
-          <li key={`${outline.role}-${outline.ref}`}>
+          <li key={`${outline.role}-${outline.mapType ?? ""}-${outline.ref}-${outline.locality ?? ""}`}>
             <button
               type="button"
               className={styles.outlineButton}

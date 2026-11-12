@@ -1,6 +1,6 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { EjesMergeRow, EjesSplitRow, EjesTwinRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import type { EjesGeometryMapBase } from "@/modules/routine-jobs/ui/clientTypes";
 import { EjesMapDetails } from "@/modules/routine-jobs/ui/EjesMapDetails";
@@ -38,6 +38,7 @@ const TWIN: EjesTwinRow = {
   length: 250.25,
   urbanLength: 120.5,
   ruralLength: 30,
+  dropLocalities: [],
 };
 
 const BASE: EjesGeometryMapBase = {
@@ -125,6 +126,41 @@ describe("EjesMapDetails twin row (ET-9)", () => {
     expect(html).toContain("30.0");
   });
 
+  it("should show the decision of the row under Qué pasa: Se mantienen todas for BOTH", () => {
+    expect(html).toContain("Qué pasa");
+    expect(html).toContain("Se mantienen todas");
+  });
+
+  it("should show which localities would be dropped when the row has some", () => {
+    const urban = subjectOfTwin({ ...TWIN, class: "URBAN", ruralLength: 0, dropLocalities: ["FLORES RURAL"] });
+    const view = renderToStaticMarkup(React.createElement(EjesMapDetails, { subject: urban, outline: null }));
+
+    expect(view).toContain("Se quitaría: FLORES RURAL");
+    expect(view).not.toContain("Sin regla: se mantienen todas");
+  });
+
+  it("should say Se mantienen todas for an URBAN row with nothing to drop", () => {
+    const urban = subjectOfTwin({ ...TWIN, class: "URBAN", ruralLength: 0, dropLocalities: [] });
+    const view = renderToStaticMarkup(React.createElement(EjesMapDetails, { subject: urban, outline: null }));
+
+    expect(view).toContain("Se mantienen todas");
+    expect(view).not.toContain("Sin regla");
+  });
+
+  it("should say Sin regla: se mantienen todas for a NEITHER row", () => {
+    const none = subjectOfTwin({ ...TWIN, class: "NEITHER", urbanLength: 0, ruralLength: 0, dropLocalities: [] });
+    const view = renderToStaticMarkup(React.createElement(EjesMapDetails, { subject: none, outline: null }));
+
+    expect(view).toContain("Sin regla: se mantienen todas");
+  });
+
+  it("should show the localities dropped from a RURAL row", () => {
+    const rural = subjectOfTwin({ ...TWIN, class: "RURAL", urbanLength: 0, dropLocalities: ["TRINIDAD"] });
+    const view = renderToStaticMarkup(React.createElement(EjesMapDetails, { subject: rural, outline: null }));
+
+    expect(view).toContain("Se quitaría: TRINIDAD");
+  });
+
   it("should not show the split and merge facts", () => {
     expect(html).not.toContain("Puntos de acceso");
     expect(html).not.toContain("Cobertura");
@@ -140,8 +176,8 @@ describe("EjesMapDetails twin row (ET-9)", () => {
 
   it.each([
     ["URBAN", "Cerca de padrones urbanos"],
-    ["RURAL", "Cerca de padrones rurales: sin regla"],
-    ["NEITHER", "Lejos de padrones: decidir en el mapa"],
+    ["RURAL", "Cerca de padrones rurales"],
+    ["NEITHER", "Lejos de padrones: sin regla"],
   ] as const)("should show the case text of the class %s", (twinClass, text) => {
     const view = renderToStaticMarkup(
       React.createElement(EjesMapDetails, { subject: subjectOfTwin({ ...TWIN, class: twinClass }), outline: null })
@@ -157,11 +193,14 @@ describe("EjesMapDetails twin row (ET-9)", () => {
 
     expect(list).toContain("Padrones urbanos cercanos");
     expect(list).toContain("Padrones rurales cercanos");
-    expect(list).toContain("1035386 · nuevo");
+    expect(list).toContain("1035386 · FLORES RURAL (se queda)");
+    expect(list).toContain("1035386 · TRINIDAD (se queda)");
     expect(list).toContain("data-map-type=\"PADRON_ZONA_URBANA\"");
+    expect(list).toContain("data-map-type=\"TRAMO_SE_QUEDA\"");
+    expect(list).not.toContain("TRAMO_COPIA");
   });
 
-  it("should list a zone with no length near no more than the section", () => {
+  it("should list a zone with no length near no more than the copies", () => {
     const only = subjectOfTwin({ ...TWIN, class: "NEITHER", urbanLength: 0, ruralLength: 0 });
     const list = renderToStaticMarkup(
       React.createElement(EjesMapDetails, { subject: only, outline: null, selectedOutlineIndex: null, onSelectOutline: NOOP })
@@ -169,7 +208,72 @@ describe("EjesMapDetails twin row (ET-9)", () => {
 
     expect(list).not.toContain("Padrones urbanos cercanos");
     expect(list).not.toContain("Padrones rurales cercanos");
-    expect(list.match(/<button/g)).toHaveLength(1);
+    expect(list.match(/<button/g)).toHaveLength(2);
+  });
+
+  it("should list every copy as its own selectable entry, even when the copies share a reftramo", () => {
+    const list = renderToStaticMarkup(
+      React.createElement(EjesMapDetails, { subject, outline: null, selectedOutlineIndex: 2, onSelectOutline: NOOP })
+    );
+
+    expect(list.match(/data-role="new"/g)).toHaveLength(4);
+    expect(list.match(/aria-pressed="true"/g)).toHaveLength(1);
+  });
+
+  it("should show the reftramo, the locality and Se queda for a selected copy that stays", () => {
+    const copy = subject.outlines.find((outline) => outline.locality === "TRINIDAD");
+    const html = renderToStaticMarkup(React.createElement(EjesMapDetails, { subject, outline: copy ?? null }));
+
+    expect(html).toContain("Localidad");
+    expect(html).toContain("TRINIDAD");
+    expect(html).toContain("Copia");
+    expect(html).toContain("Se queda");
+  });
+
+  it("should show Se quitaría for a selected copy that would be dropped", () => {
+    const urban = subjectOfTwin({ ...TWIN, class: "URBAN", ruralLength: 0, dropLocalities: ["FLORES RURAL"] });
+    const copy = urban.outlines.find((outline) => outline.locality === "FLORES RURAL");
+    const html = renderToStaticMarkup(React.createElement(EjesMapDetails, { subject: urban, outline: copy ?? null }));
+
+    expect(html).toContain("FLORES RURAL");
+    expect(html).toContain(">Se quitaría<");
+  });
+
+  it("should swatch a dropped copy as TRAMO_SE_QUITA and a kept one as TRAMO_SE_QUEDA", () => {
+    const urban = subjectOfTwin({ ...TWIN, class: "URBAN", ruralLength: 0, dropLocalities: ["FLORES RURAL"] });
+    const list = renderToStaticMarkup(
+      React.createElement(EjesMapDetails, { subject: urban, outline: null, selectedOutlineIndex: null, onSelectOutline: NOOP })
+    );
+
+    expect(list).toContain("data-map-type=\"TRAMO_SE_QUITA\"");
+    expect(list).toContain("data-map-type=\"TRAMO_SE_QUEDA\"");
+    expect(list.indexOf("TRAMO_SE_QUITA")).toBeLessThan(list.indexOf("TRAMO_SE_QUEDA"));
+  });
+
+  it("should render a BOTH row with two zones and two copies without a duplicate React key", () => {
+    const errors: unknown[][] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args);
+    });
+    try {
+      const both = subjectOfTwin({ ...TWIN, class: "BOTH", urbanLength: 120.5, ruralLength: 30, dropLocalities: [] });
+      renderToStaticMarkup(
+        React.createElement(EjesMapDetails, { subject: both, outline: null, selectedOutlineIndex: null, onSelectOutline: NOOP })
+      );
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(errors.filter((args) => String(args[0]).includes("same key"))).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  it("should show no Localidad or Copia fact for an outline of a split", () => {
+    const split = subjectOfSplit(SPLIT);
+    const html = renderToStaticMarkup(React.createElement(EjesMapDetails, { subject: split, outline: split.outlines[0] }));
+
+    expect(html).not.toContain("Localidad");
+    expect(html).not.toContain("Copia");
   });
 
   it("should say what a selected zone outline is", () => {

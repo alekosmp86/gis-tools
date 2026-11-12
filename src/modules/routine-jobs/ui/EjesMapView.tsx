@@ -27,6 +27,7 @@ export function EjesMapView({ subject, base, selectedOutlineIndex, onSelectOutli
       emptyMessage={EMPTY_MESSAGE}
       selectedOutlineIndex={selectedOutlineIndex}
       onSelectOutline={onSelectOutline}
+      showLabels={subject.twin === undefined}
     />
   );
 }

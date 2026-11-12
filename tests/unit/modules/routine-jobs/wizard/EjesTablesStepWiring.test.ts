@@ -48,6 +48,14 @@ describe("EjesTablesStep ejes-padrones (ET-1)", () => {
     expect(html).toContain("Solo se lee.");
   });
 
+  it("should word the localities note with nomloc and the twins decision (ET-12)", () => {
+    const html = renderToStaticMarkup(React.createElement(EjesTablesStep, propsOf()));
+
+    expect(html).toContain(
+      "Calcula el cloc_iso de los tramos y, con nomloc, decide los tramos repetidos lejos de los padrones. Solo se lee."
+    );
+  });
+
   it("should title the role Padrones", () => {
     expect(EJES_ROLE_TITLES[EJES_TABLE_ROLE.PADRONES]).toBe("Padrones");
   });

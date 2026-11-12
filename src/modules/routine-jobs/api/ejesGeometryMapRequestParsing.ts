@@ -7,6 +7,8 @@ const MAP_ITEMS_MESSAGE = `El campo items debe ser una lista de 1 a ${EJES_MAP_I
 const MAP_ITEM_MESSAGE = "Cada elemento de items necesita oldRef, newRef o zoneOf.";
 const ZONE_TYPE_MESSAGE = `El campo items.type debe ser ${Object.values(PADRON_TYPE).join(" o ")}.`;
 const PADRON_TYPES: readonly unknown[] = Object.values(PADRON_TYPE);
+const LOCALITY_MESSAGE = "El campo items.locality debe ser un texto no vacío y solo se admite junto a newRef.";
+const OUTER_SPACES = /^ +| +$/g;
 const REFERENCE_PATTERN = /^\d+$/;
 const INT4_MAX = 2147483647;
 
@@ -30,15 +32,23 @@ function readZoneType(value: unknown): PadronType {
 
 const isPresent = (value: unknown): boolean => value !== undefined && value !== null;
 
+function readLocality(value: unknown): string {
+  const text = typeof value === "string" ? value.replace(OUTER_SPACES, "") : "";
+  if (text === "") throw invalid(LOCALITY_MESSAGE);
+  return text;
+}
+
 function readMapItem(entry: unknown): EjesMapItem {
   if (!isRecord(entry)) throw invalid("Cada elemento de items debe ser un objeto.");
   const hasOld = isPresent(entry.oldRef);
   const hasNew = isPresent(entry.newRef);
   const hasZone = isPresent(entry.zoneOf);
   if (!hasOld && !hasNew && !hasZone) throw invalid(MAP_ITEM_MESSAGE);
+  if (isPresent(entry.locality) && !hasNew) throw invalid(LOCALITY_MESSAGE);
   return {
     ...(hasOld ? { oldRef: readOldRef(entry.oldRef) } : {}),
     ...(hasNew ? { newRef: referenceOf(entry.newRef, "newRef") } : {}),
+    ...(isPresent(entry.locality) ? { locality: readLocality(entry.locality) } : {}),
     ...(hasZone ? { zoneOf: referenceOf(entry.zoneOf, "zoneOf"), type: readZoneType(entry.type) } : {}),
   };
 }

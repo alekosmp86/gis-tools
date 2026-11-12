@@ -7,6 +7,7 @@ import {
   EJES_DRY_RUN_BANNER,
   metersTextOf,
   twinCaseTextOf,
+  twinDecisionTextOf,
 } from "@/modules/routine-jobs/ui/ejesCallesReportView";
 
 const COUNTS = {
@@ -27,6 +28,8 @@ const COUNTS = {
   twinsBoth: 3,
   twinsNeither: 4,
   twinsCrossDepartment: 5,
+  twinsDrop: 2,
+  twinsKeep: 4,
 };
 
 const TWIN: EjesTwinRow = {
@@ -38,6 +41,7 @@ const TWIN: EjesTwinRow = {
   length: 250.25,
   urbanLength: 120.5,
   ruralLength: 30,
+  dropLocalities: [],
 };
 
 const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
@@ -171,17 +175,19 @@ describe("buildEjesReportView (EJ-12)", () => {
         { label: "Cerca de rurales solamente", value: 2 },
         { label: "Cerca de ambos", value: 3 },
         { label: "Lejos de ambos", value: 4 },
+        { label: "Se quitaría alguna copia", value: 2 },
+        { label: "Se mantienen todas", value: 4 },
         { label: "En más de un departamento: sin regla", value: 5 },
       ]);
     });
 
     it("should show zeros in the KPI group when there are no twin groups", () => {
-      const zero = { ...COUNTS, twins: 0, twinsUrban: 0, twinsRural: 0, twinsBoth: 0, twinsNeither: 0, twinsCrossDepartment: 0 };
+      const zero = { ...COUNTS, twins: 0, twinsUrban: 0, twinsRural: 0, twinsBoth: 0, twinsNeither: 0, twinsCrossDepartment: 0, twinsDrop: 0, twinsKeep: 0 };
       const group = buildEjesReportView(resultOf({ counts: zero })).kpiGroups.find(
         (candidate) => candidate.title === "Tramos repetidos por localidad"
       );
 
-      expect(group?.kpis.map((kpi) => kpi.value)).toEqual([0, 0, 0, 0, 0, 0]);
+      expect(group?.kpis.map((kpi) => kpi.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
     });
 
     it("should summarize the list with the shown rows and the total, noting a cut list", () => {
@@ -194,11 +200,43 @@ describe("buildEjesReportView (EJ-12)", () => {
 
     it.each([
       [TWIN_CLASS.URBAN, "Cerca de padrones urbanos"],
-      [TWIN_CLASS.RURAL, "Cerca de padrones rurales: sin regla"],
+      [TWIN_CLASS.RURAL, "Cerca de padrones rurales"],
       [TWIN_CLASS.BOTH, "Cerca de ambos: se mantienen las dos"],
-      [TWIN_CLASS.NEITHER, "Lejos de padrones: decidir en el mapa"],
+      [TWIN_CLASS.NEITHER, "Lejos de padrones: sin regla"],
     ])("should describe the class %s as %s", (twinClass, text) => {
       expect(twinCaseTextOf(twinClass)).toBe(text);
+    });
+  });
+
+  describe("twinDecisionTextOf (ET-11)", () => {
+    it("should list the localities that would be dropped, comma separated", () => {
+      expect(twinDecisionTextOf({ class: TWIN_CLASS.URBAN, dropLocalities: ["FLORES RURAL"] })).toBe("Se quitaría: FLORES RURAL");
+      expect(twinDecisionTextOf({ class: TWIN_CLASS.URBAN, dropLocalities: ["A RURAL", "B RURAL"] })).toBe("Se quitaría: A RURAL, B RURAL");
+    });
+
+    it("should list the localities of a RURAL row that would be dropped", () => {
+      expect(twinDecisionTextOf({ class: TWIN_CLASS.RURAL, dropLocalities: ["TRINIDAD", "MALDONADO RURAL"] })).toBe(
+        "Se quitaría: TRINIDAD, MALDONADO RURAL"
+      );
+    });
+
+    it("should say Se mantienen todas for a BOTH row", () => {
+      expect(twinDecisionTextOf({ class: TWIN_CLASS.BOTH, dropLocalities: [] })).toBe("Se mantienen todas");
+    });
+
+    it.each([TWIN_CLASS.URBAN, TWIN_CLASS.RURAL])(
+      "should say Se mantienen todas for the class %s with nothing to drop (no copy of the other kind)",
+      (twinClass) => {
+        expect(twinDecisionTextOf({ class: twinClass, dropLocalities: [] })).toBe("Se mantienen todas");
+      }
+    );
+
+    it("should say Sin regla: se mantienen todas for a NEITHER row", () => {
+      expect(twinDecisionTextOf({ class: TWIN_CLASS.NEITHER, dropLocalities: [] })).toBe("Sin regla: se mantienen todas");
+    });
+
+    it("should show the drop text before the class when the row has localities to drop", () => {
+      expect(twinDecisionTextOf({ class: TWIN_CLASS.BOTH, dropLocalities: ["X RURAL"] })).toBe("Se quitaría: X RURAL");
     });
   });
 

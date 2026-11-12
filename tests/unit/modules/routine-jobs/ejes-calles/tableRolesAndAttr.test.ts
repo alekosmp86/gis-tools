@@ -90,6 +90,7 @@ describe("EJ-4 table roles", () => {
     ]);
     expect(EJES_REQUIRED_COLUMNS_BY_ROLE[EJES_TABLE_ROLE.ACCESS_POINT]).toEqual(["id", "id_road_section"]);
     expect(EJES_REQUIRED_COLUMNS_BY_ROLE[EJES_TABLE_ROLE.DEPARTMENTS]).toEqual(["iso_code_dpto", "name_dpto"]);
+    expect(EJES_REQUIRED_COLUMNS_BY_ROLE[EJES_TABLE_ROLE.LOCALITIES]).toEqual(["cloc_iso", "nomloc", "geom"]);
   });
 });
 

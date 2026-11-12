@@ -40,9 +40,10 @@ async function featureOf(
   reference: string | number,
   itemIndex: number,
   role: EjesMapFeature["role"],
-  label: string
+  label: string,
+  locality?: string
 ): Promise<EjesMapFeature> {
-  const geometry = await outlineOf(session, sql, [reference]);
+  const geometry = await outlineOf(session, sql, locality === undefined ? [reference] : [reference, locality]);
   if (geometry === null) throw new MapFeatureNotFoundError(`No existe el tramo con reftramo ${reference} o no tiene geometría.`);
   return { itemIndex, role, label, geometry };
 }
@@ -85,6 +86,7 @@ async function readFeatures(session: RunSession, params: EjesGeometryMapParams):
   ]);
   const oldSql = oldSectionOutlineSql(roadSection.layout);
   const newSql = newSectionOutlineSql(staging.layout);
+  const copySql = newSectionOutlineSql(staging.layout, true);
   const zoneSql = padrones === null ? null : zoneOutlineSql(staging.layout, padrones.layout);
   const features: EjesMapFeature[] = [];
   for (const [itemIndex, item] of params.items.entries()) {
@@ -95,7 +97,8 @@ async function readFeatures(session: RunSession, params: EjesGeometryMapParams):
     }
     if (entry.newRef !== undefined) {
       // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
-      features.push(await featureOf(session, newSql, entry.newRef, itemIndex, EJES_MAP_ROLE.NEW, `Tramo nuevo ${entry.newRef}`));
+      const sql = entry.locality === undefined ? newSql : copySql;
+      features.push(await featureOf(session, sql, entry.newRef, itemIndex, EJES_MAP_ROLE.NEW, `Tramo nuevo ${entry.newRef}`, entry.locality));
     }
     if (zoneSql !== null && entry.zoneOf !== undefined && entry.type !== undefined) {
       // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await

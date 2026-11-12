@@ -14,8 +14,8 @@ const labelOf = (outline: OutlineLabel | undefined, labelled: boolean): string =
 const roleTypeOf = (feature: OutlineFeature): string => (feature.role === OUTLINE_ROLE.OLD ? MAP_ROLE_TYPE.OLD : MAP_ROLE_TYPE.NEW);
 
 /** Each outline is coloured by its role (or its own colour type) and labelled by its minimal label; a feature's `itemIndex` names its outline. */
-export function toMapCollection(features: readonly OutlineFeature[], outlines: readonly OutlineLabel[]): FeatureCollection {
-  const labelled = features.length <= OUTLINE_LABEL_LIMIT;
+export function toMapCollection(features: readonly OutlineFeature[], outlines: readonly OutlineLabel[], showLabels = true): FeatureCollection {
+  const labelled = showLabels && features.length <= OUTLINE_LABEL_LIMIT;
   return {
     type: "FeatureCollection",
     features: features.map((feature, labelSlot) => {

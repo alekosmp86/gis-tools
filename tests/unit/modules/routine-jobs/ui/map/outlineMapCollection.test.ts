@@ -104,6 +104,42 @@ describe("toMapCollection label limit", () => {
   });
 });
 
+describe("toMapCollection showLabels (ET-17)", () => {
+  const outlines = [outlineOf("a"), outlineOf("b")];
+  const features = [featureOf(0, OUTLINE_ROLE.NEW), featureOf(1, OUTLINE_ROLE.NEW)];
+  const labelsOf = (collection: ReturnType<typeof toMapCollection>) =>
+    collection.features.map((feature) => feature.properties?.[OUTLINE_LABEL_PROPERTY]);
+
+  it("should emit an empty label on every feature when showLabels is false, even for two features", () => {
+    expect(labelsOf(toMapCollection(features, outlines, false))).toEqual(["", ""]);
+  });
+
+  it("should leave the colour type and the label slot unchanged when showLabels is false", () => {
+    const typed = [outlineOf("a", "TRAMO_SE_QUITA"), outlineOf("b", "TRAMO_SE_QUEDA")];
+
+    const collection = toMapCollection(features, typed, false);
+
+    expect(collection.features.map((feature) => feature.properties?._discrepancyType)).toEqual(["TRAMO_SE_QUITA", "TRAMO_SE_QUEDA"]);
+    expect(collection.features.map((feature) => feature.properties?._labelSlot)).toEqual([0, 1]);
+  });
+
+  it("should keep the labels when showLabels is true or not given", () => {
+    expect(labelsOf(toMapCollection(features, outlines, true))).toEqual(["a", "b"]);
+    expect(labelsOf(toMapCollection(features, outlines))).toEqual(["a", "b"]);
+  });
+
+  it("should still draw no label past the limit when showLabels is true", () => {
+    const many = Array.from({ length: OUTLINE_LABEL_LIMIT + 1 }, (_, index) => index);
+    const collection = toMapCollection(many.map((id) => featureOf(id, OUTLINE_ROLE.NEW)), many.map((id) => outlineOf(`ref ${id}`)), true);
+
+    expect(labelsOf(collection).every((label) => label === "")).toBe(true);
+  });
+
+  it("should give an empty collection for no features whatever showLabels is", () => {
+    expect(toMapCollection([], [], false)).toEqual({ type: "FeatureCollection", features: [] });
+  });
+});
+
 describe("toMapCollection label slots", () => {
   it("should give every feature its own label slot, in feature order", () => {
     const outlines = [outlineOf("a"), outlineOf("b")];

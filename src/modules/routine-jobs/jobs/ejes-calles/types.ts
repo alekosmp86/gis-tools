@@ -58,6 +58,8 @@ export interface EjesCounts {
   twinsBoth: number;
   twinsNeither: number;
   twinsCrossDepartment: number;
+  twinsDrop: number;
+  twinsKeep: number;
 }
 
 export interface EjesClocReport {
@@ -125,6 +127,7 @@ export interface EjesTwinRow {
   length: number | null;
   urbanLength: number | null;
   ruralLength: number | null;
+  dropLocalities: string[];
 }
 
 export interface EjesAnalysis {
@@ -158,6 +161,7 @@ export interface EjesResult extends EjesAnalysis {
 export interface EjesMapItem {
   oldRef?: number;
   newRef?: string;
+  locality?: string;
   zoneOf?: string;
   type?: PadronType;
 }

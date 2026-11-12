@@ -118,6 +118,11 @@ describe("request limit", () => {
   });
 });
 
+const COPIES = [
+  { newRef: "1035386", locality: "FLORES RURAL" },
+  { newRef: "1035386", locality: "TRINIDAD" },
+];
+
 const TWIN: EjesTwinRow = {
   ref: "1035386",
   idcalle: "72006",
@@ -127,10 +132,11 @@ const TWIN: EjesTwinRow = {
   length: 250.25,
   urbanLength: 120.5,
   ruralLength: 30,
+  dropLocalities: [],
 };
 
 describe("subjectOfTwin (ET-8)", () => {
-  it("should list the urban zone, then the rural zone, then the section last so it is drawn on top", () => {
+  it("should list the urban zone, then the rural zone, then one entry per copy so the copies are drawn on top", () => {
     const subject = subjectOfTwin(TWIN);
 
     expect(subject.title).toBe(EJES_SUBJECT_TITLE.TWIN);
@@ -138,24 +144,27 @@ describe("subjectOfTwin (ET-8)", () => {
     expect(subject.items).toEqual([
       { zoneOf: "1035386", type: "URBANO" },
       { zoneOf: "1035386", type: "RURAL" },
-      { newRef: "1035386" },
+      { newRef: "1035386", locality: "FLORES RURAL" },
+      { newRef: "1035386", locality: "TRINIDAD" },
     ]);
-    expect(subject.outlines.map((outline) => outline.role)).toEqual(["zone", "zone", "new"]);
+    expect(subject.outlines.map((outline) => outline.role)).toEqual(["zone", "zone", "new", "new"]);
   });
 
-  it("should label the zones Padrones urbanos cercanos and Padrones rurales cercanos and the section reftramo · nuevo", () => {
+  it("should label the zones Padrones urbanos cercanos and Padrones rurales cercanos and each copy reftramo · locality (se queda)", () => {
     expect(subjectOfTwin(TWIN).outlines.map((outline) => outline.label)).toEqual([
       "Padrones urbanos cercanos",
       "Padrones rurales cercanos",
-      "1035386 · nuevo",
+      "1035386 · FLORES RURAL (se queda)",
+      "1035386 · TRINIDAD (se queda)",
     ]);
   });
 
-  it("should type the zones as urban and rural zone and the section as the new section", () => {
+  it("should type the zones as urban and rural zone and the copies by their decision", () => {
     expect(subjectOfTwin(TWIN).outlines.map((outline) => outline.mapType)).toEqual([
       "PADRON_ZONA_URBANA",
       "PADRON_ZONA_RURAL",
-      "TRAMO_NUEVO",
+      "TRAMO_SE_QUEDA",
+      "TRAMO_SE_QUEDA",
     ]);
   });
 
@@ -171,28 +180,28 @@ describe("subjectOfTwin (ET-8)", () => {
     const ruralOnly = subjectOfTwin({ ...TWIN, class: "RURAL", urbanLength: 0 });
     const urbanOnly = subjectOfTwin({ ...TWIN, class: "URBAN", ruralLength: 0 });
 
-    expect(ruralOnly.items).toEqual([{ zoneOf: "1035386", type: "RURAL" }, { newRef: "1035386" }]);
-    expect(urbanOnly.items).toEqual([{ zoneOf: "1035386", type: "URBANO" }, { newRef: "1035386" }]);
+    expect(ruralOnly.items).toEqual([{ zoneOf: "1035386", type: "RURAL" }, ...COPIES]);
+    expect(urbanOnly.items).toEqual([{ zoneOf: "1035386", type: "URBANO" }, ...COPIES]);
   });
 
-  it("should list only the section when no length is near, including null lengths", () => {
+  it("should list only the copies when no length is near, including null lengths", () => {
     const none = subjectOfTwin({ ...TWIN, class: "NEITHER", urbanLength: 0, ruralLength: 0 });
     const unknown = subjectOfTwin({ ...TWIN, class: "NEITHER", urbanLength: null, ruralLength: null });
 
-    expect(none.items).toEqual([{ newRef: "1035386" }]);
-    expect(unknown.items).toEqual([{ newRef: "1035386" }]);
-    expect(none.outlines.map((outline) => outline.role)).toEqual(["new"]);
+    expect(none.items).toEqual(COPIES);
+    expect(unknown.items).toEqual(COPIES);
+    expect(none.outlines.map((outline) => outline.role)).toEqual(["new", "new"]);
   });
 
   it("should list a zone with a tiny positive length near", () => {
-    expect(subjectOfTwin({ ...TWIN, urbanLength: 0.01, ruralLength: 0 }).items).toHaveLength(2);
+    expect(subjectOfTwin({ ...TWIN, urbanLength: 0.01, ruralLength: 0 }).items).toHaveLength(1 + COPIES.length);
   });
 
   it("should keep the items and the outlines parallel and show no cut note", () => {
     const subject = subjectOfTwin(TWIN);
 
     expect(subject.items).toHaveLength(subject.outlines.length);
-    expect(subject.total).toBe(3);
+    expect(subject.total).toBe(4);
     expect(truncationNoteOf(subject)).toBeNull();
   });
 
@@ -206,9 +215,95 @@ describe("subjectOfTwin (ET-8)", () => {
       length: 250.25,
       urbanLength: 120.5,
       ruralLength: 30,
+      dropLocalities: [],
     });
     expect(subject.facts.idcalle).toBe("72006");
     expect(subject.facts.newLength).toBe(250.25);
+  });
+
+  it("should carry the localities to drop in the twin facts", () => {
+    const subject = subjectOfTwin({ ...TWIN, class: "URBAN", ruralLength: 0, dropLocalities: ["FLORES RURAL"] });
+
+    expect(subject.twin?.dropLocalities).toEqual(["FLORES RURAL"]);
+    expect(subject.twin?.twinClass).toBe("URBAN");
+  });
+
+  it("should label a copy as se queda or se quitaría by dropLocalities", () => {
+    const subject = subjectOfTwin({ ...TWIN, class: "URBAN", urbanLength: 5, ruralLength: 0, dropLocalities: ["FLORES RURAL"] });
+    const copies = subject.outlines.filter((outline) => outline.role === "new");
+
+    expect(copies.map((outline) => outline.label)).toEqual([
+      "1035386 · FLORES RURAL (se quitaría)",
+      "1035386 · TRINIDAD (se queda)",
+    ]);
+    expect(copies.map((outline) => outline.dropped)).toEqual([true, false]);
+    expect(copies.map((outline) => outline.locality)).toEqual(["FLORES RURAL", "TRINIDAD"]);
+  });
+
+  it("should order the copies by locality name, not by the order the row lists them", () => {
+    const subject = subjectOfTwin({ ...TWIN, localities: ["TRINIDAD", "B", "A"] });
+    const copies = subject.items.filter((item) => item.locality !== undefined);
+
+    expect(copies.map((item) => item.locality)).toEqual(["A", "B", "TRINIDAD"]);
+  });
+
+  it("should type a copy by its decision: TRAMO_SE_QUITA when dropped and TRAMO_SE_QUEDA when kept", () => {
+    const subject = subjectOfTwin({ ...TWIN, class: "URBAN", ruralLength: 0, dropLocalities: ["FLORES RURAL"] });
+    const copies = subject.outlines.filter((outline) => outline.role === "new");
+
+    expect(copies.map((outline) => [outline.locality, outline.mapType])).toEqual([
+      ["FLORES RURAL", "TRAMO_SE_QUITA"],
+      ["TRINIDAD", "TRAMO_SE_QUEDA"],
+    ]);
+  });
+
+  it("should list the dropped copies before the kept ones, each group by locality name, so the kept ones are drawn on top", () => {
+    const subject = subjectOfTwin({
+      ...TWIN,
+      urbanLength: 0,
+      ruralLength: 0,
+      localities: ["D", "A", "C", "B"],
+      dropLocalities: ["D", "B"],
+    });
+
+    expect(subject.items.map((item) => item.locality)).toEqual(["B", "D", "A", "C"]);
+    expect(subject.outlines.map((outline) => outline.dropped)).toEqual([true, true, false, false]);
+  });
+
+  it("should keep the zones before every copy even when a copy is dropped", () => {
+    const subject = subjectOfTwin({ ...TWIN, dropLocalities: ["TRINIDAD"] });
+
+    expect(subject.outlines.map((outline) => outline.role)).toEqual(["zone", "zone", "new", "new"]);
+  });
+
+  it("should keep every copy item as {newRef, locality} with 32 localities, cutting at 30 with the note", () => {
+    const localities = Array.from({ length: 32 }, (_, index) => `LOC ${String(index).padStart(2, "0")}`);
+    const subject = subjectOfTwin({ ...TWIN, urbanLength: 0, ruralLength: 0, localities });
+
+    expect(subject.items).toHaveLength(EJES_MAP_ITEMS_LIMIT);
+    expect(subject.total).toBe(32);
+    expect(truncationNoteOf(subject)).toBe("Se muestran 30 de 32 tramos.");
+    expect(subject.items.every((item) => Object.keys(item).sort().join() === "locality,newRef")).toBe(true);
+  });
+
+  it("should cut the whole subject, zones plus copies, at 30 entries and say how many were cut", () => {
+    const localities = Array.from({ length: 35 }, (_, index) => `LOC ${String(index).padStart(2, "0")}`);
+    const subject = subjectOfTwin({ ...TWIN, localities });
+
+    expect(subject.items).toHaveLength(EJES_MAP_ITEMS_LIMIT);
+    expect(subject.outlines).toHaveLength(EJES_MAP_ITEMS_LIMIT);
+    expect(subject.total).toBe(37);
+    expect(truncationNoteOf(subject)).toBe("Se muestran 30 de 37 tramos.");
+    expect(subject.items.slice(0, 2)).toEqual([
+      { zoneOf: "1035386", type: "URBANO" },
+      { zoneOf: "1035386", type: "RURAL" },
+    ]);
+  });
+
+  it("should give every copy item a locality and the same reftramo", () => {
+    const copies = subjectOfTwin(TWIN).items.filter((item) => item.newRef !== undefined);
+
+    expect(copies.every((item) => item.newRef === "1035386" && typeof item.locality === "string")).toBe(true);
   });
 
   it("should leave split and merge subjects without twin facts", () => {

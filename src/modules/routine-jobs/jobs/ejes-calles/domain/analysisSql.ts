@@ -1,27 +1,20 @@
-import { physicalColumn, qualifiedName } from "../../actualizar-padron/domain/layouts";
-import { DETAIL_LIST_LIMIT } from "../../shared/limits";
-import { cte, jsonArrayOf, q, withClause } from "../../shared/sqlFragments";
+import { cte, q, withClause } from "../../shared/sqlFragments";
 import {
   ACCESS_POINT_COLUMN,
   CIRCULATION_WAY_COLUMN,
   COVERAGE_RATIO,
   COVERAGE_TOLERANCE_M,
   DEPARTMENTS_COLUMN,
-  EJES_TABLE_ROLE,
-  EJES_SRID,
   GEOMETRY_EQUALITY_DECIMALS,
   LOCALITIES_COLUMN,
-  PADRON_COLUMN,
-  PADRON_TYPE,
   ROAD_SECTION_COLUMN,
   STAGING_COLUMN,
-  TWIN_CLASS,
-  TWIN_NEAR_RATIO,
-  TWIN_PADRON_DISTANCE_M,
 } from "../constants";
 import type { EjesLayouts } from "../types";
+import { col, countOf, listOf, table, trimmed } from "./layoutSql";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
 import { INTEGER_PATTERN } from "./stagingSql";
+import { twinCountColumns, twinCtes, twinGroupCtes, twinListColumn } from "./twinSql";
 
 const SNAP_GRID = 10 ** -GEOMETRY_EQUALITY_DECIMALS;
 
@@ -33,15 +26,6 @@ export const ANALYSIS_LIST_ALIAS = {
   ATTRS: "attrs_json",
   TWINS: "twins_json",
 } as const;
-
-type RoleName = keyof typeof EJES_TABLE_ROLE;
-
-const col = (layouts: EjesLayouts, role: RoleName, logical: string): string =>
-  physicalColumn(layouts[EJES_TABLE_ROLE[role]], logical);
-
-const table = (layouts: EjesLayouts, role: RoleName): string => qualifiedName(layouts[EJES_TABLE_ROLE[role]]);
-
-const trimmed = (expression: string): string => `NULLIF(btrim(${expression}::text), '')`;
 
 export const comparableLineSql = (geometry: string): string =>
   `ST_Normalize(ST_SnapToGrid(ST_LineMerge(${geometry}), ${SNAP_GRID}))`;
@@ -225,85 +209,6 @@ function clocCtes(layouts: EjesLayouts): string[] {
   ];
 }
 
-function twinGroupCtes(layouts: EjesLayouts): string[] {
-  const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
-  const reference = trimmed(column(STAGING_COLUMN.REFTRAMO));
-  const geometry = column(STAGING_COLUMN.GEOM);
-  return [
-    cte(
-      "twin_raw",
-      [
-        "SELECT",
-        `${reference} AS ref,`,
-        `${trimmed(column(STAGING_COLUMN.IDCALLE))} AS idcalle,`,
-        `${trimmed(column(STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
-        `${trimmed(column(STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
-        `ST_SetSRID(${geometry}, ${EJES_SRID}) AS geom`,
-        `FROM ${table(layouts, "STAGING")} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry})`,
-        `AND ${reference} ~ '${INTEGER_PATTERN}'`,
-      ].join(" ")
-    ),
-    cte(
-      "twin_groups",
-      [
-        "SELECT t.ref, min(t.idcalle) AS idcalle, min(t.departamento) AS department, count(DISTINCT t.departamento) AS departments,",
-        "count(DISTINCT t.localidad) AS locality_count,",
-        "array_agg(DISTINCT t.localidad ORDER BY t.localidad) FILTER (WHERE t.localidad IS NOT NULL) AS localities,",
-        `(array_agg(t.geom))[1] AS geom FROM ${q("twin_raw")} AS t GROUP BY t.ref`,
-        "HAVING count(DISTINCT t.departamento) > 1 OR count(DISTINCT t.localidad) >= 2",
-      ].join(" ")
-    ),
-  ];
-}
-
-const nearLengthSql = (layouts: EjesLayouts, padronType: string): string => {
-  const padron = (logical: string): string => `p.${col(layouts, "PADRONES", logical)}`;
-  const geometry = padron(PADRON_COLUMN.GEOMETRY);
-  return [
-    `COALESCE((SELECT ST_Length(ST_Intersection(g.geom, ST_Union(ST_Buffer(${geometry}, ${TWIN_PADRON_DISTANCE_M}))))`,
-    `FROM ${table(layouts, "PADRONES")} AS p`,
-    `WHERE upper(btrim(${padron(PADRON_COLUMN.TYPE)}::text)) = '${padronType}' AND ST_DWithin(${geometry}, g.geom, ${TWIN_PADRON_DISTANCE_M})), 0)`,
-  ].join(" ");
-};
-
-function twinCtes(layouts: EjesLayouts): string[] {
-  const near = (column: string): string => `(m.len > 0 AND m.${column} >= ${TWIN_NEAR_RATIO} * m.len)`;
-  return [
-    cte(
-      "twin_measured",
-      [
-        "SELECT g.ref, g.idcalle, g.department, g.localities, ST_Length(g.geom) AS len,",
-        `${nearLengthSql(layouts, PADRON_TYPE.URBAN)} AS urban_len,`,
-        `${nearLengthSql(layouts, PADRON_TYPE.RURAL)} AS rural_len`,
-        `FROM ${q("twin_groups")} AS g WHERE g.departments = 1 AND g.locality_count >= 2`,
-      ].join(" ")
-    ),
-    cte(
-      "twins",
-      [
-        "SELECT m.*, CASE",
-        `WHEN ${near("urban_len")} AND ${near("rural_len")} THEN '${TWIN_CLASS.BOTH}'`,
-        `WHEN ${near("urban_len")} THEN '${TWIN_CLASS.URBAN}'`,
-        `WHEN ${near("rural_len")} THEN '${TWIN_CLASS.RURAL}'`,
-        `ELSE '${TWIN_CLASS.NEITHER}' END AS class`,
-        `FROM ${q("twin_measured")} AS m`,
-      ].join(" ")
-    ),
-  ];
-}
-
-const TWIN_CLASS_ORDER = [TWIN_CLASS.NEITHER, TWIN_CLASS.BOTH, TWIN_CLASS.RURAL, TWIN_CLASS.URBAN];
-
-const twinOrderSql = (): string =>
-  `CASE t.class ${TWIN_CLASS_ORDER.map((twinClass, index) => `WHEN '${twinClass}' THEN ${index}`).join(" ")} END, t.ref`;
-
-const limited = (select: string): string => `${select} LIMIT ${DETAIL_LIST_LIMIT}`;
-
-const countOf = (source: string, condition = "true"): string => `(SELECT count(*) FROM ${q(source)} WHERE ${condition})`;
-
-const listOf = (alias: string, name: string, select: string): string =>
-  `${jsonArrayOf(limited(select), name)} AS ${q(alias)}`;
-
 function listColumns(): string[] {
   const splitSelect = `SELECT s.ref AS "old_ref", s.idcalle AS "idcalle", s.new_refs AS "new_refs", COALESCE(ap.points, 0) AS "points", s.covered / NULLIF(s.len, 0) AS "coverage", s.len AS "old_length", s.new_len AS "new_length", s.outside_len AS "outside_length" FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref ORDER BY s.ref`;
   const mergeSelect = `SELECT m.new_ref AS "new_ref", m.idcalle AS "idcalle", m.old_refs AS "old_refs", m.points AS "points", m.coverage AS "coverage", m.old_len AS "old_length", m.new_len AS "new_length", m.outside_len AS "outside_length" FROM ${q("merges")} AS m ORDER BY m.new_ref`;
@@ -314,14 +219,13 @@ function listColumns(): string[] {
     'c.new_type_id AS "type_id", c.cur_type_id AS "current_type_id", c.new_font_id AS "font_id", c.cur_font_id AS "current_font_id"',
     `FROM ${q("classified")} AS c WHERE c.attr_changed ORDER BY c.ref`,
   ].join(" ");
-  const twinSelect = `SELECT t.ref AS "ref", t.idcalle AS "idcalle", t.department AS "department", t.localities AS "localities", t.class AS "class", t.len AS "length", t.urban_len AS "urban_length", t.rural_len AS "rural_length" FROM ${q("twins")} AS t ORDER BY ${twinOrderSql()}`;
   return [
     listOf(ANALYSIS_LIST_ALIAS.SPLITS, "split_list", splitSelect),
     listOf(ANALYSIS_LIST_ALIAS.MERGES, "merge_list", mergeSelect),
     listOf(ANALYSIS_LIST_ALIAS.PLAIN, "plain_list", plainSelect),
     listOf(ANALYSIS_LIST_ALIAS.STREETS, "street_list", streetSelect),
     listOf(ANALYSIS_LIST_ALIAS.ATTRS, "attr_list", attrSelect),
-    listOf(ANALYSIS_LIST_ALIAS.TWINS, "twin_list", twinSelect),
+    twinListColumn(ANALYSIS_LIST_ALIAS.TWINS),
   ];
 }
 
@@ -341,9 +245,7 @@ function countColumns(): string[] {
     `${countOf("located", "cloc IS NOT NULL")} AS "with_locality"`,
     `${countOf("located", "cloc IS NULL AND dept_code IS NOT NULL")} AS "only_department"`,
     `${countOf("located", "cloc IS NULL AND dept_code IS NULL")} AS "without_code"`,
-    `${countOf("twins")} AS "twins"`,
-    ...Object.values(TWIN_CLASS).map((twinClass) => `${countOf("twins", `class = '${twinClass}'`)} AS "twins_${twinClass.toLowerCase()}"`),
-    `${countOf("twin_groups", "departments > 1")} AS "twins_cross_department"`,
+    ...twinCountColumns(),
   ];
 }
 

@@ -29,7 +29,7 @@ const columnsOf = (role: EjesTableRole, geometryType: string): Row[] =>
   }));
 
 /** Every table has its required columns; the geometry type of the padrones table is `padronGeometry`, the others are 32721. */
-function sessionOf(padronGeometry: string, missingPadronColumns = false): CatalogQuerySession {
+function sessionOf(padronGeometry: string, missingPadronColumns = false, localitiesGeometry = "geometry(MultiPolygon,32721)"): CatalogQuerySession {
   const roleOfTable = new Map<string, EjesTableRole>(
     (Object.keys(EJES_DEFAULT_TABLES) as EjesTableRole[]).map((role) => [EJES_DEFAULT_TABLES[role].table, role])
   );
@@ -41,6 +41,7 @@ function sessionOf(padronGeometry: string, missingPadronColumns = false): Catalo
       if (role === EJES_TABLE_ROLE.PADRONES) {
         return { rows: missingPadronColumns ? [] : columnsOf(role, padronGeometry) };
       }
+      if (role === EJES_TABLE_ROLE.LOCALITIES) return { rows: columnsOf(role, localitiesGeometry) };
       return { rows: columnsOf(role, "geometry(MultiLineString,32721)") };
     },
   } as CatalogQuerySession;
@@ -114,5 +115,38 @@ describe("resolveEjesLayouts ejes-padrones (ET-1)", () => {
 
     expect(writeTargets).toHaveLength(EJES_WRITE_ROLES.length);
     expect(writeTargets.map((target) => target.table)).not.toContain("padron");
+  });
+});
+
+describe("resolveEjesLayouts ejes-localidades geometry (ET-12)", () => {
+  const OK = "geometry(MultiPolygon,32721)";
+
+  it("should accept a localities geometry of SRID 32721", async () => {
+    await expect(resolveEjesLayouts(sessionOf(OK), paramsOf())).resolves.toBeDefined();
+  });
+
+  it("should refuse a generic SRID 0 localities geometry, naming the table and the SRID", async () => {
+    await expect(resolveEjesLayouts(sessionOf(OK, false, "geometry(MultiPolygon,0)"), paramsOf())).rejects.toThrow(
+      "La columna \"geom\" de la tabla bdj_carto.ine_localidades_pg tiene SRID 0; debe ser 32721."
+    );
+  });
+
+  it("should refuse a localities geometry of another SRID", async () => {
+    await expect(resolveEjesLayouts(sessionOf(OK, false, "geometry(MultiPolygon,4326)"), paramsOf())).rejects.toThrow(
+      /ine_localidades_pg.*SRID 4326; debe ser 32721/
+    );
+  });
+
+  it("should still accept a generic SRID 0 on the staging and road section geometry", async () => {
+    const session = {
+      async query(sql: string, values?: unknown[]) {
+        const inner = sessionOf(OK);
+        const generic = String(values?.[1]) === "ide_ejesviacirculacion" || String(values?.[1]) === "road_section";
+        const answer = await inner.query(sql, values);
+        return generic ? { rows: answer.rows.map((row) => ({ ...row, data_type: String(row.data_type).replace("32721", "0") })) } : answer;
+      },
+    } as CatalogQuerySession;
+
+    await expect(resolveEjesLayouts(session, paramsOf())).resolves.toBeDefined();
   });
 });

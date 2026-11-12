@@ -1,6 +1,6 @@
 import { TWIN_CLASS, type TwinClass } from "../jobs/ejes-calles/constants";
 import { ejesAttrChangesOf } from "../jobs/ejes-calles/domain/attrChanges";
-import type { EjesAttrRow, EjesResult, EjesUnknownValue } from "../jobs/ejes-calles/types";
+import type { EjesAttrRow, EjesResult, EjesTwinRow, EjesUnknownValue } from "../jobs/ejes-calles/types";
 import { plural } from "../jobs/shared/text";
 import type { ReportBannerView, ReportKpiView, TimingItemView } from "./ReportParts";
 import { listSummaryOf, timingsViewOf } from "./reportViewParts";
@@ -52,12 +52,17 @@ export const metersTextOf = (meters: number | null): string => (meters === null 
 
 const TWIN_CASE_TEXT: Record<TwinClass, string> = {
   [TWIN_CLASS.URBAN]: "Cerca de padrones urbanos",
-  [TWIN_CLASS.RURAL]: "Cerca de padrones rurales: sin regla",
+  [TWIN_CLASS.RURAL]: "Cerca de padrones rurales",
   [TWIN_CLASS.BOTH]: "Cerca de ambos: se mantienen las dos",
-  [TWIN_CLASS.NEITHER]: "Lejos de padrones: decidir en el mapa",
+  [TWIN_CLASS.NEITHER]: "Lejos de padrones: sin regla",
 };
 
 export const twinCaseTextOf = (twinClass: TwinClass): string => TWIN_CASE_TEXT[twinClass];
+
+export const twinDecisionTextOf = (row: Pick<EjesTwinRow, "class" | "dropLocalities">): string => {
+  if (row.dropLocalities.length > 0) return `Se quitaría: ${row.dropLocalities.join(", ")}`;
+  return row.class === TWIN_CLASS.NEITHER ? "Sin regla: se mantienen todas" : "Se mantienen todas";
+};
 
 const kpi = (label: string, value: number): ReportKpiView => ({ label, value });
 
@@ -110,6 +115,8 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
         kpi("Cerca de rurales solamente", counts.twinsRural),
         kpi("Cerca de ambos", counts.twinsBoth),
         kpi("Lejos de ambos", counts.twinsNeither),
+        kpi("Se quitaría alguna copia", counts.twinsDrop),
+        kpi("Se mantienen todas", counts.twinsKeep),
         kpi("En más de un departamento: sin regla", counts.twinsCrossDepartment),
       ],
     },

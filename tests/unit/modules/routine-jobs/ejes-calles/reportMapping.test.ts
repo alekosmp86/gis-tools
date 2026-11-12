@@ -62,6 +62,8 @@ describe("toEjesAnalysis", () => {
       twins_both: 3,
       twins_neither: "4",
       twins_cross_department: 5,
+      twins_drop: "2",
+      twins_keep: 4,
       with_locality: 2,
       only_department: 1,
       without_code: 0,
@@ -111,6 +113,8 @@ describe("toEjesAnalysis", () => {
       twinsBoth: 3,
       twinsNeither: 4,
       twinsCrossDepartment: 5,
+      twinsDrop: 2,
+      twinsKeep: 4,
     });
     expect(analysis.cloc).toEqual({ withLocality: 2, onlyDepartment: 1, withoutCode: 0 });
     expect(analysis.splits).toEqual([{ oldRef: "10", idcalle: "5", newRefs: ["11", "12"], points: 3, coverage: 0.98, oldLength: 100.5, newLength: 130, outsideLength: 29.5 }]);
@@ -152,6 +156,8 @@ describe("toEjesAnalysis", () => {
     expect(analysis.twins).toEqual([]);
     expect(analysis.counts.twins).toBe(0);
     expect(analysis.counts.twinsCrossDepartment).toBe(0);
+    expect(analysis.counts.twinsDrop).toBe(0);
+    expect(analysis.counts.twinsKeep).toBe(0);
   });
 
   it("should ignore non-array new_refs and old_refs", () => {
@@ -175,6 +181,7 @@ describe("toEjesAnalysis twins (ET-4)", () => {
     length: "250.25",
     urban_length: 120.5,
     rural_length: "30",
+    drop_localities: ["FLORES RURAL"],
   };
 
   it("should map a twin row with its reftramo as text, every locality and the three lengths as numbers", () => {
@@ -190,6 +197,7 @@ describe("toEjesAnalysis twins (ET-4)", () => {
         length: 250.25,
         urbanLength: 120.5,
         ruralLength: 30,
+        dropLocalities: ["FLORES RURAL"],
       },
     ]);
   });
@@ -209,6 +217,24 @@ describe("toEjesAnalysis twins (ET-4)", () => {
   it("should map a missing or non-array localities to an empty list", () => {
     expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: [{ ...twinRow, localities: null }] }).twins[0].localities).toEqual([]);
     expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: [{ ...twinRow, localities: "x" }] }).twins[0].localities).toEqual([]);
+  });
+
+  it("should map drop_localities to dropLocalities as text, keeping their order", () => {
+    const rows = [{ ...twinRow, class: "URBAN", drop_localities: ["A RURAL", 7] }];
+
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: rows }).twins[0].dropLocalities).toEqual(["A RURAL", "7"]);
+  });
+
+  it.each([[null], [undefined], ["FLORES RURAL"], [{}], [5]])("should map drop_localities %j to an empty list", (value) => {
+    const rows = [{ ...twinRow, drop_localities: value }];
+
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: rows }).twins[0].dropLocalities).toEqual([]);
+  });
+
+  it("should map the twinsDrop and twinsKeep counts and keep them summing to the twins", () => {
+    const { counts } = toEjesAnalysis({ twins: 6, twins_drop: 2, twins_keep: 4 });
+
+    expect(counts.twinsDrop + counts.twinsKeep).toBe(counts.twins);
   });
 
   it("should keep the order of the rows", () => {

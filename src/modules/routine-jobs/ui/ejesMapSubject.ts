@@ -19,6 +19,10 @@ const OUTLINE_SUFFIX = {
 export interface EjesMapOutline extends OutlineLabel {
   ref: string;
   role: OutlineRole;
+  /** The locality of the copy, on the outlines of a twin row. */
+  locality?: string;
+  /** Whether the copy would be dropped, on the copies of a twin row. */
+  dropped?: boolean;
 }
 
 /** What the row says as a whole, shown whether or not an outline is selected. */
@@ -39,6 +43,7 @@ export interface EjesTwinFacts {
   length: number | null;
   urbanLength: number | null;
   ruralLength: number | null;
+  dropLocalities: string[];
 }
 
 /** One split, merge or twin row on the map. `items[i]` is the request item of `outlines[i]`; `twin` is set on a twin row only. */
@@ -113,7 +118,34 @@ export const subjectOfSplit = (row: EjesSplitRow): EjesMapSubject =>
 export const subjectOfMerge = (row: EjesMergeRow): EjesMapSubject =>
   subjectOf(EJES_SUBJECT_TITLE.MERGE, [newEntry(row.newRef), ...row.oldRefs.map(oldEntry)], factsOf(row));
 
-/** A twin row: the zones with padrones near, below, then the section on top. A zone with no length near is not listed. */
+const COPY_STAYS = "se queda";
+const COPY_DROPPED = "se quitaría";
+
+const copyDecisionTextOf = (dropped: boolean): string => (dropped ? COPY_DROPPED : COPY_STAYS);
+
+const copyEntry = (row: EjesTwinRow, locality: string): OutlineEntry => {
+  const dropped = row.dropLocalities.includes(locality);
+  return {
+    item: { newRef: row.ref, locality },
+    outline: {
+      ref: row.ref,
+      role: OUTLINE_ROLE.NEW,
+      label: `${row.ref} · ${locality} (${copyDecisionTextOf(dropped)})`,
+      mapType: dropped ? MAP_SECTION_TYPE.COPY_DROPPED : MAP_SECTION_TYPE.COPY_KEPT,
+      locality,
+      dropped,
+    },
+  };
+};
+
+/** The dropped copies first and the kept ones after, so the kept ones are drawn on top; each group by locality name. */
+const copyEntriesOf = (row: EjesTwinRow): OutlineEntry[] => {
+  const entries = [...row.localities].sort().map((locality) => copyEntry(row, locality));
+  const droppedFirst = (entry: OutlineEntry): number => (entry.outline.dropped === true ? 0 : 1);
+  return entries.sort((first, second) => droppedFirst(first) - droppedFirst(second));
+};
+
+/** A twin row: the zones with padrones near, below, then one outline per copy, in locality order. A zone with no length near is not listed. */
 export function subjectOfTwin(row: EjesTwinRow): EjesMapSubject {
   const zones = [
     (row.urbanLength ?? 0) > 0 ? zoneEntry(row.ref, PADRON_TYPE.URBAN) : null,
@@ -127,8 +159,9 @@ export function subjectOfTwin(row: EjesTwinRow): EjesMapSubject {
     length: row.length,
     urbanLength: row.urbanLength,
     ruralLength: row.ruralLength,
+    dropLocalities: row.dropLocalities,
   };
-  return subjectOf(EJES_SUBJECT_TITLE.TWIN, [...zones, newEntry(row.ref)], facts, twin);
+  return subjectOf(EJES_SUBJECT_TITLE.TWIN, [...zones, ...copyEntriesOf(row)], facts, twin);
 }
 
 /** The note of a row that was cut at the request limit; null when every outline is shown. */

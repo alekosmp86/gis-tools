@@ -83,6 +83,7 @@ const twinOf = (row: Row): EjesTwinRow => ({
   length: nullableNumber(row.length),
   urbanLength: nullableNumber(row.urban_length),
   ruralLength: nullableNumber(row.rural_length),
+  dropLocalities: textsOf(row.drop_localities),
 });
 
 export function toEjesStagingReport(row: Row): EjesStagingReport {
@@ -122,6 +123,8 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       twinsBoth: numberOf(row.twins_both),
       twinsNeither: numberOf(row.twins_neither),
       twinsCrossDepartment: numberOf(row.twins_cross_department),
+      twinsDrop: numberOf(row.twins_drop),
+      twinsKeep: numberOf(row.twins_keep),
     },
     cloc: {
       withLocality: numberOf(row.with_locality),

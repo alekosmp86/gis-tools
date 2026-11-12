@@ -23,7 +23,11 @@ import type { EjesLayouts, EjesParams, EjesResolvedLayouts } from "../types";
 const GEOMETRY_LOGICAL_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
   [EJES_TABLE_ROLE.STAGING]: STAGING_COLUMN.GEOM,
   [EJES_TABLE_ROLE.ROAD_SECTION]: ROAD_SECTION_COLUMN.GEOMETRY,
+};
+
+const EXACT_GEOMETRY_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
   [EJES_TABLE_ROLE.LOCALITIES]: LOCALITIES_COLUMN.GEOM,
+  [EJES_TABLE_ROLE.PADRONES]: PADRON_COLUMN.GEOMETRY,
 };
 
 export function sridIssuesOf(resolved: ResolvedTable, logicalGeometry: string, allowGeneric = true): string[] {
@@ -39,7 +43,8 @@ export function sridIssuesOf(resolved: ResolvedTable, logicalGeometry: string, a
 export const padronSridIssuesOf = (resolved: ResolvedTable): string[] => sridIssuesOf(resolved, PADRON_COLUMN.GEOMETRY, false);
 
 function geometryIssuesOf(role: EjesTableRole, resolved: ResolvedTable): string[] {
-  if (role === EJES_TABLE_ROLE.PADRONES) return padronSridIssuesOf(resolved);
+  const exact = EXACT_GEOMETRY_BY_ROLE[role];
+  if (exact !== undefined) return sridIssuesOf(resolved, exact, false);
   const logical = GEOMETRY_LOGICAL_BY_ROLE[role];
   return logical === undefined ? [] : sridIssuesOf(resolved, logical);
 }

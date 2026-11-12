@@ -103,3 +103,11 @@
 .swatch[data-map-type="PADRON_ZONA_RURAL"] {
   background-color: #92400e;
 }
+
+.swatch[data-map-type="TRAMO_SE_QUEDA"] {
+  background-color: #2563eb;
+}
+
+.swatch[data-map-type="TRAMO_SE_QUITA"] {
+  background-color: #dc2626;
+}

@@ -44,11 +44,13 @@ export interface OutlineMapViewProps {
   emptyMessage: string;
   selectedOutlineIndex: number | null;
   onSelectOutline: (outlineIndex: number | null) => void;
+  /** False draws no permanent label (identical outlines would pile their labels); a click still names the outline in the details. */
+  showLabels?: boolean;
 }
 
 /** The outlines on the map: the loading, failure and empty states, then the map with its labels and clicks. */
-export function OutlineMapView({ map, outlines, title, emptyMessage, selectedOutlineIndex, onSelectOutline }: OutlineMapViewProps) {
-  const collection = useMemo(() => toMapCollection(map.features, outlines), [map.features, outlines]);
+export function OutlineMapView({ map, outlines, title, emptyMessage, selectedOutlineIndex, onSelectOutline, showLabels = true }: OutlineMapViewProps) {
+  const collection = useMemo(() => toMapCollection(map.features, outlines, showLabels), [map.features, outlines, showLabels]);
 
   if (map.status === MapLoadStatus.LOADING) {
     return <p className={styles.status} role="status">{LOADING_MESSAGE}</p>;
@@ -79,8 +81,8 @@ export function OutlineMapView({ map, outlines, title, emptyMessage, selectedOut
         selectedFeatureIndex={featureIndexOf(map.features, selectedOutlineIndex)}
         onSelectFeature={handleSelectFeature}
         showPopups={false}
-        labelProperty={OUTLINE_LABEL_PROPERTY}
-        codedLabels
+        labelProperty={showLabels ? OUTLINE_LABEL_PROPERTY : undefined}
+        codedLabels={showLabels}
         clearOnBackgroundClick
         fillParent
       />

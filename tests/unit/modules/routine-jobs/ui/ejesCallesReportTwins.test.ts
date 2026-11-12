@@ -23,6 +23,8 @@ const COUNTS = {
   twinsBoth: 1,
   twinsNeither: 1,
   twinsCrossDepartment: 7,
+  twinsDrop: 1,
+  twinsKeep: 1,
 };
 
 const TWINS: EjesTwinRow[] = [
@@ -35,6 +37,7 @@ const TWINS: EjesTwinRow[] = [
     length: 250.25,
     urbanLength: 0,
     ruralLength: null,
+    dropLocalities: [],
   },
   {
     ref: "1035390",
@@ -45,6 +48,7 @@ const TWINS: EjesTwinRow[] = [
     length: 99.94,
     urbanLength: 40,
     ruralLength: 12.34,
+    dropLocalities: [],
   },
 ];
 
@@ -85,7 +89,7 @@ const render = (twins: EjesTwinRow[]): string =>
   renderToStaticMarkup(React.createElement(EjesCallesReport, { result: resultOf(twins), mapBase: null }));
 
 describe("EjesCallesReport twins (ET-6)", () => {
-  it("should show the KPI group Tramos repetidos por localidad with its six cards", () => {
+  it("should show the KPI group Tramos repetidos por localidad with its eight cards", () => {
     const html = render(TWINS);
 
     expect(html).toContain("Tramos repetidos por localidad");
@@ -95,6 +99,8 @@ describe("EjesCallesReport twins (ET-6)", () => {
       "Cerca de rurales solamente",
       "Cerca de ambos",
       "Lejos de ambos",
+      "Se quitaría alguna copia",
+      "Se mantienen todas",
       "En más de un departamento: sin regla",
     ]) {
       expect(html).toContain(label);
@@ -105,7 +111,7 @@ describe("EjesCallesReport twins (ET-6)", () => {
     const html = render(TWINS);
 
     expect(html).toContain("<details");
-    for (const header of ["reftramo", "idcalle", "Departamento", "Localidades", "Caso", "Largo (m)", "Cerca de urbanos (m)", "Cerca de rurales (m)"]) {
+    for (const header of ["reftramo", "idcalle", "Departamento", "Localidades", "Caso", "Largo (m)", "Cerca de urbanos (m)", "Cerca de rurales (m)", "Qué pasa"]) {
       expect(html).toContain(`>${header}</th>`);
     }
     expect(html.match(/aria-label="Ver en mapa"/g)).toHaveLength(2);
@@ -116,11 +122,34 @@ describe("EjesCallesReport twins (ET-6)", () => {
 
     expect(html).toContain("1035386");
     expect(html).toContain("FLORES RURAL, TRINIDAD");
-    expect(html).toContain("Lejos de padrones: decidir en el mapa");
+    expect(html).toContain("Lejos de padrones: sin regla");
     expect(html).toContain("250.3");
     expect(html).toContain("Cerca de ambos: se mantienen las dos");
     expect(html).toContain("12.3");
     expect(html).toContain("sin dato");
+  });
+
+  it("should show the decision of each row in the Qué pasa column", () => {
+    const urban: EjesTwinRow = {
+      ...TWINS[0],
+      ref: "1035400",
+      class: TWIN_CLASS.URBAN,
+      localities: ["TRINIDAD", "FLORES RURAL"],
+      dropLocalities: ["FLORES RURAL"],
+    };
+    const rural: EjesTwinRow = {
+      ...TWINS[0],
+      ref: "1035401",
+      class: TWIN_CLASS.RURAL,
+      localities: ["A RURAL", "B RURAL", "TRINIDAD"],
+      dropLocalities: ["TRINIDAD", "B RURAL"],
+    };
+    const html = render([urban, rural, ...TWINS]);
+
+    expect(html).toContain("Se quitaría: FLORES RURAL");
+    expect(html).toContain("Se quitaría: TRINIDAD, B RURAL");
+    expect(html).toContain("Sin regla: se mantienen todas");
+    expect(html).toContain("Se mantienen todas");
   });
 
   it("should show no list, only the KPI group, when there are no twin rows", () => {
