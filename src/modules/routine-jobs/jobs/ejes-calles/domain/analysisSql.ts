@@ -9,7 +9,7 @@ import {
   GEOMETRY_TOLERANCE_M,
   LOCALITIES_COLUMN,
   ROAD_SECTION_COLUMN,
-  STAGING_COLUMN,
+  EJES_STAGING_COLUMN,
 } from "../constants";
 import type { EjesLayouts } from "../types";
 import { col, countOf, listOf, table, trimmed } from "./layoutSql";
@@ -40,11 +40,11 @@ export const geometriesDifferSql = (current: string, incoming: string): string =
 export const coverageThresholdSql = (covered: string, length: string): string =>
   `${covered} >= ${COVERAGE_RATIO} * ${length}`;
 
-function stagingCtes(layouts: EjesLayouts): string[] {
+export function stagingCtes(layouts: EjesLayouts): string[] {
   const staging = table(layouts, "STAGING");
   const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
-  const reference = trimmed(column(STAGING_COLUMN.REFTRAMO));
-  const geometry = column(STAGING_COLUMN.GEOM);
+  const reference = trimmed(column(EJES_STAGING_COLUMN.REFTRAMO));
+  const geometry = column(EJES_STAGING_COLUMN.GEOM);
   return [
     cte("stg_keys", `SELECT DISTINCT ${reference} AS ref FROM ${staging} AS s WHERE ${reference} IS NOT NULL`),
     cte(
@@ -52,12 +52,12 @@ function stagingCtes(layouts: EjesLayouts): string[] {
       [
         "SELECT DISTINCT ON (raw.ref) raw.* FROM (SELECT",
         `${reference} AS ref,`,
-        `${trimmed(column(STAGING_COLUMN.IDCALLE))} AS idcalle,`,
-        `${trimmed(column(STAGING_COLUMN.NOMBRE))} AS nombre,`,
-        `${trimmed(column(STAGING_COLUMN.TIPO_VIALIDAD))} AS tipo,`,
-        `${trimmed(column(STAGING_COLUMN.FUENTE))} AS fuente,`,
-        `${trimmed(column(STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
-        `${trimmed(column(STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
+        `${trimmed(column(EJES_STAGING_COLUMN.IDCALLE))} AS idcalle,`,
+        `${trimmed(column(EJES_STAGING_COLUMN.NOMBRE))} AS nombre,`,
+        `${trimmed(column(EJES_STAGING_COLUMN.TIPO_VIALIDAD))} AS tipo,`,
+        `${trimmed(column(EJES_STAGING_COLUMN.FUENTE))} AS fuente,`,
+        `${trimmed(column(EJES_STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
+        `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `${geometry} AS geom`,
         `FROM ${staging} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry)}`,
         `AND ${reference} ~ '${INTEGER_PATTERN}') AS raw ORDER BY raw.ref`,
@@ -66,15 +66,19 @@ function stagingCtes(layouts: EjesLayouts): string[] {
   ];
 }
 
-function currentCtes(layouts: EjesLayouts): string[] {
-  const section = (logical: string): string => `r.${col(layouts, "ROAD_SECTION", logical)}`;
+export function circulationPairsCte(layouts: EjesLayouts): string {
   const way = (logical: string): string => `w.${col(layouts, "CIRCULATION_WAY", logical)}`;
+  return cte(
+    "cw_pairs",
+    `SELECT DISTINCT ${trimmed(way(CIRCULATION_WAY_COLUMN.CALLE))} AS idcalle, ${trimmed(way(CIRCULATION_WAY_COLUMN.NAME))} AS name FROM ${table(layouts, "CIRCULATION_WAY")} AS w`
+  );
+}
+
+export function currentCtes(layouts: EjesLayouts): string[] {
+  const section = (logical: string): string => `r.${col(layouts, "ROAD_SECTION", logical)}`;
   const point = (logical: string): string => `a.${col(layouts, "ACCESS_POINT", logical)}`;
   return [
-    cte(
-      "cw_pairs",
-      `SELECT DISTINCT ${trimmed(way(CIRCULATION_WAY_COLUMN.CALLE))} AS idcalle, ${trimmed(way(CIRCULATION_WAY_COLUMN.NAME))} AS name FROM ${table(layouts, "CIRCULATION_WAY")} AS w`
-    ),
+    circulationPairsCte(layouts),
     cte("cw", `SELECT idcalle, min(name) AS name FROM ${q("cw_pairs")} GROUP BY idcalle`),
     cte(
       "cur",
@@ -96,7 +100,7 @@ function currentCtes(layouts: EjesLayouts): string[] {
   ];
 }
 
-function classifiedCtes(): string[] {
+export function classifiedCtes(): string[] {
   return [
     cte(
       "matched",
@@ -124,7 +128,7 @@ function classifiedCtes(): string[] {
   ];
 }
 
-function removalCtes(): string[] {
+export function removalCtes(): string[] {
   return [
     cte(
       "removed",

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { OUTLINE_ROLE } from "./map/outlineTypes";
-import { coverageTextOf, metersTextOf, twinCaseTextOf, twinDecisionTextOf } from "./ejesCallesReportView";
+import { coverageTextOf, metersTextOf, twinDecisionTextOf, twinRowCaseTextOf } from "./ejesCallesReportView";
 import { truncationNoteOf, type EjesMapOutline, type EjesMapSubject, type EjesTwinFacts } from "./ejesMapSubject";
 import { textOrNoData } from "./reportFormat";
 import styles from "./EjesMapDetails.module.css";
@@ -17,16 +17,24 @@ const ROLE_TEXT = {
 
 type DetailRow = [string, string];
 
-const twinFactsOf = (idcalle: string | null, twin: EjesTwinFacts): DetailRow[] => [
+const twinFactsOf = (idcalle: string | null, twin: EjesTwinFacts): DetailRow[] => {
+  const textRow = {
+    class: twin.twinClass,
+    localities: twin.localities,
+    dropLocalities: twin.dropLocalities,
+    insideLocalities: twin.insideLocalities,
+  };
+  return [
   ["idcalle", textOrNoData(idcalle)],
   ["Departamento", textOrNoData(twin.department)],
   ["Localidades", twin.localities.join(", ")],
-  ["Caso", twinCaseTextOf(twin.twinClass)],
-  ["Qué pasa", twinDecisionTextOf({ class: twin.twinClass, dropLocalities: twin.dropLocalities })],
+  ["Caso", twinRowCaseTextOf(textRow)],
+  ["Qué pasa", twinDecisionTextOf(textRow)],
   ["Largo (m)", metersTextOf(twin.length)],
   ["Cerca de urbanos (m)", metersTextOf(twin.urbanLength)],
   ["Cerca de rurales (m)", metersTextOf(twin.ruralLength)],
-];
+  ];
+};
 
 const splitMergeFactsOf = (subject: EjesMapSubject): DetailRow[] => [
   ["idcalle", textOrNoData(subject.facts.idcalle)],

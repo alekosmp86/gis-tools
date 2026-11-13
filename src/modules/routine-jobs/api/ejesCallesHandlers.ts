@@ -26,7 +26,7 @@ export function createEjesCallesHandlers(overrides: Partial<EjesCallesHandlerDep
       conflictMessage: "Ya hay un trabajo de ejes de calles en curso para esta tabla.",
       parse: parseEjesCallesStartRequest,
       lockKeysOf: lockKeysOfEjes,
-      plannedSteps: plannedEjesStepLabels,
+      plannedSteps: (params) => plannedEjesStepLabels(params.dryRun),
       run: runEjesCalles,
     },
     overrides

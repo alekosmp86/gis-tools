@@ -5,7 +5,7 @@ import {
   PADRON_COLUMN,
   PADRON_TYPE,
   RURAL_LOCALITY_SUFFIX,
-  STAGING_COLUMN,
+  EJES_STAGING_COLUMN,
   TWIN_CLASS,
   TWIN_NEAR_MIN_LENGTH_M,
   TWIN_PADRON_DISTANCE_M,
@@ -16,17 +16,17 @@ import { INTEGER_PATTERN, validGeometrySql } from "./stagingSql";
 
 export function twinGroupCtes(layouts: EjesLayouts): string[] {
   const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
-  const reference = trimmed(column(STAGING_COLUMN.REFTRAMO));
-  const geometry = column(STAGING_COLUMN.GEOM);
+  const reference = trimmed(column(EJES_STAGING_COLUMN.REFTRAMO));
+  const geometry = column(EJES_STAGING_COLUMN.GEOM);
   return [
     cte(
       "twin_raw",
       [
         "SELECT",
         `${reference} AS ref,`,
-        `${trimmed(column(STAGING_COLUMN.IDCALLE))} AS idcalle,`,
-        `${trimmed(column(STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
-        `${trimmed(column(STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
+        `${trimmed(column(EJES_STAGING_COLUMN.IDCALLE))} AS idcalle,`,
+        `${trimmed(column(EJES_STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
+        `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `ST_SetSRID(${geometry}, ${EJES_SRID}) AS geom`,
         `FROM ${table(layouts, "STAGING")} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry)}`,
         `AND ${reference} ~ '${INTEGER_PATTERN}'`,
@@ -127,7 +127,7 @@ export const twinListColumn = (alias: string): string =>
   listOf(
     alias,
     "twin_list",
-    `SELECT t.ref AS "ref", t.idcalle AS "idcalle", t.department AS "department", t.localities AS "localities", t.class AS "class", t.len AS "length", t.urban_len AS "urban_length", t.rural_len AS "rural_length", t.drop_localities AS "drop_localities" FROM ${q("twins")} AS t ORDER BY ${twinOrderSql()}`
+    `SELECT t.ref AS "ref", t.idcalle AS "idcalle", t.department AS "department", t.localities AS "localities", t.class AS "class", t.len AS "length", t.urban_len AS "urban_length", t.rural_len AS "rural_length", t.drop_localities AS "drop_localities", t.inside_localities AS "inside_localities" FROM ${q("twins")} AS t ORDER BY ${twinOrderSql()}`
   );
 
 export const twinCountColumns = (): string[] => [

@@ -51,13 +51,13 @@ describe("buildStagingChecksSql (EJ-8)", () => {
 
   describe("ET-18 invalid geometries", () => {
     it("should define the validity predicate so a null or empty geometry is not invalid", () => {
-      expect(validGeometrySql("g")).toBe("COALESCE(ST_IsValid(g), true)");
+      expect(validGeometrySql("g")).toBe("COALESCE(ST_IsEmpty(g) OR (ST_IsValid(g) AND ST_Length(g) >= 0.001), true)");
     });
 
     it("should carry localidad, departamento and invalid_geometry in the s CTE", () => {
       expect(sql).toContain("AS localidad");
       expect(sql).toContain("AS departamento");
-      expect(sql).toContain('(NOT COALESCE(ST_IsValid(s."geom"), true)) AS invalid_geometry');
+      expect(sql).toContain('(NOT COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001), true)) AS invalid_geometry');
     });
 
     it("should count the invalid rows and the distinct invalid reftramo", () => {

@@ -15,13 +15,13 @@ import {
   LOCALITIES_COLUMN,
   PADRON_COLUMN,
   ROAD_SECTION_COLUMN,
-  STAGING_COLUMN,
+  EJES_STAGING_COLUMN,
   type EjesTableRole,
 } from "../constants";
 import type { EjesLayouts, EjesParams, EjesResolvedLayouts } from "../types";
 
 const GEOMETRY_LOGICAL_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
-  [EJES_TABLE_ROLE.STAGING]: STAGING_COLUMN.GEOM,
+  [EJES_TABLE_ROLE.STAGING]: EJES_STAGING_COLUMN.GEOM,
   [EJES_TABLE_ROLE.ROAD_SECTION]: ROAD_SECTION_COLUMN.GEOMETRY,
 };
 

@@ -133,6 +133,7 @@ const TWIN: EjesTwinRow = {
   urbanLength: 120.5,
   ruralLength: 30,
   dropLocalities: [],
+  insideLocalities: [],
 };
 
 describe("subjectOfTwin (ET-8)", () => {
@@ -216,6 +217,7 @@ describe("subjectOfTwin (ET-8)", () => {
       urbanLength: 120.5,
       ruralLength: 30,
       dropLocalities: [],
+      insideLocalities: [],
     });
     expect(subject.facts.idcalle).toBe("72006");
     expect(subject.facts.newLength).toBe(250.25);

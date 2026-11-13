@@ -45,6 +45,7 @@ export interface EjesTwinFacts {
   urbanLength: number | null;
   ruralLength: number | null;
   dropLocalities: string[];
+  insideLocalities: string[];
 }
 
 /** One split, merge, twin or renumbered row on the map. `items[i]` is the request item of `outlines[i]`; `twin` and `renumbered` are set on their own rows only. */
@@ -174,6 +175,7 @@ export function subjectOfTwin(row: EjesTwinRow): EjesMapSubject {
     urbanLength: row.urbanLength,
     ruralLength: row.ruralLength,
     dropLocalities: row.dropLocalities,
+    insideLocalities: row.insideLocalities,
   };
   return subjectOf(EJES_SUBJECT_TITLE.TWIN, [...zones, ...copyEntriesOf(row)], facts, { twin });
 }

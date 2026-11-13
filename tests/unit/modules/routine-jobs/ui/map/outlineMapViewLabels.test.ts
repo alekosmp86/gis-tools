@@ -120,6 +120,7 @@ describe("EjesMapView showLabels (ET-17)", () => {
         urbanLength: 0,
         ruralLength: 0,
         dropLocalities: [],
+        insideLocalities: [],
       })
     );
 

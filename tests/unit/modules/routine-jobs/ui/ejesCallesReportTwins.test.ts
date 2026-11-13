@@ -41,6 +41,7 @@ const TWINS: EjesTwinRow[] = [
     urbanLength: 0,
     ruralLength: null,
     dropLocalities: [],
+    insideLocalities: [],
   },
   {
     ref: "1035390",
@@ -52,6 +53,7 @@ const TWINS: EjesTwinRow[] = [
     urbanLength: 40,
     ruralLength: 12.34,
     dropLocalities: [],
+    insideLocalities: [],
   },
 ];
 
@@ -101,10 +103,10 @@ describe("EjesCallesReport invalid geometries (ET-18)", () => {
     { ref: "1002", idcalle: null, localidad: null, departamento: null },
   ];
 
-  it("should show a collapsible list titled Tramos con geometría inválida (se omiten) with the four columns and the rows", () => {
+  it("should show a collapsible list titled Tramos con geometría inválida o colapsada (se omiten) with the four columns and the rows", () => {
     const html = render([], INVALID);
 
-    expect(html).toContain("Tramos con geometría inválida (se omiten)");
+    expect(html).toContain("Tramos con geometría inválida o colapsada (se omiten)");
     for (const header of ["reftramo", "idcalle", "Localidad", "Departamento"]) {
       expect(html).toContain(`>${header}</th>`);
     }
@@ -121,15 +123,15 @@ describe("EjesCallesReport invalid geometries (ET-18)", () => {
   it("should show the two KPIs of the file problems", () => {
     const html = render([], INVALID);
 
-    expect(html).toContain("Filas con geometría inválida (se omiten)");
-    expect(html).toContain("Tramos con geometría inválida");
+    expect(html).toContain("Filas con geometría inválida o colapsada (se omiten)");
+    expect(html).toContain("Tramos con geometría inválida o colapsada");
   });
 
   it("should hide the list and the KPIs when there are none", () => {
     const html = render([], []);
 
-    expect(html).not.toContain("Tramos con geometría inválida");
-    expect(html).not.toContain("Filas con geometría inválida");
+    expect(html).not.toContain("Tramos con geometría inválida o colapsada");
+    expect(html).not.toContain("Filas con geometría inválida o colapsada");
   });
 });
 

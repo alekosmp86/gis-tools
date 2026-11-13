@@ -344,7 +344,7 @@ describe("buildEjesAnalysisSql", () => {
     const stg = sql.slice(sql.indexOf('"stg" AS ('), sql.indexOf(",\n", sql.indexOf('"stg" AS (')));
 
     it("should skip invalid geometries in stg, next to the null and empty conditions", () => {
-      expect(stg).toContain('s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsValid(s."geom"), true)');
+      expect(stg).toContain('s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001), true)');
     });
 
     it("should not filter stg_keys on validity or on geometry at all, so a reftramo with only invalid rows stays present", () => {
@@ -361,7 +361,7 @@ describe("buildEjesAnalysisSql", () => {
     it("should use the validity predicate in the twin analysis too", () => {
       const twinRaw = sql.slice(sql.indexOf('"twin_raw" AS ('), sql.indexOf('"twin_groups" AS ('));
 
-      expect(twinRaw).toContain('COALESCE(ST_IsValid(s."geom"), true)');
+      expect(twinRaw).toContain('COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001), true)');
     });
   });
 
@@ -464,6 +464,7 @@ describe("buildEjesAnalysisSql", () => {
     it("should read the classed twins and select drop_localities in the list", () => {
       expect(dropSql).toContain('FROM "twin_located" AS c');
       expect(sql).toContain('t.drop_localities AS "drop_localities"');
+      expect(sql).toContain('t.inside_localities AS "inside_localities"');
     });
 
     it("should count twins_drop as the rows with a non-empty list and twins_keep as the rows with none", () => {

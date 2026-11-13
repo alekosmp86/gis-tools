@@ -5,7 +5,6 @@ import { useOutlineMapFeatures, type OutlineMapFeatures } from "./map/useOutline
 import type { PadronMapSubject } from "./padronMapSubject";
 import { createRoutineJobsClient } from "./routineJobsClient";
 
-export { MapLoadStatus } from "./map/useOutlineMapFeatures";
 export type PadronMapFeatures = OutlineMapFeatures;
 
 const client = createRoutineJobsClient();

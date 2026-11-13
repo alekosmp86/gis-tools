@@ -4,7 +4,7 @@ import type { EjesTables } from "../types";
 
 const DISTINCT_TABLES_MESSAGE = "Cada rol de tabla debe ser una tabla distinta: no repita el mismo esquema y nombre.";
 
-export const labelsOfEjesTables = (tables: EjesTables): string[] =>
+const labelsOfEjesTables = (tables: EjesTables): string[] =>
   EJES_ROLES.map((role) => buildQualifiedTableLabel(tables[role].schema, tables[role].table));
 
 export function assertDistinctEjesTables(params: { tables: EjesTables }): void {

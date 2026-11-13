@@ -7,7 +7,7 @@ import type { RunDeps, RunSession } from "../../cargar-padrones/types";
 import { throwIfIssues } from "../../shared/preflightAsserts";
 import { resolveTable, type ResolvedTable, type TableSpec } from "../../shared/tableResolution";
 import { runTransaction, withRunSession } from "../../shared/transaction";
-import { EJES_REQUIRED_COLUMNS_BY_ROLE, EJES_TABLE_ROLE, PADRON_TYPE, ROAD_SECTION_COLUMN, STAGING_COLUMN, type EjesTableRole, type PadronType } from "../constants";
+import { EJES_REQUIRED_COLUMNS_BY_ROLE, EJES_TABLE_ROLE, PADRON_TYPE, ROAD_SECTION_COLUMN, EJES_STAGING_COLUMN, type EjesTableRole, type PadronType } from "../constants";
 import { EJES_MAP_ROLE, EJES_MAP_STATEMENT_TIMEOUT, newSectionOutlineSql, oldSectionOutlineSql, zoneOutlineSql } from "../domain/geometryMap";
 import type { EjesGeometryMapParams, EjesMapFeature, EjesTableRef } from "../types";
 import { padronSridIssuesOf, sridIssuesOf } from "./resolveLayouts";
@@ -79,7 +79,7 @@ async function readFeatures(session: RunSession, params: EjesGeometryMapParams):
   const padrones = await resolvePadronesIfZoned(session, params);
   throwIfIssues([
     ...staging.issues,
-    ...sridIssuesOf(staging, STAGING_COLUMN.GEOM),
+    ...sridIssuesOf(staging, EJES_STAGING_COLUMN.GEOM),
     ...roadSection.issues,
     ...sridIssuesOf(roadSection, ROAD_SECTION_COLUMN.GEOMETRY),
     ...(padrones === null ? [] : [...padrones.issues, ...padronSridIssuesOf(padrones)]),

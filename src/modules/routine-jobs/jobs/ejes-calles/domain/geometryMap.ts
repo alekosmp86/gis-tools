@@ -1,6 +1,6 @@
 import { physicalColumn, qualifiedName, type TableLayout } from "../../actualizar-padron/domain/layouts";
 import { GEOMETRY_MAP_ROLE } from "../../actualizar-padron/constants";
-import { EJES_SRID, PADRON_COLUMN, ROAD_SECTION_COLUMN, STAGING_COLUMN, TWIN_PADRON_DISTANCE_M } from "../constants";
+import { EJES_SRID, PADRON_COLUMN, ROAD_SECTION_COLUMN, EJES_STAGING_COLUMN, TWIN_PADRON_DISTANCE_M } from "../constants";
 
 export const EJES_MAP_ITEMS_LIMIT = 30;
 export const EJES_MAP_STATEMENT_TIMEOUT = "20s";
@@ -30,13 +30,13 @@ export function oldSectionOutlineSql(roadSection: TableLayout): string {
  */
 export function newSectionOutlineSql(staging: TableLayout, byLocality = false): string {
   const column = (logical: string): string => `${STAGING_ALIAS}.${physicalColumn(staging, logical)}`;
-  const geometry = `ST_SetSRID(${column(STAGING_COLUMN.GEOM)}, ${EJES_SRID})`;
+  const geometry = `ST_SetSRID(${column(EJES_STAGING_COLUMN.GEOM)}, ${EJES_SRID})`;
   return [
-    `SELECT ${column(STAGING_COLUMN.IDCALLE)} AS "idcalle", ${outlineGeoJsonSql(geometry)} AS "geojson"`,
+    `SELECT ${column(EJES_STAGING_COLUMN.IDCALLE)} AS "idcalle", ${outlineGeoJsonSql(geometry)} AS "geojson"`,
     `FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
-    `WHERE trim(${column(STAGING_COLUMN.REFTRAMO)}::text) = $1 AND ${column(STAGING_COLUMN.GEOM)} IS NOT NULL`,
-    `AND NOT ST_IsEmpty(${column(STAGING_COLUMN.GEOM)})`,
-    byLocality ? `AND trim(${column(STAGING_COLUMN.LOCALIDAD)}::text) = $2` : "",
+    `WHERE trim(${column(EJES_STAGING_COLUMN.REFTRAMO)}::text) = $1 AND ${column(EJES_STAGING_COLUMN.GEOM)} IS NOT NULL`,
+    `AND NOT ST_IsEmpty(${column(EJES_STAGING_COLUMN.GEOM)})`,
+    byLocality ? `AND trim(${column(EJES_STAGING_COLUMN.LOCALIDAD)}::text) = $2` : "",
     "LIMIT 1",
   ].join(" ");
 }
@@ -49,9 +49,9 @@ export function zoneOutlineSql(staging: TableLayout, padrones: TableLayout): str
   const column = (logical: string): string => `${STAGING_ALIAS}.${physicalColumn(staging, logical)}`;
   const geometry = `p.${physicalColumn(padrones, PADRON_COLUMN.GEOMETRY)}`;
   const section = [
-    `SELECT ST_SetSRID(${column(STAGING_COLUMN.GEOM)}, ${EJES_SRID}) FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
-    `WHERE trim(${column(STAGING_COLUMN.REFTRAMO)}::text) = $1 AND ${column(STAGING_COLUMN.GEOM)} IS NOT NULL`,
-    `AND NOT ST_IsEmpty(${column(STAGING_COLUMN.GEOM)}) LIMIT 1`,
+    `SELECT ST_SetSRID(${column(EJES_STAGING_COLUMN.GEOM)}, ${EJES_SRID}) FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
+    `WHERE trim(${column(EJES_STAGING_COLUMN.REFTRAMO)}::text) = $1 AND ${column(EJES_STAGING_COLUMN.GEOM)} IS NOT NULL`,
+    `AND NOT ST_IsEmpty(${column(EJES_STAGING_COLUMN.GEOM)}) LIMIT 1`,
   ].join(" ");
   return [
     `SELECT ${outlineGeoJsonSql(`ST_Union(ST_MakeValid(${geometry}))`)} AS "geojson"`,

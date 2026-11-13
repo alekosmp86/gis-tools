@@ -3,7 +3,7 @@ import type { DbConfig } from "@/core/types/db";
 import type { TableLayout } from "../actualizar-padron/domain/layouts";
 import type { StepTiming } from "../cargar-padrones/types";
 import type { WritableTargetLayout } from "../shared/tableResolution";
-import type { EjesTableRole, PadronType, TwinClass } from "./constants";
+import type { EJES_LOAD_ROLES, EJES_SUMMARY_COUNT_KEYS, EjesTableRole, PadronType, TwinClass } from "./constants";
 
 export interface EjesTableRef {
   schema: string;
@@ -15,7 +15,8 @@ export type EjesTables = Record<EjesTableRole, EjesTableRef>;
 export interface EjesParams {
   config: DbConfig;
   tables: EjesTables;
-  dryRun: true;
+  dryRun: boolean;
+  summary?: EjesSummary;
 }
 
 export type EjesLayouts = Record<EjesTableRole, TableLayout>;
@@ -141,6 +142,7 @@ export interface EjesTwinRow {
   urbanLength: number | null;
   ruralLength: number | null;
   dropLocalities: string[];
+  insideLocalities: string[];
 }
 
 export interface EjesRenumberedRow {
@@ -171,9 +173,12 @@ export interface EjesResolvedLayouts {
 }
 
 export interface EjesResult extends EjesAnalysis {
-  dryRun: true;
-  targetModified: false;
-  outcomeUnknown: false;
+  dryRun: boolean;
+  targetModified: boolean;
+  outcomeUnknown: boolean;
+  commitError?: string;
+  load?: EjesLoadReport;
+  nextStep?: EjesNextStep;
   staging: EjesStagingReport;
   blockers: string[];
   privilegeInfo: string[];
@@ -203,4 +208,68 @@ export interface EjesGeometryMapParams {
   roadSection: EjesTableRef;
   padrones: EjesTableRef;
   items: EjesMapItem[];
+}
+
+export type EjesSummaryCountKey = (typeof EJES_SUMMARY_COUNT_KEYS)[number];
+
+/** The counts of the Revisar analysis: the real run only goes on when the staging still gives the same ones. */
+export interface EjesSummary {
+  counts: Record<EjesSummaryCountKey, number>;
+}
+
+export type EjesLoadRole = (typeof EJES_LOAD_ROLES)[number];
+
+export interface EjesLoadContext {
+  layouts: EjesLayouts;
+  targets: Record<EjesLoadRole, WritableTargetLayout>;
+}
+
+export interface EjesLoadCounts {
+  inserted: number;
+  updated: number;
+  renumbered: number;
+  waysCreated: number;
+  mastersCreated: number;
+  pointsMoved: number;
+}
+
+export interface EjesSurplusRow {
+  ref: string;
+  id: string;
+  points: number;
+}
+
+export interface EjesLoadRenumberedRow {
+  oldRef: string;
+  newRef: string;
+  id: string;
+  points: number;
+}
+
+export interface EjesSkippedRow {
+  kind: "split" | "merge" | "removal";
+  refs: string[];
+  idcalle: string | null;
+  points: number;
+}
+
+export interface EjesBackup {
+  token: string;
+  fileName: string;
+  bytes: number;
+  counts: { updated: number; inserted: number; ways: number; masters: number; pointsMoved: number };
+}
+
+export interface EjesNextStep {
+  text: string;
+  statement: string;
+}
+
+export interface EjesLoadReport {
+  counts: EjesLoadCounts;
+  surplus: EjesSurplusRow[];
+  surplusTotal: number;
+  renumbered: EjesLoadRenumberedRow[];
+  skipped: EjesSkippedRow[];
+  backup?: EjesBackup;
 }

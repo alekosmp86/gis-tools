@@ -6,11 +6,6 @@ const valuesTextOf = (values: readonly EjesUnknownValue[]): string =>
 
 export function ejesBlockersOf(staging: EjesStagingReport): string[] {
   const blockers: string[] = [];
-  if (staging.repeatedGroups > 0) {
-    blockers.push(
-      `${plural(staging.repeatedGroups, "reftramo se repite", "reftramo se repiten")} (${plural(staging.repeatedRows, "fila", "filas")}).`
-    );
-  }
   if (staging.nonIntegerRefs > 0) {
     blockers.push(`${plural(staging.nonIntegerRefs, "fila tiene", "filas tienen")} un reftramo que no es un entero.`);
   }

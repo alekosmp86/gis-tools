@@ -14,7 +14,7 @@ const when = (nameLike: string, longerThan: number | undefined, ...replacements:
   longerThan,
 });
 
-export const SHORT_NAME_STEPS: readonly ShortNameStep[] = [
+const SHORT_NAME_STEPS: readonly ShortNameStep[] = [
   unconditional(
     ["CALLE ", "CL "], ["CAMINO ", "CNO "], ["PASAJE ", "PSJE "], ["BULEVAR ", "BV "], ["RAMBLA ", "RMBL "],
     ["AVENIDA ", "AV "], ["CONTINUACION ", "CONT "], ["SENDA ", "SDA "], ["ASENTAMIENTO ", "ASENT "]

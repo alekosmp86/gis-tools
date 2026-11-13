@@ -61,8 +61,35 @@ const TWIN_CASE_TEXT: Record<TwinClass, string> = {
 
 export const twinCaseTextOf = (twinClass: TwinClass): string => TWIN_CASE_TEXT[twinClass];
 
-export const twinDecisionTextOf = (row: Pick<EjesTwinRow, "class" | "dropLocalities">): string => {
+export type TwinTextRow = Pick<EjesTwinRow, "class" | "dropLocalities"> & Partial<Pick<EjesTwinRow, "localities" | "insideLocalities">>;
+
+const CROSSES_LOCALITIES = "Cruza varias localidades";
+
+const keptInsideCount = (row: TwinTextRow): number => {
+  const inside = new Set(row.insideLocalities ?? []);
+  return (row.localities ?? []).filter((locality) => inside.has(locality.trim().toUpperCase())).length;
+};
+
+const isPolygonCrossing = (row: TwinTextRow): boolean =>
+  row.class === TWIN_CLASS.NEITHER && row.dropLocalities.length === 0 && keptInsideCount(row) >= 2;
+
+const isPolygonDrop = (row: TwinTextRow): boolean =>
+  row.class === TWIN_CLASS.NEITHER && row.dropLocalities.length > 0 && (row.insideLocalities ?? []).length > 0;
+
+export const twinRowCaseTextOf = (row: TwinTextRow): string => {
+  if (isPolygonCrossing(row)) return CROSSES_LOCALITIES;
+  if (isPolygonDrop(row)) return "Lejos de padrones: por polígono de localidad";
+  if (row.class === TWIN_CLASS.NEITHER && row.dropLocalities.length > 0) return "Lejos de padrones: regla rural";
+  return TWIN_CASE_TEXT[row.class];
+};
+
+export const twinDecisionTextOf = (row: TwinTextRow): string => {
+  if (isPolygonDrop(row)) {
+    const verb = row.dropLocalities.length === 1 ? "se quita" : "se quitan";
+    return `Dentro de ${(row.insideLocalities ?? []).join(", ")}: ${verb} ${row.dropLocalities.join(", ")}`;
+  }
   if (row.dropLocalities.length > 0) return `Se quitaría: ${row.dropLocalities.join(", ")}`;
+  if (isPolygonCrossing(row)) return `${CROSSES_LOCALITIES}: se mantienen todas`;
   return row.class === TWIN_CLASS.NEITHER ? "Sin regla: se mantienen todas" : "Se mantienen todas";
 };
 
@@ -74,8 +101,8 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
     kpi("reftramo que no es un número", staging.nonIntegerRefs),
     kpi("Filas sin geometría", staging.emptyGeometry),
     kpi("Filas sin idcalle", staging.emptyIdcalle),
-    kpi("Filas con geometría inválida (se omiten)", staging.invalidGeometryRows),
-    kpi("Tramos con geometría inválida", staging.invalidGeometryRefs),
+    kpi("Filas con geometría inválida o colapsada (se omiten)", staging.invalidGeometryRows),
+    kpi("Tramos con geometría inválida o colapsada", staging.invalidGeometryRefs),
     kpi("Filas con caracteres dañados (�)", staging.damagedTextRows),
     kpi("Filas con tipo de vía desconocido", staging.unknownTipoRows),
     kpi("Filas con fuente desconocida", staging.unknownFuenteRows),
@@ -145,7 +172,7 @@ const summariesOf = (result: EjesResult): EjesListSummaries => ({
   plainRemovals: listSummaryOf("Tramos sin reemplazo (primero los que tienen puntos de acceso)", result.plainRemovals.length, result.counts.plainRemovals),
   newStreets: listSummaryOf("Calles nuevas", result.newStreets.length, result.counts.newStreets),
   attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
-  invalidGeometries: listSummaryOf("Tramos con geometría inválida (se omiten)", result.staging.invalidGeometries.length, result.staging.invalidGeometryRows),
+  invalidGeometries: listSummaryOf("Tramos con geometría inválida o colapsada (se omiten)", result.staging.invalidGeometries.length, result.staging.invalidGeometryRows),
   renumbered: listSummaryOf("Tramos renumerados (primero los que tienen puntos de acceso)", result.renumbered.length, result.counts.renumbered),
   twins: listSummaryOf("Tramos repetidos por localidad (primero los que se deciden en el mapa)", result.twins.length, result.counts.twins),
 });

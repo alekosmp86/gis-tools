@@ -39,6 +39,7 @@ const TWIN: EjesTwinRow = {
   urbanLength: 120.5,
   ruralLength: 30,
   dropLocalities: [],
+  insideLocalities: [],
 };
 
 const BASE: EjesGeometryMapBase = {

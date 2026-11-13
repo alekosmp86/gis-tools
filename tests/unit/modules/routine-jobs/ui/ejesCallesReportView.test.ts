@@ -8,6 +8,7 @@ import {
   metersTextOf,
   twinCaseTextOf,
   twinDecisionTextOf,
+  twinRowCaseTextOf,
 } from "@/modules/routine-jobs/ui/ejesCallesReportView";
 
 const COUNTS = {
@@ -45,6 +46,7 @@ const TWIN: EjesTwinRow = {
   urbanLength: 120.5,
   ruralLength: 30,
   dropLocalities: [],
+  insideLocalities: [],
 };
 
 const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
@@ -268,31 +270,31 @@ describe("buildEjesReportView (EJ-12)", () => {
         buildEjesReportView(withInvalid(795, 615)).kpiGroups.flatMap((group) => group.kpis).map((kpi) => [kpi.label, kpi.value])
       );
 
-      expect(kpis["Filas con geometría inválida (se omiten)"]).toBe(795);
-      expect(kpis["Tramos con geometría inválida"]).toBe(615);
+      expect(kpis["Filas con geometría inválida o colapsada (se omiten)"]).toBe(795);
+      expect(kpis["Tramos con geometría inválida o colapsada"]).toBe(615);
     });
 
     it("should show neither KPI when there are no invalid geometries", () => {
       const labels = kpiLabels(withInvalid(0, 0));
 
-      expect(labels).not.toContain("Filas con geometría inválida (se omiten)");
-      expect(labels).not.toContain("Tramos con geometría inválida");
+      expect(labels).not.toContain("Filas con geometría inválida o colapsada (se omiten)");
+      expect(labels).not.toContain("Tramos con geometría inválida o colapsada");
     });
 
     it("should show the KPIs in the file-problems part, next to the other file problems", () => {
-      const problems = buildEjesReportView(withInvalid(3, 2)).kpiGroups.find((group) => group.kpis.some((kpi) => kpi.label === "Tramos con geometría inválida"));
+      const problems = buildEjesReportView(withInvalid(3, 2)).kpiGroups.find((group) => group.kpis.some((kpi) => kpi.label === "Tramos con geometría inválida o colapsada"));
       const labels = problems?.kpis.map((kpi) => kpi.label) ?? [];
 
       expect(labels).toContain("Filas con caracteres dañados (�)");
-      expect(labels).toContain("Filas con geometría inválida (se omiten)");
+      expect(labels).toContain("Filas con geometría inválida o colapsada (se omiten)");
     });
 
     it("should summarize the list with the shown rows and the row total, noting a cut list", () => {
       const row = { ref: "1", idcalle: "2", localidad: "A", departamento: "B" };
 
-      expect(buildEjesReportView(withInvalid(1, 1, [row])).summaries.invalidGeometries).toBe("Tramos con geometría inválida (se omiten) (1)");
+      expect(buildEjesReportView(withInvalid(1, 1, [row])).summaries.invalidGeometries).toBe("Tramos con geometría inválida o colapsada (se omiten) (1)");
       expect(buildEjesReportView(withInvalid(795, 615, [row])).summaries.invalidGeometries).toBe(
-        "Tramos con geometría inválida (se omiten) (primeras 1 de 795)"
+        "Tramos con geometría inválida o colapsada (se omiten) (primeras 1 de 795)"
       );
     });
 
@@ -332,6 +334,55 @@ describe("buildEjesReportView (EJ-12)", () => {
 
     it("should show the drop text before the class when the row has localities to drop", () => {
       expect(twinDecisionTextOf({ class: TWIN_CLASS.BOTH, dropLocalities: ["X RURAL"] })).toBe("Se quitaría: X RURAL");
+    });
+  });
+
+  describe("twinRowCaseTextOf and twinDecisionTextOf for NEITHER (ET-19)", () => {
+    const neither = { class: TWIN_CLASS.NEITHER, localities: ["A", "B"], dropLocalities: [] as string[], insideLocalities: [] as string[] };
+
+    it("should say Cruza varias localidades when nothing is dropped and two or more polygons match", () => {
+      const row = { ...neither, insideLocalities: ["A", "B"] };
+
+      expect(twinRowCaseTextOf(row)).toBe("Cruza varias localidades");
+      expect(twinDecisionTextOf(row)).toBe("Cruza varias localidades: se mantienen todas");
+    });
+
+    it("should not say Cruza varias localidades when only one polygon matches", () => {
+      const row = { ...neither, insideLocalities: ["A"] };
+
+      expect(twinRowCaseTextOf(row)).toBe("Lejos de padrones: sin regla");
+      expect(twinDecisionTextOf(row)).toBe("Sin regla: se mantienen todas");
+    });
+
+    it("should say por polígono de localidad with se quita for a single dropped copy", () => {
+      const row = { ...neither, insideLocalities: ["A"], dropLocalities: ["B"] };
+
+      expect(twinRowCaseTextOf(row)).toBe("Lejos de padrones: por polígono de localidad");
+      expect(twinDecisionTextOf(row)).toBe("Dentro de A: se quita B");
+    });
+
+    it("should say se quitan with every dropped copy and every inside locality", () => {
+      const row = { ...neither, localities: ["A", "B", "C"], insideLocalities: ["A", "D"], dropLocalities: ["B", "C"] };
+
+      expect(twinDecisionTextOf(row)).toBe("Dentro de A, D: se quitan B, C");
+    });
+
+    it("should say regla rural when no polygon matches and a copy is dropped", () => {
+      const row = { ...neither, dropLocalities: ["B RURAL"] };
+
+      expect(twinRowCaseTextOf(row)).toBe("Lejos de padrones: regla rural");
+      expect(twinDecisionTextOf(row)).toBe("Se quitaría: B RURAL");
+    });
+
+    it("should say sin regla when no polygon matches and nothing is dropped", () => {
+      expect(twinRowCaseTextOf(neither)).toBe("Lejos de padrones: sin regla");
+      expect(twinDecisionTextOf(neither)).toBe("Sin regla: se mantienen todas");
+    });
+
+    it("should leave the case of a non-NEITHER row to its class", () => {
+      expect(twinRowCaseTextOf({ class: TWIN_CLASS.BOTH, dropLocalities: [], insideLocalities: ["A", "B"], localities: ["A", "B"] })).toBe(
+        "Cerca de ambos: se mantienen las dos"
+      );
     });
   });
 

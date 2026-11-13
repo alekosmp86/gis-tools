@@ -2,16 +2,18 @@ import { buildQualifiedTableLabel } from "@/core/services/sqlStatements";
 import { createStepTimer, type StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunDeps, RunProgress, RunSession } from "../../cargar-padrones/types";
 import { withRunSession, runTransaction, type TransactionMessages } from "../../shared/transaction";
-import { EJES_ROLES, type EjesTableRole } from "../constants";
-import { buildEjesAnalysisSql } from "../domain/analysisSql";
+import { EJES_ROLES, EJES_TABLE_ROLE, type EjesTableRole } from "../constants";
 import { ejesBlockersOf } from "../domain/blockers";
+import { ejesLoadContextOf } from "../domain/loadContext";
+import { buildEjesNextStep } from "../domain/nextStep";
 import { EJES_STEP, plannedEjesStepLabels } from "../domain/plannedSteps";
-import { toEjesAnalysis, toEjesStagingReport } from "../domain/reportMapping";
-import { buildStagingChecksSql } from "../domain/stagingSql";
+import { assertEjesRealRunEnabled } from "../domain/realRunSwitch";
 import { assertDistinctEjesTables } from "../domain/tableRoles";
-import type { EjesAnalysis, EjesParams, EjesResolvedLayouts, EjesResult, EjesStagingReport } from "../types";
-import { assertEjesReadable, assertEjesStagingReady, ejesWritePrivilegeInfo } from "./preflight";
+import type { EjesParams, EjesResolvedLayouts, EjesResult } from "../types";
+import { assertEjesLoadReady, assertEjesReadable, assertEjesStagingReady, ejesWritePrivilegeInfo } from "./preflight";
+import { readStagingAndAnalysis, type EjesAnalysisBody } from "./readEjesAnalysis";
 import { resolveEjesLayouts } from "./resolveLayouts";
+import { runEjesPersistTransaction } from "./writeEjesSteps";
 
 const EJES_TRANSACTION: TransactionMessages = {
   jobLabel: "análisis de ejes de calles",
@@ -19,17 +21,12 @@ const EJES_TRANSACTION: TransactionMessages = {
   unverified: "No se pudo cerrar la transacción de solo lectura: verifique la conexión.",
 };
 
-interface AnalysisBody {
-  staging: EjesStagingReport;
-  analysis: EjesAnalysis;
-}
-
 async function analyzeInReadOnlyTransaction(
   session: RunSession,
   params: EjesParams,
   resolved: EjesResolvedLayouts,
   timer: StepTimer
-): Promise<AnalysisBody> {
+): Promise<EjesAnalysisBody> {
   const outcome = await runTransaction(
     session,
     {
@@ -40,15 +37,7 @@ async function analyzeInReadOnlyTransaction(
       steps: { commit: EJES_STEP.ANALYZE, rollback: EJES_STEP.ANALYZE },
       messages: EJES_TRANSACTION,
     },
-    async () => {
-      const staging = await timer.run(EJES_STEP.STAGING, async () =>
-        toEjesStagingReport((await session.query(buildStagingChecksSql(resolved.layouts))).rows[0] ?? {})
-      );
-      const analysis = await timer.run(EJES_STEP.ANALYZE, async () =>
-        toEjesAnalysis((await session.query(buildEjesAnalysisSql(resolved.layouts))).rows[0] ?? {})
-      );
-      return { staging, analysis };
-    }
+    () => readStagingAndAnalysis(session, resolved.layouts, timer)
   );
   return outcome.body;
 }
@@ -58,20 +47,20 @@ const tableLabelsOf = (params: EjesParams): Record<EjesTableRole, string> =>
     EJES_ROLES.map((role) => [role, buildQualifiedTableLabel(params.tables[role].schema, params.tables[role].table)])
   ) as Record<EjesTableRole, string>;
 
-async function runOnSession(
-  session: RunSession,
-  params: EjesParams,
-  deps: RunDeps,
-  onProgress?: (progress: RunProgress) => void
-): Promise<EjesResult> {
-  const timer = createStepTimer({ now: deps.now, total: plannedEjesStepLabels().length, onProgress });
-  const resolved = await timer.run(EJES_STEP.VALIDATE, async () => {
+async function resolveAndValidate(session: RunSession, params: EjesParams, timer: StepTimer): Promise<EjesResolvedLayouts> {
+  return timer.run(EJES_STEP.VALIDATE, async () => {
     const layouts = await resolveEjesLayouts(session, params);
     await assertEjesReadable(session, layouts.layouts);
     await assertEjesStagingReady(session, layouts.layouts);
     return layouts;
   });
+}
+
+async function runAnalysisOnSession(session: RunSession, params: EjesParams, timer: StepTimer): Promise<EjesResult> {
+  const resolved = await resolveAndValidate(session, params, timer);
   const privilegeInfo = await timer.run(EJES_STEP.PRIVILEGES, () => ejesWritePrivilegeInfo(session, resolved));
+  // One pg client: the analysis transaction starts after the privilege reads.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const { staging, analysis } = await analyzeInReadOnlyTransaction(session, params, resolved, timer);
   return {
     dryRun: true,
@@ -86,11 +75,39 @@ async function runOnSession(
   };
 }
 
+async function runPersistOnSession(session: RunSession, params: EjesParams, timer: StepTimer): Promise<EjesResult> {
+  const resolved = await resolveAndValidate(session, params, timer);
+  const context = ejesLoadContextOf(resolved.layouts, params.tables, resolved.writeTargets);
+  await timer.run(EJES_STEP.PRIVILEGES, () => assertEjesLoadReady(session, context));
+  const outcome = await runEjesPersistTransaction(session, params, context, timer);
+  const { staging, analysis, load, targetModified, outcomeUnknown, commitError } = outcome;
+  return {
+    dryRun: false,
+    targetModified,
+    outcomeUnknown,
+    ...(commitError === undefined ? {} : { commitError }),
+    staging,
+    ...analysis,
+    blockers: [],
+    privilegeInfo: [],
+    tables: tableLabelsOf(params),
+    stepTimings: timer.timings,
+    load,
+    ...(targetModified || outcomeUnknown
+      ? { nextStep: buildEjesNextStep(params.tables[EJES_TABLE_ROLE.ROAD_SECTION], params.tables[EJES_TABLE_ROLE.STAGING]) }
+      : {}),
+  };
+}
+
 export async function runEjesCalles(
   params: EjesParams,
   deps: RunDeps,
   onProgress?: (progress: RunProgress) => void
 ): Promise<EjesResult> {
   assertDistinctEjesTables(params);
-  return withRunSession(params.config, deps, (session) => runOnSession(session, params, deps, onProgress));
+  if (!params.dryRun) assertEjesRealRunEnabled();
+  const timer = createStepTimer({ now: deps.now, total: plannedEjesStepLabels(params.dryRun).length, onProgress });
+  return withRunSession(params.config, deps, (session) =>
+    params.dryRun ? runAnalysisOnSession(session, params, timer) : runPersistOnSession(session, params, timer)
+  );
 }

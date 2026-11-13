@@ -45,6 +45,7 @@ const SUBJECT = subjectOfTwin({
   urbanLength: 5,
   ruralLength: 0,
   dropLocalities: [],
+  insideLocalities: [],
 });
 
 describe("useEjesMapFeatures scope (ET-8)", () => {

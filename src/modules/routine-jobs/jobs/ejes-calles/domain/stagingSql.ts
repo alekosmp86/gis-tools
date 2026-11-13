@@ -1,33 +1,34 @@
 import { physicalColumn, qualifiedName } from "../../actualizar-padron/domain/layouts";
 import { cte, jsonArrayOf, q, withClause } from "../../shared/sqlFragments";
 import { DETAIL_LIST_LIMIT } from "../../shared/limits";
-import { EJES_TABLE_ROLE, STAGING_COLUMN } from "../constants";
+import { EJES_TABLE_ROLE, EJES_STAGING_COLUMN, GEOMETRY_TOLERANCE_M } from "../constants";
 import type { EjesLayouts } from "../types";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
 
 export const INTEGER_PATTERN = "^[0-9]+$";
 
-const DAMAGED_COLUMNS = [STAGING_COLUMN.NOMBRE, STAGING_COLUMN.LOCALIDAD, STAGING_COLUMN.DEPARTAMENTO];
+const DAMAGED_COLUMNS = [EJES_STAGING_COLUMN.NOMBRE, EJES_STAGING_COLUMN.LOCALIDAD, EJES_STAGING_COLUMN.DEPARTAMENTO];
 
 const textOf = (layouts: EjesLayouts, column: string): string =>
   `NULLIF(btrim(s.${physicalColumn(layouts[EJES_TABLE_ROLE.STAGING], column)}::text), '')`;
 
-/** A NULL or empty geometry is not an invalid one: those have their own counts. */
-export const validGeometrySql = (geometry: string): string => `COALESCE(ST_IsValid(${geometry}), true)`;
+/** Invalid or collapsed (shorter than the geometry tolerance). A NULL or empty geometry is not one of those: it has its own count. */
+export const validGeometrySql = (geometry: string): string =>
+  `COALESCE(ST_IsEmpty(${geometry}) OR (ST_IsValid(${geometry}) AND ST_Length(${geometry}) >= ${GEOMETRY_TOLERANCE_M}), true)`;
 
-export function stagingRowsCte(layouts: EjesLayouts): string {
+function stagingRowsCte(layouts: EjesLayouts): string {
   const staging = layouts[EJES_TABLE_ROLE.STAGING];
-  const geometry = `s.${physicalColumn(staging, STAGING_COLUMN.GEOM)}`;
+  const geometry = `s.${physicalColumn(staging, EJES_STAGING_COLUMN.GEOM)}`;
   return cte(
     "s",
     [
       "SELECT",
-      `${textOf(layouts, STAGING_COLUMN.REFTRAMO)} AS ref,`,
-      `${textOf(layouts, STAGING_COLUMN.IDCALLE)} AS idcalle,`,
-      `${textOf(layouts, STAGING_COLUMN.TIPO_VIALIDAD)} AS tipo,`,
-      `${textOf(layouts, STAGING_COLUMN.FUENTE)} AS fuente,`,
-      `${textOf(layouts, STAGING_COLUMN.LOCALIDAD)} AS localidad,`,
-      `${textOf(layouts, STAGING_COLUMN.DEPARTAMENTO)} AS departamento,`,
+      `${textOf(layouts, EJES_STAGING_COLUMN.REFTRAMO)} AS ref,`,
+      `${textOf(layouts, EJES_STAGING_COLUMN.IDCALLE)} AS idcalle,`,
+      `${textOf(layouts, EJES_STAGING_COLUMN.TIPO_VIALIDAD)} AS tipo,`,
+      `${textOf(layouts, EJES_STAGING_COLUMN.FUENTE)} AS fuente,`,
+      `${textOf(layouts, EJES_STAGING_COLUMN.LOCALIDAD)} AS localidad,`,
+      `${textOf(layouts, EJES_STAGING_COLUMN.DEPARTAMENTO)} AS departamento,`,
       `(${geometry} IS NULL OR ST_IsEmpty(${geometry})) AS empty_geometry,`,
       `(NOT ${validGeometrySql(geometry)}) AS invalid_geometry,`,
       `(${DAMAGED_COLUMNS.map((column) => `position(chr(65533) in COALESCE(s.${physicalColumn(staging, column)}::text, '')) > 0`).join(" OR ")}) AS damaged_text`,

@@ -36,16 +36,12 @@ describe("ejesBlockersOf (EJ-8)", () => {
     expect(ejesBlockersOf(cleanStaging({ rows: 0, distinctRefs: 0 }))).toEqual([]);
   });
 
-  it("should block on repeated reftramo with groups and rows", () => {
-    expect(ejesBlockersOf(cleanStaging({ repeatedGroups: 2, repeatedRows: 5 }))).toEqual([
-      "2 reftramo se repiten (5 filas).",
-    ]);
+  it("should not block on repeated reftramo (EJL-15)", () => {
+    expect(ejesBlockersOf(cleanStaging({ repeatedGroups: 2, repeatedRows: 5 }))).toEqual([]);
   });
 
-  it("should use the singular form for one group and one row", () => {
-    expect(ejesBlockersOf(cleanStaging({ repeatedGroups: 1, repeatedRows: 1 }))[0]).toContain(
-      "1 reftramo se repite (1 fila)"
-    );
+  it("should not block on a single repeated reftramo group (EJL-15)", () => {
+    expect(ejesBlockersOf(cleanStaging({ repeatedGroups: 1, repeatedRows: 1 }))).toEqual([]);
   });
 
   it("should block on non-integer reftramo", () => {
@@ -104,6 +100,6 @@ describe("ejesBlockersOf (EJ-8)", () => {
       })
     );
 
-    expect(blockers).toHaveLength(7);
+    expect(blockers).toHaveLength(6);
   });
 });

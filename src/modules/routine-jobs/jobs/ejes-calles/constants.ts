@@ -24,7 +24,7 @@ export const EJES_WRITE_ROLES: readonly EjesTableRole[] = [
 
 export const EJES_READ_ROLES: readonly EjesTableRole[] = EJES_ROLES.filter((role) => !EJES_WRITE_ROLES.includes(role));
 
-export const STAGING_COLUMN = {
+export const EJES_STAGING_COLUMN = {
   REFTRAMO: "reftramo",
   IDCALLE: "idcalle",
   NOMBRE: "nombre",
@@ -64,7 +64,7 @@ export const ADDRESS_MASTER_COLUMN = {
   LONGITUDE: "longitud",
 } as const;
 
-export const VERTICES_COLUMN = {
+const VERTICES_COLUMN = {
   ID: "id",
   THE_GEOM: "the_geom",
 } as const;
@@ -111,7 +111,7 @@ export const TWIN_NEAR_MIN_LENGTH_M = 1;
 export const RURAL_LOCALITY_SUFFIX = " RURAL";
 
 export const EJES_REQUIRED_COLUMNS_BY_ROLE: Record<EjesTableRole, readonly string[]> = {
-  [EJES_TABLE_ROLE.STAGING]: Object.values(STAGING_COLUMN),
+  [EJES_TABLE_ROLE.STAGING]: Object.values(EJES_STAGING_COLUMN),
   [EJES_TABLE_ROLE.ROAD_SECTION]: Object.values(ROAD_SECTION_COLUMN),
   [EJES_TABLE_ROLE.CIRCULATION_WAY]: Object.values(CIRCULATION_WAY_COLUMN),
   [EJES_TABLE_ROLE.ADDRESS_MASTER]: Object.values(ADDRESS_MASTER_COLUMN),
@@ -186,4 +186,33 @@ export const COVERAGE_TOLERANCE_M = 1;
 export const RENUMBER_HAUSDORFF_M = 0.5;
 export const RENUMBER_CANDIDATE_DISTANCE_M = COVERAGE_TOLERANCE_M;
 
+export const REAL_RUN_ENV_VAR = "EJES_CALLES_REAL_RUN_ENABLED";
 export const REAL_RUN_UNAVAILABLE_MESSAGE = "La carga real de ejes de calles todavía no está disponible.";
+
+export const LOAD_LOCK_TIMEOUT_MS = 15000;
+export const LOAD_CHUNK_SIZE = 500;
+export const REVERT_PAGE_SIZE = 500;
+export const DISTANCE_DECIMALS = 2;
+export const MASTER_URN_PREFIX = "cgeo:road_section:id:";
+export const EJES_REFRESH_VIEW_NAMES = ["mv_road_section", "mv_road_section2", "mv_addresses_2_0"] as const;
+export const EJES_STAGING_REFRESH_VIEW = "bdj_ejes";
+
+export const EJES_LOAD_ROLES = [
+  EJES_TABLE_ROLE.ROAD_SECTION,
+  EJES_TABLE_ROLE.CIRCULATION_WAY,
+  EJES_TABLE_ROLE.ADDRESS_MASTER,
+  EJES_TABLE_ROLE.ACCESS_POINT,
+] as const;
+
+export const EJES_SUMMARY_COUNT_KEYS = [
+  "newSections",
+  "unchanged",
+  "attr",
+  "geom",
+  "both",
+  "removed",
+  "splits",
+  "merges",
+  "plainRemovals",
+  "renumbered",
+] as const;

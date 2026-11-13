@@ -268,6 +268,7 @@ describe("toEjesAnalysis twins (ET-4)", () => {
     urban_length: 120.5,
     rural_length: "30",
     drop_localities: ["FLORES RURAL"],
+    inside_localities: ["TRINIDAD"],
   };
 
   it("should map a twin row with its reftramo as text, every locality and the three lengths as numbers", () => {
@@ -284,8 +285,21 @@ describe("toEjesAnalysis twins (ET-4)", () => {
         urbanLength: 120.5,
         ruralLength: 30,
         dropLocalities: ["FLORES RURAL"],
+        insideLocalities: ["TRINIDAD"],
       },
     ]);
+  });
+
+  it("should map inside_localities to insideLocalities as text, keeping their order", () => {
+    const rows = [{ ...twinRow, inside_localities: ["B", 7, "A"] }];
+
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: rows }).twins[0].insideLocalities).toEqual(["B", "7", "A"]);
+  });
+
+  it.each([[null], [undefined], ["TRINIDAD"], [{}], [5]])("should map inside_localities %j to an empty list", (value) => {
+    const rows = [{ ...twinRow, inside_localities: value }];
+
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: rows }).twins[0].insideLocalities).toEqual([]);
   });
 
   it.each(["URBAN", "RURAL", "BOTH", "NEITHER"])("should keep the class %s", (twinClass) => {
