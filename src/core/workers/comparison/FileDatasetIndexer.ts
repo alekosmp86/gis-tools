@@ -1,17 +1,21 @@
 import type { SerializableFileDataset } from "@/core/types/workerMessages";
 import type { BinaryDbfReader, DbfFieldDescriptor } from "@/core/binary/BinaryDbfReader";
+import type { BinaryShpReader } from "@/core/binary/BinaryShpReader";
+import { DegenerateRowCollector, isDegenerateGeometry } from "./DegenerateGeometry";
 import { SuidKeyResolver, type SuidKeyOptions } from "./SuidKeyResolver";
 
 export interface BinaryIndexResult {
   readonly suidMap: Map<string, number[]>;
   readonly nullRecordIndices: number[];
   readonly totalRecords: number;
+  readonly degenerate: DegenerateRowCollector;
 }
 
 export interface ObjectIndexResult {
   readonly suidMap: Map<string, Record<string, unknown>[]>;
   readonly nullRecords: Record<string, unknown>[];
   readonly totalRecords: number;
+  readonly degenerate: DegenerateRowCollector;
 }
 
 /**
@@ -28,10 +32,12 @@ export class FileDatasetIndexer {
   public indexBinaryDbf(
     dbfReader: BinaryDbfReader,
     targetFileSuidCols: string[],
-    keyOptions?: SuidKeyOptions
+    keyOptions?: SuidKeyOptions,
+    shpReader?: BinaryShpReader | null
   ): BinaryIndexResult {
     const suidMap = new Map<string, number[]>();
     const nullRecordIndices: number[] = [];
+    const degenerate = new DegenerateRowCollector();
     const totalRecords = dbfReader.header.recordCount;
 
     const suidFieldDescriptors: (DbfFieldDescriptor | undefined)[] = targetFileSuidCols.map(
@@ -42,6 +48,10 @@ export class FileDatasetIndexer {
     );
 
     for (let recordIndex = 0; recordIndex < totalRecords; recordIndex++) {
+      if (shpReader && isDegenerateGeometry(shpReader.readGeometry(recordIndex))) {
+        degenerate.add(recordIndex + 1, () => this.suidResolver.buildCompositeRawSuid(dbfReader.readRecord(recordIndex) || {}, targetFileSuidCols));
+        continue;
+      }
       let hasAtLeastOneValidPart = false;
       const keyParts: string[] = [];
 
@@ -75,7 +85,7 @@ export class FileDatasetIndexer {
       }
     }
 
-    return { suidMap, nullRecordIndices, totalRecords };
+    return { suidMap, nullRecordIndices, totalRecords, degenerate };
   }
 
   public indexObjectDataset(
@@ -85,6 +95,7 @@ export class FileDatasetIndexer {
   ): ObjectIndexResult {
     const suidMap = new Map<string, Record<string, unknown>[]>();
     const nullRecords: Record<string, unknown>[] = [];
+    const degenerate = new DegenerateRowCollector();
     const recordsObject = fileDataset.recordsObject || {};
     const objectValues = Object.values(recordsObject);
     const geojsonObj = fileDataset.geojson as { features?: Array<{ properties?: Record<string, unknown>; geometry?: unknown }> } | undefined;
@@ -99,6 +110,11 @@ export class FileDatasetIndexer {
         ...record,
         _geometry: featureGeom,
       };
+
+      if (isDegenerateGeometry(featureGeom)) {
+        degenerate.add(index + 1, () => this.suidResolver.buildCompositeRawSuid(fullRecord, targetFileSuidCols));
+        continue;
+      }
 
       const compositeKey = this.suidResolver.buildCompositeKey(
         fullRecord,
@@ -119,6 +135,6 @@ export class FileDatasetIndexer {
       }
     }
 
-    return { suidMap, nullRecords, totalRecords };
+    return { suidMap, nullRecords, totalRecords, degenerate };
   }
 }

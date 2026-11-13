@@ -49,7 +49,7 @@ Unlike file-based tools, this tool directly queries both live database connectio
 - Attribute-only exact pass: after the full-content pass, leftover representatives are also paired 1:1 by attributes alone (SUID + compared fields, lowest row first) when at least one side has no usable geometry in the leftovers (e.g. CSV, or DB-to-DB without a geometry column). Otherwise geometry pairing decides.
 - The 40,000-candidate cap applies to the geometry-row product (DB geometry rows x file geometry rows) after the exact pass, not to the raw group size.
 - Unkeyed paired rows never produce an UPDATE (counted in `unkeyedUpdatesSkippedCount`). INSERTs generated from collision groups may repeat an existing key; a unique constraint would reject them.
-- Counts reconcile: DB rows = match + attribute + geometry + onlyInDb + duplicate (DB side); file rows = match + attribute + geometry + onlyInShp + duplicate (file side) + skipped.
+- Counts reconcile: DB rows = match + attribute + geometry + onlyInDb + duplicate (DB side); file rows = match + attribute + geometry + onlyInShp + duplicate (file side) + skipped + degenerate skipped (`degenerateFileRowsSkipped`: a source row whose geometry collapsed to a point is left out of the comparison and reported with up to 20 examples; spec `DB_FILE_DEGENERATE_GEOMETRY_SPEC.md`).
 
 ## 5. Sync Mode and Full Replace (wipe + reload)
 

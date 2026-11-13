@@ -9,6 +9,7 @@ import { BinaryDbfReader, type DbfFieldDescriptor } from "@/core/binary/BinaryDb
 import { BinaryShpReader } from "@/core/binary/BinaryShpReader";
 import { createProjectionConverter } from "@/core/spatial/ProjectionEngine";
 import { resolveFileSridForSql } from "@/core/spatial/FileSridResolver";
+import type { DegenerateRowCollector } from "./DegenerateGeometry";
 import { FileDatasetIndexer } from "./FileDatasetIndexer";
 import { SuidKeyResolver, type SuidKeyOptions } from "./SuidKeyResolver";
 import { NullRecordHandler } from "./NullRecordHandler";
@@ -17,6 +18,12 @@ import { FeatureAttributeExtractor } from "./FeatureAttributeExtractor";
 import { GeometryDifferenceEvaluator } from "./GeometryDifferenceEvaluator";
 import { MatchedRecordsComparator } from "./MatchedRecordsComparator";
 import { UnmatchedFileFeaturesCollector } from "./UnmatchedFileFeaturesCollector";
+
+/** Present only when rows were skipped, so a file without degenerate rows returns the summary it always did. */
+const degenerateSummaryOf = (degenerate: DegenerateRowCollector) =>
+  degenerate.count === 0
+    ? {}
+    : { degenerateFileRowsSkipped: degenerate.count, degenerateFileExamples: degenerate.sample };
 
 /**
  * SpatialComparisonEngine.ts
@@ -63,7 +70,7 @@ export class SpatialComparisonEngine {
     const dbSuidMap = this.indexDatabaseRecords(dbRecords, dbSuidCols, keyOptions);
 
     // 2. Index File records
-    const { binaryFileSuidMap, objectFileSuidMap, totalFileRecords, nullRecordItems } =
+    const { binaryFileSuidMap, objectFileSuidMap, totalFileRecords, nullRecordItems, degenerate } =
       this.indexFileRecords(
         fileDataset,
         targetFileSuidCols,
@@ -129,7 +136,8 @@ export class SpatialComparisonEngine {
       unmatchedFileItems.length +
       duplicateFileRowsSkipped +
       nullRecordItems.length +
-      duplicateSuidCount;
+      duplicateSuidCount +
+      degenerate.count;
 
     // 6. Generate SQL Patches (Ultra-fast preview mode: extracts first 25 updates and 25 inserts, < 1ms execution)
     const previewUpdateItems: DiscrepancyItem[] = [];
@@ -185,6 +193,7 @@ export class SpatialComparisonEngine {
       nullSuidCount: nullRecordItems.length,
       duplicateSuidCount,
       duplicateFileRowsSkipped,
+      ...degenerateSummaryOf(degenerate),
       pairingCappedGroups: pass1Result.pairingCappedGroups,
       unkeyedUpdatesSkippedCount,
       items: allDiscrepancyItems,
@@ -264,11 +273,13 @@ export class SpatialComparisonEngine {
     let objectFileSuidMap = new Map<string, Record<string, unknown>[]>();
     let totalFileRecords = 0;
     let nullRecordItems: DiscrepancyItem[] = [];
+    let degenerate: DegenerateRowCollector;
 
     if (dbfReader) {
-      const indexResult = this.indexer.indexBinaryDbf(dbfReader, targetFileSuidCols, keyOptions);
+      const indexResult = this.indexer.indexBinaryDbf(dbfReader, targetFileSuidCols, keyOptions, shpReader);
       binaryFileSuidMap = indexResult.suidMap;
       totalFileRecords = indexResult.totalRecords;
+      degenerate = indexResult.degenerate;
       nullRecordItems = this.nullHandler.processDbfNulls(
         indexResult.nullRecordIndices,
         dbfReader,
@@ -279,10 +290,11 @@ export class SpatialComparisonEngine {
       const indexResult = this.indexer.indexObjectDataset(fileDataset, targetFileSuidCols, keyOptions);
       objectFileSuidMap = indexResult.suidMap;
       totalFileRecords = indexResult.totalRecords;
+      degenerate = indexResult.degenerate;
       nullRecordItems = this.nullHandler.processObjectNulls(indexResult.nullRecords);
     }
 
-    return { binaryFileSuidMap, objectFileSuidMap, totalFileRecords, nullRecordItems };
+    return { binaryFileSuidMap, objectFileSuidMap, totalFileRecords, nullRecordItems, degenerate };
   }
 
   private buildDbfFieldDescriptors(

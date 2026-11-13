@@ -10,6 +10,21 @@
   filter: saturate(0.85);
 }
 
+.warningBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.warningExamples {
+  margin: 0;
+  padding-left: 18px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 0.75rem;
+}
+
 .warningBanner {
   grid-column: 1 / -1;
   display: flex;

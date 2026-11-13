@@ -18,6 +18,7 @@ import {
   type ComparisonSourceDescriptor,
   type ComparisonIconKind,
 } from "@/core/types/comparison";
+import { DegenerateRowsWarning } from "./DegenerateRowsWarning";
 import { SummaryKpiCard } from "./SummaryKpiCard";
 import styles from "./DiscrepanciesSummaryBar.module.css";
 
@@ -145,6 +146,9 @@ export const DiscrepanciesSummaryBar: React.FC<DiscrepanciesSummaryBarProps> = (
         isActive={activeFilter === DiscrepancyFilter.ONLY_IN_SHP}
         onClick={() => onSelectFilter(DiscrepancyFilter.ONLY_IN_SHP)}
       />
+      {summary.degenerateFileRowsSkipped ? (
+        <DegenerateRowsWarning skipped={summary.degenerateFileRowsSkipped} examples={summary.degenerateFileExamples ?? []} />
+      ) : null}
       {summary.pairingCappedGroups ? (
         <div className={styles.warningBanner}>
           <AlertTriangle size={16} />

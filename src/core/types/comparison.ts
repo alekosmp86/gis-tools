@@ -113,6 +113,12 @@ export interface DiscrepancyItem {
   pairing?: ItemPairing;
 }
 
+/** A file row left out of the comparison because its geometry collapsed to a point: its 1-based row number and key values. */
+export interface DegenerateFileExample {
+  rowNumber: number;
+  suid: string;
+}
+
 export interface ComparisonSummary {
   totalDbRecords: number;
   totalFileRecords: number;
@@ -125,6 +131,8 @@ export interface ComparisonSummary {
   nullSuidCount: number;
   duplicateSuidCount: number;
   duplicateFileRowsSkipped?: number;
+  degenerateFileRowsSkipped?: number;
+  degenerateFileExamples?: DegenerateFileExample[];
   pairingCappedGroups?: number;
   unkeyedUpdatesSkippedCount?: number;
   items: DiscrepancyItem[];
