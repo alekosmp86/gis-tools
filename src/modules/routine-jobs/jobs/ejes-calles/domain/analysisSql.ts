@@ -6,6 +6,7 @@ import {
   COVERAGE_TOLERANCE_M,
   DEPARTMENTS_COLUMN,
   GEOMETRY_EQUALITY_DECIMALS,
+  GEOMETRY_TOLERANCE_M,
   LOCALITIES_COLUMN,
   ROAD_SECTION_COLUMN,
   STAGING_COLUMN,
@@ -32,8 +33,9 @@ export const ANALYSIS_LIST_ALIAS = {
 export const comparableLineSql = (geometry: string): string =>
   `ST_Normalize(ST_SnapToGrid(ST_LineMerge(${geometry}), ${SNAP_GRID}))`;
 
+/** A coordinate that rounds to the other side of the snap grid is noise: the Hausdorff distance is read only for pairs the ordering test calls different. */
 export const geometriesDifferSql = (current: string, incoming: string): string =>
-  `NOT COALESCE(ST_OrderingEquals(${comparableLineSql(current)}, ${comparableLineSql(incoming)}), false)`;
+  `NOT CASE WHEN COALESCE(ST_OrderingEquals(${comparableLineSql(current)}, ${comparableLineSql(incoming)}), false) THEN true ELSE COALESCE(ST_HausdorffDistance(${current}, ${incoming}) < ${GEOMETRY_TOLERANCE_M}, false) END`;
 
 export const coverageThresholdSql = (covered: string, length: string): string =>
   `${covered} >= ${COVERAGE_RATIO} * ${length}`;

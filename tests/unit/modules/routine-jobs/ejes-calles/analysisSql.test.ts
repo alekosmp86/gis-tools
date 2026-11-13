@@ -6,7 +6,7 @@ import {
   coverageThresholdSql,
   geometriesDifferSql,
 } from "@/modules/routine-jobs/jobs/ejes-calles/domain/analysisSql";
-import { RURAL_LOCALITY_SUFFIX, TWIN_NEAR_MIN_LENGTH_M, TWIN_PADRON_DISTANCE_M } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
+import { GEOMETRY_TOLERANCE_M, RURAL_LOCALITY_SUFFIX, TWIN_NEAR_MIN_LENGTH_M, TWIN_PADRON_DISTANCE_M } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { ejesLayouts } from "./ejesFixtures";
 
@@ -53,9 +53,44 @@ describe("buildEjesAnalysisSql", () => {
     it("should flag GEOM using a 4 decimals snapped, merged and normalized comparison", () => {
       expect(comparableLineSql("g")).toBe("ST_Normalize(ST_SnapToGrid(ST_LineMerge(g), 0.0001))");
       expect(geometriesDifferSql("a", "b")).toBe(
-        "NOT COALESCE(ST_OrderingEquals(ST_Normalize(ST_SnapToGrid(ST_LineMerge(a), 0.0001)), ST_Normalize(ST_SnapToGrid(ST_LineMerge(b), 0.0001))), false)"
+        "NOT CASE WHEN COALESCE(ST_OrderingEquals(ST_Normalize(ST_SnapToGrid(ST_LineMerge(a), 0.0001)), ST_Normalize(ST_SnapToGrid(ST_LineMerge(b), 0.0001))), false) THEN true ELSE COALESCE(ST_HausdorffDistance(a, b) < 0.001, false) END"
       );
       expect(sql).toContain("ST_OrderingEquals");
+    });
+
+    it("should take the geometry tolerance from the constant, 0.001 m", () => {
+      expect(GEOMETRY_TOLERANCE_M).toBe(0.001);
+      expect(geometriesDifferSql("a", "b")).toContain(`ST_HausdorffDistance(a, b) < ${GEOMETRY_TOLERANCE_M}`);
+    });
+
+    it("should read the Hausdorff distance only in the ELSE branch, so only for pairs the ordering test already calls different", () => {
+      const text = geometriesDifferSql("a", "b");
+      const thenAt = text.indexOf(" THEN true ");
+      const elseAt = text.indexOf(" ELSE ");
+
+      expect(text.slice(0, thenAt)).not.toContain("ST_HausdorffDistance");
+      expect(text.slice(elseAt)).toContain("ST_HausdorffDistance");
+      expect(text.split("ST_HausdorffDistance")).toHaveLength(2);
+      expect(text.startsWith("NOT CASE WHEN COALESCE(ST_OrderingEquals(")).toBe(true);
+    });
+
+    it("should treat an ordering match as unchanged without reading the distance, and a NULL ordering or distance as different", () => {
+      const text = geometriesDifferSql("a", "b");
+
+      expect(text).toContain("THEN true ELSE");
+      expect(text).toContain("COALESCE(ST_OrderingEquals(");
+      expect(text).toMatch(/, false\) THEN true/);
+      expect(text).toContain("< 0.001, false) END");
+    });
+
+    it("should use the expression for geom_changed of a matched section in the classified CTE", () => {
+      const classified = sql.slice(sql.indexOf('"classified" AS ('));
+
+      expect(classified).toContain(`(m.cur_id IS NOT NULL AND ${geometriesDifferSql("m.cur_geometry", "m.geom")}) AS geom_changed`);
+    });
+
+    it("should keep the 4 decimals snap for the ordering test", () => {
+      expect(comparableLineSql("g")).toContain("ST_SnapToGrid(ST_LineMerge(g), 0.0001)");
     });
 
     it("should count both as attr and geom changed together", () => {

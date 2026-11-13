@@ -180,6 +180,7 @@ export const FUENTE_IDS: Readonly<Record<string, number>> = {
 };
 
 export const GEOMETRY_EQUALITY_DECIMALS = 4;
+export const GEOMETRY_TOLERANCE_M = 0.001;
 export const COVERAGE_RATIO = 0.95;
 export const COVERAGE_TOLERANCE_M = 1;
 export const RENUMBER_HAUSDORFF_M = 0.5;
