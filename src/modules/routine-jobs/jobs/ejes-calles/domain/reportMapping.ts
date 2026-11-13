@@ -9,6 +9,7 @@ import type {
   EjesMergeRow,
   EjesNewStreetRow,
   EjesRemovalRow,
+  EjesRenumberedRow,
   EjesSplitRow,
   EjesTwinRow,
   EjesStagingReport,
@@ -39,6 +40,16 @@ const mergeOf = (row: Row): EjesMergeRow => ({
   oldLength: nullableNumber(row.old_length),
   newLength: nullableNumber(row.new_length),
   outsideLength: nullableNumber(row.outside_length),
+});
+
+const renumberedOf = (row: Row): EjesRenumberedRow => ({
+  oldRef: String(row.old_ref),
+  newRef: String(row.new_ref),
+  idcalle: textOf(row.idcalle),
+  points: numberOf(row.points),
+  oldLength: nullableNumber(row.old_length),
+  newLength: nullableNumber(row.new_length),
+  hausdorff: nullableNumber(row.hausdorff),
 });
 
 const removalOf = (row: Row): EjesRemovalRow => ({
@@ -136,6 +147,9 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       twinsCrossDepartment: numberOf(row.twins_cross_department),
       twinsDrop: numberOf(row.twins_drop),
       twinsKeep: numberOf(row.twins_keep),
+      renumbered: numberOf(row.renumbered),
+      renumberedWithPoints: numberOf(row.renumbered_with_points),
+      renumberedPoints: numberOf(row.renumbered_points),
     },
     cloc: {
       withLocality: numberOf(row.with_locality),
@@ -148,5 +162,6 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
     newStreets: listOf(row[ANALYSIS_LIST_ALIAS.STREETS]).map(streetOf),
     attrChanges: listOf(row[ANALYSIS_LIST_ALIAS.ATTRS]).map(attrOf),
     twins: listOf(row[ANALYSIS_LIST_ALIAS.TWINS]).map(twinOf),
+    renumbered: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBERED]).map(renumberedOf),
   };
 }

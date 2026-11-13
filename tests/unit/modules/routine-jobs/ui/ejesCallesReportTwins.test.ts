@@ -25,6 +25,9 @@ const COUNTS = {
   twinsCrossDepartment: 7,
   twinsDrop: 1,
   twinsKeep: 1,
+  renumbered: 0,
+  renumberedWithPoints: 0,
+  renumberedPoints: 0,
 };
 
 const TWINS: EjesTwinRow[] = [
@@ -82,6 +85,7 @@ const resultOf = (twins: EjesTwinRow[], invalid: EjesInvalidGeometryRow[] = []):
     newStreets: [],
     attrChanges: [],
     twins,
+    renumbered: [],
     blockers: [],
     privilegeInfo: [],
     tables: {},

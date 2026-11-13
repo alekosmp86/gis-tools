@@ -70,6 +70,9 @@ export interface EjesCounts {
   twinsCrossDepartment: number;
   twinsDrop: number;
   twinsKeep: number;
+  renumbered: number;
+  renumberedWithPoints: number;
+  renumberedPoints: number;
 }
 
 export interface EjesClocReport {
@@ -140,6 +143,16 @@ export interface EjesTwinRow {
   dropLocalities: string[];
 }
 
+export interface EjesRenumberedRow {
+  oldRef: string;
+  newRef: string;
+  idcalle: string | null;
+  points: number;
+  oldLength: number | null;
+  newLength: number | null;
+  hausdorff: number | null;
+}
+
 export interface EjesAnalysis {
   counts: EjesCounts;
   cloc: EjesClocReport;
@@ -149,6 +162,7 @@ export interface EjesAnalysis {
   newStreets: EjesNewStreetRow[];
   attrChanges: EjesAttrRow[];
   twins: EjesTwinRow[];
+  renumbered: EjesRenumberedRow[];
 }
 
 export interface EjesResolvedLayouts {

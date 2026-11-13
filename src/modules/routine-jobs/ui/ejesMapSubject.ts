@@ -1,12 +1,13 @@
 import { getDiscrepancyLabel, MAP_SECTION_TYPE } from "@/core/constants/mapConstants";
 import { PADRON_TYPE, type PadronType } from "../jobs/ejes-calles/constants";
 import { EJES_MAP_ITEMS_LIMIT } from "../jobs/ejes-calles/domain/geometryMap";
-import type { EjesMapItem, EjesMergeRow, EjesSplitRow, EjesTwinRow } from "../jobs/ejes-calles/types";
+import type { EjesMapItem, EjesMergeRow, EjesRenumberedRow, EjesSplitRow, EjesTwinRow } from "../jobs/ejes-calles/types";
 import { OUTLINE_ROLE, type OutlineLabel, type OutlineMapSubject, type OutlineRole } from "./map/outlineTypes";
 
 export const EJES_SUBJECT_TITLE = {
   SPLIT: "División de tramo",
   MERGE: "Unión de tramos",
+  RENUMBERED: "Tramo renumerado",
   TWIN: "Tramo repetido por localidad",
 } as const;
 
@@ -46,10 +47,12 @@ export interface EjesTwinFacts {
   dropLocalities: string[];
 }
 
-/** One split, merge or twin row on the map. `items[i]` is the request item of `outlines[i]`; `twin` is set on a twin row only. */
+/** One split, merge, twin or renumbered row on the map. `items[i]` is the request item of `outlines[i]`; `twin` and `renumbered` are set on their own rows only. */
 export interface EjesMapSubject extends OutlineMapSubject<EjesMapItem, EjesMapOutline> {
   facts: EjesMapFacts;
   twin?: EjesTwinFacts;
+  /** The largest distance in metres between the old and the new shape. */
+  renumbered?: { hausdorff: number | null };
   /** How many outlines the row has; larger than `items.length` when the row was cut at the request limit. */
   total: number;
 }
@@ -88,7 +91,9 @@ const DRAW_ORDER: Record<EjesMapOutline["role"], number> = {
   [OUTLINE_ROLE.NEW]: 2,
 };
 
-function subjectOf(title: string, entries: OutlineEntry[], facts: EjesMapFacts, twin?: EjesTwinFacts): EjesMapSubject {
+type SubjectExtras = Pick<EjesMapSubject, "twin" | "renumbered">;
+
+function subjectOf(title: string, entries: OutlineEntry[], facts: EjesMapFacts, extras: SubjectExtras = {}): EjesMapSubject {
   const order = (entry: OutlineEntry): number => DRAW_ORDER[entry.outline.role];
   const shown = entries.slice(0, EJES_MAP_ITEMS_LIMIT).sort((first, second) => order(first) - order(second));
   return {
@@ -96,7 +101,7 @@ function subjectOf(title: string, entries: OutlineEntry[], facts: EjesMapFacts, 
     items: shown.map((entry) => entry.item),
     outlines: shown.map((entry) => entry.outline),
     facts,
-    ...(twin === undefined ? {} : { twin }),
+    ...extras,
     total: entries.length,
   };
 }
@@ -138,6 +143,15 @@ const copyEntry = (row: EjesTwinRow, locality: string): OutlineEntry => {
   };
 };
 
+/** A renumbered pair: the old section, then the new one on top. */
+export const subjectOfRenumbered = (row: EjesRenumberedRow): EjesMapSubject =>
+  subjectOf(
+    EJES_SUBJECT_TITLE.RENUMBERED,
+    [oldEntry(row.oldRef), newEntry(row.newRef)],
+    { idcalle: row.idcalle, points: row.points, coverage: null, oldLength: row.oldLength, newLength: row.newLength, outsideLength: null },
+    { renumbered: { hausdorff: row.hausdorff } }
+  );
+
 /** The dropped copies first and the kept ones after, so the kept ones are drawn on top; each group by locality name. */
 const copyEntriesOf = (row: EjesTwinRow): OutlineEntry[] => {
   const entries = [...row.localities].sort().map((locality) => copyEntry(row, locality));
@@ -161,7 +175,7 @@ export function subjectOfTwin(row: EjesTwinRow): EjesMapSubject {
     ruralLength: row.ruralLength,
     dropLocalities: row.dropLocalities,
   };
-  return subjectOf(EJES_SUBJECT_TITLE.TWIN, [...zones, ...copyEntriesOf(row)], facts, twin);
+  return subjectOf(EJES_SUBJECT_TITLE.TWIN, [...zones, ...copyEntriesOf(row)], facts, { twin });
 }
 
 /** The note of a row that was cut at the request limit; null when every outline is shown. */

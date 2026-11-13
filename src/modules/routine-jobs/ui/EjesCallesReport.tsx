@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import type { EjesInvalidGeometryRow, EjesMergeRow, EjesNewStreetRow, EjesRemovalRow, EjesResult, EjesSplitRow, EjesTwinRow } from "../jobs/ejes-calles/types";
+import type { EjesInvalidGeometryRow, EjesMergeRow, EjesNewStreetRow, EjesRemovalRow, EjesRenumberedRow, EjesResult, EjesSplitRow, EjesTwinRow } from "../jobs/ejes-calles/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import type { EjesGeometryMapBase } from "./clientTypes";
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
-import { subjectOfMerge, subjectOfSplit, subjectOfTwin } from "./ejesMapSubject";
+import { subjectOfMerge, subjectOfRenumbered, subjectOfSplit, subjectOfTwin } from "./ejesMapSubject";
 import { buildEjesReportView, coverageTextOf, metersTextOf, twinCaseTextOf, twinDecisionTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
 import { KpiCards, OutcomeBanners, RowsTable, SectionTitle, TimingsSection, type TableColumn } from "./ReportParts";
 import { textOrNoData } from "./reportFormat";
@@ -31,6 +31,15 @@ const MERGE_COLUMNS: TableColumn<EjesMergeRow>[] = [
   { header: "Largo anterior (m)", cell: (row) => metersTextOf(row.oldLength) },
   { header: "Largo nuevo (m)", cell: (row) => metersTextOf(row.newLength) },
   { header: "Nuevo fuera del anterior (m)", cell: (row) => metersTextOf(row.outsideLength) },
+];
+
+const RENUMBERED_COLUMNS: TableColumn<EjesRenumberedRow>[] = [
+  { header: "reftramo anterior", cell: (row) => row.oldRef },
+  { header: "reftramo nuevo", cell: (row) => row.newRef },
+  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
+  { header: "Puntos de acceso", cell: (row) => String(row.points) },
+  { header: "Largo anterior (m)", cell: (row) => metersTextOf(row.oldLength) },
+  { header: "Largo nuevo (m)", cell: (row) => metersTextOf(row.newLength) },
 ];
 
 const REMOVAL_COLUMNS: TableColumn<EjesRemovalRow>[] = [
@@ -106,6 +115,7 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
   const splitSubjects = result.splits.map(subjectOfSplit);
   const mergeSubjects = result.merges.map(subjectOfMerge);
   const twinSubjects = result.twins.map(subjectOfTwin);
+  const renumberedSubjects = result.renumbered.map(subjectOfRenumbered);
   return (
     <div className={sharedStyles.report}>
       <OutcomeBanners banners={view.banners} />
@@ -119,6 +129,16 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
       <TextList title="Privilegios de escritura (información del análisis)" items={view.privilegeInfo} />
       <section className={sharedStyles.section}>
         <SectionTitle>{LIST_SECTION_TITLE}</SectionTitle>
+        {result.renumbered.length > 0 && (
+          <CollapsibleSection summary={view.summaries.renumbered}>
+            <RowsTable
+              columns={RENUMBERED_COLUMNS}
+              rows={result.renumbered}
+              rowKey={(row) => row.oldRef}
+              onShowOnMap={(row) => setReview({ subjects: renumberedSubjects, index: result.renumbered.indexOf(row) })}
+            />
+          </CollapsibleSection>
+        )}
         {result.splits.length > 0 && (
           <CollapsibleSection summary={view.summaries.splits}>
             <RowsTable

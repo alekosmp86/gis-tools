@@ -37,8 +37,19 @@ const splitMergeFactsOf = (subject: EjesMapSubject): DetailRow[] => [
   ["Nuevo fuera del anterior (m)", metersTextOf(subject.facts.outsideLength)],
 ];
 
-const rowFactsOf = (subject: EjesMapSubject): DetailRow[] =>
-  subject.twin === undefined ? splitMergeFactsOf(subject) : twinFactsOf(subject.facts.idcalle, subject.twin);
+const renumberedFactsOf = (subject: EjesMapSubject, hausdorff: number | null): DetailRow[] => [
+  ["idcalle", textOrNoData(subject.facts.idcalle)],
+  ["Puntos de acceso", String(subject.facts.points)],
+  ["Largo anterior (m)", metersTextOf(subject.facts.oldLength)],
+  ["Largo nuevo (m)", metersTextOf(subject.facts.newLength)],
+  ["Distancia máxima entre trazados (m)", metersTextOf(hausdorff)],
+];
+
+function rowFactsOf(subject: EjesMapSubject): DetailRow[] {
+  if (subject.twin !== undefined) return twinFactsOf(subject.facts.idcalle, subject.twin);
+  if (subject.renumbered !== undefined) return renumberedFactsOf(subject, subject.renumbered.hausdorff);
+  return splitMergeFactsOf(subject);
+}
 
 const outlineFactsOf = (outline: EjesMapOutline): DetailRow[] => [
   ["reftramo", outline.ref],

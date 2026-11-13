@@ -14,6 +14,7 @@ import type { EjesLayouts } from "../types";
 import { col, countOf, listOf, table, trimmed } from "./layoutSql";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
 import { INTEGER_PATTERN, validGeometrySql } from "./stagingSql";
+import { renumberCountColumns, renumberCtes, renumberListColumn } from "./renumberSql";
 import { twinCountColumns, twinCtes, twinGroupCtes, twinListColumn } from "./twinSql";
 
 const SNAP_GRID = 10 ** -GEOMETRY_EQUALITY_DECIMALS;
@@ -25,6 +26,7 @@ export const ANALYSIS_LIST_ALIAS = {
   STREETS: "streets_json",
   ATTRS: "attrs_json",
   TWINS: "twins_json",
+  RENUMBERED: "renumbered_json",
 } as const;
 
 export const comparableLineSql = (geometry: string): string =>
@@ -120,14 +122,19 @@ function classifiedCtes(): string[] {
   ];
 }
 
-function splitCtes(): string[] {
-  const tolerance = COVERAGE_TOLERANCE_M;
+function removalCtes(): string[] {
   return [
     cte(
       "removed",
       `SELECT c.id, c.ref, c.idcalle, c.geometry, ST_Length(c.geometry) AS len FROM ${q("cur")} AS c WHERE NOT EXISTS (SELECT 1 FROM ${q("stg_keys")} AS k WHERE k.ref = c.ref)`
     ),
     cte("new_sections", `SELECT ref, idcalle, geom FROM ${q("classified")} WHERE is_new`),
+  ];
+}
+
+function splitCtes(): string[] {
+  const tolerance = COVERAGE_TOLERANCE_M;
+  return [
     cte(
       "removed_cover",
       [
@@ -136,7 +143,7 @@ function splitCtes(): string[] {
         "array_agg(n.ref ORDER BY n.ref) AS new_refs,",
         `ST_Length(ST_Union(n.geom)) AS new_len,`,
         `ST_Length(ST_Difference(ST_Union(n.geom), ST_Buffer(r.geometry, ${tolerance}))) AS outside_len`,
-        `FROM ${q("removed")} AS r JOIN ${q("new_sections")} AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
+        `FROM ${q("removed_rest")} AS r JOIN ${q("new_rest")} AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
         "WHERE r.len > 0 GROUP BY r.id, r.ref, r.idcalle, r.len, r.geometry",
       ].join(" ")
     ),
@@ -152,7 +159,7 @@ function mergeCtes(): string[] {
       [
         "SELECT n.ref AS new_ref, n.idcalle AS idcalle, r.id, r.ref AS old_ref, r.len, n.geom AS new_geom, r.geometry AS old_geom,",
         `ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, ${tolerance}))) AS covered`,
-        `FROM ${q("new_sections")} AS n JOIN ${q("removed")} AS r ON r.idcalle = n.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
+        `FROM ${q("new_rest")} AS n JOIN ${q("removed_rest")} AS r ON r.idcalle = n.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
         `WHERE r.len > 0 AND r.id NOT IN (SELECT id FROM ${q("splits")})`,
       ].join(" ")
     ),
@@ -177,7 +184,7 @@ function remainderCtes(): string[] {
   return [
     cte(
       "plain",
-      `SELECT r.id, r.ref, r.idcalle FROM ${q("removed")} AS r WHERE r.id NOT IN (SELECT id FROM ${q("splits")}) AND r.id NOT IN (SELECT id FROM ${q("merged_ids")})`
+      `SELECT r.id, r.ref, r.idcalle FROM ${q("removed_rest")} AS r WHERE r.id NOT IN (SELECT id FROM ${q("splits")}) AND r.id NOT IN (SELECT id FROM ${q("merged_ids")})`
     ),
     cte(
       "new_streets",
@@ -226,6 +233,7 @@ function listColumns(): string[] {
     listOf(ANALYSIS_LIST_ALIAS.STREETS, "street_list", streetSelect),
     listOf(ANALYSIS_LIST_ALIAS.ATTRS, "attr_list", attrSelect),
     twinListColumn(ANALYSIS_LIST_ALIAS.TWINS),
+    renumberListColumn(ANALYSIS_LIST_ALIAS.RENUMBERED),
   ];
 }
 
@@ -246,6 +254,7 @@ function countColumns(): string[] {
     `${countOf("located", "cloc IS NULL AND dept_code IS NOT NULL")} AS "only_department"`,
     `${countOf("located", "cloc IS NULL AND dept_code IS NULL")} AS "without_code"`,
     ...twinCountColumns(),
+    ...renumberCountColumns(),
   ];
 }
 
@@ -256,6 +265,8 @@ export function buildEjesAnalysisSql(layouts: EjesLayouts): string {
     ...stagingCtes(layouts),
     ...currentCtes(layouts),
     ...classifiedCtes(),
+    ...removalCtes(),
+    ...renumberCtes(),
     ...splitCtes(),
     ...mergeCtes(),
     ...remainderCtes(),

@@ -30,6 +30,9 @@ const COUNTS = {
   twinsCrossDepartment: 5,
   twinsDrop: 2,
   twinsKeep: 4,
+  renumbered: 2,
+  renumberedWithPoints: 1,
+  renumberedPoints: 5,
 };
 
 const TWIN: EjesTwinRow = {
@@ -76,6 +79,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     plainRemovals: [],
     newStreets: [],
     twins: [],
+    renumbered: [],
     attrChanges: [
       {
         ref: "1",
@@ -115,7 +119,7 @@ describe("buildEjesReportView (EJ-12)", () => {
     expect(kpis["Tramos con más de una fila"]).toBe(1);
     expect(kpis["Filas con tipo de vía desconocido"]).toBe(3);
     expect(kpis["Filas con caracteres dañados (�)"]).toBe(4);
-    expect(kpis["Nuevos"]).toBe(5);
+    expect(kpis["Nuevos"]).toBe(3);
     expect(kpis["Sin cambios"]).toBe(80);
     expect(kpis["Divididos en varios nuevos"]).toBe(1);
     expect(kpis["Unidos en uno nuevo"]).toBe(1);
@@ -185,7 +189,7 @@ describe("buildEjesReportView (EJ-12)", () => {
     });
 
     it("should show zeros in the KPI group when there are no twin groups", () => {
-      const zero = { ...COUNTS, twins: 0, twinsUrban: 0, twinsRural: 0, twinsBoth: 0, twinsNeither: 0, twinsCrossDepartment: 0, twinsDrop: 0, twinsKeep: 0 };
+      const zero = { ...COUNTS, twins: 0, twinsUrban: 0, twinsRural: 0, twinsBoth: 0, twinsNeither: 0, twinsCrossDepartment: 0, twinsDrop: 0, twinsKeep: 0, renumbered: 0, renumberedWithPoints: 0, renumberedPoints: 0 };
       const group = buildEjesReportView(resultOf({ counts: zero })).kpiGroups.find(
         (candidate) => candidate.title === "Tramos repetidos por localidad"
       );
@@ -208,6 +212,47 @@ describe("buildEjesReportView (EJ-12)", () => {
       [TWIN_CLASS.NEITHER, "Lejos de padrones: sin regla"],
     ])("should describe the class %s as %s", (twinClass, text) => {
       expect(twinCaseTextOf(twinClass)).toBe(text);
+    });
+  });
+
+  describe("renumbered sections (ER-4)", () => {
+    const row = { oldRef: "10", newRef: "11", idcalle: "5", points: 3, oldLength: 100, newLength: 100.2, hausdorff: 0.2 };
+    const kpisOf = (result: EjesResult): Record<string, number> =>
+      Object.fromEntries(buildEjesReportView(result).kpiGroups.flatMap((group) => group.kpis).map((kpi) => [kpi.label, kpi.value]));
+
+    it("should show Nuevos without the renumbered news: newSections minus renumbered", () => {
+      expect(kpisOf(resultOf({ counts: { ...COUNTS, newSections: 10, renumbered: 4 } }))["Nuevos"]).toBe(6);
+      expect(kpisOf(resultOf({ counts: { ...COUNTS, newSections: 10, renumbered: 0 } }))["Nuevos"]).toBe(10);
+      expect(kpisOf(resultOf({ counts: { ...COUNTS, newSections: 4, renumbered: 4 } }))["Nuevos"]).toBe(0);
+    });
+
+    it("should show the three renumbered KPIs with their values", () => {
+      const kpis = kpisOf(resultOf());
+
+      expect(kpis["Renumerados (mismo trazado, otro reftramo)"]).toBe(2);
+      expect(kpis["Renumerados con puntos de acceso"]).toBe(1);
+      expect(kpis["Puntos de acceso que seguirían al renumerar"]).toBe(5);
+    });
+
+    it("should put the renumbered KPI in the group of current sections that no longer come in the file", () => {
+      const group = buildEjesReportView(resultOf()).kpiGroups.find((candidate) =>
+        candidate.kpis.some((kpi) => kpi.label === "Renumerados (mismo trazado, otro reftramo)")
+      );
+
+      expect(group?.title).toBe("Tramos actuales que ya no vienen en el archivo");
+    });
+
+    it("should leave the raw removed count as it is", () => {
+      expect(kpisOf(resultOf({ counts: { ...COUNTS, removed: 4, renumbered: 2 } }))["Sin reemplazo, se quitarían"]).toBe(1);
+    });
+
+    it("should summarize the list with the shown rows and the total, noting a cut list", () => {
+      expect(buildEjesReportView(resultOf({ renumbered: [row], counts: { ...COUNTS, renumbered: 1 } })).summaries.renumbered).toBe(
+        "Tramos renumerados (primero los que tienen puntos de acceso) (1)"
+      );
+      expect(buildEjesReportView(resultOf({ renumbered: [row], counts: { ...COUNTS, renumbered: 4037 } })).summaries.renumbered).toBe(
+        "Tramos renumerados (primero los que tienen puntos de acceso) (primeras 1 de 4037)"
+      );
     });
   });
 

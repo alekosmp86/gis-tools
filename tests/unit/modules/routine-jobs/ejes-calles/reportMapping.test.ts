@@ -95,6 +95,9 @@ describe("toEjesAnalysis", () => {
       twins_cross_department: 5,
       twins_drop: "2",
       twins_keep: 4,
+      renumbered: "3",
+      renumbered_with_points: 2,
+      renumbered_points: "9",
       with_locality: 2,
       only_department: 1,
       without_code: 0,
@@ -146,6 +149,9 @@ describe("toEjesAnalysis", () => {
       twinsCrossDepartment: 5,
       twinsDrop: 2,
       twinsKeep: 4,
+      renumbered: 3,
+      renumberedWithPoints: 2,
+      renumberedPoints: 9,
     });
     expect(analysis.cloc).toEqual({ withLocality: 2, onlyDepartment: 1, withoutCode: 0 });
     expect(analysis.splits).toEqual([{ oldRef: "10", idcalle: "5", newRefs: ["11", "12"], points: 3, coverage: 0.98, oldLength: 100.5, newLength: 130, outsideLength: 29.5 }]);
@@ -189,6 +195,10 @@ describe("toEjesAnalysis", () => {
     expect(analysis.counts.twinsCrossDepartment).toBe(0);
     expect(analysis.counts.twinsDrop).toBe(0);
     expect(analysis.counts.twinsKeep).toBe(0);
+    expect(analysis.counts.renumbered).toBe(0);
+    expect(analysis.counts.renumberedWithPoints).toBe(0);
+    expect(analysis.counts.renumberedPoints).toBe(0);
+    expect(analysis.renumbered).toEqual([]);
   });
 
   it("should ignore non-array new_refs and old_refs", () => {
@@ -199,6 +209,51 @@ describe("toEjesAnalysis", () => {
 
     expect(analysis.splits[0].newRefs).toEqual([]);
     expect(analysis.merges[0].oldRefs).toEqual([]);
+  });
+});
+
+describe("toEjesAnalysis renumbered (ER-3)", () => {
+  const rowOf = {
+    old_ref: 1001634,
+    new_ref: "1035386",
+    idcalle: "72006",
+    points: "4",
+    old_length: "100.5",
+    new_length: 100.6,
+    hausdorff: "0.2",
+  };
+
+  it("should map a renumbered row with both references as text and the numbers as numbers", () => {
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.RENUMBERED]: [rowOf] }).renumbered).toEqual([
+      { oldRef: "1001634", newRef: "1035386", idcalle: "72006", points: 4, oldLength: 100.5, newLength: 100.6, hausdorff: 0.2 },
+    ]);
+  });
+
+  it("should map null idcalle and null lengths or distance to null, and missing points to 0", () => {
+    const [entry] = toEjesAnalysis({
+      [ANALYSIS_LIST_ALIAS.RENUMBERED]: [{ old_ref: "1", new_ref: "2", idcalle: null, old_length: null, new_length: null, hausdorff: null }],
+    }).renumbered;
+
+    expect(entry).toEqual({ oldRef: "1", newRef: "2", idcalle: null, points: 0, oldLength: null, newLength: null, hausdorff: null });
+  });
+
+  it("should keep the order of the rows as the SQL gave them (points descending, then old reftramo)", () => {
+    const rows = [
+      { ...rowOf, old_ref: "5", points: 9 },
+      { ...rowOf, old_ref: "2", points: 3 },
+      { ...rowOf, old_ref: "7", points: 0 },
+    ];
+
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.RENUMBERED]: rows }).renumbered.map((entry) => entry.oldRef)).toEqual(["5", "2", "7"]);
+  });
+
+  it("should return no rows when the list is missing or not an array", () => {
+    expect(toEjesAnalysis({}).renumbered).toEqual([]);
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.RENUMBERED]: "oops" }).renumbered).toEqual([]);
+  });
+
+  it("should use its own list alias", () => {
+    expect(ANALYSIS_LIST_ALIAS.RENUMBERED).toBe("renumbered_json");
   });
 });
 

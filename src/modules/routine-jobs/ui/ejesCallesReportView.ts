@@ -17,6 +17,7 @@ export interface EjesListSummaries {
   attrChanges: string;
   twins: string;
   invalidGeometries: string;
+  renumbered: string;
 }
 
 export interface EjesAttrRowView extends EjesAttrRow {
@@ -93,7 +94,7 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
     {
       title: "Tramos del archivo frente a los actuales",
       kpis: [
-        kpi("Nuevos", counts.newSections),
+        kpi("Nuevos", counts.newSections - counts.renumbered),
         kpi("Sin cambios", counts.unchanged),
         kpi("Cambió nombre, calle, tipo o fuente", counts.attr),
         kpi("Cambió el trazado", counts.geom),
@@ -104,6 +105,9 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
       title: "Tramos actuales que ya no vienen en el archivo",
       kpis: [
         kpi("Total", counts.removed),
+        kpi("Renumerados (mismo trazado, otro reftramo)", counts.renumbered),
+        kpi("Renumerados con puntos de acceso", counts.renumberedWithPoints),
+        kpi("Puntos de acceso que seguirían al renumerar", counts.renumberedPoints),
         kpi("Divididos en varios nuevos", counts.splits),
         kpi("Unidos en uno nuevo", counts.merges),
         kpi("Sin reemplazo, se quitarían", counts.plainRemovals - counts.plainHeld),
@@ -142,6 +146,7 @@ const summariesOf = (result: EjesResult): EjesListSummaries => ({
   newStreets: listSummaryOf("Calles nuevas", result.newStreets.length, result.counts.newStreets),
   attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
   invalidGeometries: listSummaryOf("Tramos con geometría inválida (se omiten)", result.staging.invalidGeometries.length, result.staging.invalidGeometryRows),
+  renumbered: listSummaryOf("Tramos renumerados (primero los que tienen puntos de acceso)", result.renumbered.length, result.counts.renumbered),
   twins: listSummaryOf("Tramos repetidos por localidad (primero los que se deciden en el mapa)", result.twins.length, result.counts.twins),
 });
 
