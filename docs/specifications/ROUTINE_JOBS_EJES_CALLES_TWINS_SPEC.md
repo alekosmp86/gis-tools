@@ -124,17 +124,27 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
   and the details panel identify the selected one. The maps of splits, merges and padrones keep their labels unchanged.
 
 ### Invalid geometries in the file (skip and report)
-- **ET-18** Staging rows whose geometry is invalid (`NOT ST_IsValid`) are skipped by the whole analysis: the section classification
+- **ET-18** Staging rows whose geometry is invalid (`NOT ST_IsValid`) or collapsed (`ST_Length` < `GEOMETRY_TOLERANCE_M`, 0.001) are skipped by the whole analysis: the section classification
   (new, unchanged, changed, removed, split, merge), the new streets, the locality computation and the twin analysis never see them,
-  so a degenerate line (on dev 795 rows, 615 distinct `reftramo`, all of zero length, e.g. a two-point line with identical points)
+  so a degenerate line (on dev 795 invalid rows plus 878 valid-but-collapsed rows, 676 distinct `reftramo` among the collapsed, e.g. reftramo 1001006 with two points ~1e-9 m apart)
   is never classified, dropped, kept or counted as a new section. The `reftramo` still counts as present in the file: a current
   section whose only staging rows are invalid is left as it is and is NOT reported as removed (on dev 557 of the 615 invalid
   `reftramo` exist in `carto` with a valid geometry; reporting them as removed would flag 557 sections for a file error). They are reported in the file-problems part of the report: a KPI
-  "Filas con geometría inválida (se omiten)" (rows) and "Tramos con geometría inválida" (distinct `reftramo`), and a collapsible list
+  "Filas con geometría inválida o colapsada (se omiten)" (rows) and "Tramos con geometría inválida o colapsada" (distinct `reftramo`), and a collapsible list
   of up to `DETAIL_LIST_LIMIT` rows with `reftramo`, `idcalle`, locality and department. The raw file counts (`rows`, distinct refs,
-  repeated groups) are unchanged. It is a warning, not a blocker. The criterion is validity, never a length threshold: short but
-  valid sections are kept. The root cause (the csv-db tool writing these geometries) is a separate fix outside this job; this step
+  repeated groups) are unchanged. It is a warning, not a blocker. The criterion is validity or collapse (length under the 1 mm geometry tolerance, one shared definition `validGeometrySql`); real short
+  sections of 1 mm or more are kept. The root cause (the csv-db tool writing these geometries) is a separate fix outside this job; this step
   is the safety net that stays after it.
+
+### Labels of the "far from padrones" case
+- **ET-19** For class NEITHER the "Caso" and "Qué pasa" texts say which rule decided, with no change to what is kept or dropped (the rule
+  of ET-10 stays: a copy whose name matches ANY locality polygon the section intersects stays; there is no dominant-locality rule).
+  Each twin row carries `insideLocalities` (the upper-cased names of the polygons the section intersects, empty unless class NEITHER).
+  (a) No copy dropped and two or more copies match a polygon: case "Cruza varias localidades", what happens "Cruza varias localidades: se mantienen todas".
+  (b) Copies dropped by polygon (`insideLocalities` not empty): case "Lejos de padrones: por polígono de localidad", what happens
+  "Dentro de <insideLocalities>: se quita <dropped>" ("se quitan" for several).
+  (c) No polygon found and a copy dropped: the rural rule, case "Lejos de padrones: regla rural", what happens "Se quitaría: <dropped>".
+  "Sin regla" ("Lejos de padrones: sin regla" / "Sin regla: se mantienen todas") remains only when no rule applies.
 
 ## Out of scope
 Applying anything (the real load: deleting a copy, how several copies are stored in the final table), a rule for sections near rural
