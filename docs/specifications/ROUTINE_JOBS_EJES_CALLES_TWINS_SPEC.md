@@ -27,9 +27,10 @@ The rural copy is picked by the locality name, not by hand: the 19 rural localit
 `MALDONADO RURAL`, ...), and no other locality name contains RURAL. "Next to" is measured to the padron polygon, border included,
 not to its centre.
 
-Streets run between lots, so a section almost never intersects a padron: "next to" means within a distance (15 m, from the section line, which is the
+Streets run between lots, so a section almost never intersects a padron: "next to" means within a distance (25 m, from the section line, which is the
 street's centreline: the user first gave 7–12 m, but on wide avenues the lots start farther than that from the line, so the range was
-extended to 15 m).
+extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/16 sample, sections near no padron are 233 at 15 m,
+131 at 20 m, 70 at 25 m and 42 at 30 m).
 
 ## Criteria
 
@@ -51,7 +52,7 @@ extended to 15 m).
 - **ET-2** A *twin group* is the set of valid staging rows (non-empty geometry, integer `reftramo`) that share a trimmed `reftramo`,
   have exactly one non-null department and at least two distinct non-null localities. Groups with more than one department are not
   twin groups, whatever their locality count; their number is reported as one count ("sin regla").
-- **ET-3** For each twin group, `urbanLength` is the length of the section within `TWIN_PADRON_DISTANCE_M` (15) metres of any padron
+- **ET-3** For each twin group, `urbanLength` is the length of the section within `TWIN_PADRON_DISTANCE_M` (25) metres of any padron
   whose `type_padron` is `URBANO`; `ruralLength` likewise for `RURAL`. A section is *near* a type when that length is at least
   `TWIN_NEAR_MIN_LENGTH_M` (1) metre, whatever the length of the section: a long section that only touches one padron of a type
   is still near that type, because an access point can be defined in that padron. (A proportion of the section length was tried and

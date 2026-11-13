@@ -227,7 +227,7 @@ describe("buildEjesAnalysisSql", () => {
 
   describe("ET-3 near lengths and class", () => {
     it("should take the distance and the minimum near length from the constants", () => {
-      expect(TWIN_PADRON_DISTANCE_M).toBe(15);
+      expect(TWIN_PADRON_DISTANCE_M).toBe(25);
       expect(TWIN_NEAR_MIN_LENGTH_M).toBe(1);
       expect(sql).toContain(`ST_DWithin(p."geometry", g.geom, ${TWIN_PADRON_DISTANCE_M})`);
       expect(sql).toContain(`ST_Buffer(p."geometry", ${TWIN_PADRON_DISTANCE_M})`);

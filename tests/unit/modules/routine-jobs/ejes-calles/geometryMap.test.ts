@@ -119,7 +119,7 @@ describe("ejes geometry map", () => {
     });
 
     it("should keep the padrones within TWIN_PADRON_DISTANCE_M of the section with ST_DWithin on the padron geometry", () => {
-      expect(TWIN_PADRON_DISTANCE_M).toBe(15);
+      expect(TWIN_PADRON_DISTANCE_M).toBe(25);
       expect(sql).toContain('ST_DWithin(p."geometry", (');
       expect(sql).toContain(`), ${TWIN_PADRON_DISTANCE_M})`);
     });

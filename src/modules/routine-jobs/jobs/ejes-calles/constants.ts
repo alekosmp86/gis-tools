@@ -106,7 +106,7 @@ export const TWIN_CLASS = {
 
 export type TwinClass = (typeof TWIN_CLASS)[keyof typeof TWIN_CLASS];
 
-export const TWIN_PADRON_DISTANCE_M = 15;
+export const TWIN_PADRON_DISTANCE_M = 25;
 export const TWIN_NEAR_MIN_LENGTH_M = 1;
 export const RURAL_LOCALITY_SUFFIX = " RURAL";
 
