@@ -1,93 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
-import type { EjesInvalidGeometryRow, EjesMergeRow, EjesNewStreetRow, EjesRemovalRow, EjesRenumberedRow, EjesResult, EjesSplitRow, EjesTwinRow } from "../jobs/ejes-calles/types";
+import type { EjesResult } from "../jobs/ejes-calles/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import type { EjesGeometryMapBase } from "./clientTypes";
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
 import { subjectOfMerge, subjectOfRenumbered, subjectOfSplit, subjectOfTwin } from "./ejesMapSubject";
-import { buildEjesReportView, coverageTextOf, metersTextOf, twinDecisionTextOf, twinRowCaseTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
-import { KpiCards, OutcomeBanners, RowsTable, SectionTitle, TimingsSection, type TableColumn } from "./ReportParts";
-import { textOrNoData } from "./reportFormat";
+import { ejesListAnchorOf, type EjesListKey } from "./ejesCallesListMeta";
+import { buildEjesReportView } from "./ejesCallesReportView";
+import { EjesReportLists } from "./EjesReportLists";
+import { EjesSummaryStrip } from "./EjesSummaryStrip";
+import { KpiCards, OutcomeBanners, SectionTitle, TimingsSection } from "./ReportParts";
 import sharedStyles from "./CargarPadronesReport.module.css";
 
-const SPLIT_COLUMNS: TableColumn<EjesSplitRow>[] = [
-  { header: "reftramo quitado", cell: (row) => row.oldRef },
-  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
-  { header: "reftramo nuevos", cell: (row) => row.newRefs.join(", ") },
-  { header: "Puntos de acceso", cell: (row) => String(row.points) },
-  { header: "Cobertura", cell: (row) => coverageTextOf(row.coverage) },
-  { header: "Largo anterior (m)", cell: (row) => metersTextOf(row.oldLength) },
-  { header: "Largo nuevo (m)", cell: (row) => metersTextOf(row.newLength) },
-  { header: "Nuevo fuera del anterior (m)", cell: (row) => metersTextOf(row.outsideLength) },
-];
-
-const MERGE_COLUMNS: TableColumn<EjesMergeRow>[] = [
-  { header: "reftramo nuevo", cell: (row) => row.newRef },
-  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
-  { header: "reftramo quitados", cell: (row) => row.oldRefs.join(", ") },
-  { header: "Puntos de acceso", cell: (row) => String(row.points) },
-  { header: "Cobertura", cell: (row) => coverageTextOf(row.coverage) },
-  { header: "Largo anterior (m)", cell: (row) => metersTextOf(row.oldLength) },
-  { header: "Largo nuevo (m)", cell: (row) => metersTextOf(row.newLength) },
-  { header: "Nuevo fuera del anterior (m)", cell: (row) => metersTextOf(row.outsideLength) },
-];
-
-const RENUMBERED_COLUMNS: TableColumn<EjesRenumberedRow>[] = [
-  { header: "reftramo anterior", cell: (row) => row.oldRef },
-  { header: "reftramo nuevo", cell: (row) => row.newRef },
-  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
-  { header: "Puntos de acceso", cell: (row) => String(row.points) },
-  { header: "Largo anterior (m)", cell: (row) => metersTextOf(row.oldLength) },
-  { header: "Largo nuevo (m)", cell: (row) => metersTextOf(row.newLength) },
-];
-
-const REMOVAL_COLUMNS: TableColumn<EjesRemovalRow>[] = [
-  { header: "reftramo", cell: (row) => row.ref },
-  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
-  { header: "Puntos de acceso", cell: (row) => String(row.points) },
-  { header: "Qué pasa", cell: (row) => (row.points > 0 ? "No se quita: tiene puntos de acceso" : "Se quita") },
-];
-
-const STREET_COLUMNS: TableColumn<EjesNewStreetRow>[] = [
-  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
-  { header: "Nombre", cell: (row) => textOrNoData(row.name) },
-  { header: "Nombre corto", cell: (row) => textOrNoData(row.shortName) },
-  { header: "Departamento", cell: (row) => textOrNoData(row.departments) },
-  { header: "Localidad", cell: (row) => textOrNoData(row.localities) },
-  { header: "Tipo de vía", cell: (row) => textOrNoData(row.tipos) },
-  { header: "Tramos nuevos", cell: (row) => String(row.sections) },
-];
-
-const INVALID_GEOMETRY_COLUMNS: TableColumn<EjesInvalidGeometryRow>[] = [
-  { header: "reftramo", cell: (row) => row.ref },
-  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
-  { header: "Localidad", cell: (row) => textOrNoData(row.localidad) },
-  { header: "Departamento", cell: (row) => textOrNoData(row.departamento) },
-];
-
-const ATTR_COLUMNS: TableColumn<EjesAttrRowView>[] = [
-  { header: "reftramo", cell: (row) => row.ref },
-  { header: "Cambia", cell: (row) => row.changes },
-  { header: "Nombre actual", cell: (row) => textOrNoData(row.currentName) },
-  { header: "Nombre nuevo", cell: (row) => textOrNoData(row.name) },
-  { header: "idcalle actual", cell: (row) => textOrNoData(row.currentIdcalle) },
-  { header: "idcalle nuevo", cell: (row) => textOrNoData(row.idcalle) },
-];
-
-const TWIN_COLUMNS: TableColumn<EjesTwinRow>[] = [
-  { header: "reftramo", cell: (row) => row.ref },
-  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
-  { header: "Departamento", cell: (row) => textOrNoData(row.department) },
-  { header: "Localidades", cell: (row) => row.localities.join(", ") },
-  { header: "Caso", cell: twinRowCaseTextOf },
-  { header: "Largo (m)", cell: (row) => metersTextOf(row.length) },
-  { header: "Cerca de urbanos (m)", cell: (row) => metersTextOf(row.urbanLength) },
-  { header: "Cerca de rurales (m)", cell: (row) => metersTextOf(row.ruralLength) },
-  { header: "Qué pasa", cell: twinDecisionTextOf },
-];
-
-const LIST_SECTION_TITLE = "Listas";
+const ALL_INDICATORS_TITLE = "Todos los indicadores";
 
 function TextList({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
@@ -103,6 +29,13 @@ function TextList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
+function withListState(current: ReadonlySet<EjesListKey>, list: EjesListKey, open: boolean): Set<EjesListKey> {
+  const next = new Set(current);
+  if (open) next.add(list);
+  else next.delete(list);
+  return next;
+}
+
 export interface EjesCallesReportProps {
   result: EjesResult;
   /** The connection of the wizard for the map; null when the wizard holds no password. */
@@ -112,90 +45,44 @@ export interface EjesCallesReportProps {
 export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapBase }) => {
   const view = buildEjesReportView(result);
   const [review, setReview] = useState<EjesMapReview | null>(null);
-  const splitSubjects = result.splits.map(subjectOfSplit);
-  const mergeSubjects = result.merges.map(subjectOfMerge);
-  const twinSubjects = result.twins.map(subjectOfTwin);
-  const renumberedSubjects = result.renumbered.map(subjectOfRenumbered);
+  const [openLists, setOpenLists] = useState<ReadonlySet<EjesListKey>>(
+    () => new Set(view.defaultOpenList === null ? [] : [view.defaultOpenList])
+  );
+  const subjects = {
+    splits: result.splits.map(subjectOfSplit),
+    merges: result.merges.map(subjectOfMerge),
+    twins: result.twins.map(subjectOfTwin),
+    renumbered: result.renumbered.map(subjectOfRenumbered),
+  };
+  const selectList = (list: EjesListKey) => {
+    const opening = !openLists.has(list);
+    setOpenLists(withListState(openLists, list, opening));
+    if (opening) document.getElementById(ejesListAnchorOf(list))?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   return (
     <div className={sharedStyles.report}>
       <OutcomeBanners banners={view.banners} />
-      {view.kpiGroups.map((group) => (
-        <section key={group.title} className={sharedStyles.section}>
-          <SectionTitle>{group.title}</SectionTitle>
-          {group.kpis.length > 0 ? <KpiCards kpis={group.kpis} /> : <p>{group.emptyText}</p>}
-        </section>
-      ))}
+      <EjesSummaryStrip items={view.strip} openLists={openLists} onSelect={selectList} />
       <TextList title="Bloqueos para la carga" items={view.blockers} />
       <TextList title="Privilegios de escritura (información del análisis)" items={view.privilegeInfo} />
-      <section className={sharedStyles.section}>
-        <SectionTitle>{LIST_SECTION_TITLE}</SectionTitle>
-        {result.renumbered.length > 0 && (
-          <CollapsibleSection summary={view.summaries.renumbered}>
-            <RowsTable
-              columns={RENUMBERED_COLUMNS}
-              rows={result.renumbered}
-              rowKey={(row) => row.oldRef}
-              onShowOnMap={(row) => setReview({ subjects: renumberedSubjects, index: result.renumbered.indexOf(row) })}
-            />
-          </CollapsibleSection>
-        )}
-        {result.splits.length > 0 && (
-          <CollapsibleSection summary={view.summaries.splits}>
-            <RowsTable
-              columns={SPLIT_COLUMNS}
-              rows={result.splits}
-              rowKey={(row) => row.oldRef}
-              onShowOnMap={(row) => setReview({ subjects: splitSubjects, index: result.splits.indexOf(row) })}
-            />
-          </CollapsibleSection>
-        )}
-        {result.merges.length > 0 && (
-          <CollapsibleSection summary={view.summaries.merges}>
-            <RowsTable
-              columns={MERGE_COLUMNS}
-              rows={result.merges}
-              rowKey={(row) => row.newRef}
-              onShowOnMap={(row) => setReview({ subjects: mergeSubjects, index: result.merges.indexOf(row) })}
-            />
-          </CollapsibleSection>
-        )}
-        {result.twins.length > 0 && (
-          <CollapsibleSection summary={view.summaries.twins}>
-            <RowsTable
-              columns={TWIN_COLUMNS}
-              rows={result.twins}
-              rowKey={(row) => row.ref}
-              onShowOnMap={(row) => setReview({ subjects: twinSubjects, index: result.twins.indexOf(row) })}
-            />
-          </CollapsibleSection>
-        )}
-        {result.plainRemovals.length > 0 && (
-          <CollapsibleSection summary={view.summaries.plainRemovals}>
-            <RowsTable columns={REMOVAL_COLUMNS} rows={result.plainRemovals} rowKey={(row) => row.ref} />
-          </CollapsibleSection>
-        )}
-        {result.newStreets.length > 0 && (
-          <CollapsibleSection summary={view.summaries.newStreets}>
-            <RowsTable columns={STREET_COLUMNS} rows={result.newStreets} rowKey={(row) => `${row.idcalle}|${row.name}`} />
-          </CollapsibleSection>
-        )}
-        {result.staging.invalidGeometries.length > 0 && (
-          <CollapsibleSection summary={view.summaries.invalidGeometries}>
-            <RowsTable
-              columns={INVALID_GEOMETRY_COLUMNS}
-              rows={result.staging.invalidGeometries}
-              rowKey={(row) => `${row.ref}|${row.localidad}|${row.departamento}`}
-            />
-          </CollapsibleSection>
-        )}
-        {view.attrRows.length > 0 && (
-          <CollapsibleSection summary={view.summaries.attrChanges}>
-            <RowsTable columns={ATTR_COLUMNS} rows={view.attrRows} rowKey={(row) => row.ref} />
-          </CollapsibleSection>
-        )}
-      </section>
+      <EjesReportLists
+        result={result}
+        view={view}
+        openLists={openLists}
+        onToggle={(list, open) => setOpenLists((current) => (current.has(list) === open ? current : withListState(current, list, open)))}
+        onShowOnMap={(listSubjects, index) => setReview({ subjects: listSubjects, index })}
+        subjects={subjects}
+      />
       <TextList title="Tipos de vialidad fuera de la tabla" items={view.unknownTipos} />
       <TextList title="Fuentes fuera de la tabla" items={view.unknownFuentes} />
+      <CollapsibleSection summary={ALL_INDICATORS_TITLE}>
+        {view.kpiGroups.map((group) => (
+          <section key={group.title} className={sharedStyles.section}>
+            <SectionTitle>{group.title}</SectionTitle>
+            {group.kpis.length > 0 ? <KpiCards kpis={group.kpis} /> : <p>{group.emptyText}</p>}
+          </section>
+        ))}
+      </CollapsibleSection>
       <TimingsSection timings={view.timings} totalSeconds={view.totalSeconds} />
       <EjesMapModal
         review={review}

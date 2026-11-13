@@ -1,0 +1,81 @@
+.strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.stripItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+}
+
+button.stripItem {
+  cursor: pointer;
+}
+
+button.stripItem:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+button.stripItem:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.stripItemActive {
+  border-color: rgba(56, 189, 248, 0.7);
+}
+
+.stripValue {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.stripLabel {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.listSection {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  padding: 0.5rem 0.875rem;
+  scroll-margin-top: 12px;
+}
+
+.listSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.listTitle {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.listIntro {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.listBody {
+  margin-top: 0.5rem;
+  padding-bottom: 0.25rem;
+}
+
+.lists {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

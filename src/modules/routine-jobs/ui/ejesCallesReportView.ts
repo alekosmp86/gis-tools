@@ -3,6 +3,7 @@ import { ejesAttrChangesOf } from "../jobs/ejes-calles/domain/attrChanges";
 import type { EjesAttrRow, EjesResult, EjesTwinRow, EjesUnknownValue } from "../jobs/ejes-calles/types";
 import { plural } from "../jobs/shared/text";
 import type { ReportBannerView, ReportKpiView, TimingItemView } from "./ReportParts";
+import { defaultOpenListOf, stripOf, type EjesListKey, type EjesStripItem } from "./ejesCallesListMeta";
 import { listSummaryOf, timingsViewOf } from "./reportViewParts";
 
 export const EJES_DRY_RUN_BANNER = "Análisis: no se modificó ninguna tabla.";
@@ -39,6 +40,8 @@ export interface EjesReportView {
   unknownFuentes: string[];
   summaries: EjesListSummaries;
   attrRows: EjesAttrRowView[];
+  strip: EjesStripItem[];
+  defaultOpenList: EjesListKey | null;
   timings: TimingItemView[];
   totalSeconds: number;
 }
@@ -188,6 +191,8 @@ export function buildEjesReportView(result: EjesResult): EjesReportView {
     unknownFuentes: result.staging.unknownFuentes.map(unknownTextOf),
     summaries: summariesOf(result),
     attrRows: result.attrChanges.map((row) => ({ ...row, changes: ejesAttrChangesOf(row).join(", ") })),
+    strip: stripOf(result),
+    defaultOpenList: defaultOpenListOf(result),
     timings,
     totalSeconds,
   };

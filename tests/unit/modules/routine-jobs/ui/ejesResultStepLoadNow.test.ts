@@ -51,7 +51,7 @@ describe("EjesResultStep Cargar ahora (EJ-24)", () => {
 
   it("should call onLoad when Cargar ahora is clicked", () => {
     const onLoad = vi.fn();
-    const tree = EjesResultStep(propsOf(RunPhase.DONE, true, { onLoad }));
+    const tree = (EjesResultStep as (props: EjesResultStepProps) => React.ReactNode)(propsOf(RunPhase.DONE, true, { onLoad }));
 
     const click = findOnClick(tree, LOAD_LABEL);
     click?.();
