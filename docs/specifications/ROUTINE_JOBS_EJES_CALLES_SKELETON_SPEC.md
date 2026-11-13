@@ -62,7 +62,7 @@ Facts read from preprod (not rules):
 
 ## Wizard
 
-- EJ-24: Steps Conexión, Tablas, Revisar and Resultado on the shared orchestrator. Revisar has "Analizar"; "Cargar ahora" is enabled only after an analysis of the same staging data and when EJ-8 has no blocker. Resultado shows progress, the report, the review lists of EJ-13 and "Nueva carga". State, steps and run store live beside the other jobs' (`ui/ejesCallesWizardState.ts`, `ui/ejesCallesWizardSteps.ts`, `ui/ejesCallesRunStore.ts`).
+- EJ-24: Steps Conexión, Tablas, Revisar and Resultado on the shared orchestrator. Revisar has "Analizar"; "Cargar ahora" is enabled only after an analysis of the same staging data and when EJ-8 has no blocker. Resultado shows progress, the report, the review lists of EJ-13 and "Nueva carga"; when the finished run is an analysis (dry-run) for which the same gate as Revisar holds (`canLoadNow`: same tables, no EJ-8 blockers, password typed), it also shows "Cargar ahora" next to the report, wired to the same handler (the server still refuses a real run unless `EJES_CALLES_REAL_RUN_ENABLED=true`). State, steps and run store live beside the other jobs' (`ui/ejesCallesWizardState.ts`, `ui/ejesCallesWizardSteps.ts`, `ui/ejesCallesRunStore.ts`).
 
 ## Documentation and tests
 

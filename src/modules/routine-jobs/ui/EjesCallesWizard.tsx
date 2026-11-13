@@ -81,6 +81,10 @@ export const EjesCallesWizard: React.FC = () => {
     dispatch({ type: "runStarted" });
   };
 
+  const loadNow = () => {
+    if (canLoadNow(state, snapshot)) startRun(toEjesStartRequest(state, LOAD));
+  };
+
   const newRun = () => {
     runStore.reset();
     resetCatalog();
@@ -127,9 +131,7 @@ export const EjesCallesWizard: React.FC = () => {
             onAnalyze={() => {
               if (canAnalyzeNow(state)) startRun(toEjesStartRequest(state, ANALYZE));
             }}
-            onLoad={() => {
-              if (canLoadNow(state, snapshot)) startRun(toEjesStartRequest(state, LOAD));
-            }}
+            onLoad={loadNow}
           />
         );
       case EjesStep.RESULT:
@@ -138,6 +140,8 @@ export const EjesCallesWizard: React.FC = () => {
             snapshot={snapshot}
             nowMs={nowMs}
             mapBase={ejesGeometryMapBaseOf(state)}
+            canLoad={canLoadNow(state, snapshot)}
+            onLoad={loadNow}
             onNewRun={newRun}
             onBackToReview={() => dispatch({ type: "goTo", step: EjesStep.REVIEW })}
           />

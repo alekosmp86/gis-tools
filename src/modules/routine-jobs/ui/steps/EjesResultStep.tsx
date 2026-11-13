@@ -1,7 +1,9 @@
 "use client";
 
 import React from "react";
+import { DatabaseZap } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
+import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertType } from "@/ui-kit/types/ui";
 import { EjesCallesReport } from "../EjesCallesReport";
 import type { EjesGeometryMapBase } from "../clientTypes";
@@ -11,6 +13,7 @@ import { RunProgressStatus, RunResultActions } from "./RunResultParts";
 import { RunStepChecklist } from "./RunStepChecklist";
 import styles from "./WizardSteps.module.css";
 
+const ICON_SIZE = 15;
 const IDLE_HINT = "Todavía no hay un análisis. Complete los pasos anteriores y pulse Analizar.";
 const NO_REPORT_MESSAGE = "El análisis terminó, pero el servidor no envió el informe.";
 const FAILED_FALLBACK = "El trabajo de ejes de calles terminó con un error.";
@@ -22,6 +25,9 @@ export interface EjesResultStepProps {
   nowMs: number;
   /** The connection of the wizard for the map; null when the wizard holds no password. */
   mapBase: EjesGeometryMapBase | null;
+  /** Same gate as the Revisar step: finished dry-run of these tables, no blockers, password typed. */
+  canLoad: boolean;
+  onLoad: () => void;
   onNewRun: () => void;
   onBackToReview: () => void;
 }
@@ -40,7 +46,15 @@ function Checklist({ snapshot }: { snapshot: EjesRunSnapshot }) {
   );
 }
 
-export const EjesResultStep: React.FC<EjesResultStepProps> = ({ snapshot, nowMs, mapBase, onNewRun, onBackToReview }) => {
+export const EjesResultStep: React.FC<EjesResultStepProps> = ({
+  snapshot,
+  nowMs,
+  mapBase,
+  canLoad,
+  onLoad,
+  onNewRun,
+  onBackToReview,
+}) => {
   const actions = <RunResultActions onNewRun={onNewRun} onBackToReview={onBackToReview} />;
   switch (snapshot.phase) {
     case RunPhase.IDLE:
@@ -62,6 +76,14 @@ export const EjesResultStep: React.FC<EjesResultStepProps> = ({ snapshot, nowMs,
       return (
         <div className={styles.stack}>
           {result ? <EjesCallesReport result={result} mapBase={mapBase} /> : <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />}
+          {canLoad && (
+            <div className={styles.actions}>
+              <Button onClick={onLoad}>
+                <DatabaseZap size={ICON_SIZE} />
+                <span>Cargar ahora</span>
+              </Button>
+            </div>
+          )}
           {actions}
         </div>
       );
