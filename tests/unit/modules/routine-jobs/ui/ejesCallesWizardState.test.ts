@@ -323,11 +323,50 @@ describe("ejes wizard state", () => {
       );
     });
 
-    it("should move to result and clear the confirmation on runStarted", () => {
-      const next = reduce(validState(), { type: "runStarted" });
+    it("should move to result and clear the confirmation on runStarted with dryRun false", () => {
+      const next = reduce(validState(), { type: "runStarted", dryRun: false });
 
       expect(next.step).toBe(EjesStep.RESULT);
       expect(next.confirmation.password).toBe("");
+    });
+
+    it("should move to result and keep the confirmation on runStarted with dryRun true", () => {
+      const next = reduce(validState(), { type: "runStarted", dryRun: true });
+
+      expect(next.step).toBe(EjesStep.RESULT);
+      expect(next.confirmation.password).toBe(PASSWORD);
+    });
+
+    it("should allow loading on the result step after a dry run finished for the same data", () => {
+      const next = reduce(validState(), { type: "runStarted", dryRun: true });
+
+      expect(canLoadNow(next, doneSnapshot(next))).toBe(true);
+    });
+
+    it("should clear the kept confirmation when resetting after a dry run", () => {
+      const next = reduce(validState(), { type: "runStarted", dryRun: true }, { type: "reset" });
+
+      expect(next.confirmation.password).toBe("");
+    });
+
+    it("should clear the kept confirmation when the password changes after a dry run", () => {
+      const next = reduce(
+        validState(),
+        { type: "runStarted", dryRun: true },
+        { type: "connectionChanged", field: "password", value: "x" }
+      );
+
+      expect(next.confirmation.password).toBe("");
+    });
+
+    it("should not allow loading after a dry run when the confirmation does not match the password", () => {
+      const next = reduce(
+        validState(),
+        { type: "runStarted", dryRun: true },
+        { type: "confirmationChanged", patch: { password: "wrong" } }
+      );
+
+      expect(canLoadNow(next, doneSnapshot(next))).toBe(false);
     });
 
     it("should reset to the initial state", () => {

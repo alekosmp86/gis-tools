@@ -78,7 +78,7 @@ export const EjesCallesWizard: React.FC = () => {
 
   const startRun = (request: EjesStartRequest) => {
     void runStore.start(request);
-    dispatch({ type: "runStarted" });
+    dispatch({ type: "runStarted", dryRun: request.dryRun });
   };
 
   const loadNow = () => {

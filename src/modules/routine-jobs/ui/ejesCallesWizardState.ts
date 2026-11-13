@@ -40,7 +40,7 @@ export type EjesWizardAction =
   | { type: "next" }
   | { type: "back" }
   | { type: "goTo"; step: EjesStep }
-  | { type: "runStarted" }
+  | { type: "runStarted"; dryRun: boolean }
   | { type: "reset" };
 
 const STEP_ORDER: readonly EjesStep[] = [EjesStep.CONNECTION, EjesStep.TABLES, EjesStep.REVIEW, EjesStep.RESULT];
@@ -166,7 +166,7 @@ function landingStepOf(state: EjesWizardState, target: EjesStep): EjesStep {
   return target;
 }
 
-/** The typed confirmation lives only while the review is on screen, so it never outlives that step. */
+/** The typed confirmation lives while the review, or the result of a dry-run, is on screen; leaving the review clears it, and so does starting a real run. */
 function moveTo(state: EjesWizardState, step: EjesStep): EjesWizardState {
   const landing = landingStepOf(state, step);
   const leavesReview = state.step === EjesStep.REVIEW && landing !== EjesStep.REVIEW;
@@ -207,7 +207,7 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
     case "goTo":
       return moveTo(state, action.step);
     case "runStarted":
-      return { ...state, step: EjesStep.RESULT, confirmation: emptyConfirmation() };
+      return { ...state, step: EjesStep.RESULT, confirmation: action.dryRun ? state.confirmation : emptyConfirmation() };
     case "reset":
       return initialEjesWizardState();
   }
