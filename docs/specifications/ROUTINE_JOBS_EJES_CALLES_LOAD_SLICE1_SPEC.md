@@ -1,6 +1,6 @@
 # Routine jobs: "Carga de ejes de calles", real load slice 1 (EJL-1 to EJL-16)
 
-Scope: real load of NEW, ATTR, GEOM, twin and renumbered sections. Out of scope: topology (EJ-20), splits and merges (EJ-19), plain removals (EJ-21), UI wiring (EJ-24). Builds on EJ-3, EJ-13 to EJ-18, EJ-22, EJ-23 of `ROUTINE_JOBS_EJES_CALLES_SKELETON_SPEC.md`.
+Scope: real load of NEW, ATTR, GEOM, twin and renumbered sections. Out of scope: topology (EJ-20), splits and merges (EJ-19), plain removals (EJ-21), UI wiring beyond the "Cargar ahora" buttons of EJ-24 (Revisar and Resultado, built). Builds on EJ-3, EJ-13 to EJ-18, EJ-22, EJ-23 of `ROUTINE_JOBS_EJES_CALLES_SKELETON_SPEC.md`.
 
 ## Criteria
 
@@ -17,7 +17,7 @@ Scope: real load of NEW, ATTR, GEOM, twin and renumbered sections. Out of scope:
 - EJL-11: `access_point` rows are never deleted. The only write on that table is the `id_road_section` update of EJL-10. `road_section_vertices_pgr` is not written. Points matching neither a `reftramo` nor an id are not touched.
 - EJL-12: Sections absent from staging, splits, merges and plain removals are not modified; they are reported as skipped.
 - EJL-13: The result has counts (inserted, updated, renumbered, ways created, masters created, points moved), the skipped and surplus lists, the backup, and the "Siguiente paso sugerido" text of EJ-22.
-- EJL-14: A second run over the same staging changes nothing. The real run stays disabled in the UI until the user enables it.
+- EJL-14: A second run over the same staging changes nothing. The real run stays refused by the server until `EJES_CALLES_REAL_RUN_ENABLED=true` (EJL-16).
 
 - EJL-15: A `reftramo` repeated across localities is not a blocker (EJ-8 no longer blocks on it). Identity is reftramo + locality + department; twin rules and EJL-6/7 handle the repeats. Rows with the same reftramo, locality and department count as one copy.
 
