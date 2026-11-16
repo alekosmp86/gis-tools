@@ -6,10 +6,10 @@ import {
   buildCentrosAnepReportView,
   signedDifferenceOf,
   subsistemaTextOf,
-} from "@/modules/routine-jobs/ui/centrosAnepReportView";
-import { CENTROS_DRY_RUN_BANNER, CENTROS_NEXT_STEP_TEXT, CENTROS_NEXT_STEP_TITLE } from "@/modules/routine-jobs/ui/centrosAnepTexts";
-import { CentrosAnepReport } from "@/modules/routine-jobs/ui/CentrosAnepReport";
-import { CentrosAnepStagingNote } from "@/modules/routine-jobs/ui/steps/CentrosAnepStagingNote";
+} from "@/modules/routine-jobs/ui/centros-anep/centrosAnepReportView";
+import { CENTROS_DRY_RUN_BANNER, CENTROS_NEXT_STEP_TEXT, CENTROS_NEXT_STEP_TITLE } from "@/modules/routine-jobs/ui/centros-anep/centrosAnepTexts";
+import { CentrosAnepReport } from "@/modules/routine-jobs/ui/centros-anep/CentrosAnepReport";
+import { CentrosAnepStagingNote } from "@/modules/routine-jobs/ui/centros-anep/steps/CentrosAnepStagingNote";
 import { CENTROS_STAGING_NOTE, CENTROS_WFS_URL } from "@/modules/routine-jobs/jobs/centros-anep/constants";
 import { cleanStaging } from "../centros-anep/centrosFixtures";
 

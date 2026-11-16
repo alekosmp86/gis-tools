@@ -9,7 +9,7 @@ import {
   twinCaseTextOf,
   twinDecisionTextOf,
   twinRowCaseTextOf,
-} from "@/modules/routine-jobs/ui/ejesCallesReportView";
+} from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesReportView";
 
 const COUNTS = {
   newSections: 5,

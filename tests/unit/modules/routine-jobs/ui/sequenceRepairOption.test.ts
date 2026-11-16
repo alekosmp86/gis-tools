@@ -5,18 +5,18 @@ import {
   initialWizardState as initialActualizarState,
   toStartRequest as toActualizarStartRequest,
   wizardReducer as actualizarReducer,
-} from "@/modules/routine-jobs/ui/actualizarPadronWizardState";
+} from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPadronWizardState";
 import {
   initialWizardStateFor as initialLocalidadesStateFor,
   localidadesWizardReducer,
   toStartRequest as toLocalidadesStartRequest,
-} from "@/modules/routine-jobs/ui/cargarLocalidadesWizardState";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
-import { ActualizarReviewStep } from "@/modules/routine-jobs/ui/steps/ActualizarReviewStep";
-import { LocalidadesReviewStep } from "@/modules/routine-jobs/ui/steps/LocalidadesReviewStep";
-import { SEQUENCE_REPAIR_LABEL, SequenceRepairField } from "@/modules/routine-jobs/ui/steps/SequenceRepairField";
-import { UnidadReviewStep } from "@/modules/routine-jobs/ui/steps/UnidadReviewStep";
-import { initialUnidadWizardStateFor, toUnidadStartRequest, unidadWizardReducer } from "@/modules/routine-jobs/ui/unidadTerritorialWizardState";
+} from "@/modules/routine-jobs/ui/cargar-localidades/cargarLocalidadesWizardState";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
+import { ActualizarReviewStep } from "@/modules/routine-jobs/ui/actualizar-padron/steps/ActualizarReviewStep";
+import { LocalidadesReviewStep } from "@/modules/routine-jobs/ui/cargar-localidades/steps/LocalidadesReviewStep";
+import { SEQUENCE_REPAIR_LABEL, SequenceRepairField } from "@/modules/routine-jobs/ui/shared/steps/SequenceRepairField";
+import { UnidadReviewStep } from "@/modules/routine-jobs/ui/unidad-territorial/steps/UnidadReviewStep";
+import { initialUnidadWizardStateFor, toUnidadStartRequest, unidadWizardReducer } from "@/modules/routine-jobs/ui/unidad-territorial/unidadTerritorialWizardState";
 
 const CONNECTION = { host: "db.local", port: "5432", db_name: "gis", user: "gis_user", password: "Seq-pw!1" };
 const NOOP = (): void => undefined;

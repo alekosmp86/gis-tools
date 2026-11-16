@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CENTROS_DEFAULT_TABLES, CENTROS_ROLES } from "@/modules/routine-jobs/jobs/centros-anep/constants";
-import { centrosAnepAnalysisKeyOf } from "@/modules/routine-jobs/ui/centrosAnepAnalysisKey";
+import { centrosAnepAnalysisKeyOf } from "@/modules/routine-jobs/ui/shared/centrosAnepAnalysisKey";
 import {
   blockingReason,
   canAnalyzeNow,
@@ -15,13 +15,13 @@ import {
   toCentrosAnepStartRequest,
   type CentrosAnepWizardAction,
   type CentrosAnepWizardState,
-} from "@/modules/routine-jobs/ui/centrosAnepWizardState";
+} from "@/modules/routine-jobs/ui/centros-anep/centrosAnepWizardState";
 import {
   buildCentrosAnepWizardSteps,
   centrosAnepStepIdOf,
   centrosAnepStepOfId,
-} from "@/modules/routine-jobs/ui/centrosAnepWizardSteps";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
+} from "@/modules/routine-jobs/ui/centros-anep/centrosAnepWizardSteps";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
 
 const PASSWORD = "pw-secret";
 

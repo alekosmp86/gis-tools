@@ -5,8 +5,8 @@ import { UiSlot } from "@/ui-kit/modules/contracts";
 import { moduleRegistry } from "@/app/modules.registry";
 import { routineJobsModule } from "@/modules/routine-jobs/manifest";
 import routeDeclarations from "@/modules/routine-jobs/module.routes.json";
-import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/RoutineJobsDashboard";
-import { RoutineJobsHomeCard } from "@/modules/routine-jobs/ui/RoutineJobsHomeCard";
+import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/dashboard/RoutineJobsDashboard";
+import { RoutineJobsHomeCard } from "@/modules/routine-jobs/ui/dashboard/RoutineJobsHomeCard";
 
 const EXPECTED_ENDPOINTS = [
   "GET actualizar-padron/status",

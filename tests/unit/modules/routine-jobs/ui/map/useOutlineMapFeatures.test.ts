@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { MapLoadStatus, useOutlineMapFeatures, type FetchOutlines } from "@/modules/routine-jobs/ui/map/useOutlineMapFeatures";
-import type { OutlineFeature } from "@/modules/routine-jobs/ui/map/outlineTypes";
+import { MapLoadStatus, useOutlineMapFeatures, type FetchOutlines } from "@/modules/routine-jobs/ui/shared/map/useOutlineMapFeatures";
+import type { OutlineFeature } from "@/modules/routine-jobs/ui/shared/map/outlineTypes";
 
 /** No DOM/renderHook lib installed: the react hooks are replaced by a minimal slot-based runtime that re-renders until stable. */
 const runtime = vi.hoisted(() => {

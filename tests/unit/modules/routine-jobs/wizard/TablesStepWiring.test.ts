@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableSelectorProps } from "@/ui-kit/components/TableSelector";
-import { TablesStep } from "@/modules/routine-jobs/ui/steps/TablesStep";
+import { TablesStep } from "@/modules/routine-jobs/ui/cargar-padrones/steps/TablesStep";
 
 const captured = vi.hoisted(() => ({ selectors: [] as unknown[] }));
 

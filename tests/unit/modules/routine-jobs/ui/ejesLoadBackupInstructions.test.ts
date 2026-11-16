@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EJES_LOAD_BACKUP_INSTRUCTIONS } from "@/modules/routine-jobs/ui/ejesLoadTexts";
+import { EJES_LOAD_BACKUP_INSTRUCTIONS } from "@/modules/routine-jobs/ui/ejes-calles/ejesLoadTexts";
 
 describe("EJES_LOAD_BACKUP_INSTRUCTIONS topology sentence (EJ-28)", () => {
   const sentenceOf = (fragment: string): string | undefined => EJES_LOAD_BACKUP_INSTRUCTIONS.find((line) => line.includes(fragment));

@@ -11,8 +11,8 @@ import { createUnidadTerritorialHandlers } from "./api/unidadTerritorialHandlers
 import { createEjesCallesHandlers } from "./api/ejesCallesHandlers";
 import { readEjesCallesGeometryMap } from "./api/ejesGeometryMap";
 import { createCentrosAnepHandlers } from "./api/centrosAnepHandlers";
-import { RoutineJobsDashboard } from "./ui/RoutineJobsDashboard";
-import { RoutineJobsHomeCard } from "./ui/RoutineJobsHomeCard";
+import { RoutineJobsDashboard } from "./ui/dashboard/RoutineJobsDashboard";
+import { RoutineJobsHomeCard } from "./ui/dashboard/RoutineJobsHomeCard";
 
 /**
  * The routine jobs module: a shell for recurring database jobs, one wizard per job.

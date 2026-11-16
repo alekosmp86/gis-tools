@@ -6,7 +6,7 @@ import {
   wizardReducer,
   WizardStep,
   type ActualizarWizardState,
-} from "@/modules/routine-jobs/ui/actualizarPadronWizardState";
+} from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPadronWizardState";
 
 const MESSAGE_SIMULATION_STALE = "Analice de nuevo con la selección de pares actual antes de persistir.";
 

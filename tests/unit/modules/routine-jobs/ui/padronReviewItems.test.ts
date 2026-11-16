@@ -9,17 +9,17 @@ import type {
   PadronPair,
   PairChoice,
 } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
-import type { AmbiguousGroupView } from "@/modules/routine-jobs/ui/pairChoices";
-import type { PairRowView, PairView } from "@/modules/routine-jobs/ui/actualizarPadronReportView";
-import { missingReviewViewOf } from "@/modules/routine-jobs/ui/missingPadronView";
-import { subjectOfGeometryChange, subjectOfPair } from "@/modules/routine-jobs/ui/padronMapSubject";
+import type { AmbiguousGroupView } from "@/modules/routine-jobs/ui/shared/pairChoices";
+import type { PairRowView, PairView } from "@/modules/routine-jobs/ui/shared/actualizarPadronReportView";
+import { missingReviewViewOf } from "@/modules/routine-jobs/ui/shared/missingPadronView";
+import { subjectOfGeometryChange, subjectOfPair } from "@/modules/routine-jobs/ui/shared/padronMapSubject";
 import {
   geometryReviewItemsOf,
   groupReviewItemsOf,
   missingReviewItemsOf,
   pairReviewItemsOf,
   REVIEW_KIND,
-} from "@/modules/routine-jobs/ui/padronReviewItems";
+} from "@/modules/routine-jobs/ui/actualizar-padron/padronReviewItems";
 
 const newKeyOf = (overrides: Partial<PadronNamedKey> = {}): PadronNamedKey => ({
   typePadron: "RURAL",

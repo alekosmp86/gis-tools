@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseUnidadTerritorialStartRequest } from "@/modules/routine-jobs/api/unidadTerritorialRequestParsing";
 import { plannedUnitStepLabels } from "@/modules/routine-jobs/jobs/unidad-territorial/domain/plannedSteps";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
 import {
   activeSlotsOf,
   blockingReason,
@@ -11,7 +11,7 @@ import {
   unidadWizardReducer,
   UnitSlot,
   type UnidadTerritorialWizardState,
-} from "@/modules/routine-jobs/ui/unidadTerritorialWizardState";
+} from "@/modules/routine-jobs/ui/unidad-territorial/unidadTerritorialWizardState";
 
 const MESSAGE_TABLES_DISTINCT = "Las tablas elegidas deben ser distintas: no repita el mismo esquema y nombre.";
 const TARGET_TABLE = "territorial_unit";

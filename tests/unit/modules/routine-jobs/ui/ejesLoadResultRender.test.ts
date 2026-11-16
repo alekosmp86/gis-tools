@@ -2,10 +2,10 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { EjesBackup, EjesLoadReport, EjesResult, EjesSkippedRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
-import { EjesLoadResult } from "@/modules/routine-jobs/ui/EjesLoadResult";
-import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/ejesCallesRunStore";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
-import { EjesResultStep, type EjesResultStepProps } from "@/modules/routine-jobs/ui/steps/EjesResultStep";
+import { EjesLoadResult } from "@/modules/routine-jobs/ui/ejes-calles/EjesLoadResult";
+import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/shared/ejesCallesRunStore";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
+import { EjesResultStep, type EjesResultStepProps } from "@/modules/routine-jobs/ui/ejes-calles/steps/EjesResultStep";
 import {
   EJES_LOAD_DONE_BANNER,
   EJES_LOAD_SKIPPED_BY_REASON_TITLE,
@@ -13,7 +13,7 @@ import {
   EJES_LOAD_SURPLUS_TITLE,
   EJES_LOAD_TITLE,
   EJES_LOAD_UNKNOWN_BANNER,
-} from "@/modules/routine-jobs/ui/ejesLoadTexts";
+} from "@/modules/routine-jobs/ui/ejes-calles/ejesLoadTexts";
 
 const REPORT_MARKER = "Todos los indicadores";
 const BACKUP_TITLE = "Respaldo para revertir";

@@ -1,9 +1,9 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ROUTINE_JOBS } from "@/modules/routine-jobs/ui/jobs";
-import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/RoutineJobsDashboard";
-import { RoutineJobsHomeCard } from "@/modules/routine-jobs/ui/RoutineJobsHomeCard";
+import { ROUTINE_JOBS } from "@/modules/routine-jobs/ui/dashboard/jobs";
+import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/dashboard/RoutineJobsDashboard";
+import { RoutineJobsHomeCard } from "@/modules/routine-jobs/ui/dashboard/RoutineJobsHomeCard";
 import { expectHelpLinkNotNested, expectSingleHelpLink } from "../../../ui-kit/helpLinkAssertions";
 
 const ROUTE = "/tools/m/routine-jobs";

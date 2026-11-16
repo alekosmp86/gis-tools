@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { useCatalogLoader } from "@/modules/routine-jobs/ui/useCatalogLoader";
-import { RoutineJobsApiError, type RoutineJobsClient } from "@/modules/routine-jobs/ui/routineJobsClient";
-import type { ClientConnection } from "@/modules/routine-jobs/ui/clientTypes";
+import { useCatalogLoader } from "@/modules/routine-jobs/ui/shared/useCatalogLoader";
+import { RoutineJobsApiError, type RoutineJobsClient } from "@/modules/routine-jobs/ui/shared/routineJobsClient";
+import type { ClientConnection } from "@/modules/routine-jobs/ui/shared/clientTypes";
 import type { TableListing } from "@/core/types/tableCatalog";
 
 /** No DOM/renderHook lib installed: react hooks are replaced by a minimal slot-based shim (same pattern as the db-sync hooks). */

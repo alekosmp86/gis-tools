@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { TablesStep } from "@/modules/routine-jobs/ui/steps/TablesStep";
+import { TablesStep } from "@/modules/routine-jobs/ui/cargar-padrones/steps/TablesStep";
 
 type Props = React.ComponentProps<typeof TablesStep>;
 
@@ -98,7 +98,7 @@ describe("TablesStep", () => {
   });
 
   it("AC-32: should not expose a per-keystroke onSchemaChange prop any more", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/modules/routine-jobs/ui/steps/TablesStep.tsx"), "utf8");
+    const source = readFileSync(resolve(process.cwd(), "src/modules/routine-jobs/ui/cargar-padrones/steps/TablesStep.tsx"), "utf8");
 
     expect(source).not.toContain("onSchemaChange");
     expect(source).toContain("onSchemaCommit");

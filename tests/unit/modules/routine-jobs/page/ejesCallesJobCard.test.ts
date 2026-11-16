@@ -1,8 +1,8 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/RoutineJobsDashboard";
-import { EJES_CALLES_JOB_ID, MONTHLY_CARTO_JOB_ID, ROUTINE_JOBS } from "@/modules/routine-jobs/ui/jobs";
+import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/dashboard/RoutineJobsDashboard";
+import { EJES_CALLES_JOB_ID, MONTHLY_CARTO_JOB_ID, ROUTINE_JOBS } from "@/modules/routine-jobs/ui/dashboard/jobs";
 
 const countOf = (html: string, needle: string): number => html.split(needle).length - 1;
 

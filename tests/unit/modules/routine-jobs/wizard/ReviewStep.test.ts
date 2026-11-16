@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { ReviewStep } from "@/modules/routine-jobs/ui/steps/ReviewStep";
+import { ReviewStep } from "@/modules/routine-jobs/ui/cargar-padrones/steps/ReviewStep";
 import {
   buttonAttributes,
   isDisabledAttributes,

@@ -5,7 +5,7 @@ import {
   emptyCatalogFailures,
   recordCatalogFailure,
   type CatalogFailures,
-} from "@/modules/routine-jobs/ui/catalogErrors";
+} from "@/modules/routine-jobs/ui/shared/catalogErrors";
 
 const KEY_A = "9:db.local|4:5432|3:gis|5:carto|8:catastro";
 const KEY_B = "9:db.local|4:5432|3:gis|5:carto|5:otro1";

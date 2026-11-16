@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { EJES_ROLES } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { EjesResult } from "@/modules/routine-jobs/jobs/ejes-calles/types";
-import { ejesAnalysisKeyOf } from "@/modules/routine-jobs/ui/ejesCallesAnalysisKey";
-import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/ejesCallesRunStore";
+import { ejesAnalysisKeyOf } from "@/modules/routine-jobs/ui/shared/ejesCallesAnalysisKey";
+import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/shared/ejesCallesRunStore";
 import {
   blockingReason,
   canAnalyzeNow,
@@ -18,8 +18,8 @@ import {
   toEjesStartRequest,
   type EjesWizardAction,
   type EjesWizardState,
-} from "@/modules/routine-jobs/ui/ejesCallesWizardState";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
+} from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesWizardState";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
 
 const PASSWORD = "pw-secret";
 

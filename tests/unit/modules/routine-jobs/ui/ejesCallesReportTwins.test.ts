@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TWIN_CLASS } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { EjesInvalidGeometryRow, EjesResult, EjesTwinRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
-import { EjesCallesReport } from "@/modules/routine-jobs/ui/EjesCallesReport";
+import { EjesCallesReport } from "@/modules/routine-jobs/ui/ejes-calles/EjesCallesReport";
 
 const COUNTS = {
   newSections: 0,

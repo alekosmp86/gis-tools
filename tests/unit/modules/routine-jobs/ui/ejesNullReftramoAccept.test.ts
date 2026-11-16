@@ -1,11 +1,11 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { EjesAcceptableRows } from "@/modules/routine-jobs/ui/EjesAcceptableRows";
-import { EjesAcceptList, type EjesAcceptChange, type EjesAcceptView } from "@/modules/routine-jobs/ui/ejesAccept";
-import { EJES_ACCEPT_TEXT } from "@/modules/routine-jobs/ui/ejesAcceptTexts";
-import { REMOVAL_COLUMNS } from "@/modules/routine-jobs/ui/ejesReportColumns";
-import { NO_REFTRAMO_TEXT } from "@/modules/routine-jobs/ui/ejesLoadTexts";
+import { EjesAcceptableRows } from "@/modules/routine-jobs/ui/ejes-calles/EjesAcceptableRows";
+import { EjesAcceptList, type EjesAcceptChange, type EjesAcceptView } from "@/modules/routine-jobs/ui/ejes-calles/ejesAccept";
+import { EJES_ACCEPT_TEXT } from "@/modules/routine-jobs/ui/ejes-calles/ejesAcceptTexts";
+import { REMOVAL_COLUMNS } from "@/modules/routine-jobs/ui/ejes-calles/ejesReportColumns";
+import { NO_REFTRAMO_TEXT } from "@/modules/routine-jobs/ui/ejes-calles/ejesLoadTexts";
 import type { EjesRemovalRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 
 /** The predicate EjesReportLists passes for plain removals: a row without a reftramo has no key to send. */

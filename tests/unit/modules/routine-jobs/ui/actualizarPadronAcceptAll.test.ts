@@ -12,10 +12,10 @@ import {
   WizardStep,
   type ActualizarWizardAction,
   type ActualizarWizardState,
-} from "@/modules/routine-jobs/ui/actualizarPadronWizardState";
-import type { ActualizarPadronRunSnapshot } from "@/modules/routine-jobs/ui/actualizarPadronRunStore";
-import { persistDecisionOf, PersistDecisionKind } from "@/modules/routine-jobs/ui/actualizarPersistFlow";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
+} from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPadronWizardState";
+import type { ActualizarPadronRunSnapshot } from "@/modules/routine-jobs/ui/shared/actualizarPadronRunStore";
+import { persistDecisionOf, PersistDecisionKind } from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPersistFlow";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
 
 const PASSWORD = "s3cret-pw";
 const TARGET_TABLE = "padron_tmp_actualizacion";

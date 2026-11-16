@@ -8,7 +8,7 @@ import {
   subjectOfSplit,
   subjectOfTwin,
   truncationNoteOf,
-} from "@/modules/routine-jobs/ui/ejesMapSubject";
+} from "@/modules/routine-jobs/ui/ejes-calles/ejesMapSubject";
 
 const SPLIT: EjesSplitRow = {
   oldRef: "1001634",

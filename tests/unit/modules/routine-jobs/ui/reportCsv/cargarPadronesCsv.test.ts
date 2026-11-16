@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCargarPadronesCsv } from "@/modules/routine-jobs/ui/reportCsv/cargarPadronesCsv";
+import { buildCargarPadronesCsv } from "@/modules/routine-jobs/ui/cargar-padrones/cargarPadronesCsv";
 import type { CargarPadronesResult } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
 import { BOM, cargarPadronesResultOf, parseCsv } from "./reportCsvFixtures";
 

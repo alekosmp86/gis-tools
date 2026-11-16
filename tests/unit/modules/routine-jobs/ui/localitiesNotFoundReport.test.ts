@@ -3,10 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SKIP_REASON, type SkipReason } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { ActualizarPadronResult, SkippedLocalityGroup } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
-import { ActualizarPadronReport } from "@/modules/routine-jobs/ui/ActualizarPadronReport";
-import { buildActualizarReportView } from "@/modules/routine-jobs/ui/actualizarPadronReportView";
-import { MonthlyStage } from "@/modules/routine-jobs/ui/monthlyCartoStages";
-import { REPORT_CSV_KIND, reportCsvFilename } from "@/modules/routine-jobs/ui/reportCsv/filename";
+import { ActualizarPadronReport } from "@/modules/routine-jobs/ui/actualizar-padron/ActualizarPadronReport";
+import { buildActualizarReportView } from "@/modules/routine-jobs/ui/shared/actualizarPadronReportView";
+import { MonthlyStage } from "@/modules/routine-jobs/ui/shared/monthlyCartoStages";
+import { REPORT_CSV_KIND, reportCsvFilename } from "@/modules/routine-jobs/ui/shared/filename";
 
 const BUTTON_LABEL = "Descargar localidades no encontradas (CSV)";
 const ALL_REASONS = Object.values(SKIP_REASON) as SkipReason[];

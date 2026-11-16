@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { STEP, type StepLabel } from "@/modules/routine-jobs/jobs/cargar-padrones/domain/plannedSteps";
-import { CargarPadronesRunPhase } from "@/modules/routine-jobs/ui/cargarPadronesRunStore";
-import { buildStepChecklist, ChecklistStatus } from "@/modules/routine-jobs/ui/stepChecklist";
+import { CargarPadronesRunPhase } from "@/modules/routine-jobs/ui/shared/cargarPadronesRunStore";
+import { buildStepChecklist, ChecklistStatus } from "@/modules/routine-jobs/ui/shared/stepChecklist";
 
 const PLANNED: StepLabel[] = [STEP.VALIDATE, STEP.COUNT, STEP.CLEAR, STEP.LOAD_RURAL];
 

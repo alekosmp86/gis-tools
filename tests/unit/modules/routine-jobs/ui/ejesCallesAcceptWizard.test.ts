@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { EJES_TABLE_ROLE, type EjesTableRole } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { EjesResult } from "@/modules/routine-jobs/jobs/ejes-calles/types";
-import { EjesAcceptList, type EjesAcceptChange } from "@/modules/routine-jobs/ui/ejesAccept";
-import { ejesAnalysisKeyOf } from "@/modules/routine-jobs/ui/ejesCallesAnalysisKey";
-import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/ejesCallesRunStore";
+import { EjesAcceptList, type EjesAcceptChange } from "@/modules/routine-jobs/ui/ejes-calles/ejesAccept";
+import { ejesAnalysisKeyOf } from "@/modules/routine-jobs/ui/shared/ejesCallesAnalysisKey";
+import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/shared/ejesCallesRunStore";
 import {
   acceptKeysOfState,
   ejesLoadRequestOf,
@@ -12,8 +12,8 @@ import {
   resultKeyOf,
   toEjesStartRequest,
   type EjesWizardState,
-} from "@/modules/routine-jobs/ui/ejesCallesWizardState";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
+} from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesWizardState";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
 
 const PASSWORD = "Ejes-Accept-pw!3";
 

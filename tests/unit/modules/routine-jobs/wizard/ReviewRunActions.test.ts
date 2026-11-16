@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { PASSWORD_LABEL, ReviewRunActions, type ReviewRunActionsProps } from "@/modules/routine-jobs/ui/steps/reviewParts";
+import { PASSWORD_LABEL, ReviewRunActions, type ReviewRunActionsProps } from "@/modules/routine-jobs/ui/shared/steps/reviewParts";
 import { buttonAttributes, isDisabledAttributes } from "./wizardFixtures";
 
 const DRY_LABEL = "Analizar sin cargar";

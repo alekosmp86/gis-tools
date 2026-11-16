@@ -2,8 +2,8 @@ import { describe, expect, it, vi, beforeEach, type Mock } from "vitest";
 import {
   createCargarPadronesRunStore,
   getCargarPadronesRunStore,
-} from "@/modules/routine-jobs/ui/cargarPadronesRunStore";
-import type { JobStatusView, StartRequest } from "@/modules/routine-jobs/ui/clientTypes";
+} from "@/modules/routine-jobs/ui/shared/cargarPadronesRunStore";
+import type { JobStatusView, StartRequest } from "@/modules/routine-jobs/ui/shared/clientTypes";
 
 const PASSWORD = "s3cret-pw";
 
@@ -613,7 +613,7 @@ describe("cargarPadronesRunStore", () => {
       const before = getCargarPadronesRunStore();
 
       vi.resetModules();
-      const reloaded = await import("@/modules/routine-jobs/ui/cargarPadronesRunStore");
+      const reloaded = await import("@/modules/routine-jobs/ui/shared/cargarPadronesRunStore");
 
       expect(reloaded.getCargarPadronesRunStore()).toBe(before);
     });

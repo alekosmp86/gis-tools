@@ -24,7 +24,7 @@ import type {
   ActualizarJobStatusView,
   ClientConnection,
   JobStatusView,
-} from "../../../src/modules/routine-jobs/ui/clientTypes";
+} from "../../../src/modules/routine-jobs/ui/shared/clientTypes";
 
 export const FAKE_CONNECTION: ClientConnection = {
   host: "db.example.test",

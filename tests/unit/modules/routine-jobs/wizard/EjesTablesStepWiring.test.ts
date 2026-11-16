@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableSelectorProps } from "@/ui-kit/components/TableSelector";
 import { EJES_ROLES, EJES_TABLE_ROLE } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
-import { EJES_ROLE_TITLES } from "@/modules/routine-jobs/ui/ejesCallesTexts";
-import { initialEjesWizardState, excludedEjesTablesOf } from "@/modules/routine-jobs/ui/ejesCallesWizardState";
-import { EjesTablesStep } from "@/modules/routine-jobs/ui/steps/EjesTablesStep";
+import { EJES_ROLE_TITLES } from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesTexts";
+import { initialEjesWizardState, excludedEjesTablesOf } from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesWizardState";
+import { EjesTablesStep } from "@/modules/routine-jobs/ui/ejes-calles/steps/EjesTablesStep";
 
 const captured = vi.hoisted(() => ({ selectors: [] as unknown[] }));
 

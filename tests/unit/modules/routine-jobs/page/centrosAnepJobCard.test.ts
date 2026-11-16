@@ -2,9 +2,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { CENTROS_STAGING_NOTE, CENTROS_WFS_URL } from "@/modules/routine-jobs/jobs/centros-anep/constants";
-import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/RoutineJobsDashboard";
-import { CENTROS_ANEP_JOB_ID, ROUTINE_JOBS } from "@/modules/routine-jobs/ui/jobs";
-import { CentrosAnepReviewStep } from "@/modules/routine-jobs/ui/steps/CentrosAnepReviewStep";
+import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/dashboard/RoutineJobsDashboard";
+import { CENTROS_ANEP_JOB_ID, ROUTINE_JOBS } from "@/modules/routine-jobs/ui/dashboard/jobs";
+import { CentrosAnepReviewStep } from "@/modules/routine-jobs/ui/centros-anep/steps/CentrosAnepReviewStep";
 import { centrosTablesBody } from "../centros-anep/centrosFixtures";
 
 const countOf = (html: string, needle: string): number => html.split(needle).length - 1;

@@ -17,9 +17,9 @@ import {
   wizardReducer,
   WizardStep,
   type ActualizarWizardState,
-} from "@/modules/routine-jobs/ui/actualizarPadronWizardState";
-import type { ActualizarPadronRunSnapshot } from "@/modules/routine-jobs/ui/actualizarPadronRunStore";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
+} from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPadronWizardState";
+import type { ActualizarPadronRunSnapshot } from "@/modules/routine-jobs/ui/shared/actualizarPadronRunStore";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
 import { actualizarPadronResultOf } from "./reportCsv/reportCsvFixtures";
 
 const PASSWORD = "s3cret-pw";

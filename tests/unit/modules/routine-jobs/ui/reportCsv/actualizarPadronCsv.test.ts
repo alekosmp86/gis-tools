@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildActualizarPadronCsv,
   buildActualizarPadronInconsistenciasCsv,
-} from "@/modules/routine-jobs/ui/reportCsv/actualizarPadronCsv";
+} from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPadronCsv";
 import type { ActualizarAddressMasterReport, ActualizarPadronResult, PadronGeometryChange, PadronInserted, PadronPair } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import { GEOMETRY_STATE, PAIR_CHANGE, PAIR_STATUS, PAIR_TIER, type PairStatus, type PairTier } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";

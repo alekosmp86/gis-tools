@@ -1,0 +1,201 @@
+import { TWIN_CLASS, type TwinClass } from "../../jobs/ejes-calles/constants";
+import { ejesAttrChangesOf } from "../../jobs/ejes-calles/domain/attrChanges";
+import type { EjesAttrRow, EjesResult, EjesTwinRow, EjesUnknownValue } from "../../jobs/ejes-calles/types";
+import { plural } from "../../jobs/shared/text";
+import type { ReportBannerView, ReportKpiView, TimingItemView } from "../shared/ReportParts";
+import { defaultOpenListOf, stripOf, type EjesListKey, type EjesStripItem } from "./ejesCallesListMeta";
+import { listSummaryOf, timingsViewOf } from "../shared/reportViewParts";
+
+export const EJES_DRY_RUN_BANNER = "Análisis: no se modificó ninguna tabla.";
+
+const PERCENT_SCALE = 100;
+
+export interface EjesListSummaries {
+  splits: string;
+  merges: string;
+  plainRemovals: string;
+  newStreets: string;
+  attrChanges: string;
+  twins: string;
+  invalidGeometries: string;
+  renumbered: string;
+  renumberHeld: string;
+}
+
+export interface EjesAttrRowView extends EjesAttrRow {
+  changes: string;
+}
+
+export interface EjesKpiGroup {
+  title: string;
+  kpis: ReportKpiView[];
+  emptyText?: string;
+}
+
+export interface EjesReportView {
+  banners: ReportBannerView[];
+  kpiGroups: EjesKpiGroup[];
+  blockers: string[];
+  privilegeInfo: string[];
+  unknownTipos: string[];
+  unknownFuentes: string[];
+  summaries: EjesListSummaries;
+  attrRows: EjesAttrRowView[];
+  strip: EjesStripItem[];
+  defaultOpenList: EjesListKey | null;
+  timings: TimingItemView[];
+  totalSeconds: number;
+}
+
+const unknownTextOf = (entry: EjesUnknownValue): string => `${entry.value ?? "sin dato"}: ${plural(entry.rows, "fila", "filas")}`;
+
+export const coverageTextOf = (coverage: number | null): string =>
+  coverage === null ? "sin dato" : `${Math.round(coverage * PERCENT_SCALE)}%`;
+
+const METER_DECIMALS = 1;
+
+export const metersTextOf = (meters: number | null): string => (meters === null ? "sin dato" : meters.toFixed(METER_DECIMALS));
+
+const TWIN_CASE_TEXT: Record<TwinClass, string> = {
+  [TWIN_CLASS.URBAN]: "Cerca de padrones urbanos",
+  [TWIN_CLASS.RURAL]: "Cerca de padrones rurales",
+  [TWIN_CLASS.BOTH]: "Cerca de ambos: se mantienen las dos",
+  [TWIN_CLASS.NEITHER]: "Lejos de padrones: sin regla",
+};
+
+export const twinCaseTextOf = (twinClass: TwinClass): string => TWIN_CASE_TEXT[twinClass];
+
+export type TwinTextRow = Pick<EjesTwinRow, "class" | "dropLocalities"> & Partial<Pick<EjesTwinRow, "localities" | "insideLocalities">>;
+
+const CROSSES_LOCALITIES = "Cruza varias localidades";
+
+const keptInsideCount = (row: TwinTextRow): number => {
+  const inside = new Set(row.insideLocalities ?? []);
+  return (row.localities ?? []).filter((locality) => inside.has(locality.trim().toUpperCase())).length;
+};
+
+const isPolygonCrossing = (row: TwinTextRow): boolean =>
+  row.class === TWIN_CLASS.NEITHER && row.dropLocalities.length === 0 && keptInsideCount(row) >= 2;
+
+const isPolygonDrop = (row: TwinTextRow): boolean =>
+  row.class === TWIN_CLASS.NEITHER && row.dropLocalities.length > 0 && (row.insideLocalities ?? []).length > 0;
+
+export const twinRowCaseTextOf = (row: TwinTextRow): string => {
+  if (isPolygonCrossing(row)) return CROSSES_LOCALITIES;
+  if (isPolygonDrop(row)) return "Lejos de padrones: por polígono de localidad";
+  if (row.class === TWIN_CLASS.NEITHER && row.dropLocalities.length > 0) return "Lejos de padrones: regla rural";
+  return TWIN_CASE_TEXT[row.class];
+};
+
+export const twinDecisionTextOf = (row: TwinTextRow): string => {
+  if (isPolygonDrop(row)) {
+    const verb = row.dropLocalities.length === 1 ? "se quita" : "se quitan";
+    return `Dentro de ${(row.insideLocalities ?? []).join(", ")}: ${verb} ${row.dropLocalities.join(", ")}`;
+  }
+  if (row.dropLocalities.length > 0) return `Se quitaría: ${row.dropLocalities.join(", ")}`;
+  if (isPolygonCrossing(row)) return `${CROSSES_LOCALITIES}: se mantienen todas`;
+  return row.class === TWIN_CLASS.NEITHER ? "Sin regla: se mantienen todas" : "Se mantienen todas";
+};
+
+const kpi = (label: string, value: number): ReportKpiView => ({ label, value });
+
+function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
+  const { staging, counts, cloc } = result;
+  const problems = [
+    kpi("reftramo que no es un número", staging.nonIntegerRefs),
+    kpi("Filas sin geometría", staging.emptyGeometry),
+    kpi("Filas sin idcalle", staging.emptyIdcalle),
+    kpi("Filas con geometría inválida o colapsada (se omiten)", staging.invalidGeometryRows),
+    kpi("Tramos con geometría inválida o colapsada", staging.invalidGeometryRefs),
+    kpi("Filas con caracteres dañados (�)", staging.damagedTextRows),
+    kpi("Filas con tipo de vía desconocido", staging.unknownTipoRows),
+    kpi("Filas con fuente desconocida", staging.unknownFuenteRows),
+  ].filter((entry) => entry.value > 0);
+  return [
+    {
+      title: "Archivo cargado en el origen",
+      kpis: [
+        kpi("Filas", staging.rows),
+        kpi("Tramos distintos", staging.distinctRefs),
+        kpi("Tramos con más de una fila", staging.repeatedGroups),
+        kpi("Filas de esos tramos", staging.repeatedRows),
+      ],
+    },
+    { title: "Problemas en el archivo", kpis: problems, emptyText: "Sin problemas." },
+    {
+      title: "Tramos del archivo frente a los actuales",
+      kpis: [
+        kpi("Nuevos", counts.newSections - counts.renumbered),
+        kpi("Sin cambios", counts.unchanged),
+        kpi("Cambió nombre, calle, tipo o fuente", counts.attr),
+        kpi("Cambió el trazado", counts.geom),
+        kpi("Cambió todo", counts.both),
+      ],
+    },
+    {
+      title: "Tramos actuales que ya no vienen en el archivo",
+      kpis: [
+        kpi("Total", counts.removed),
+        kpi("Renumerados (mismo trazado, otro reftramo)", counts.renumbered),
+        kpi("Renumerados con puntos de acceso", counts.renumberedWithPoints),
+        kpi("Puntos de acceso que seguirían al renumerar", counts.renumberedPoints),
+        kpi("Divididos en varios nuevos", counts.splits),
+        kpi("Unidos en uno nuevo", counts.merges),
+        kpi("Sin reemplazo, se quitarían", counts.plainRemovals - counts.plainHeld),
+        kpi("Sin reemplazo, con puntos de acceso: no se quitan", counts.plainHeld),
+      ],
+    },
+    {
+      title: "Tramos repetidos por localidad",
+      kpis: [
+        kpi("Total", counts.twins),
+        kpi("Cerca de urbanos solamente", counts.twinsUrban),
+        kpi("Cerca de rurales solamente", counts.twinsRural),
+        kpi("Cerca de ambos", counts.twinsBoth),
+        kpi("Lejos de ambos", counts.twinsNeither),
+        kpi("Se quitaría alguna copia", counts.twinsDrop),
+        kpi("Se mantienen todas", counts.twinsKeep),
+        kpi("En más de un departamento: sin regla", counts.twinsCrossDepartment),
+      ],
+    },
+    {
+      title: "Calles y localidades de los tramos nuevos o con trazado distinto",
+      kpis: [
+        kpi("Calles nuevas", counts.newStreets),
+        kpi("Con localidad", cloc.withLocality),
+        kpi("Solo con departamento", cloc.onlyDepartment),
+        kpi("Sin código", cloc.withoutCode),
+      ],
+    },
+  ];
+}
+
+const summariesOf = (result: EjesResult): EjesListSummaries => ({
+  splits: listSummaryOf("Tramos divididos", result.splits.length, result.counts.splits),
+  merges: listSummaryOf("Tramos unidos", result.merges.length, result.counts.merges),
+  plainRemovals: listSummaryOf("Tramos sin reemplazo (primero los que tienen puntos de acceso)", result.plainRemovals.length, result.counts.plainRemovals),
+  newStreets: listSummaryOf("Calles nuevas", result.newStreets.length, result.counts.newStreets),
+  attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
+  invalidGeometries: listSummaryOf("Tramos con geometría inválida o colapsada (se omiten)", result.staging.invalidGeometries.length, result.staging.invalidGeometryRows),
+  renumbered: listSummaryOf("Tramos renumerados (primero los que tienen puntos de acceso)", result.renumbered.length, result.counts.renumbered),
+  renumberHeld: listSummaryOf("Renumerados retenidos (ambos tramos quedan como están)", result.renumberSkipped.length, result.counts.renumberSkipped),
+  twins: listSummaryOf("Tramos repetidos por localidad (primero los que se deciden en el mapa)", result.twins.length, result.counts.twins),
+});
+
+export function buildEjesReportView(result: EjesResult): EjesReportView {
+  const { timings, totalSeconds } = timingsViewOf(result.stepTimings);
+  return {
+    banners: result.dryRun ? [{ kind: "dryRun", text: EJES_DRY_RUN_BANNER }] : [],
+    kpiGroups: kpiGroupsOf(result),
+    blockers: result.blockers,
+    privilegeInfo: result.privilegeInfo,
+    unknownTipos: result.staging.unknownTipos.map(unknownTextOf),
+    unknownFuentes: result.staging.unknownFuentes.map(unknownTextOf),
+    summaries: summariesOf(result),
+    attrRows: result.attrChanges.map((row) => ({ ...row, changes: ejesAttrChangesOf(row).join(", ") })),
+    strip: stripOf(result),
+    defaultOpenList: defaultOpenListOf(result),
+    timings,
+    totalSeconds,
+  };
+}

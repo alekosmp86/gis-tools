@@ -11,9 +11,9 @@ import {
   type LocalidadesDestination,
   type LocalidadesWizardAction,
   type LocalidadesWizardState,
-} from "@/modules/routine-jobs/ui/cargarLocalidadesWizardState";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
-import type { CargarLocalidadesRunSnapshot } from "@/modules/routine-jobs/ui/cargarLocalidadesRunStore";
+} from "@/modules/routine-jobs/ui/cargar-localidades/cargarLocalidadesWizardState";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
+import type { CargarLocalidadesRunSnapshot } from "@/modules/routine-jobs/ui/shared/cargarLocalidadesRunStore";
 
 const PASSWORD = "s3cret-pw";
 const BDJ_CARTO: LocalidadesDestination = "bdjCarto";

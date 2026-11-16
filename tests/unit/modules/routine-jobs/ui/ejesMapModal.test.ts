@@ -2,10 +2,10 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { EjesMergeRow, EjesSplitRow, EjesTwinRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
-import type { EjesGeometryMapBase } from "@/modules/routine-jobs/ui/clientTypes";
-import { EjesMapDetails } from "@/modules/routine-jobs/ui/EjesMapDetails";
-import { EJES_CONNECTION_NOTICE, EjesMapModal } from "@/modules/routine-jobs/ui/EjesMapModal";
-import { subjectOfMerge, subjectOfSplit, subjectOfTwin } from "@/modules/routine-jobs/ui/ejesMapSubject";
+import type { EjesGeometryMapBase } from "@/modules/routine-jobs/ui/shared/clientTypes";
+import { EjesMapDetails } from "@/modules/routine-jobs/ui/ejes-calles/EjesMapDetails";
+import { EJES_CONNECTION_NOTICE, EjesMapModal } from "@/modules/routine-jobs/ui/ejes-calles/EjesMapModal";
+import { subjectOfMerge, subjectOfSplit, subjectOfTwin } from "@/modules/routine-jobs/ui/ejes-calles/ejesMapSubject";
 
 const SPLIT: EjesSplitRow = {
   oldRef: "1001634",

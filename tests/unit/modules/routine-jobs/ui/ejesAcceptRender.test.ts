@@ -3,14 +3,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ACCEPTED_KEYS_LIMIT } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { EjesResult } from "@/modules/routine-jobs/jobs/ejes-calles/types";
-import { EjesAcceptableRows } from "@/modules/routine-jobs/ui/EjesAcceptableRows";
-import { EjesAcceptToolbar } from "@/modules/routine-jobs/ui/EjesAcceptToolbar";
-import { EjesAcceptList, type EjesAcceptView } from "@/modules/routine-jobs/ui/ejesAccept";
-import { EJES_ACCEPT_TEXT, acceptedCountTextOf, incompleteListTextOf } from "@/modules/routine-jobs/ui/ejesAcceptTexts";
-import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/ejesCallesRunStore";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
-import { EjesResultStep, type EjesResultStepProps } from "@/modules/routine-jobs/ui/steps/EjesResultStep";
-import type { TableColumn } from "@/modules/routine-jobs/ui/ReportParts";
+import { EjesAcceptableRows } from "@/modules/routine-jobs/ui/ejes-calles/EjesAcceptableRows";
+import { EjesAcceptToolbar } from "@/modules/routine-jobs/ui/ejes-calles/EjesAcceptToolbar";
+import { EjesAcceptList, type EjesAcceptView } from "@/modules/routine-jobs/ui/ejes-calles/ejesAccept";
+import { EJES_ACCEPT_TEXT, acceptedCountTextOf, incompleteListTextOf } from "@/modules/routine-jobs/ui/ejes-calles/ejesAcceptTexts";
+import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/shared/ejesCallesRunStore";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
+import { EjesResultStep, type EjesResultStepProps } from "@/modules/routine-jobs/ui/ejes-calles/steps/EjesResultStep";
+import type { TableColumn } from "@/modules/routine-jobs/ui/shared/ReportParts";
 
 const COUNTS = {
   newSections: 2,

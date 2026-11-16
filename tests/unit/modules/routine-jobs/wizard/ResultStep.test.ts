@@ -1,11 +1,11 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { buildReportView } from "@/modules/routine-jobs/ui/cargarPadronesReportView";
-import { ResultStep } from "@/modules/routine-jobs/ui/steps/ResultStep";
+import { buildReportView } from "@/modules/routine-jobs/ui/cargar-padrones/cargarPadronesReportView";
+import { ResultStep } from "@/modules/routine-jobs/ui/cargar-padrones/steps/ResultStep";
 import { STEP } from "@/modules/routine-jobs/jobs/cargar-padrones/domain/plannedSteps";
 import { buttonAttributes, jobOf, openingTags, resultOf, snapshotOf } from "./wizardFixtures";
-import type { CargarPadronesRunPlan, CargarPadronesRunSnapshot } from "@/modules/routine-jobs/ui/cargarPadronesRunStore";
+import type { CargarPadronesRunPlan, CargarPadronesRunSnapshot } from "@/modules/routine-jobs/ui/shared/cargarPadronesRunStore";
 
 const START_MS = 1_000_000;
 const ELAPSED_125_SECONDS = START_MS + 125_000;

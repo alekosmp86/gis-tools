@@ -6,8 +6,8 @@ import {
   defaultOpenListOf,
   ejesListAnchorOf,
   stripOf,
-} from "@/modules/routine-jobs/ui/ejesCallesListMeta";
-import { buildEjesReportView } from "@/modules/routine-jobs/ui/ejesCallesReportView";
+} from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesListMeta";
+import { buildEjesReportView } from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesReportView";
 
 interface Overrides {
   counts?: Record<string, number>;

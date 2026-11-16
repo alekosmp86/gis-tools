@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EJES_SKIP_REASON, RENUMBER_SKIP_REASON } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { EjesBackup, EjesLoadReport, EjesResult, EjesSkippedRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
-import { buildEjesLoadView } from "@/modules/routine-jobs/ui/ejesLoadReportView";
+import { buildEjesLoadView } from "@/modules/routine-jobs/ui/ejes-calles/ejesLoadReportView";
 import {
   EJES_LOAD_COUNT_TEXT,
   EJES_LOAD_DONE_BANNER,
@@ -9,7 +9,7 @@ import {
   EJES_SKIP_KIND_TEXT,
   RENUMBER_SKIP_TEXT,
   SKIP_REASON_TEXT,
-} from "@/modules/routine-jobs/ui/ejesLoadTexts";
+} from "@/modules/routine-jobs/ui/ejes-calles/ejesLoadTexts";
 
 const loadOf = (overrides: Partial<EjesLoadReport> = {}): EjesLoadReport => ({
   counts: {

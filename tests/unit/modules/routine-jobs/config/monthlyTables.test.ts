@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import * as cargarPadronesState from "@/modules/routine-jobs/ui/cargarPadronesWizardState";
-import * as cargarLocalidadesState from "@/modules/routine-jobs/ui/cargarLocalidadesWizardState";
-import * as unidadTerritorialState from "@/modules/routine-jobs/ui/unidadTerritorialWizardState";
-import * as actualizarPadronState from "@/modules/routine-jobs/ui/actualizarPadronWizardState";
-import { LocalidadesDestination } from "@/modules/routine-jobs/ui/localidadesDestination";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
+import * as cargarPadronesState from "@/modules/routine-jobs/ui/shared/cargarPadronesWizardState";
+import * as cargarLocalidadesState from "@/modules/routine-jobs/ui/cargar-localidades/cargarLocalidadesWizardState";
+import * as unidadTerritorialState from "@/modules/routine-jobs/ui/unidad-territorial/unidadTerritorialWizardState";
+import * as actualizarPadronState from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPadronWizardState";
+import { LocalidadesDestination } from "@/modules/routine-jobs/ui/shared/localidadesDestination";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
 
 const CONNECTION = { host: "db.local", port: "5432", db_name: "gis", user: "carto", password: "pw" };
 const IDLE_SNAPSHOT = { phase: RunPhase.IDLE };

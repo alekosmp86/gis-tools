@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { plural } from "@/modules/routine-jobs/jobs/shared/text";
 import { listOf, nullableNumber, numberOf, textOf } from "@/modules/routine-jobs/jobs/shared/rowMapping";
 import { assertTablesDistinct, RequestInvalidError } from "@/modules/routine-jobs/api/requestParsing";
-import { outcomeBannersOf, timingsViewOf } from "@/modules/routine-jobs/ui/reportViewParts";
+import { outcomeBannersOf, timingsViewOf } from "@/modules/routine-jobs/ui/shared/reportViewParts";
 
 describe("plural", () => {
   it("should use the singular form for exactly one", () => {

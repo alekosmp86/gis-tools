@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MONTHLY_STAGES, MonthlyStage } from "@/modules/routine-jobs/ui/monthlyCartoStages";
+import { MONTHLY_STAGES, MonthlyStage } from "@/modules/routine-jobs/ui/shared/monthlyCartoStages";
 
 const stageOf = (id: MonthlyStage) => MONTHLY_STAGES.find((stage) => stage.id === id);
 

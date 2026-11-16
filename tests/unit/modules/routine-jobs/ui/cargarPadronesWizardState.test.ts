@@ -13,7 +13,7 @@ import {
   WizardStep,
   type ConnectionField,
   type WizardState,
-} from "@/modules/routine-jobs/ui/cargarPadronesWizardState";
+} from "@/modules/routine-jobs/ui/shared/cargarPadronesWizardState";
 
 const PASSWORD = "s3cret-pw";
 

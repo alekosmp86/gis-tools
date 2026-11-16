@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EjesGeometryMapBase } from "@/modules/routine-jobs/ui/clientTypes";
-import { subjectOfTwin } from "@/modules/routine-jobs/ui/ejesMapSubject";
-import { useEjesMapFeatures } from "@/modules/routine-jobs/ui/useEjesMapFeatures";
+import type { EjesGeometryMapBase } from "@/modules/routine-jobs/ui/shared/clientTypes";
+import { subjectOfTwin } from "@/modules/routine-jobs/ui/ejes-calles/ejesMapSubject";
+import { useEjesMapFeatures } from "@/modules/routine-jobs/ui/ejes-calles/useEjesMapFeatures";
 
 const calls = vi.hoisted(() => ({
   scopes: [] as string[],
@@ -14,7 +14,7 @@ vi.mock("react", async (importOriginal) => ({
   useCallback: <T>(callback: T): T => callback,
 }));
 
-vi.mock("@/modules/routine-jobs/ui/map/useOutlineMapFeatures", () => ({
+vi.mock("@/modules/routine-jobs/ui/shared/map/useOutlineMapFeatures", () => ({
   useOutlineMapFeatures: (_items: unknown, scope: string, fetchOutlines: (items: unknown[]) => Promise<unknown>) => {
     calls.scopes.push(scope);
     calls.fetchers.push(fetchOutlines);
@@ -22,7 +22,7 @@ vi.mock("@/modules/routine-jobs/ui/map/useOutlineMapFeatures", () => ({
   },
 }));
 
-vi.mock("@/modules/routine-jobs/ui/routineJobsClient", () => ({
+vi.mock("@/modules/routine-jobs/ui/shared/routineJobsClient", () => ({
   createRoutineJobsClient: () => ({ fetchEjesGeometryMap: calls.fetchEjesGeometryMap }),
 }));
 

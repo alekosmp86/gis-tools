@@ -4,8 +4,8 @@ import {
   initialWizardStateFor,
   WizardStep,
   type WizardState,
-} from "@/modules/routine-jobs/ui/cargarPadronesWizardState";
-import { buildWizardSteps, excludedFor, initialStepFor } from "@/modules/routine-jobs/ui/wizardSteps";
+} from "@/modules/routine-jobs/ui/shared/cargarPadronesWizardState";
+import { buildWizardSteps, excludedFor, initialStepFor } from "@/modules/routine-jobs/ui/cargar-padrones/wizardSteps";
 
 const TITLES = ["Conexión", "Tablas", "Opciones", "Revisar", "Resultado"];
 

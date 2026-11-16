@@ -251,8 +251,8 @@ and are passed as bound parameters or constants.
 
 Everything user-facing is Spanish; code is English; modular CSS, no inline styles, Lucide icons only.
 
-- CL-42: Wizard (`ui/CargarLocalidadesWizard.tsx`) with `WizardOrchestrator`, five steps: (1) Conexión, (2) Tablas, (3) Opciones, (4) Revisar,
-  (5) Resultado. The reducer is pure (`ui/cargarLocalidadesWizardState.ts`). `canContinue` requires: connection fields valid; the three schemas
+- CL-42: Wizard (`ui/cargar-localidades/CargarLocalidadesWizard.tsx`) with `WizardOrchestrator`, five steps: (1) Conexión, (2) Tablas, (3) Opciones, (4) Revisar,
+  (5) Resultado. The reducer is pure (`ui/cargar-localidades/cargarLocalidadesWizardState.ts`). `canContinue` requires: connection fields valid; the three schemas
   chosen; the five tables chosen, distinct and all valid; options valid; for a real run, the password matches.
 - CL-43: Dependency resets: changing the connection resets schemas and tables. Changing `stagingSchema` resets the two staging tables;
   `cartoSchema` resets the province and carto target tables; `bdjSchema` resets the BDJ target table.
@@ -274,10 +274,10 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
   per target: insertadas, actualizadas, sin cambios, faltantes, ambiguas; skipped by reason with a one-line Spanish explanation; top 10 lists
   with "Ver todo"; inserted list and geometry changes in collapsibles; samples in collapsibles; warnings and banners). A dry run shows the banner
   "Análisis: las tablas de localidades no fueron modificadas". An `outcomeUnknown` result shows the verify-before-retry banner.
-- CL-50: Run store (`ui/cargarLocalidadesRunStore.ts`) as AC-29 of Cargar padrones: polls every 2 s (timer injected), stops on DONE/FAILED,
+- CL-50: Run store (`ui/shared/cargarLocalidadesRunStore.ts`) as AC-29 of Cargar padrones: polls every 2 s (timer injected), stops on DONE/FAILED,
   survives in-app navigation, gives up only after 60 s of consecutive poll failures and then reports an unknown outcome with the job id; never
   keeps the password in its snapshot.
-- CL-51: Report view-model (`ui/cargarLocalidadesReportView.ts`): pure and unit tested. Percentages per reason over the candidates plus skipped
+- CL-51: Report view-model (`ui/cargar-localidades/cargarLocalidadesReportView.ts`): pure and unit tested. Percentages per reason over the candidates plus skipped
   (0 when nothing was read), non-zero reasons sorted by count with their explanation, `rest` counts for the top 10 lists, banners and warnings.
 - CL-52: Dashboard: the routine-jobs job list shows "Cargar localidades" next to the other two jobs and opens its wizard. The module page, the
   home card and the manifest need no new entry point. `module.routes.json` declares the two endpoints and the five catalog roles; the generated

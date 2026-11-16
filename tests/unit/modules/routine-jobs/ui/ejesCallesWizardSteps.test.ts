@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { initialEjesWizardState, EjesStep } from "@/modules/routine-jobs/ui/ejesCallesWizardState";
-import { buildEjesWizardSteps, ejesStepIdOf, ejesStepOfId } from "@/modules/routine-jobs/ui/ejesCallesWizardSteps";
-import { getEjesRunStore } from "@/modules/routine-jobs/ui/ejesCallesRunStore";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
+import { initialEjesWizardState, EjesStep } from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesWizardState";
+import { buildEjesWizardSteps, ejesStepIdOf, ejesStepOfId } from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesWizardSteps";
+import { getEjesRunStore } from "@/modules/routine-jobs/ui/shared/ejesCallesRunStore";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
 
 describe("ejes wizard steps (EJ-24)", () => {
   it("should define Conexión, Tablas, Revisar and Resultado in order", () => {

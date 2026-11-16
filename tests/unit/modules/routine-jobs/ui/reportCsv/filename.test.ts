@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reportCsvFilename } from "@/modules/routine-jobs/ui/reportCsv/filename";
+import { reportCsvFilename } from "@/modules/routine-jobs/ui/shared/filename";
 
 describe("reportCsvFilename", () => {
   describe("mode segment", () => {

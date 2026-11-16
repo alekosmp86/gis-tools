@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildSharedLoadTables, firstCatalogError } from "@/modules/routine-jobs/ui/sharedCatalog";
-import type { ClientConnection } from "@/modules/routine-jobs/ui/clientTypes";
+import { buildSharedLoadTables, firstCatalogError } from "@/modules/routine-jobs/ui/shared/sharedCatalog";
+import type { ClientConnection } from "@/modules/routine-jobs/ui/shared/clientTypes";
 import type { TableListing } from "@/core/types/tableCatalog";
 
 const connection: ClientConnection = { host: "db.local", port: "5432", db_name: "gis", user: "carto", password: "pw" };

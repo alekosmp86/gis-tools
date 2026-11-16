@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCargarLocalidadesCsv } from "@/modules/routine-jobs/ui/reportCsv/cargarLocalidadesCsv";
+import { buildCargarLocalidadesCsv } from "@/modules/routine-jobs/ui/cargar-localidades/cargarLocalidadesCsv";
 import type { CargarLocalidadesResult } from "@/modules/routine-jobs/jobs/cargar-localidades/types";
 import {
   BOM,

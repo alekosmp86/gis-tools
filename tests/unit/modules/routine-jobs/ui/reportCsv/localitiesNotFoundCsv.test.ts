@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LOCALITY_REASON_GROUP_LIMIT } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
-import type { LocalityRow } from "@/modules/routine-jobs/ui/actualizarPadronReportView";
-import { buildLocalitiesNotFoundCsv } from "@/modules/routine-jobs/ui/reportCsv/localitiesNotFoundCsv";
+import type { LocalityRow } from "@/modules/routine-jobs/ui/shared/actualizarPadronReportView";
+import { buildLocalitiesNotFoundCsv } from "@/modules/routine-jobs/ui/actualizar-padron/localitiesNotFoundCsv";
 import { BOM, parseCsv } from "./reportCsvFixtures";
 
 const HEADER = ["Departamento", "Localidad", "Padrones afectados", "Motivo"];

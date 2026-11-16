@@ -2,8 +2,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableSelectorProps } from "@/ui-kit/components/TableSelector";
-import { UnidadTablesStep } from "@/modules/routine-jobs/ui/steps/UnidadTablesStep";
-import { UnitSlot } from "@/modules/routine-jobs/ui/unidadTerritorialWizardState";
+import { UnidadTablesStep } from "@/modules/routine-jobs/ui/unidad-territorial/steps/UnidadTablesStep";
+import { UnitSlot } from "@/modules/routine-jobs/ui/unidad-territorial/unidadTerritorialWizardState";
 import { UNIT_REQUIRED_COLUMNS_BY_ROLE, UNIT_TABLE_ROLE } from "@/modules/routine-jobs/jobs/unidad-territorial/constants";
 
 const captured = vi.hoisted(() => ({ selectors: [] as unknown[] }));

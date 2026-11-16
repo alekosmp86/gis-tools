@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { catalogKey, commitSchema, createInFlightMemo, schemaCommitPlan } from "@/modules/routine-jobs/ui/schemaDraft";
-import type { ClientConnection } from "@/modules/routine-jobs/ui/clientTypes";
+import { catalogKey, commitSchema, createInFlightMemo, schemaCommitPlan } from "@/modules/routine-jobs/ui/shared/schemaDraft";
+import type { ClientConnection } from "@/modules/routine-jobs/ui/shared/clientTypes";
 
 const connection = (overrides: Partial<ClientConnection> = {}): ClientConnection => ({
   host: "db.local",

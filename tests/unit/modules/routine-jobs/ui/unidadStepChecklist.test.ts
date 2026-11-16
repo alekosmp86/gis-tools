@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { plannedUnitStepLabels, UNIT_STEP } from "@/modules/routine-jobs/jobs/unidad-territorial/domain/plannedSteps";
-import { resolvePlannedLabels } from "@/modules/routine-jobs/ui/stepChecklist";
+import { resolvePlannedLabels } from "@/modules/routine-jobs/ui/shared/stepChecklist";
 
 describe("resolvePlannedLabels for the unidad territorial plan", () => {
   it("should keep resolving the stage 3 plan to its own steps", () => {

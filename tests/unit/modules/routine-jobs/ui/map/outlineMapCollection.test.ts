@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAP_ROLE_TYPE } from "@/core/constants/mapConstants";
-import { OUTLINE_LABEL_LIMIT, OUTLINE_LABEL_PROPERTY, toMapCollection } from "@/modules/routine-jobs/ui/map/outlineMapCollection";
-import { OUTLINE_ROLE, type OutlineFeature, type OutlineLabel } from "@/modules/routine-jobs/ui/map/outlineTypes";
+import { OUTLINE_LABEL_LIMIT, OUTLINE_LABEL_PROPERTY, toMapCollection } from "@/modules/routine-jobs/ui/shared/map/outlineMapCollection";
+import { OUTLINE_ROLE, type OutlineFeature, type OutlineLabel } from "@/modules/routine-jobs/ui/shared/map/outlineTypes";
 
 const POINT = { type: "Point" as const, coordinates: [-56.1, -34.9] };
 

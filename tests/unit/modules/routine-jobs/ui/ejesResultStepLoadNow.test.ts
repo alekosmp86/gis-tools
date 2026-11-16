@@ -1,9 +1,9 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { EjesResultStep, type EjesResultStepProps } from "@/modules/routine-jobs/ui/steps/EjesResultStep";
-import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/ejesCallesRunStore";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
+import { EjesResultStep, type EjesResultStepProps } from "@/modules/routine-jobs/ui/ejes-calles/steps/EjesResultStep";
+import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/shared/ejesCallesRunStore";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
 
 const LOAD_LABEL = "Cargar ahora";
 

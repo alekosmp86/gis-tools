@@ -2,9 +2,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { EjesRenumberedRow, EjesResult } from "@/modules/routine-jobs/jobs/ejes-calles/types";
-import { EjesCallesReport } from "@/modules/routine-jobs/ui/EjesCallesReport";
-import { EjesMapDetails } from "@/modules/routine-jobs/ui/EjesMapDetails";
-import { EJES_SUBJECT_TITLE, subjectOfRenumbered, truncationNoteOf } from "@/modules/routine-jobs/ui/ejesMapSubject";
+import { EjesCallesReport } from "@/modules/routine-jobs/ui/ejes-calles/EjesCallesReport";
+import { EjesMapDetails } from "@/modules/routine-jobs/ui/ejes-calles/EjesMapDetails";
+import { EJES_SUBJECT_TITLE, subjectOfRenumbered, truncationNoteOf } from "@/modules/routine-jobs/ui/ejes-calles/ejesMapSubject";
 
 const COUNTS = {
   newSections: 10,

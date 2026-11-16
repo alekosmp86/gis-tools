@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createRoutineJobsClient } from "@/modules/routine-jobs/ui/routineJobsClient";
-import type { CentrosAnepStartRequest } from "@/modules/routine-jobs/ui/clientTypes";
+import { createRoutineJobsClient } from "@/modules/routine-jobs/ui/shared/routineJobsClient";
+import type { CentrosAnepStartRequest } from "@/modules/routine-jobs/ui/shared/clientTypes";
 import { centrosTablesBody } from "../centros-anep/centrosFixtures";
 
 const BASE = "/api/m/routine-jobs";

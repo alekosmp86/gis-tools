@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useElapsedTick } from "@/modules/routine-jobs/ui/useElapsedTick";
+import { useElapsedTick } from "@/modules/routine-jobs/ui/shared/useElapsedTick";
 
 /** No DOM/renderHook lib installed: react hooks are replaced by a minimal slot-based shim (same pattern as the db-sync hooks). */
 const shim = vi.hoisted(() => {

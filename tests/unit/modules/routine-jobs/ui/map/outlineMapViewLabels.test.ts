@@ -1,13 +1,13 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EjesGeometryMapBase } from "@/modules/routine-jobs/ui/clientTypes";
-import { EjesMapView } from "@/modules/routine-jobs/ui/EjesMapView";
-import { subjectOfSplit, subjectOfTwin } from "@/modules/routine-jobs/ui/ejesMapSubject";
-import { OUTLINE_LABEL_PROPERTY } from "@/modules/routine-jobs/ui/map/outlineMapCollection";
-import { OutlineMapView } from "@/modules/routine-jobs/ui/map/OutlineMapView";
-import type { OutlineFeature } from "@/modules/routine-jobs/ui/map/outlineTypes";
-import { MapLoadStatus, type OutlineMapFeatures } from "@/modules/routine-jobs/ui/map/useOutlineMapFeatures";
+import type { EjesGeometryMapBase } from "@/modules/routine-jobs/ui/shared/clientTypes";
+import { EjesMapView } from "@/modules/routine-jobs/ui/ejes-calles/EjesMapView";
+import { subjectOfSplit, subjectOfTwin } from "@/modules/routine-jobs/ui/ejes-calles/ejesMapSubject";
+import { OUTLINE_LABEL_PROPERTY } from "@/modules/routine-jobs/ui/shared/map/outlineMapCollection";
+import { OutlineMapView } from "@/modules/routine-jobs/ui/shared/map/OutlineMapView";
+import type { OutlineFeature } from "@/modules/routine-jobs/ui/shared/map/outlineTypes";
+import { MapLoadStatus, type OutlineMapFeatures } from "@/modules/routine-jobs/ui/shared/map/useOutlineMapFeatures";
 
 const shown = vi.hoisted(() => ({ props: [] as Array<Record<string, unknown>>, map: null as unknown }));
 
@@ -18,7 +18,7 @@ vi.mock("next/dynamic", () => ({
   },
 }));
 
-vi.mock("@/modules/routine-jobs/ui/useEjesMapFeatures", () => ({
+vi.mock("@/modules/routine-jobs/ui/ejes-calles/useEjesMapFeatures", () => ({
   useEjesMapFeatures: () => shown.map,
 }));
 

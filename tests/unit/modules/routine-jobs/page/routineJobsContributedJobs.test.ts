@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/RoutineJobsDashboard";
+import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/dashboard/RoutineJobsDashboard";
 import { ModuleContributionsProvider } from "@/ui-kit/modules/ModuleContributionsContext";
 import { UiSlot } from "@/ui-kit/modules/contracts";
 

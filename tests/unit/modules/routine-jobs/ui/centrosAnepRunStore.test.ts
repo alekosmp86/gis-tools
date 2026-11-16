@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import { createCentrosAnepRunStore } from "@/modules/routine-jobs/ui/centrosAnepRunStore";
-import { centrosAnepAnalysisKeyOf } from "@/modules/routine-jobs/ui/centrosAnepAnalysisKey";
-import type { CentrosAnepJobStatusView, CentrosAnepStartRequest } from "@/modules/routine-jobs/ui/clientTypes";
+import { createCentrosAnepRunStore } from "@/modules/routine-jobs/ui/shared/centrosAnepRunStore";
+import { centrosAnepAnalysisKeyOf } from "@/modules/routine-jobs/ui/shared/centrosAnepAnalysisKey";
+import type { CentrosAnepJobStatusView, CentrosAnepStartRequest } from "@/modules/routine-jobs/ui/shared/clientTypes";
 import { centrosTablesBody } from "../centros-anep/centrosFixtures";
 
 const PASSWORD = "s3cret-pw";

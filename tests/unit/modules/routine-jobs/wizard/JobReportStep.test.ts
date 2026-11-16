@@ -1,12 +1,12 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { JobReportStep, type JobReportTexts } from "@/modules/routine-jobs/ui/steps/JobReportStep";
-import { UnidadReportStep } from "@/modules/routine-jobs/ui/steps/UnidadReportStep";
-import { LocalidadesReportStep } from "@/modules/routine-jobs/ui/steps/LocalidadesReportStep";
-import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
-import type { UnidadRunSnapshot } from "@/modules/routine-jobs/ui/unidadTerritorialRunStore";
-import type { CargarLocalidadesRunSnapshot } from "@/modules/routine-jobs/ui/cargarLocalidadesRunStore";
+import { JobReportStep, type JobReportTexts } from "@/modules/routine-jobs/ui/shared/steps/JobReportStep";
+import { UnidadReportStep } from "@/modules/routine-jobs/ui/unidad-territorial/steps/UnidadReportStep";
+import { LocalidadesReportStep } from "@/modules/routine-jobs/ui/cargar-localidades/steps/LocalidadesReportStep";
+import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
+import type { UnidadRunSnapshot } from "@/modules/routine-jobs/ui/shared/unidadTerritorialRunStore";
+import type { CargarLocalidadesRunSnapshot } from "@/modules/routine-jobs/ui/shared/cargarLocalidadesRunStore";
 import { buttonAttributes } from "./wizardFixtures";
 
 const TEXTS: JobReportTexts = {

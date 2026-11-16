@@ -1,5 +1,5 @@
-import type { ClientConnection, JobStatusView, StartRequest } from "@/modules/routine-jobs/ui/clientTypes";
-import type { CargarPadronesRunSnapshot } from "@/modules/routine-jobs/ui/cargarPadronesRunStore";
+import type { ClientConnection, JobStatusView, StartRequest } from "@/modules/routine-jobs/ui/shared/clientTypes";
+import type { CargarPadronesRunSnapshot } from "@/modules/routine-jobs/ui/shared/cargarPadronesRunStore";
 import type { SavedDbProfile } from "@/core/types/db";
 import type { CargarPadronesResult, TypeReport } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
 

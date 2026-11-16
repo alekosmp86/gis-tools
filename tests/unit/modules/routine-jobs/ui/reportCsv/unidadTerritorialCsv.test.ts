@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildUnidadTerritorialCsv } from "@/modules/routine-jobs/ui/reportCsv/unidadTerritorialCsv";
+import { buildUnidadTerritorialCsv } from "@/modules/routine-jobs/ui/unidad-territorial/unidadTerritorialCsv";
 import type { UnitResult } from "@/modules/routine-jobs/jobs/unidad-territorial/types";
 import { BOM, parseCsv, unitResultOf, unitTargetReportOf } from "./reportCsvFixtures";
 

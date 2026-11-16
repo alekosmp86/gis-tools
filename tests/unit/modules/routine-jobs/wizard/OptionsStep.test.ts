@@ -1,8 +1,8 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { StartRequest } from "@/modules/routine-jobs/ui/clientTypes";
-import { OptionsStep } from "@/modules/routine-jobs/ui/steps/OptionsStep";
+import type { StartRequest } from "@/modules/routine-jobs/ui/shared/clientTypes";
+import { OptionsStep } from "@/modules/routine-jobs/ui/cargar-padrones/steps/OptionsStep";
 import { openingTags } from "./wizardFixtures";
 
 type Options = StartRequest["options"];

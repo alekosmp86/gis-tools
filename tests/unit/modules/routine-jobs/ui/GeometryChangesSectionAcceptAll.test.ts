@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { GEOMETRY_STATE } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { PadronGeometryChange } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
-import { GeometryChangesSection, type GeometryChangesSectionProps } from "@/modules/routine-jobs/ui/GeometryChangesSection";
-import { RESIMULATE_LABEL } from "@/modules/routine-jobs/ui/PairChoiceGroups";
-import { readOnlyAcceptsOf, type GeometryAcceptSelection } from "@/modules/routine-jobs/ui/reviewDecisions";
+import { GeometryChangesSection, type GeometryChangesSectionProps } from "@/modules/routine-jobs/ui/actualizar-padron/GeometryChangesSection";
+import { RESIMULATE_LABEL } from "@/modules/routine-jobs/ui/actualizar-padron/PairChoiceGroups";
+import { readOnlyAcceptsOf, type GeometryAcceptSelection } from "@/modules/routine-jobs/ui/actualizar-padron/reviewDecisions";
 
 const changeOf = (overrides: Partial<PadronGeometryChange> = {}): PadronGeometryChange => ({
   typePadron: "URBANO",

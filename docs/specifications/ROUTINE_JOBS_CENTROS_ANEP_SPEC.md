@@ -54,7 +54,7 @@ Facts read from the layer (not rules):
 
 ## Wizard
 
-- CA-15: Steps Conexión, Tablas, Revisar and Resultado on the shared orchestrator. The Tablas step uses the shared `TableSelector`. Revisar has "Analizar"; "Analizar" is optional: "Cargar ahora" is enabled with the password typed again and the destructive confirmation checked, without a prior analysis. The real run reads the staging report inside its transaction and, before the backup and the DELETE, stops with the CA-8 blockers if there are any (nothing is written then). Resultado shows progress and the report. State, steps and run store live beside the other jobs' (`ui/centrosAnepWizardState.ts`, `ui/centrosAnepWizardSteps.ts`, `ui/centrosAnepRunStore.ts`).
+- CA-15: Steps Conexión, Tablas, Revisar and Resultado on the shared orchestrator. The Tablas step uses the shared `TableSelector`. Revisar has "Analizar"; "Analizar" is optional: "Cargar ahora" is enabled with the password typed again and the destructive confirmation checked, without a prior analysis. The real run reads the staging report inside its transaction and, before the backup and the DELETE, stops with the CA-8 blockers if there are any (nothing is written then). Resultado shows progress and the report. State, steps and run store live beside the other jobs' (`ui/centros-anep/centrosAnepWizardState.ts`, `ui/centros-anep/centrosAnepWizardSteps.ts`, `ui/shared/centrosAnepRunStore.ts`).
 - CA-16: The Conexión step shows a note: "Antes de correr este trabajo, cargue la tabla de staging con DB vs. Shapefile (Reemplazo completo) desde el shapefile del WFS de IDEuy" with the download URL.
 
 ## Documentation and tests

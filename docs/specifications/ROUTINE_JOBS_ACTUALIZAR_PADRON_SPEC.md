@@ -418,8 +418,8 @@ The wizard and the request carry two schema fields:
 
 Everything user-facing is Spanish; code is English; modular CSS, no inline styles, Lucide icons only.
 
-- AP-27: Wizard (`ui/ActualizarPadronWizard.tsx`), five steps with `WizardOrchestrator`: (1) Conexión, (2) Tablas, (3) Opciones, (4) Revisar,
-  (5) Resultado. The reducer is pure (`ui/actualizarPadronWizardState.ts`). `canContinue` requires: connection fields valid; the two schemas
+- AP-27: Wizard (`ui/actualizar-padron/ActualizarPadronWizard.tsx`), five steps with `WizardOrchestrator`: (1) Conexión, (2) Tablas, (3) Opciones, (4) Revisar,
+  (5) Resultado. The reducer is pure (`ui/actualizar-padron/actualizarPadronWizardState.ts`). `canContinue` requires: connection fields valid; the two schemas
   chosen; the required tables chosen, distinct and valid (the type table is optional); when a type table is selected, a non-blank locality
   type; a valid tolerance. The password that a real run needs is checked by the persist panel of
   AP-91, not by the review step. Changing the connection resets the schemas
@@ -471,10 +471,10 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
   - "Localidades no encontradas" and "Localidades ambiguas" (AP-16), shown when non-empty;
   - skipped samples and colliding keys in collapsible tables; step timings in a collapsible;
   - warnings as a list; body text at least 14 px, nothing below 12 px, zebra rows in every table.
-- AP-33: Run store (`ui/actualizarPadronRunStore.ts`) follows AC-29 of Cargar padrones: holds the active job id, polls status every 2 s (timer
+- AP-33: Run store (`ui/shared/actualizarPadronRunStore.ts`) follows AC-29 of Cargar padrones: holds the active job id, polls status every 2 s (timer
   injected), stops on DONE/FAILED, survives in-app navigation, gives up only after consecutive poll failures span 60 s and then reports an
   unknown outcome with the job id; never keeps the password in its snapshot. Its plan is `{ dryRun, destinationTable }`.
-- AP-34: Report view-model (`ui/actualizarPadronReportView.ts`): pure and unit tested. It turns the result into display data: KPI values, the
+- AP-34: Report view-model (`ui/shared/actualizarPadronReportView.ts`): pure and unit tested. It turns the result into display data: KPI values, the
   percentage per reason (share of the skipped rows; 0 when nothing was skipped), the non-zero reasons sorted by count, the top 10 lists per
   department and locality with a `rest` count, the localities-not-found and ambiguous aggregations from `skipped.byLocalityAndReason`, the
   target counts and lists with their summaries, samples, warnings (without the dry-run and unknown-outcome texts, which are banners) and banners.

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AddressMasterReport } from "@/modules/routine-jobs/jobs/shared/addressMasterLinkReport";
 import { TERRITORIAL_UNIT_VIEW_NAME, UNIT_SKIP_REASON, type UnitSkipReason } from "@/modules/routine-jobs/jobs/unidad-territorial/constants";
 import type { UnitResult, UnitTargetReport } from "@/modules/routine-jobs/jobs/unidad-territorial/types";
-import { buildUnitReportView } from "@/modules/routine-jobs/ui/unidadTerritorialReportView";
+import { buildUnitReportView } from "@/modules/routine-jobs/ui/unidad-territorial/unidadTerritorialReportView";
 
 const TARGET_SCHEMA = "carto";
 const EXPECTED_STATEMENT = `REFRESH MATERIALIZED VIEW "carto"."${TERRITORIAL_UNIT_VIEW_NAME}";`;

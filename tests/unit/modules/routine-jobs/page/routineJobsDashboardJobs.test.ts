@@ -1,8 +1,8 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/RoutineJobsDashboard";
-import { MONTHLY_CARTO_JOB_ID, ROUTINE_JOBS } from "@/modules/routine-jobs/ui/jobs";
+import { RoutineJobsDashboard } from "@/modules/routine-jobs/ui/dashboard/RoutineJobsDashboard";
+import { MONTHLY_CARTO_JOB_ID, ROUTINE_JOBS } from "@/modules/routine-jobs/ui/dashboard/jobs";
 
 const MONTHLY_TITLE = "Carga de padrones";
 

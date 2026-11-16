@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ActualizarPadronBackup } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import type { CentrosResult } from "@/modules/routine-jobs/jobs/centros-anep/types";
-import { ActualizarBackupSection } from "@/modules/routine-jobs/ui/ActualizarBackupSection";
-import { CentrosAnepReport } from "@/modules/routine-jobs/ui/CentrosAnepReport";
-import { RevertBackupSection } from "@/modules/routine-jobs/ui/RevertBackupSection";
+import { ActualizarBackupSection } from "@/modules/routine-jobs/ui/actualizar-padron/ActualizarBackupSection";
+import { CentrosAnepReport } from "@/modules/routine-jobs/ui/centros-anep/CentrosAnepReport";
+import { RevertBackupSection } from "@/modules/routine-jobs/ui/shared/RevertBackupSection";
 import { cleanStaging } from "../centros-anep/centrosFixtures";
 
 const TITLE = "Respaldo para revertir";

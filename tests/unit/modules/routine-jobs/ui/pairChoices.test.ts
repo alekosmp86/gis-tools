@@ -10,7 +10,7 @@ import {
   withChoice,
   withChoices,
   withoutChoices,
-} from "@/modules/routine-jobs/ui/pairChoices";
+} from "@/modules/routine-jobs/ui/shared/pairChoices";
 
 const newKeyOf = (overrides: Partial<PadronNamedKey> = {}): PadronNamedKey => ({
   typePadron: "RURAL",

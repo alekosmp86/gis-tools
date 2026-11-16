@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { ConnectionStep } from "@/modules/routine-jobs/ui/steps/ConnectionStep";
+import { ConnectionStep } from "@/modules/routine-jobs/ui/shared/steps/ConnectionStep";
 import { connectionOf, openingTags, profileOf, SECRET, withoutValueAttributes } from "./wizardFixtures";
 
 type Props = React.ComponentProps<typeof ConnectionStep>;

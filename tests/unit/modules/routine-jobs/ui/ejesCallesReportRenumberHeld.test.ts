@@ -3,10 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { RENUMBER_SKIP_REASON } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { EjesRenumberSkippedRow, EjesResult } from "@/modules/routine-jobs/jobs/ejes-calles/types";
-import { EjesCallesReport } from "@/modules/routine-jobs/ui/EjesCallesReport";
-import { EJES_LIST, stripOf, type EjesListKey } from "@/modules/routine-jobs/ui/ejesCallesListMeta";
-import { EjesSummaryStrip } from "@/modules/routine-jobs/ui/EjesSummaryStrip";
-import { RENUMBER_SKIP_TEXT } from "@/modules/routine-jobs/ui/ejesLoadTexts";
+import { EjesCallesReport } from "@/modules/routine-jobs/ui/ejes-calles/EjesCallesReport";
+import { EJES_LIST, stripOf, type EjesListKey } from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesListMeta";
+import { EjesSummaryStrip } from "@/modules/routine-jobs/ui/ejes-calles/EjesSummaryStrip";
+import { RENUMBER_SKIP_TEXT } from "@/modules/routine-jobs/ui/ejes-calles/ejesLoadTexts";
 
 const HELD_TITLE = "Renumerados retenidos (ambos tramos quedan como están)";
 const ANCHOR = 'id="ejes-list-renumberHeld"';

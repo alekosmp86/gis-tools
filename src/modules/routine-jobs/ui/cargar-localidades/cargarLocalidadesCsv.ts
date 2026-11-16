@@ -1,0 +1,73 @@
+import type {
+  CargarLocalidadesResult,
+  GeometryChange,
+  TargetReport,
+  UnmatchedPadron,
+} from "../../jobs/cargar-localidades/types";
+import { textOrNoData } from "../shared/reportFormat";
+import type { CsvRow } from "../../jobs/shared/csvFormat";
+import {
+  CHANGE_KIND,
+  changeCsvOf,
+  listCsvOf,
+  orderedChangesOf,
+  type ChangeRecord,
+  type ListCut,
+} from "../shared/reportCsvRows";
+
+const insertedChangesOf = (table: string, localities: TargetReport["insertedList"]): ChangeRecord[] =>
+  localities.map((locality) => ({
+    table,
+    kind: CHANGE_KIND.INSERTED,
+    province: textOrNoData(locality.department),
+    name: textOrNoData(locality.name),
+    id: locality.id,
+    distance: null,
+    areaRatio: null,
+  }));
+
+const geometryChangesOf = (table: string, applied: boolean, changes: GeometryChange[]): ChangeRecord[] =>
+  changes.map((change) => ({
+    table,
+    kind: applied ? CHANGE_KIND.MODIFIED : CHANGE_KIND.DETECTED,
+    province: textOrNoData(change.department),
+    name: textOrNoData(change.name),
+    id: null,
+    distance: change.distance,
+    areaRatio: change.areaRatio,
+  }));
+
+const targetChangesOf = (target: TargetReport): ChangeRecord[] =>
+  orderedChangesOf([
+    ...insertedChangesOf(target.table, target.insertedList),
+    ...geometryChangesOf(target.table, target.updateApplied, target.geometryChanges),
+  ]);
+
+const targetCutsOf = (target: TargetReport): ListCut[] => [
+  { table: target.table, shown: target.insertedList.length, total: target.inserted, noun: "localidades insertadas" },
+  { table: target.table, shown: target.geometryChanges.length, total: target.changed, noun: "geometrías que cambian" },
+];
+
+export const buildCargarLocalidadesCsv = (result: CargarLocalidadesResult): string =>
+  changeCsvOf(
+    result.targets.flatMap((target) => targetChangesOf(target)),
+    result.targets.flatMap(targetCutsOf)
+  );
+
+const INCONSISTENCY_HEADER: CsvRow = ["Departamento", "Localidad", "Padrón"];
+
+const unmatchedPadronRowOf = (padron: UnmatchedPadron): CsvRow => [
+  textOrNoData(padron.department),
+  textOrNoData(padron.locality),
+  textOrNoData(padron.number),
+];
+
+export const buildCargarLocalidadesInconsistenciasCsv = (result: CargarLocalidadesResult): string =>
+  listCsvOf(INCONSISTENCY_HEADER, unmatchedPadronRowOf, result.unmatchedPadrons, [
+    {
+      table: "",
+      shown: result.unmatchedPadrons.length,
+      total: result.unmatchedPadronTotal,
+      noun: "padrones sin localidad en el origen",
+    },
+  ]);

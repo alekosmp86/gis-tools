@@ -7,7 +7,7 @@ import {
   acceptKeysOf,
   EjesAcceptList,
   type EjesAcceptance,
-} from "@/modules/routine-jobs/ui/ejesAccept";
+} from "@/modules/routine-jobs/ui/ejes-calles/ejesAccept";
 
 const keysOf = (count: number, prefix = "k"): string[] => Array.from({ length: count }, (_, index) => `${prefix}${index}`);
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { persistSummaryOf } from "@/modules/routine-jobs/ui/actualizarPersistSummary";
+import { persistSummaryOf } from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPersistSummary";
 
 describe("actualizarPersistSummary", () => {
   describe("persistSummaryOf", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReportView } from "@/modules/routine-jobs/ui/cargarPadronesReportView";
+import { buildReportView } from "@/modules/routine-jobs/ui/cargar-padrones/cargarPadronesReportView";
 import type {
   AmbiguousLocalityCode,
   AttributeConflictSample,

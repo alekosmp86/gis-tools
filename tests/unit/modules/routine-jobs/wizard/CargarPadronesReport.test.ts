@@ -2,8 +2,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { AttributeConflictSample, CargarPadronesResult } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
-import { buildReportView } from "@/modules/routine-jobs/ui/cargarPadronesReportView";
-import { CargarPadronesReport } from "@/modules/routine-jobs/ui/CargarPadronesReport";
+import { buildReportView } from "@/modules/routine-jobs/ui/cargar-padrones/cargarPadronesReportView";
+import { CargarPadronesReport } from "@/modules/routine-jobs/ui/cargar-padrones/CargarPadronesReport";
 import { resultOf, typeReportOf } from "./wizardFixtures";
 
 const render = (result: CargarPadronesResult): string =>

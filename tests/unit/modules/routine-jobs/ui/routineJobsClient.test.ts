@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
-import { createRoutineJobsClient, RoutineJobsApiError, STATUS_TIMEOUT_MS } from "@/modules/routine-jobs/ui/routineJobsClient";
-import type { ClientConnection, JobStatusView, StartRequest } from "@/modules/routine-jobs/ui/clientTypes";
+import { createRoutineJobsClient, RoutineJobsApiError, STATUS_TIMEOUT_MS } from "@/modules/routine-jobs/ui/shared/routineJobsClient";
+import type { ClientConnection, JobStatusView, StartRequest } from "@/modules/routine-jobs/ui/shared/clientTypes";
 
 const PASSWORD = "s3cret-pw";
 const BASE = "/api/m/routine-jobs";

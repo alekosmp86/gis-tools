@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildCargarLocalidadesCsv } from "@/modules/routine-jobs/ui/reportCsv/cargarLocalidadesCsv";
-import { buildUnidadTerritorialCsv } from "@/modules/routine-jobs/ui/reportCsv/unidadTerritorialCsv";
-import { changeCsvOf, cutRowsOf, type ListCut } from "@/modules/routine-jobs/ui/reportCsv/reportCsvRows";
+import { buildCargarLocalidadesCsv } from "@/modules/routine-jobs/ui/cargar-localidades/cargarLocalidadesCsv";
+import { buildUnidadTerritorialCsv } from "@/modules/routine-jobs/ui/unidad-territorial/unidadTerritorialCsv";
+import { changeCsvOf, cutRowsOf, type ListCut } from "@/modules/routine-jobs/ui/shared/reportCsvRows";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import {
   BOM,

@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { CargarPadronesWizard } from "@/modules/routine-jobs/ui/CargarPadronesWizard";
+import { CargarPadronesWizard } from "@/modules/routine-jobs/ui/cargar-padrones/CargarPadronesWizard";
 import { buttonAttributes, openingTags } from "./wizardFixtures";
 
 const render = (): string => renderToStaticMarkup(React.createElement(CargarPadronesWizard));
