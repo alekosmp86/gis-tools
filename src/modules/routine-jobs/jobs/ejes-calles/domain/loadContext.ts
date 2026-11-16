@@ -24,6 +24,7 @@ export function ejesLoadContextOf(
       [EJES_TABLE_ROLE.CIRCULATION_WAY]: targetOf(EJES_TABLE_ROLE.CIRCULATION_WAY),
       [EJES_TABLE_ROLE.ADDRESS_MASTER]: targetOf(EJES_TABLE_ROLE.ADDRESS_MASTER),
       [EJES_TABLE_ROLE.ACCESS_POINT]: targetOf(EJES_TABLE_ROLE.ACCESS_POINT),
+      [EJES_TABLE_ROLE.VERTICES]: targetOf(EJES_TABLE_ROLE.VERTICES),
     },
   };
 }
@@ -65,6 +66,13 @@ export const physicalOf = (context: EjesLoadContext, role: EjesLoadRole, logical
   const physical = context.targets[role].columns[logical];
   if (physical === undefined) throw new Error(`Falta la columna resuelta "${logical}".`);
   return quoteIdentifier(physical);
+};
+
+/** The physical name as written in the catalog, unquoted: for the text arguments of pgRouting functions. */
+export const rawOf = (context: EjesLoadContext, role: EjesLoadRole, logical: string): string => {
+  const physical = context.targets[role].columns[logical];
+  if (physical === undefined) throw new Error(`Falta la columna resuelta "${logical}".`);
+  return physical;
 };
 
 export const qualifiedOf = (context: EjesLoadContext, role: EjesLoadRole): string => {

@@ -97,16 +97,16 @@ describe("ejes load write SQL (EJL-2, EJL-5, EJL-8, EJL-9, EJL-10, EJL-11)", () 
       expect(LOAD_LOCK_TIMEOUT_MS).toBeGreaterThan(0);
     });
 
-    it("should lock road_section, circulation_way, addresses_master and access_point in SHARE ROW EXCLUSIVE MODE", () => {
+    it("should lock road_section, circulation_way, addresses_master, access_point and the vertices table in SHARE ROW EXCLUSIVE MODE", () => {
       const sql = buildLockSql(contextOf());
 
       expect(sql).toBe(
-        'LOCK TABLE "carto"."road_section", "carto"."circulation_way", "carto"."addresses_master", "carto"."access_point" IN SHARE ROW EXCLUSIVE MODE'
+        'LOCK TABLE "carto"."road_section", "carto"."circulation_way", "carto"."addresses_master", "carto"."access_point", "carto"."road_section_vertices_pgr" IN SHARE ROW EXCLUSIVE MODE'
       );
     });
 
-    it("should not lock the vertices table", () => {
-      expect(buildLockSql(contextOf())).not.toContain("vertices");
+    it("should lock the vertices table, which the topology step writes (EJ-14)", () => {
+      expect(buildLockSql(contextOf())).toContain('"carto"."road_section_vertices_pgr"');
     });
 
     it.each(EJES_LOAD_ROLES)("should ANALYZE the %s table", (role) => {
@@ -337,8 +337,16 @@ describe("ejes load write SQL (EJL-2, EJL-5, EJL-8, EJL-9, EJL-10, EJL-11)", () 
   });
 
   describe("revert SQL (EJL-4)", () => {
-    it("should keep the order sections, points, inserts", () => {
-      expect(REVERT_ORDER).toEqual(["ej_rev_masters", "ej_rev_restore", "ej_rev_sections", "ej_rev_points", "ej_rev_inserts"]);
+    it("should keep the order restored vertices, masters, restored sections, sections, points, inserts, created vertices (EJ-28)", () => {
+      expect(REVERT_ORDER).toEqual([
+        "ej_rev_vertices_del",
+        "ej_rev_masters",
+        "ej_rev_restore",
+        "ej_rev_sections",
+        "ej_rev_points",
+        "ej_rev_inserts",
+        "ej_rev_vertices_new",
+      ]);
     });
 
     it("should restore every column the load can change, including reftramo_ideuy", () => {

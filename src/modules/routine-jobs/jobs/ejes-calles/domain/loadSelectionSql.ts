@@ -29,6 +29,8 @@ export const LOAD_TEMP = {
   WAY_IN: "ej_way_in",
   WAY: "ej_way",
   SURPLUS: "ej_surplus",
+  TOPO: "ej_topo_ids",
+  VERTEX_CANDIDATES: "ej_vertex_candidates",
 } as const;
 
 export const tmp = (name: string): string => `pg_temp.${q(name)}`;

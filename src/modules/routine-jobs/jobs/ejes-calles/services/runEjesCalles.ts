@@ -16,6 +16,7 @@ import {
   assertEjesStagingReady,
   ejesAnalyzeWarnings,
   ejesWritePrivilegeInfo,
+  topologyIssuesOf,
 } from "./preflight";
 import { readStagingAndAnalysis, type EjesAnalysisBody } from "./readEjesAnalysis";
 import { resolveEjesLayouts } from "./resolveLayouts";
@@ -65,7 +66,10 @@ async function resolveAndValidate(session: RunSession, params: EjesParams, timer
 async function dryRunPrivilegeInfo(session: RunSession, params: EjesParams, resolved: EjesResolvedLayouts): Promise<string[]> {
   const context = ejesLoadContextOf(resolved.layouts, params.tables, resolved.writeTargets);
   const privileges = await ejesWritePrivilegeInfo(session, resolved);
-  return [...privileges, ...(await ejesAnalyzeWarnings(session, context))];
+  // One pg client: the topology reads run before the ANALYZE ownership reads, which follow them in the return.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const topology = await topologyIssuesOf(session, context);
+  return [...privileges, ...(await ejesAnalyzeWarnings(session, context)), ...topology];
 }
 
 async function runAnalysisOnSession(session: RunSession, params: EjesParams, timer: StepTimer): Promise<EjesResult> {

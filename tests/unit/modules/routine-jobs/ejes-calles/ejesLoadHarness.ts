@@ -1,4 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
+import { btree_gist } from "@electric-sql/pglite/contrib/btree_gist";
 import { EJES_DEFAULT_TABLES, EJES_LOAD_ROLES, EJES_REQUIRED_COLUMNS_BY_ROLE } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import { ejesLoadContextOf } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadContext";
 import { summaryOf } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadMapping";
@@ -58,6 +59,58 @@ const POSTGIS_STUBS_SQL = `
   CREATE AGGREGATE ST_Union(geometry) (SFUNC = hull_step, STYPE = geometry);
 `;
 
+/**
+ * PGlite has no pgRouting. The stub has pgRouting's signature and does what the load relies on: every row of `rows_where` gets a
+ * `source` and a `target` vertex, found by the exact text of its start and end point or inserted when missing. The session variable
+ * `ejes.pgr_stub` picks the mode: `on` (default) assigns and returns OK; `off` returns OK without touching the rows; `fail` returns
+ * FAIL without touching the rows, as pgRouting does after a caught error; `partial` assigns only the first row and returns FAIL.
+ */
+const PGROUTING_STUBS_SQL = `
+  CREATE FUNCTION pgr_version() RETURNS text AS $$ SELECT '3.3.0-stub'::text $$ LANGUAGE sql;
+  CREATE FUNCTION pgr_createTopology(table_name text, tolerance float8, geom text, id text, source text, target text,
+    rows_where text DEFAULT 'true', clean boolean DEFAULT false) RETURNS text AS $$
+  DECLARE
+    vertices text := table_name || '_vertices_pgr';
+    mode text := coalesce(current_setting('ejes.pgr_stub', true), 'on');
+    row_id bigint;
+    start_point text;
+    end_point text;
+    start_id bigint;
+    end_id bigint;
+  BEGIN
+    IF mode = 'off' OR mode = 'fail' THEN
+      RETURN CASE WHEN mode = 'off' THEN 'OK' ELSE 'FAIL' END;
+    END IF;
+    FOR row_id, start_point, end_point IN EXECUTE format(
+      'SELECT %I, iv_a(%I)::float8::text, iv_b(%I)::float8::text FROM %s WHERE %s ORDER BY %I', id, geom, geom, table_name, rows_where, id
+    ) LOOP
+      EXECUTE format('SELECT id FROM %s WHERE the_geom::text = $1 ORDER BY id LIMIT 1', vertices) INTO start_id USING start_point;
+      IF start_id IS NULL THEN
+        EXECUTE format('INSERT INTO %s (the_geom) VALUES ($1) RETURNING id', vertices) INTO start_id USING start_point;
+      END IF;
+      EXECUTE format('SELECT id FROM %s WHERE the_geom::text = $1 ORDER BY id LIMIT 1', vertices) INTO end_id USING end_point;
+      IF end_id IS NULL THEN
+        EXECUTE format('INSERT INTO %s (the_geom) VALUES ($1) RETURNING id', vertices) INTO end_id USING end_point;
+      END IF;
+      EXECUTE format('UPDATE %s SET %I = $1, %I = $2 WHERE %I = $3', table_name, source, target, id) USING start_id, end_id, row_id;
+      IF mode = 'partial' THEN EXIT; END IF;
+    END LOOP;
+    RETURN CASE WHEN mode = 'partial' THEN 'FAIL' ELSE 'OK' END;
+  END;
+  $$ LANGUAGE plpgsql;
+`;
+
+/**
+ * The indexes of the tables pgRouting reads (EJ-20): the btree on the section id, source and target, and the GiST on the section and
+ * vertex geometries. The GiST indexes use btree_gist, the PGlite extension that gives GiST an operator class for text.
+ */
+const TOPOLOGY_INDEXES_SQL = `
+  CREATE INDEX road_section_source_idx ON carto.road_section USING btree (source);
+  CREATE INDEX road_section_target_idx ON carto.road_section USING btree (target);
+  CREATE INDEX road_section_geometry_idx ON carto.road_section USING gist (geometry);
+  CREATE INDEX road_section_vertices_geom_idx ON carto.road_section_vertices_pgr USING gist (the_geom);
+`;
+
 /** The type of `access_point.id_road_section`: the production table stores the reference as text; `integer` is the typed variant. */
 export type AccessPointRefType = "varchar" | "integer";
 
@@ -75,7 +128,7 @@ const schemaSqlOf = (accessPointRefType: AccessPointRefType): string => `
     id serial PRIMARY KEY, name text, short_name text, id_road_type integer, id_font integer, id_calle integer
   );
   CREATE TABLE carto.addresses_master (addresses_master_id serial PRIMARY KEY, urn text, latitud double precision, longitud double precision);
-  CREATE TABLE carto.road_section_vertices_pgr (id serial PRIMARY KEY, the_geom geometry);
+  CREATE TABLE carto.road_section_vertices_pgr (id bigserial PRIMARY KEY, cnt integer, chk integer, ein integer, eout integer, the_geom geometry);
   CREATE TABLE carto.access_point (id serial PRIMARY KEY, id_road_section ${accessPointRefType});
   CREATE TABLE bdj_carto.ine_localidades_pg (cloc_iso text, nomloc text, geom geometry);
   CREATE TABLE carto.mv_country_province (iso_code_dpto text, name_dpto text);
@@ -107,10 +160,27 @@ export const sessionOn = (database: PGlite, log: SqlLog = [], failOn?: FailRule)
 });
 
 export async function createEjesDatabase(PGliteClass: typeof PGlite, accessPointRefType: AccessPointRefType = "varchar"): Promise<PGlite> {
-  const database = new PGliteClass();
+  const database = new PGliteClass({ extensions: { btree_gist } });
+  await database.exec("CREATE EXTENSION btree_gist");
   await database.exec(POSTGIS_STUBS_SQL);
+  await database.exec(PGROUTING_STUBS_SQL);
   await database.exec(schemaSqlOf(accessPointRefType));
+  await database.exec(TOPOLOGY_INDEXES_SQL);
   return database;
+}
+
+/**
+ * `off` makes the pgRouting stub leave every section without a source and a target, as a topology that assigned nothing would.
+ * `fail` makes it return FAIL with nothing assigned; `partial` assigns the first row, then returns FAIL.
+ */
+export async function setPgrStub(database: PGlite, mode: "on" | "off" | "fail" | "partial"): Promise<void> {
+  await database.exec(`SET ejes.pgr_stub = '${mode}'`);
+}
+
+/** The vertex id the stub gave to a point, by its text: the points of the harness geometries are the numbers at the ends of a line. */
+export async function vertexIdAt(database: PGlite, point: string): Promise<number> {
+  const result = await database.query<{ id: number | string }>("SELECT id FROM carto.road_section_vertices_pgr WHERE the_geom::text = $1 ORDER BY id", [point]);
+  return Number(result.rows[0].id);
 }
 
 const targetOf = async (database: PGlite, role: (typeof EJES_LOAD_ROLES)[number]): Promise<WritableTargetLayout> => {
@@ -229,6 +299,11 @@ export async function insertSection(database: PGlite, seed: SectionSeed): Promis
   return result.rows[0].id;
 }
 
+export async function insertVertex(database: PGlite, point: string): Promise<number> {
+  const result = await database.query<{ id: number | string }>("INSERT INTO carto.road_section_vertices_pgr (the_geom) VALUES ($1) RETURNING id", [point]);
+  return Number(result.rows[0].id);
+}
+
 export async function insertWay(database: PGlite, calle: number, name: string, type = 4, font = 1, id?: number): Promise<number> {
   const result = await database.query<{ id: number }>(
     "INSERT INTO carto.circulation_way (id, name, short_name, id_road_type, id_font, id_calle) VALUES (COALESCE($1::int, nextval('carto.circulation_way_id_seq')::int), $2, $3, $4, $5, $6) RETURNING id",
@@ -265,5 +340,8 @@ export const zeroLoadCounts = (overrides: Partial<Record<string, number>> = {}):
   deleted: 0,
   waysCreated: 0,
   pointsMoved: 0,
+  topologyAssigned: 0,
+  verticesCreated: 0,
+  verticesDeleted: 0,
   ...overrides,
 });

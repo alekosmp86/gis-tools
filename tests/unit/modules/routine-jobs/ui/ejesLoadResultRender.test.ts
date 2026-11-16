@@ -56,6 +56,9 @@ const LOAD_COUNTS = {
   deleted: 0,
   waysCreated: 4,
   pointsMoved: 9,
+  topologyAssigned: 0,
+  verticesCreated: 0,
+  verticesDeleted: 0,
 };
 
 const BACKUP: EjesBackup = {

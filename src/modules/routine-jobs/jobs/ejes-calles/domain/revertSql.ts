@@ -6,6 +6,7 @@ import {
   LOAD_CHUNK_SIZE,
   ADDRESS_MASTER_COLUMN,
   ROAD_SECTION_COLUMN,
+  VERTICES_COLUMN,
 } from "../constants";
 import type { EjesLayouts, EjesLoadContext, EjesLoadRole } from "../types";
 import { accessPointRefMatchSql } from "./analysisSql";
@@ -19,15 +20,22 @@ const REVERT_TEMP = {
   SECTIONS: "ej_rev_sections",
   POINTS: "ej_rev_points",
   INSERTS: "ej_rev_inserts",
+  RESTORED_VERTICES: "ej_rev_vertices_del",
+  CREATED_VERTICES: "ej_rev_vertices_new",
 } as const;
 
-/** Deleted masters come back before the sections that point at them; the points follow the restored sections, the inserted rows go last. */
+/**
+ * Deleted vertices come back first (the sections that name them follow), then the deleted masters and sections, the section columns
+ * and the points; the inserted rows go next, and the created vertices last, once no section names them.
+ */
 export const REVERT_ORDER: readonly string[] = [
+  REVERT_TEMP.RESTORED_VERTICES,
   REVERT_TEMP.RESTORED_MASTERS,
   REVERT_TEMP.RESTORED_SECTIONS,
   REVERT_TEMP.SECTIONS,
   REVERT_TEMP.POINTS,
   REVERT_TEMP.INSERTS,
+  REVERT_TEMP.CREATED_VERTICES,
 ];
 
 export const REVERT_COLUMNS = { CURSOR: "cursor", LINE: "line" } as const;
@@ -51,6 +59,7 @@ const ID_LOGICAL_BY_ROLE: Record<EjesLoadRole, string> = {
   [EJES_TABLE_ROLE.CIRCULATION_WAY]: CIRCULATION_WAY_COLUMN.ID,
   [EJES_TABLE_ROLE.ADDRESS_MASTER]: ADDRESS_MASTER_COLUMN.ID,
   [EJES_TABLE_ROLE.ACCESS_POINT]: ACCESS_POINT_COLUMN.ID,
+  [EJES_TABLE_ROLE.VERTICES]: VERTICES_COLUMN.ID,
 };
 
 const formatOf = (template: string, args: readonly string[]): string => `format(${literal(template)}, ${args.join(", ")})`;
@@ -105,14 +114,26 @@ export function buildRevertPointsSql(context: EjesLoadContext, layouts: EjesLayo
  * Re-inserts the rows a load deletes, with their original ids: each row is read as JSON before the first write and rebuilt by
  * `jsonb_populate_record`, so every column comes back as it was.
  */
-function buildRestoreRowsSql(context: EjesLoadContext, role: EjesLoadRole, idLogical: string, sourceSql: string, name: string): string {
+function buildRestoreRowsSql(
+  context: EjesLoadContext,
+  role: EjesLoadRole,
+  idLogical: string,
+  sourceSql: string,
+  name: string,
+  onlyMissing = false
+): string {
   const target = literal(qualifiedOf(context, role));
   const id = physicalOf(context, role, idLogical);
-  const statement = formatOf("INSERT INTO %s OVERRIDING SYSTEM VALUE SELECT * FROM jsonb_populate_record(NULL::%s, %L);", [
-    target,
-    target,
-    "x.row_json",
-  ]);
+  const statement = onlyMissing
+    ? formatOf(
+        "INSERT INTO %s OVERRIDING SYSTEM VALUE SELECT * FROM jsonb_populate_record(NULL::%s, %L) AS x WHERE NOT EXISTS (SELECT 1 FROM %s AS y WHERE y.%s = x.%s);",
+        [target, target, "x.row_json", target, literal(id), literal(id)]
+      )
+    : formatOf("INSERT INTO %s OVERRIDING SYSTEM VALUE SELECT * FROM jsonb_populate_record(NULL::%s, %L);", [
+        target,
+        target,
+        "x.row_json",
+      ]);
   return createTemp(
     name,
     [
@@ -140,6 +161,45 @@ export const buildRevertRestoredSectionsSql = (context: EjesLoadContext): string
     `SELECT d.road_id FROM ${tmp(LOAD_TEMP.DEL)} AS d`,
     REVERT_TEMP.RESTORED_SECTIONS
   );
+
+/** The candidate vertices as they were: the ones the load deleted come back, the ones it kept are already there and are skipped. */
+export const buildRevertRestoredVerticesSql = (context: EjesLoadContext): string =>
+  buildRestoreRowsSql(
+    context,
+    EJES_TABLE_ROLE.VERTICES,
+    VERTICES_COLUMN.ID,
+    `SELECT c.vertex_id FROM ${tmp(LOAD_TEMP.VERTEX_CANDIDATES)} AS c`,
+    REVERT_TEMP.RESTORED_VERTICES,
+    true
+  );
+
+/**
+ * Deletes the vertices the topology step created: ids above the largest id before the load, and only while no section names them.
+ * The largest id is read now, before the first write, when nothing has been inserted into the vertices table yet.
+ */
+export function buildRevertCreatedVerticesSql(context: EjesLoadContext): string {
+  const vertexId = physicalOf(context, EJES_TABLE_ROLE.VERTICES, VERTICES_COLUMN.ID);
+  const statement = formatOf(
+    "DELETE FROM %s AS v WHERE v.%s > %s AND NOT EXISTS (SELECT 1 FROM %s AS r WHERE r.%s = v.%s OR r.%s = v.%s);",
+    [
+      literal(qualifiedOf(context, EJES_TABLE_ROLE.VERTICES)),
+      literal(vertexId),
+      "m.max_id",
+      literal(qualifiedOf(context, EJES_TABLE_ROLE.ROAD_SECTION)),
+      literal(physicalOf(context, EJES_TABLE_ROLE.ROAD_SECTION, ROAD_SECTION_COLUMN.SOURCE)),
+      literal(vertexId),
+      literal(physicalOf(context, EJES_TABLE_ROLE.ROAD_SECTION, ROAD_SECTION_COLUMN.TARGET)),
+      literal(vertexId),
+    ]
+  );
+  return createTemp(
+    REVERT_TEMP.CREATED_VERTICES,
+    [
+      `SELECT 1::bigint AS n, ${statement} AS line`,
+      `FROM (SELECT COALESCE(max(v.${vertexId}), 0) AS max_id FROM ${qualifiedOf(context, EJES_TABLE_ROLE.VERTICES)} AS v) AS m`,
+    ].join(" ")
+  );
+}
 
 function deleteChunksSql(part: number, context: EjesLoadContext, role: EjesLoadRole, source: string, idExpression: string): string {
   return [

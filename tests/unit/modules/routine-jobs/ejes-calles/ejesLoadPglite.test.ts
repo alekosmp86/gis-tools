@@ -14,6 +14,7 @@ import {
   insertPoints,
   insertSection,
   insertStaging,
+  insertVertex,
   insertWay,
   loadContextOn,
   paramsWith,
@@ -22,6 +23,7 @@ import {
   sessionOn,
   snapshotOf,
   summaryOn,
+  vertexIdAt,
   zeroLoadCounts,
   type FailRule,
   type Row,
@@ -71,7 +73,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
     rowsOf(database, `SELECT * FROM carto.road_section WHERE reftramo_ideuy = ${ref} ORDER BY id`);
 
   describe("NEW sections (EJL-5, EJL-8)", () => {
-    it("should insert a NEW section with mapped type and font, one distance text, NULL source and target, and its way and master", async () => {
+    it("should insert a NEW section with mapped type and font, one distance text, its way and master, and the source and target of the topology", async () => {
       await insertStaging(database, [
         { ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", tipo: "PASAJE", fuente: "OSM", geom: "0:123.456" },
       ]);
@@ -85,12 +87,12 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
         id_circulation_way: 77,
         id_road_section_type: 10,
         id_font: 32,
-        source: null,
-        target: null,
+        source: await vertexIdAt(database, "0"),
+        target: await vertexIdAt(database, "123.456"),
         distance: "123.46",
         geometry: "0:123.456",
       });
-      expect(outcome.load.counts).toMatchObject({ inserted: 1, waysCreated: 1, updated: 0, renumbered: 0, pointsMoved: 0 });
+      expect(outcome.load.counts).toMatchObject({ inserted: 1, waysCreated: 1, updated: 0, renumbered: 0, pointsMoved: 0, topologyAssigned: 1 });
       expect(outcome.targetModified).toBe(true);
       expect(outcome.outcomeUnknown).toBe(false);
     });
@@ -248,7 +250,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       expect((await sectionByRef(2001))[0]).toMatchObject({ id_circulation_way: 11, id_road_section_type: 4, id_font: 1, source: 5, target: 6, distance: "50.00" });
     });
 
-    it("should recompute distance and clear source and target on a GEOM change, keeping the attributes", async () => {
+    it("should recompute distance and reassign source and target by the topology on a GEOM change, keeping the attributes", async () => {
       await seedPair();
       await insertStaging(database, [
         { ref: "2001", calle: "10", geom: "0:80" },
@@ -257,8 +259,15 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
 
       const outcome = await persist();
 
-      expect((await sectionByRef(2001))[0]).toMatchObject({ geometry: "0:80", distance: "80.00", source: null, target: null, id_road_section_type: 4, id_font: 1 });
-      expect(outcome.load.counts.updated).toBe(1);
+      expect((await sectionByRef(2001))[0]).toMatchObject({
+        geometry: "0:80",
+        distance: "80.00",
+        source: await vertexIdAt(database, "0"),
+        target: await vertexIdAt(database, "80"),
+        id_road_section_type: 4,
+        id_font: 1,
+      });
+      expect(outcome.load.counts).toMatchObject({ updated: 1, topologyAssigned: 1 });
     });
 
     it("should apply ATTR and GEOM changes of the same section as one updated section", async () => {
@@ -270,8 +279,14 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
 
       const outcome = await persist();
 
-      expect((await sectionByRef(2001))[0]).toMatchObject({ id_road_section_type: 10, geometry: "0:80", distance: "80.00", source: null, target: null });
-      expect(outcome.load.counts.updated).toBe(1);
+      expect((await sectionByRef(2001))[0]).toMatchObject({
+        id_road_section_type: 10,
+        geometry: "0:80",
+        distance: "80.00",
+        source: await vertexIdAt(database, "0"),
+        target: await vertexIdAt(database, "80"),
+      });
+      expect(outcome.load.counts).toMatchObject({ updated: 1, topologyAssigned: 1 });
     });
 
     it("should leave an unchanged section byte for byte as it was", async () => {
@@ -375,7 +390,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       await seedRenumber(2);
       const log: SqlLog = [];
 
-      await persist(log);
+      const outcome = await persist(log);
 
       const writes = log.filter((sql) => /^\s*(INSERT|UPDATE|DELETE|TRUNCATE)/i.test(sql) || /\b(INSERT INTO|UPDATE|DELETE FROM)\s+"?carto"?\."?access_point/i.test(sql));
       const onAccessPoint = writes.filter((sql) => /access_point/.test(sql));
@@ -383,7 +398,11 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       expect(onAccessPoint[0]).toMatch(/UPDATE\s+"carto"\."access_point"/);
       expect(onAccessPoint[0]).toMatch(/SET "id_road_section"/);
       expect(log.filter((sql) => /DELETE\s+FROM/i.test(sql) && /access_point/.test(sql))).toEqual([]);
-      expect(log.filter((sql) => /road_section_vertices_pgr/.test(sql) && !/^\s*(SELECT|WITH)/i.test(sql) && !/^LOCK/i.test(sql))).toEqual([]);
+      const vertexWrites = log.filter((sql) => /^WITH "written" AS \((INSERT|UPDATE|DELETE)[^]*road_section_vertices_pgr/.test(sql));
+      expect(vertexWrites.every((sql) => sql.includes('pg_temp."ej_vertex_candidates"'))).toBe(true);
+      expect(outcome.load.counts).toMatchObject({ verticesCreated: 0, verticesDeleted: 0 });
+      expect(log.filter((sql) => /^ANALYZE .*road_section_vertices_pgr/.test(sql))).toEqual([]);
+      expect(log.filter((sql) => /pgr_createTopology/.test(sql))).toEqual([]);
     });
 
     it("should report 0 points moved and write nothing on access_point for a renumbered section without points", async () => {
@@ -564,7 +583,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       ]);
     };
 
-    it("should lock the four tables in SHARE ROW EXCLUSIVE MODE with a lock_timeout before any other statement of the apply", async () => {
+    it("should lock the five tables, the vertices included, in SHARE ROW EXCLUSIVE MODE with a lock_timeout before any other statement of the apply", async () => {
       await seedChanges();
       const log: SqlLog = [];
 
@@ -578,22 +597,28 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       expect(timeout).toBeGreaterThan(begin);
       expect(lock).toBeGreaterThan(timeout);
       expect(firstRead).toBeGreaterThan(lock);
-      for (const name of ["road_section", "circulation_way", "addresses_master", "access_point"]) {
+      for (const name of ["road_section", "circulation_way", "addresses_master", "access_point", "road_section_vertices_pgr"]) {
         expect(log[lock]).toContain(`"carto"."${name}"`);
       }
-      expect(log[lock]).not.toContain("vertices");
       expect(log[lock]).toMatch(/IN SHARE ROW EXCLUSIVE MODE$/);
     });
 
-    it("should end with ANALYZE of exactly the changed tables, then COMMIT", async () => {
+    it("should end with ANALYZE of exactly the changed tables, the vertices included when the topology created vertices, then COMMIT", async () => {
       await seedChanges();
       const log: SqlLog = [];
 
-      await persist(log);
+      const outcome = await persist(log);
 
+      expect(outcome.load.counts.verticesCreated).toBeGreaterThan(0);
       const analyzed = log.filter((sql) => /^ANALYZE "carto"/.test(sql));
       expect(analyzed.sort()).toEqual(
-        ['ANALYZE "carto"."access_point";', 'ANALYZE "carto"."addresses_master";', 'ANALYZE "carto"."circulation_way";', 'ANALYZE "carto"."road_section";'].sort()
+        [
+          'ANALYZE "carto"."access_point";',
+          'ANALYZE "carto"."addresses_master";',
+          'ANALYZE "carto"."circulation_way";',
+          'ANALYZE "carto"."road_section";',
+          'ANALYZE "carto"."road_section_vertices_pgr";',
+        ].sort()
       );
       const lastWrite = Math.max(...log.map((sql, index) => (/^WITH "written"/.test(sql) ? index : -1)));
       const firstAnalyze = log.findIndex((sql) => /^ANALYZE "carto"/.test(sql));
@@ -726,6 +751,8 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
 
   describe("backup file and revert (EJL-4)", () => {
     const seedChanges = async () => {
+      await insertVertex(database, "0");
+      await insertVertex(database, "50");
       await insertWay(database, 5, "CALLE UNO");
       await insertSection(database, { ref: 3001, calle: 5, geom: "1000:1100", distance: "100.00" });
       await insertSection(database, { ref: 2001, calle: 5, geom: "0:50", distance: "50.00", source: 1, target: 2 });
@@ -796,6 +823,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
         '"carto"."road_section"',
         '"carto"."addresses_master"',
         '"carto"."circulation_way"',
+        '"carto"."road_section_vertices_pgr"',
       ]);
       expect(text.lastIndexOf("UPDATE")).toBeLessThan(text.indexOf("DELETE FROM"));
     });
@@ -807,7 +835,15 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
 
       const text = await readBackup(await persist());
 
-      expect(text).toBe("SET client_encoding = 'UTF8';\nBEGIN;\nCOMMIT;\n");
+      expect(text).toBe(
+        [
+          "SET client_encoding = 'UTF8';",
+          "BEGIN;",
+          `DELETE FROM "carto"."road_section_vertices_pgr" AS v WHERE v."id" > 0 AND NOT EXISTS (SELECT 1 FROM "carto"."road_section" AS r WHERE r."source" = v."id" OR r."target" = v."id");`,
+          "COMMIT;",
+          "",
+        ].join("\n")
+      );
     });
 
     it("should restore the exact pre-state of every table when the revert SQL is applied", async () => {
@@ -826,17 +862,23 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       expect(after["carto.road_section_vertices_pgr"]).toEqual(before["carto.road_section_vertices_pgr"]);
     });
 
-    it("should restore source, target, distance and geometry cleared by a GEOM update", async () => {
+    it("should restore source, target, distance and geometry changed by a GEOM update, and the vertices the topology added", async () => {
       await insertWay(database, 5, "CALLE UNO");
       await insertSection(database, { ref: 2001, calle: 5, geom: "0:50", distance: "50.00", source: 11, target: 12 });
       await insertStaging(database, [{ ref: "2001", calle: "5", nombre: "CALLE UNO", geom: "0:90" }]);
       const before = await snapshotOf(database);
 
       const outcome = await persist();
-      expect((await sectionByRef(2001))[0]).toMatchObject({ source: null, target: null, distance: "90.00" });
+      expect((await sectionByRef(2001))[0]).toMatchObject({
+        source: await vertexIdAt(database, "0"),
+        target: await vertexIdAt(database, "90"),
+        distance: "90.00",
+      });
+      expect(outcome.load.counts).toMatchObject({ verticesCreated: 2, verticesDeleted: 0 });
       await database.exec(await readBackup(outcome));
 
       expect((await snapshotOf(database))["carto.road_section"]).toEqual(before["carto.road_section"]);
+      expect((await snapshotOf(database))["carto.road_section_vertices_pgr"]).toEqual(before["carto.road_section_vertices_pgr"]);
     });
   });
 
@@ -945,7 +987,20 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
         ["backup", "counts", "renumbered", "skipped", "skippedByReason", "skippedTotal", "surplus", "surplusTotal"]
       );
       expect(Object.keys(outcome.load.counts).sort()).toEqual(
-        ["deleted", "inserted", "merged", "pointsMoved", "removed", "renumberSkipped", "renumbered", "updated", "waysCreated"]
+        [
+          "deleted",
+          "inserted",
+          "merged",
+          "pointsMoved",
+          "removed",
+          "renumberSkipped",
+          "renumbered",
+          "topologyAssigned",
+          "updated",
+          "verticesCreated",
+          "verticesDeleted",
+          "waysCreated",
+        ]
       );
       expect(outcome.load.skipped).toEqual([]);
       expect(outcome.load.skippedTotal).toBe(0);

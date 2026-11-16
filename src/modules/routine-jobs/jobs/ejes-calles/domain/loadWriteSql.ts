@@ -26,7 +26,7 @@ export const buildLockTimeoutSql = (): string => `SET LOCAL lock_timeout = ${LOA
 export const buildLockSql = (context: EjesLoadContext): string =>
   `LOCK TABLE ${EJES_LOAD_ROLES.map((role) => qualifiedOf(context, role)).join(", ")} IN SHARE ROW EXCLUSIVE MODE`;
 
-const counted = (statement: string): string =>
+export const counted = (statement: string): string =>
   `WITH ${q(WRITTEN_ALIAS)} AS (${statement} RETURNING 1) SELECT count(*) AS ${q(WRITTEN_ALIAS)} FROM ${q(WRITTEN_ALIAS)}`;
 
 const columnsOf = (context: EjesLoadContext, role: EjesLoadRole, logicals: readonly string[]): string =>

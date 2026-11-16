@@ -13,11 +13,12 @@ const WRITE_GRANTS = [
   "GRANT SELECT, INSERT, UPDATE ON carto.road_section TO {role}",
   "GRANT SELECT, INSERT ON carto.circulation_way, carto.addresses_master TO {role}",
   "GRANT SELECT, UPDATE ON carto.access_point TO {role}",
+  "GRANT SELECT, INSERT, UPDATE, DELETE ON carto.road_section_vertices_pgr TO {role}",
   "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA carto TO {role}",
 ];
 
 const LOCK_UPDATE_GRANTS = [
-  "GRANT UPDATE ON carto.road_section, carto.circulation_way, carto.addresses_master, carto.access_point TO {role}",
+  "GRANT UPDATE ON carto.road_section, carto.circulation_way, carto.addresses_master, carto.access_point, carto.road_section_vertices_pgr TO {role}",
 ];
 
 const DELETE_GRANTS = ["GRANT DELETE ON carto.road_section, carto.addresses_master TO {role}"];
@@ -46,12 +47,13 @@ describe("ejes load privileges on PGlite (EJL-24)", () => {
   /** A loader that can do everything of the load, DELETE on the removal tables included. */
   const loaderWith = (name: string, grants: string[]): Promise<void> => roleWith(name, [...WRITE_GRANTS, ...DELETE_GRANTS, ...grants]);
 
-  it("should pass with every write and lock privilege, and return one ANALYZE warning per locked table the loader does not own (EJL-24)", async () => {
+  it("should pass with every write and lock privilege, and return one ANALYZE warning per locked table the loader does not own (EJL-24, EJ-14)", async () => {
     await loaderWith("loader_full", LOCK_UPDATE_GRANTS);
 
     const warnings = await assertEjesLoadReady(sessionOn(database), context);
 
-    expect(warnings).toHaveLength(4);
+    expect(warnings).toHaveLength(5);
+    expect(warnings.some((warning) => warning.includes("carto.road_section_vertices_pgr"))).toBe(true);
     for (const warning of warnings) {
       expect(warning).toContain("ANALYZE de");
       expect(warning).toContain("se omitiría");
@@ -66,7 +68,7 @@ describe("ejes load privileges on PGlite (EJL-24)", () => {
 
     const warnings = await ejesAnalyzeWarnings(sessionOn(database), context);
 
-    expect(warnings).toHaveLength(4);
+    expect(warnings).toHaveLength(5);
     expect(warnings[0]).toMatch(/^ANALYZE de .+ se omitiría: el usuario no es propietario de la tabla/);
   });
 
@@ -84,7 +86,7 @@ describe("ejes load privileges on PGlite (EJL-24)", () => {
       "GRANT DELETE ON carto.circulation_way TO {role}",
     ]);
 
-    await expect(assertEjesLoadReady(sessionOn(database), context)).resolves.toHaveLength(4);
+    await expect(assertEjesLoadReady(sessionOn(database), context)).resolves.toHaveLength(5);
   });
 
   it("should accept TRUNCATE alone as the lock privilege of a locked table (any one of the three, EJL-24)", async () => {
@@ -93,7 +95,7 @@ describe("ejes load privileges on PGlite (EJL-24)", () => {
       "GRANT TRUNCATE ON carto.addresses_master TO {role}",
     ]);
 
-    await expect(assertEjesLoadReady(sessionOn(database), context)).resolves.toHaveLength(4);
+    await expect(assertEjesLoadReady(sessionOn(database), context)).resolves.toHaveLength(5);
   });
 
   it("should refuse a missing DELETE on the road section table as a blocker, since merges and removals delete sections (EJS-9, EJL-24)", async () => {
@@ -108,20 +110,34 @@ describe("ejes load privileges on PGlite (EJL-24)", () => {
     await expect(assertEjesLoadReady(sessionOn(database), context)).rejects.toThrow(/No tiene privilegio DELETE sobre la tabla carto\.addresses_master/);
   });
 
+  it("should refuse a missing DELETE on the vertices table as a blocker, since the cleanup deletes unused vertices (EJ-27, EJL-24)", async () => {
+    const grants = WRITE_GRANTS.filter((grant) => !grant.includes("road_section_vertices_pgr"));
+    await roleWith("loader_nodelete_vertices", [...grants, "GRANT SELECT, INSERT, UPDATE ON carto.road_section_vertices_pgr TO {role}", ...DELETE_GRANTS]);
+
+    await expect(assertEjesLoadReady(sessionOn(database), context)).rejects.toThrow(/No tiene privilegio DELETE sobre la tabla carto\.road_section_vertices_pgr/);
+  });
+
+  it("should refuse a missing INSERT on the vertices table as a blocker, since the topology step creates vertices (EJ-20, EJL-24)", async () => {
+    const grants = WRITE_GRANTS.filter((grant) => !grant.includes("road_section_vertices_pgr"));
+    await roleWith("loader_noinsert_vertices", [...grants, "GRANT SELECT, UPDATE, DELETE ON carto.road_section_vertices_pgr TO {role}", ...DELETE_GRANTS]);
+
+    await expect(assertEjesLoadReady(sessionOn(database), context)).rejects.toThrow(/No tiene privilegio INSERT sobre la tabla carto\.road_section_vertices_pgr/);
+  });
+
   it("should pass the write check when DELETE is granted on both removal tables, with no other grant beyond the load's", async () => {
     await loaderWith("loader_delete_both", LOCK_UPDATE_GRANTS);
 
-    await expect(assertEjesLoadReady(sessionOn(database), context)).resolves.toHaveLength(4);
+    await expect(assertEjesLoadReady(sessionOn(database), context)).resolves.toHaveLength(5);
   });
 
   it("should refuse a missing INSERT on the road section table as a blocker, not as a warning (EJL-24)", async () => {
     await database.exec("CREATE ROLE loader_noinsert NOLOGIN");
-    for (const statement of WRITE_GRANTS.filter((grant) => !grant.includes("road_section"))) {
+    for (const statement of WRITE_GRANTS.filter((grant) => !grant.includes("carto.road_section TO"))) {
       await database.exec(statement.replaceAll("{role}", "loader_noinsert"));
     }
     await database.exec("GRANT SELECT, UPDATE, DELETE ON carto.road_section TO loader_noinsert");
     await database.exec("GRANT DELETE ON carto.addresses_master TO loader_noinsert");
-    await database.exec(`GRANT UPDATE ON carto.circulation_way, carto.addresses_master, carto.access_point TO loader_noinsert`);
+    await database.exec(`GRANT UPDATE ON carto.circulation_way, carto.addresses_master, carto.access_point, carto.road_section_vertices_pgr TO loader_noinsert`);
     await database.exec("SET ROLE loader_noinsert");
 
     await expect(assertEjesLoadReady(sessionOn(database), context)).rejects.toThrow(/No tiene privilegio INSERT sobre la tabla carto\.road_section/);

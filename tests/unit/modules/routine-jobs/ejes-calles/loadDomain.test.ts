@@ -20,7 +20,7 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
     expect(plannedEjesStepLabels(true)).toEqual(plannedEjesStepLabels());
   });
 
-  it("should plan the 15 steps of the real run in order", () => {
+  it("should plan the 16 steps of the real run in order, the topology step after the removals and before the ANALYZE", () => {
     expect(plannedEjesStepLabels(false)).toEqual([
       "Validar tablas y columnas",
       "Comprobar privilegios",
@@ -35,6 +35,7 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
       "Actualizar los tramos con cambios",
       "Aplicar los tramos renumerados y mover sus puntos de acceso",
       "Quitar los tramos unidos y sin reemplazo aceptados",
+      "Actualizar la topología y limpiar los vértices sin uso",
       "Analizar las tablas modificadas",
       "Confirmar la transacción",
     ]);
@@ -46,6 +47,8 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
     expect(labels.indexOf(EJES_STEP.LOCK)).toBeLessThan(labels.indexOf(EJES_STEP.STAGING));
     expect(labels.indexOf(EJES_STEP.BACKUP)).toBeLessThan(labels.indexOf(EJES_STEP.WAYS));
     expect(labels.indexOf(EJES_STEP.WAYS)).toBeLessThan(labels.indexOf(EJES_STEP.SECTIONS));
+    expect(labels.indexOf(EJES_STEP.REMOVE)).toBeLessThan(labels.indexOf(EJES_STEP.TOPOLOGY));
+    expect(labels.indexOf(EJES_STEP.TOPOLOGY)).toBeLessThan(labels.indexOf(EJES_STEP.ANALYZE_TABLES));
     expect(labels.indexOf(EJES_STEP.ANALYZE_TABLES)).toBeLessThan(labels.indexOf(EJES_STEP.COMMIT));
     expect(labels[labels.length - 1]).toBe(EJES_STEP.COMMIT);
   });
@@ -60,7 +63,7 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
     const labels = plannedEjesStepLabels(false);
     labels.pop();
 
-    expect(plannedEjesStepLabels(false)).toHaveLength(15);
+    expect(plannedEjesStepLabels(false)).toHaveLength(16);
   });
 });
 
@@ -119,6 +122,9 @@ describe("load mapping (EJL-12, EJL-13)", () => {
       deleted: 4,
       waysCreated: 2,
       pointsMoved: 9,
+      topologyAssigned: 0,
+      verticesCreated: 0,
+      verticesDeleted: 0,
     });
     expect(plan.deletedMasters).toBe(3);
     expect(plan.attr).toEqual({ idcalle: 1, type: 2, font: 0, geom: 1 });
@@ -143,6 +149,9 @@ describe("load mapping (EJL-12, EJL-13)", () => {
       deleted: 0,
       waysCreated: 0,
       pointsMoved: 0,
+      topologyAssigned: 0,
+      verticesCreated: 0,
+      verticesDeleted: 0,
     });
     expect(plan.deletedMasters).toBe(0);
     expect(plan.attr).toEqual({ idcalle: 0, type: 0, font: 0, geom: 0 });

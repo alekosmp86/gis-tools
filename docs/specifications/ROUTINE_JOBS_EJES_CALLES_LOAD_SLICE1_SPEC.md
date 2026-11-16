@@ -1,6 +1,6 @@
 # Routine jobs: "Carga de ejes de calles", real load slice 1 (EJL-1 to EJL-26)
 
-Scope: real load of NEW, ATTR, GEOM, twin and renumbered sections. Out of scope: topology (EJ-20), splits and merges (EJ-19), plain removals (EJ-21), UI wiring beyond the "Cargar ahora" buttons of EJ-24 (Revisar and Resultado, built). Builds on EJ-3, EJ-13 to EJ-18, EJ-22, EJ-23 of `ROUTINE_JOBS_EJES_CALLES_SKELETON_SPEC.md`.
+Scope: real load of NEW, ATTR, GEOM, twin and renumbered sections. Out of scope: topology and vertex cleanup (EJ-20, EJ-27, EJ-28; built later in the topology slice), splits and merges (EJ-19), plain removals (EJ-21), UI wiring beyond the "Cargar ahora" buttons of EJ-24 (Revisar and Resultado, built). Builds on EJ-3, EJ-13 to EJ-18, EJ-22, EJ-23 of `ROUTINE_JOBS_EJES_CALLES_SKELETON_SPEC.md`.
 
 Superseded for merges and plain removals by slice A (`ROUTINE_JOBS_EJES_CALLES_SPLIT_MERGE_LOAD_SPEC.md`): an accepted merge or plain removal is applied, the rest of EJL-12 holds (splits and every row not accepted are skipped and reported, never modified).
 

@@ -12,6 +12,7 @@ export const EJES_STEP = {
   UPDATES: "Actualizar los tramos con cambios",
   RENUMBER: "Aplicar los tramos renumerados y mover sus puntos de acceso",
   REMOVE: "Quitar los tramos unidos y sin reemplazo aceptados",
+  TOPOLOGY: "Actualizar la topología y limpiar los vértices sin uso",
   ANALYZE_TABLES: "Analizar las tablas modificadas",
   COMMIT: "Confirmar la transacción",
 } as const;
@@ -32,6 +33,7 @@ const REAL_RUN_STEPS = [
   EJES_STEP.UPDATES,
   EJES_STEP.RENUMBER,
   EJES_STEP.REMOVE,
+  EJES_STEP.TOPOLOGY,
   EJES_STEP.ANALYZE_TABLES,
   EJES_STEP.COMMIT,
 ];

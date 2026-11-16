@@ -56,16 +56,19 @@ import { buildSkippedListSql, buildSkippedReasonCountsSql } from "../domain/remo
 import { assertEjesRealRunEnabled } from "../domain/realRunSwitch";
 import { EJES_STEP } from "../domain/plannedSteps";
 import {
+  buildRevertCreatedVerticesSql,
   buildRevertInsertsSql,
   buildRevertMastersSql,
   buildRevertPointsSql,
   buildRevertRestoredSectionsSql,
+  buildRevertRestoredVerticesSql,
   buildRevertSectionsSql,
 } from "../domain/revertSql";
 import type {
   EjesAccepted,
   EjesAnalysis,
   EjesLoadContext,
+  EjesLoadCounts,
   EjesLoadReport,
   EjesParams,
   EjesStagingReport,
@@ -73,6 +76,7 @@ import type {
 } from "../types";
 import { discardEjesRevertBackup, writeEjesRevertBackup } from "./ejesRevertBackup";
 import { readAnalysisForLoad, readStagingReport } from "./readEjesAnalysis";
+import { createTopologyInputs, writeTopology } from "./topologyLoad";
 
 export interface EjesPersistBody {
   staging: EjesStagingReport;
@@ -109,7 +113,12 @@ function assertSummaryMatches(summary: EjesSummary | undefined, analysis: EjesAn
 }
 
 async function repairSequences(session: RunSession, context: EjesLoadContext): Promise<void> {
-  for (const role of [EJES_TABLE_ROLE.ROAD_SECTION, EJES_TABLE_ROLE.CIRCULATION_WAY, EJES_TABLE_ROLE.ADDRESS_MASTER] as const) {
+  for (const role of [
+    EJES_TABLE_ROLE.ROAD_SECTION,
+    EJES_TABLE_ROLE.CIRCULATION_WAY,
+    EJES_TABLE_ROLE.ADDRESS_MASTER,
+    EJES_TABLE_ROLE.VERTICES,
+  ] as const) {
     // One pg client: each repair runs before the next.
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await session.query(buildSequenceRepairSql(context.targets[role]));
@@ -149,6 +158,7 @@ async function prepareLoad(session: RunSession, context: EjesLoadContext): Promi
   await createRemovalPlans(session, context);
   await assertSingleParts(session);
   await session.query(buildNewTableSql(context));
+  await createTopologyInputs(session, context);
   await createWays(session, context);
   await session.query(buildSurplusTableSql(context));
   await runInOrder(session, [
@@ -157,6 +167,8 @@ async function prepareLoad(session: RunSession, context: EjesLoadContext): Promi
     buildRevertInsertsSql(context),
     buildRevertMastersSql(context),
     buildRevertRestoredSectionsSql(context),
+    buildRevertRestoredVerticesSql(context),
+    buildRevertCreatedVerticesSql(context),
   ]);
   return toEjesLoadPlan((await session.query(buildLoadCountsSql())).rows[0] ?? {});
 }
@@ -206,6 +218,7 @@ async function analyzeChanged(session: RunSession, context: EjesLoadContext, pla
     counts.waysCreated > 0 ? EJES_TABLE_ROLE.CIRCULATION_WAY : undefined,
     counts.inserted + plan.deletedMasters > 0 ? EJES_TABLE_ROLE.ADDRESS_MASTER : undefined,
     counts.pointsMoved > 0 ? EJES_TABLE_ROLE.ACCESS_POINT : undefined,
+    counts.verticesCreated + counts.verticesDeleted > 0 ? EJES_TABLE_ROLE.VERTICES : undefined,
   ];
   for (const role of changed) {
     if (role === undefined) continue;
@@ -227,14 +240,17 @@ async function readLoadLists(session: RunSession): Promise<LoadLists> {
   return { surplus, renumbered, skipped, skippedTotal, skippedByReason };
 }
 
-/** The writes and the ANALYZE of the changed tables. Any failure here is followed by a rollback, so the backup is discarded first. */
-async function writeChanges(session: RunSession, context: EjesLoadContext, plan: EjesLoadPlan, timer: StepTimer): Promise<void> {
+/** The writes, the topology and the ANALYZE of the changed tables. Any failure here is followed by a rollback, so the backup is discarded first. */
+async function writeChanges(session: RunSession, context: EjesLoadContext, plan: EjesLoadPlan, timer: StepTimer): Promise<EjesLoadCounts> {
   await timer.run(EJES_STEP.WAYS, () => writeWays(session, context, plan));
   await timer.run(EJES_STEP.SECTIONS, () => writeSections(session, context, plan));
   await timer.run(EJES_STEP.UPDATES, () => writeUpdates(session, context, plan));
   await timer.run(EJES_STEP.RENUMBER, () => writeRenumbered(session, context, plan));
   await timer.run(EJES_STEP.REMOVE, () => writeRemovals(session, context, plan));
-  await timer.run(EJES_STEP.ANALYZE_TABLES, () => analyzeChanged(session, context, plan));
+  const topology = await timer.run(EJES_STEP.TOPOLOGY, () => writeTopology(session, context));
+  const counts = { ...plan.counts, ...topology };
+  await timer.run(EJES_STEP.ANALYZE_TABLES, () => analyzeChanged(session, context, { ...plan, counts }));
+  return counts;
 }
 
 async function persistBody(
@@ -267,8 +283,9 @@ async function persistBody(
   const backup = await timer.run(EJES_STEP.BACKUP, () =>
     writeEjesRevertBackup(session, params.tables[EJES_TABLE_ROLE.ROAD_SECTION], plan.counts)
   );
+  let counts: EjesLoadCounts;
   try {
-    await writeChanges(session, context, plan, timer);
+    counts = await writeChanges(session, context, plan, timer);
   } catch (error: unknown) {
     await discardEjesRevertBackup(backup);
     throw error;
@@ -277,7 +294,7 @@ async function persistBody(
     staging,
     analysis,
     load: {
-      counts: plan.counts,
+      counts,
       surplus: lists.surplus,
       surplusTotal: plan.surplusTotal,
       renumbered: lists.renumbered,

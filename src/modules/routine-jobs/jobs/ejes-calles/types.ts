@@ -268,6 +268,10 @@ export interface EjesLoadCounts {
   deleted: number;
   waysCreated: number;
   pointsMoved: number;
+  /** Sections of the topology set that hold a source and a target after pgr_createTopology. */
+  topologyAssigned: number;
+  verticesCreated: number;
+  verticesDeleted: number;
 }
 
 export interface EjesSurplusRow {

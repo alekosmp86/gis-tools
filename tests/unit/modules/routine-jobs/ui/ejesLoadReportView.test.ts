@@ -3,6 +3,7 @@ import { EJES_SKIP_REASON, RENUMBER_SKIP_REASON } from "@/modules/routine-jobs/j
 import type { EjesBackup, EjesLoadReport, EjesResult, EjesSkippedRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import { buildEjesLoadView } from "@/modules/routine-jobs/ui/ejesLoadReportView";
 import {
+  EJES_LOAD_COUNT_TEXT,
   EJES_LOAD_DONE_BANNER,
   EJES_LOAD_UNKNOWN_BANNER,
   EJES_SKIP_KIND_TEXT,
@@ -21,6 +22,9 @@ const loadOf = (overrides: Partial<EjesLoadReport> = {}): EjesLoadReport => ({
     deleted: 0,
     waysCreated: 4,
     pointsMoved: 9,
+    topologyAssigned: 0,
+    verticesCreated: 0,
+    verticesDeleted: 0,
   },
   surplus: [],
   surplusTotal: 0,
@@ -94,8 +98,11 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
   });
 
   describe("applied counts", () => {
-    it("should list inserted, updated, renumbered, renumbers held back, merges applied, sections removed, sections deleted, ways created and points moved, in this order", () => {
-      const view = buildEjesLoadView(resultOf(), loadOf({ counts: { ...loadOf().counts, merged: 2, removed: 5, deleted: 7 } }));
+    it("should list inserted, updated, renumbered, renumbers held back, merges applied, sections removed, sections deleted, ways created, points moved and the topology counts, in this order", () => {
+      const view = buildEjesLoadView(
+        resultOf(),
+        loadOf({ counts: { ...loadOf().counts, merged: 2, removed: 5, deleted: 7, topologyAssigned: 4, verticesCreated: 6, verticesDeleted: 1 } })
+      );
 
       expect(view.counts).toEqual([
         { label: "Tramos insertados", value: 3 },
@@ -107,13 +114,31 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
         { label: "Tramos borrados (quitados y unidos)", value: 7 },
         { label: "Vías de circulación creadas", value: 4 },
         { label: "Puntos de acceso movidos", value: 9 },
+        { label: EJES_LOAD_COUNT_TEXT.TOPOLOGY_ASSIGNED, value: 4 },
+        { label: EJES_LOAD_COUNT_TEXT.VERTICES_CREATED, value: 6 },
+        { label: EJES_LOAD_COUNT_TEXT.VERTICES_DELETED, value: 1 },
       ]);
     });
 
     it("should show the renumbers held back as the load's own renumberSkipped count", () => {
       const view = buildEjesLoadView(
         resultOf(),
-        loadOf({ counts: { inserted: 0, updated: 0, renumbered: 0, renumberSkipped: 7, removed: 0, merged: 0, deleted: 0, waysCreated: 0, pointsMoved: 0 } })
+        loadOf({
+          counts: {
+            inserted: 0,
+            updated: 0,
+            renumbered: 0,
+            renumberSkipped: 7,
+            removed: 0,
+            merged: 0,
+            deleted: 0,
+            waysCreated: 0,
+            pointsMoved: 0,
+            topologyAssigned: 0,
+            verticesCreated: 0,
+            verticesDeleted: 0,
+          },
+        })
       );
 
       expect(countOf(view, "Renumerados retenidos")).toBe(7);
@@ -122,10 +147,25 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
     it("should show zeros for a run that changed nothing", () => {
       const view = buildEjesLoadView(
         resultOf(),
-        loadOf({ counts: { inserted: 0, updated: 0, renumbered: 0, renumberSkipped: 0, removed: 0, merged: 0, deleted: 0, waysCreated: 0, pointsMoved: 0 } })
+        loadOf({
+          counts: {
+            inserted: 0,
+            updated: 0,
+            renumbered: 0,
+            renumberSkipped: 0,
+            removed: 0,
+            merged: 0,
+            deleted: 0,
+            waysCreated: 0,
+            pointsMoved: 0,
+            topologyAssigned: 0,
+            verticesCreated: 0,
+            verticesDeleted: 0,
+          },
+        })
       );
 
-      expect(view.counts.map((row) => row.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+      expect(view.counts.map((row) => row.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     });
 
     it("should show the sections deleted by the load (removed and merged) from counts.deleted", () => {

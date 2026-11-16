@@ -1,5 +1,11 @@
 import type { EjesBackup, EjesLoadReport, EjesResult, EjesSkippedRow, EjesSurplusRow } from "../jobs/ejes-calles/types";
-import { EJES_SKIP_KIND_TEXT, EJES_LOAD_DONE_BANNER, EJES_LOAD_UNKNOWN_BANNER, SKIP_REASON_TEXT } from "./ejesLoadTexts";
+import {
+  EJES_LOAD_COUNT_TEXT,
+  EJES_LOAD_DONE_BANNER,
+  EJES_LOAD_UNKNOWN_BANNER,
+  EJES_SKIP_KIND_TEXT,
+  SKIP_REASON_TEXT,
+} from "./ejesLoadTexts";
 import type { ReportBannerView } from "./ReportParts";
 import type { ReportRowListRow } from "./ReportRowList";
 import type { RefreshSuggestionView } from "./refreshSuggestionView";
@@ -43,6 +49,9 @@ const countRowsOf = (load: EjesLoadReport): ReportRowListRow[] => [
   { label: "Tramos borrados (quitados y unidos)", value: load.counts.deleted },
   { label: "Vías de circulación creadas", value: load.counts.waysCreated },
   { label: "Puntos de acceso movidos", value: load.counts.pointsMoved },
+  { label: EJES_LOAD_COUNT_TEXT.TOPOLOGY_ASSIGNED, value: load.counts.topologyAssigned },
+  { label: EJES_LOAD_COUNT_TEXT.VERTICES_CREATED, value: load.counts.verticesCreated },
+  { label: EJES_LOAD_COUNT_TEXT.VERTICES_DELETED, value: load.counts.verticesDeleted },
 ];
 
 const skippedViewOf = (row: EjesSkippedRow, index: number): EjesSkippedView => ({

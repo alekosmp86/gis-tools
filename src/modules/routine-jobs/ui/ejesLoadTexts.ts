@@ -6,8 +6,14 @@ export const EJES_LOAD_UNKNOWN_BANNER =
   "No se pudo confirmar el COMMIT: verifique las tablas de ejes de calles antes de volver a cargar.";
 export const EJES_LOAD_SKIPPED_TITLE = "Omitidos, sin aplicar";
 export const EJES_LOAD_SURPLUS_TITLE = "Tramos sobrantes (no se borran)";
+export const EJES_LOAD_COUNT_TEXT = {
+  TOPOLOGY_ASSIGNED: "Tramos con topología asignada",
+  VERTICES_CREATED: "Vértices de ruteo creados",
+  VERTICES_DELETED: "Vértices de ruteo borrados (sin uso)",
+} as const;
 export const EJES_LOAD_BACKUP_INSTRUCTIONS = [
-  "Para revertir, descomprima el .gz y ejecute el .sql completo contra la base, con psql o con pgAdmin / cualquier cliente SQL. Restaura los tramos tocados, los tramos y direcciones maestras borrados y los puntos de acceso movidos, y borra los tramos, vías y direcciones maestras insertados.",
+  "Para revertir, descomprima el .gz y ejecute el .sql completo contra la base, con psql o con pgAdmin / cualquier cliente SQL. Restaura los vértices de ruteo borrados, los tramos tocados, los tramos y direcciones maestras borrados y los puntos de acceso movidos, y borra los tramos, vías, direcciones maestras y vértices de ruteo creados.",
+  "El respaldo solo sirve antes de cualquier reconstrucción posterior de la topología: un pgr_createTopology con clean := true renumera los vértices. Los vértices de ruteo creados se borran por id, por encima del máximo previo a la carga.",
   "El servidor guarda una copia temporal durante 7 días.",
   "Si el servidor se reinicia, los enlaces de descarga dejan de funcionar: descargue el respaldo antes.",
 ];

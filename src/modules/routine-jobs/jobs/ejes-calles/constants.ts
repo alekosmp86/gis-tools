@@ -65,9 +65,13 @@ export const ADDRESS_MASTER_COLUMN = {
   LONGITUDE: "longitud",
 } as const;
 
-const VERTICES_COLUMN = {
+export const VERTICES_COLUMN = {
   ID: "id",
   THE_GEOM: "the_geom",
+  CNT: "cnt",
+  CHK: "chk",
+  EIN: "ein",
+  EOUT: "eout",
 } as const;
 
 export const ACCESS_POINT_COLUMN = {
@@ -207,11 +211,14 @@ export const MASTER_URN_PREFIX = "cgeo:road_section:id:";
 export const EJES_REFRESH_VIEW_NAMES = ["mv_road_section", "mv_road_section2", "mv_addresses_2_0"] as const;
 export const EJES_STAGING_REFRESH_VIEW = "bdj_ejes";
 
+export const TOPOLOGY_TOLERANCE_M = 0.1;
+
 export const EJES_LOAD_ROLES = [
   EJES_TABLE_ROLE.ROAD_SECTION,
   EJES_TABLE_ROLE.CIRCULATION_WAY,
   EJES_TABLE_ROLE.ADDRESS_MASTER,
   EJES_TABLE_ROLE.ACCESS_POINT,
+  EJES_TABLE_ROLE.VERTICES,
 ] as const;
 
 export const RENUMBER_SKIP_REASON = {
