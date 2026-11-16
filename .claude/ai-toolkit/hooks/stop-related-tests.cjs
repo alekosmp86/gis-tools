@@ -8,6 +8,21 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 
 const BUDGET_MS = 30000;
+const MAX_FILES = 8;
+const MAX_WORKERS = 2;
+
+function killTree(pid) {
+  if (!pid) return;
+  try {
+    if (process.platform === "win32") {
+      spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    } else {
+      process.kill(-pid, "SIGKILL");
+    }
+  } catch {
+    // process already gone
+  }
+}
 
 function changedSourceFiles() {
   const diff = spawnSync("git", ["diff", "--name-only", "HEAD"], { encoding: "utf8" });
@@ -40,6 +55,16 @@ function main() {
     return;
   }
 
+  if (files.length > MAX_FILES) {
+    console.log(
+      JSON.stringify({
+        decision: "approve",
+        reason: `level-1 related tests skipped: ${files.length} changed files (limit ${MAX_FILES}); the gauntlet before commit covers them`,
+      })
+    );
+    return;
+  }
+
   // Drive-letter case matters: a lowercase "c:" drive cwd makes vitest load two module instances
   // ("Cannot read properties of undefined (reading 'config')", every file "0 test").
   let cwd = process.cwd();
@@ -49,7 +74,7 @@ function main() {
     // keep process.cwd()
   }
 
-  const result = spawnSync("npx", ["vitest", "related", "--run", "--maxWorkers=6", ...files], {
+  const result = spawnSync("npx", ["vitest", "related", "--run", `--maxWorkers=${MAX_WORKERS}`, ...files], {
     cwd,
     timeout: BUDGET_MS,
     encoding: "utf8",
@@ -57,6 +82,7 @@ function main() {
   });
 
   if (result.error && result.error.code === "ETIMEDOUT") {
+    killTree(result.pid);
     console.log(
       JSON.stringify({
         decision: "approve",
