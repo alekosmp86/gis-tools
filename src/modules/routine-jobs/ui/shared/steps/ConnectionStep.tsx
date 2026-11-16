@@ -8,7 +8,7 @@ import type { SavedDbProfile } from "@/core/types/db";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
-import type { ConnectionField } from "../cargarPadronesWizardState";
+import type { ConnectionField } from "../wizardConnection";
 import type { ClientConnection } from "../clientTypes";
 import styles from "./WizardSteps.module.css";
 

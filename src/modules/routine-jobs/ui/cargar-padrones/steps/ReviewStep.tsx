@@ -5,7 +5,7 @@ import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType } from "@/ui-kit/types/ui";
 import { CLEAR_MODE, type ClearMode } from "../../../jobs/cargar-padrones/constants";
-import type { WizardConfirmation } from "../../shared/cargarPadronesWizardState";
+import type { WizardConfirmation } from "../cargarPadronesWizardState";
 import type { StartRequest } from "../../shared/clientTypes";
 import { PASSWORD_LABEL, ReviewRunActions } from "../../shared/steps/reviewParts";
 import styles from "../../shared/steps/WizardSteps.module.css";

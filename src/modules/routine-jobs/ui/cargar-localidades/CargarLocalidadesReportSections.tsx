@@ -11,11 +11,11 @@ import type {
 } from "../../jobs/cargar-localidades/types";
 import type { TargetView } from "./cargarLocalidadesReportView";
 import { skipReasonLabelOf } from "./cargarLocalidadesReportView";
-import { CollapsibleSection } from "../shared/ActualizarReportSections";
+import { CollapsibleSection } from "../shared/CollapsibleSection";
 import { ReportRowList } from "../shared/ReportRowList";
 import { RowsTable, SectionTitle, type TableColumn } from "../shared/ReportParts";
 import { NO_DATA_TEXT, textOrNoData } from "../shared/reportFormat";
-import sharedStyles from "../shared/CargarPadronesReport.module.css";
+import sharedStyles from "../shared/ReportShared.module.css";
 
 const DECIMAL_PLACES = 2;
 const AREA_DECIMAL_PLACES = 3;

@@ -1,6 +1,6 @@
 import { LOCALITY_REASON_GROUP_LIMIT } from "../../jobs/actualizar-padron/constants";
 import { toCsv, type CsvRow } from "../../jobs/shared/csvFormat";
-import type { LocalityRow } from "../shared/actualizarPadronReportView";
+import type { LocalityRow } from "./actualizarPadronReportView";
 
 const NOT_FOUND_HEADER: CsvRow = ["Departamento", "Localidad", "Padrones afectados", "Motivo"];
 const NOT_ANYWHERE_REASON = "La localidad no existe en el departamento.";

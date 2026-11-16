@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import * as cargarPadronesState from "@/modules/routine-jobs/ui/shared/cargarPadronesWizardState";
+import * as cargarPadronesState from "@/modules/routine-jobs/ui/cargar-padrones/cargarPadronesWizardState";
 import * as cargarLocalidadesState from "@/modules/routine-jobs/ui/cargar-localidades/cargarLocalidadesWizardState";
 import * as unidadTerritorialState from "@/modules/routine-jobs/ui/unidad-territorial/unidadTerritorialWizardState";
 import * as actualizarPadronState from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPadronWizardState";

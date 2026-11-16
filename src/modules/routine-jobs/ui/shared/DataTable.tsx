@@ -1,5 +1,5 @@
 import React from "react";
-import styles from "./CargarPadronesReport.module.css";
+import styles from "./ReportShared.module.css";
 
 export interface DataTableProps {
   headers: ReadonlyArray<string>;

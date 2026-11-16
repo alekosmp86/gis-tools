@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LOCALITY_REASON_GROUP_LIMIT } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
-import type { LocalityRow } from "@/modules/routine-jobs/ui/shared/actualizarPadronReportView";
+import type { LocalityRow } from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPadronReportView";
 import { buildLocalitiesNotFoundCsv } from "@/modules/routine-jobs/ui/actualizar-padron/localitiesNotFoundCsv";
 import { BOM, parseCsv } from "./reportCsvFixtures";
 

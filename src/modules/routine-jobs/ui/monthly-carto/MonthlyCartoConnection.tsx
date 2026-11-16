@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { Button } from "@/ui-kit/components/ui/Button";
-import { connectionBlockingReason, initialWizardState, type ConnectionField } from "../shared/cargarPadronesWizardState";
+import { initialWizardState } from "../cargar-padrones/cargarPadronesWizardState";
+import { connectionBlockingReason, type ConnectionField } from "../shared/wizardConnection";
 import type { ClientConnection } from "../shared/clientTypes";
 import { trimConnection } from "../shared/connectionProfiles";
 import { ConnectionStep } from "../shared/steps/ConnectionStep";

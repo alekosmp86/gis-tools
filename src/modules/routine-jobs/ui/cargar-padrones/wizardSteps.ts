@@ -2,9 +2,10 @@ import { ChartColumn, ClipboardCheck, Plug, SlidersHorizontal, Table2 } from "lu
 import type { WizardStepDef } from "@/ui-kit/types/ui";
 import type { TableRole } from "../../jobs/cargar-padrones/constants";
 import { TABLE_ROLE } from "../../jobs/cargar-padrones/constants";
-import { canContinue, WizardStep, type WizardState } from "../shared/cargarPadronesWizardState";
+import { canContinue, type WizardState } from "./cargarPadronesWizardState";
+import { WizardStep } from "../shared/wizardConnection";
 
-export { initialStepFor } from "../shared/cargarPadronesWizardState";
+export { initialStepFor } from "./cargarPadronesWizardState";
 
 interface StepDef {
   step: WizardStep;

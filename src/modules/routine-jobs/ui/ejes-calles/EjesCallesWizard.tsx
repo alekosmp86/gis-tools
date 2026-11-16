@@ -6,7 +6,7 @@ import type { SafeDbConfig } from "@/core/types/db";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
 import { EJES_ROLES, type EjesTableRole } from "../../jobs/ejes-calles/constants";
-import { connectionFieldInvalidatesCatalog, type ConnectionField } from "../shared/cargarPadronesWizardState";
+import { connectionFieldInvalidatesCatalog, type ConnectionField } from "../shared/wizardConnection";
 import type { EjesStartRequest } from "../shared/clientTypes";
 import { changedConnectionFields, trimConnection } from "../shared/connectionProfiles";
 import { getEjesRunStore, type EjesRunSnapshot, type EjesRunStore } from "../shared/ejesCallesRunStore";

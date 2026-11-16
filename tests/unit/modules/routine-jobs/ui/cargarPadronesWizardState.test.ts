@@ -1,19 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  blockingReason,
-  canContinue,
-  canRunNow,
-  connectionFieldInvalidatesCatalog,
-  initialWizardState,
-  initialWizardStateFor,
-  isRealRunConfirmed,
-  runBlockedReason,
-  toStartRequest,
-  wizardReducer,
-  WizardStep,
-  type ConnectionField,
-  type WizardState,
-} from "@/modules/routine-jobs/ui/shared/cargarPadronesWizardState";
+import { blockingReason, canContinue, canRunNow, initialWizardState, initialWizardStateFor, isRealRunConfirmed, runBlockedReason, toStartRequest, wizardReducer, type WizardState } from "@/modules/routine-jobs/ui/cargar-padrones/cargarPadronesWizardState";
+import { connectionFieldInvalidatesCatalog, WizardStep, type ConnectionField } from "@/modules/routine-jobs/ui/shared/wizardConnection";
 
 const PASSWORD = "s3cret-pw";
 

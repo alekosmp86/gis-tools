@@ -4,11 +4,11 @@ import React from "react";
 import type { AddressMasterAmbiguous, AddressMasterLinked } from "../../jobs/shared/addressMasterLinkPass";
 import type { AddressMasterView } from "./addressMasterReportView";
 import type { AddressMasterSubjectTexts } from "./addressMasterSubjectTexts";
-import { CollapsibleSection } from "./ActualizarReportSections";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { RowsTable, SectionTitle, type TableColumn } from "./ReportParts";
 import { ReportRowList } from "./ReportRowList";
 import { textOrNoData } from "./reportFormat";
-import sharedStyles from "./CargarPadronesReport.module.css";
+import sharedStyles from "./ReportShared.module.css";
 
 const CREATED_TEXT = "Creado";
 const EXISTING_TEXT = "Ya existía";

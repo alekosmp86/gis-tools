@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildActualizarReportView } from "@/modules/routine-jobs/ui/shared/actualizarPadronReportView";
+import { buildActualizarReportView } from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPadronReportView";
 import { GEOMETRY_STATE, PAIR_STATUS, SKIP_REASON, type SkipReason } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { ActualizarPadronResult, MissingPadron, PadronGeometryChange, PadronPair } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 

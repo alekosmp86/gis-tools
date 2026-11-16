@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ActualizarTargetReport, PadronRemoved, RemovalSkippedReport } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
-import { removalViewOf } from "@/modules/routine-jobs/ui/shared/removalReportView";
+import { removalViewOf } from "@/modules/routine-jobs/ui/actualizar-padron/removalReportView";
 
 const TABLE = "carto.padron_tmp_actualizacion";
 

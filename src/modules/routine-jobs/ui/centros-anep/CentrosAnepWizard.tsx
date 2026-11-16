@@ -6,7 +6,7 @@ import type { SafeDbConfig } from "@/core/types/db";
 import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
 import { CENTROS_ROLES, type CentrosTableRole } from "../../jobs/centros-anep/constants";
-import { connectionFieldInvalidatesCatalog, type ConnectionField } from "../shared/cargarPadronesWizardState";
+import { connectionFieldInvalidatesCatalog, type ConnectionField } from "../shared/wizardConnection";
 import { getCentrosAnepRunStore, type CentrosAnepRunSnapshot, type CentrosAnepRunStore } from "../shared/centrosAnepRunStore";
 import {
   blockingReason,

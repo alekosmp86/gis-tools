@@ -146,7 +146,7 @@ Part A
 - AC-22: connection profiles reuse the core shared store (`core/services/localStorageDbConfig.ts`, the same profiles the other DB tools use): the step lists them through the
   ui-kit `ProfileSelect`, selecting one fills host, port, database and user, saving writes a connection-only profile (schema and table empty), deleting removes the selected one;
   profiles are never overwritten unless selected; the password is never stored; the wizard does not store schema, tables or options.
-- AC-30: wizard state is a pure reducer (`ui/shared/cargarPadronesWizardState.ts`): steps `connection -> tables -> options -> review -> result`, `canContinue(state)` rules (connection
+- AC-30: wizard state is a pure reducer (`ui/cargar-padrones/cargarPadronesWizardState.ts`; connection helpers and `WizardStep` in `ui/shared/wizardConnection.ts`): steps `connection -> tables -> options -> review -> result`, `canContinue(state)` rules (connection
   fields valid; schema chosen and the three tables chosen, distinct and all valid; options valid; confirmation matches), reset of dependent fields when the schema or connection changes.
 - AC-31: report view-model (`ui/cargar-padrones/cargarPadronesReportView.ts`): turns `CargarPadronesResult` into display rows (per type: rows read, repaired / inserted invalid / repaired in union,
   no geometry, null keys, groups, rows merged, conflicts, inserted), warnings, up to 20 conflict samples, ambiguous locality codes, step timings, the analyze status and the

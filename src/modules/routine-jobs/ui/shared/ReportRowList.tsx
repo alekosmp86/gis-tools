@@ -1,6 +1,6 @@
 import React from "react";
 import type { ReportRowTone } from "./reportRowTone";
-import styles from "./CargarPadronesReport.module.css";
+import styles from "./ReportShared.module.css";
 
 export interface ReportRowListRow {
   label: string;

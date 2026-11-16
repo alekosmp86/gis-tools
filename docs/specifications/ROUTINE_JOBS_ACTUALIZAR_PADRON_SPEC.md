@@ -474,7 +474,7 @@ Everything user-facing is Spanish; code is English; modular CSS, no inline style
 - AP-33: Run store (`ui/shared/actualizarPadronRunStore.ts`) follows AC-29 of Cargar padrones: holds the active job id, polls status every 2 s (timer
   injected), stops on DONE/FAILED, survives in-app navigation, gives up only after consecutive poll failures span 60 s and then reports an
   unknown outcome with the job id; never keeps the password in its snapshot. Its plan is `{ dryRun, destinationTable }`.
-- AP-34: Report view-model (`ui/shared/actualizarPadronReportView.ts`): pure and unit tested. It turns the result into display data: KPI values, the
+- AP-34: Report view-model (`ui/actualizar-padron/actualizarPadronReportView.ts`): pure and unit tested. It turns the result into display data: KPI values, the
   percentage per reason (share of the skipped rows; 0 when nothing was skipped), the non-zero reasons sorted by count, the top 10 lists per
   department and locality with a `rest` count, the localities-not-found and ambiguous aggregations from `skipped.byLocalityAndReason`, the
   target counts and lists with their summaries, samples, warnings (without the dry-run and unknown-outcome texts, which are banners) and banners.

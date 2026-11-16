@@ -28,7 +28,7 @@ import {
   type ActualizarWizardSeed,
   type ActualizarWizardState,
 } from "./actualizarPadronWizardState";
-import { connectionFieldInvalidatesCatalog, type ConnectionField } from "../shared/cargarPadronesWizardState";
+import { connectionFieldInvalidatesCatalog, type ConnectionField } from "../shared/wizardConnection";
 import {
   getActualizarPadronRunStore,
   type ActualizarPadronRunSnapshot,

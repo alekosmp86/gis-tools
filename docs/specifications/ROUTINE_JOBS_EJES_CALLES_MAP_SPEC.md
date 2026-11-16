@@ -2,7 +2,7 @@
 
 ## Context
 
-The analysis report of the ejes job lists SPLIT ("Divisiones") and MERGE ("Uniones") cases with only `reftramo` numbers. The user needs to see them on a map to judge them. Carga de padrones already has a map in a modal (`PadronMapModal`, `PadronMapBody`, `PadronMapView`, `usePadronMapFeatures`, `padronMapCollection`, `ShowOnMapButton`, `ReviewNavigation` in `src/modules/routine-jobs/ui/`). Those components are tied to padrones types; this change makes the generic parts shareable and builds the ejes map on them.
+The analysis report of the ejes job lists SPLIT ("Divisiones") and MERGE ("Uniones") cases with only `reftramo` numbers. The user needs to see them on a map to judge them. Carga de padrones already has a map in a modal (`PadronMapModal`, `PadronMapBody`, `PadronMapView`, `usePadronMapFeatures`, `padronMapCollection`, `ShowOnMapButton`, `ReviewNavigation`; the padrones ones live in `src/modules/routine-jobs/ui/actualizar-padron/map/`). Those components are tied to padrones types; this change makes the generic parts shareable and builds the ejes map on them.
 
 ## Shared map UI (refactor, no change of padrones behaviour)
 

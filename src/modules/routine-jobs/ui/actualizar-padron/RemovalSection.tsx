@@ -2,13 +2,13 @@
 
 import React, { useMemo } from "react";
 import type { PadronRemoved } from "../../jobs/actualizar-padron/types";
-import { CollapsibleSection } from "../shared/ActualizarReportSections";
+import { CollapsibleSection } from "../shared/CollapsibleSection";
 import { RowsTable, SectionTitle, type TableColumn } from "../shared/ReportParts";
 import { ReportRowList } from "../shared/ReportRowList";
 import { textOrNoData } from "../shared/reportFormat";
-import type { RemovalView } from "../shared/removalReportView";
+import type { RemovalView } from "./removalReportView";
 import { NUMBER_COLUMN, TYPE_COLUMN } from "./targetColumns";
-import sharedStyles from "../shared/CargarPadronesReport.module.css";
+import sharedStyles from "../shared/ReportShared.module.css";
 
 const REMOVED_COLUMNS: TableColumn<PadronRemoved>[] = [
   { header: "Id", cell: (padron) => String(padron.id) },

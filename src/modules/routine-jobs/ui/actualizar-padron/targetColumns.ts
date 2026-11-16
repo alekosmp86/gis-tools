@@ -1,5 +1,5 @@
 import type { PadronGeometryChange, PadronKey, PadronLocation } from "../../jobs/actualizar-padron/types";
-import { geometryStateLabelOf } from "../shared/actualizarPadronReportView";
+import { geometryStateLabelOf } from "./actualizarPadronReportView";
 import type { TableColumn } from "../shared/ReportParts";
 import { decimalOrNoData, NO_DATA_TEXT, textOrNoData } from "../shared/reportFormat";
 

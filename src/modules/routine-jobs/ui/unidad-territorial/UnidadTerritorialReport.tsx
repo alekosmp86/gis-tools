@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { UnitGeometryChange, UnitInserted, UnitKey, UnitResult, UnitSkippedSample } from "../../jobs/unidad-territorial/types";
-import { CollapsibleSection } from "../shared/ActualizarReportSections";
+import { CollapsibleSection } from "../shared/CollapsibleSection";
 import { ReportRowList } from "../shared/ReportRowList";
 import {
   KpiCards,
@@ -22,7 +22,7 @@ import { buildUnitReportView, unitSkipReasonLabelOf, type UnitReportTargetView }
 import { AddressMasterSection } from "../shared/AddressMasterSection";
 import { UNIT_ADDRESS_MASTER_TEXTS } from "../shared/addressMasterSubjectTexts";
 import { RefreshSuggestion } from "../shared/RefreshSuggestion";
-import sharedStyles from "../shared/CargarPadronesReport.module.css";
+import sharedStyles from "../shared/ReportShared.module.css";
 
 const DECIMAL_PLACES = 2;
 const AREA_DECIMAL_PLACES = 3;

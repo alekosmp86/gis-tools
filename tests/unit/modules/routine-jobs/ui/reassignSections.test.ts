@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { ActualizarPadronBackup } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import { ActualizarBackupSection } from "@/modules/routine-jobs/ui/actualizar-padron/ActualizarBackupSection";
 import { RemovalSection } from "@/modules/routine-jobs/ui/actualizar-padron/RemovalSection";
-import type { RemovalView } from "@/modules/routine-jobs/ui/shared/removalReportView";
+import type { RemovalView } from "@/modules/routine-jobs/ui/actualizar-padron/removalReportView";
 
-vi.mock("@/modules/routine-jobs/ui/shared/padronBackupAutoDownload", () => ({ claimAutomaticBackupDownload: vi.fn(() => false) }));
-vi.mock("@/modules/routine-jobs/ui/shared/padronBackupDownload", () => ({ downloadPadronBackup: vi.fn(async () => undefined) }));
+vi.mock("@/modules/routine-jobs/ui/shared/backupAutoDownload", () => ({ claimAutomaticBackupDownload: vi.fn(() => false) }));
+vi.mock("@/modules/routine-jobs/ui/shared/backupDownload", () => ({ downloadPadronBackup: vi.fn(async () => undefined) }));
 
 const backupOf = (counts: Partial<ActualizarPadronBackup["counts"]> = {}): ActualizarPadronBackup => ({
   token: "00000000-0000-4000-8000-000000000000",

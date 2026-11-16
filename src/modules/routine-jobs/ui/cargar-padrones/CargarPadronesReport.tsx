@@ -13,7 +13,7 @@ import { DataTable } from "../shared/DataTable";
 import { ReportDownloadActions, ReportDownloadButton } from "../shared/ReportDownloadButton";
 import { ReportRowList } from "../shared/ReportRowList";
 import { MonthlyStage } from "../shared/monthlyCartoStages";
-import styles from "../shared/CargarPadronesReport.module.css";
+import styles from "../shared/ReportShared.module.css";
 
 const BANNER_CLASS: Record<ReportBannerKind, string> = {
   unknown: styles.bannerUnknown,

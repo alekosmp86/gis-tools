@@ -7,22 +7,8 @@ import { isConnectionFailure } from "@/ui-kit/components/tableSelectorLogic";
 import type { WizardStepDef } from "@/ui-kit/types/ui";
 import type { ResolvedColumn } from "@/core/types/tableCatalog";
 import type { TableRole } from "../../jobs/cargar-padrones/constants";
-import {
-  blockingReason,
-  canRunNow,
-  connectionFieldInvalidatesCatalog,
-  initialWizardStateFor,
-  isRealRunConfirmed,
-  runBlockedReason,
-  toStartRequest,
-  WizardStep,
-  wizardReducer,
-  type ConnectionField,
-  stagingSelectionOf,
-  type WizardAction,
-  type WizardSeed,
-  type WizardState,
-} from "../shared/cargarPadronesWizardState";
+import { blockingReason, canRunNow, initialWizardStateFor, isRealRunConfirmed, runBlockedReason, toStartRequest, wizardReducer, stagingSelectionOf, type WizardAction, type WizardSeed, type WizardState } from "./cargarPadronesWizardState";
+import { connectionFieldInvalidatesCatalog, WizardStep, type ConnectionField } from "../shared/wizardConnection";
 import { useElapsedTick } from "../shared/useElapsedTick";
 import { createRoutineJobsClient, RoutineJobsApiError } from "../shared/routineJobsClient";
 import {

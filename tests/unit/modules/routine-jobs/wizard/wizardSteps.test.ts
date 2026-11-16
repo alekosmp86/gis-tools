@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  initialWizardState,
-  initialWizardStateFor,
-  WizardStep,
-  type WizardState,
-} from "@/modules/routine-jobs/ui/shared/cargarPadronesWizardState";
+import { initialWizardState, initialWizardStateFor, type WizardState } from "@/modules/routine-jobs/ui/cargar-padrones/cargarPadronesWizardState";
+import { WizardStep } from "@/modules/routine-jobs/ui/shared/wizardConnection";
 import { buildWizardSteps, excludedFor, initialStepFor } from "@/modules/routine-jobs/ui/cargar-padrones/wizardSteps";
 
 const TITLES = ["Conexión", "Tablas", "Opciones", "Revisar", "Resultado"];

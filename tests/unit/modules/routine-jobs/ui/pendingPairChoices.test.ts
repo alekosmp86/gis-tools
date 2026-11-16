@@ -9,7 +9,7 @@ import {
   pendingChoiceStateIn,
   pendingChoiceStateOf,
   PendingChoiceState,
-} from "@/modules/routine-jobs/ui/actualizar-padron/pendingPairChoices";
+} from "@/modules/routine-jobs/ui/actualizar-padron/review/pendingPairChoices";
 
 const choiceOf = (overrides: Partial<PairChoice> = {}): PairChoice => ({
   typePadron: "URBANO",

@@ -5,13 +5,13 @@ import { Download } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
-import { claimAutomaticBackupDownload } from "./padronBackupAutoDownload";
-import { downloadPadronBackup } from "./padronBackupDownload";
+import { claimAutomaticBackupDownload } from "./backupAutoDownload";
+import { downloadPadronBackup } from "./backupDownload";
 import { ReportDownloadActions } from "./ReportDownloadButton";
 import { SectionTitle } from "./ReportParts";
 import { ReportRowList, type ReportRowListRow } from "./ReportRowList";
 import { megabytesText } from "./reportFormat";
-import sharedStyles from "./CargarPadronesReport.module.css";
+import sharedStyles from "./ReportShared.module.css";
 
 const TITLE = "Respaldo para revertir";
 const BUTTON_LABEL = "Descargar respaldo";

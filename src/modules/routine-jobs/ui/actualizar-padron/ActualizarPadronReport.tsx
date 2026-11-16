@@ -3,38 +3,31 @@
 import React, { useMemo, useState } from "react";
 import type { ActualizarPadronResult } from "../../jobs/actualizar-padron/types";
 import type { GeometryMapBase } from "../shared/clientTypes";
-import type { PadronReview, PadronReviewItem } from "./padronReviewItems";
-import { PadronMapModal } from "./PadronMapModal";
+import type { PadronReview, PadronReviewItem } from "./review/padronReviewItems";
+import { PadronMapModal } from "./map/PadronMapModal";
 import {
   readOnlyAcceptsOf,
   type GeometryAcceptSelection,
   type ReviewDecisions,
-} from "./reviewDecisions";
+} from "./review/reviewDecisions";
 import {
   buildActualizarReportView,
   type ActualizarBannerKind,
   type ActualizarReportView,
-} from "../shared/actualizarPadronReportView";
-import {
-  CollapsibleSection,
-  CollidingKeyList,
-  GroupTopList,
-  LocalityTable,
-  SampleTable,
-  SkippedReasonsTable,
-  TimingList,
-} from "../shared/ActualizarReportSections";
+} from "./actualizarPadronReportView";
+import { CollidingKeyList, GroupTopList, LocalityTable, SampleTable, SkippedReasonsTable, TimingList } from "./ActualizarReportSections";
+import { CollapsibleSection } from "../shared/CollapsibleSection";
 import { AddressMasterSection } from "../shared/AddressMasterSection";
 import { PADRON_ADDRESS_MASTER_TEXTS } from "../shared/addressMasterSubjectTexts";
 import { ActualizarBackupSection } from "./ActualizarBackupSection";
 import { ActualizarTargetSection } from "./ActualizarTargetSection";
-import { MissingPadronSection } from "./MissingPadronSection";
-import { PendingGeometryDownload } from "./PendingGeometryDownload";
-import type { PairChoiceSelection } from "./PairChoiceGroups";
-import { unappliedChoicesOf } from "../shared/pairChoices";
+import { MissingPadronSection } from "./review/MissingPadronSection";
+import { PendingGeometryDownload } from "./review/PendingGeometryDownload";
+import type { PairChoiceSelection } from "./review/PairChoiceGroups";
+import { unappliedChoicesOf } from "./review/pairChoices";
 import { RefreshSuggestion } from "../shared/RefreshSuggestion";
 import styles from "../shared/ActualizarPadronReport.module.css";
-import sharedStyles from "../shared/CargarPadronesReport.module.css";
+import sharedStyles from "../shared/ReportShared.module.css";
 import { ReportDownloadActions, ReportDownloadButton } from "../shared/ReportDownloadButton";
 import { buildActualizarPadronCsv, buildActualizarPadronInconsistenciasCsv } from "./actualizarPadronCsv";
 import { REPORT_CSV_KIND } from "../shared/filename";

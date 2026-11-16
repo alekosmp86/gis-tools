@@ -2,19 +2,19 @@
 
 import React from "react";
 import type { PadronInserted, PadronKey, PadronNamedKey, PairChoice } from "../../jobs/actualizar-padron/types";
-import type { TargetView } from "../shared/actualizarPadronReportView";
-import { CollapsibleSection } from "../shared/ActualizarReportSections";
+import type { TargetView } from "./actualizarPadronReportView";
+import { CollapsibleSection } from "../shared/CollapsibleSection";
 import { RowsTable, SectionTitle, type TableColumn } from "../shared/ReportParts";
 import { ReportRowList } from "../shared/ReportRowList";
 import { textOrNoData } from "../shared/reportFormat";
-import { PairChoiceGroups, type PairChoiceSelection } from "./PairChoiceGroups";
-import { PendingPairsSection } from "./PendingPairsSection";
+import { PairChoiceGroups, type PairChoiceSelection } from "./review/PairChoiceGroups";
+import { PendingPairsSection } from "./review/PendingPairsSection";
 import { RemovalSection } from "./RemovalSection";
-import { GeometryChangesSection } from "./GeometryChangesSection";
-import type { OpenReview } from "./padronReviewItems";
-import type { GeometryAcceptSelection } from "./reviewDecisions";
+import { GeometryChangesSection } from "./review/GeometryChangesSection";
+import type { OpenReview } from "./review/padronReviewItems";
+import type { GeometryAcceptSelection } from "./review/reviewDecisions";
 import { idOrNoData, keyContentOf, NUMBER_COLUMN, TYPE_COLUMN } from "./targetColumns";
-import sharedStyles from "../shared/CargarPadronesReport.module.css";
+import sharedStyles from "../shared/ReportShared.module.css";
 
 const appliedGeometriesTextOf = (count: number): string =>
   `${count} geometrías aplicadas sin revisión individual: bajo el umbral o aceptadas en bloque (incluidas en el CSV de cambios).`;

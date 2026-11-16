@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { SKIP_REASON, type SkipReason } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { ActualizarPadronResult, SkippedLocalityGroup } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
 import { ActualizarPadronReport } from "@/modules/routine-jobs/ui/actualizar-padron/ActualizarPadronReport";
-import { buildActualizarReportView } from "@/modules/routine-jobs/ui/shared/actualizarPadronReportView";
+import { buildActualizarReportView } from "@/modules/routine-jobs/ui/actualizar-padron/actualizarPadronReportView";
 import { MonthlyStage } from "@/modules/routine-jobs/ui/shared/monthlyCartoStages";
 import { REPORT_CSV_KIND, reportCsvFilename } from "@/modules/routine-jobs/ui/shared/filename";
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PAIR_STATUS, PAIR_TIER, REMOVAL_SKIP_REASON, REPLACEMENT_CLASS } from "@/modules/routine-jobs/jobs/actualizar-padron/constants";
 import type { ActualizarTargetReport, MissingPadron, PadronPair } from "@/modules/routine-jobs/jobs/actualizar-padron/types";
-import { missingReviewViewOf, refsTextOf } from "@/modules/routine-jobs/ui/shared/missingPadronView";
+import { missingReviewViewOf, refsTextOf } from "@/modules/routine-jobs/ui/actualizar-padron/review/missingPadronView";
 
 const missingPadronOf = (overrides: Partial<MissingPadron> = {}): MissingPadron => ({
   oldId: 500,

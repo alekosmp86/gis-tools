@@ -1,5 +1,5 @@
 import { CENTROS_DEFAULT_TABLES, CENTROS_ROLES, type CentrosTableRole } from "../../jobs/centros-anep/constants";
-import { connectionBlockingReason, type ConnectionField } from "../shared/cargarPadronesWizardState";
+import { connectionBlockingReason, type ConnectionField } from "../shared/wizardConnection";
 import type { CentrosAnepRunSnapshot } from "../shared/centrosAnepRunStore";
 import type { CentrosAnepStartRequest, ClientConnection } from "../shared/clientTypes";
 import { trimConnection } from "../shared/connectionProfiles";

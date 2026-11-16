@@ -1,6 +1,6 @@
 import { EJES_DEFAULT_TABLES, EJES_ROLES, EJES_TABLE_ROLE, type EjesTableRole } from "../../jobs/ejes-calles/constants";
 import { summaryOf } from "../../jobs/ejes-calles/domain/loadMapping";
-import { connectionBlockingReason, type ConnectionField } from "../shared/cargarPadronesWizardState";
+import { connectionBlockingReason, type ConnectionField } from "../shared/wizardConnection";
 import type { ClientConnection, EjesGeometryMapBase, EjesLoadRequest, EjesStartRequest } from "../shared/clientTypes";
 import { trimConnection } from "../shared/connectionProfiles";
 import {

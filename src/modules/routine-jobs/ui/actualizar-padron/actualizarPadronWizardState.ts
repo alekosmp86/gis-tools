@@ -4,15 +4,11 @@ import { MONTHLY_TABLES } from "../../config/monthlyTables";
 import { DEFAULT_LOCALITY_TYPE } from "../../jobs/actualizar-padron/constants";
 import type { AcceptedGeometry, PairChoice } from "../../jobs/actualizar-padron/types";
 import type { ActualizarStartRequest, ClientConnection, StagingSelection } from "../shared/clientTypes";
-import { sameChoices, withChoice, withChoices, withoutChoices } from "../shared/pairChoices";
-import { sameAccepts } from "./geometryAccepts";
+import { sameChoices, withChoice, withChoices, withoutChoices } from "./review/pairChoices";
+import { sameAccepts } from "./review/geometryAccepts";
 import type { GeometryMapBase } from "../shared/clientTypes";
 import type { ActualizarPadronRunSnapshot } from "../shared/actualizarPadronRunStore";
-import {
-  connectionBlockingReason,
-  WizardStep,
-  type ConnectionField,
-} from "../shared/cargarPadronesWizardState";
+import { connectionBlockingReason, WizardStep, type ConnectionField } from "../shared/wizardConnection";
 import { trimConnection } from "../shared/connectionProfiles";
 import { DEFAULT_TOLERANCE_TEXT, DEFAULT_UPDATE_GEOMETRIES, isToleranceValid, toleranceOf, type GeometryOptionsDraft } from "../shared/geometryOptions";
 import { RunPhase } from "../shared/jobRunStore";
@@ -25,7 +21,7 @@ import {
   type SchemaField,
 } from "./actualizarPadronTables";
 
-export { WizardStep } from "../shared/cargarPadronesWizardState";
+export { WizardStep } from "../shared/wizardConnection";
 export { actualizarExcludedFor, ActualizarTableKey, roleOfTableKey, schemaFieldOf } from "./actualizarPadronTables";
 
 export interface ActualizarOptionsDraft extends GeometryOptionsDraft {

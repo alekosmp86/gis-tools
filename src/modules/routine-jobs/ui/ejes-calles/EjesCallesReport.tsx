@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import type { EjesResult } from "../../jobs/ejes-calles/types";
-import { CollapsibleSection } from "../shared/ActualizarReportSections";
+import { CollapsibleSection } from "../shared/CollapsibleSection";
 import type { EjesGeometryMapBase } from "../shared/clientTypes";
 import type { EjesAcceptView } from "./ejesAccept";
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
@@ -12,7 +12,7 @@ import { buildEjesReportView } from "./ejesCallesReportView";
 import { EjesReportLists } from "./EjesReportLists";
 import { EjesSummaryStrip } from "./EjesSummaryStrip";
 import { KpiCards, OutcomeBanners, SectionTitle, TimingsSection } from "../shared/ReportParts";
-import sharedStyles from "../shared/CargarPadronesReport.module.css";
+import sharedStyles from "../shared/ReportShared.module.css";
 
 const ALL_INDICATORS_TITLE = "Todos los indicadores";
 

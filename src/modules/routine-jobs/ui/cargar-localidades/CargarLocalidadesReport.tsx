@@ -9,7 +9,7 @@ import { SkippedSamplesDetails, TargetBlocks, UnmatchedPadronDetails } from "./C
 import { KpiCards, OutcomeBanners, SkippedReasonsSection, TimingsSection, WarningsSection } from "../shared/ReportParts";
 import { ReportDownloadActions, ReportDownloadButton } from "../shared/ReportDownloadButton";
 import { MonthlyStage } from "../shared/monthlyCartoStages";
-import sharedStyles from "../shared/CargarPadronesReport.module.css";
+import sharedStyles from "../shared/ReportShared.module.css";
 
 export interface CargarLocalidadesReportProps {
   result: CargarLocalidadesResult;

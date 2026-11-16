@@ -1,12 +1,12 @@
 "use client";
 
 import React from "react";
-import { CollapsibleSection } from "./ActualizarReportSections";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { DataTable } from "./DataTable";
 import { keyedRowsOf } from "./keyedRows";
 import { secondsText } from "./reportFormat";
 import { ShowOnMapButton } from "./map/ShowOnMapButton";
-import sharedStyles from "./CargarPadronesReport.module.css";
+import sharedStyles from "./ReportShared.module.css";
 import styles from "./ActualizarPadronReport.module.css";
 
 export type ReportBannerKind = "unknown" | "dryRun" | "done";

@@ -2,12 +2,12 @@
 
 import React from "react";
 import type { CentrosBackup, CentrosComparisonRow, CentrosRepeatedRuee, CentrosResult } from "../../jobs/centros-anep/types";
-import { CollapsibleSection } from "../shared/ActualizarReportSections";
+import { CollapsibleSection } from "../shared/CollapsibleSection";
 import { buildCentrosAnepReportView, signedDifferenceOf, subsistemaTextOf } from "./centrosAnepReportView";
 import { CENTROS_NEXT_STEP_TEXT, CENTROS_NEXT_STEP_TITLE } from "./centrosAnepTexts";
 import { KpiCards, OutcomeBanners, RowsTable, SectionTitle, TimingsSection, WarningsSection, type TableColumn } from "../shared/ReportParts";
 import { RevertBackupSection } from "../shared/RevertBackupSection";
-import sharedStyles from "../shared/CargarPadronesReport.module.css";
+import sharedStyles from "../shared/ReportShared.module.css";
 
 const COMPARISON_COLUMNS: TableColumn<CentrosComparisonRow>[] = [
   { header: "Subsistema", cell: (row) => subsistemaTextOf(row.value) },

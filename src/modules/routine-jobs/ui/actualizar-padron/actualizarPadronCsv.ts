@@ -10,7 +10,7 @@ import type {
   SkippedSample,
 } from "../../jobs/actualizar-padron/types";
 import { PADRON_SUBJECT_SPEC } from "../../jobs/shared/addressMasterLinkSpec";
-import { reasonLabelOf } from "../shared/actualizarPadronReportView";
+import { reasonLabelOf } from "./actualizarPadronReportView";
 import { textOrNoData } from "../shared/reportFormat";
 import { CHANGE_KIND, compareChangeKinds, listCsvOf, type ChangeKind, type ListCut } from "../shared/reportCsvRows";
 import type { CsvRow } from "../../jobs/shared/csvFormat";

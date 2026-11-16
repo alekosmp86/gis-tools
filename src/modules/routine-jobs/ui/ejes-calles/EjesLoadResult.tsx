@@ -4,7 +4,7 @@ import React from "react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import type { EjesLoadReport, EjesResult, EjesSurplusRow } from "../../jobs/ejes-calles/types";
-import { CollapsibleSection } from "../shared/ActualizarReportSections";
+import { CollapsibleSection } from "../shared/CollapsibleSection";
 import { buildEjesLoadView, type EjesSkippedView } from "./ejesLoadReportView";
 import {
   EJES_LOAD_BACKUP_INSTRUCTIONS,
@@ -18,7 +18,7 @@ import { OutcomeBanners, RowsTable, SectionTitle, type TableColumn } from "../sh
 import { ReportRowList } from "../shared/ReportRowList";
 import { RefreshSuggestion } from "../shared/RefreshSuggestion";
 import { RevertBackupSection } from "../shared/RevertBackupSection";
-import sharedStyles from "../shared/CargarPadronesReport.module.css";
+import sharedStyles from "../shared/ReportShared.module.css";
 
 const SKIPPED_COLUMNS: TableColumn<EjesSkippedView>[] = [
   { header: "Tipo", cell: (row) => row.kind },

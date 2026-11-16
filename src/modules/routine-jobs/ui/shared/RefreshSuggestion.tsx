@@ -1,7 +1,7 @@
 import React from "react";
 import { SectionTitle } from "./ReportParts";
 import type { RefreshSuggestionView } from "./refreshSuggestionView";
-import sharedStyles from "./CargarPadronesReport.module.css";
+import sharedStyles from "./ReportShared.module.css";
 import styles from "./RefreshSuggestion.module.css";
 
 const SUGGESTION_TITLE = "Siguiente paso sugerido";

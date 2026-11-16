@@ -10,7 +10,7 @@ import {
   isDecidableGeometry,
   reviewableGeometryChangesOf,
   sameAccepts,
-} from "@/modules/routine-jobs/ui/actualizar-padron/geometryAccepts";
+} from "@/modules/routine-jobs/ui/actualizar-padron/review/geometryAccepts";
 
 const KEY_200 = { typePadron: "URBANO", provinceId: 1, localityId: 10, number: "200" };
 const KEY_501 = { typePadron: "RURAL", provinceId: 1, localityId: null, number: "501" };
