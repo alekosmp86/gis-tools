@@ -14,8 +14,8 @@ import type { EjesAttrRow } from "@/modules/routine-jobs/jobs/ejes-calles/types"
 import { ejesTables } from "./ejesFixtures";
 
 describe("EJ-4 table roles", () => {
-  it("should define nine roles with the spec default tables", () => {
-    expect(EJES_ROLES).toHaveLength(9);
+  it("should define ten roles with the spec default tables", () => {
+    expect(EJES_ROLES).toHaveLength(10);
     expect(EJES_DEFAULT_TABLES[EJES_TABLE_ROLE.STAGING]).toEqual({
       schema: "bdj_carto",
       table: "ide_ejesviacirculacion",
@@ -31,19 +31,39 @@ describe("EJ-4 table roles", () => {
     });
   });
 
-  it("should treat staging, localities, departments and padrones as read roles and the five carto tables as write roles", () => {
+  it("should treat staging, localities, departments, padrones and address as read roles and the five carto tables as write roles", () => {
     expect([...EJES_READ_ROLES].sort()).toEqual(
-      [EJES_TABLE_ROLE.STAGING, EJES_TABLE_ROLE.LOCALITIES, EJES_TABLE_ROLE.DEPARTMENTS, EJES_TABLE_ROLE.PADRONES].sort()
+      [
+        EJES_TABLE_ROLE.STAGING,
+        EJES_TABLE_ROLE.LOCALITIES,
+        EJES_TABLE_ROLE.DEPARTMENTS,
+        EJES_TABLE_ROLE.PADRONES,
+        EJES_TABLE_ROLE.ADDRESS,
+      ].sort()
     );
     expect(EJES_WRITE_ROLES).toHaveLength(5);
   });
 
+  describe("EJ-4 ejes-address role (EJS-2, shared-master check of EJ-21)", () => {
+    it("should be named ejes-address, default to carto.address and require only id_address_master", () => {
+      expect(EJES_TABLE_ROLE.ADDRESS).toBe("ejes-address");
+      expect(EJES_ROLES).toContain("ejes-address");
+      expect(EJES_DEFAULT_TABLES[EJES_TABLE_ROLE.ADDRESS]).toEqual({ schema: "carto", table: "address" });
+      expect(EJES_REQUIRED_COLUMNS_BY_ROLE[EJES_TABLE_ROLE.ADDRESS]).toEqual(["id_address_master"]);
+    });
+
+    it("should be a read role and never a write role", () => {
+      expect(EJES_READ_ROLES).toContain(EJES_TABLE_ROLE.ADDRESS);
+      expect(EJES_WRITE_ROLES).not.toContain(EJES_TABLE_ROLE.ADDRESS);
+    });
+  });
+
   describe("ET-1 ejes-padrones role", () => {
-    it("should be named ejes-padrones, default to carto.padron and require type_padron and geometry", () => {
+    it("should be named ejes-padrones, default to carto.padron and require type_padron, geometry and id_address_master", () => {
       expect(EJES_TABLE_ROLE.PADRONES).toBe("ejes-padrones");
       expect(EJES_ROLES).toContain("ejes-padrones");
       expect(EJES_DEFAULT_TABLES[EJES_TABLE_ROLE.PADRONES]).toEqual({ schema: "carto", table: "padron" });
-      expect(EJES_REQUIRED_COLUMNS_BY_ROLE[EJES_TABLE_ROLE.PADRONES]).toEqual(["type_padron", "geometry"]);
+      expect(EJES_REQUIRED_COLUMNS_BY_ROLE[EJES_TABLE_ROLE.PADRONES]).toEqual(["type_padron", "geometry", "id_address_master"]);
     });
 
     it("should be a read role and never a write role", () => {

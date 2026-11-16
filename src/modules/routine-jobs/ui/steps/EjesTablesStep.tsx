@@ -42,6 +42,10 @@ const COPY_BY_ROLE: Record<EjesTableRole, Omit<SlotCopy<EjesTableRole, EjesTable
     note: "Padrones urbanos y rurales cercanos a los tramos repetidos por localidad. Solo se lee.",
     tableLabel: "Tabla de padrones",
   },
+  [EJES_TABLE_ROLE.ADDRESS]: {
+    note: "Direcciones que apuntan a una dirección maestra: una maestra solo se borra si nada más la usa. Solo se lee.",
+    tableLabel: "Tabla de direcciones",
+  },
 };
 
 const COPIES: readonly SlotCopy<EjesTableRole, EjesTableRole>[] = EJES_ROLES.map((role) => ({

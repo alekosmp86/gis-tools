@@ -106,7 +106,7 @@ export function SkippedReasonsSection({ rows, zeroReasonCount }: { rows: SkipRea
 
 export interface TableColumn<Row> {
   header: string;
-  cell: (row: Row) => string;
+  cell: (row: Row) => React.ReactNode;
 }
 
 const MAP_COLUMN_HEADER = "Mapa";

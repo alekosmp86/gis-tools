@@ -8,6 +8,7 @@ import { AlertType } from "@/ui-kit/types/ui";
 import { EjesCallesReport } from "../EjesCallesReport";
 import { EjesLoadResult } from "../EjesLoadResult";
 import type { EjesGeometryMapBase } from "../clientTypes";
+import type { EjesAcceptView } from "../ejesAccept";
 import type { EjesRunSnapshot } from "../ejesCallesRunStore";
 import { RunPhase } from "../jobRunStore";
 import { RunProgressStatus, RunResultActions } from "./RunResultParts";
@@ -28,6 +29,8 @@ export interface EjesResultStepProps {
   mapBase: EjesGeometryMapBase | null;
   /** Same gate as the Revisar step: finished dry-run of these tables, no blockers, password typed. */
   canLoad: boolean;
+  /** The accept controls of the review lists; shown only on a dry-run report, and absent means read-only. */
+  accept?: EjesAcceptView;
   onLoad: () => void;
   onNewRun: () => void;
   onBackToReview: () => void;
@@ -52,6 +55,7 @@ export const EjesResultStep: React.FC<EjesResultStepProps> = ({
   nowMs,
   mapBase,
   canLoad,
+  accept,
   onLoad,
   onNewRun,
   onBackToReview,
@@ -78,7 +82,11 @@ export const EjesResultStep: React.FC<EjesResultStepProps> = ({
       return (
         <div className={styles.stack}>
           {result && load && <EjesLoadResult result={result} load={load} />}
-          {result ? <EjesCallesReport result={result} mapBase={mapBase} /> : <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />}
+          {result ? (
+            <EjesCallesReport result={result} mapBase={mapBase} accept={result.dryRun ? accept : undefined} />
+          ) : (
+            <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />
+          )}
           {canLoad && (
             <div className={styles.actions}>
               <Button onClick={onLoad}>

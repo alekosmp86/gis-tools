@@ -175,7 +175,7 @@ describe("renumber sinks (EJL-23)", () => {
       '"renum_sink" AS (INSERT INTO pg_temp."ej_renum" (old_id, old_ref, new_ref, points) SELECT r.old_id, r.old_ref, r.new_ref, r.points FROM "renumbered" AS r RETURNING 1)'
     );
     expect(sinks[1]).toBe(
-      '"held_sink" AS (INSERT INTO pg_temp."ej_held" (old_id, old_ref, new_ref, points) SELECT r.old_id, r.old_ref, r.new_ref, r.points FROM "renum_skipped" AS r RETURNING 1)'
+      '"held_sink" AS (INSERT INTO pg_temp."ej_held" (old_id, old_ref, new_ref, idcalle, points, reason) SELECT r.old_id, r.old_ref, r.new_ref, r.idcalle, r.points, r.reason FROM "renum_skipped" AS r RETURNING 1)'
     );
   });
 });

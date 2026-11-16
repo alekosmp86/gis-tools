@@ -6,7 +6,14 @@ import { EjesLoadResult } from "@/modules/routine-jobs/ui/EjesLoadResult";
 import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/ejesCallesRunStore";
 import { RunPhase } from "@/modules/routine-jobs/ui/jobRunStore";
 import { EjesResultStep, type EjesResultStepProps } from "@/modules/routine-jobs/ui/steps/EjesResultStep";
-import { EJES_LOAD_DONE_BANNER, EJES_LOAD_SKIPPED_TITLE, EJES_LOAD_SURPLUS_TITLE, EJES_LOAD_TITLE, EJES_LOAD_UNKNOWN_BANNER } from "@/modules/routine-jobs/ui/ejesLoadTexts";
+import {
+  EJES_LOAD_DONE_BANNER,
+  EJES_LOAD_SKIPPED_BY_REASON_TITLE,
+  EJES_LOAD_SKIPPED_TITLE,
+  EJES_LOAD_SURPLUS_TITLE,
+  EJES_LOAD_TITLE,
+  EJES_LOAD_UNKNOWN_BANNER,
+} from "@/modules/routine-jobs/ui/ejesLoadTexts";
 
 const REPORT_MARKER = "Todos los indicadores";
 const BACKUP_TITLE = "Respaldo para revertir";
@@ -39,18 +46,29 @@ const COUNTS = {
   renumberSkipped: 1,
 };
 
-const LOAD_COUNTS = { inserted: 3, updated: 2, renumbered: 1, renumberSkipped: 0, waysCreated: 4, pointsMoved: 9 };
+const LOAD_COUNTS = {
+  inserted: 3,
+  updated: 2,
+  renumbered: 1,
+  renumberSkipped: 0,
+  removed: 0,
+  merged: 0,
+  deleted: 0,
+  waysCreated: 4,
+  pointsMoved: 9,
+};
 
 const BACKUP: EjesBackup = {
   token: "tok-render",
-  fileName: "ejes-revert-carto-road_section-20260101-100000.sql.gz",
+  fileName: "ejes-revert-carto-road_section-20260101-100000-000.sql.gz",
   bytes: 2048,
-  counts: { updated: 2, inserted: 3, ways: 4, masters: 3, pointsMoved: 9 },
+  counts: { updated: 2, inserted: 3, ways: 4, masters: 3, pointsMoved: 9, deleted: 0 },
 };
 
 const SKIPPED_RENUMBER: EjesSkippedRow = {
   kind: "renumber",
   refs: ["3001", "3002"],
+  newRefs: [],
   idcalle: "5",
   points: 2,
   reason: "not_single_copy",
@@ -62,6 +80,8 @@ const loadOf = (overrides: Partial<EjesLoadReport> = {}): EjesLoadReport => ({
   surplusTotal: 0,
   renumbered: [],
   skipped: [],
+  skippedTotal: 0,
+  skippedByReason: [],
   ...overrides,
 });
 
@@ -169,11 +189,41 @@ describe("EjesLoadResult (EJL-13, EJ-24)", () => {
   });
 
   it("should render the skipped list with its count and each renumber with both refs and its reason", () => {
-    const out = loadHtml(resultOf(), loadOf({ skipped: [SKIPPED_RENUMBER] }));
+    const out = loadHtml(resultOf(), loadOf({ skipped: [SKIPPED_RENUMBER], skippedTotal: 1, skippedByReason: [{ reason: "not_single_copy", count: 1 }] }));
 
     expect(out).toContain(`${EJES_LOAD_SKIPPED_TITLE} (1)`);
     expect(out).toContain("3001 / 3002");
     expect(out).toContain("El reftramo nuevo no tiene exactamente una copia");
+  });
+
+  it("should render the total in the skipped header and the reason counts over every row, not only the listed ones", () => {
+    const out = loadHtml(
+      resultOf(),
+      loadOf({
+        skipped: [SKIPPED_RENUMBER],
+        skippedTotal: 1200,
+        skippedByReason: [
+          { reason: "split_pending", count: 1100 },
+          { reason: "not_single_copy", count: 100 },
+        ],
+      })
+    );
+
+    expect(out).toContain(`${EJES_LOAD_SKIPPED_TITLE} (1200)`);
+    expect(out).toContain(EJES_LOAD_SKIPPED_BY_REASON_TITLE);
+    expect(out).toContain("División pendiente: no se aplica en esta carga");
+  });
+
+  it("should render the cap note with the listed and total counts when the list holds fewer rows than the total", () => {
+    const out = loadHtml(resultOf(), loadOf({ skipped: [SKIPPED_RENUMBER], skippedTotal: 1200, skippedByReason: [] }));
+
+    expect(out).toContain("Primeras 1 de 1200 filas omitidas. Los conteos por motivo cubren todas.");
+  });
+
+  it("should omit the cap note when every skipped row is listed", () => {
+    const out = loadHtml(resultOf(), loadOf({ skipped: [SKIPPED_RENUMBER], skippedTotal: 1, skippedByReason: [] }));
+
+    expect(out).not.toContain("filas omitidas");
   });
 
   it("should omit the skipped list when nothing was held back", () => {

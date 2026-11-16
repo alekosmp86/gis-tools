@@ -25,9 +25,13 @@ import {
   renumberSkippedListColumn,
   type RenumberSinks,
 } from "./renumberSql";
+import { isPieceSql } from "./pieceSql";
+import { groupPieceCtes, removalSinkCtes, type RemovalSinks } from "./removalSql";
 import { twinCountColumns, twinCtes, twinGroupCtes, twinListColumn } from "./twinSql";
 
 const SNAP_GRID = 10 ** -GEOMETRY_EQUALITY_DECIMALS;
+
+export type AnalysisSinks = RenumberSinks & RemovalSinks;
 
 export const ANALYSIS_LIST_ALIAS = {
   SPLITS: "splits_json",
@@ -162,7 +166,8 @@ export function copyRawCte(layouts: EjesLayouts): string {
 }
 
 /** A new `reftramo` held by a skipped renumber pair is neither new nor inserted: its section and its old one stay as they are. */
-const heldNewSql = (reference: string): string => `${reference} NOT IN (SELECT new_ref FROM ${q("renum_skipped")})`;
+const heldNewSql = (reference: string): string =>
+  `${reference} NOT IN (SELECT new_ref FROM ${q("renum_skipped")}) AND ${reference} NOT IN (SELECT ref FROM ${q("group_pieces")})`;
 
 export const copyKeptCte = (): string =>
   cte(
@@ -237,15 +242,24 @@ function splitCtes(): string[] {
   const tolerance = COVERAGE_TOLERANCE_M;
   return [
     cte(
+      "piece_cover",
+      [
+        "SELECT r.id, r.ref, r.idcalle, r.len, r.geometry, n.ref AS new_ref, n.geom,",
+        `ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, ${tolerance}))) AS piece_covered`,
+        `FROM ${q("removed_rest")} AS r JOIN ${q("new_rest")} AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
+        "WHERE r.len > 0",
+      ].join(" ")
+    ),
+    cte(
       "removed_cover",
       [
-        "SELECT r.id, r.ref, r.idcalle, r.len, count(n.ref) AS new_count,",
-        `ST_Length(ST_Intersection(r.geometry, ST_Buffer(ST_Collect(n.geom), ${tolerance}))) AS covered,`,
-        "array_agg(n.ref ORDER BY n.ref) AS new_refs,",
-        `ST_Length(ST_Union(n.geom)) AS new_len,`,
-        `ST_Length(ST_Difference(ST_Union(n.geom), ST_Buffer(r.geometry, ${tolerance}))) AS outside_len`,
-        `FROM ${q("removed_rest")} AS r JOIN ${q("new_rest")} AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
-        "WHERE r.len > 0 GROUP BY r.id, r.ref, r.idcalle, r.len, r.geometry",
+        "SELECT p.id, p.ref, p.idcalle, p.len, count(p.new_ref) AS new_count,",
+        `ST_Length(ST_Intersection(p.geometry, ST_Buffer(ST_Collect(p.geom), ${tolerance}))) AS covered,`,
+        "array_agg(p.new_ref ORDER BY p.new_ref) AS new_refs,",
+        "ST_Length(ST_Union(p.geom)) AS new_len,",
+        `ST_Length(ST_Difference(ST_Union(p.geom), ST_Buffer(p.geometry, ${tolerance}))) AS outside_len`,
+        `FROM ${q("piece_cover")} AS p WHERE ${isPieceSql("p.piece_covered", "p.len")}`,
+        "GROUP BY p.id, p.ref, p.idcalle, p.len, p.geometry",
       ].join(" ")
     ),
     cte("splits", `SELECT * FROM ${q("removed_cover")} WHERE new_count >= 2 AND ${coverageThresholdSql("covered", "len")}`),
@@ -270,13 +284,14 @@ function mergeCtes(): string[] {
         "SELECT p.new_ref, min(p.idcalle) AS idcalle, array_agg(p.old_ref ORDER BY p.old_ref) AS old_refs,",
         "sum(p.covered) / NULLIF(sum(p.len), 0) AS coverage, sum(p.len) AS old_len, ST_Length((array_agg(p.new_geom))[1]) AS new_len,",
         `ST_Length(ST_Difference((array_agg(p.new_geom))[1], ST_Buffer(ST_Collect(p.old_geom), ${tolerance}))) AS outside_len,`,
-        `COALESCE(sum(ap.points), 0) AS points FROM ${q("merge_pairs")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.old_ref`,
-        `WHERE p.covered > 0 GROUP BY p.new_ref HAVING count(*) >= 2 AND ${coverageThresholdSql("sum(p.covered)", "sum(p.len)")}`,
+        `COALESCE(sum(ap.points), 0) + COALESCE(sum(apid.points), 0) AS points FROM ${q("merge_pairs")} AS p`,
+        `LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.old_ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = p.id::text`,
+        `WHERE ${isPieceSql("p.covered", "p.len")} GROUP BY p.new_ref HAVING count(*) >= 2 AND ${coverageThresholdSql("sum(p.covered)", "sum(p.len)")}`,
       ].join(" ")
     ),
     cte(
       "merged_ids",
-      `SELECT DISTINCT p.id FROM ${q("merge_pairs")} AS p JOIN ${q("merges")} AS m ON m.new_ref = p.new_ref WHERE p.covered > 0`
+      `SELECT DISTINCT p.id FROM ${q("merge_pairs")} AS p JOIN ${q("merges")} AS m ON m.new_ref = p.new_ref WHERE ${isPieceSql("p.covered", "p.len")}`
     ),
   ];
 }
@@ -318,9 +333,9 @@ function clocCtes(layouts: EjesLayouts): string[] {
 }
 
 function listColumns(): string[] {
-  const splitSelect = `SELECT s.ref AS "old_ref", s.idcalle AS "idcalle", s.new_refs AS "new_refs", COALESCE(ap.points, 0) AS "points", s.covered / NULLIF(s.len, 0) AS "coverage", s.len AS "old_length", s.new_len AS "new_length", s.outside_len AS "outside_length" FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref ORDER BY s.ref`;
+  const splitSelect = `SELECT s.ref AS "old_ref", s.idcalle AS "idcalle", s.new_refs AS "new_refs", COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points", s.covered / NULLIF(s.len, 0) AS "coverage", s.len AS "old_length", s.new_len AS "new_length", s.outside_len AS "outside_length" FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = s.id::text ORDER BY s.ref`;
   const mergeSelect = `SELECT m.new_ref AS "new_ref", m.idcalle AS "idcalle", m.old_refs AS "old_refs", m.points AS "points", m.coverage AS "coverage", m.old_len AS "old_length", m.new_len AS "new_length", m.outside_len AS "outside_length" FROM ${q("merges")} AS m ORDER BY m.new_ref`;
-  const plainSelect = `SELECT p.ref AS "ref", p.idcalle AS "idcalle", COALESCE(ap.points, 0) AS "points" FROM ${q("plain")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.ref ORDER BY COALESCE(ap.points, 0) DESC, p.ref`;
+  const plainSelect = `SELECT p.ref AS "ref", p.idcalle AS "idcalle", COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points" FROM ${q("plain")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = p.id::text ORDER BY COALESCE(ap.points, 0) + COALESCE(apid.points, 0) DESC, p.ref`;
   const streetSelect = `SELECT n.idcalle AS "idcalle", n.name AS "name", n.sections AS "sections", n.tipos AS "tipos", n.departments AS "departments", n.localities AS "localities" FROM ${q("new_streets")} AS n ORDER BY n.idcalle, n.name`;
   const attrSelect = [
     'SELECT c.ref AS "ref", c.nombre AS "name", c.cur_name AS "current_name", c.idcalle AS "idcalle", c.cur_idcalle AS "current_idcalle",',
@@ -350,7 +365,7 @@ function countColumns(): string[] {
     `${countOf("splits")} AS "splits"`,
     `${countOf("merges")} AS "merges"`,
     `${countOf("plain")} AS "plain_removals"`,
-    `(SELECT count(*) FROM ${q("plain")} AS p WHERE EXISTS (SELECT 1 FROM ${q("ap")} AS ap WHERE ap.ref = p.ref AND ap.points > 0)) AS "plain_held"`,
+    `(SELECT count(*) FROM ${q("plain")} AS p WHERE EXISTS (SELECT 1 FROM ${q("ap")} AS ap WHERE ap.ref = p.ref AND ap.points > 0) OR EXISTS (SELECT 1 FROM ${q("ap")} AS apid WHERE apid.ref = p.id::text AND apid.points > 0)) AS "plain_held"`,
     `${countOf("new_streets")} AS "new_streets"`,
     `${countOf("located", "cloc IS NOT NULL")} AS "with_locality"`,
     `${countOf("located", "cloc IS NULL AND dept_code IS NOT NULL")} AS "only_department"`,
@@ -366,7 +381,7 @@ function countColumns(): string[] {
  * The analysis as one statement. With `sinks` (temp tables the caller created) the renumbered and the skipped renumber pairs are also
  * written there by data-modifying CTEs, which PostgreSQL runs once whether or not the result reads them: the load reuses them.
  */
-export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: RenumberSinks): string {
+export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks): string {
   const ctes = [
     tipoMapCte(),
     fuenteMapCte(),
@@ -384,7 +399,9 @@ export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: RenumberSinks
     ...(sinks === undefined ? [] : renumberSinkCtes(sinks)),
     ...splitCtes(),
     ...mergeCtes(),
+    ...groupPieceCtes(),
     ...remainderCtes(),
+    ...(sinks === undefined ? [] : removalSinkCtes(sinks)),
     ...clocCtes(layouts),
   ];
   return `${withClause(ctes)}\nSELECT\n${[...countColumns(), ...listColumns()].join(",\n")}`;

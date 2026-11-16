@@ -79,7 +79,8 @@ const schemaSqlOf = (accessPointRefType: AccessPointRefType): string => `
   CREATE TABLE carto.access_point (id serial PRIMARY KEY, id_road_section ${accessPointRefType});
   CREATE TABLE bdj_carto.ine_localidades_pg (cloc_iso text, nomloc text, geom geometry);
   CREATE TABLE carto.mv_country_province (iso_code_dpto text, name_dpto text);
-  CREATE TABLE carto.padron (type_padron text, geometry geometry);
+  CREATE TABLE carto.padron (type_padron text, geometry geometry, id_address_master integer);
+  CREATE TABLE carto.address (id serial PRIMARY KEY, id_address_master integer, geometry geometry);
 `;
 
 const SNAPSHOT_TABLES = [
@@ -252,3 +253,17 @@ export async function insertPadron(database: PGlite, type: string, geometry: str
 export async function rowsOf<T extends Row = Row>(database: PGlite, sql: string): Promise<T[]> {
   return (await database.query<T>(sql)).rows;
 }
+
+/** The load counts of a run that wrote nothing; `overrides` sets the counts the run did write. */
+export const zeroLoadCounts = (overrides: Partial<Record<string, number>> = {}): Record<string, number> => ({
+  inserted: 0,
+  updated: 0,
+  renumbered: 0,
+  renumberSkipped: 0,
+  removed: 0,
+  merged: 0,
+  deleted: 0,
+  waysCreated: 0,
+  pointsMoved: 0,
+  ...overrides,
+});

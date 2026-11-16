@@ -64,7 +64,11 @@ const ROAD_SECTION_COLUMNS: Row[] = [
   column("geometry", "geometry(LineString,32721)"),
 ];
 
-const PADRONES_COLUMNS: Row[] = [column("type_padron"), column("geometry", "geometry(MultiPolygon,32721)")];
+const PADRONES_COLUMNS: Row[] = [
+  column("type_padron"),
+  column("geometry", "geometry(MultiPolygon,32721)"),
+  column("id_address_master", "integer"),
+];
 
 const columnsOf = (table: string): Row[] => {
   if (table === STAGING_TABLE) return STAGING_COLUMNS;
@@ -334,7 +338,7 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
     });
 
     it("should answer 500 and never show the password when a zone item meets a generic SRID 0 padrones geometry", async () => {
-      const generic = [column("type_padron"), column("geometry", "geometry(MultiPolygon,0)")];
+      const generic = [column("type_padron"), column("geometry", "geometry(MultiPolygon,0)"), column("id_address_master", "integer")];
       const fake = fakeSessionOf();
       const inner = fake.session.query.bind(fake.session);
       fake.session.query = async (sql: string, params?: unknown[]) =>

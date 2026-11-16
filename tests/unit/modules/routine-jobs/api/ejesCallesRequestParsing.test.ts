@@ -43,13 +43,14 @@ const SUMMARY_COUNT_KEYS = [
 const FINGERPRINT = { rows: 12, digest: "9f8e7d6c5b4a3210fedcba9876543210" };
 
 describe("parseEjesCallesStartRequest", () => {
-  it("should return the params of a dry run with config and nine tables", () => {
+  it("should return the params of a dry run with config and ten tables", () => {
     const params = parse(startBody());
 
     expect(params.dryRun).toBe(true);
     expect(params.config).toMatchObject({ host: "db.local", port: "5432", db_name: "gis", user: "gis_user" });
-    expect(Object.keys(params.tables)).toHaveLength(9);
+    expect(Object.keys(params.tables)).toHaveLength(10);
     expect(params.tables["ejes-origen"]).toEqual({ schema: "bdj_carto", table: "ide_ejesviacirculacion" });
+    expect(params.tables["ejes-address"]).toEqual({ schema: "carto", table: "address" });
   });
 
   describe("real run (EJL-1, EJL-20)", () => {
@@ -116,9 +117,10 @@ describe("parseEjesCallesStartRequest", () => {
     });
 
     it("should accept accepted lists that are present and empty", () => {
-      const params = parse(realBody({ accepted: { splits: [], merges: [], removals: [], plainRemovals: [] } }));
+      const params = parse(realBody({ accepted: { splits: [], merges: [], plainRemovals: [] } }));
 
       expect(params.dryRun).toBe(false);
+      expect(params.accepted).toEqual({ plainRemovals: [], merges: [] });
     });
 
     it("should refuse dryRun false without the password, with a Spanish message", () => {
@@ -228,12 +230,19 @@ describe("parseEjesCallesStartRequest", () => {
       expect(() => parse(realBody({ accepted: value }))).toThrow(RequestInvalidError);
     });
 
-    it.each(["splits", "merges", "removals", "plainRemovals"])(
-      "should keep the unavailable message when accepted.%s is not empty",
-      (key) => {
-        expect(messageOf(realBody({ accepted: { [key]: [{ ref: "1" }] } }))).toBe(REAL_RUN_UNAVAILABLE_MESSAGE);
-      }
-    );
+    it("should keep the unavailable message when accepted.splits is not empty", () => {
+      expect(messageOf(realBody({ accepted: { splits: [{ oldRef: "1", newRefs: ["2"] }] } }))).toBe(REAL_RUN_UNAVAILABLE_MESSAGE);
+    });
+
+    it("should refuse the removals key as an unknown key, since plain removals are plainRemovals", () => {
+      expect(messageOf(realBody({ accepted: { removals: [{ ref: "1" }] } }))).toMatch(/clave no admitida: removals/);
+    });
+
+    it("should accept a non-empty merges and plainRemovals list when every entry is shaped", () => {
+      const params = parse(realBody({ accepted: { merges: [{ newRef: "4" }], plainRemovals: [{ ref: "7" }] } }));
+
+      expect(params.accepted).toEqual({ merges: ["4"], plainRemovals: ["7"] });
+    });
 
     it("should refuse an accepted list that is not a list", () => {
       expect(() => parse(realBody({ accepted: { splits: "all" } }))).toThrow(RequestInvalidError);

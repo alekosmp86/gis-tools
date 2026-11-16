@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import type { EjesResult } from "../jobs/ejes-calles/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import type { EjesGeometryMapBase } from "./clientTypes";
+import type { EjesAcceptView } from "./ejesAccept";
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
 import { subjectOfMerge, subjectOfRenumbered, subjectOfSplit, subjectOfTwin } from "./ejesMapSubject";
 import { ejesListAnchorOf, type EjesListKey } from "./ejesCallesListMeta";
@@ -40,9 +41,11 @@ export interface EjesCallesReportProps {
   result: EjesResult;
   /** The connection of the wizard for the map; null when the wizard holds no password. */
   mapBase: EjesGeometryMapBase | null;
+  /** Absent on a read-only report: the lists then show no accept controls. */
+  accept?: EjesAcceptView;
 }
 
-export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapBase }) => {
+export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapBase, accept }) => {
   const view = buildEjesReportView(result);
   const [review, setReview] = useState<EjesMapReview | null>(null);
   const [openLists, setOpenLists] = useState<ReadonlySet<EjesListKey>>(
@@ -72,6 +75,7 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
         onToggle={(list, open) => setOpenLists((current) => (current.has(list) === open ? current : withListState(current, list, open)))}
         onShowOnMap={(listSubjects, index) => setReview({ subjects: listSubjects, index })}
         subjects={subjects}
+        accept={accept}
       />
       <TextList title="Tipos de vialidad fuera de la tabla" items={view.unknownTipos} />
       <TextList title="Fuentes fuera de la tabla" items={view.unknownFuentes} />

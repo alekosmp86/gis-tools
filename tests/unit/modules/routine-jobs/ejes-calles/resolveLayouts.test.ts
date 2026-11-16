@@ -56,7 +56,7 @@ describe("resolveEjesLayouts ejes-padrones (ET-1)", () => {
     expect(layouts[EJES_TABLE_ROLE.PADRONES]).toEqual({
       schema: "carto",
       table: "padron",
-      columns: { type_padron: "type_padron", geometry: "geometry" },
+      columns: { type_padron: "type_padron", geometry: "geometry", id_address_master: "id_address_master" },
     });
   });
 

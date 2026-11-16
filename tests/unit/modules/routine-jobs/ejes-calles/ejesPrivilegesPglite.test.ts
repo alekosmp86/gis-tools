@@ -6,7 +6,7 @@ import { createEjesDatabase, loadContextOn, sessionOn } from "./ejesLoadHarness"
 
 const HOOK_TIMEOUT_MS = 60_000;
 
-/** Everything the load writes or reads, except the UPDATE/DELETE/TRUNCATE the lock needs: each test adds that itself. */
+/** Everything the load writes or reads, except the UPDATE/DELETE/TRUNCATE the lock needs and the DELETE of removals and merges. */
 const WRITE_GRANTS = [
   "GRANT USAGE ON SCHEMA carto, bdj_carto TO {role}",
   "GRANT SELECT ON bdj_carto.ide_ejesviacirculacion, bdj_carto.ine_localidades_pg, carto.mv_country_province, carto.padron TO {role}",
@@ -19,6 +19,8 @@ const WRITE_GRANTS = [
 const LOCK_UPDATE_GRANTS = [
   "GRANT UPDATE ON carto.road_section, carto.circulation_way, carto.addresses_master, carto.access_point TO {role}",
 ];
+
+const DELETE_GRANTS = ["GRANT DELETE ON carto.road_section, carto.addresses_master TO {role}"];
 
 describe("ejes load privileges on PGlite (EJL-24)", () => {
   let database: PGlite;
@@ -35,11 +37,14 @@ describe("ejes load privileges on PGlite (EJL-24)", () => {
   }, HOOK_TIMEOUT_MS);
 
   /** Creates a non-owner role with the given grants and makes it the current user of the connection. */
-  const loaderWith = async (name: string, grants: string[]): Promise<void> => {
+  const roleWith = async (name: string, grants: string[]): Promise<void> => {
     await database.exec(`CREATE ROLE ${name} NOLOGIN`);
-    for (const statement of [...WRITE_GRANTS, ...grants]) await database.exec(statement.replaceAll("{role}", name));
+    for (const statement of [...grants]) await database.exec(statement.replaceAll("{role}", name));
     await database.exec(`SET ROLE ${name}`);
   };
+
+  /** A loader that can do everything of the load, DELETE on the removal tables included. */
+  const loaderWith = (name: string, grants: string[]): Promise<void> => roleWith(name, [...WRITE_GRANTS, ...DELETE_GRANTS, ...grants]);
 
   it("should pass with every write and lock privilege, and return one ANALYZE warning per locked table the loader does not own (EJL-24)", async () => {
     await loaderWith("loader_full", LOCK_UPDATE_GRANTS);
@@ -91,12 +96,31 @@ describe("ejes load privileges on PGlite (EJL-24)", () => {
     await expect(assertEjesLoadReady(sessionOn(database), context)).resolves.toHaveLength(4);
   });
 
+  it("should refuse a missing DELETE on the road section table as a blocker, since merges and removals delete sections (EJS-9, EJL-24)", async () => {
+    await roleWith("loader_nodelete_road", [...WRITE_GRANTS, ...LOCK_UPDATE_GRANTS, "GRANT DELETE ON carto.addresses_master TO {role}"]);
+
+    await expect(assertEjesLoadReady(sessionOn(database), context)).rejects.toThrow(/No tiene privilegio DELETE sobre la tabla carto\.road_section/);
+  });
+
+  it("should refuse a missing DELETE on the address master table as a blocker, since merges and removals delete their masters (EJS-9, EJL-24)", async () => {
+    await roleWith("loader_nodelete_master", [...WRITE_GRANTS, ...LOCK_UPDATE_GRANTS, "GRANT DELETE ON carto.road_section TO {role}"]);
+
+    await expect(assertEjesLoadReady(sessionOn(database), context)).rejects.toThrow(/No tiene privilegio DELETE sobre la tabla carto\.addresses_master/);
+  });
+
+  it("should pass the write check when DELETE is granted on both removal tables, with no other grant beyond the load's", async () => {
+    await loaderWith("loader_delete_both", LOCK_UPDATE_GRANTS);
+
+    await expect(assertEjesLoadReady(sessionOn(database), context)).resolves.toHaveLength(4);
+  });
+
   it("should refuse a missing INSERT on the road section table as a blocker, not as a warning (EJL-24)", async () => {
     await database.exec("CREATE ROLE loader_noinsert NOLOGIN");
     for (const statement of WRITE_GRANTS.filter((grant) => !grant.includes("road_section"))) {
       await database.exec(statement.replaceAll("{role}", "loader_noinsert"));
     }
-    await database.exec("GRANT SELECT, UPDATE ON carto.road_section TO loader_noinsert");
+    await database.exec("GRANT SELECT, UPDATE, DELETE ON carto.road_section TO loader_noinsert");
+    await database.exec("GRANT DELETE ON carto.addresses_master TO loader_noinsert");
     await database.exec(`GRANT UPDATE ON carto.circulation_way, carto.addresses_master, carto.access_point TO loader_noinsert`);
     await database.exec("SET ROLE loader_noinsert");
 
@@ -110,6 +134,7 @@ describe("ejes load privileges on PGlite (EJL-24)", () => {
     }
     await database.exec("GRANT SELECT ON carto.access_point TO loader_noupdate");
     await database.exec("GRANT UPDATE ON carto.road_section, carto.circulation_way, carto.addresses_master TO loader_noupdate");
+    await database.exec("GRANT DELETE ON carto.road_section, carto.addresses_master TO loader_noupdate");
     await database.exec("SET ROLE loader_noupdate");
 
     await expect(assertEjesLoadReady(sessionOn(database), context)).rejects.toThrow(/No tiene privilegio UPDATE sobre la tabla carto\.access_point/);

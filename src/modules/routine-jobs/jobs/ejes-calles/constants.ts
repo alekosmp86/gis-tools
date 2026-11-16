@@ -8,6 +8,7 @@ export const EJES_TABLE_ROLE = {
   LOCALITIES: "ejes-localidades",
   DEPARTMENTS: "ejes-departamentos",
   PADRONES: "ejes-padrones",
+  ADDRESS: "ejes-address",
 } as const;
 
 export type EjesTableRole = (typeof EJES_TABLE_ROLE)[keyof typeof EJES_TABLE_ROLE];
@@ -88,6 +89,11 @@ export const DEPARTMENTS_COLUMN = {
 export const PADRON_COLUMN = {
   TYPE: "type_padron",
   GEOMETRY: "geometry",
+  ADDRESS_MASTER: "id_address_master",
+} as const;
+
+export const ADDRESS_COLUMN = {
+  ADDRESS_MASTER: "id_address_master",
 } as const;
 
 export const PADRON_TYPE = {
@@ -120,6 +126,7 @@ export const EJES_REQUIRED_COLUMNS_BY_ROLE: Record<EjesTableRole, readonly strin
   [EJES_TABLE_ROLE.LOCALITIES]: Object.values(LOCALITIES_COLUMN),
   [EJES_TABLE_ROLE.DEPARTMENTS]: Object.values(DEPARTMENTS_COLUMN),
   [EJES_TABLE_ROLE.PADRONES]: Object.values(PADRON_COLUMN),
+  [EJES_TABLE_ROLE.ADDRESS]: Object.values(ADDRESS_COLUMN),
 };
 
 export const EJES_ID_LOGICAL_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
@@ -139,6 +146,7 @@ export const EJES_DEFAULT_TABLES: Record<EjesTableRole, { schema: string; table:
   [EJES_TABLE_ROLE.LOCALITIES]: { schema: "bdj_carto", table: "ine_localidades_pg" },
   [EJES_TABLE_ROLE.DEPARTMENTS]: { schema: "carto", table: "mv_country_province" },
   [EJES_TABLE_ROLE.PADRONES]: { schema: "carto", table: "padron" },
+  [EJES_TABLE_ROLE.ADDRESS]: { schema: "carto", table: "address" },
 };
 
 export const EJES_SRID = 32721;
@@ -185,6 +193,8 @@ export const COVERAGE_RATIO = 0.95;
 export const COVERAGE_TOLERANCE_M = 1;
 export const RENUMBER_HAUSDORFF_M = 0.5;
 export const RENUMBER_CANDIDATE_DISTANCE_M = COVERAGE_TOLERANCE_M;
+/** A neighbour counts as a split piece or a merge member only when it covers more than this of the old section: a neighbour that just touches an end reaches at most COVERAGE_TOLERANCE_M into it. */
+export const SPLIT_PIECE_MIN_COVER_M = 2 * COVERAGE_TOLERANCE_M;
 
 export const REAL_RUN_ENV_VAR = "EJES_CALLES_REAL_RUN_ENABLED";
 export const REAL_RUN_UNAVAILABLE_MESSAGE = "La carga real de ejes de calles todavía no está disponible.";
@@ -212,6 +222,29 @@ export const RENUMBER_SKIP_REASON = {
 } as const;
 
 export type RenumberSkipReason = (typeof RENUMBER_SKIP_REASON)[keyof typeof RENUMBER_SKIP_REASON];
+
+export const EJES_SKIP_REASON = {
+  ...RENUMBER_SKIP_REASON,
+  NOT_ACCEPTED: "not_accepted",
+  SPLIT_PENDING: "split_pending",
+  HAS_POINTS: "has_points",
+  NO_REFTRAMO: "no_reftramo",
+  SHARED_OLD_REF: "shared_old_ref",
+  ID_LINKED_POINTS: "points_by_id",
+} as const;
+
+export type EjesSkipReason = (typeof EJES_SKIP_REASON)[keyof typeof EJES_SKIP_REASON];
+
+export const EJES_SKIP_KIND = {
+  SPLIT: "split",
+  MERGE: "merge",
+  REMOVAL: "removal",
+  RENUMBER: "renumber",
+} as const;
+
+export type EjesSkipKind = (typeof EJES_SKIP_KIND)[keyof typeof EJES_SKIP_KIND];
+
+export const ACCEPTED_KEYS_LIMIT = 5000;
 
 export const EJES_SUMMARY_COUNT_KEYS = [
   "newSections",

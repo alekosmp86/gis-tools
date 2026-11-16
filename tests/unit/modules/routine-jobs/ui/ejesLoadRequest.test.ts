@@ -78,13 +78,13 @@ describe("ejesLoadRequestOf (EJL-22)", () => {
       });
     });
 
-    it("should send the connection and the nine tables of the wizard, trimmed", () => {
+    it("should send the connection and the ten tables of the wizard, trimmed", () => {
       const state = validState({ connection: { host: " db.local ", port: "5432", db_name: "gis", user: "gis_user", password: PASSWORD } });
 
       const request = ejesLoadRequestOf(state, doneSnapshot(state));
 
       expect(request?.connection).toMatchObject({ host: "db.local", user: "gis_user", password: PASSWORD });
-      expect(Object.keys(request?.tables ?? {})).toHaveLength(9);
+      expect(Object.keys(request?.tables ?? {})).toHaveLength(10);
     });
   });
 
@@ -148,7 +148,7 @@ describe("ejesLoadRequestOf (EJL-22)", () => {
       expect(params.dryRun).toBe(false);
       expect(params.summary).toEqual(request?.summary);
       expect(params.config).toMatchObject({ host: "db.local", user: "gis_user", db_name: "gis" });
-      expect(Object.keys(params.tables)).toHaveLength(9);
+      expect(Object.keys(params.tables)).toHaveLength(10);
     });
 
     it("should be refused by the server with the unavailable message when the switch is off", () => {

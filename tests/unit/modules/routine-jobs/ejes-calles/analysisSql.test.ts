@@ -6,7 +6,14 @@ import {
   coverageThresholdSql,
   geometriesDifferSql,
 } from "@/modules/routine-jobs/jobs/ejes-calles/domain/analysisSql";
-import { GEOMETRY_TOLERANCE_M, RURAL_LOCALITY_SUFFIX, TWIN_NEAR_MIN_LENGTH_M, TWIN_PADRON_DISTANCE_M } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
+import {
+  COVERAGE_TOLERANCE_M,
+  GEOMETRY_TOLERANCE_M,
+  RURAL_LOCALITY_SUFFIX,
+  SPLIT_PIECE_MIN_COVER_M,
+  TWIN_NEAR_MIN_LENGTH_M,
+  TWIN_PADRON_DISTANCE_M,
+} from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { ejesLayouts } from "./ejesFixtures";
 
@@ -128,7 +135,7 @@ describe("buildEjesAnalysisSql", () => {
     });
 
     it("should use a 1 m tolerance for buffer and ST_DWithin", () => {
-      expect(sql).toContain("ST_Buffer(ST_Collect(n.geom), 1)");
+      expect(sql).toContain("ST_Buffer(ST_Collect(p.geom), 1)");
       expect(sql).toContain("ST_DWithin(r.geometry, n.geom, 1)");
       expect(sql).toContain("ST_Buffer(n.geom, 1)");
     });
@@ -149,7 +156,7 @@ describe("buildEjesAnalysisSql", () => {
     });
 
     it("should list plain removals with access points first and count them as held", () => {
-      expect(sql).toContain("ORDER BY COALESCE(ap.points, 0) DESC, p.ref");
+      expect(sql).toContain("ORDER BY COALESCE(ap.points, 0) + COALESCE(apid.points, 0) DESC, p.ref");
       expect(sql).toContain('AS "plain_held"');
     });
 
@@ -160,7 +167,7 @@ describe("buildEjesAnalysisSql", () => {
 
     it("should measure the old length, the new length and the new length outside the old section of splits and merges", () => {
       for (const alias of ["old_length", "new_length", "outside_length"]) expect(sql).toContain(`AS "${alias}"`);
-      expect(sql).toContain("ST_Difference(ST_Union(n.geom)");
+      expect(sql).toContain("ST_Difference(ST_Union(p.geom)");
       expect(sql).toContain("ST_Difference((array_agg(p.new_geom))[1]");
     });
 
@@ -168,6 +175,62 @@ describe("buildEjesAnalysisSql", () => {
       expect(sql).toContain('LEFT JOIN "ap" AS ap ON ap.ref = s.ref');
       expect(sql).toContain("count(*) AS points");
       expect(sql).toContain('AS "points"');
+    });
+  });
+
+  describe("EJ-10 touching neighbours and id-linked points (SPLIT_PIECE_MIN_COVER_M, EJ-21)", () => {
+    it("should set the minimum cover of a split piece or a merge member to twice the coverage tolerance, 2 m", () => {
+      expect(COVERAGE_TOLERANCE_M).toBe(1);
+      expect(SPLIT_PIECE_MIN_COVER_M).toBe(2 * COVERAGE_TOLERANCE_M);
+      expect(SPLIT_PIECE_MIN_COVER_M).toBe(2);
+    });
+
+    it("should measure the cover of each neighbour piece in piece_cover, one row per (removed section, new section)", () => {
+      const pieceCover = sql.slice(sql.indexOf('"piece_cover" AS ('), sql.indexOf('"removed_cover" AS ('));
+
+      expect(pieceCover).toContain("ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, 1))) AS piece_covered");
+      expect(pieceCover).toContain('FROM "removed_rest" AS r JOIN "new_rest" AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, 1)');
+      expect(pieceCover).not.toContain("GROUP BY");
+    });
+
+    it("should count only the pieces whose cover is above 2 m in removed_cover, and never a piece at exactly 2 m", () => {
+      const removedCover = sql.slice(sql.indexOf('"removed_cover" AS ('), sql.indexOf('"splits" AS ('));
+
+      expect(removedCover).toContain('FROM "piece_cover" AS p WHERE (p.piece_covered > 2 OR p.piece_covered >= 0.95 * p.len)');
+      expect(removedCover).toContain("count(p.new_ref) AS new_count");
+      expect(removedCover).toContain("ST_Length(ST_Intersection(p.geometry, ST_Buffer(ST_Collect(p.geom), 1))) AS covered");
+      expect(sql).not.toMatch(/piece_covered >= 2\b/);
+    });
+
+    it("should take a merge member only when its cover is above 2 m or at least 95% of a short section, in the merge sums and in merged_ids", () => {
+      const mergeBlock = sql.slice(sql.indexOf('"merge_pairs" AS ('), sql.indexOf('"plain" AS ('));
+
+      expect(mergeBlock).toContain(
+        "WHERE (p.covered > 2 OR p.covered >= 0.95 * p.len) GROUP BY p.new_ref HAVING count(*) >= 2 AND sum(p.covered) >= 0.95 * sum(p.len)"
+      );
+      expect(mergeBlock).toContain('JOIN "merges" AS m ON m.new_ref = p.new_ref WHERE (p.covered > 2 OR p.covered >= 0.95 * p.len)');
+      expect(sql).not.toContain("covered > 0");
+    });
+
+    it("should add the points matched by road_section.id to the points of a split, from the split list", () => {
+      expect(sql).toContain('COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points", s.covered / NULLIF(s.len, 0) AS "coverage"');
+      expect(sql).toContain('LEFT JOIN "ap" AS apid ON apid.ref = s.id::text ORDER BY s.ref');
+    });
+
+    it("should add the points matched by road_section.id to the points of a merge, summed over its members", () => {
+      expect(sql).toContain('COALESCE(sum(ap.points), 0) + COALESCE(sum(apid.points), 0) AS points FROM "merge_pairs" AS p');
+      expect(sql).toContain('LEFT JOIN "ap" AS apid ON apid.ref = p.id::text WHERE (p.covered > 2 OR p.covered >= 0.95 * p.len)');
+    });
+
+    it("should add the points matched by road_section.id to the points of a plain removal and sort the list by both", () => {
+      expect(sql).toContain('COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points" FROM "plain" AS p');
+      expect(sql).toContain('LEFT JOIN "ap" AS apid ON apid.ref = p.id::text ORDER BY COALESCE(ap.points, 0) + COALESCE(apid.points, 0) DESC, p.ref');
+    });
+
+    it("should count a plain removal as held when either its reftramo or its road_section.id has points", () => {
+      expect(sql).toContain(
+        '(SELECT count(*) FROM "plain" AS p WHERE EXISTS (SELECT 1 FROM "ap" AS ap WHERE ap.ref = p.ref AND ap.points > 0) OR EXISTS (SELECT 1 FROM "ap" AS apid WHERE apid.ref = p.id::text AND apid.points > 0)) AS "plain_held"'
+      );
     });
   });
 
@@ -183,8 +246,8 @@ describe("buildEjesAnalysisSql", () => {
       expect(sql).toContain("AS dept_code");
     });
 
-    it("should compute it only for NEW and GEOM sections, leaving out the NEW reftramos held by a skipped renumber (EJL-12)", () => {
-      expect(sql).toContain('WHERE (c.is_new AND c.ref NOT IN (SELECT new_ref FROM "renum_skipped")) OR c.geom_changed');
+    it("should compute it only for NEW and GEOM sections, leaving out the NEW reftramos held by a skipped renumber or a split or merge group (EJL-12)", () => {
+      expect(sql).toContain('WHERE (c.is_new AND c.ref NOT IN (SELECT new_ref FROM "renum_skipped") AND c.ref NOT IN (SELECT ref FROM "group_pieces")) OR c.geom_changed');
     });
 
     it("should count with_locality, only_department and without_code", () => {
@@ -512,7 +575,13 @@ const canonicalOf = (column: string): string => {
 };
 
 describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20, EJL-23)", () => {
-  const SINKS = { renumbered: 'pg_temp."ej_renum"', skipped: 'pg_temp."ej_held"' };
+  const SINKS = {
+    renumbered: 'pg_temp."ej_renum"',
+    skipped: 'pg_temp."ej_held"',
+    merged: 'pg_temp."ej_merge"',
+    plain: 'pg_temp."ej_plain"',
+    split: 'pg_temp."ej_split"',
+  };
   const sql = buildEjesAnalysisSql(ejesLayouts());
   const withSinks = buildEjesAnalysisSql(ejesLayouts(), SINKS);
 
@@ -563,7 +632,7 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
 
     it("should write the skipped pairs into the second sink table by a data-modifying CTE", () => {
       expect(withSinks).toContain(
-        'INSERT INTO pg_temp."ej_held" (old_id, old_ref, new_ref, points) SELECT r.old_id, r.old_ref, r.new_ref, r.points FROM "renum_skipped" AS r RETURNING 1'
+        'INSERT INTO pg_temp."ej_held" (old_id, old_ref, new_ref, idcalle, points, reason) SELECT r.old_id, r.old_ref, r.new_ref, r.idcalle, r.points, r.reason FROM "renum_skipped" AS r RETURNING 1'
       );
     });
 
@@ -578,10 +647,39 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
       expect(sql).not.toContain("RETURNING 1");
     });
 
-    it("should write only the two sink tables, and read the counts from the CTEs, not from the sinks", () => {
-      expect(withSinks.match(/\bINSERT INTO\b/g)).toHaveLength(2);
+    it("should write only the five sink tables, and read the counts from the CTEs, not from the sinks", () => {
+      expect(withSinks.match(/\bINSERT INTO\b/g)).toHaveLength(5);
       expect(withSinks).toContain('AS "renumbered"');
       expect(withSinks).not.toMatch(/FROM pg_temp\."ej_renum"/);
+    });
+  });
+
+  describe("removed sections of the real run: members and their points (EJ-10, EJ-21, EJS-1)", () => {
+    const mergeMembers = withSinks.slice(withSinks.indexOf('"merge_members" AS ('), withSinks.indexOf('"plain_members" AS ('));
+    const plainMembers = withSinks.slice(withSinks.indexOf('"plain_members" AS ('), withSinks.indexOf('"merge_sink" AS ('));
+    const splitMembers = withSinks.slice(withSinks.indexOf('"split_members" AS ('), withSinks.indexOf('"group_pieces" AS ('));
+
+    it("should take a merge member only when its cover is above 2 m, and record its reftramo and road_section.id points apart", () => {
+      expect(mergeMembers).toContain("WHERE (p.covered > 2 OR p.covered >= 0.95 * p.len)");
+      expect(mergeMembers).toContain("COALESCE(ap.points, 0) AS points, COALESCE(apid.points, 0) AS id_points");
+      expect(mergeMembers).toContain("LEFT JOIN \"ap\" AS apid ON apid.ref = p.id::text");
+      expect(mergeMembers).not.toContain("covered > 0");
+    });
+
+    it("should count a plain member's points as its reftramo points plus its road_section.id points", () => {
+      expect(plainMembers).toContain("COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS points");
+      expect(plainMembers).toContain("LEFT JOIN \"ap\" AS apid ON apid.ref = p.id::text");
+    });
+
+    it("should count a split member's points as its reftramo points plus its road_section.id points", () => {
+      expect(splitMembers).toContain("COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS points");
+      expect(splitMembers).toContain("LEFT JOIN \"ap\" AS apid ON apid.ref = s.id::text");
+    });
+
+    it("should write the id points of every merge member to the merge sink, next to its reftramo points", () => {
+      expect(withSinks).toContain(
+        'INSERT INTO pg_temp."ej_merge" (new_ref, idcalle, old_id, old_ref, points, id_points, old_rows) SELECT m.new_ref, m.idcalle, m.old_id, m.old_ref, m.points, m.id_points, m.old_rows FROM "merge_members" AS m RETURNING 1'
+      );
     });
   });
 
@@ -592,8 +690,8 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
     });
 
     it("should leave a held new reftramo out of the new section count, the new streets and the new rest", () => {
-      expect(sql).toContain('WHERE is_new AND ref NOT IN (SELECT new_ref FROM "renum_skipped")) AS "new_sections"');
-      expect(sql).toContain('FROM "classified" AS c WHERE c.is_new AND c.ref NOT IN (SELECT new_ref FROM "renum_skipped") AND NOT EXISTS');
+      expect(sql).toContain('WHERE is_new AND ref NOT IN (SELECT new_ref FROM "renum_skipped") AND ref NOT IN (SELECT ref FROM "group_pieces")) AS "new_sections"');
+      expect(sql).toContain('FROM "classified" AS c WHERE c.is_new AND c.ref NOT IN (SELECT new_ref FROM "renum_skipped") AND c.ref NOT IN (SELECT ref FROM "group_pieces") AND NOT EXISTS');
       expect(sql).toContain('"new_rest" AS (SELECT n.* FROM "new_sections" AS n WHERE n.ref NOT IN (SELECT new_ref FROM "renumbered") AND n.ref NOT IN (SELECT new_ref FROM "renum_skipped"))');
     });
   });

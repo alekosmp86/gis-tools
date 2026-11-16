@@ -22,6 +22,7 @@ import {
   sessionOn,
   snapshotOf,
   summaryOn,
+  zeroLoadCounts,
   type FailRule,
   type Row,
   type SqlLog,
@@ -508,7 +509,9 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
 
       expect((await sectionByRef(7001))[0]).toEqual(before);
       expect((await sectionByRef(7001))[0].id).toBe(id);
-      expect(outcome.load.skipped).toEqual([{ kind: "removal", refs: ["7001"], idcalle: "6", points: 2 }]);
+      expect(outcome.load.skipped).toEqual([
+        { kind: "removal", refs: ["7001"], newRefs: [], idcalle: "6", points: 2, reason: "not_accepted" },
+      ]);
     });
 
     it("should not modify the old section of a split and report it as skipped", async () => {
@@ -524,7 +527,9 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       const outcome = await persist();
 
       expect((await sectionByRef(6001))[0]).toEqual(before);
-      expect(outcome.load.skipped).toEqual([{ kind: "split", refs: ["6001"], idcalle: "3", points: 1 }]);
+      expect(outcome.load.skipped).toEqual([
+        { kind: "split", refs: ["6001"], newRefs: ["6002", "6003"], idcalle: "3", points: 1, reason: "split_pending" },
+      ]);
       expect(await rowsOf(database, "SELECT count(*)::int AS n FROM carto.access_point WHERE id_road_section = '6001'")).toEqual([{ n: 1 }]);
     });
 
@@ -540,7 +545,9 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       const outcome = await persist();
 
       expect([...(await sectionByRef(8001)), ...(await sectionByRef(8002))]).toEqual(before);
-      expect(outcome.load.skipped).toEqual([{ kind: "merge", refs: ["8001", "8002"], idcalle: "4", points: 3 }]);
+      expect(outcome.load.skipped).toEqual([
+        { kind: "merge", refs: ["8001", "8002"], newRefs: ["8003"], idcalle: "4", points: 3, reason: "not_accepted" },
+      ]);
     });
   });
 
@@ -747,7 +754,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       const entry = getRevertBackup(backup?.token ?? "");
       expect(entry?.bytes).toBe(backup?.bytes);
       expect((await stat(entry?.filePath ?? "")).size).toBe(backup?.bytes);
-      expect(backup?.counts).toEqual({ updated: 1, inserted: 1, ways: 1, masters: 1, pointsMoved: 2 });
+      expect(backup?.counts).toEqual({ updated: 1, inserted: 1, ways: 1, masters: 1, pointsMoved: 2, deleted: 0 });
     });
 
     it("should write a transaction that restores the old values of updated and renumbered sections", async () => {
@@ -925,7 +932,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       const second = await persist();
 
       expect(await snapshotOf(database)).toEqual(afterFirst);
-      expect(second.load.counts).toEqual({ inserted: 0, updated: 0, renumbered: 0, renumberSkipped: 0, waysCreated: 0, pointsMoved: 0 });
+      expect(second.load.counts).toEqual(zeroLoadCounts());
       expect(second.load.renumbered).toEqual([]);
     });
 
@@ -934,11 +941,15 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
 
       const outcome = await persist();
 
-      expect(Object.keys(outcome.load).sort()).toEqual(["backup", "counts", "renumbered", "skipped", "surplus", "surplusTotal"]);
+      expect(Object.keys(outcome.load).sort()).toEqual(
+        ["backup", "counts", "renumbered", "skipped", "skippedByReason", "skippedTotal", "surplus", "surplusTotal"]
+      );
       expect(Object.keys(outcome.load.counts).sort()).toEqual(
-        ["inserted", "pointsMoved", "renumberSkipped", "renumbered", "updated", "waysCreated"].sort()
+        ["deleted", "inserted", "merged", "pointsMoved", "removed", "renumberSkipped", "renumbered", "updated", "waysCreated"]
       );
       expect(outcome.load.skipped).toEqual([]);
+      expect(outcome.load.skippedTotal).toBe(0);
+      expect(outcome.load.skippedByReason).toEqual([]);
       expect(outcome.load.surplus).toEqual([]);
     });
 

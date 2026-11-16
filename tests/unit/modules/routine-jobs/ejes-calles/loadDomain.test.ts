@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   changedSummaryKeys,
   fingerprintChanged,
-  skippedRowsOf,
   summaryOf,
   toEjesLoadPlan,
   toLoadRenumberedRow,
+  toSkipCount,
+  toSkippedRow,
   toSurplusRow,
 } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadMapping";
 import { buildEjesNextStep } from "@/modules/routine-jobs/jobs/ejes-calles/domain/nextStep";
@@ -19,7 +20,7 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
     expect(plannedEjesStepLabels(true)).toEqual(plannedEjesStepLabels());
   });
 
-  it("should plan the 14 steps of the real run in order", () => {
+  it("should plan the 15 steps of the real run in order", () => {
     expect(plannedEjesStepLabels(false)).toEqual([
       "Validar tablas y columnas",
       "Comprobar privilegios",
@@ -33,6 +34,7 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
       "Insertar los tramos nuevos y sus direcciones maestras",
       "Actualizar los tramos con cambios",
       "Aplicar los tramos renumerados y mover sus puntos de acceso",
+      "Quitar los tramos unidos y sin reemplazo aceptados",
       "Analizar las tablas modificadas",
       "Confirmar la transacción",
     ]);
@@ -58,7 +60,7 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
     const labels = plannedEjesStepLabels(false);
     labels.pop();
 
-    expect(plannedEjesStepLabels(false)).toHaveLength(14);
+    expect(plannedEjesStepLabels(false)).toHaveLength(15);
   });
 });
 
@@ -88,15 +90,16 @@ describe("buildEjesNextStep (EJL-13, EJ-22)", () => {
 });
 
 describe("load mapping (EJL-12, EJL-13)", () => {
-  const analysisLists = (overrides: Record<string, unknown> = {}): EjesAnalysis =>
-    ({ splits: [], merges: [], plainRemovals: [], renumberSkipped: [], ...overrides }) as unknown as EjesAnalysis;
-
   it("should read the plan counts of the load as numbers", () => {
     const plan = toEjesLoadPlan({
       inserted: "3",
       updated: 2,
       renumbered: "1",
       renumber_skipped: "5",
+      removed: "2",
+      merged: "1",
+      deleted: "4",
+      masters_deleted: "3",
       ways: "2",
       points_moved: "9",
       idcalle: 1,
@@ -106,7 +109,18 @@ describe("load mapping (EJL-12, EJL-13)", () => {
       surplus: "4",
     });
 
-    expect(plan.counts).toEqual({ inserted: 3, updated: 2, renumbered: 1, renumberSkipped: 5, waysCreated: 2, pointsMoved: 9 });
+    expect(plan.counts).toEqual({
+      inserted: 3,
+      updated: 2,
+      renumbered: 1,
+      renumberSkipped: 5,
+      removed: 2,
+      merged: 1,
+      deleted: 4,
+      waysCreated: 2,
+      pointsMoved: 9,
+    });
+    expect(plan.deletedMasters).toBe(3);
     expect(plan.attr).toEqual({ idcalle: 1, type: 2, font: 0, geom: 1 });
     expect(plan.surplusTotal).toBe(4);
   });
@@ -119,7 +133,18 @@ describe("load mapping (EJL-12, EJL-13)", () => {
   it("should read an empty row as zeros", () => {
     const plan = toEjesLoadPlan({});
 
-    expect(plan.counts).toEqual({ inserted: 0, updated: 0, renumbered: 0, renumberSkipped: 0, waysCreated: 0, pointsMoved: 0 });
+    expect(plan.counts).toEqual({
+      inserted: 0,
+      updated: 0,
+      renumbered: 0,
+      renumberSkipped: 0,
+      removed: 0,
+      merged: 0,
+      deleted: 0,
+      waysCreated: 0,
+      pointsMoved: 0,
+    });
+    expect(plan.deletedMasters).toBe(0);
     expect(plan.attr).toEqual({ idcalle: 0, type: 0, font: 0, geom: 0 });
     expect(plan.surplusTotal).toBe(0);
   });
@@ -132,54 +157,36 @@ describe("load mapping (EJL-12, EJL-13)", () => {
     expect(toLoadRenumberedRow({ old_ref: 1, new_ref: 2, id: 3, points: "4" })).toEqual({ oldRef: "1", newRef: "2", id: "3", points: 4 });
   });
 
-  it("should list splits, merges and plain removals as skipped, with their points", () => {
-    const analysis = analysisLists({
-      splits: [{ oldRef: "1", idcalle: "9", newRefs: ["2", "3"], points: 5 }],
-      merges: [{ newRef: "4", idcalle: "8", oldRefs: ["5", "6"], points: 7 }],
-      plainRemovals: [{ ref: "7", idcalle: null, points: 0 }],
+  it("should map a skipped row with its refs, new refs, street, points and reason, as text and numbers", () => {
+    expect(toSkippedRow({ kind: "merge", refs: "8001,8002", new_refs: "8003", idcalle: "4", points: "3", reason: "not_accepted" })).toEqual({
+      kind: "merge",
+      refs: ["8001", "8002"],
+      newRefs: ["8003"],
+      idcalle: "4",
+      points: 3,
+      reason: "not_accepted",
     });
-
-    expect(skippedRowsOf(analysis)).toEqual([
-      { kind: "split", refs: ["1"], idcalle: "9", points: 5 },
-      { kind: "merge", refs: ["5", "6"], idcalle: "8", points: 7 },
-      { kind: "removal", refs: ["7"], idcalle: null, points: 0 },
-    ]);
   });
 
-  it("should list a held renumber pair as one skipped row with both refs, its points and its reason (EJL-12, EJL-17)", () => {
-    const analysis = analysisLists({
-      renumberSkipped: [
-        { oldRef: "3001", newRef: "3002", idcalle: "5", points: 4, reason: RENUMBER_SKIP_REASON.AMBIGUOUS_NEW_REF },
-      ],
+  it("should map an empty new refs text to an empty list, and a NULL street to null", () => {
+    expect(toSkippedRow({ kind: "removal", refs: "7001", new_refs: "", idcalle: null, points: 0, reason: "has_points" })).toEqual({
+      kind: "removal",
+      refs: ["7001"],
+      newRefs: [],
+      idcalle: null,
+      points: 0,
+      reason: "has_points",
     });
-
-    expect(skippedRowsOf(analysis)).toEqual([
-      {
-        kind: "renumber",
-        refs: ["3001", "3002"],
-        idcalle: "5",
-        points: 4,
-        reason: RENUMBER_SKIP_REASON.AMBIGUOUS_NEW_REF,
-      },
-    ]);
   });
 
-  it("should keep the renumber rows after the splits, merges and removals, one row per held pair", () => {
-    const analysis = analysisLists({
-      splits: [{ oldRef: "1", idcalle: "9", newRefs: ["2", "3"], points: 5 }],
-      plainRemovals: [{ ref: "7", idcalle: "4", points: 0 }],
-      renumberSkipped: [
-        { oldRef: "10", newRef: "11", idcalle: "5", points: 1, reason: RENUMBER_SKIP_REASON.REPEATED_OLD_REF },
-        { oldRef: "12", newRef: "13", idcalle: "5", points: 2, reason: RENUMBER_SKIP_REASON.NOT_SINGLE_COPY },
-      ],
-    });
-
-    expect(skippedRowsOf(analysis).map((row) => row.kind)).toEqual(["split", "removal", "renumber", "renumber"]);
-    expect(skippedRowsOf(analysis)[3]).toMatchObject({ refs: ["12", "13"], reason: RENUMBER_SKIP_REASON.NOT_SINGLE_COPY });
+  it("should map a held renumber pair to its old and new refs and its reason (EJL-12, EJL-17)", () => {
+    expect(
+      toSkippedRow({ kind: "renumber", refs: "3001", new_refs: "3002", idcalle: "5", points: 4, reason: RENUMBER_SKIP_REASON.AMBIGUOUS_NEW_REF })
+    ).toMatchObject({ kind: "renumber", refs: ["3001"], newRefs: ["3002"], reason: RENUMBER_SKIP_REASON.AMBIGUOUS_NEW_REF });
   });
 
-  it("should list nothing as skipped when there are no splits, merges, removals or held renumbers", () => {
-    expect(skippedRowsOf(analysisLists())).toEqual([]);
+  it("should map a reason count row to its reason and a numeric count", () => {
+    expect(toSkipCount({ reason: "split_pending", count: "900" })).toEqual({ reason: "split_pending", count: 900 });
   });
 
   describe("summaryOf (EJL-20, EJL-22)", () => {

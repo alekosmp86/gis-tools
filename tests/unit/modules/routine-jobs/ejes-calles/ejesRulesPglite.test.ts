@@ -20,6 +20,7 @@ import {
   sessionOn,
   snapshotOf,
   summaryOn,
+  zeroLoadCounts,
   type FailRule,
   type Row,
   type SqlLog,
@@ -98,7 +99,9 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
       expect(await sectionsByRef(3001)).toEqual(before["carto.road_section"].filter((row) => row.id === old));
       expect(await sectionsByRef(3002)).toEqual([]);
       expect(await snapshotOf(database)).toEqual(before);
-      expect(outcome.load.skipped).toEqual([{ kind: "renumber", refs: ["3001", "3002"], idcalle: "5", points: 2, reason: "not_single_copy" }]);
+      expect(outcome.load.skipped).toEqual([
+        { kind: "renumber", refs: ["3001"], newRefs: ["3002"], idcalle: "5", points: 2, reason: "not_single_copy" },
+      ]);
     });
 
     it("should count the held sections neither as removed nor as new, and report the held pair in the analysis", async () => {
@@ -125,7 +128,7 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
 
       expect(await ways()).toEqual(waysBefore);
       expect(await snapshotOf(database)).toEqual(afterFirst);
-      expect(second.load.counts).toEqual({ inserted: 0, updated: 0, renumbered: 0, renumberSkipped: 1, waysCreated: 0, pointsMoved: 0 });
+      expect(second.load.counts).toEqual(zeroLoadCounts({ renumberSkipped: 1 }));
       expect(second.load.skipped).toHaveLength(1);
     });
 
@@ -191,7 +194,7 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
 
       expect(outcome.analysis.renumberSkipped).toEqual([{ oldRef: "3001", newRef: "3002", idcalle: "5", points: 0, reason: "repeated_old_ref" }]);
       expect(outcome.load.skipped.filter((row) => row.kind === "renumber")).toEqual([
-        { kind: "renumber", refs: ["3001", "3002"], idcalle: "5", points: 0, reason: "repeated_old_ref" },
+        { kind: "renumber", refs: ["3001"], newRefs: ["3002"], idcalle: "5", points: 0, reason: "repeated_old_ref" },
       ]);
       expect(outcome.load.counts.renumberSkipped).toBe(outcome.analysis.renumberSkipped.length);
     });
@@ -236,7 +239,7 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
       expect(outcome.load.counts.renumbered).toBe(analysis.counts.renumbered);
       expect(outcome.load.renumbered.map((row) => [row.oldRef, row.newRef])).toEqual(analysis.renumbered.map((row) => [row.oldRef, row.newRef]));
       expect(outcome.load.renumbered.map((row) => [row.oldRef, row.newRef])).toEqual([["3001", "3002"]]);
-      expect(outcome.load.skipped.map((row) => [row.refs.join("/"), row.reason])).toEqual([["4001/4002", "not_single_copy"]]);
+      expect(outcome.load.skipped.map((row) => [row.refs.join("/"), row.newRefs.join("/"), row.reason])).toEqual([["4001", "4002", "not_single_copy"]]);
       expect(await sectionsByRef(4001)).toHaveLength(1);
       expect(await sectionsByRef(4002)).toEqual([]);
     });
@@ -339,7 +342,7 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
 
       expect(first.load.counts).toMatchObject({ inserted: 1, waysCreated: 1 });
       expect((await sectionsByRef(12))[0]).toMatchObject({ reftramo_ideuy: 12, id_circulation_way: 77 });
-      expect(second.load.counts).toEqual({ inserted: 0, updated: 0, renumbered: 0, renumberSkipped: 0, waysCreated: 0, pointsMoved: 0 });
+      expect(second.load.counts).toEqual(zeroLoadCounts());
       expect(await snapshotOf(database)).toEqual(afterFirst);
     });
 
@@ -351,7 +354,7 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
 
       const outcome = await persist();
 
-      expect(outcome.load.counts).toEqual({ inserted: 0, updated: 0, renumbered: 0, renumberSkipped: 0, waysCreated: 0, pointsMoved: 0 });
+      expect(outcome.load.counts).toEqual(zeroLoadCounts());
       expect(await snapshotOf(database)).toEqual(before);
     });
 

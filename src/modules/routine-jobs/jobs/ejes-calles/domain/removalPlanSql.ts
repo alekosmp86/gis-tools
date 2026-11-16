@@ -1,0 +1,133 @@
+import { ADDRESS_COLUMN, EJES_SKIP_KIND, EJES_SKIP_REASON, PADRON_COLUMN, ROAD_SECTION_COLUMN } from "../constants";
+import type { EjesLayouts } from "../types";
+import { col, table } from "./layoutSql";
+import { createTemp, LOAD_TEMP, tmp } from "./loadSelectionSql";
+
+const quoted = (value: string): string => `'${value}'`;
+
+/**
+ * Merges: one row per new `reftramo` of the analysis. A merge is applied only when it is accepted, its new `reftramo` is not a split
+ * piece, it has one kept copy, its old sections each carry one current `reftramo`, no old section has points linked by id, and no
+ * accepted merge shares an old section with it. The lookups are grouped once and joined, not counted per row.
+ */
+export function buildMergePlanSql(): string {
+  const merge = tmp(LOAD_TEMP.MERGE);
+  const accepted = tmp(LOAD_TEMP.ACC_MERGE);
+  const sharedOld = `SELECT o.old_id FROM ${merge} AS o JOIN ${accepted} AS oa ON oa.ref = o.new_ref GROUP BY o.old_id HAVING count(DISTINCT o.new_ref) > 1`;
+  const copies = `SELECT c.ref, count(*) AS copies FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE c.ref IN (SELECT m.new_ref FROM ${merge} AS m) GROUP BY c.ref`;
+  const pieces = `SELECT DISTINCT s.new_ref FROM ${tmp(LOAD_TEMP.SPLIT)} AS s`;
+  const groups = [
+    "SELECT m.new_ref, min(m.idcalle) AS idcalle, string_agg(m.old_ref, ',' ORDER BY m.old_ref) AS refs, sum(m.points + m.id_points)::bigint AS points,",
+    "bool_or(a.ref IS NOT NULL) AS accepted, bool_or(m.old_ref IS NULL) AS no_ref, bool_or(m.old_rows > 1) AS repeated,",
+    "bool_or(m.id_points > 0) AS id_linked, bool_or(so.old_id IS NOT NULL) AS shared",
+    `FROM ${merge} AS m LEFT JOIN ${accepted} AS a ON a.ref = m.new_ref LEFT JOIN (${sharedOld}) AS so ON so.old_id = m.old_id GROUP BY m.new_ref`,
+  ].join(" ");
+  return createTemp(LOAD_TEMP.MERGE_PLAN, [
+    "SELECT g.new_ref, g.idcalle, g.refs, g.points, CASE",
+    `WHEN NOT g.accepted THEN ${quoted(EJES_SKIP_REASON.NOT_ACCEPTED)}`,
+    `WHEN sp.new_ref IS NOT NULL THEN ${quoted(EJES_SKIP_REASON.SPLIT_PENDING)}`,
+    `WHEN COALESCE(k.copies, 0) <> 1 THEN ${quoted(EJES_SKIP_REASON.NOT_SINGLE_COPY)}`,
+    `WHEN g.no_ref THEN ${quoted(EJES_SKIP_REASON.NO_REFTRAMO)}`,
+    `WHEN g.id_linked THEN ${quoted(EJES_SKIP_REASON.ID_LINKED_POINTS)}`,
+    `WHEN g.repeated THEN ${quoted(EJES_SKIP_REASON.REPEATED_OLD_REF)}`,
+    `WHEN g.shared THEN ${quoted(EJES_SKIP_REASON.SHARED_OLD_REF)}`,
+    "END AS reason",
+    `FROM (${groups}) AS g`,
+    `LEFT JOIN (${copies}) AS k ON k.ref = g.new_ref`,
+    `LEFT JOIN (${pieces}) AS sp ON sp.new_ref = g.new_ref`,
+  ].join(" "));
+}
+
+/** Plain removals: accepted, one current `reftramo`, and no access point left (by `reftramo` or by id). A section with points is never deleted. */
+export function buildPlainPlanSql(): string {
+  return createTemp(LOAD_TEMP.PLAIN_PLAN, [
+    "SELECT p.old_id, p.ref, p.idcalle, p.points, CASE",
+    `WHEN a.ref IS NULL THEN ${quoted(EJES_SKIP_REASON.NOT_ACCEPTED)}`,
+    `WHEN p.ref IS NULL THEN ${quoted(EJES_SKIP_REASON.NO_REFTRAMO)}`,
+    `WHEN p.old_rows > 1 THEN ${quoted(EJES_SKIP_REASON.REPEATED_OLD_REF)}`,
+    `WHEN p.points > 0 THEN ${quoted(EJES_SKIP_REASON.HAS_POINTS)}`,
+    "END AS reason",
+    `FROM ${tmp(LOAD_TEMP.PLAIN)} AS p LEFT JOIN ${tmp(LOAD_TEMP.ACC_PLAIN)} AS a ON a.ref = p.ref`,
+  ].join(" "));
+}
+
+/**
+ * The copies of split pieces and of the new `reftramo`s of merges that are not applied are held: they are not inserted, so no
+ * section, master or way is created for them. Runs after the plans, which count the copies of each new `reftramo`.
+ */
+export const buildHoldGroupCopiesSql = (): string =>
+  [
+    `DELETE FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE`,
+    `c.ref IN (SELECT s.new_ref FROM ${tmp(LOAD_TEMP.SPLIT)} AS s)`,
+    `OR c.ref IN (SELECT p.new_ref FROM ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p WHERE p.reason IS NOT NULL)`,
+  ].join(" ");
+
+/** Every access point move of the load: the renumbered `reftramo`s and the old sections of the applied merges, each to its new `reftramo`. */
+export const buildMoveTableSql = (): string =>
+  createTemp(
+    LOAD_TEMP.MOVE,
+    [
+      `SELECT n.old_ref, n.new_ref, n.points FROM ${tmp(LOAD_TEMP.RENUM)} AS n`,
+      "UNION ALL",
+      `SELECT m.old_ref, m.new_ref, m.points FROM ${tmp(LOAD_TEMP.MERGE)} AS m JOIN ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p ON p.new_ref = m.new_ref WHERE p.reason IS NULL`,
+    ].join(" ")
+  );
+
+/**
+ * The road sections the load deletes: applied merges' old sections and applied plain removals. `master_deleted` is true only when the
+ * section has a master that nothing else holds: no other section outside this delete, no address, no padron. Only those masters are
+ * counted, deleted and restored; a shared master stays and is never re-inserted by a revert.
+ */
+export function buildDeleteTableSql(layouts: EjesLayouts): string {
+  const road = (logical: string): string => `r.${col(layouts, "ROAD_SECTION", logical)}`;
+  const master = road(ROAD_SECTION_COLUMN.ADDRESS_MASTER);
+  const sectionMasterColumn = col(layouts, "ROAD_SECTION", ROAD_SECTION_COLUMN.ADDRESS_MASTER);
+  const sectionIdColumn = col(layouts, "ROAD_SECTION", ROAD_SECTION_COLUMN.ID);
+  const otherSectionHolds = `EXISTS (SELECT 1 FROM ${table(layouts, "ROAD_SECTION")} AS o WHERE o.${sectionMasterColumn} = ${master} AND o.${sectionIdColumn} NOT IN (SELECT c.road_id FROM cand AS c))`;
+  const addressHolds = `EXISTS (SELECT 1 FROM ${table(layouts, "ADDRESS")} AS h WHERE h.${col(layouts, "ADDRESS", ADDRESS_COLUMN.ADDRESS_MASTER)} = ${master})`;
+  const padronHolds = `EXISTS (SELECT 1 FROM ${table(layouts, "PADRONES")} AS h WHERE h.${col(layouts, "PADRONES", PADRON_COLUMN.ADDRESS_MASTER)} = ${master})`;
+  const candidates = [
+    `SELECT m.old_id AS road_id, m.old_ref AS ref, m.points FROM ${tmp(LOAD_TEMP.MERGE)} AS m JOIN ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p ON p.new_ref = m.new_ref WHERE p.reason IS NULL`,
+    "UNION ALL",
+    `SELECT p.old_id AS road_id, p.ref AS ref, p.points FROM ${tmp(LOAD_TEMP.PLAIN_PLAN)} AS p WHERE p.reason IS NULL`,
+  ].join(" ");
+  return createTemp(
+    LOAD_TEMP.DEL,
+    [
+      `WITH cand AS (${candidates})`,
+      `SELECT d.road_id, d.ref, d.points, ${master} AS master_id,`,
+      `(${master} IS NOT NULL AND NOT ${otherSectionHolds} AND NOT ${addressHolds} AND NOT ${padronHolds}) AS master_deleted`,
+      `FROM cand AS d JOIN ${table(layouts, "ROAD_SECTION")} AS r ON ${road(ROAD_SECTION_COLUMN.ID)} = d.road_id`,
+    ].join(" ")
+  );
+}
+
+/**
+ * Every skipped row of the load, one per group: a split (its old section, with all its pieces), a merge (its new `reftramo`, with
+ * its old ones), a plain removal, a held renumber pair. Applied rows are never here, so the list and its counts are exact.
+ */
+export const buildSkippedTableSql = (): string =>
+  createTemp(LOAD_TEMP.SKIPPED, [
+    `SELECT ${quoted(EJES_SKIP_KIND.SPLIT)} AS kind, s.old_ref AS refs, string_agg(s.new_ref, ',' ORDER BY s.new_ref) AS new_refs,`,
+    `s.idcalle, s.points, ${quoted(EJES_SKIP_REASON.SPLIT_PENDING)} AS reason`,
+    `FROM ${tmp(LOAD_TEMP.SPLIT)} AS s GROUP BY s.old_id, s.old_ref, s.idcalle, s.points`,
+    "UNION ALL",
+    `SELECT ${quoted(EJES_SKIP_KIND.MERGE)}, p.refs, p.new_ref, p.idcalle, p.points, p.reason`,
+    `FROM ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p WHERE p.reason IS NOT NULL`,
+    "UNION ALL",
+    `SELECT ${quoted(EJES_SKIP_KIND.REMOVAL)}, p.ref, '', p.idcalle, p.points, p.reason`,
+    `FROM ${tmp(LOAD_TEMP.PLAIN_PLAN)} AS p WHERE p.reason IS NOT NULL`,
+    "UNION ALL",
+    `SELECT DISTINCT ${quoted(EJES_SKIP_KIND.RENUMBER)}, h.old_ref, h.new_ref, h.idcalle, h.points, h.reason`,
+    `FROM ${tmp(LOAD_TEMP.HELD)} AS h`,
+  ].join(" "));
+
+/** The first `limit` skipped rows, the largest first; the total and the counts by reason come from `buildSkippedReasonCountsSql`. */
+export const buildSkippedListSql = (limit: number): string =>
+  [
+    'SELECT s.kind AS "kind", s.refs AS "refs", s.new_refs AS "new_refs", s.idcalle AS "idcalle", s.points AS "points", s.reason AS "reason"',
+    `FROM ${tmp(LOAD_TEMP.SKIPPED)} AS s ORDER BY s.points DESC, s.kind, s.refs LIMIT ${limit}`,
+  ].join(" ");
+
+export const buildSkippedReasonCountsSql = (): string =>
+  `SELECT s.reason AS "reason", count(*) AS "count" FROM ${tmp(LOAD_TEMP.SKIPPED)} AS s GROUP BY s.reason`;

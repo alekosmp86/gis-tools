@@ -1,19 +1,24 @@
-import { numberOf, type Row } from "../../shared/rowMapping";
-import { EJES_SUMMARY_COUNT_KEYS } from "../constants";
+import { numberOf, textOf, type Row } from "../../shared/rowMapping";
+import { EJES_SUMMARY_COUNT_KEYS, type EjesSkipKind, type EjesSkipReason } from "../constants";
 import type {
+  EjesAccepted,
   EjesAnalysis,
   EjesFingerprint,
   EjesLoadCounts,
   EjesLoadRenumberedRow,
+  EjesSkipCount,
   EjesSkippedRow,
   EjesSummary,
   EjesSurplusRow,
 } from "../types";
 
+export const NO_ACCEPTED: EjesAccepted = { plainRemovals: [], merges: [] };
+
 export interface EjesLoadPlan {
   counts: EjesLoadCounts;
   attr: { idcalle: number; type: number; font: number; geom: number };
   surplusTotal: number;
+  deletedMasters: number;
 }
 
 export const toEjesLoadPlan = (row: Row): EjesLoadPlan => ({
@@ -22,11 +27,15 @@ export const toEjesLoadPlan = (row: Row): EjesLoadPlan => ({
     updated: numberOf(row.updated),
     renumbered: numberOf(row.renumbered),
     renumberSkipped: numberOf(row.renumber_skipped),
+    removed: numberOf(row.removed),
+    merged: numberOf(row.merged),
+    deleted: numberOf(row.deleted),
     waysCreated: numberOf(row.ways),
     pointsMoved: numberOf(row.points_moved),
   },
   attr: { idcalle: numberOf(row.idcalle), type: numberOf(row.type), font: numberOf(row.font), geom: numberOf(row.geom) },
   surplusTotal: numberOf(row.surplus),
+  deletedMasters: numberOf(row.masters_deleted),
 });
 
 export const toSurplusRow = (row: Row): EjesSurplusRow => ({
@@ -42,19 +51,25 @@ export const toLoadRenumberedRow = (row: Row): EjesLoadRenumberedRow => ({
   points: numberOf(row.points),
 });
 
-/** Splits, merges, plain removals and renumbers the analysis skipped are not applied in this slice: they are listed as skipped, with the points their sections hold. */
-export function skippedRowsOf(analysis: EjesAnalysis): EjesSkippedRow[] {
-  return [
-    ...analysis.splits.map((row): EjesSkippedRow => ({ kind: "split", refs: [row.oldRef], idcalle: row.idcalle, points: row.points })),
-    ...analysis.merges.map((row): EjesSkippedRow => ({ kind: "merge", refs: row.oldRefs, idcalle: row.idcalle, points: row.points })),
-    ...analysis.plainRemovals.map(
-      (row): EjesSkippedRow => ({ kind: "removal", refs: [row.ref], idcalle: row.idcalle, points: row.points })
-    ),
-    ...analysis.renumberSkipped.map(
-      (row): EjesSkippedRow => ({ kind: "renumber", refs: [row.oldRef, row.newRef], idcalle: row.idcalle, points: row.points, reason: row.reason })
-    ),
-  ];
-}
+const listOfCsv = (value: unknown): string[] => {
+  const text = textOf(value);
+  return text === null || text === "" ? [] : text.split(",");
+};
+
+/** One skipped row of the load. Its refs and new refs come comma-joined from the skipped table. */
+export const toSkippedRow = (row: Row): EjesSkippedRow => ({
+  kind: String(row.kind) as EjesSkipKind,
+  refs: listOfCsv(row.refs),
+  newRefs: listOfCsv(row.new_refs),
+  idcalle: textOf(row.idcalle),
+  points: numberOf(row.points),
+  reason: String(row.reason) as EjesSkipReason,
+});
+
+export const toSkipCount = (row: Row): EjesSkipCount => ({
+  reason: String(row.reason) as EjesSkipReason,
+  count: numberOf(row.count),
+});
 
 /** The summary the real run sends back: the Revisar counts and the staging fingerprint of the dry-run result. */
 export const summaryOf = (analysis: EjesAnalysis): EjesSummary => ({

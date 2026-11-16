@@ -72,6 +72,10 @@ export function renumberCtes(): string[] {
   ];
 }
 
+/** The held pairs: one row per section the analysis held, with the reason the load reports. */
+export const buildCreateHeldTableSql = (name: string): string =>
+  `CREATE TEMP TABLE ${q(name)} (old_id bigint, old_ref text, new_ref text, idcalle text, points bigint, reason text) ON COMMIT DROP`;
+
 /** Data-modifying CTEs: PostgreSQL runs each to completion even though the analysis never reads it. */
 export const renumberSinkCtes = (sinks: RenumberSinks): string[] => [
   cte(
@@ -80,7 +84,7 @@ export const renumberSinkCtes = (sinks: RenumberSinks): string[] => [
   ),
   cte(
     "held_sink",
-    `INSERT INTO ${sinks.skipped} (old_id, old_ref, new_ref, points) SELECT r.old_id, r.old_ref, r.new_ref, r.points FROM ${q("renum_skipped")} AS r RETURNING 1`
+    `INSERT INTO ${sinks.skipped} (old_id, old_ref, new_ref, idcalle, points, reason) SELECT r.old_id, r.old_ref, r.new_ref, r.idcalle, r.points, r.reason FROM ${q("renum_skipped")} AS r RETURNING 1`
   ),
 ];
 

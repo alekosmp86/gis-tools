@@ -10,6 +10,7 @@ import {
 import { ejesLoadContextOf, nextvalSql, physicalOf, qualifiedOf, typedAs } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadContext";
 import {
   buildAnalyzeLoadedSql,
+  buildDeleteSectionsSql,
   buildInsertMastersSql,
   buildInsertSectionsSql,
   buildInsertWaysSql,
@@ -284,7 +285,7 @@ describe("ejes load write SQL (EJL-2, EJL-5, EJL-8, EJL-9, EJL-10, EJL-11)", () 
       const sql = buildMovePointsSql(contextOf());
 
       expect(sql).toMatch(/UPDATE "carto"\."access_point" AS a SET "id_road_section" = \(n\.new_ref\)::character varying/);
-      expect(sql).toContain("FROM pg_temp.\"ej_renum\" AS n WHERE CASE WHEN NULLIF(btrim(a.\"id_road_section\"::text), '') ~ '^[0-9]+$' THEN (NULLIF(btrim(a.\"id_road_section\"::text), ''))::numeric::text ELSE NULLIF(btrim(a.\"id_road_section\"::text), '') END = n.old_ref");
+      expect(sql).toContain("FROM pg_temp.\"ej_move\" AS n WHERE CASE WHEN NULLIF(btrim(a.\"id_road_section\"::text), '') ~ '^[0-9]+$' THEN (NULLIF(btrim(a.\"id_road_section\"::text), ''))::numeric::text ELSE NULLIF(btrim(a.\"id_road_section\"::text), '') END = n.old_ref");
       expect(sql).not.toMatch(/\bDELETE\b|\bINSERT\b/i);
       expect(sql.match(/SET /g)).toHaveLength(1);
     });
@@ -309,9 +310,35 @@ describe("ejes load write SQL (EJL-2, EJL-5, EJL-8, EJL-9, EJL-10, EJL-11)", () 
     });
   });
 
+  describe("section delete guards (EJ-21, EJS-10)", () => {
+    const ACCESS_POINT_GUARD = 'NOT EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE ';
+    const canonicalAccessPoint = 'CASE WHEN NULLIF(btrim(a."id_road_section"::text), \'\') ~ \'^[0-9]+$\' THEN (NULLIF(btrim(a."id_road_section"::text), \'\'))::numeric::text ELSE NULLIF(btrim(a."id_road_section"::text), \'\') END';
+
+    it("should delete only the applied sections, guarded by a reftramo NOT EXISTS on access_point", () => {
+      const sql = buildDeleteSectionsSql(contextOf());
+
+      expect(sql).toMatch(/^WITH "written" AS \(DELETE FROM "carto"\."road_section" AS r USING pg_temp\."ej_del" AS d WHERE r\."[a-z_]+" = d\.road_id/);
+      expect(sql).toContain(`AND ${ACCESS_POINT_GUARD}${canonicalAccessPoint} = d.ref)`);
+    });
+
+    it("should also refuse the delete of a section whose road_section.id an access point holds, with a second NOT EXISTS", () => {
+      const sql = buildDeleteSectionsSql(contextOf());
+
+      expect(sql).toContain(`AND ${ACCESS_POINT_GUARD}${canonicalAccessPoint} = d.road_id::text)`);
+      expect(sql.split(ACCESS_POINT_GUARD)).toHaveLength(3);
+    });
+
+    it("should never write access_point from the delete statement", () => {
+      const sql = buildDeleteSectionsSql(contextOf());
+
+      expect(sql).not.toMatch(/\bUPDATE\b|\bINSERT\b/i);
+      expect(sql).not.toMatch(/DELETE FROM "carto"\."access_point"/);
+    });
+  });
+
   describe("revert SQL (EJL-4)", () => {
     it("should keep the order sections, points, inserts", () => {
-      expect(REVERT_ORDER).toEqual(["ej_rev_sections", "ej_rev_points", "ej_rev_inserts"]);
+      expect(REVERT_ORDER).toEqual(["ej_rev_masters", "ej_rev_restore", "ej_rev_sections", "ej_rev_points", "ej_rev_inserts"]);
     });
 
     it("should restore every column the load can change, including reftramo_ideuy", () => {

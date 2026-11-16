@@ -215,9 +215,17 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
   });
 
   describe("load counts of the held set (EJL-13, EJL-23)", () => {
-    const countsRow = async (): Promise<Record<string, unknown>> => {
+    /** The delete plan: one row per deleted section, with its master id and whether that master is deleted with it. */
+    const countsRow = async (deleted: Array<{ road: number; master: number; masterDeleted: boolean }> = []): Promise<Record<string, unknown>> => {
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.NEW}" (copy_id bigint, section_id bigint, master_id bigint)`);
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.WAY}" (way_id bigint, idcalle text, name text, short_name text, type_id text, font_id text)`);
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.MERGE_PLAN}" (new_ref text, idcalle text, refs text, points bigint, reason text)`);
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.PLAIN_PLAN}" (old_id bigint, ref text, idcalle text, points bigint, reason text)`);
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.DEL}" (road_id bigint, ref text, points bigint, master_id bigint, master_deleted boolean)`);
+      for (const row of deleted) {
+        await database.query(`INSERT INTO pg_temp."${LOAD_TEMP.DEL}" VALUES ($1, $2, 0, $3, $4)`, [row.road, String(row.road), row.master, row.masterDeleted]);
+      }
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.MOVE}" (old_ref text, new_ref text, points bigint)`);
       return (await rowsOf(database, buildLoadCountsSql()))[0];
     };
 
@@ -230,6 +238,29 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       const row = await countsRow();
 
       expect(Number(row.renumber_skipped)).toBe(2);
+    });
+
+    it("should count every deleted section, but only the masters flagged master_deleted", async () => {
+      await select();
+      const row = await countsRow([
+        { road: 1, master: 901, masterDeleted: true },
+        { road: 2, master: 902, masterDeleted: false },
+        { road: 3, master: 902, masterDeleted: false },
+      ]);
+
+      expect(Number(row.deleted)).toBe(3);
+      expect(Number(row.masters_deleted)).toBe(1);
+    });
+
+    it("should count a master shared by two deleted sections once", async () => {
+      await select();
+      const row = await countsRow([
+        { road: 1, master: 901, masterDeleted: true },
+        { road: 2, master: 901, masterDeleted: true },
+      ]);
+
+      expect(Number(row.deleted)).toBe(2);
+      expect(Number(row.masters_deleted)).toBe(1);
     });
 
     it("should count zero renumber_skipped and zero renumbered when nothing is held back", async () => {

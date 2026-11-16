@@ -147,7 +147,7 @@ describe("ejes wizard state", () => {
       expect(request.dryRun).toBe(true);
       expect(request.tables["ejes-origen"]).toEqual({ schema: "s", table: "t" });
       expect(request.connection.host).toBe("h");
-      expect(Object.keys(request.tables)).toHaveLength(9);
+      expect(Object.keys(request.tables)).toHaveLength(10);
     });
   });
 

@@ -15,6 +15,8 @@ const NEW_REF = "777";
 const INTEGER_MATCH_SQL = `${CANONICAL_COLUMN} = CASE WHEN v.old_ref ~ '^(0|-?[1-9][0-9]*)$' THEN (CASE WHEN v.old_ref::numeric BETWEEN -2147483648 AND 2147483647 THEN v.old_ref::integer END) END`;
 const TEXT_MATCH_SQL = `${canonicalTextSql(CANONICAL_COLUMN)} = v.old_ref`;
 const RENUM_ROW_SQL = `INSERT INTO pg_temp."${LOAD_TEMP.RENUM}" (old_id, old_ref, new_ref, points) VALUES (1, $1, $2, 0)`;
+const CREATE_MOVE_SQL = `CREATE TEMP TABLE pg_temp."${LOAD_TEMP.MOVE}" (old_ref text, new_ref text, points bigint)`;
+const MOVE_ROW_SQL = `INSERT INTO pg_temp."${LOAD_TEMP.MOVE}" (old_ref, new_ref, points) VALUES ($1, $2, 0)`;
 
 const OLD_REFS = ["12", "0", "-5", "0012", "abc", "99999999999", "-2147483648", "2147483647", "-2147483649", "2147483648"];
 
@@ -91,6 +93,8 @@ describe.each<AccessPointRefType>(["integer", "varchar"])(
         await database.exec("BEGIN");
         await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.RENUM));
         await database.query(RENUM_ROW_SQL, [oldRef, NEW_REF]);
+        await database.exec(CREATE_MOVE_SQL);
+        await database.query(MOVE_ROW_SQL, [oldRef, NEW_REF]);
 
         const written = await database.query<{ written: number | string }>(buildMovePointsSql(context));
         const moved = await matchingIds(database, TEXT_MATCH_SQL, NEW_REF);
@@ -108,6 +112,8 @@ describe.each<AccessPointRefType>(["integer", "varchar"])(
         await database.exec("BEGIN");
         await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.RENUM));
         await database.query(RENUM_ROW_SQL, [oldRef, NEW_REF]);
+        await database.exec(CREATE_MOVE_SQL);
+        await database.query(MOVE_ROW_SQL, [oldRef, NEW_REF]);
         await database.exec(buildRevertPointsSql(context, ejesLayouts()));
         await database.query(buildMovePointsSql(context));
         const moved = await matchingIds(database, TEXT_MATCH_SQL, NEW_REF);

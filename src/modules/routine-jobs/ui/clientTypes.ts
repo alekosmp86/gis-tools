@@ -141,10 +141,16 @@ export interface EjesStartRequest {
   dryRun: boolean;
 }
 
-/** The real run: the counts and fingerprint of the finished dry-run, and an empty `accepted` (slice 1 accepts nothing else). */
+/** The accepted review rows: plain removals by `reftramo`, merges by their new `reftramo` (the server derives the old ones). */
+export interface EjesAcceptedRequest {
+  plainRemovals: { ref: string }[];
+  merges: { newRef: string }[];
+}
+
+/** The real run: the counts and fingerprint of the finished dry-run, and the rows the user accepted on it. */
 export interface EjesLoadRequest extends EjesStartRequest {
   dryRun: false;
-  accepted: Record<string, never>;
+  accepted: EjesAcceptedRequest;
   summary: EjesSummary;
 }
 

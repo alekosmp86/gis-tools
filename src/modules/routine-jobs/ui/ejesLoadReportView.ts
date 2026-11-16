@@ -1,5 +1,5 @@
 import type { EjesBackup, EjesLoadReport, EjesResult, EjesSkippedRow, EjesSurplusRow } from "../jobs/ejes-calles/types";
-import { EJES_SKIP_KIND_TEXT, EJES_LOAD_DONE_BANNER, EJES_LOAD_UNKNOWN_BANNER, RENUMBER_SKIP_TEXT } from "./ejesLoadTexts";
+import { EJES_SKIP_KIND_TEXT, EJES_LOAD_DONE_BANNER, EJES_LOAD_UNKNOWN_BANNER, SKIP_REASON_TEXT } from "./ejesLoadTexts";
 import type { ReportBannerView } from "./ReportParts";
 import type { ReportRowListRow } from "./ReportRowList";
 import type { RefreshSuggestionView } from "./refreshSuggestionView";
@@ -8,6 +8,7 @@ export interface EjesSkippedView {
   key: string;
   kind: string;
   refs: string;
+  newRefs: string;
   idcalle: string;
   points: string;
   reason: string;
@@ -18,6 +19,8 @@ interface EjesLoadView {
   commitError: string | null;
   counts: ReportRowListRow[];
   skipped: EjesSkippedView[];
+  skippedTotal: number;
+  skippedByReason: ReportRowListRow[];
   surplus: EjesSurplusRow[];
   surplusTotal: number;
   backup: EjesBackup | null;
@@ -35,6 +38,9 @@ const countRowsOf = (load: EjesLoadReport): ReportRowListRow[] => [
   { label: "Tramos actualizados", value: load.counts.updated },
   { label: "Tramos renumerados", value: load.counts.renumbered },
   { label: "Renumerados retenidos", value: load.counts.renumberSkipped },
+  { label: "Uniones aplicadas", value: load.counts.merged },
+  { label: "Tramos quitados", value: load.counts.removed },
+  { label: "Tramos borrados (quitados y unidos)", value: load.counts.deleted },
   { label: "Vías de circulación creadas", value: load.counts.waysCreated },
   { label: "Puntos de acceso movidos", value: load.counts.pointsMoved },
 ];
@@ -43,9 +49,10 @@ const skippedViewOf = (row: EjesSkippedRow, index: number): EjesSkippedView => (
   key: `${index}-${row.kind}`,
   kind: EJES_SKIP_KIND_TEXT[row.kind],
   refs: row.refs.join(" / "),
+  newRefs: row.newRefs.join(" / "),
   idcalle: row.idcalle ?? "sin dato",
   points: String(row.points),
-  reason: row.reason === undefined ? "" : RENUMBER_SKIP_TEXT[row.reason],
+  reason: row.reason === undefined ? "" : SKIP_REASON_TEXT[row.reason],
 });
 
 /** The real run's result block: what the load wrote, what it held back, the backup and the next step. */
@@ -55,6 +62,8 @@ export function buildEjesLoadView(result: EjesResult, load: EjesLoadReport): Eje
     commitError: result.commitError ?? null,
     counts: countRowsOf(load),
     skipped: load.skipped.map(skippedViewOf),
+    skippedTotal: load.skippedTotal,
+    skippedByReason: load.skippedByReason.map((entry) => ({ label: SKIP_REASON_TEXT[entry.reason], value: entry.count })),
     surplus: load.surplus,
     surplusTotal: load.surplusTotal,
     backup: load.backup ?? null,

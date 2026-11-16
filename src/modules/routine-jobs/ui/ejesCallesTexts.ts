@@ -10,4 +10,5 @@ export const EJES_ROLE_TITLES: Record<EjesTableRole, string> = {
   [EJES_TABLE_ROLE.LOCALITIES]: "Localidades INE",
   [EJES_TABLE_ROLE.DEPARTMENTS]: "Departamentos",
   [EJES_TABLE_ROLE.PADRONES]: "Padrones",
+  [EJES_TABLE_ROLE.ADDRESS]: "Direcciones",
 };

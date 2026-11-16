@@ -6,7 +6,14 @@ import { AlertType } from "@/ui-kit/types/ui";
 import type { EjesLoadReport, EjesResult, EjesSurplusRow } from "../jobs/ejes-calles/types";
 import { CollapsibleSection } from "./ActualizarReportSections";
 import { buildEjesLoadView, type EjesSkippedView } from "./ejesLoadReportView";
-import { EJES_LOAD_BACKUP_INSTRUCTIONS, EJES_LOAD_SKIPPED_TITLE, EJES_LOAD_SURPLUS_TITLE, EJES_LOAD_TITLE } from "./ejesLoadTexts";
+import {
+  EJES_LOAD_BACKUP_INSTRUCTIONS,
+  EJES_LOAD_SKIPPED_BY_REASON_TITLE,
+  EJES_LOAD_SKIPPED_TITLE,
+  EJES_LOAD_SURPLUS_TITLE,
+  EJES_LOAD_TITLE,
+  skippedCapTextOf,
+} from "./ejesLoadTexts";
 import { OutcomeBanners, RowsTable, SectionTitle, type TableColumn } from "./ReportParts";
 import { ReportRowList } from "./ReportRowList";
 import { RefreshSuggestion } from "./RefreshSuggestion";
@@ -16,6 +23,7 @@ import sharedStyles from "./CargarPadronesReport.module.css";
 const SKIPPED_COLUMNS: TableColumn<EjesSkippedView>[] = [
   { header: "Tipo", cell: (row) => row.kind },
   { header: "Referencias", cell: (row) => row.refs },
+  { header: "reftramo nuevos", cell: (row) => row.newRefs },
   { header: "Calle", cell: (row) => row.idcalle },
   { header: "Puntos", cell: (row) => row.points },
   { header: "Motivo", cell: (row) => row.reason },
@@ -42,8 +50,13 @@ export const EjesLoadResult: React.FC<EjesLoadResultProps> = ({ result, load }) 
       <section className={sharedStyles.section}>
         <ReportRowList rows={view.counts} />
       </section>
-      {view.skipped.length > 0 && (
-        <CollapsibleSection summary={`${EJES_LOAD_SKIPPED_TITLE} (${view.skipped.length})`}>
+      {view.skippedTotal > 0 && (
+        <CollapsibleSection summary={`${EJES_LOAD_SKIPPED_TITLE} (${view.skippedTotal})`}>
+          <section className={sharedStyles.section}>
+            <SectionTitle>{EJES_LOAD_SKIPPED_BY_REASON_TITLE}</SectionTitle>
+            <ReportRowList rows={view.skippedByReason} />
+          </section>
+          {view.skipped.length < view.skippedTotal && <p>{skippedCapTextOf(view.skipped.length, view.skippedTotal)}</p>}
           <RowsTable columns={SKIPPED_COLUMNS} rows={view.skipped} rowKey={(row) => row.key} />
         </CollapsibleSection>
       )}
@@ -60,6 +73,7 @@ export const EjesLoadResult: React.FC<EjesLoadResultProps> = ({ result, load }) 
             { label: "Tramos insertados", value: view.backup.counts.inserted },
             { label: "Vías insertadas", value: view.backup.counts.ways },
             { label: "Direcciones maestras insertadas", value: view.backup.counts.masters },
+            { label: "Tramos borrados (se restauran)", value: view.backup.counts.deleted },
             { label: "Puntos de acceso movidos", value: view.backup.counts.pointsMoved },
           ]}
           instructions={EJES_LOAD_BACKUP_INSTRUCTIONS}

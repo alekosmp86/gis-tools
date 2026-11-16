@@ -3,7 +3,16 @@ import type { DbConfig } from "@/core/types/db";
 import type { TableLayout } from "../actualizar-padron/domain/layouts";
 import type { StepTiming } from "../cargar-padrones/types";
 import type { WritableTargetLayout } from "../shared/tableResolution";
-import type { EJES_LOAD_ROLES, EJES_SUMMARY_COUNT_KEYS, EjesTableRole, PadronType, RenumberSkipReason, TwinClass } from "./constants";
+import type {
+  EJES_LOAD_ROLES,
+  EJES_SUMMARY_COUNT_KEYS,
+  EjesSkipKind,
+  EjesSkipReason,
+  EjesTableRole,
+  PadronType,
+  RenumberSkipReason,
+  TwinClass,
+} from "./constants";
 
 export interface EjesTableRef {
   schema: string;
@@ -12,11 +21,18 @@ export interface EjesTableRef {
 
 export type EjesTables = Record<EjesTableRole, EjesTableRef>;
 
+/** The review rows the user accepted: plain removals by `reftramo`, merges by the new `reftramo` (the old ones are derived server-side). */
+export interface EjesAccepted {
+  plainRemovals: string[];
+  merges: string[];
+}
+
 export interface EjesParams {
   config: DbConfig;
   tables: EjesTables;
   dryRun: boolean;
   summary?: EjesSummary;
+  accepted?: EjesAccepted;
 }
 
 export type EjesLayouts = Record<EjesTableRole, TableLayout>;
@@ -247,6 +263,9 @@ export interface EjesLoadCounts {
   updated: number;
   renumbered: number;
   renumberSkipped: number;
+  removed: number;
+  merged: number;
+  deleted: number;
   waysCreated: number;
   pointsMoved: number;
 }
@@ -265,18 +284,19 @@ export interface EjesLoadRenumberedRow {
 }
 
 export interface EjesSkippedRow {
-  kind: "split" | "merge" | "removal" | "renumber";
+  kind: EjesSkipKind;
   refs: string[];
+  newRefs: string[];
   idcalle: string | null;
   points: number;
-  reason?: RenumberSkipReason;
+  reason?: EjesSkipReason;
 }
 
 export interface EjesBackup {
   token: string;
   fileName: string;
   bytes: number;
-  counts: { updated: number; inserted: number; ways: number; masters: number; pointsMoved: number };
+  counts: { updated: number; inserted: number; ways: number; masters: number; pointsMoved: number; deleted: number };
 }
 
 export interface EjesNextStep {
@@ -284,11 +304,19 @@ export interface EjesNextStep {
   statement: string;
 }
 
+export interface EjesSkipCount {
+  reason: EjesSkipReason;
+  count: number;
+}
+
 export interface EjesLoadReport {
   counts: EjesLoadCounts;
   surplus: EjesSurplusRow[];
   surplusTotal: number;
   renumbered: EjesLoadRenumberedRow[];
+  /** The first DETAIL_LIST_LIMIT skipped rows; `skippedTotal` and `skippedByReason` count all of them. */
   skipped: EjesSkippedRow[];
+  skippedTotal: number;
+  skippedByReason: EjesSkipCount[];
   backup?: EjesBackup;
 }

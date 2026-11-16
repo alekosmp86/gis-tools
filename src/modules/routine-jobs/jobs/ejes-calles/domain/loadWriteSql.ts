@@ -2,6 +2,7 @@ import { buildAnalyzeStatement } from "@/core/services/sqlStatements";
 import { q } from "../../shared/sqlFragments";
 import {
   ACCESS_POINT_COLUMN,
+  ADDRESS_COLUMN,
   ADDRESS_MASTER_COLUMN,
   CIRCULATION_WAY_COLUMN,
   DISTANCE_DECIMALS,
@@ -9,11 +10,13 @@ import {
   EJES_TABLE_ROLE,
   LOAD_LOCK_TIMEOUT_MS,
   MASTER_URN_PREFIX,
+  PADRON_COLUMN,
   ROAD_SECTION_COLUMN,
 } from "../constants";
 import type { EjesLoadContext, EjesLoadRole } from "../types";
 import { accessPointRefMatchSql } from "./analysisSql";
 import { physicalOf, qualifiedOf, typedAs } from "./loadContext";
+import { col, table } from "./layoutSql";
 import { LOAD_TEMP, tmp } from "./loadSelectionSql";
 
 export const WRITTEN_ALIAS = "written";
@@ -127,13 +130,41 @@ export function buildUpdateGeometrySql(context: EjesLoadContext): string {
 export const buildRenumberSectionsSql = (context: EjesLoadContext): string =>
   sectionUpdate(context, setOf(context, ROAD_SECTION_COLUMN.REFTRAMO, "s.renum_new"), false, "s.renum_new IS NOT NULL");
 
-/** The only write on `access_point`: the points of the old `reftramo` follow their section to the new one. */
+/** The only write on `access_point`: the points of an old `reftramo` follow their section to the new one. */
 export function buildMovePointsSql(context: EjesLoadContext): string {
   const reference = physicalOf(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ROAD_SECTION);
   return counted(
     [
       `UPDATE ${qualifiedOf(context, EJES_TABLE_ROLE.ACCESS_POINT)} AS a SET ${reference} = ${typedAs(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ROAD_SECTION, "n.new_ref")}`,
-      `FROM ${tmp(LOAD_TEMP.RENUM)} AS n WHERE ${accessPointRefMatchSql(context, "n.old_ref")}`,
+      `FROM ${tmp(LOAD_TEMP.MOVE)} AS n WHERE ${accessPointRefMatchSql(context, "n.old_ref")}`,
+    ].join(" ")
+  );
+}
+
+/** Applied removals and merged old sections, deleted only while no access point holds their `reftramo` or their `road_section.id` (the guard aborts the load otherwise). */
+export function buildDeleteSectionsSql(context: EjesLoadContext): string {
+  const section = EJES_TABLE_ROLE.ROAD_SECTION;
+  return counted(
+    [
+      `DELETE FROM ${qualifiedOf(context, section)} AS r USING ${tmp(LOAD_TEMP.DEL)} AS d`,
+      `WHERE r.${physicalOf(context, section, ROAD_SECTION_COLUMN.ID)} = d.road_id`,
+      `AND NOT EXISTS (SELECT 1 FROM ${qualifiedOf(context, EJES_TABLE_ROLE.ACCESS_POINT)} AS a WHERE ${accessPointRefMatchSql(context, "d.ref")})`,
+      `AND NOT EXISTS (SELECT 1 FROM ${qualifiedOf(context, EJES_TABLE_ROLE.ACCESS_POINT)} AS a WHERE ${accessPointRefMatchSql(context, "d.road_id::text")})`,
+    ].join(" ")
+  );
+}
+
+/** The address masters of the deleted sections that no section holds any more. Runs after the section deletes. */
+export function buildDeleteMastersSql(context: EjesLoadContext): string {
+  const master = EJES_TABLE_ROLE.ADDRESS_MASTER;
+  const masterId = physicalOf(context, master, ADDRESS_MASTER_COLUMN.ID);
+  const sectionMaster = physicalOf(context, EJES_TABLE_ROLE.ROAD_SECTION, ROAD_SECTION_COLUMN.ADDRESS_MASTER);
+  return counted(
+    [
+      `DELETE FROM ${qualifiedOf(context, master)} AS m USING (SELECT DISTINCT d.master_id FROM ${tmp(LOAD_TEMP.DEL)} AS d WHERE d.master_deleted) AS d`,
+      `WHERE m.${masterId} = d.master_id AND NOT EXISTS (SELECT 1 FROM ${qualifiedOf(context, EJES_TABLE_ROLE.ROAD_SECTION)} AS r WHERE r.${sectionMaster} = m.${masterId})`,
+      `AND NOT EXISTS (SELECT 1 FROM ${table(context.layouts, "ADDRESS")} AS h WHERE h.${col(context.layouts, "ADDRESS", ADDRESS_COLUMN.ADDRESS_MASTER)} = m.${masterId})`,
+      `AND NOT EXISTS (SELECT 1 FROM ${table(context.layouts, "PADRONES")} AS h WHERE h.${col(context.layouts, "PADRONES", PADRON_COLUMN.ADDRESS_MASTER)} = m.${masterId})`,
     ].join(" ")
   );
 }

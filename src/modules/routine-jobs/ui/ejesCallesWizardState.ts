@@ -3,6 +3,14 @@ import { summaryOf } from "../jobs/ejes-calles/domain/loadMapping";
 import { connectionBlockingReason, type ConnectionField } from "./cargarPadronesWizardState";
 import type { ClientConnection, EjesGeometryMapBase, EjesLoadRequest, EjesStartRequest } from "./clientTypes";
 import { trimConnection } from "./connectionProfiles";
+import {
+  acceptanceAfter,
+  acceptedRequestOf,
+  acceptKeysOf,
+  type EjesAcceptance,
+  type EjesAcceptChange,
+  type EjesAcceptKeys,
+} from "./ejesAccept";
 import { ejesAnalysisKeyOf } from "./ejesCallesAnalysisKey";
 import type { EjesRunSnapshot } from "./ejesCallesRunStore";
 import { RunPhase } from "./jobRunStore";
@@ -31,6 +39,8 @@ export interface EjesWizardState {
   connection: ClientConnection;
   slots: Record<EjesTableRole, EjesSlotDraft>;
   confirmation: EjesConfirmation;
+  /** The rows accepted on the review lists; cleared when the connection or a table changes. */
+  acceptance: EjesAcceptance | null;
 }
 
 export type EjesWizardAction =
@@ -38,6 +48,7 @@ export type EjesWizardAction =
   | { type: "slotSchemaChanged"; key: EjesTableRole; schema: string }
   | { type: "slotTableChosen"; key: EjesTableRole; table: string; valid: boolean }
   | { type: "confirmationChanged"; patch: Partial<EjesConfirmation> }
+  | { type: "acceptChanged"; analysisKey: string; change: EjesAcceptChange }
   | { type: "next" }
   | { type: "back" }
   | { type: "goTo"; step: EjesStep }
@@ -69,6 +80,7 @@ export function initialEjesWizardState(): EjesWizardState {
     connection: { host: "", port: DEFAULT_PORT, db_name: "", user: "", password: "" },
     slots: mapSlots((role) => ({ ...EJES_DEFAULT_TABLES[role], valid: false })),
     confirmation: emptyConfirmation(),
+    acceptance: null,
   };
 }
 
@@ -153,11 +165,23 @@ export function canLoadNow(state: EjesWizardState, snapshot: EjesRunSnapshot): b
   return snapshot.plan.analysisKey === ejesAnalysisKeyOf(toEjesStartRequest(state, { dryRun: true }));
 }
 
-/** The real-run request, its summary taken from the finished dry-run; null while "Cargar ahora" is not allowed. */
+/** The accepted keys of the analysis on screen: none when the acceptance was made for another analysis. */
+/** The finished result the accepted keys were made on: its analysis key and its job id. A new analysis is a new job, so it never matches. */
+export const resultKeyOf = (snapshot: EjesRunSnapshot): string => JSON.stringify([snapshot.plan?.analysisKey ?? null, snapshot.jobId ?? null]);
+
+export const acceptKeysOfState = (state: EjesWizardState, snapshot: EjesRunSnapshot): EjesAcceptKeys =>
+  acceptKeysOf(state.acceptance, resultKeyOf(snapshot));
+
+/** The real-run request, its summary taken from the finished dry-run and its accepted rows; null while "Cargar ahora" is not allowed. */
 export function ejesLoadRequestOf(state: EjesWizardState, snapshot: EjesRunSnapshot): EjesLoadRequest | null {
   const result = snapshot.job?.result;
   if (result === undefined || !canLoadNow(state, snapshot)) return null;
-  return { ...toEjesStartRequest(state, { dryRun: false }), dryRun: false, accepted: {}, summary: summaryOf(result) };
+  return {
+    ...toEjesStartRequest(state, { dryRun: false }),
+    dryRun: false,
+    accepted: acceptedRequestOf(acceptKeysOfState(state, snapshot)),
+    summary: summaryOf(result),
+  };
 }
 
 const indexOfStep = (step: EjesStep): number => STEP_ORDER.indexOf(step);
@@ -187,6 +211,7 @@ const withoutDependents = (state: EjesWizardState): EjesWizardState => ({
   ...state,
   slots: mapSlots((role) => ({ ...state.slots[role], valid: false })),
   confirmation: emptyConfirmation(),
+  acceptance: null,
 });
 
 function connectionReducer(state: EjesWizardState, field: ConnectionField, value: string): EjesWizardState {
@@ -200,14 +225,21 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
     case "connectionChanged":
       return connectionReducer(state, action.field, action.value);
     case "slotSchemaChanged":
-      return { ...state, slots: { ...state.slots, [action.key]: { schema: action.schema, table: "", valid: false } } };
+      return {
+        ...state,
+        slots: { ...state.slots, [action.key]: { schema: action.schema, table: "", valid: false } },
+        acceptance: null,
+      };
     case "slotTableChosen":
       return {
         ...state,
         slots: { ...state.slots, [action.key]: { ...state.slots[action.key], table: action.table, valid: action.valid } },
+        acceptance: null,
       };
     case "confirmationChanged":
       return { ...state, confirmation: { ...state.confirmation, ...action.patch } };
+    case "acceptChanged":
+      return { ...state, acceptance: acceptanceAfter(state.acceptance, action.analysisKey, action.change) };
     case "next":
       return canContinue(state) ? moveTo(state, stepAfter(state.step, 1)) : state;
     case "back":
@@ -215,7 +247,12 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
     case "goTo":
       return moveTo(state, action.step);
     case "runStarted":
-      return { ...state, step: EjesStep.RESULT, confirmation: action.dryRun ? state.confirmation : emptyConfirmation() };
+      return {
+        ...state,
+        step: EjesStep.RESULT,
+        confirmation: action.dryRun ? state.confirmation : emptyConfirmation(),
+        acceptance: action.dryRun ? null : state.acceptance,
+      };
     case "reset":
       return initialEjesWizardState();
   }

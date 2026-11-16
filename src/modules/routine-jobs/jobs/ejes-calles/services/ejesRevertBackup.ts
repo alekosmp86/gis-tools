@@ -100,6 +100,7 @@ async function writeAndRegister(
       ways: counts.waysCreated,
       masters: counts.inserted,
       pointsMoved: counts.pointsMoved,
+      deleted: counts.deleted,
     },
   };
 }

@@ -14,6 +14,8 @@ import {
   blockingReason,
   canAnalyzeNow,
   canLoadNow,
+  acceptKeysOfState,
+  resultKeyOf,
   ejesGeometryMapBaseOf,
   ejesLoadRequestOf,
   ejesWizardReducer,
@@ -142,6 +144,10 @@ export const EjesCallesWizard: React.FC = () => {
             nowMs={nowMs}
             mapBase={ejesGeometryMapBaseOf(state)}
             canLoad={canLoadNow(state, snapshot)}
+            accept={{
+              keys: acceptKeysOfState(state, snapshot),
+              onChange: (change) => dispatch({ type: "acceptChanged", analysisKey: resultKeyOf(snapshot), change }),
+            }}
             onLoad={loadNow}
             onNewRun={newRun}
             onBackToReview={() => dispatch({ type: "goTo", step: EjesStep.REVIEW })}

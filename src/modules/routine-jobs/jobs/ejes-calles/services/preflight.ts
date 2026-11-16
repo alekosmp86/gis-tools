@@ -57,9 +57,9 @@ export async function ejesWritePrivilegeInfo(session: CatalogQuerySession, resol
 }
 
 const LOAD_PRIVILEGES: Record<EjesLoadRole, readonly string[]> = {
-  [EJES_TABLE_ROLE.ROAD_SECTION]: ["SELECT", "INSERT", "UPDATE"],
+  [EJES_TABLE_ROLE.ROAD_SECTION]: ["SELECT", "INSERT", "UPDATE", "DELETE"],
   [EJES_TABLE_ROLE.CIRCULATION_WAY]: ["SELECT", "INSERT"],
-  [EJES_TABLE_ROLE.ADDRESS_MASTER]: ["SELECT", "INSERT"],
+  [EJES_TABLE_ROLE.ADDRESS_MASTER]: ["SELECT", "INSERT", "DELETE"],
   [EJES_TABLE_ROLE.ACCESS_POINT]: ["SELECT", "UPDATE"],
 };
 

@@ -62,7 +62,7 @@ const renumberSkippedOf = (row: Row): EjesRenumberSkippedRow => ({
 });
 
 const removalOf = (row: Row): EjesRemovalRow => ({
-  ref: String(row.ref),
+  ref: textOf(row.ref) ?? "",
   idcalle: textOf(row.idcalle),
   points: numberOf(row.points),
 });

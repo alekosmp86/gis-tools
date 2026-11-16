@@ -14,12 +14,21 @@ import { physicalOf, qualifiedOf } from "./loadContext";
 import { CHANGED_CONDITION, createTemp, LOAD_TEMP, tmp } from "./loadSelectionSql";
 
 const REVERT_TEMP = {
+  RESTORED_MASTERS: "ej_rev_masters",
+  RESTORED_SECTIONS: "ej_rev_restore",
   SECTIONS: "ej_rev_sections",
   POINTS: "ej_rev_points",
   INSERTS: "ej_rev_inserts",
 } as const;
 
-export const REVERT_ORDER: readonly string[] = [REVERT_TEMP.SECTIONS, REVERT_TEMP.POINTS, REVERT_TEMP.INSERTS];
+/** Deleted masters come back before the sections that point at them; the points follow the restored sections, the inserted rows go last. */
+export const REVERT_ORDER: readonly string[] = [
+  REVERT_TEMP.RESTORED_MASTERS,
+  REVERT_TEMP.RESTORED_SECTIONS,
+  REVERT_TEMP.SECTIONS,
+  REVERT_TEMP.POINTS,
+  REVERT_TEMP.INSERTS,
+];
 
 export const REVERT_COLUMNS = { CURSOR: "cursor", LINE: "line" } as const;
 
@@ -86,11 +95,51 @@ export function buildRevertPointsSql(context: EjesLoadContext, layouts: EjesLayo
     [
       `SELECT (row_number() OVER (ORDER BY g.old_value))::bigint AS n, ${formatOf("UPDATE %s SET %s = %L WHERE %s IN (%s);", args)} AS line FROM (`,
       `SELECT ${reference}::text AS old_value, string_agg(format('%L', ${point(ACCESS_POINT_COLUMN.ID)}), ', ' ORDER BY ${point(ACCESS_POINT_COLUMN.ID)}) AS ids`,
-      `FROM ${table(layouts, "ACCESS_POINT")} AS a JOIN ${tmp(LOAD_TEMP.RENUM)} AS n ON ${accessPointRefMatchSql(context, "n.old_ref")} GROUP BY ${reference}::text`,
+      `FROM ${table(layouts, "ACCESS_POINT")} AS a JOIN ${tmp(LOAD_TEMP.MOVE)} AS n ON ${accessPointRefMatchSql(context, "n.old_ref")} GROUP BY ${reference}::text`,
       ") AS g",
     ].join(" ")
   );
 }
+
+/**
+ * Re-inserts the rows a load deletes, with their original ids: each row is read as JSON before the first write and rebuilt by
+ * `jsonb_populate_record`, so every column comes back as it was.
+ */
+function buildRestoreRowsSql(context: EjesLoadContext, role: EjesLoadRole, idLogical: string, sourceSql: string, name: string): string {
+  const target = literal(qualifiedOf(context, role));
+  const id = physicalOf(context, role, idLogical);
+  const statement = formatOf("INSERT INTO %s OVERRIDING SYSTEM VALUE SELECT * FROM jsonb_populate_record(NULL::%s, %L);", [
+    target,
+    target,
+    "x.row_json",
+  ]);
+  return createTemp(
+    name,
+    [
+      `SELECT (row_number() OVER (ORDER BY x.row_id))::bigint AS n, ${statement} AS line`,
+      `FROM (SELECT t.${id} AS row_id, to_jsonb(t)::text AS row_json FROM ${qualifiedOf(context, role)} AS t`,
+      `WHERE t.${id} IN (${sourceSql})) AS x`,
+    ].join(" ")
+  );
+}
+
+export const buildRevertMastersSql = (context: EjesLoadContext): string =>
+  buildRestoreRowsSql(
+    context,
+    EJES_TABLE_ROLE.ADDRESS_MASTER,
+    ADDRESS_MASTER_COLUMN.ID,
+    `SELECT d.master_id FROM ${tmp(LOAD_TEMP.DEL)} AS d WHERE d.master_deleted`,
+    REVERT_TEMP.RESTORED_MASTERS
+  );
+
+export const buildRevertRestoredSectionsSql = (context: EjesLoadContext): string =>
+  buildRestoreRowsSql(
+    context,
+    EJES_TABLE_ROLE.ROAD_SECTION,
+    ROAD_SECTION_COLUMN.ID,
+    `SELECT d.road_id FROM ${tmp(LOAD_TEMP.DEL)} AS d`,
+    REVERT_TEMP.RESTORED_SECTIONS
+  );
 
 function deleteChunksSql(part: number, context: EjesLoadContext, role: EjesLoadRole, source: string, idExpression: string): string {
   return [
