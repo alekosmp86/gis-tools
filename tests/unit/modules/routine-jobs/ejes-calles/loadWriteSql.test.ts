@@ -200,12 +200,20 @@ describe("ejes load write SQL (EJL-2, EJL-5, EJL-8, EJL-9, EJL-10, EJL-11)", () 
       expect(sql).toContain("(array_agg(c.font_id ORDER BY length(c.ref), c.ref))[1]");
     });
 
-    it("should only select ways whose (idcalle, name) pair does not exist, for NEW sections", () => {
+    it("should only select ways whose (idcalle, name) pair does not exist, for NEW sections and for sections that moved to another idcalle (EJL-5, EJL-18)", () => {
       const sql = buildNewWaysSql(ejesLayouts());
 
       expect(sql).toContain("NOT EXISTS");
       expect(sql).toContain('"cw_pairs"');
-      expect(sql).toContain('JOIN pg_temp."ej_new"');
+      expect(sql).toContain('EXISTS (SELECT 1 FROM pg_temp."ej_new" AS n WHERE n.copy_id = c.copy_id)');
+      expect(sql).toContain('EXISTS (SELECT 1 FROM pg_temp."ej_state" AS s WHERE s.copy_id = c.copy_id AND s.idcalle_changed)');
+    });
+
+    it("should source the way of a moved section from every kept copy, not only from the NEW ones (EJL-18)", () => {
+      const sql = buildNewWaysSql(ejesLayouts());
+
+      expect(sql).toContain('FROM pg_temp."ej_copy" AS c');
+      expect(sql).toMatch(/WHERE \(EXISTS \(SELECT 1 FROM pg_temp\."ej_new"[^)]*\)\s*OR EXISTS \(SELECT 1 FROM pg_temp\."ej_state"/);
     });
 
     it("should never emit an update or delete on circulation_way", () => {
@@ -273,10 +281,10 @@ describe("ejes load write SQL (EJL-2, EJL-5, EJL-8, EJL-9, EJL-10, EJL-11)", () 
 
   describe("access_point (EJL-10, EJL-11)", () => {
     it("should move the points of the old reftramo to the new one by updating id_road_section only", () => {
-      const sql = buildMovePointsSql(contextOf(), ejesLayouts());
+      const sql = buildMovePointsSql(contextOf());
 
       expect(sql).toMatch(/UPDATE "carto"\."access_point" AS a SET "id_road_section" = \(n\.new_ref\)::character varying/);
-      expect(sql).toContain("= n.old_ref");
+      expect(sql).toContain("FROM pg_temp.\"ej_renum\" AS n WHERE CASE WHEN NULLIF(btrim(a.\"id_road_section\"::text), '') ~ '^[0-9]+$' THEN (NULLIF(btrim(a.\"id_road_section\"::text), ''))::numeric::text ELSE NULLIF(btrim(a.\"id_road_section\"::text), '') END = n.old_ref");
       expect(sql).not.toMatch(/\bDELETE\b|\bINSERT\b/i);
       expect(sql.match(/SET /g)).toHaveLength(1);
     });

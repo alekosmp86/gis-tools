@@ -1,6 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { EJES_DEFAULT_TABLES, EJES_LOAD_ROLES, EJES_REQUIRED_COLUMNS_BY_ROLE } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import { ejesLoadContextOf } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadContext";
+import { summaryOf } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadMapping";
 import type { RunSession } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
 import type { WritableTargetLayout } from "@/modules/routine-jobs/jobs/shared/tableResolution";
 import type { EjesLoadContext, EjesParams, EjesSummary } from "@/modules/routine-jobs/jobs/ejes-calles/types";
@@ -57,7 +58,10 @@ const POSTGIS_STUBS_SQL = `
   CREATE AGGREGATE ST_Union(geometry) (SFUNC = hull_step, STYPE = geometry);
 `;
 
-const SCHEMA_SQL = `
+/** The type of `access_point.id_road_section`: the production table stores the reference as text; `integer` is the typed variant. */
+export type AccessPointRefType = "varchar" | "integer";
+
+const schemaSqlOf = (accessPointRefType: AccessPointRefType): string => `
   CREATE SCHEMA bdj_carto;
   CREATE SCHEMA carto;
   CREATE TABLE bdj_carto.ide_ejesviacirculacion (
@@ -72,7 +76,7 @@ const SCHEMA_SQL = `
   );
   CREATE TABLE carto.addresses_master (addresses_master_id serial PRIMARY KEY, urn text, latitud double precision, longitud double precision);
   CREATE TABLE carto.road_section_vertices_pgr (id serial PRIMARY KEY, the_geom geometry);
-  CREATE TABLE carto.access_point (id serial PRIMARY KEY, id_road_section varchar);
+  CREATE TABLE carto.access_point (id serial PRIMARY KEY, id_road_section ${accessPointRefType});
   CREATE TABLE bdj_carto.ine_localidades_pg (cloc_iso text, nomloc text, geom geometry);
   CREATE TABLE carto.mv_country_province (iso_code_dpto text, name_dpto text);
   CREATE TABLE carto.padron (type_padron text, geometry geometry);
@@ -101,10 +105,10 @@ export const sessionOn = (database: PGlite, log: SqlLog = [], failOn?: FailRule)
   async close() {},
 });
 
-export async function createEjesDatabase(PGliteClass: typeof PGlite): Promise<PGlite> {
+export async function createEjesDatabase(PGliteClass: typeof PGlite, accessPointRefType: AccessPointRefType = "varchar"): Promise<PGlite> {
   const database = new PGliteClass();
   await database.exec(POSTGIS_STUBS_SQL);
-  await database.exec(SCHEMA_SQL);
+  await database.exec(schemaSqlOf(accessPointRefType));
   return database;
 }
 
@@ -151,9 +155,7 @@ export const paramsWith = (summary: EjesSummary | undefined): EjesParams => ({
 });
 
 export async function summaryOn(database: PGlite): Promise<EjesSummary> {
-  const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
-  const { newSections, unchanged, attr, geom, both, removed, splits, merges, plainRemovals, renumbered } = analysis.counts;
-  return { counts: { newSections, unchanged, attr, geom, both, removed, splits, merges, plainRemovals, renumbered } };
+  return summaryOf(await readAnalysis(sessionOn(database), ejesLayouts()));
 }
 
 export async function snapshotOf(database: PGlite): Promise<Record<string, Row[]>> {
@@ -196,7 +198,7 @@ export async function insertStaging(database: PGlite, rows: readonly StagingRow[
 
 export interface SectionSeed {
   id?: number;
-  ref: number;
+  ref: number | null;
   calle: number;
   geom: string;
   type?: number;

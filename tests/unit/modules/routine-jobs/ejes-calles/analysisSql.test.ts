@@ -10,6 +10,15 @@ import { GEOMETRY_TOLERANCE_M, RURAL_LOCALITY_SUFFIX, TWIN_NEAR_MIN_LENGTH_M, TW
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { ejesLayouts } from "./ejesFixtures";
 
+const CANONICAL_REFTRAMO =
+  "CASE WHEN NULLIF(btrim(s.\"reftramo\"::text), '') ~ '^[0-9]+$' THEN (NULLIF(btrim(s.\"reftramo\"::text), ''))::numeric::text ELSE NULLIF(btrim(s.\"reftramo\"::text), '') END";
+
+const positionOf = (text: string, fragment: string): number => {
+  const index = text.indexOf(fragment);
+  expect(index, `missing ${fragment}`).toBeGreaterThanOrEqual(0);
+  return index;
+};
+
 describe("buildEjesAnalysisSql", () => {
   const sql = buildEjesAnalysisSql(ejesLayouts());
 
@@ -174,8 +183,8 @@ describe("buildEjesAnalysisSql", () => {
       expect(sql).toContain("AS dept_code");
     });
 
-    it("should compute it only for NEW and GEOM sections", () => {
-      expect(sql).toContain("WHERE c.is_new OR c.geom_changed");
+    it("should compute it only for NEW and GEOM sections, leaving out the NEW reftramos held by a skipped renumber (EJL-12)", () => {
+      expect(sql).toContain('WHERE (c.is_new AND c.ref NOT IN (SELECT new_ref FROM "renum_skipped")) OR c.geom_changed');
     });
 
     it("should count with_locality, only_department and without_code", () => {
@@ -234,9 +243,9 @@ describe("buildEjesAnalysisSql", () => {
   });
 
   describe("ET-2 twin group", () => {
-    it("should read only staging rows with a non-empty geometry and an integer reftramo, grouped by the trimmed reftramo", () => {
+    it("should read only staging rows with a non-empty geometry and an integer reftramo, grouped by the canonical reftramo (EJL-19)", () => {
       expect(sql).toContain("twin_raw");
-      expect(sql).toContain("NULLIF(btrim(s.\"reftramo\"::text), '') AS ref");
+      expect(sql).toContain(`${CANONICAL_REFTRAMO} AS ref,`);
       expect(sql).toContain('s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom")');
       expect(sql).toMatch(/NULLIF\(btrim\(s\."reftramo"::text\), ''\) ~ '\^\[0-9\]\+\$'/);
       expect(sql).toContain('FROM "twin_raw" AS t GROUP BY t.ref');
@@ -351,7 +360,7 @@ describe("buildEjesAnalysisSql", () => {
       expect(stgKeys).not.toContain("ST_IsValid");
       expect(stgKeys).not.toContain("ST_IsEmpty");
       expect(stgKeys).not.toContain("geom");
-      expect(stgKeys).toContain("WHERE NULLIF(btrim(s.\"reftramo\"::text), '') IS NOT NULL");
+      expect(stgKeys).toContain(`WHERE ${CANONICAL_REFTRAMO} IS NOT NULL`);
     });
 
     it("should still compare the current sections with stg_keys when looking for removed ones", () => {
@@ -494,5 +503,140 @@ describe("buildEjesAnalysisSql", () => {
     delete layouts["ejes-localidades"].columns.cloc_iso;
 
     expect(() => buildEjesAnalysisSql(layouts)).toThrow(/cloc_iso/);
+  });
+});
+
+const canonicalOf = (column: string): string => {
+  const text = `NULLIF(btrim(${column}::text), '')`;
+  return `CASE WHEN ${text} ~ '^[0-9]+$' THEN (${text})::numeric::text ELSE ${text} END`;
+};
+
+describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20, EJL-23)", () => {
+  const SINKS = { renumbered: 'pg_temp."ej_renum"', skipped: 'pg_temp."ej_held"' };
+  const sql = buildEjesAnalysisSql(ejesLayouts());
+  const withSinks = buildEjesAnalysisSql(ejesLayouts(), SINKS);
+
+  describe("CTE order: twins, then the kept copies, then the renumber (EJL-23)", () => {
+    it("should define twins before copy_raw, copy_kept and copy_refs, and those before the renumber candidates", () => {
+      const order = [
+        '"twins" AS (',
+        '"copy_raw" AS (',
+        '"copy_kept" AS (',
+        '"copy_refs" AS (',
+        '"renum_cand" AS (',
+        '"renum_status" AS (',
+        '"renumbered" AS (',
+        '"renum_skipped" AS (',
+        '"removed_rest" AS (',
+        '"new_rest" AS (',
+        '"splits" AS (',
+      ].map((fragment) => positionOf(sql, fragment));
+
+      expect([...order].sort((first, second) => first - second)).toEqual(order);
+    });
+
+    it("should build copy_raw one row per kept copy of reftramo, localidad and departamento, with canonical reftramo and idcalle", () => {
+      expect(sql).toContain(
+        `"copy_raw" AS (SELECT DISTINCT ON (raw.ref, raw.localidad, raw.departamento) raw.* FROM (SELECT ${CANONICAL_REFTRAMO} AS ref, ${canonicalOf('s."idcalle"')} AS idcalle,`
+      );
+    });
+
+    it("should keep a copy unless the twin rules drop its locality (copy_kept reads the twins)", () => {
+      expect(sql).toContain(
+        '"copy_kept" AS (SELECT r.* FROM "copy_raw" AS r LEFT JOIN "twins" AS w ON w.ref = r.ref WHERE w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities)))'
+      );
+    });
+
+    it("should count the kept copies per reftramo with one GROUP BY, the count the renumber reads", () => {
+      expect(sql).toContain('"copy_refs" AS (SELECT k.ref, count(*) AS copies FROM "copy_kept" AS k GROUP BY k.ref)');
+      expect(sql).toContain('LEFT JOIN "copy_refs" AS kc ON kc.ref = c.new_ref');
+      expect(sql).not.toMatch(/SELECT count\(\*\) FROM "copy_kept" AS k WHERE k\.ref = c\.new_ref/);
+    });
+  });
+
+  describe("sinks for the real run (EJL-23)", () => {
+    it("should write the renumbered pairs into the sink table by a data-modifying CTE", () => {
+      expect(withSinks).toContain(
+        'INSERT INTO pg_temp."ej_renum" (old_id, old_ref, new_ref, points) SELECT r.old_id, r.old_ref, r.new_ref, r.points FROM "renumbered" AS r RETURNING 1'
+      );
+    });
+
+    it("should write the skipped pairs into the second sink table by a data-modifying CTE", () => {
+      expect(withSinks).toContain(
+        'INSERT INTO pg_temp."ej_held" (old_id, old_ref, new_ref, points) SELECT r.old_id, r.old_ref, r.new_ref, r.points FROM "renum_skipped" AS r RETURNING 1'
+      );
+    });
+
+    it("should run the sinks right after the renumber, before the splits", () => {
+      expect(positionOf(withSinks, '"renum_sink" AS (')).toBeGreaterThan(positionOf(withSinks, '"renum_skipped" AS ('));
+      expect(positionOf(withSinks, '"held_sink" AS (')).toBeGreaterThan(positionOf(withSinks, '"renum_sink" AS ('));
+      expect(positionOf(withSinks, '"splits" AS (')).toBeGreaterThan(positionOf(withSinks, '"held_sink" AS ('));
+    });
+
+    it("should write nothing when no sinks are given, so the dry run stays read-only", () => {
+      expect(sql).not.toMatch(/\bINSERT\b/);
+      expect(sql).not.toContain("RETURNING 1");
+    });
+
+    it("should write only the two sink tables, and read the counts from the CTEs, not from the sinks", () => {
+      expect(withSinks.match(/\bINSERT INTO\b/g)).toHaveLength(2);
+      expect(withSinks).toContain('AS "renumbered"');
+      expect(withSinks).not.toMatch(/FROM pg_temp\."ej_renum"/);
+    });
+  });
+
+  describe("held renumber pairs (EJL-12)", () => {
+    it("should leave a held old section out of the removed count and out of the removed rest", () => {
+      expect(sql).toContain('WHERE id NOT IN (SELECT old_id FROM "renum_skipped")) AS "removed"');
+      expect(sql).toContain('"removed_rest" AS (SELECT r.* FROM "removed" AS r WHERE r.id NOT IN (SELECT old_id FROM "renumbered") AND r.id NOT IN (SELECT old_id FROM "renum_skipped"))');
+    });
+
+    it("should leave a held new reftramo out of the new section count, the new streets and the new rest", () => {
+      expect(sql).toContain('WHERE is_new AND ref NOT IN (SELECT new_ref FROM "renum_skipped")) AS "new_sections"');
+      expect(sql).toContain('FROM "classified" AS c WHERE c.is_new AND c.ref NOT IN (SELECT new_ref FROM "renum_skipped") AND NOT EXISTS');
+      expect(sql).toContain('"new_rest" AS (SELECT n.* FROM "new_sections" AS n WHERE n.ref NOT IN (SELECT new_ref FROM "renumbered") AND n.ref NOT IN (SELECT new_ref FROM "renum_skipped"))');
+    });
+  });
+
+  describe("canonical references (EJL-19)", () => {
+    it("should compare the access point reference in canonical form", () => {
+      expect(sql).toContain(`${canonicalOf('a."id_road_section"')} AS ref, count(*) AS points FROM "carto"."access_point" AS a`);
+    });
+
+    it("should compare the section reference, idcalle and the circulation way idcalle in canonical form", () => {
+      expect(sql).toContain(`${canonicalOf('r."reftramo_ideuy"')} AS ref,`);
+      expect(sql).toContain(`${canonicalOf('r."id_circulation_way"')} AS idcalle,`);
+      expect(sql).toContain(`${canonicalOf('w."id_calle"')} AS idcalle, `);
+    });
+
+    it("should read the staging row used for classification by its full content, so the choice is deterministic", () => {
+      expect(sql).toContain(
+        "ORDER BY raw.ref, raw.idcalle, raw.nombre, raw.tipo, raw.fuente, raw.departamento, raw.localidad, ST_AsEWKB(raw.geom)"
+      );
+    });
+  });
+
+  describe("staging fingerprint (EJL-20)", () => {
+    it("should select the row count and the digest of the staging as the summary columns", () => {
+      expect(sql).toContain('(SELECT row_count FROM "staging_fp") AS "staging_rows"');
+      expect(sql).toContain('(SELECT digest FROM "staging_fp") AS "staging_digest"');
+    });
+
+    it("should count every staging row, not only the ones the analysis reads", () => {
+      expect(sql).toContain('SELECT count(*) AS row_count, COALESCE(md5(string_agg(f.digest, \'\' ORDER BY f.digest)), \'\') AS digest');
+      expect(sql).toContain('FROM (SELECT md5(concat_ws(\',\', ') ;
+      expect(sql).toContain('FROM "bdj_carto"."ide_ejesviacirculacion" AS s) AS f');
+    });
+
+    it.each(["reftramo", "idcalle", "nombre", "tipo_vialidad", "fuente", "departamento", "localidad"])(
+      "should digest the %s field with NULLs distinguished",
+      (field) => {
+        expect(sql).toContain(`quote_nullable(s."${field}"::text)`);
+      }
+    );
+
+    it("should digest the geometry by the md5 of its EWKB, NULLs distinguished", () => {
+      expect(sql).toContain('quote_nullable(md5(ST_AsEWKB(s."geom")))');
+    });
   });
 });

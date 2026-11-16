@@ -1,5 +1,15 @@
-import type { EjesInvalidGeometryRow, EjesMergeRow, EjesNewStreetRow, EjesRemovalRow, EjesRenumberedRow, EjesSplitRow, EjesTwinRow } from "../jobs/ejes-calles/types";
+import type {
+  EjesInvalidGeometryRow,
+  EjesMergeRow,
+  EjesNewStreetRow,
+  EjesRemovalRow,
+  EjesRenumberedRow,
+  EjesRenumberSkippedRow,
+  EjesSplitRow,
+  EjesTwinRow,
+} from "../jobs/ejes-calles/types";
 import { coverageTextOf, metersTextOf, twinDecisionTextOf, twinRowCaseTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
+import { RENUMBER_SKIP_TEXT } from "./ejesLoadTexts";
 import type { TableColumn } from "./ReportParts";
 import { textOrNoData } from "./reportFormat";
 
@@ -32,6 +42,14 @@ export const RENUMBERED_COLUMNS: TableColumn<EjesRenumberedRow>[] = [
   { header: "Puntos de acceso", cell: (row) => String(row.points) },
   { header: "Largo anterior (m)", cell: (row) => metersTextOf(row.oldLength) },
   { header: "Largo nuevo (m)", cell: (row) => metersTextOf(row.newLength) },
+];
+
+export const RENUMBER_HELD_COLUMNS: TableColumn<EjesRenumberSkippedRow>[] = [
+  { header: "reftramo anterior", cell: (row) => row.oldRef },
+  { header: "reftramo nuevo", cell: (row) => row.newRef },
+  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
+  { header: "Puntos de acceso", cell: (row) => String(row.points) },
+  { header: "Motivo", cell: (row) => RENUMBER_SKIP_TEXT[row.reason] },
 ];
 
 export const REMOVAL_COLUMNS: TableColumn<EjesRemovalRow>[] = [

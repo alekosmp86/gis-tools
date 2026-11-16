@@ -12,11 +12,11 @@ import {
 } from "../constants";
 import type { EjesLayouts } from "../types";
 import { col, countOf, listOf, table, trimmed } from "./layoutSql";
-import { INTEGER_PATTERN, validGeometrySql } from "./stagingSql";
+import { canonicalTextSql, INTEGER_PATTERN, validGeometrySql } from "./stagingSql";
 
 export function twinGroupCtes(layouts: EjesLayouts): string[] {
   const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
-  const reference = trimmed(column(EJES_STAGING_COLUMN.REFTRAMO));
+  const reference = canonicalTextSql(column(EJES_STAGING_COLUMN.REFTRAMO));
   const geometry = column(EJES_STAGING_COLUMN.GEOM);
   return [
     cte(
@@ -24,7 +24,7 @@ export function twinGroupCtes(layouts: EjesLayouts): string[] {
       [
         "SELECT",
         `${reference} AS ref,`,
-        `${trimmed(column(EJES_STAGING_COLUMN.IDCALLE))} AS idcalle,`,
+        `${canonicalTextSql(column(EJES_STAGING_COLUMN.IDCALLE))} AS idcalle,`,
         `${trimmed(column(EJES_STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
         `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `ST_SetSRID(${geometry}, ${EJES_SRID}) AS geom`,

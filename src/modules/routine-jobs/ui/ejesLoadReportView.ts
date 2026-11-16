@@ -1,0 +1,63 @@
+import type { EjesBackup, EjesLoadReport, EjesResult, EjesSkippedRow, EjesSurplusRow } from "../jobs/ejes-calles/types";
+import { EJES_SKIP_KIND_TEXT, EJES_LOAD_DONE_BANNER, EJES_LOAD_UNKNOWN_BANNER, RENUMBER_SKIP_TEXT } from "./ejesLoadTexts";
+import type { ReportBannerView } from "./ReportParts";
+import type { ReportRowListRow } from "./ReportRowList";
+import type { RefreshSuggestionView } from "./refreshSuggestionView";
+
+export interface EjesSkippedView {
+  key: string;
+  kind: string;
+  refs: string;
+  idcalle: string;
+  points: string;
+  reason: string;
+}
+
+interface EjesLoadView {
+  banners: ReportBannerView[];
+  commitError: string | null;
+  counts: ReportRowListRow[];
+  skipped: EjesSkippedView[];
+  surplus: EjesSurplusRow[];
+  surplusTotal: number;
+  backup: EjesBackup | null;
+  nextStep: RefreshSuggestionView | null;
+}
+
+const bannersOf = (result: EjesResult): ReportBannerView[] => {
+  if (result.outcomeUnknown) return [{ kind: "unknown", text: EJES_LOAD_UNKNOWN_BANNER }];
+  if (result.targetModified) return [{ kind: "done", text: EJES_LOAD_DONE_BANNER }];
+  return [];
+};
+
+const countRowsOf = (load: EjesLoadReport): ReportRowListRow[] => [
+  { label: "Tramos insertados", value: load.counts.inserted },
+  { label: "Tramos actualizados", value: load.counts.updated },
+  { label: "Tramos renumerados", value: load.counts.renumbered },
+  { label: "Renumerados retenidos", value: load.counts.renumberSkipped },
+  { label: "Vías de circulación creadas", value: load.counts.waysCreated },
+  { label: "Puntos de acceso movidos", value: load.counts.pointsMoved },
+];
+
+const skippedViewOf = (row: EjesSkippedRow, index: number): EjesSkippedView => ({
+  key: `${index}-${row.kind}`,
+  kind: EJES_SKIP_KIND_TEXT[row.kind],
+  refs: row.refs.join(" / "),
+  idcalle: row.idcalle ?? "sin dato",
+  points: String(row.points),
+  reason: row.reason === undefined ? "" : RENUMBER_SKIP_TEXT[row.reason],
+});
+
+/** The real run's result block: what the load wrote, what it held back, the backup and the next step. */
+export function buildEjesLoadView(result: EjesResult, load: EjesLoadReport): EjesLoadView {
+  return {
+    banners: bannersOf(result),
+    commitError: result.commitError ?? null,
+    counts: countRowsOf(load),
+    skipped: load.skipped.map(skippedViewOf),
+    surplus: load.surplus,
+    surplusTotal: load.surplusTotal,
+    backup: load.backup ?? null,
+    nextStep: result.nextStep ?? null,
+  };
+}

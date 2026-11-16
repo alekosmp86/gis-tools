@@ -12,7 +12,7 @@ import { buildEjesReportView } from "@/modules/routine-jobs/ui/ejesCallesReportV
 interface Overrides {
   counts?: Record<string, number>;
   staging?: Record<string, unknown>;
-  lists?: Partial<Record<"splits" | "merges" | "renumbered" | "twins" | "plainRemovals" | "newStreets" | "attrChanges", unknown[]>>;
+  lists?: Partial<Record<"splits" | "merges" | "renumbered" | "renumberSkipped" | "twins" | "plainRemovals" | "newStreets" | "attrChanges", unknown[]>>;
   invalid?: unknown[];
 }
 
@@ -62,6 +62,7 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
       renumbered: 0,
       renumberedWithPoints: 0,
       renumberedPoints: 0,
+      renumberSkipped: 0,
       ...counts,
     },
     cloc: { withLocality: 0, onlyDepartment: 0, withoutCode: 0 },
@@ -72,6 +73,7 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
     attrChanges: [],
     twins: [],
     renumbered: [],
+    renumberSkipped: [],
     ...lists,
     blockers: [],
     privilegeInfo: [],
@@ -82,15 +84,16 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
 const row = (n: number) => ({ ref: String(n) });
 
 describe("stripOf", () => {
-  it("should return nine items in the fixed order", () => {
+  it("should return ten items in the fixed order", () => {
     const strip = stripOf(resultOf());
 
-    expect(strip).toHaveLength(9);
+    expect(strip).toHaveLength(10);
     expect(strip.map((item) => item.label)).toEqual([
       "Filas del archivo",
       "Calles nuevas",
       "Cambios de atributos",
       "Renumerados",
+      "Renumerados retenidos",
       "Divididos",
       "Unidos",
       "Sin reemplazo",
@@ -103,7 +106,7 @@ describe("stripOf", () => {
     const strip = stripOf(
       resultOf({
         staging: { rows: 500, invalidGeometryRows: 3 },
-        counts: { newSections: 20, attr: 4, renumbered: 5, splits: 6, merges: 7, plainRemovals: 8, twins: 9 },
+        counts: { newSections: 20, attr: 4, renumbered: 5, renumberSkipped: 11, splits: 6, merges: 7, plainRemovals: 8, twins: 9 },
       })
     );
     const byLabel = Object.fromEntries(strip.map((item) => [item.label, item]));
@@ -111,6 +114,7 @@ describe("stripOf", () => {
     expect(byLabel["Filas del archivo"]).toMatchObject({ value: 500, list: null });
     expect(byLabel["Cambios de atributos"]).toMatchObject({ value: 4, list: EJES_LIST.ATTR_CHANGES });
     expect(byLabel["Renumerados"]).toMatchObject({ value: 5, list: EJES_LIST.RENUMBERED });
+    expect(byLabel["Renumerados retenidos"]).toMatchObject({ value: 11, list: EJES_LIST.RENUMBER_HELD });
     expect(byLabel["Divididos"]).toMatchObject({ value: 6, list: EJES_LIST.SPLITS });
     expect(byLabel["Unidos"]).toMatchObject({ value: 7, list: EJES_LIST.MERGES });
     expect(byLabel["Sin reemplazo"]).toMatchObject({ value: 8, list: EJES_LIST.PLAIN_REMOVALS });
@@ -162,7 +166,7 @@ describe("defaultOpenListOf", () => {
   });
 
   it("should prefer twins when it has rows, even if earlier lists are non-empty", () => {
-    const result = resultOf({ lists: { twins: [row(1)], splits: [row(2)], merges: [row(3)] } });
+    const result = resultOf({ lists: { twins: [row(1)], splits: [row(2)], merges: [row(3)], renumberSkipped: [row(4)] } });
 
     expect(defaultOpenListOf(result)).toBe(EJES_LIST.TWINS);
   });
@@ -171,6 +175,7 @@ describe("defaultOpenListOf", () => {
     ["splits", EJES_LIST.SPLITS],
     ["merges", EJES_LIST.MERGES],
     ["renumbered", EJES_LIST.RENUMBERED],
+    ["renumberSkipped", EJES_LIST.RENUMBER_HELD],
     ["plainRemovals", EJES_LIST.PLAIN_REMOVALS],
     ["newStreets", EJES_LIST.NEW_STREETS],
     ["attrChanges", EJES_LIST.ATTR_CHANGES],
@@ -182,21 +187,53 @@ describe("defaultOpenListOf", () => {
     expect(defaultOpenListOf(resultOf({ invalid: [row(1)] }))).toBe(EJES_LIST.INVALID_GEOMETRIES);
   });
 
-  it("should pick the first non-empty in order divididos, unidos, renumerados, sin reemplazo, invalid, nuevos, atributos", () => {
-    const all = { splits: [row(1)], merges: [row(1)], renumbered: [row(1)], plainRemovals: [row(1)], newStreets: [row(1)], attrChanges: [row(1)] };
+  it("should open renumbers held back when it is the first list with rows, before plain removals", () => {
+    const result = resultOf({ lists: { renumberSkipped: [row(1)], plainRemovals: [row(2)], newStreets: [row(3)] }, invalid: [row(4)] });
+
+    expect(defaultOpenListOf(result)).toBe(EJES_LIST.RENUMBER_HELD);
+  });
+
+  it("should not open renumbers held back by default when splits, merges or renumbered rows come before it", () => {
+    expect(defaultOpenListOf(resultOf({ lists: { splits: [row(1)], renumberSkipped: [row(2)] } }))).toBe(EJES_LIST.SPLITS);
+    expect(defaultOpenListOf(resultOf({ lists: { merges: [row(1)], renumberSkipped: [row(2)] } }))).toBe(EJES_LIST.MERGES);
+    expect(defaultOpenListOf(resultOf({ lists: { renumbered: [row(1)], renumberSkipped: [row(2)] } }))).toBe(EJES_LIST.RENUMBERED);
+  });
+
+  it("should not open renumbers held back by default when the twins list has rows", () => {
+    expect(defaultOpenListOf(resultOf({ lists: { twins: [row(1)], renumberSkipped: [row(2)] } }))).toBe(EJES_LIST.TWINS);
+  });
+
+  it("should pick the first non-empty in order twins first, then divididos, unidos, renumerados, retenidos, sin reemplazo, invalid, nuevos, atributos", () => {
+    const all = {
+      splits: [row(1)],
+      merges: [row(1)],
+      renumbered: [row(1)],
+      renumberSkipped: [row(1)],
+      plainRemovals: [row(1)],
+      newStreets: [row(1)],
+      attrChanges: [row(1)],
+    };
     const order: [keyof typeof all | "invalid", string][] = [
       ["splits", EJES_LIST.SPLITS],
       ["merges", EJES_LIST.MERGES],
       ["renumbered", EJES_LIST.RENUMBERED],
+      ["renumberSkipped", EJES_LIST.RENUMBER_HELD],
       ["plainRemovals", EJES_LIST.PLAIN_REMOVALS],
     ];
     let lists: Record<string, unknown[]> = { ...all };
+    expect(defaultOpenListOf(resultOf({ lists: { twins: [row(1)], ...lists }, invalid: [row(1)] }))).toBe(EJES_LIST.TWINS);
     for (const [field, expected] of order) {
       expect(defaultOpenListOf(resultOf({ lists, invalid: [row(1)] }))).toBe(expected);
       lists = Object.fromEntries(Object.entries(lists).filter(([name]) => name !== field));
     }
     expect(defaultOpenListOf(resultOf({ lists, invalid: [row(1)] }))).toBe(EJES_LIST.INVALID_GEOMETRIES);
     expect(defaultOpenListOf(resultOf({ lists }))).toBe(EJES_LIST.NEW_STREETS);
+  });
+
+  it("should give the held cell the count of counts.renumberSkipped, not the length of its list", () => {
+    const cell = stripOf(resultOf({ counts: { renumberSkipped: 2 } })).find((item) => item.key === EJES_LIST.RENUMBER_HELD);
+
+    expect(cell).toMatchObject({ value: 2, list: EJES_LIST.RENUMBER_HELD });
   });
 
   it("should ignore counts and look only at list rows", () => {

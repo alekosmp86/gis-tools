@@ -1,17 +1,17 @@
 import { cte, q, withClause } from "../../shared/sqlFragments";
-import { ACCESS_POINT_COLUMN, EJES_SRID, EJES_TABLE_ROLE, EJES_STAGING_COLUMN } from "../constants";
+import { EJES_SRID, EJES_TABLE_ROLE } from "../constants";
 import type { EjesLayouts, EjesLoadContext } from "../types";
-import { circulationPairsCte, classifiedCtes, currentCtes, geometriesDifferSql, removalCtes, stagingCtes } from "./analysisSql";
-import { col, table, trimmed } from "./layoutSql";
+import { accessPointRefMatchSql, circulationPairsCte, copyKeptCte, copyRawCte, currentCtes, geometriesDifferSql, pointsCte } from "./analysisSql";
+import { col, table } from "./layoutSql";
 import { nextvalSql } from "./loadContext";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
-import { renumberCtes } from "./renumberSql";
-import { INTEGER_PATTERN, validGeometrySql } from "./stagingSql";
+import { distinctPairsCountSql } from "./renumberSql";
 import { twinCtes, twinGroupCtes } from "./twinSql";
 
 export const LOAD_TEMP = {
   COPY: "ej_copy",
   RENUM: "ej_renum",
+  HELD: "ej_held",
   EXIST: "ej_exist",
   PAIR: "ej_pair",
   STATE: "ej_state",
@@ -23,42 +23,13 @@ export const LOAD_TEMP = {
 
 export const tmp = (name: string): string => `pg_temp.${q(name)}`;
 
-const createTemp = (name: string, body: string): string => `CREATE TEMP TABLE ${q(name)} ON COMMIT DROP AS ${body}`;
+export const createTemp = (name: string, body: string): string => `CREATE TEMP TABLE ${q(name)} ON COMMIT DROP AS ${body}`;
 
 export const buildAnalyzeTempSql = (name: string): string => `ANALYZE ${tmp(name)}`;
 
 /** One row per kept copy: a copy is `reftramo + localidad + departamento`; the twin rules drop the copies of the localities they name. */
 export function buildCopyTableSql(layouts: EjesLayouts): string {
-  const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
-  const reference = trimmed(column(EJES_STAGING_COLUMN.REFTRAMO));
-  const geometry = column(EJES_STAGING_COLUMN.GEOM);
-  const ctes = [
-    tipoMapCte(),
-    fuenteMapCte(),
-    ...twinGroupCtes(layouts),
-    ...twinCtes(layouts),
-    cte(
-      "copy_raw",
-      [
-        "SELECT DISTINCT ON (raw.ref, raw.localidad, raw.departamento) raw.* FROM (SELECT",
-        `${reference} AS ref,`,
-        `${trimmed(column(EJES_STAGING_COLUMN.IDCALLE))} AS idcalle,`,
-        `${trimmed(column(EJES_STAGING_COLUMN.NOMBRE))} AS nombre,`,
-        `${trimmed(column(EJES_STAGING_COLUMN.TIPO_VIALIDAD))} AS tipo,`,
-        `${trimmed(column(EJES_STAGING_COLUMN.FUENTE))} AS fuente,`,
-        `${trimmed(column(EJES_STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
-        `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
-        `${geometry} AS geom`,
-        `FROM ${table(layouts, "STAGING")} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry)}`,
-        `AND ${reference} ~ '${INTEGER_PATTERN}') AS raw`,
-        "ORDER BY raw.ref, raw.localidad, raw.departamento, raw.idcalle, raw.nombre, raw.tipo, raw.fuente, ST_AsEWKB(raw.geom)",
-      ].join(" ")
-    ),
-    cte(
-      "copy_kept",
-      `SELECT r.* FROM ${q("copy_raw")} AS r LEFT JOIN ${q("twins")} AS w ON w.ref = r.ref WHERE w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities))`
-    ),
-  ];
+  const ctes = [tipoMapCte(), fuenteMapCte(), ...twinGroupCtes(layouts), ...twinCtes(layouts), copyRawCte(layouts), copyKeptCte()];
   return createTemp(
     LOAD_TEMP.COPY,
     [
@@ -72,26 +43,13 @@ export function buildCopyTableSql(layouts: EjesLayouts): string {
   );
 }
 
-/** Renumbered sections of the analysis whose new `reftramo` has exactly one kept copy. */
-export function buildRenumTableSql(layouts: EjesLayouts): string {
-  const ctes = [
-    tipoMapCte(),
-    fuenteMapCte(),
-    ...stagingCtes(layouts),
-    ...currentCtes(layouts),
-    ...classifiedCtes(),
-    ...removalCtes(),
-    ...renumberCtes(),
-  ];
-  return createTemp(
-    LOAD_TEMP.RENUM,
-    [
-      withClause(ctes),
-      "SELECT r.old_id, r.old_ref, r.new_ref, r.points FROM",
-      `${q("renumbered")} AS r WHERE (SELECT count(*) FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE c.ref = r.new_ref) = 1`,
-    ].join(" ")
-  );
-}
+/** The renumbered and the held sets, written by the analysis of the same transaction (its sinks): the tables are created empty here. */
+export const buildCreateRenumberTableSql = (name: string): string =>
+  `CREATE TEMP TABLE ${q(name)} (old_id bigint, old_ref text, new_ref text, points bigint) ON COMMIT DROP`;
+
+/** The copies of the skipped renumber pairs' new `reftramo`s are not inserted: their section and the old one stay as they are. */
+export const buildHeldCopiesSql = (): string =>
+  `DELETE FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE c.ref IN (SELECT h.new_ref FROM ${tmp(LOAD_TEMP.HELD)} AS h)`;
 
 /** E: the existing sections of every `reftramo` that has a kept copy, plus the renumbered ones. */
 export function buildExistTableSql(layouts: EjesLayouts): string {
@@ -179,13 +137,20 @@ export function buildNewTableSql(context: EjesLoadContext): string {
   );
 }
 
+/** The copies that need a `circulation_way` for their `(idcalle, name)`: the new sections and the ones that moved to another street. */
+const WAY_SOURCE_CONDITION = [
+  `(EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.NEW)} AS n WHERE n.copy_id = c.copy_id)`,
+  `OR EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.STATE)} AS s WHERE s.copy_id = c.copy_id AND s.idcalle_changed))`,
+].join(" ");
+
 export function buildNewWaysSql(layouts: EjesLayouts): string {
   const first = (column: string): string => `(array_agg(c.${column} ORDER BY length(c.ref), c.ref))[1]`;
   return [
     withClause([circulationPairsCte(layouts)]),
     `SELECT c.idcalle AS "idcalle", c.nombre AS "name", ${first("type_id")} AS "type_id", ${first("font_id")} AS "font_id"`,
-    `FROM ${tmp(LOAD_TEMP.COPY)} AS c JOIN ${tmp(LOAD_TEMP.NEW)} AS n ON n.copy_id = c.copy_id`,
-    `WHERE NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle IS NOT DISTINCT FROM c.idcalle AND p.name IS NOT DISTINCT FROM c.nombre)`,
+    `FROM ${tmp(LOAD_TEMP.COPY)} AS c`,
+    `WHERE ${WAY_SOURCE_CONDITION}`,
+    `AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle IS NOT DISTINCT FROM c.idcalle AND p.name IS NOT DISTINCT FROM c.nombre)`,
     "GROUP BY c.idcalle, c.nombre ORDER BY c.idcalle, c.nombre",
   ].join(" ");
 }
@@ -203,15 +168,15 @@ export function buildWayTableSql(context: EjesLoadContext): string {
   );
 }
 
-/** Existing sections the staging no longer holds a copy for: reported, never deleted. */
-export function buildSurplusTableSql(layouts: EjesLayouts): string {
-  const point = (logical: string): string => `a.${col(layouts, "ACCESS_POINT", logical)}`;
+/** Existing sections the staging no longer holds a copy for: reported, never deleted. Points are read only for the `reftramo`s of the existing rows. */
+export function buildSurplusTableSql(context: EjesLoadContext): string {
+  const exist = tmp(LOAD_TEMP.EXIST);
   return createTemp(
     LOAD_TEMP.SURPLUS,
     [
-      `WITH ${q("ap")} AS (SELECT ${trimmed(point(ACCESS_POINT_COLUMN.ROAD_SECTION))} AS ref, count(*) AS points FROM ${table(layouts, "ACCESS_POINT")} AS a GROUP BY 1)`,
+      withClause([pointsCte(context.layouts, `WHERE EXISTS (SELECT 1 FROM ${exist} AS e WHERE ${accessPointRefMatchSql(context, "e.ref")})`)]),
       "SELECT e.id, e.ref, e.idcalle, COALESCE(ap.points, 0) AS points",
-      `FROM ${tmp(LOAD_TEMP.EXIST)} AS e LEFT JOIN ${q("ap")} AS ap ON ap.ref = e.ref`,
+      `FROM ${exist} AS e LEFT JOIN ${q("ap")} AS ap ON ap.ref = e.ref`,
       `WHERE e.ref IN (SELECT ref FROM ${tmp(LOAD_TEMP.COPY)}) AND NOT EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.PAIR)} AS p WHERE p.road_id = e.id)`,
     ].join(" ")
   );
@@ -235,6 +200,7 @@ export const buildLoadCountsSql = (): string =>
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.STATE)} AS s WHERE s.font_changed) AS "font",`,
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.STATE)} AS s WHERE s.geom_changed) AS "geom",`,
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.RENUM)}) AS "renumbered",`,
+    `${distinctPairsCountSql(tmp(LOAD_TEMP.HELD))} AS "renumber_skipped",`,
     `(SELECT COALESCE(sum(points), 0) FROM ${tmp(LOAD_TEMP.RENUM)}) AS "points_moved",`,
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.WAY)}) AS "ways",`,
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.SURPLUS)}) AS "surplus"`,

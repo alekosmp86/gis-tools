@@ -15,6 +15,7 @@ import {
   canAnalyzeNow,
   canLoadNow,
   ejesGeometryMapBaseOf,
+  ejesLoadRequestOf,
   ejesWizardReducer,
   EjesStep,
   excludedEjesTablesOf,
@@ -37,7 +38,6 @@ const IDLE_SNAPSHOT: EjesRunSnapshot = { phase: RunPhase.IDLE };
 const FIRST_STEP_ID = ejesStepIdOf(EjesStep.CONNECTION);
 const REVIEW_STEP_ID = ejesStepIdOf(EjesStep.REVIEW);
 const ANALYZE = { dryRun: true };
-const LOAD = { dryRun: false };
 const client = createRoutineJobsClient();
 const getIdleSnapshot = (): EjesRunSnapshot => IDLE_SNAPSHOT;
 
@@ -82,7 +82,8 @@ export const EjesCallesWizard: React.FC = () => {
   };
 
   const loadNow = () => {
-    if (canLoadNow(state, snapshot)) startRun(toEjesStartRequest(state, LOAD));
+    const request = ejesLoadRequestOf(state, snapshot);
+    if (request !== null) startRun(request);
   };
 
   const newRun = () => {

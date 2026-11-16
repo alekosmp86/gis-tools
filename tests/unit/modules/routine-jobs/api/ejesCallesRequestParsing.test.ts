@@ -26,6 +26,22 @@ function messageOf(body: Body): string {
   return "";
 }
 
+const SUMMARY_COUNT_KEYS = [
+  "newSections",
+  "unchanged",
+  "attr",
+  "geom",
+  "both",
+  "removed",
+  "splits",
+  "merges",
+  "plainRemovals",
+  "renumbered",
+  "renumberSkipped",
+];
+
+const FINGERPRINT = { rows: 12, digest: "9f8e7d6c5b4a3210fedcba9876543210" };
+
 describe("parseEjesCallesStartRequest", () => {
   it("should return the params of a dry run with config and nine tables", () => {
     const params = parse(startBody());
@@ -36,12 +52,12 @@ describe("parseEjesCallesStartRequest", () => {
     expect(params.tables["ejes-origen"]).toEqual({ schema: "bdj_carto", table: "ide_ejesviacirculacion" });
   });
 
-  describe("real run (EJL-1)", () => {
-    const COUNT_KEYS = ["newSections", "unchanged", "attr", "geom", "both", "removed", "splits", "merges", "plainRemovals", "renumbered"];
-    const counts = (): Record<string, number> => Object.fromEntries(COUNT_KEYS.map((key, index) => [key, index]));
+  describe("real run (EJL-1, EJL-20)", () => {
+    const counts = (): Record<string, number> => Object.fromEntries(SUMMARY_COUNT_KEYS.map((key, index) => [key, index]));
+    const summaryOf = (overrides: Body = {}): Body => ({ counts: counts(), fingerprint: { ...FINGERPRINT }, ...overrides });
     const realBody = (overrides: Body = {}): Body => ({
       ...startBody({ dryRun: false }),
-      summary: { counts: counts() },
+      summary: summaryOf(),
       accepted: {},
       ...overrides,
     });
@@ -90,12 +106,13 @@ describe("parseEjesCallesStartRequest", () => {
 
       expect(params.dryRun).toBe(false);
       expect(params.summary?.counts).toEqual(counts());
+      expect(params.summary?.fingerprint).toEqual(FINGERPRINT);
     });
 
-    it("should keep only the 10 summary counts as numbers and drop any other key", () => {
-      const params = parse(realBody({ summary: { counts: { ...counts(), extra: 99 } } }));
+    it("should keep only the 11 summary counts as numbers and drop any other key", () => {
+      const params = parse(realBody({ summary: summaryOf({ counts: { ...counts(), extra: 99 } }) }));
 
-      expect(Object.keys(params.summary?.counts ?? {}).sort()).toEqual([...COUNT_KEYS].sort());
+      expect(Object.keys(params.summary?.counts ?? {}).sort()).toEqual([...SUMMARY_COUNT_KEYS].sort());
     });
 
     it("should accept accepted lists that are present and empty", () => {
@@ -124,14 +141,14 @@ describe("parseEjesCallesStartRequest", () => {
     });
 
     it("should refuse a summary without counts", () => {
-      expect(() => parse(realBody({ summary: {} }))).toThrow(RequestInvalidError);
+      expect(() => parse(realBody({ summary: { fingerprint: { ...FINGERPRINT } } }))).toThrow(RequestInvalidError);
     });
 
-    it.each(COUNT_KEYS)("should refuse a summary whose %s count is missing", (key) => {
+    it.each(SUMMARY_COUNT_KEYS)("should refuse a summary whose %s count is missing", (key) => {
       const partial = counts();
       delete partial[key];
 
-      expect(() => parse(realBody({ summary: { counts: partial } }))).toThrow(RequestInvalidError);
+      expect(() => parse(realBody({ summary: summaryOf({ counts: partial }) }))).toThrow(RequestInvalidError);
     });
 
     it.each([
@@ -140,13 +157,59 @@ describe("parseEjesCallesStartRequest", () => {
       ["NaN", Number.NaN],
       ["Infinity", Number.POSITIVE_INFINITY],
     ])("should refuse a summary count that is %s", (_label, value) => {
-      expect(() => parse(realBody({ summary: { counts: { ...counts(), geom: value } } }))).toThrow(RequestInvalidError);
+      expect(() => parse(realBody({ summary: summaryOf({ counts: { ...counts(), geom: value } }) }))).toThrow(RequestInvalidError);
     });
 
     it("should accept a summary count of zero", () => {
-      const zeros = Object.fromEntries(COUNT_KEYS.map((key) => [key, 0]));
+      const zeros = Object.fromEntries(SUMMARY_COUNT_KEYS.map((key) => [key, 0]));
 
-      expect(parse(realBody({ summary: { counts: zeros } })).summary?.counts).toEqual(zeros);
+      expect(parse(realBody({ summary: summaryOf({ counts: zeros }) })).summary?.counts).toEqual(zeros);
+    });
+
+    it("should refuse a summary without the renumberSkipped count, the Revisar counts of EJL-1", () => {
+      const partial = counts();
+      delete partial.renumberSkipped;
+
+      expect(() => parse(realBody({ summary: { counts: partial, fingerprint: { ...FINGERPRINT } } }))).toThrow(RequestInvalidError);
+    });
+
+    it("should refuse a summary without the fingerprint (EJL-20)", () => {
+      const body = realBody({ summary: { counts: counts() } });
+
+      expect(() => parse(body)).toThrow(RequestInvalidError);
+      expect(messageOf(body)).toMatch(/fingerprint|huella/);
+    });
+
+    it.each([
+      ["null", null],
+      ["a string", "9f8e"],
+      ["a list", []],
+    ])("should refuse a fingerprint that is %s (EJL-20)", (_label, value) => {
+      expect(() => parse(realBody({ summary: summaryOf({ fingerprint: value }) }))).toThrow(RequestInvalidError);
+    });
+
+    it("should refuse a fingerprint without its row count (EJL-20)", () => {
+      expect(() => parse(realBody({ summary: summaryOf({ fingerprint: { digest: FINGERPRINT.digest } }) }))).toThrow(RequestInvalidError);
+    });
+
+    it("should refuse a fingerprint whose row count is not a finite number (EJL-20)", () => {
+      expect(() => parse(realBody({ summary: summaryOf({ fingerprint: { rows: "12", digest: FINGERPRINT.digest } }) }))).toThrow(
+        RequestInvalidError
+      );
+      expect(() => parse(realBody({ summary: summaryOf({ fingerprint: { rows: null, digest: FINGERPRINT.digest } }) }))).toThrow(
+        RequestInvalidError
+      );
+    });
+
+    it.each([
+      ["missing", undefined],
+      ["an empty string", ""],
+      ["a number", 42],
+      ["null", null],
+    ])("should refuse a fingerprint digest that is %s (EJL-20)", (_label, value) => {
+      const fingerprint = value === undefined ? { rows: FINGERPRINT.rows } : { rows: FINGERPRINT.rows, digest: value };
+
+      expect(() => parse(realBody({ summary: summaryOf({ fingerprint }) }))).toThrow(RequestInvalidError);
     });
 
     it("should refuse dryRun false without the accepted object", () => {
@@ -184,6 +247,7 @@ describe("parseEjesCallesStartRequest", () => {
       const messages = [
         messageOf(realBody({ accepted: { splits: [1] } })),
         messageOf(realBody({ summary: null })),
+        messageOf(realBody({ summary: { counts: counts() } })),
         messageOf(startBody({ dryRun: false })),
       ];
 

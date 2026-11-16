@@ -98,6 +98,9 @@ describe("toEjesAnalysis", () => {
       renumbered: "3",
       renumbered_with_points: 2,
       renumbered_points: "9",
+      renumber_skipped: "2",
+      staging_rows: "14",
+      staging_digest: "d41d8cd98f00b204e9800998ecf8427e",
       with_locality: 2,
       only_department: 1,
       without_code: 0,
@@ -152,7 +155,9 @@ describe("toEjesAnalysis", () => {
       renumbered: 3,
       renumberedWithPoints: 2,
       renumberedPoints: 9,
+      renumberSkipped: 2,
     });
+    expect(analysis.fingerprint).toEqual({ rows: 14, digest: "d41d8cd98f00b204e9800998ecf8427e" });
     expect(analysis.cloc).toEqual({ withLocality: 2, onlyDepartment: 1, withoutCode: 0 });
     expect(analysis.splits).toEqual([{ oldRef: "10", idcalle: "5", newRefs: ["11", "12"], points: 3, coverage: 0.98, oldLength: 100.5, newLength: 130, outsideLength: 29.5 }]);
     expect(analysis.merges).toEqual([
@@ -198,7 +203,10 @@ describe("toEjesAnalysis", () => {
     expect(analysis.counts.renumbered).toBe(0);
     expect(analysis.counts.renumberedWithPoints).toBe(0);
     expect(analysis.counts.renumberedPoints).toBe(0);
+    expect(analysis.counts.renumberSkipped).toBe(0);
     expect(analysis.renumbered).toEqual([]);
+    expect(analysis.renumberSkipped).toEqual([]);
+    expect(analysis.fingerprint).toEqual({ rows: 0, digest: "" });
   });
 
   it("should ignore non-array new_refs and old_refs", () => {
@@ -346,5 +354,43 @@ describe("toEjesAnalysis twins (ET-4)", () => {
   it("should return no twin rows when the list is missing or not an array", () => {
     expect(toEjesAnalysis({}).twins).toEqual([]);
     expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.TWINS]: "oops" }).twins).toEqual([]);
+  });
+});
+
+describe("toEjesAnalysis renumber skipped (EJL-12, EJL-17)", () => {
+  it("should map each held renumber pair with both refs as text, its points and its reason", () => {
+    const analysis = toEjesAnalysis({
+      [ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED]: [
+        { old_ref: 3001, new_ref: "3002", idcalle: "5", points: "4", reason: "ambiguous_new_ref" },
+        { old_ref: "3003", new_ref: 3004, idcalle: null, points: null, reason: "repeated_old_ref" },
+      ],
+    });
+
+    expect(analysis.renumberSkipped).toEqual([
+      { oldRef: "3001", newRef: "3002", idcalle: "5", points: 4, reason: "ambiguous_new_ref" },
+      { oldRef: "3003", newRef: "3004", idcalle: null, points: 0, reason: "repeated_old_ref" },
+    ]);
+  });
+
+  it("should keep the order of the held pairs as the SQL gave them", () => {
+    const rows = [
+      { old_ref: "1", new_ref: "2", idcalle: "5", points: 9, reason: "not_single_copy" },
+      { old_ref: "3", new_ref: "4", idcalle: "5", points: 1, reason: "ambiguous_old_ref" },
+    ];
+
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED]: rows }).renumberSkipped.map((entry) => entry.oldRef)).toEqual(["1", "3"]);
+  });
+
+  it("should return no held pairs when the list is missing or not an array", () => {
+    expect(toEjesAnalysis({}).renumberSkipped).toEqual([]);
+    expect(toEjesAnalysis({ [ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED]: "oops" }).renumberSkipped).toEqual([]);
+  });
+
+  it("should use its own list alias", () => {
+    expect(ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED).toBe("renumber_skipped_json");
+  });
+
+  it("should map a missing staging digest to an empty string and a missing row count to zero", () => {
+    expect(toEjesAnalysis({ staging_rows: 3 }).fingerprint).toEqual({ rows: 3, digest: "" });
   });
 });

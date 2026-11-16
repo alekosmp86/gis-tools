@@ -4,7 +4,7 @@ import type { AcceptedGeometry, ActualizarPadronResult, GeometryMapItem, PairCho
 import type { CargarLocalidadesResult, LocalityOptions, LocalityTableRef } from "../jobs/cargar-localidades/types";
 import type { UnitAddressMasterTable, UnitResult } from "../jobs/unidad-territorial/types";
 import type { EjesTableRole } from "../jobs/ejes-calles/constants";
-import type { EjesMapItem, EjesResult, EjesTableRef } from "../jobs/ejes-calles/types";
+import type { EjesMapItem, EjesResult, EjesSummary, EjesTableRef } from "../jobs/ejes-calles/types";
 import type { CentrosTableRole } from "../jobs/centros-anep/constants";
 import type { CentrosResult, CentrosTableRef } from "../jobs/centros-anep/types";
 
@@ -139,6 +139,13 @@ export interface EjesStartRequest {
   connection: ClientConnection;
   tables: Record<EjesTableRole, EjesTableRef>;
   dryRun: boolean;
+}
+
+/** The real run: the counts and fingerprint of the finished dry-run, and an empty `accepted` (slice 1 accepts nothing else). */
+export interface EjesLoadRequest extends EjesStartRequest {
+  dryRun: false;
+  accepted: Record<string, never>;
+  summary: EjesSummary;
 }
 
 export type EjesJobStatusView = JobStatusBase<EjesResult>;

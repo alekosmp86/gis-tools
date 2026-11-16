@@ -34,6 +34,7 @@ const COUNTS = {
   renumbered: 2,
   renumberedWithPoints: 1,
   renumberedPoints: 5,
+  renumberSkipped: 0,
 };
 
 const TWIN: EjesTwinRow = {
@@ -82,6 +83,8 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     newStreets: [],
     twins: [],
     renumbered: [],
+    renumberSkipped: [],
+    fingerprint: { rows: 100, digest: "9f8e7d6c5b4a" },
     attrChanges: [
       {
         ref: "1",
@@ -111,6 +114,12 @@ describe("buildEjesReportView (EJ-12)", () => {
 
     expect(EJES_DRY_RUN_BANNER).toBe("Análisis: no se modificó ninguna tabla.");
     expect(view.banners).toEqual([{ kind: "dryRun", text: "Análisis: no se modificó ninguna tabla." }]);
+  });
+
+  it("should show no dry-run banner for a real run, whose outcome banner comes from the load result", () => {
+    const view = buildEjesReportView(resultOf({ dryRun: false, targetModified: true }));
+
+    expect(view.banners).toEqual([]);
   });
 
   it("should expose cards for staging checks, classification and cloc counts", () => {
@@ -255,6 +264,26 @@ describe("buildEjesReportView (EJ-12)", () => {
       expect(buildEjesReportView(resultOf({ renumbered: [row], counts: { ...COUNTS, renumbered: 4037 } })).summaries.renumbered).toBe(
         "Tramos renumerados (primero los que tienen puntos de acceso) (primeras 1 de 4037)"
       );
+    });
+  });
+
+  describe("renumbers held back (EJ-25, EJL-12)", () => {
+    const held = { oldRef: "3001", newRef: "3002", idcalle: "5", points: 2, reason: "not_single_copy" } as const;
+
+    it("should summarize the held list with its shown rows and the analysis count, in the list's own title", () => {
+      const view = buildEjesReportView(resultOf({ renumberSkipped: [held], counts: { ...COUNTS, renumberSkipped: 1 } }));
+
+      expect(view.summaries.renumberHeld).toBe("Renumerados retenidos (ambos tramos quedan como están) (1)");
+    });
+
+    it("should note a cut held list when the analysis count is larger than the rows shown", () => {
+      const view = buildEjesReportView(resultOf({ renumberSkipped: [held], counts: { ...COUNTS, renumberSkipped: 700 } }));
+
+      expect(view.summaries.renumberHeld).toBe("Renumerados retenidos (ambos tramos quedan como están) (primeras 1 de 700)");
+    });
+
+    it("should summarize an empty held list with zero", () => {
+      expect(buildEjesReportView(resultOf()).summaries.renumberHeld).toBe("Renumerados retenidos (ambos tramos quedan como están) (0)");
     });
   });
 

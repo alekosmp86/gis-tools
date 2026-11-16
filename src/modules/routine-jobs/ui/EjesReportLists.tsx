@@ -8,6 +8,7 @@ import {
   INVALID_GEOMETRY_COLUMNS,
   MERGE_COLUMNS,
   REMOVAL_COLUMNS,
+  RENUMBER_HELD_COLUMNS,
   RENUMBERED_COLUMNS,
   SPLIT_COLUMNS,
   STREET_COLUMNS,
@@ -54,6 +55,11 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({ result, view, 
           rowKey={(row) => row.oldRef}
           onShowOnMap={(row) => onShowOnMap(subjects.renumbered, result.renumbered.indexOf(row))}
         />
+      )}
+      {section(
+        EJES_LIST.RENUMBER_HELD,
+        result.renumberSkipped.length,
+        <RowsTable columns={RENUMBER_HELD_COLUMNS} rows={result.renumberSkipped} rowKey={(row) => `${row.oldRef}|${row.newRef}`} />
       )}
       {section(
         EJES_LIST.TWINS,

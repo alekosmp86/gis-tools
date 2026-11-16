@@ -2,6 +2,7 @@ import type { StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunSession } from "../../cargar-padrones/types";
 import { buildEjesAnalysisSql } from "../domain/analysisSql";
 import { EJES_STEP } from "../domain/plannedSteps";
+import { buildCreateRenumberTableSql, LOAD_TEMP, tmp } from "../domain/loadSelectionSql";
 import { toEjesAnalysis, toEjesStagingReport } from "../domain/reportMapping";
 import { buildStagingChecksSql } from "../domain/stagingSql";
 import type { EjesAnalysis, EjesLayouts, EjesStagingReport } from "../types";
@@ -17,6 +18,14 @@ export async function readStagingReport(session: RunSession, layouts: EjesLayout
 
 export async function readAnalysis(session: RunSession, layouts: EjesLayouts): Promise<EjesAnalysis> {
   return toEjesAnalysis((await session.query(buildEjesAnalysisSql(layouts))).rows[0] ?? {});
+}
+
+/** The real run's analysis: the renumbered and the held pairs are kept in the temp tables the load reads, so the load never classifies again. */
+export async function readAnalysisForLoad(session: RunSession, layouts: EjesLayouts): Promise<EjesAnalysis> {
+  await session.query(buildCreateRenumberTableSql(LOAD_TEMP.RENUM));
+  await session.query(buildCreateRenumberTableSql(LOAD_TEMP.HELD));
+  const sinks = { renumbered: tmp(LOAD_TEMP.RENUM), skipped: tmp(LOAD_TEMP.HELD) };
+  return toEjesAnalysis((await session.query(buildEjesAnalysisSql(layouts, sinks))).rows[0] ?? {});
 }
 
 /** The staging checks and the classification, on the transaction's own snapshot. */

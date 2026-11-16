@@ -11,8 +11,8 @@ import {
   MASTER_URN_PREFIX,
   ROAD_SECTION_COLUMN,
 } from "../constants";
-import type { EjesLayouts, EjesLoadContext, EjesLoadRole } from "../types";
-import { col, trimmed } from "./layoutSql";
+import type { EjesLoadContext, EjesLoadRole } from "../types";
+import { accessPointRefMatchSql } from "./analysisSql";
 import { physicalOf, qualifiedOf, typedAs } from "./loadContext";
 import { LOAD_TEMP, tmp } from "./loadSelectionSql";
 
@@ -128,13 +128,12 @@ export const buildRenumberSectionsSql = (context: EjesLoadContext): string =>
   sectionUpdate(context, setOf(context, ROAD_SECTION_COLUMN.REFTRAMO, "s.renum_new"), false, "s.renum_new IS NOT NULL");
 
 /** The only write on `access_point`: the points of the old `reftramo` follow their section to the new one. */
-export function buildMovePointsSql(context: EjesLoadContext, layouts: EjesLayouts): string {
+export function buildMovePointsSql(context: EjesLoadContext): string {
   const reference = physicalOf(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ROAD_SECTION);
-  const current = `a.${col(layouts, "ACCESS_POINT", ACCESS_POINT_COLUMN.ROAD_SECTION)}`;
   return counted(
     [
       `UPDATE ${qualifiedOf(context, EJES_TABLE_ROLE.ACCESS_POINT)} AS a SET ${reference} = ${typedAs(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ROAD_SECTION, "n.new_ref")}`,
-      `FROM ${tmp(LOAD_TEMP.RENUM)} AS n WHERE ${trimmed(current)} = n.old_ref`,
+      `FROM ${tmp(LOAD_TEMP.RENUM)} AS n WHERE ${accessPointRefMatchSql(context, "n.old_ref")}`,
     ].join(" ")
   );
 }

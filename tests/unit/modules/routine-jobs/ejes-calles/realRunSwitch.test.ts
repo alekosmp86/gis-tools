@@ -78,7 +78,7 @@ describe("runEjesPersistTransaction with the switch off (EJL-16)", () => {
       query.mockClear();
 
       await expect(
-        runEjesPersistTransaction(session, paramsWith({ counts: {} as never }), context, createStepTimer({ now: () => 0, total: 20 }))
+        runEjesPersistTransaction(session, paramsWith(undefined), context, createStepTimer({ now: () => 0, total: 20 }))
       ).rejects.toThrow(REAL_RUN_UNAVAILABLE_MESSAGE);
       expect(query).not.toHaveBeenCalled();
     } finally {

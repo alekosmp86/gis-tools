@@ -2,20 +2,22 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   buildCopyTableSql,
+  buildCreateRenumberTableSql,
   buildExistTableSql,
+  buildHeldCopiesSql,
+  buildLoadCountsSql,
   buildMultiPartCountSql,
   buildPairTableSql,
-  buildRenumTableSql,
   buildStateTableSql,
   buildSurplusTableSql,
   LOAD_TEMP,
 } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadSelectionSql";
 import { ejesLayouts } from "./ejesFixtures";
-import { createEjesDatabase, insertPadron, insertPoints, insertSection, insertStaging, insertWay, rowsOf } from "./ejesLoadHarness";
+import { createEjesDatabase, insertPadron, insertPoints, insertSection, insertStaging, insertWay, loadContextOn, rowsOf } from "./ejesLoadHarness";
 
 const HOOK_TIMEOUT_MS = 60_000;
 
-describe("ejes load selection SQL on PGlite (EJL-6, EJL-7)", () => {
+describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () => {
   let database: PGlite;
 
   beforeEach(async () => {
@@ -27,15 +29,27 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7)", () => {
     await database.close();
   }, HOOK_TIMEOUT_MS);
 
-  const select = async (): Promise<void> => {
+  /** The analysis sinks fill the two tables before the selection; `renumbered` and `held` are rows of (old_id, old_ref, new_ref, points). */
+  const select = async (
+    renumbered: Array<{ oldId: number; oldRef: string; newRef: string }> = [],
+    held: Array<{ oldId: number; oldRef: string; newRef: string }> = []
+  ): Promise<void> => {
     const layouts = ejesLayouts();
+    await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.RENUM));
+    await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.HELD));
+    for (const row of renumbered) {
+      await database.query(`INSERT INTO pg_temp."${LOAD_TEMP.RENUM}" (old_id, old_ref, new_ref, points) VALUES ($1, $2, $3, 0)`, [row.oldId, row.oldRef, row.newRef]);
+    }
+    for (const row of held) {
+      await database.query(`INSERT INTO pg_temp."${LOAD_TEMP.HELD}" (old_id, old_ref, new_ref, points) VALUES ($1, $2, $3, 0)`, [row.oldId, row.oldRef, row.newRef]);
+    }
     for (const sql of [
       buildCopyTableSql(layouts),
-      buildRenumTableSql(layouts),
+      buildHeldCopiesSql(),
       buildExistTableSql(layouts),
       buildPairTableSql(),
       buildStateTableSql(layouts),
-      buildSurplusTableSql(layouts),
+      buildSurplusTableSql(await loadContextOn(database)),
     ]) {
       await database.exec(sql);
     }
@@ -137,6 +151,134 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7)", () => {
       await select();
 
       expect(await pairs()).toEqual([{ ref: "12", road_id: id }]);
+    });
+
+    it("should write the canonical reftramo of a copy with leading zeros, so '0012' pairs with the section 12 (EJL-19)", async () => {
+      await insertWay(database, 10, "CALLE UNO");
+      const id = await insertSection(database, { ref: 12, calle: 10, geom: "0:10" });
+      await insertStaging(database, [{ ref: "0012", geom: "0:10" }]);
+
+      await select();
+
+      expect((await copies()).map((row) => row.ref)).toEqual(["12"]);
+      expect(await pairs()).toEqual([{ ref: "12", road_id: id }]);
+    });
+
+    it("should count '0012' and '12' as one copy when they share a locality and department (EJL-19)", async () => {
+      await insertStaging(database, [
+        { ref: "0012", localidad: "A", departamento: "D1", geom: "0:10" },
+        { ref: "12", localidad: "A", departamento: "D1", geom: "0:10" },
+      ]);
+
+      await select();
+
+      expect((await copies()).map((row) => row.ref)).toEqual(["12"]);
+    });
+  });
+
+  describe("held renumber pairs (EJL-12, EJL-23)", () => {
+    it("should delete the copies of a held new reftramo and keep every other copy", async () => {
+      await insertStaging(database, [
+        { ref: "7", localidad: "TRINIDAD", geom: "0:50" },
+        { ref: "7", localidad: "FLORES", geom: "0:50" },
+        { ref: "8", localidad: "TRINIDAD", geom: "60:70" },
+      ]);
+
+      await select([], [{ oldId: 30, oldRef: "6", newRef: "7" }]);
+
+      expect((await copies()).map((row) => row.ref)).toEqual(["8"]);
+    });
+
+    it("should not insert a held new section: it is neither paired nor listed as surplus, and its old section is not paired either", async () => {
+      await insertWay(database, 10, "CALLE UNO");
+      const old = await insertSection(database, { ref: 6, calle: 10, geom: "0:50", distance: "50.00" });
+      await insertPoints(database, "6", 2);
+      await insertStaging(database, [{ ref: "7", calle: "10", nombre: "CALLE UNO", geom: "0:50" }]);
+
+      await select([], [{ oldId: old, oldRef: "6", newRef: "7" }]);
+
+      expect(await copies()).toEqual([]);
+      expect(await pairs()).toEqual([]);
+      expect(await rowsOf(database, `SELECT * FROM pg_temp."${LOAD_TEMP.SURPLUS}"`)).toEqual([]);
+    });
+
+    it("should delete only the copies of the held new reftramo, never the copies of another reftramo", async () => {
+      await insertStaging(database, [
+        { ref: "7", localidad: "TRINIDAD", geom: "0:50" },
+        { ref: "9", localidad: "TRINIDAD", geom: "90:99" },
+      ]);
+
+      await select([], [{ oldId: 31, oldRef: "5", newRef: "7" }]);
+
+      expect((await copies()).map((row) => row.ref)).toEqual(["9"]);
+    });
+  });
+
+  describe("load counts of the held set (EJL-13, EJL-23)", () => {
+    const countsRow = async (): Promise<Record<string, unknown>> => {
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.NEW}" (copy_id bigint, section_id bigint, master_id bigint)`);
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.WAY}" (way_id bigint, idcalle text, name text, short_name text, type_id text, font_id text)`);
+      return (await rowsOf(database, buildLoadCountsSql()))[0];
+    };
+
+    it("should count each held pair as renumber_skipped, one per row of ej_held", async () => {
+      await select([], [
+        { oldId: 30, oldRef: "6", newRef: "7" },
+        { oldId: 31, oldRef: "8", newRef: "9" },
+      ]);
+
+      const row = await countsRow();
+
+      expect(Number(row.renumber_skipped)).toBe(2);
+    });
+
+    it("should count zero renumber_skipped and zero renumbered when nothing is held back", async () => {
+      await select();
+
+      const row = await countsRow();
+
+      expect(Number(row.renumber_skipped)).toBe(0);
+      expect(Number(row.renumbered)).toBe(0);
+    });
+
+    it("should count the held pairs apart from the renumbered pairs", async () => {
+      await select([{ oldId: 40, oldRef: "4", newRef: "5" }], [{ oldId: 41, oldRef: "6", newRef: "7" }]);
+
+      const row = await countsRow();
+
+      expect(Number(row.renumbered)).toBe(1);
+      expect(Number(row.renumber_skipped)).toBe(1);
+    });
+  });
+
+  describe("renumber table filled by the analysis sink (EJL-23)", () => {
+    it("should create the renumber table empty, with the four columns the analysis sink writes", async () => {
+      await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.RENUM));
+
+      const result = await database.query(`SELECT * FROM pg_temp."${LOAD_TEMP.RENUM}"`);
+      expect(result.fields.map((field) => field.name)).toEqual(["old_id", "old_ref", "new_ref", "points"]);
+      expect(result.rows).toEqual([]);
+    });
+
+    it("should pair the copy of a renumbered new reftramo with the old section id, read from the sink table", async () => {
+      await insertWay(database, 10, "CALLE UNO");
+      const old = await insertSection(database, { ref: 3001, calle: 10, geom: "0:50", distance: "50.00" });
+      await insertStaging(database, [{ ref: "3002", calle: "10", nombre: "CALLE UNO", geom: "0:50" }]);
+
+      await select([{ oldId: old, oldRef: "3001", newRef: "3002" }]);
+
+      expect(await pairs()).toEqual([{ ref: "3002", road_id: old }]);
+    });
+
+    it("should list nothing as surplus for the old section of a renumbered pair, which the sink moved to the new reftramo", async () => {
+      await insertWay(database, 10, "CALLE UNO");
+      const old = await insertSection(database, { ref: 3001, calle: 10, geom: "0:50", distance: "50.00" });
+      await insertPoints(database, "3001", 2);
+      await insertStaging(database, [{ ref: "3002", calle: "10", nombre: "CALLE UNO", geom: "0:50" }]);
+
+      await select([{ oldId: old, oldRef: "3001", newRef: "3002" }]);
+
+      expect(await rowsOf(database, `SELECT * FROM pg_temp."${LOAD_TEMP.SURPLUS}"`)).toEqual([]);
     });
   });
 

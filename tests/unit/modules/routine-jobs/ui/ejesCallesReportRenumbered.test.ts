@@ -29,6 +29,7 @@ const COUNTS = {
   renumbered: 2,
   renumberedWithPoints: 1,
   renumberedPoints: 4,
+  renumberSkipped: 0,
 };
 
 const ROWS: EjesRenumberedRow[] = [
@@ -67,6 +68,7 @@ const resultOf = (renumbered: EjesRenumberedRow[]): EjesResult =>
     attrChanges: [],
     twins: [],
     renumbered,
+    renumberSkipped: [],
     blockers: [],
     privilegeInfo: [],
     tables: {},

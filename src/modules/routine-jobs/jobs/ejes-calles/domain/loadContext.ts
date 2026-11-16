@@ -36,6 +36,25 @@ const sqlTypeOf = (target: WritableTargetLayout, logical: string): string | unde
   return dataType;
 };
 
+const INTEGER_TYPE_RANGE: Partial<Record<string, readonly [string, string]>> = {
+  smallint: ["-32768", "32767"],
+  integer: ["-2147483648", "2147483647"],
+  bigint: ["-9223372036854775808", "9223372036854775807"],
+};
+
+export interface IntegerColumn {
+  type: string;
+  min: string;
+  max: string;
+}
+
+/** The real integer type of a target column and its bounds; undefined when the column is not an integer type. */
+export function integerColumnOf(context: EjesLoadContext, role: EjesLoadRole, logical: string): IntegerColumn | undefined {
+  const type = sqlTypeOf(context.targets[role], logical);
+  const range = type === undefined ? undefined : INTEGER_TYPE_RANGE[type.toLowerCase()];
+  return type === undefined || range === undefined ? undefined : { type, min: range[0], max: range[1] };
+}
+
 /** Casts a value to the real type of a target column, so text values land in integer or numeric columns. */
 export function typedAs(context: EjesLoadContext, role: EjesLoadRole, logical: string, expression: string): string {
   const type = sqlTypeOf(context.targets[role], logical);

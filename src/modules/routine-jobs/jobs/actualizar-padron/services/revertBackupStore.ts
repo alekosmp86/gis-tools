@@ -57,6 +57,13 @@ export async function registerRevertBackup(file: RevertBackupFile, now: number =
   return token;
 }
 
+/** Unregisters a backup whose transaction was rolled back, and deletes its file: a rolled-back run leaves no revert file behind. */
+export async function discardRevertBackup(token: string): Promise<void> {
+  const entry = registryOf().get(token);
+  registryOf().delete(token);
+  if (entry !== undefined) await rm(entry.filePath, { force: true }).catch(() => undefined);
+}
+
 async function removeExpiredRevertBackups(now: number): Promise<void> {
   const cutoff = now - RETENTION_MS;
   const holder = globalThis as typeof globalThis & RegistryHolder;

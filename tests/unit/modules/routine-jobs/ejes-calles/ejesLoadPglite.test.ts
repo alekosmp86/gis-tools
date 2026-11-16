@@ -89,7 +89,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
         distance: "123.46",
         geometry: "0:123.456",
       });
-      expect(outcome.load.counts).toMatchObject({ inserted: 1, waysCreated: 1, mastersCreated: 1, updated: 0, renumbered: 0, pointsMoved: 0 });
+      expect(outcome.load.counts).toMatchObject({ inserted: 1, waysCreated: 1, updated: 0, renumbered: 0, pointsMoved: 0 });
       expect(outcome.targetModified).toBe(true);
       expect(outcome.outcomeUnknown).toBe(false);
     });
@@ -162,7 +162,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
 
       const outcome = await persist();
 
-      expect(outcome.load.counts).toMatchObject({ inserted: 2, waysCreated: 1, mastersCreated: 2 });
+      expect(outcome.load.counts).toMatchObject({ inserted: 2, waysCreated: 1 });
     });
 
     it("should assign ids above the table maximum when the sequences are behind (sequences repaired first)", async () => {
@@ -335,7 +335,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       expect(sections).toEqual([{ id, reftramo_ideuy: 3002 }]);
       const points = await rowsOf(database, `SELECT id, id_road_section FROM carto.access_point WHERE id IN (${moved.join(",")}) ORDER BY id`);
       expect(points.map((row) => row.id_road_section)).toEqual(["3002", "3002", "3002"]);
-      expect(outcome.load.counts).toMatchObject({ renumbered: 1, pointsMoved: 3, inserted: 0, updated: 0, waysCreated: 0, mastersCreated: 0 });
+      expect(outcome.load.counts).toMatchObject({ renumbered: 1, pointsMoved: 3, inserted: 0, updated: 0, waysCreated: 0 });
     });
 
     it("should list the renumbered section with its id and the points moved", async () => {
@@ -743,7 +743,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       const outcome = await persist();
 
       const backup = outcome.load.backup;
-      expect(backup?.fileName).toMatch(/^ejes-revert-carto-road_section-.*\.sql\.gz$/);
+      expect(backup?.fileName).toMatch(/^ejes-revert-carto-road_section-\d{8}-\d{6}-\d{3}\.sql\.gz$/);
       const entry = getRevertBackup(backup?.token ?? "");
       expect(entry?.bytes).toBe(backup?.bytes);
       expect((await stat(entry?.filePath ?? "")).size).toBe(backup?.bytes);
@@ -833,6 +833,42 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
     });
   });
 
+  describe("revert file name (EJL-25)", () => {
+    const SHARED_BACKUP_PATTERN = /^(padron|centros-anep|ejes)-revert-.*\.sql\.gz$/;
+
+    const seedOneChange = async (): Promise<void> => {
+      await insertWay(database, 5, "CALLE UNO");
+      await insertSection(database, { ref: 2001, calle: 5, geom: "0:50", distance: "50.00" });
+      await insertStaging(database, [{ ref: "2001", calle: "5", nombre: "CALLE UNO", tipo: "PASAJE", geom: "0:80" }]);
+    };
+
+    it("should name two runs in the same second by their milliseconds, so the second run does not collide with the first file", async () => {
+      await seedOneChange();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-01-01T10:00:00.100Z"));
+      const first = await persist();
+      vi.setSystemTime(new Date("2026-01-01T10:00:00.200Z"));
+
+      const second = await persist();
+
+      const firstName = first.load.backup?.fileName ?? "";
+      const secondName = second.load.backup?.fileName ?? "";
+      expect(firstName).toMatch(/^ejes-revert-carto-road_section-\d{8}-\d{6}-100\.sql\.gz$/);
+      expect(secondName).toMatch(/^ejes-revert-carto-road_section-\d{8}-\d{6}-200\.sql\.gz$/);
+      expect(secondName.replace(/-\d{3}\.sql\.gz$/, "")).toBe(firstName.replace(/-\d{3}\.sql\.gz$/, ""));
+      expect(new Set([firstName, secondName]).size).toBe(2);
+      expect((await backupFiles()).sort()).toEqual([firstName, secondName].sort());
+    });
+
+    it("should name the file so the shared BACKUP_FILE_PATTERN of the padron store still matches it", async () => {
+      await seedOneChange();
+
+      const outcome = await persist();
+
+      expect(outcome.load.backup?.fileName).toMatch(SHARED_BACKUP_PATTERN);
+    });
+  });
+
   describe("access_point and idempotence (EJL-11, EJL-13, EJL-14)", () => {
     const seedAll = async () => {
       await insertWay(database, 5, "CALLE UNO");
@@ -882,14 +918,14 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(new Date("2026-01-01T10:00:00Z"));
       const first = await persist();
-      expect(first.load.counts).toMatchObject({ inserted: 1, updated: 1, renumbered: 1, waysCreated: 1, mastersCreated: 1, pointsMoved: 2 });
+      expect(first.load.counts).toMatchObject({ inserted: 1, updated: 1, renumbered: 1, waysCreated: 1, pointsMoved: 2 });
       const afterFirst = await snapshotOf(database);
       vi.setSystemTime(new Date("2026-01-01T10:05:00Z"));
 
       const second = await persist();
 
       expect(await snapshotOf(database)).toEqual(afterFirst);
-      expect(second.load.counts).toEqual({ inserted: 0, updated: 0, renumbered: 0, waysCreated: 0, mastersCreated: 0, pointsMoved: 0 });
+      expect(second.load.counts).toEqual({ inserted: 0, updated: 0, renumbered: 0, renumberSkipped: 0, waysCreated: 0, pointsMoved: 0 });
       expect(second.load.renumbered).toEqual([]);
     });
 
@@ -899,7 +935,9 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       const outcome = await persist();
 
       expect(Object.keys(outcome.load).sort()).toEqual(["backup", "counts", "renumbered", "skipped", "surplus", "surplusTotal"]);
-      expect(Object.keys(outcome.load.counts).sort()).toEqual(["inserted", "pointsMoved", "renumbered", "updated", "waysCreated", "mastersCreated"].sort());
+      expect(Object.keys(outcome.load.counts).sort()).toEqual(
+        ["inserted", "pointsMoved", "renumberSkipped", "renumbered", "updated", "waysCreated"].sort()
+      );
       expect(outcome.load.skipped).toEqual([]);
       expect(outcome.load.surplus).toEqual([]);
     });

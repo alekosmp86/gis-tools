@@ -70,6 +70,17 @@ export async function tablePrivilegeIssues(
   return issues;
 }
 
+/** has_table_privilege with a comma list is true when any of the listed privileges is held. */
+export async function tableAnyPrivilegeIssues(
+  session: CatalogQuerySession,
+  layout: TableLayout,
+  privileges: readonly string[],
+  purpose: string
+): Promise<string[]> {
+  if (await hasTablePrivilege(session, layout, privileges.join(","))) return [];
+  return [`No tiene ninguno de los privilegios ${privileges.join(", ")} sobre la tabla ${labelOf(layout)}, necesarios ${purpose}.`];
+}
+
 const sequenceNameOf = (target: WritableTargetLayout, idSequence: string): string => {
   const sequence = parseSequenceName(idSequence);
   return sequence === undefined ? idSequence : `${sequence.schema ?? target.schema}.${sequence.name}`;

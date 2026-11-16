@@ -6,7 +6,7 @@ import {
 } from "../jobs/ejes-calles/constants";
 import { assertEjesRealRunEnabled } from "../jobs/ejes-calles/domain/realRunSwitch";
 import { assertDistinctEjesTables } from "../jobs/ejes-calles/domain/tableRoles";
-import type { EjesParams, EjesSummary, EjesTableRef, EjesTables } from "../jobs/ejes-calles/types";
+import type { EjesFingerprint, EjesParams, EjesSummary, EjesTableRef, EjesTables } from "../jobs/ejes-calles/types";
 import {
   assertTablesDistinct,
   invalid,
@@ -22,6 +22,7 @@ const PASSWORD_REQUIRED_MESSAGE = "La carga real de ejes de calles necesita la c
 const SUMMARY_REQUIRED_MESSAGE = "Para cargar primero analice los ejes: falta el resumen del análisis.";
 const ACCEPTED_REQUIRED_MESSAGE = "El campo accepted es obligatorio y debe ser un objeto.";
 const SUMMARY_COUNT_MESSAGE = "El resumen del análisis no tiene todos sus conteos numéricos: vuelva a analizar.";
+const FINGERPRINT_MESSAGE = "El resumen del análisis no tiene la huella del origen: vuelva a analizar.";
 const ACCEPTED_LIST_KEYS = ["splits", "merges", "removals", "plainRemovals"] as const;
 
 function readTableRef(tables: JsonRecord, role: EjesTableRole): EjesTableRef {
@@ -40,10 +41,23 @@ function readCount(counts: JsonRecord, key: string): number {
   return value;
 }
 
+function readFingerprint(summary: JsonRecord): EjesFingerprint {
+  const fingerprint = readRecord(summary, "fingerprint");
+  const rows = fingerprint.rows;
+  const digest = fingerprint.digest;
+  if (typeof rows !== "number" || !Number.isFinite(rows)) throw invalid(FINGERPRINT_MESSAGE);
+  if (typeof digest !== "string" || digest === "") throw invalid(FINGERPRINT_MESSAGE);
+  return { rows, digest };
+}
+
 function readSummary(body: JsonRecord): EjesSummary {
   if (body.summary === undefined || body.summary === null) throw invalid(SUMMARY_REQUIRED_MESSAGE);
-  const counts = readRecord(readRecord(body, "summary"), "counts");
-  return { counts: Object.fromEntries(EJES_SUMMARY_COUNT_KEYS.map((key) => [key, readCount(counts, key)])) as EjesSummary["counts"] };
+  const summary = readRecord(body, "summary");
+  const counts = readRecord(summary, "counts");
+  return {
+    counts: Object.fromEntries(EJES_SUMMARY_COUNT_KEYS.map((key) => [key, readCount(counts, key)])) as EjesSummary["counts"],
+    fingerprint: readFingerprint(summary),
+  };
 }
 
 /** Slice 1 applies no accepted split, merge or removal: asking for one keeps the message of a real run that is not available. */

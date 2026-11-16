@@ -8,6 +8,7 @@ import { EJES_TABLE_ROLE } from "../constants";
 import { ejesBlockersOf } from "../domain/blockers";
 import {
   changedSummaryKeys,
+  fingerprintChanged,
   skippedRowsOf,
   toEjesLoadPlan,
   toLoadRenumberedRow,
@@ -24,8 +25,8 @@ import {
   buildNewTableSql,
   buildNewWaysSql,
   buildPairTableSql,
+  buildHeldCopiesSql,
   buildRenumberedListSql,
-  buildRenumTableSql,
   buildStateTableSql,
   buildSurplusListSql,
   buildSurplusTableSql,
@@ -52,8 +53,8 @@ import { assertEjesRealRunEnabled } from "../domain/realRunSwitch";
 import { EJES_STEP } from "../domain/plannedSteps";
 import { buildRevertInsertsSql, buildRevertPointsSql, buildRevertSectionsSql } from "../domain/revertSql";
 import type { EjesAnalysis, EjesLoadContext, EjesLoadReport, EjesParams, EjesStagingReport, EjesSummary } from "../types";
-import { writeEjesRevertBackup } from "./ejesRevertBackup";
-import { readAnalysis, readStagingReport } from "./readEjesAnalysis";
+import { discardEjesRevertBackup, writeEjesRevertBackup } from "./ejesRevertBackup";
+import { readAnalysisForLoad, readStagingReport } from "./readEjesAnalysis";
 
 export interface EjesPersistBody {
   staging: EjesStagingReport;
@@ -85,7 +86,13 @@ function assertWritten(label: string, written: number, expected: number): void {
 }
 
 function assertSummaryMatches(summary: EjesSummary | undefined, analysis: EjesAnalysis): void {
-  if (summary === undefined || changedSummaryKeys(summary, analysis.counts).length > 0) throw new Error(ANALYSIS_CHANGED_MESSAGE);
+  if (
+    summary === undefined ||
+    changedSummaryKeys(summary, analysis.counts).length > 0 ||
+    fingerprintChanged(summary, analysis.fingerprint)
+  ) {
+    throw new Error(ANALYSIS_CHANGED_MESSAGE);
+  }
 }
 
 async function writtenBy(session: RunSession, sql: string): Promise<number> {
@@ -104,8 +111,8 @@ async function createSelection(session: RunSession, context: EjesLoadContext): P
   const { layouts } = context;
   const statements = [
     buildCopyTableSql(layouts),
+    buildHeldCopiesSql(),
     buildAnalyzeTempSql(LOAD_TEMP.COPY),
-    buildRenumTableSql(layouts),
     buildExistTableSql(layouts),
     buildPairTableSql(),
     buildStateTableSql(layouts),
@@ -134,7 +141,7 @@ async function prepareLoad(session: RunSession, context: EjesLoadContext): Promi
   await createSelection(session, context);
   await session.query(buildNewTableSql(context));
   await createWays(session, context);
-  await session.query(buildSurplusTableSql(context.layouts));
+  await session.query(buildSurplusTableSql(context));
   await session.query(buildRevertSectionsSql(context, context.layouts));
   await session.query(buildRevertPointsSql(context, context.layouts));
   await session.query(buildRevertInsertsSql(context));
@@ -148,7 +155,7 @@ async function writeWays(session: RunSession, context: EjesLoadContext, plan: Ej
 
 async function writeSections(session: RunSession, context: EjesLoadContext, plan: EjesLoadPlan): Promise<void> {
   if (plan.counts.inserted === 0) return;
-  assertWritten("las direcciones maestras", await writtenBy(session, buildInsertMastersSql(context)), plan.counts.mastersCreated);
+  assertWritten("las direcciones maestras", await writtenBy(session, buildInsertMastersSql(context)), plan.counts.inserted);
   // Ordered: both inserts use the ids taken before the backup.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   assertWritten("los tramos nuevos", await writtenBy(session, buildInsertSectionsSql(context)), plan.counts.inserted);
@@ -175,7 +182,7 @@ async function writeRenumbered(session: RunSession, context: EjesLoadContext, pl
   if (plan.counts.pointsMoved === 0) return;
   // Ordered: the points move after their section took the new reftramo, in the same transaction.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  assertWritten("los puntos de acceso movidos", await writtenBy(session, buildMovePointsSql(context, context.layouts)), plan.counts.pointsMoved);
+  assertWritten("los puntos de acceso movidos", await writtenBy(session, buildMovePointsSql(context)), plan.counts.pointsMoved);
 }
 
 async function analyzeChanged(session: RunSession, context: EjesLoadContext, plan: EjesLoadPlan): Promise<void> {
@@ -183,7 +190,7 @@ async function analyzeChanged(session: RunSession, context: EjesLoadContext, pla
   const changed = [
     counts.inserted + counts.updated + counts.renumbered > 0 ? EJES_TABLE_ROLE.ROAD_SECTION : undefined,
     counts.waysCreated > 0 ? EJES_TABLE_ROLE.CIRCULATION_WAY : undefined,
-    counts.mastersCreated > 0 ? EJES_TABLE_ROLE.ADDRESS_MASTER : undefined,
+    counts.inserted > 0 ? EJES_TABLE_ROLE.ADDRESS_MASTER : undefined,
     counts.pointsMoved > 0 ? EJES_TABLE_ROLE.ACCESS_POINT : undefined,
   ];
   for (const role of changed) {
@@ -201,6 +208,15 @@ async function readLoadLists(session: RunSession): Promise<Pick<EjesLoadReport, 
   return { surplus, renumbered };
 }
 
+/** The writes and the ANALYZE of the changed tables. Any failure here is followed by a rollback, so the backup is discarded first. */
+async function writeChanges(session: RunSession, context: EjesLoadContext, plan: EjesLoadPlan, timer: StepTimer): Promise<void> {
+  await timer.run(EJES_STEP.WAYS, () => writeWays(session, context, plan));
+  await timer.run(EJES_STEP.SECTIONS, () => writeSections(session, context, plan));
+  await timer.run(EJES_STEP.UPDATES, () => writeUpdates(session, context, plan));
+  await timer.run(EJES_STEP.RENUMBER, () => writeRenumbered(session, context, plan));
+  await timer.run(EJES_STEP.ANALYZE_TABLES, () => analyzeChanged(session, context, plan));
+}
+
 async function persistBody(
   session: RunSession,
   params: EjesParams,
@@ -215,7 +231,7 @@ async function persistBody(
   throwIfIssues(ejesBlockersOf(staging));
   // Ordered: a blocker aborts the run before the classification and the backup.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const analysis = await timer.run(EJES_STEP.ANALYZE, () => readAnalysis(session, context.layouts));
+  const analysis = await timer.run(EJES_STEP.ANALYZE, () => readAnalysisForLoad(session, context.layouts));
   assertSummaryMatches(params.summary, analysis);
   await timer.run(EJES_STEP.SEQUENCES, () => repairSequences(session, context));
   // Ordered: the ids come from the repaired sequences.
@@ -229,11 +245,12 @@ async function persistBody(
   const backup = await timer.run(EJES_STEP.BACKUP, () =>
     writeEjesRevertBackup(session, params.tables[EJES_TABLE_ROLE.ROAD_SECTION], plan.counts)
   );
-  await timer.run(EJES_STEP.WAYS, () => writeWays(session, context, plan));
-  await timer.run(EJES_STEP.SECTIONS, () => writeSections(session, context, plan));
-  await timer.run(EJES_STEP.UPDATES, () => writeUpdates(session, context, plan));
-  await timer.run(EJES_STEP.RENUMBER, () => writeRenumbered(session, context, plan));
-  await timer.run(EJES_STEP.ANALYZE_TABLES, () => analyzeChanged(session, context, plan));
+  try {
+    await writeChanges(session, context, plan, timer);
+  } catch (error: unknown) {
+    await discardEjesRevertBackup(backup);
+    throw error;
+  }
   return {
     staging,
     analysis,

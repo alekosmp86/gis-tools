@@ -3,7 +3,7 @@ import type { DbConfig } from "@/core/types/db";
 import type { TableLayout } from "../actualizar-padron/domain/layouts";
 import type { StepTiming } from "../cargar-padrones/types";
 import type { WritableTargetLayout } from "../shared/tableResolution";
-import type { EJES_LOAD_ROLES, EJES_SUMMARY_COUNT_KEYS, EjesTableRole, PadronType, TwinClass } from "./constants";
+import type { EJES_LOAD_ROLES, EJES_SUMMARY_COUNT_KEYS, EjesTableRole, PadronType, RenumberSkipReason, TwinClass } from "./constants";
 
 export interface EjesTableRef {
   schema: string;
@@ -74,6 +74,7 @@ export interface EjesCounts {
   renumbered: number;
   renumberedWithPoints: number;
   renumberedPoints: number;
+  renumberSkipped: number;
 }
 
 export interface EjesClocReport {
@@ -155,6 +156,20 @@ export interface EjesRenumberedRow {
   hausdorff: number | null;
 }
 
+export interface EjesRenumberSkippedRow {
+  oldRef: string;
+  newRef: string;
+  idcalle: string | null;
+  points: number;
+  reason: RenumberSkipReason;
+}
+
+/** The staging as the analysis reads it: its row count and an md5 over its rows (see `fingerprintCtes`). */
+export interface EjesFingerprint {
+  rows: number;
+  digest: string;
+}
+
 export interface EjesAnalysis {
   counts: EjesCounts;
   cloc: EjesClocReport;
@@ -165,6 +180,8 @@ export interface EjesAnalysis {
   attrChanges: EjesAttrRow[];
   twins: EjesTwinRow[];
   renumbered: EjesRenumberedRow[];
+  renumberSkipped: EjesRenumberSkippedRow[];
+  fingerprint: EjesFingerprint;
 }
 
 export interface EjesResolvedLayouts {
@@ -212,9 +229,10 @@ export interface EjesGeometryMapParams {
 
 export type EjesSummaryCountKey = (typeof EJES_SUMMARY_COUNT_KEYS)[number];
 
-/** The counts of the Revisar analysis: the real run only goes on when the staging still gives the same ones. */
+/** The counts and the staging fingerprint of the Revisar analysis: the real run only goes on when the staging still gives the same ones. */
 export interface EjesSummary {
   counts: Record<EjesSummaryCountKey, number>;
+  fingerprint: EjesFingerprint;
 }
 
 export type EjesLoadRole = (typeof EJES_LOAD_ROLES)[number];
@@ -228,8 +246,8 @@ export interface EjesLoadCounts {
   inserted: number;
   updated: number;
   renumbered: number;
+  renumberSkipped: number;
   waysCreated: number;
-  mastersCreated: number;
   pointsMoved: number;
 }
 
@@ -247,10 +265,11 @@ export interface EjesLoadRenumberedRow {
 }
 
 export interface EjesSkippedRow {
-  kind: "split" | "merge" | "removal";
+  kind: "split" | "merge" | "removal" | "renumber";
   refs: string[];
   idcalle: string | null;
   points: number;
+  reason?: RenumberSkipReason;
 }
 
 export interface EjesBackup {

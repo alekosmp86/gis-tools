@@ -19,6 +19,7 @@ export interface EjesListSummaries {
   twins: string;
   invalidGeometries: string;
   renumbered: string;
+  renumberHeld: string;
 }
 
 export interface EjesAttrRowView extends EjesAttrRow {
@@ -177,13 +178,14 @@ const summariesOf = (result: EjesResult): EjesListSummaries => ({
   attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
   invalidGeometries: listSummaryOf("Tramos con geometría inválida o colapsada (se omiten)", result.staging.invalidGeometries.length, result.staging.invalidGeometryRows),
   renumbered: listSummaryOf("Tramos renumerados (primero los que tienen puntos de acceso)", result.renumbered.length, result.counts.renumbered),
+  renumberHeld: listSummaryOf("Renumerados retenidos (ambos tramos quedan como están)", result.renumberSkipped.length, result.counts.renumberSkipped),
   twins: listSummaryOf("Tramos repetidos por localidad (primero los que se deciden en el mapa)", result.twins.length, result.counts.twins),
 });
 
 export function buildEjesReportView(result: EjesResult): EjesReportView {
   const { timings, totalSeconds } = timingsViewOf(result.stepTimings);
   return {
-    banners: [{ kind: "dryRun", text: EJES_DRY_RUN_BANNER }],
+    banners: result.dryRun ? [{ kind: "dryRun", text: EJES_DRY_RUN_BANNER }] : [],
     kpiGroups: kpiGroupsOf(result),
     blockers: result.blockers,
     privilegeInfo: result.privilegeInfo,

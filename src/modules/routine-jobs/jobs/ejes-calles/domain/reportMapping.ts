@@ -1,6 +1,6 @@
 import { listOf, nullableNumber, numberOf, textOf, type Row } from "../../shared/rowMapping";
 import { shortNameOf } from "./shortName";
-import { TWIN_CLASS, type TwinClass } from "../constants";
+import { TWIN_CLASS, type RenumberSkipReason, type TwinClass } from "../constants";
 import { ANALYSIS_LIST_ALIAS } from "./analysisSql";
 import type {
   EjesAnalysis,
@@ -10,6 +10,7 @@ import type {
   EjesNewStreetRow,
   EjesRemovalRow,
   EjesRenumberedRow,
+  EjesRenumberSkippedRow,
   EjesSplitRow,
   EjesTwinRow,
   EjesStagingReport,
@@ -50,6 +51,14 @@ const renumberedOf = (row: Row): EjesRenumberedRow => ({
   oldLength: nullableNumber(row.old_length),
   newLength: nullableNumber(row.new_length),
   hausdorff: nullableNumber(row.hausdorff),
+});
+
+const renumberSkippedOf = (row: Row): EjesRenumberSkippedRow => ({
+  oldRef: String(row.old_ref),
+  newRef: String(row.new_ref),
+  idcalle: textOf(row.idcalle),
+  points: numberOf(row.points),
+  reason: String(row.reason) as RenumberSkipReason,
 });
 
 const removalOf = (row: Row): EjesRemovalRow => ({
@@ -151,6 +160,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       renumbered: numberOf(row.renumbered),
       renumberedWithPoints: numberOf(row.renumbered_with_points),
       renumberedPoints: numberOf(row.renumbered_points),
+      renumberSkipped: numberOf(row.renumber_skipped),
     },
     cloc: {
       withLocality: numberOf(row.with_locality),
@@ -164,5 +174,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
     attrChanges: listOf(row[ANALYSIS_LIST_ALIAS.ATTRS]).map(attrOf),
     twins: listOf(row[ANALYSIS_LIST_ALIAS.TWINS]).map(twinOf),
     renumbered: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBERED]).map(renumberedOf),
+    renumberSkipped: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED]).map(renumberSkippedOf),
+    fingerprint: { rows: numberOf(row.staging_rows), digest: textOf(row.staging_digest) ?? "" },
   };
 }

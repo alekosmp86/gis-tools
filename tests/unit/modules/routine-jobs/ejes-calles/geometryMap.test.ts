@@ -9,6 +9,9 @@ import {
 import { TWIN_PADRON_DISTANCE_M } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { TableLayout } from "@/modules/routine-jobs/jobs/actualizar-padron/domain/layouts";
 
+const CANONICAL_TRIM_REFTRAMO =
+  "CASE WHEN trim(s.\"reftramo\"::text) ~ '^[0-9]+$' THEN (trim(s.\"reftramo\"::text))::numeric::text ELSE trim(s.\"reftramo\"::text) END";
+
 const ROAD_SECTION: TableLayout = {
   schema: "carto",
   table: "road_section",
@@ -57,7 +60,7 @@ describe("ejes geometry map", () => {
 
     it("should find the staging row by its trimmed reftramo through a parameter", () => {
       expect(sql).toContain('FROM "bdj_carto"."ide_ejesviacirculacion" AS s');
-      expect(sql).toContain('trim(s."reftramo"::text) = $1');
+      expect(sql).toContain(`${CANONICAL_TRIM_REFTRAMO} = $1`);
     });
 
     it("should take one row, because rows that share a reftramo share the geometry", () => {
@@ -88,7 +91,7 @@ describe("ejes geometry map", () => {
     });
 
     it("should read the record of one copy: the same reftramo and the trimmed localidad bound as $2", () => {
-      expect(byLocality).toContain('trim(s."reftramo"::text) = $1');
+      expect(byLocality).toContain(`${CANONICAL_TRIM_REFTRAMO} = $1`);
       expect(byLocality).toContain('AND trim(s."localidad"::text) = $2');
       expect(byLocality).toMatch(/LIMIT 1$/);
     });
@@ -110,7 +113,7 @@ describe("ejes geometry map", () => {
     it("should read the padrones table and the staging section, with the reftramo and the type as parameters", () => {
       expect(sql).toContain('FROM "carto"."padron" AS p');
       expect(sql).toContain('FROM "bdj_carto"."ide_ejesviacirculacion" AS s');
-      expect(sql).toContain('trim(s."reftramo"::text) = $1');
+      expect(sql).toContain(`${CANONICAL_TRIM_REFTRAMO} = $1`);
       expect(sql).toContain("= $2::text");
     });
 

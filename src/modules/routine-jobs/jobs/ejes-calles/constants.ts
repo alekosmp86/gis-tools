@@ -204,6 +204,15 @@ export const EJES_LOAD_ROLES = [
   EJES_TABLE_ROLE.ACCESS_POINT,
 ] as const;
 
+export const RENUMBER_SKIP_REASON = {
+  REPEATED_OLD_REF: "repeated_old_ref",
+  AMBIGUOUS_OLD_REF: "ambiguous_old_ref",
+  AMBIGUOUS_NEW_REF: "ambiguous_new_ref",
+  NOT_SINGLE_COPY: "not_single_copy",
+} as const;
+
+export type RenumberSkipReason = (typeof RENUMBER_SKIP_REASON)[keyof typeof RENUMBER_SKIP_REASON];
+
 export const EJES_SUMMARY_COUNT_KEYS = [
   "newSections",
   "unchanged",
@@ -215,4 +224,5 @@ export const EJES_SUMMARY_COUNT_KEYS = [
   "merges",
   "plainRemovals",
   "renumbered",
+  "renumberSkipped",
 ] as const;

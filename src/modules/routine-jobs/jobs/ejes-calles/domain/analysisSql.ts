@@ -10,12 +10,21 @@ import {
   LOCALITIES_COLUMN,
   ROAD_SECTION_COLUMN,
   EJES_STAGING_COLUMN,
+  EJES_TABLE_ROLE,
 } from "../constants";
-import type { EjesLayouts } from "../types";
+import type { EjesLayouts, EjesLoadContext } from "../types";
+import { integerColumnOf, physicalOf } from "./loadContext";
 import { col, countOf, listOf, table, trimmed } from "./layoutSql";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
-import { INTEGER_PATTERN, validGeometrySql } from "./stagingSql";
-import { renumberCountColumns, renumberCtes, renumberListColumn } from "./renumberSql";
+import { canonicalTextSql, INTEGER_PATTERN, validGeometrySql } from "./stagingSql";
+import {
+  renumberCountColumns,
+  renumberCtes,
+  renumberListColumn,
+  renumberSinkCtes,
+  renumberSkippedListColumn,
+  type RenumberSinks,
+} from "./renumberSql";
 import { twinCountColumns, twinCtes, twinGroupCtes, twinListColumn } from "./twinSql";
 
 const SNAP_GRID = 10 ** -GEOMETRY_EQUALITY_DECIMALS;
@@ -28,6 +37,7 @@ export const ANALYSIS_LIST_ALIAS = {
   ATTRS: "attrs_json",
   TWINS: "twins_json",
   RENUMBERED: "renumbered_json",
+  RENUMBER_SKIPPED: "renumber_skipped_json",
 } as const;
 
 export const comparableLineSql = (geometry: string): string =>
@@ -40,10 +50,29 @@ export const geometriesDifferSql = (current: string, incoming: string): string =
 export const coverageThresholdSql = (covered: string, length: string): string =>
   `${covered} >= ${COVERAGE_RATIO} * ${length}`;
 
-export function stagingCtes(layouts: EjesLayouts): string[] {
+/** The `reftramo` of an access point, in the same canonical form as the sections it points to. */
+const accessPointRefSql = (layouts: EjesLayouts): string =>
+  canonicalTextSql(`a.${col(layouts, "ACCESS_POINT", ACCESS_POINT_COLUMN.ROAD_SECTION)}`);
+
+const CANONICAL_INTEGER_TEXT = "^(0|-?[1-9][0-9]*)$";
+
+/**
+ * Matches an access point's `reftramo` to a canonical text `value` (see `accessPointRefSql`). An integer column is compared by value,
+ * so its index applies; a canonical text that is not an integer in the column's range matches no point. Other columns keep the text.
+ */
+export function accessPointRefMatchSql(context: EjesLoadContext, value: string): string {
+  const column = physicalOf(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ROAD_SECTION);
+  const integer = integerColumnOf(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ROAD_SECTION);
+  if (integer === undefined) return `${canonicalTextSql(`a.${column}`)} = ${value}`;
+  const inRange = `CASE WHEN ${value}::numeric BETWEEN ${integer.min} AND ${integer.max} THEN ${value}::${integer.type} END`;
+  return `a.${column} = CASE WHEN ${value} ~ '${CANONICAL_INTEGER_TEXT}' THEN (${inRange}) END`;
+}
+
+function stagingCtes(layouts: EjesLayouts): string[] {
   const staging = table(layouts, "STAGING");
   const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
-  const reference = trimmed(column(EJES_STAGING_COLUMN.REFTRAMO));
+  const reference = canonicalTextSql(column(EJES_STAGING_COLUMN.REFTRAMO));
+  const street = canonicalTextSql(column(EJES_STAGING_COLUMN.IDCALLE));
   const geometry = column(EJES_STAGING_COLUMN.GEOM);
   return [
     cte("stg_keys", `SELECT DISTINCT ${reference} AS ref FROM ${staging} AS s WHERE ${reference} IS NOT NULL`),
@@ -52,7 +81,7 @@ export function stagingCtes(layouts: EjesLayouts): string[] {
       [
         "SELECT DISTINCT ON (raw.ref) raw.* FROM (SELECT",
         `${reference} AS ref,`,
-        `${trimmed(column(EJES_STAGING_COLUMN.IDCALLE))} AS idcalle,`,
+        `${street} AS idcalle,`,
         `${trimmed(column(EJES_STAGING_COLUMN.NOMBRE))} AS nombre,`,
         `${trimmed(column(EJES_STAGING_COLUMN.TIPO_VIALIDAD))} AS tipo,`,
         `${trimmed(column(EJES_STAGING_COLUMN.FUENTE))} AS fuente,`,
@@ -60,7 +89,33 @@ export function stagingCtes(layouts: EjesLayouts): string[] {
         `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `${geometry} AS geom`,
         `FROM ${staging} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry)}`,
-        `AND ${reference} ~ '${INTEGER_PATTERN}') AS raw ORDER BY raw.ref`,
+        `AND ${reference} ~ '${INTEGER_PATTERN}') AS raw`,
+        "ORDER BY raw.ref, raw.idcalle, raw.nombre, raw.tipo, raw.fuente, raw.departamento, raw.localidad, ST_AsEWKB(raw.geom)",
+      ].join(" ")
+    ),
+  ];
+}
+
+/** Row count and md5 of the staging rows the analysis reads: a row digest per row, then the sorted digests hashed together. */
+function fingerprintCtes(layouts: EjesLayouts): string[] {
+  const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
+  const fields = [
+    EJES_STAGING_COLUMN.REFTRAMO,
+    EJES_STAGING_COLUMN.IDCALLE,
+    EJES_STAGING_COLUMN.NOMBRE,
+    EJES_STAGING_COLUMN.TIPO_VIALIDAD,
+    EJES_STAGING_COLUMN.FUENTE,
+    EJES_STAGING_COLUMN.DEPARTAMENTO,
+    EJES_STAGING_COLUMN.LOCALIDAD,
+  ].map((logical) => `quote_nullable(${column(logical)}::text)`);
+  const geometry = `quote_nullable(md5(ST_AsEWKB(${column(EJES_STAGING_COLUMN.GEOM)})))`;
+  const rowDigest = `md5(concat_ws(',', ${[...fields, geometry].join(", ")}))`;
+  return [
+    cte(
+      "staging_fp",
+      [
+        "SELECT count(*) AS row_count, COALESCE(md5(string_agg(f.digest, '' ORDER BY f.digest)), '') AS digest",
+        `FROM (SELECT ${rowDigest} AS digest FROM ${table(layouts, "STAGING")} AS s) AS f`,
       ].join(" ")
     ),
   ];
@@ -70,13 +125,56 @@ export function circulationPairsCte(layouts: EjesLayouts): string {
   const way = (logical: string): string => `w.${col(layouts, "CIRCULATION_WAY", logical)}`;
   return cte(
     "cw_pairs",
-    `SELECT DISTINCT ${trimmed(way(CIRCULATION_WAY_COLUMN.CALLE))} AS idcalle, ${trimmed(way(CIRCULATION_WAY_COLUMN.NAME))} AS name FROM ${table(layouts, "CIRCULATION_WAY")} AS w`
+    `SELECT DISTINCT ${canonicalTextSql(way(CIRCULATION_WAY_COLUMN.CALLE))} AS idcalle, ${trimmed(way(CIRCULATION_WAY_COLUMN.NAME))} AS name FROM ${table(layouts, "CIRCULATION_WAY")} AS w`
   );
 }
 
+/** Points per section `reftramo`; `filter` narrows the access points read, e.g. to the references already known. */
+export function pointsCte(layouts: EjesLayouts, filter = ""): string {
+  return cte(
+    "ap",
+    `SELECT ${accessPointRefSql(layouts)} AS ref, count(*) AS points FROM ${table(layouts, "ACCESS_POINT")} AS a ${filter} GROUP BY 1`
+  );
+}
+
+/** One row per kept copy (`reftramo + localidad + departamento`); the load writes exactly these rows. */
+export function copyRawCte(layouts: EjesLayouts): string {
+  const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
+  const reference = canonicalTextSql(column(EJES_STAGING_COLUMN.REFTRAMO));
+  const geometry = column(EJES_STAGING_COLUMN.GEOM);
+  return cte(
+    "copy_raw",
+    [
+      "SELECT DISTINCT ON (raw.ref, raw.localidad, raw.departamento) raw.* FROM (SELECT",
+      `${reference} AS ref,`,
+      `${canonicalTextSql(column(EJES_STAGING_COLUMN.IDCALLE))} AS idcalle,`,
+      `${trimmed(column(EJES_STAGING_COLUMN.NOMBRE))} AS nombre,`,
+      `${trimmed(column(EJES_STAGING_COLUMN.TIPO_VIALIDAD))} AS tipo,`,
+      `${trimmed(column(EJES_STAGING_COLUMN.FUENTE))} AS fuente,`,
+      `${trimmed(column(EJES_STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
+      `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
+      `${geometry} AS geom`,
+      `FROM ${table(layouts, "STAGING")} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry)}`,
+      `AND ${reference} ~ '${INTEGER_PATTERN}') AS raw`,
+      "ORDER BY raw.ref, raw.localidad, raw.departamento, raw.idcalle, raw.nombre, raw.tipo, raw.fuente, ST_AsEWKB(raw.geom)",
+    ].join(" ")
+  );
+}
+
+/** A new `reftramo` held by a skipped renumber pair is neither new nor inserted: its section and its old one stay as they are. */
+const heldNewSql = (reference: string): string => `${reference} NOT IN (SELECT new_ref FROM ${q("renum_skipped")})`;
+
+export const copyKeptCte = (): string =>
+  cte(
+    "copy_kept",
+    `SELECT r.* FROM ${q("copy_raw")} AS r LEFT JOIN ${q("twins")} AS w ON w.ref = r.ref WHERE w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities))`
+  );
+
+/** Kept copies per `reftramo`: a renumber onto a `reftramo` with one copy only. */
+const copyCountCte = (): string => cte("copy_refs", `SELECT k.ref, count(*) AS copies FROM ${q("copy_kept")} AS k GROUP BY k.ref`);
+
 export function currentCtes(layouts: EjesLayouts): string[] {
   const section = (logical: string): string => `r.${col(layouts, "ROAD_SECTION", logical)}`;
-  const point = (logical: string): string => `a.${col(layouts, "ACCESS_POINT", logical)}`;
   return [
     circulationPairsCte(layouts),
     cte("cw", `SELECT idcalle, min(name) AS name FROM ${q("cw_pairs")} GROUP BY idcalle`),
@@ -85,22 +183,19 @@ export function currentCtes(layouts: EjesLayouts): string[] {
       [
         "SELECT",
         `${section(ROAD_SECTION_COLUMN.ID)} AS id,`,
-        `${trimmed(section(ROAD_SECTION_COLUMN.REFTRAMO))} AS ref,`,
-        `${trimmed(section(ROAD_SECTION_COLUMN.CIRCULATION_WAY))} AS idcalle,`,
+        `${canonicalTextSql(section(ROAD_SECTION_COLUMN.REFTRAMO))} AS ref,`,
+        `${canonicalTextSql(section(ROAD_SECTION_COLUMN.CIRCULATION_WAY))} AS idcalle,`,
         `${section(ROAD_SECTION_COLUMN.TYPE)}::text AS type_id,`,
         `${section(ROAD_SECTION_COLUMN.FONT)}::text AS font_id,`,
         `${section(ROAD_SECTION_COLUMN.GEOMETRY)} AS geometry`,
         `FROM ${table(layouts, "ROAD_SECTION")} AS r`,
       ].join(" ")
     ),
-    cte(
-      "ap",
-      `SELECT ${trimmed(point(ACCESS_POINT_COLUMN.ROAD_SECTION))} AS ref, count(*) AS points FROM ${table(layouts, "ACCESS_POINT")} AS a GROUP BY 1`
-    ),
+    pointsCte(layouts),
   ];
 }
 
-export function classifiedCtes(): string[] {
+function classifiedCtes(): string[] {
   return [
     cte(
       "matched",
@@ -128,7 +223,7 @@ export function classifiedCtes(): string[] {
   ];
 }
 
-export function removalCtes(): string[] {
+function removalCtes(): string[] {
   return [
     cte(
       "removed",
@@ -194,7 +289,7 @@ function remainderCtes(): string[] {
     ),
     cte(
       "new_streets",
-      `SELECT c.idcalle, c.nombre AS name, count(*) AS sections, string_agg(DISTINCT c.tipo, ', ') AS tipos, string_agg(DISTINCT c.departamento, ', ') AS departments, string_agg(DISTINCT c.localidad, ', ') AS localities FROM ${q("classified")} AS c WHERE c.is_new AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle IS NOT DISTINCT FROM c.idcalle AND p.name IS NOT DISTINCT FROM c.nombre) GROUP BY c.idcalle, c.nombre`
+      `SELECT c.idcalle, c.nombre AS name, count(*) AS sections, string_agg(DISTINCT c.tipo, ', ') AS tipos, string_agg(DISTINCT c.departamento, ', ') AS departments, string_agg(DISTINCT c.localidad, ', ') AS localities FROM ${q("classified")} AS c WHERE c.is_new AND ${heldNewSql("c.ref")} AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle IS NOT DISTINCT FROM c.idcalle AND p.name IS NOT DISTINCT FROM c.nombre) GROUP BY c.idcalle, c.nombre`
     ),
   ];
 }
@@ -216,7 +311,7 @@ function clocCtes(layouts: EjesLayouts): string[] {
         `WHERE ST_Intersects(${localityGeometry}, c.geom)`,
         `ORDER BY ST_Length(ST_Intersection(${localityGeometry}, c.geom)) DESC LIMIT 1) AS cloc,`,
         `(SELECT dp.code FROM ${q("dept")} AS dp WHERE dp.code = upper(c.departamento) OR dp.name = upper(c.departamento) LIMIT 1) AS dept_code`,
-        `FROM ${q("classified")} AS c WHERE c.is_new OR c.geom_changed`,
+        `FROM ${q("classified")} AS c WHERE (c.is_new AND ${heldNewSql("c.ref")}) OR c.geom_changed`,
       ].join(" ")
     ),
   ];
@@ -240,17 +335,18 @@ function listColumns(): string[] {
     listOf(ANALYSIS_LIST_ALIAS.ATTRS, "attr_list", attrSelect),
     twinListColumn(ANALYSIS_LIST_ALIAS.TWINS),
     renumberListColumn(ANALYSIS_LIST_ALIAS.RENUMBERED),
+    renumberSkippedListColumn(ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED),
   ];
 }
 
 function countColumns(): string[] {
   return [
-    `${countOf("classified", "is_new")} AS "new_sections"`,
+    `${countOf("classified", `is_new AND ${heldNewSql("ref")}`)} AS "new_sections"`,
     `${countOf("classified", "NOT is_new AND NOT attr_changed AND NOT geom_changed")} AS "unchanged"`,
     `${countOf("classified", "attr_changed")} AS "attr"`,
     `${countOf("classified", "geom_changed")} AS "geom"`,
     `${countOf("classified", "attr_changed AND geom_changed")} AS "both"`,
-    `${countOf("removed")} AS "removed"`,
+    `${countOf("removed", `id NOT IN (SELECT old_id FROM ${q("renum_skipped")})`)} AS "removed"`,
     `${countOf("splits")} AS "splits"`,
     `${countOf("merges")} AS "merges"`,
     `${countOf("plain")} AS "plain_removals"`,
@@ -261,24 +357,35 @@ function countColumns(): string[] {
     `${countOf("located", "cloc IS NULL AND dept_code IS NULL")} AS "without_code"`,
     ...twinCountColumns(),
     ...renumberCountColumns(),
+    `(SELECT row_count FROM ${q("staging_fp")}) AS "staging_rows"`,
+    `(SELECT digest FROM ${q("staging_fp")}) AS "staging_digest"`,
   ];
 }
 
-export function buildEjesAnalysisSql(layouts: EjesLayouts): string {
+/**
+ * The analysis as one statement. With `sinks` (temp tables the caller created) the renumbered and the skipped renumber pairs are also
+ * written there by data-modifying CTEs, which PostgreSQL runs once whether or not the result reads them: the load reuses them.
+ */
+export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: RenumberSinks): string {
   const ctes = [
     tipoMapCte(),
     fuenteMapCte(),
     ...stagingCtes(layouts),
+    ...fingerprintCtes(layouts),
     ...currentCtes(layouts),
     ...classifiedCtes(),
     ...removalCtes(),
+    ...twinGroupCtes(layouts),
+    ...twinCtes(layouts),
+    copyRawCte(layouts),
+    copyKeptCte(),
+    copyCountCte(),
     ...renumberCtes(),
+    ...(sinks === undefined ? [] : renumberSinkCtes(sinks)),
     ...splitCtes(),
     ...mergeCtes(),
     ...remainderCtes(),
     ...clocCtes(layouts),
-    ...twinGroupCtes(layouts),
-    ...twinCtes(layouts),
   ];
   return `${withClause(ctes)}\nSELECT\n${[...countColumns(), ...listColumns()].join(",\n")}`;
 }

@@ -1,6 +1,6 @@
-# Routine jobs: "Carga de ejes de calles" (EJ-1 to EJ-24)
+# Routine jobs: "Carga de ejes de calles" (EJ-1 to EJ-26)
 
-Related: LOAD_SLICE1 (EJL-1 to EJL-16, built), TWINS (ET), RENUMBERED (ER), SPLIT_MERGE_LOAD (EJS, not built; refines EJ-13, EJ-19, EJ-21).
+Related: LOAD_SLICE1 (EJL-1 to EJL-26, built), TWINS (ET), RENUMBERED (ER), SPLIT_MERGE_LOAD (EJS, not built; refines EJ-13, EJ-19, EJ-21).
 
 ## Context
 
@@ -68,7 +68,10 @@ Roles added later: `ejes-padrones` (ET-1, read). The split/merge load adds a rea
 
 ## Wizard
 
-- EJ-24: Steps Conexión, Tablas, Revisar and Resultado on the shared orchestrator. Revisar has "Analizar"; "Cargar ahora" is enabled only after an analysis of the same staging data and when EJ-8 has no blocker. Resultado shows progress, the report, the review lists of EJ-13 and "Nueva carga"; when the finished run is an analysis (dry-run) for which the same gate as Revisar holds (`canLoadNow`: same tables, no EJ-8 blockers, password typed; the typed password confirmation survives starting an analysis so the button can appear, and is cleared when a real run starts, on "Nueva carga", on a connection or password change, and on leaving Revisar for another step), it also shows "Cargar ahora" next to the report, wired to the same handler (the server still refuses a real run unless `EJES_CALLES_REAL_RUN_ENABLED=true`). State, steps and run store live beside the other jobs' (`ui/ejesCallesWizardState.ts`, `ui/ejesCallesWizardSteps.ts`, `ui/ejesCallesRunStore.ts`).
+- EJ-24: Steps Conexión, Tablas, Revisar and Resultado on the shared orchestrator. Revisar has "Analizar"; "Cargar ahora" is enabled only after an analysis of the same staging data and when EJ-8 has no blocker. Resultado shows progress, the report, the review lists of EJ-13 and "Nueva carga"; when the finished run is an analysis (dry-run) for which the same gate as Revisar holds (`canLoadNow`: same tables, no EJ-8 blockers, password typed; the typed password confirmation survives starting an analysis so the button can appear, and is cleared when a real run starts, on "Nueva carga", on a connection or password change, and on leaving Revisar for another step), it also shows "Cargar ahora" next to the report, wired to the same handler (the server still refuses a real run unless `EJES_CALLES_REAL_RUN_ENABLED=true`). When the finished run is a real run (its result carries `load`), Resultado first shows "Resultado de la carga" as its title, before the report and before the banners and alert: the outcome banner (confirmed, or COMMIT not confirmed), the commit error in the alert style when there is one, the applied counts (inserted, updated, renumbered, renumbers held back, ways created, points moved), the skipped list (splits, merges, removals and renumbers held back, each renumber with both refs and its reason), the surplus list, the revert backup with its download (`RevertBackupSection`, the same block as the padrón jobs), and the "Siguiente paso sugerido" text of EJ-22. The dry-run report shows no dry-run banner for a real run. State, steps and run store live beside the other jobs' (`ui/ejesCallesWizardState.ts`, `ui/ejesCallesWizardSteps.ts`, `ui/ejesCallesRunStore.ts`).
+
+- EJ-25: The dry-run report has a collapsible list "Renumerados retenidos" (`EJES_LIST.RENUMBER_HELD`, anchor `ejes-list-renumberHeld`): one row per held renumber pair of EJL-12 and EJL-17, with the columns reftramo anterior, reftramo nuevo, idcalle, "Puntos de acceso" (the access points of the old section) and "Motivo" (the Spanish label of the reason, `RENUMBER_SKIP_TEXT` in `ui/ejesLoadTexts.ts`). The list has no map. Its title counts the analysis count `counts.renumberSkipped`, and the list rows are `result.renumberSkipped`.
+- EJ-26: The summary strip has ten cells: "Filas del archivo" (information only, never opens a list), "Calles nuevas", "Cambios de atributos", "Renumerados", "Renumerados retenidos", "Divididos", "Unidos", "Sin reemplazo", "Repetidos por localidad" and "Geometría inválida o colapsada". The "Renumerados retenidos" cell shows `counts.renumberSkipped`, is disabled when it is 0, and opens its list in the same way as the others. The report opens at most one list by default, in this order: "Repetidos por localidad" when it has rows; otherwise the first list with rows in the order Divididos, Unidos, Renumerados, Renumerados retenidos, Sin reemplazo, Geometría inválida o colapsada, Calles nuevas, Cambios de atributos. So "Renumerados retenidos" opens by default only when it has rows and none of the lists before it (twins, splits, merges, renumbered) has rows.
 
 ## Documentation and tests
 
@@ -82,4 +85,4 @@ Roles added later: `ejes-padrones` (ET-1, read). The split/merge load adds a rea
 
 ## Acceptance criteria count
 
-EJ-1 to EJ-24 (24 criteria, numbering unchanged).
+EJ-1 to EJ-26 (26 criteria, numbering unchanged).

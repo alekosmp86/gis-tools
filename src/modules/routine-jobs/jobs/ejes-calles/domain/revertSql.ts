@@ -8,9 +8,10 @@ import {
   ROAD_SECTION_COLUMN,
 } from "../constants";
 import type { EjesLayouts, EjesLoadContext, EjesLoadRole } from "../types";
-import { col, table, trimmed } from "./layoutSql";
+import { accessPointRefMatchSql } from "./analysisSql";
+import { col, table } from "./layoutSql";
 import { physicalOf, qualifiedOf } from "./loadContext";
-import { CHANGED_CONDITION, LOAD_TEMP, tmp } from "./loadSelectionSql";
+import { CHANGED_CONDITION, createTemp, LOAD_TEMP, tmp } from "./loadSelectionSql";
 
 const REVERT_TEMP = {
   SECTIONS: "ej_rev_sections",
@@ -44,8 +45,6 @@ const ID_LOGICAL_BY_ROLE: Record<EjesLoadRole, string> = {
 };
 
 const formatOf = (template: string, args: readonly string[]): string => `format(${literal(template)}, ${args.join(", ")})`;
-
-const createTemp = (name: string, body: string): string => `CREATE TEMP TABLE ${q(name)} ON COMMIT DROP AS ${body}`;
 
 /** One UPDATE per touched section, with every column the load can change, read before the first write. */
 export function buildRevertSectionsSql(context: EjesLoadContext, layouts: EjesLayouts): string {
@@ -87,7 +86,7 @@ export function buildRevertPointsSql(context: EjesLoadContext, layouts: EjesLayo
     [
       `SELECT (row_number() OVER (ORDER BY g.old_value))::bigint AS n, ${formatOf("UPDATE %s SET %s = %L WHERE %s IN (%s);", args)} AS line FROM (`,
       `SELECT ${reference}::text AS old_value, string_agg(format('%L', ${point(ACCESS_POINT_COLUMN.ID)}), ', ' ORDER BY ${point(ACCESS_POINT_COLUMN.ID)}) AS ids`,
-      `FROM ${table(layouts, "ACCESS_POINT")} AS a JOIN ${tmp(LOAD_TEMP.RENUM)} AS n ON ${trimmed(reference)} = n.old_ref GROUP BY ${reference}::text`,
+      `FROM ${table(layouts, "ACCESS_POINT")} AS a JOIN ${tmp(LOAD_TEMP.RENUM)} AS n ON ${accessPointRefMatchSql(context, "n.old_ref")} GROUP BY ${reference}::text`,
       ") AS g",
     ].join(" ")
   );

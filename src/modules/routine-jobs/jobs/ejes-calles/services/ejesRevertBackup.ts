@@ -10,6 +10,7 @@ import {
   writeGzipText,
 } from "../../actualizar-padron/services/revertBackup";
 import {
+  discardRevertBackup,
   ensureRevertBackupDirectory,
   registerRevertBackup,
   revertBackupDirectory,
@@ -27,10 +28,16 @@ import {
 } from "../domain/revertSql";
 import type { EjesBackup, EjesLoadCounts, EjesTableRef } from "../types";
 
+export const discardEjesRevertBackup = (backup: EjesBackup): Promise<void> => discardRevertBackup(backup.token);
+
 type LineTally = Record<string, number>;
 
+const MILLIS_DIGITS = 3;
+
+const millisOf = (date: Date): string => String(date.getMilliseconds()).padStart(MILLIS_DIGITS, "0");
+
 const revertFileName = (target: EjesTableRef, now: Date): string =>
-  `ejes-revert-${safeIdentifier(target.schema)}-${safeIdentifier(target.table)}-${stampOf(now)}.sql.gz`;
+  `ejes-revert-${safeIdentifier(target.schema)}-${safeIdentifier(target.table)}-${stampOf(now)}-${millisOf(now)}.sql.gz`;
 
 async function* pagesOf(session: RunSession, name: string, tally: LineTally): AsyncGenerator<string> {
   let cursor: string | undefined;
@@ -91,7 +98,7 @@ async function writeAndRegister(
       updated: counts.updated,
       inserted: counts.inserted,
       ways: counts.waysCreated,
-      masters: counts.mastersCreated,
+      masters: counts.inserted,
       pointsMoved: counts.pointsMoved,
     },
   };

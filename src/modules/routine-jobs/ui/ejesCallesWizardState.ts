@@ -1,6 +1,7 @@
 import { EJES_DEFAULT_TABLES, EJES_ROLES, EJES_TABLE_ROLE, type EjesTableRole } from "../jobs/ejes-calles/constants";
+import { summaryOf } from "../jobs/ejes-calles/domain/loadMapping";
 import { connectionBlockingReason, type ConnectionField } from "./cargarPadronesWizardState";
-import type { ClientConnection, EjesGeometryMapBase, EjesStartRequest } from "./clientTypes";
+import type { ClientConnection, EjesGeometryMapBase, EjesLoadRequest, EjesStartRequest } from "./clientTypes";
 import { trimConnection } from "./connectionProfiles";
 import { ejesAnalysisKeyOf } from "./ejesCallesAnalysisKey";
 import type { EjesRunSnapshot } from "./ejesCallesRunStore";
@@ -150,6 +151,13 @@ export function canLoadNow(state: EjesWizardState, snapshot: EjesRunSnapshot): b
   if (snapshot.phase !== RunPhase.DONE || result === undefined || snapshot.plan?.dryRun !== true) return false;
   if (result.blockers.length > 0 || !isPasswordTyped(state)) return false;
   return snapshot.plan.analysisKey === ejesAnalysisKeyOf(toEjesStartRequest(state, { dryRun: true }));
+}
+
+/** The real-run request, its summary taken from the finished dry-run; null while "Cargar ahora" is not allowed. */
+export function ejesLoadRequestOf(state: EjesWizardState, snapshot: EjesRunSnapshot): EjesLoadRequest | null {
+  const result = snapshot.job?.result;
+  if (result === undefined || !canLoadNow(state, snapshot)) return null;
+  return { ...toEjesStartRequest(state, { dryRun: false }), dryRun: false, accepted: {}, summary: summaryOf(result) };
 }
 
 const indexOfStep = (step: EjesStep): number => STEP_ORDER.indexOf(step);

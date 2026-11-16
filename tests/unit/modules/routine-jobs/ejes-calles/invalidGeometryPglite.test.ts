@@ -12,6 +12,7 @@ const SETUP_SQL = `
   CREATE FUNCTION ST_IsEmpty(geometry) RETURNS boolean AS 'SELECT $1 = ''''' LANGUAGE sql;
   CREATE FUNCTION ST_IsValid(geometry) RETURNS boolean AS 'SELECT $1 <> ''BAD''' LANGUAGE sql;
   CREATE FUNCTION ST_Length(geometry) RETURNS float8 AS 'SELECT CASE $1 WHEN ''SHORT'' THEN 0.0005 WHEN ''EDGE'' THEN 0.001 ELSE 10 END' LANGUAGE sql;
+  CREATE FUNCTION ST_AsEWKB(geometry) RETURNS bytea AS 'SELECT convert_to($1::text, ''UTF8'')' LANGUAGE sql;
   CREATE SCHEMA bdj_carto;
   CREATE TABLE bdj_carto.ide_ejesviacirculacion (
     reftramo text, idcalle text, nombre text, tipo_vialidad text, fuente text, localidad text, departamento text, geom geometry

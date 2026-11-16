@@ -10,7 +10,13 @@ import { EJES_STEP, plannedEjesStepLabels } from "../domain/plannedSteps";
 import { assertEjesRealRunEnabled } from "../domain/realRunSwitch";
 import { assertDistinctEjesTables } from "../domain/tableRoles";
 import type { EjesParams, EjesResolvedLayouts, EjesResult } from "../types";
-import { assertEjesLoadReady, assertEjesReadable, assertEjesStagingReady, ejesWritePrivilegeInfo } from "./preflight";
+import {
+  assertEjesLoadReady,
+  assertEjesReadable,
+  assertEjesStagingReady,
+  ejesAnalyzeWarnings,
+  ejesWritePrivilegeInfo,
+} from "./preflight";
 import { readStagingAndAnalysis, type EjesAnalysisBody } from "./readEjesAnalysis";
 import { resolveEjesLayouts } from "./resolveLayouts";
 import { runEjesPersistTransaction } from "./writeEjesSteps";
@@ -56,9 +62,15 @@ async function resolveAndValidate(session: RunSession, params: EjesParams, timer
   });
 }
 
+async function dryRunPrivilegeInfo(session: RunSession, params: EjesParams, resolved: EjesResolvedLayouts): Promise<string[]> {
+  const context = ejesLoadContextOf(resolved.layouts, params.tables, resolved.writeTargets);
+  const privileges = await ejesWritePrivilegeInfo(session, resolved);
+  return [...privileges, ...(await ejesAnalyzeWarnings(session, context))];
+}
+
 async function runAnalysisOnSession(session: RunSession, params: EjesParams, timer: StepTimer): Promise<EjesResult> {
   const resolved = await resolveAndValidate(session, params, timer);
-  const privilegeInfo = await timer.run(EJES_STEP.PRIVILEGES, () => ejesWritePrivilegeInfo(session, resolved));
+  const privilegeInfo = await timer.run(EJES_STEP.PRIVILEGES, () => dryRunPrivilegeInfo(session, params, resolved));
   // One pg client: the analysis transaction starts after the privilege reads.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const { staging, analysis } = await analyzeInReadOnlyTransaction(session, params, resolved, timer);
@@ -78,7 +90,11 @@ async function runAnalysisOnSession(session: RunSession, params: EjesParams, tim
 async function runPersistOnSession(session: RunSession, params: EjesParams, timer: StepTimer): Promise<EjesResult> {
   const resolved = await resolveAndValidate(session, params, timer);
   const context = ejesLoadContextOf(resolved.layouts, params.tables, resolved.writeTargets);
-  await timer.run(EJES_STEP.PRIVILEGES, () => assertEjesLoadReady(session, context));
+  // Ordered: the privileges are checked before the transaction takes the lock.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const privilegeInfo = await timer.run(EJES_STEP.PRIVILEGES, () => assertEjesLoadReady(session, context));
+  // Ordered: the write transaction runs after the privilege checks, on the same pg client.
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const outcome = await runEjesPersistTransaction(session, params, context, timer);
   const { staging, analysis, load, targetModified, outcomeUnknown, commitError } = outcome;
   return {
@@ -89,7 +105,7 @@ async function runPersistOnSession(session: RunSession, params: EjesParams, time
     staging,
     ...analysis,
     blockers: [],
-    privilegeInfo: [],
+    privilegeInfo,
     tables: tableLabelsOf(params),
     stepTimings: timer.timings,
     load,

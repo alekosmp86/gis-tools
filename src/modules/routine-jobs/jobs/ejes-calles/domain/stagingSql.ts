@@ -9,6 +9,13 @@ export const INTEGER_PATTERN = "^[0-9]+$";
 
 const DAMAGED_COLUMNS = [EJES_STAGING_COLUMN.NOMBRE, EJES_STAGING_COLUMN.LOCALIDAD, EJES_STAGING_COLUMN.DEPARTAMENTO];
 
+/** Integer text without leading zeros, so '0123' and '123' compare equal; other text is kept and never cast. */
+export const canonicalIntegerSql = (text: string): string =>
+  `CASE WHEN ${text} ~ '${INTEGER_PATTERN}' THEN (${text})::numeric::text ELSE ${text} END`;
+
+/** A reftramo or idcalle as the analysis compares it: trimmed, and canonical when it is an integer. */
+export const canonicalTextSql = (expression: string): string => canonicalIntegerSql(`NULLIF(btrim(${expression}::text), '')`);
+
 const textOf = (layouts: EjesLayouts, column: string): string =>
   `NULLIF(btrim(s.${physicalColumn(layouts[EJES_TABLE_ROLE.STAGING], column)}::text), '')`;
 
@@ -23,7 +30,7 @@ function stagingRowsCte(layouts: EjesLayouts): string {
     "s",
     [
       "SELECT",
-      `${textOf(layouts, EJES_STAGING_COLUMN.REFTRAMO)} AS ref,`,
+      `${canonicalIntegerSql(textOf(layouts, EJES_STAGING_COLUMN.REFTRAMO))} AS ref,`,
       `${textOf(layouts, EJES_STAGING_COLUMN.IDCALLE)} AS idcalle,`,
       `${textOf(layouts, EJES_STAGING_COLUMN.TIPO_VIALIDAD)} AS tipo,`,
       `${textOf(layouts, EJES_STAGING_COLUMN.FUENTE)} AS fuente,`,

@@ -6,6 +6,7 @@ import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertType } from "@/ui-kit/types/ui";
 import { EjesCallesReport } from "../EjesCallesReport";
+import { EjesLoadResult } from "../EjesLoadResult";
 import type { EjesGeometryMapBase } from "../clientTypes";
 import type { EjesRunSnapshot } from "../ejesCallesRunStore";
 import { RunPhase } from "../jobRunStore";
@@ -73,8 +74,10 @@ export const EjesResultStep: React.FC<EjesResultStepProps> = ({
       );
     case RunPhase.DONE: {
       const result = snapshot.job?.result;
+      const load = result?.load;
       return (
         <div className={styles.stack}>
+          {result && load && <EjesLoadResult result={result} load={load} />}
           {result ? <EjesCallesReport result={result} mapBase={mapBase} /> : <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />}
           {canLoad && (
             <div className={styles.actions}>
