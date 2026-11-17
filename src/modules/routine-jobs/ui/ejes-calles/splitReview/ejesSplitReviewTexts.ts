@@ -29,6 +29,7 @@ export const EJES_SPLIT_REVIEW_TEXT = {
   ACCEPTED_NOTE: "Tramo aceptado: sus destinos se envían con Cargar ahora.",
   SPLIT_NOT_YET: "El tramo se acepta en la lista cuando todos sus puntos tienen destino.",
   FILTER_REASON: "Motivo",
+  FILTER_ATTENTION: "Mostrar",
   FILTER_STREET: "Calle (idcalle)",
   FILTER_STREET_PLACEHOLDER: "Todas las calles",
   FILTERED_LIST: (shown: number, total: number): string => `Filtro activo: se muestran ${shown} de ${total} tramos.`,
@@ -68,4 +69,18 @@ export const EJES_SPLIT_REASON_FILTER_TEXT = {
   ALL: "Todos los motivos",
   AMBIGUOUS: "Ambiguos",
   NO_GEOMETRY: "Sin coordenada",
+} as const;
+
+export const EJES_SPLIT_ATTENTION_FILTER_TEXT = {
+  ALL: "Todos",
+  DECISION: "Requieren decisión",
+  READY: "Listos",
+  HELD: "Retenidos",
+} as const;
+
+export const EJES_SPLIT_ATTENTION_COUNT_TEXT = {
+  DECISION: "requieren decisión",
+  READY: "listos",
+  HELD: "retenidos",
+  SEPARATOR: " · ",
 } as const;

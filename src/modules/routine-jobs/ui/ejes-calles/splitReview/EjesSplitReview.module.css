@@ -29,11 +29,52 @@
   font-weight: 600;
 }
 
+.filterBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px;
+}
+
+.attentionCounts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.attentionCount,
+.attentionCountActive {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.attentionCountActive {
+  text-decoration: underline;
+}
+
+.attentionCount:focus-visible,
+.attentionCountActive:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+.attentionEmphasis {
+  font-weight: 700;
 }
 
 .field {

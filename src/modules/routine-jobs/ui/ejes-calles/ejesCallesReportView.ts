@@ -1,6 +1,6 @@
 import { AMBIGUOUS_POINT_GAP_M, FAR_POINT_REPORT_M, TWIN_CLASS, type TwinClass } from "../../jobs/ejes-calles/constants";
 import { ejesAttrChangesOf } from "../../jobs/ejes-calles/domain/attrChanges";
-import type { EjesAttrRow, EjesResult, EjesTwinRow, EjesUnknownValue } from "../../jobs/ejes-calles/types";
+import type { EjesAttrRow, EjesResult, EjesSplitRow, EjesTwinRow, EjesUnknownValue } from "../../jobs/ejes-calles/types";
 import { plural } from "../../jobs/shared/text";
 import type { ReportBannerView, ReportKpiView, TimingItemView } from "../shared/ReportParts";
 import { defaultOpenListOf, stripOf, type EjesListKey, type EjesStripItem } from "./ejesCallesListMeta";
@@ -209,3 +209,48 @@ export function buildEjesReportView(result: EjesResult): EjesReportView {
     totalSeconds,
   };
 }
+
+export const ATTENTION_RANK = { DECISION: 0, READY: 1, HELD: 2 } as const;
+
+export type AttentionRank = (typeof ATTENTION_RANK)[keyof typeof ATTENTION_RANK];
+
+export const ATTENTION_FILTER = { ALL: "all", DECISION: "decision", READY: "ready", HELD: "held" } as const;
+
+export type AttentionFilter = (typeof ATTENTION_FILTER)[keyof typeof ATTENTION_FILTER];
+
+type RankedFilter = Exclude<AttentionFilter, typeof ATTENTION_FILTER.ALL>;
+
+const RANK_OF_FILTER: Record<RankedFilter, AttentionRank> = {
+  [ATTENTION_FILTER.DECISION]: ATTENTION_RANK.DECISION,
+  [ATTENTION_FILTER.READY]: ATTENTION_RANK.READY,
+  [ATTENTION_FILTER.HELD]: ATTENTION_RANK.HELD,
+};
+
+export const FILTER_OF_RANK: Record<AttentionRank, RankedFilter> = {
+  [ATTENTION_RANK.DECISION]: ATTENTION_FILTER.DECISION,
+  [ATTENTION_RANK.READY]: ATTENTION_FILTER.READY,
+  [ATTENTION_RANK.HELD]: ATTENTION_FILTER.HELD,
+};
+
+/** From the analysis alone: held or not acceptable (2), ready with no point pending (1), needs a point decision (0). */
+const attentionRankOf = (row: EjesSplitRow): AttentionRank => {
+  if (row.heldReason !== null || row.incompleteReview || row.oldRef === "" || row.points !== row.refPoints) return ATTENTION_RANK.HELD;
+  return row.reviewPoints + row.noGeometryPoints > 0 ? ATTENTION_RANK.DECISION : ATTENTION_RANK.READY;
+};
+
+const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+const compareSplitsByAttention = (a: EjesSplitRow, b: EjesSplitRow): number =>
+  attentionRankOf(a) - attentionRankOf(b) || b.points - a.points || compareText(a.oldRef, b.oldRef);
+
+/** The splits by attention rank, then by points (most first), then by reftramo. A new array: the analysis order is untouched. */
+export const sortSplitsByAttention = (rows: readonly EjesSplitRow[]): EjesSplitRow[] => [...rows].sort(compareSplitsByAttention);
+
+export const attentionCountsOf = (rows: readonly EjesSplitRow[]): Record<AttentionRank, number> => {
+  const counts: Record<AttentionRank, number> = { [ATTENTION_RANK.DECISION]: 0, [ATTENTION_RANK.READY]: 0, [ATTENTION_RANK.HELD]: 0 };
+  for (const row of rows) counts[attentionRankOf(row)] += 1;
+  return counts;
+};
+
+export const splitMatchesAttention = (row: EjesSplitRow, filter: AttentionFilter): boolean =>
+  filter === ATTENTION_FILTER.ALL || attentionRankOf(row) === RANK_OF_FILTER[filter];
