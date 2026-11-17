@@ -1,45 +1,15 @@
-import { FAR_POINT_REPORT_M } from "../../jobs/ejes-calles/constants";
 import type {
   EjesInvalidGeometryRow,
-  EjesMergeRow,
   EjesNewStreetRow,
   EjesRemovalRow,
   EjesRenumberedRow,
   EjesRenumberSkippedRow,
-  EjesSplitRow,
   EjesTwinRow,
 } from "../../jobs/ejes-calles/types";
-import { coverageTextOf, metersTextOf, twinDecisionTextOf, twinRowCaseTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
+import { metersTextOf, twinDecisionTextOf, twinRowCaseTextOf, type EjesAttrRowView } from "./ejesCallesReportView";
 import { NO_REFTRAMO_TEXT, RENUMBER_SKIP_TEXT } from "./ejesLoadTexts";
 import type { TableColumn } from "../shared/ReportParts";
 import { textOrNoData } from "../shared/reportFormat";
-
-export const SPLIT_COLUMNS: TableColumn<EjesSplitRow>[] = [
-  { header: "reftramo quitado", cell: (row) => (row.oldRef === "" ? NO_REFTRAMO_TEXT : row.oldRef) },
-  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
-  { header: "reftramo nuevos", cell: (row) => row.newRefs.join(", ") },
-  { header: "Puntos de acceso", cell: (row) => String(row.points) },
-  { header: "Por reftramo", cell: (row) => String(row.refPoints) },
-  { header: "Destino automático", cell: (row) => String(row.autoPoints) },
-  { header: "A revisar", cell: (row) => String(row.reviewPoints) },
-  { header: "Sin geometría", cell: (row) => String(row.noGeometryPoints) },
-  { header: `Lejos (más de ${FAR_POINT_REPORT_M} m)`, cell: (row) => String(row.farPoints) },
-  { header: "Cobertura", cell: (row) => coverageTextOf(row.coverage) },
-  { header: "Largo anterior (m)", cell: (row) => metersTextOf(row.oldLength) },
-  { header: "Largo nuevo (m)", cell: (row) => metersTextOf(row.newLength) },
-  { header: "Nuevo fuera del anterior (m)", cell: (row) => metersTextOf(row.outsideLength) },
-];
-
-export const MERGE_COLUMNS: TableColumn<EjesMergeRow>[] = [
-  { header: "reftramo nuevo", cell: (row) => row.newRef },
-  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
-  { header: "reftramo quitados", cell: (row) => row.oldRefs.join(", ") },
-  { header: "Puntos de acceso", cell: (row) => String(row.points) },
-  { header: "Cobertura", cell: (row) => coverageTextOf(row.coverage) },
-  { header: "Largo anterior (m)", cell: (row) => metersTextOf(row.oldLength) },
-  { header: "Largo nuevo (m)", cell: (row) => metersTextOf(row.newLength) },
-  { header: "Nuevo fuera del anterior (m)", cell: (row) => metersTextOf(row.outsideLength) },
-];
 
 export const RENUMBERED_COLUMNS: TableColumn<EjesRenumberedRow>[] = [
   { header: "reftramo anterior", cell: (row) => row.oldRef },

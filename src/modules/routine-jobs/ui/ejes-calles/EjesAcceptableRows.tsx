@@ -14,16 +14,17 @@ export interface EjesAcceptableRowsProps<Row> {
   total: number;
   columns: TableColumn<Row>[];
   rowKey: (row: Row) => string;
-  onShowOnMap?: (row: Row) => void;
   /** A row that cannot be accepted (no key to send) is shown without its button and never sent. */
   acceptable?: (row: Row) => boolean;
   /** The text a row shows instead of its button when it is not acceptable. */
   notAcceptableText?: string;
-  /** The text of one row that cannot be accepted, when it differs from the others; wins over `notAcceptableText`. */
-  notAcceptableTextOf?: (row: Row) => string;
   /** Takes over a row's toggle (a split is accepted through its own rule); absent, the change goes straight to the accept state. */
   onToggleRow?: (row: Row, accepted: boolean) => void;
   accept: EjesAcceptView;
+  /** Filters shown on the toolbar row, before the bulk actions. */
+  filters?: React.ReactNode;
+  /** The "N aceptados de M" counter on the toolbar row. */
+  counterText?: string;
 }
 
 const ALWAYS_ACCEPTABLE = (): boolean => true;
@@ -35,12 +36,12 @@ export function EjesAcceptableRows<Row>({
   total,
   columns,
   rowKey,
-  onShowOnMap,
   acceptable = ALWAYS_ACCEPTABLE,
   notAcceptableText = EJES_ACCEPT_TEXT.NOT_ACCEPTABLE,
-  notAcceptableTextOf,
   onToggleRow,
   accept,
+  filters,
+  counterText,
 }: EjesAcceptableRowsProps<Row>) {
   const current = accept.keys[list];
   const accepted = new Set(current);
@@ -54,7 +55,7 @@ export function EjesAcceptableRows<Row>({
     {
       header: EJES_ACCEPT_TEXT.COLUMN,
       cell: (row) => {
-        if (!acceptable(row)) return notAcceptableTextOf?.(row) ?? notAcceptableText;
+        if (!acceptable(row)) return notAcceptableText;
         const key = rowKey(row);
         const isAccepted = accepted.has(key);
         const toggle = () => (onToggleRow === undefined ? accept.onChange(change([key], !isAccepted)) : onToggleRow(row, isAccepted));
@@ -72,8 +73,10 @@ export function EjesAcceptableRows<Row>({
         capped={acceptCapReachedBy(current, pendingKeys)}
         onAcceptAll={() => accept.onChange(change(listedKeys, true))}
         onRejectAll={() => accept.onChange(change(listedKeys, false))}
+        filters={filters}
+        counterText={counterText}
       />
-      <RowsTable columns={withAccept} rows={rows} rowKey={rowKey} onShowOnMap={onShowOnMap} />
+      <RowsTable columns={withAccept} rows={rows} rowKey={rowKey} />
     </>
   );
 }

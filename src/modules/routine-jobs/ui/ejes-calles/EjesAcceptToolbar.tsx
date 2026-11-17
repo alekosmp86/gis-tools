@@ -18,9 +18,13 @@ export interface EjesAcceptToolbarProps {
   capped: boolean;
   onAcceptAll: () => void;
   onRejectAll: () => void;
+  /** Filters shown on the same row, before the bulk actions. */
+  filters?: React.ReactNode;
+  /** The "N aceptados de M" counter, shown after the bulk actions when given. */
+  counterText?: string;
 }
 
-/** "Aceptar todos" and "Rechazar todos" for the rows of one list, with the notes on an incomplete list or the request limit. */
+/** The filters, "Aceptar todos" and "Rechazar todos" for the rows of one list, with the notes on an incomplete list or the request limit. */
 export const EjesAcceptToolbar: React.FC<EjesAcceptToolbarProps> = ({
   listed,
   total,
@@ -29,9 +33,12 @@ export const EjesAcceptToolbar: React.FC<EjesAcceptToolbarProps> = ({
   capped,
   onAcceptAll,
   onRejectAll,
+  filters,
+  counterText,
 }) => (
   <>
     <div className={styles.toolbar}>
+      {filters}
       <div className={styles.actions}>
         <Button variant={ButtonVariant.SECONDARY} onClick={onAcceptAll} disabled={!canAcceptAll}>
           <Check size={ICON_SIZE} />
@@ -41,6 +48,7 @@ export const EjesAcceptToolbar: React.FC<EjesAcceptToolbarProps> = ({
           <X size={ICON_SIZE} />
           <span>{EJES_ACCEPT_TEXT.REJECT_ALL}</span>
         </Button>
+        {counterText !== undefined && <span className={styles.badge}>{counterText}</span>}
       </div>
     </div>
     {total > listed && <p className={styles.note}>{incompleteListTextOf(listed, total)}</p>}

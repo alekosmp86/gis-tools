@@ -1,0 +1,30 @@
+import { FAR_POINT_REPORT_M } from "../../../jobs/ejes-calles/constants";
+import { plural } from "../../../jobs/shared/text";
+
+export const EJES_COMPACT_TEXT = {
+  SPLIT_TRACE: "Tramo quitado",
+  SPLIT_PIECES: "Tramos nuevos",
+  MERGE_TRACE: "Tramo nuevo",
+  MERGE_PIECES: "Tramos quitados",
+  POINTS: "Puntos de acceso",
+  STATUS: "Estado",
+  DETAIL: "Detalle",
+  SHOW_DETAIL: "Ver detalle",
+  NOT_ACCEPTABLE: "No aceptable",
+  ACCEPTED: "Aceptado",
+  READY: "Listo para aceptar",
+  REVIEW_PROGRESS: (resolved: number, total: number): string => `Requiere revisión (${resolved} de ${total} resueltos)`,
+  STREET: (idcalle: string): string => `idcalle ${idcalle}`,
+  PIECE_COUNT: (count: number): string => plural(count, "tramo nuevo", "tramos nuevos"),
+  OLD_COUNT: (count: number): string => plural(count, "tramo quitado", "tramos quitados"),
+  AUTO: (count: number): string => plural(count, "automático", "automáticos"),
+  TO_REVIEW: (count: number): string => `${count} a revisar`,
+  NO_GEOMETRY: (count: number): string => `${count} sin geometría`,
+  FAR: (count: number): string => `${count} lejos (más de ${FAR_POINT_REPORT_M} m)`,
+  FACT_REFTRAMO_POINTS: "Puntos por reftramo",
+  FACT_ID_POINTS: "Puntos ligados por id",
+  FACT_COVERAGE: "Cobertura",
+  FACT_OLD_LENGTH: "Largo anterior (m)",
+  FACT_NEW_LENGTH: "Largo nuevo (m)",
+  FACT_OUTSIDE_LENGTH: "Nuevo fuera del anterior (m)",
+} as const;

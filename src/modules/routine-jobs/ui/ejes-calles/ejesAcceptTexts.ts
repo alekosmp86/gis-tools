@@ -8,8 +8,7 @@ export const EJES_ACCEPT_TEXT = {
   REJECT_ALL: "Rechazar todos",
   NOT_ACCEPTABLE: "No aceptable: sin reftramo",
   NEEDS_REVIEW: "Requiere revisión",
-  SPLIT_NOTE:
-    "Un tramo dividido se acepta cuando todos sus puntos de acceso tienen destino: el automático o el que elija en Revisar puntos. Los demás requieren revisión.",
+  SPLIT_NOTE: "Se acepta cuando todos sus puntos de acceso tienen destino.",
   CAP_NOTE: `Aceptar todos llega al límite de ${ACCEPTED_KEYS_LIMIT} tramos aceptados en esta lista: acepta hasta ese número.`,
 } as const;
 

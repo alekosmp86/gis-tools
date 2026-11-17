@@ -1,0 +1,105 @@
+.refCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.refText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.refPrimary {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.refSecondary {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.disclosure {
+  min-width: 0;
+}
+
+.summary {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid rgba(127, 127, 127, 0.4);
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosureBody {
+  margin-top: 4px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.refList {
+  margin: 0;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 12px;
+  margin: 0;
+}
+
+.factTerm {
+  opacity: 0.75;
+}
+
+.factValue {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cellStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.pointsTotal {
+  font-weight: 700;
+}
+
+.pointsDetail {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.pointsFar {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.statusCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.statusText {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}

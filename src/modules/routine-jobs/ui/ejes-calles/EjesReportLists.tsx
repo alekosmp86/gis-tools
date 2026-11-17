@@ -1,5 +1,5 @@
 import React from "react";
-import type { EjesResult } from "../../jobs/ejes-calles/types";
+import type { EjesMergeRow, EjesResult, EjesSplitRow } from "../../jobs/ejes-calles/types";
 import type { EjesSplitPointsBase } from "../shared/clientTypes";
 import { EJES_LIST, type EjesListKey } from "./ejesCallesListMeta";
 import type { EjesReportView } from "./ejesCallesReportView";
@@ -8,14 +8,14 @@ import { EjesListSection } from "./EjesListSection";
 import { EjesSplitsSection } from "./EjesSplitsSection";
 import { EjesAcceptList, splitKeyOf, type EjesAcceptView } from "./ejesAccept";
 import { acceptedCountTextOf } from "./ejesAcceptTexts";
+import { mergeColumnsOf } from "./compact/ejesMergeColumns";
+import { splitColumnsOf } from "./compact/ejesSplitColumns";
 import {
   ATTR_COLUMNS,
   INVALID_GEOMETRY_COLUMNS,
-  MERGE_COLUMNS,
   REMOVAL_COLUMNS,
   RENUMBER_HELD_COLUMNS,
   RENUMBERED_COLUMNS,
-  SPLIT_COLUMNS,
   STREET_COLUMNS,
   TWIN_COLUMNS,
 } from "./ejesReportColumns";
@@ -60,45 +60,31 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
     );
   const badgeOf = (list: EjesAcceptList, total: number): string | undefined =>
     accept === undefined ? undefined : acceptedCountTextOf(accept.keys[list].length, total);
-  const mergeRows = (
-    <RowsTable columns={MERGE_COLUMNS} rows={result.merges} rowKey={(row) => row.newRef} onShowOnMap={(row) => onShowOnMap(subjects.merges, result.merges.indexOf(row))} />
-  );
-  const plainRows = <RowsTable columns={REMOVAL_COLUMNS} rows={result.plainRemovals} rowKey={(row) => row.ref} />;
-  const splitRows = (
-    <RowsTable columns={SPLIT_COLUMNS} rows={result.splits} rowKey={splitKeyOf} onShowOnMap={(row) => onShowOnMap(subjects.splits, result.splits.indexOf(row))} />
-  );
+  const showSplit = (row: EjesSplitRow): void => onShowOnMap(subjects.splits, result.splits.indexOf(row));
+  const showMerge = (row: EjesMergeRow): void => onShowOnMap(subjects.merges, result.merges.indexOf(row));
   return (
     <div className={styles.lists}>
       {section(
         EJES_LIST.SPLITS,
         result.splits.length,
         accept === undefined ? (
-          splitRows
+          <RowsTable columns={splitColumnsOf(showSplit)} rows={result.splits} rowKey={splitKeyOf} />
         ) : (
-          <EjesSplitsSection
-            rows={result.splits}
-            total={result.counts.splits}
-            columns={SPLIT_COLUMNS}
-            accept={accept}
-            splitBase={splitBase}
-            onShowOnMap={(row) => onShowOnMap(subjects.splits, result.splits.indexOf(row))}
-          />
-        ),
-        badgeOf(EjesAcceptList.SPLITS, result.counts.splits)
+          <EjesSplitsSection rows={result.splits} total={result.counts.splits} accept={accept} splitBase={splitBase} onShowOnMap={showSplit} />
+        )
       )}
       {section(
         EJES_LIST.MERGES,
         result.merges.length,
         accept === undefined ? (
-          mergeRows
+          <RowsTable columns={mergeColumnsOf(showMerge)} rows={result.merges} rowKey={(row) => row.newRef} />
         ) : (
           <EjesAcceptableRows
             list={EjesAcceptList.MERGES}
             rows={result.merges}
             total={result.counts.merges}
-            columns={MERGE_COLUMNS}
+            columns={mergeColumnsOf(showMerge)}
             rowKey={(row) => row.newRef}
-            onShowOnMap={(row) => onShowOnMap(subjects.merges, result.merges.indexOf(row))}
             accept={accept}
           />
         ),
@@ -128,7 +114,7 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
         EJES_LIST.PLAIN_REMOVALS,
         result.plainRemovals.length,
         accept === undefined ? (
-          plainRows
+          <RowsTable columns={REMOVAL_COLUMNS} rows={result.plainRemovals} rowKey={(row) => row.ref} />
         ) : (
           <EjesAcceptableRows
             list={EjesAcceptList.PLAIN_REMOVALS}

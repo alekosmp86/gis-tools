@@ -1,10 +1,8 @@
 import { ACCEPTED_CHOICES_LIMIT, ACCEPTED_KEYS_LIMIT, EJES_POINT_REASON, type EjesPointReason } from "../../../jobs/ejes-calles/constants";
 
 export const EJES_SPLIT_REVIEW_TEXT = {
-  COLUMN: "Revisión",
   OPEN_BUTTON: "Revisar puntos",
   MODAL_TITLE: "Revisar puntos de la división",
-  NO_REVIEW_POINTS: "Sin puntos a revisar",
   NO_REFTRAMO: "Sin reftramo: no se puede revisar.",
   LOADING: "Cargando los puntos del tramo…",
   LOAD_FAILED: "No se pudieron cargar los puntos del tramo.",
@@ -35,7 +33,6 @@ export const EJES_SPLIT_REVIEW_TEXT = {
   FILTER_STREET_PLACEHOLDER: "Todas las calles",
   FILTERED_LIST: (shown: number, total: number): string => `Filtro activo: se muestran ${shown} de ${total} tramos.`,
   PROGRESS: (resolved: number, total: number): string => `${resolved} de ${total} puntos resueltos`,
-  PROGRESS_CELL: (resolved: number, total: number): string => `${resolved} de ${total} resueltos`,
   ACCEPT_SUGGESTED_HINT: (count: number): string => `${count} puntos ambiguos sin elegir tienen sugerencia.`,
   ACCEPT_SUGGESTED_CAPPED: (added: number): string =>
     `Solo caben ${added} destinos más antes del límite de ${ACCEPTED_CHOICES_LIMIT}.`,

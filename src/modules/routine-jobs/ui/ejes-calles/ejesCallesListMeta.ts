@@ -29,7 +29,7 @@ const EJES_LIST_ORDER: readonly EjesListKey[] = [
 export const ejesListAnchorOf = (key: EjesListKey): string => `ejes-list-${key}`;
 
 export const EJES_LIST_INTROS: Record<EjesListKey, string> = {
-  [EJES_LIST.SPLITS]: "Un tramo actual que el archivo reemplaza por varios nuevos. Cada punto de acceso pasa al tramo nuevo más cercano.",
+  [EJES_LIST.SPLITS]: "Un tramo actual que el archivo reemplaza por varios nuevos.",
   [EJES_LIST.MERGES]: "Varios tramos actuales que el archivo reemplaza por uno nuevo.",
   [EJES_LIST.RENUMBERED]: "Mismo trazado con otro reftramo: los puntos de acceso siguen al nuevo.",
   [EJES_LIST.RENUMBER_HELD]: "Renumeración no aplicada: ambos tramos quedan como están y sus puntos de acceso no se mueven.",
