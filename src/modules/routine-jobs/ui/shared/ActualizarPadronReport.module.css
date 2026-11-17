@@ -42,6 +42,7 @@
 .scrollTable {
   max-height: 480px;
   overflow: auto;
+  isolation: isolate;
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 116, 139, 0.6) transparent;
 }
@@ -73,10 +74,12 @@
   overflow-wrap: normal;
 }
 
+/* Stacking layers inside a scroll table: body cells auto, sticky body column 1, header 3, sticky header corner 4. */
 .scrollTable thead th {
   position: sticky;
   top: 0;
-  background: var(--bg-main, #0b1220);
+  z-index: 3;
+  background: var(--bg-dark);
 }
 
 .mapColumnTable table th:first-child,
@@ -84,11 +87,11 @@
   position: sticky;
   left: 0;
   width: 1%;
-  background: var(--bg-main, #0b1220);
+  background: var(--bg-dark);
 }
 
 .mapColumnTable table th:first-child {
-  z-index: 2;
+  z-index: 4;
 }
 
 .mapColumnTable table td:first-child {
