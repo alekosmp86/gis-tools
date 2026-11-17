@@ -1,4 +1,4 @@
-import L from "leaflet";
+import type L from "leaflet";
 import type { GeoJsonProperties } from "geojson";
 import { getDiscrepancyColor } from "@/core/constants/mapConstants";
 
@@ -27,6 +27,9 @@ export interface FeatureLabelOptions {
   coded?: boolean;
 }
 
+const isPointLayer = (layer: L.Layer): layer is L.CircleMarker =>
+  typeof (layer as { getRadius?: unknown }).getRadius === "function";
+
 const slotOf = (properties: GeoJsonProperties): number => {
   const slot = properties?.[LABEL_SLOT_PROPERTY];
   return typeof slot === "number" && slot >= 0 ? Math.floor(slot) : 0;
@@ -45,7 +48,7 @@ export function bindFeatureLabel(
     layer.bindTooltip(text, { permanent: true, direction: "center", className: LABEL_CLASS });
     return;
   }
-  if (layer instanceof L.CircleMarker) {
+  if (isPointLayer(layer)) {
     layer.bindTooltip(text, {
       permanent: true,
       direction: "top",
