@@ -11,6 +11,7 @@ import type {
   EjesSkipKind,
   EjesSkipReason,
   EjesTableRole,
+  GeoTwinRole,
   PadronType,
   RenumberSkipReason,
   TwinClass,
@@ -40,6 +41,8 @@ export interface EjesAccepted {
   splits: EjesAcceptedSplit[];
   plainRemovals: string[];
   merges: string[];
+  /** Geometric twin losers in carto, by `reftramo` (ET-26): removed only when accepted per row. */
+  twinRemovals: string[];
 }
 
 export interface EjesParams {
@@ -95,6 +98,12 @@ export interface EjesCounts {
   plainHeld: number;
   newStreets: number;
   twins: number;
+  /** Geometric twins (ET-20 to ET-27): groups, members, losers not in carto (omitted), losers in carto (removable), reftramos skipped by the conservative rule. */
+  geoTwinGroups: number;
+  geoTwinSections: number;
+  geoTwinLosersOmitted: number;
+  geoTwinLosersRemovable: number;
+  geoTwinSkippedRefs: number;
   twinsUrban: number;
   twinsRural: number;
   twinsBoth: number;
@@ -193,6 +202,19 @@ export interface EjesTwinRow {
   insideLocalities: string[];
 }
 
+/** One member of a geometric twin group: its role, its partners (other refs of the group), and whether it is in carto. */
+export interface EjesGeoTwinRow {
+  ref: string;
+  idcalle: string | null;
+  localidad: string | null;
+  departamento: string | null;
+  groupKey: string;
+  partners: string[];
+  role: GeoTwinRole;
+  inCarto: boolean;
+  points: number;
+}
+
 export interface EjesRenumberedRow {
   oldRef: string;
   newRef: string;
@@ -247,6 +269,7 @@ export interface EjesAnalysis {
   newStreets: EjesNewStreetRow[];
   attrChanges: EjesAttrRow[];
   twins: EjesTwinRow[];
+  geoTwins: EjesGeoTwinRow[];
   renumbered: EjesRenumberedRow[];
   renumberSkipped: EjesRenumberSkippedRow[];
   fingerprint: EjesFingerprint;
@@ -389,6 +412,8 @@ export interface EjesLoadCounts {
   topologyAssigned: number;
   verticesCreated: number;
   verticesDeleted: number;
+  /** Geometric twin losers in carto removed by the load (their own skip kind is `twin`). */
+  twinsRemoved: number;
 }
 
 export interface EjesSurplusRow {

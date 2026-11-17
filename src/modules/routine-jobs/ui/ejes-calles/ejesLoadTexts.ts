@@ -23,6 +23,7 @@ export const EJES_SKIP_KIND_TEXT: Record<EjesSkipKind, string> = {
   [EJES_SKIP_KIND.MERGE]: "Tramos unidos",
   [EJES_SKIP_KIND.REMOVAL]: "Sin reemplazo",
   [EJES_SKIP_KIND.RENUMBER]: "Renumeración no aplicada",
+  [EJES_SKIP_KIND.TWIN]: "Gemelo por geometría (sin aceptar o no aplicado)",
 };
 
 export const RENUMBER_SKIP_TEXT: Record<RenumberSkipReason, string> = {

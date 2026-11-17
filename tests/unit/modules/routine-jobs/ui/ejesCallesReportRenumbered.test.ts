@@ -67,6 +67,7 @@ const resultOf = (renumbered: EjesRenumberedRow[]): EjesResult =>
     newStreets: [],
     attrChanges: [],
     twins: [],
+    geoTwins: [],
     renumbered,
     renumberSkipped: [],
     blockers: [],

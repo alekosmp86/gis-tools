@@ -72,6 +72,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     plainRemovals: [PLAIN_ROW],
     newStreets: [],
     twins: [],
+    geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
     attrChanges: [],
@@ -98,7 +99,7 @@ const doneStep = (result: EjesResult, accept?: EjesAcceptView): string => {
 };
 
 const acceptView = (plainRemovals: string[] = [], merges: string[] = []): EjesAcceptView => ({
-  keys: { splits: [], plainRemovals, merges },
+  keys: { splits: [], plainRemovals, merges, twinRemovals: [] },
   pointChoices: [],
   onChange: () => undefined,
   onPointChoicesChange: () => undefined,
@@ -196,7 +197,7 @@ describe("EjesAcceptableRows (EJ-24)", () => {
 });
 
 function renderAcceptFor(merges: string[]): EjesAcceptView {
-  return { keys: { splits: [], plainRemovals: [], merges }, pointChoices: [], onChange: () => undefined, onPointChoicesChange: () => undefined };
+  return { keys: { splits: [], plainRemovals: [], merges, twinRemovals: [] }, pointChoices: [], onChange: () => undefined, onPointChoicesChange: () => undefined };
 }
 
 describe("accept controls on the Resultado step (EJ-24)", () => {

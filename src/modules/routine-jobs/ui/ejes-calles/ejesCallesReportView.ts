@@ -17,6 +17,7 @@ export interface EjesListSummaries {
   newStreets: string;
   attrChanges: string;
   twins: string;
+  geoTwins: string;
   invalidGeometries: string;
   renumbered: string;
   renumberHeld: string;
@@ -169,6 +170,16 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
       ],
     },
     {
+      title: "Gemelos por geometría (complemento de las localidades: después de ellas)",
+      kpis: [
+        kpi("Grupos", counts.geoTwinGroups),
+        kpi("Tramos en grupos", counts.geoTwinSections),
+        kpi("Se quitarían al aceptar (en carto)", counts.geoTwinLosersRemovable),
+        kpi("No se cargan (no están en carto)", counts.geoTwinLosersOmitted),
+        kpi("Con varias copias tras la regla de localidades: no agrupados", counts.geoTwinSkippedRefs),
+      ],
+    },
+    {
       title: "Calles y localidades de los tramos nuevos o con trazado distinto",
       kpis: [
         kpi("Calles nuevas", counts.newStreets),
@@ -190,6 +201,7 @@ const summariesOf = (result: EjesResult): EjesListSummaries => ({
   renumbered: listSummaryOf("Tramos renumerados (primero los que tienen puntos de acceso)", result.renumbered.length, result.counts.renumbered),
   renumberHeld: listSummaryOf("Renumerados retenidos (ambos tramos quedan como están)", result.renumberSkipped.length, result.counts.renumberSkipped),
   twins: listSummaryOf("Tramos repetidos por localidad (primero los que se deciden en el mapa)", result.twins.length, result.counts.twins),
+  geoTwins: listSummaryOf("Tramos gemelos por geometría (complemento de las localidades)", result.geoTwins.length, result.counts.geoTwinSections),
 });
 
 export function buildEjesReportView(result: EjesResult): EjesReportView {

@@ -29,12 +29,18 @@ const SETUP_SQL = `
     ('7', '70', 'G', 'CALLE', 'MTOP', 'TRINIDAD', 'FLORES', 'EDGE');
 `;
 
+/** No geometric twin loser is in this file: `stg` reads the losers of the geometric rule, which are none here. */
+const NO_GEO_LOSERS_CTE = '"geo_losers" AS (SELECT NULL::text AS ref WHERE false)';
+
 const analysisCtes = (): { stgKeys: string; stg: string } => {
   const sql = buildEjesAnalysisSql(ejesLayouts());
   const keysAt = sql.indexOf('"stg_keys" AS (');
   const stgAt = sql.indexOf('"stg" AS (');
   const stgEnd = sql.indexOf(",\n", stgAt);
-  return { stgKeys: sql.slice(keysAt, stgAt - 2), stg: sql.slice(stgAt, stgEnd) };
+  return {
+    stgKeys: sql.slice(keysAt, sql.indexOf(",\n", keysAt)),
+    stg: `${NO_GEO_LOSERS_CTE}, ${sql.slice(stgAt, stgEnd)}`,
+  };
 };
 
 describe("invalid geometries against PostgreSQL (ET-18)", () => {

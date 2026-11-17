@@ -40,6 +40,11 @@ const COUNTS = {
   splitPointsReview: 0,
   splitPointsNoGeometry: 0,
   splitPointsFar: 0,
+  geoTwinGroups: 0,
+  geoTwinSections: 0,
+  geoTwinLosersOmitted: 0,
+  geoTwinLosersRemovable: 0,
+  geoTwinSkippedRefs: 0,
 };
 
 const TWIN: EjesTwinRow = {
@@ -87,6 +92,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     plainRemovals: [],
     newStreets: [],
     twins: [],
+    geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
     fingerprint: { rows: 100, digest: "9f8e7d6c5b4a" },

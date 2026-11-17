@@ -1,7 +1,8 @@
 import { cte, q, withClause } from "../../shared/sqlFragments";
-import { EJES_SRID, EJES_TABLE_ROLE } from "../constants";
+import { EJES_SKIP_KIND, EJES_SRID, EJES_TABLE_ROLE, GEO_TWIN_ROLE } from "../constants";
 import type { EjesLayouts, EjesLoadContext } from "../types";
 import { accessPointRefMatchSql, circulationPairsCte, copyKeptCte, copyRawCte, currentCtes, geometriesDifferSql, pointsCte } from "./analysisSql";
+import { copyFinalCte } from "./geoTwinSql";
 import { col, table } from "./layoutSql";
 import { nextvalSql } from "./loadContext";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
@@ -9,6 +10,8 @@ import { distinctPairsCountSql } from "./renumberSql";
 import { twinCtes, twinGroupCtes } from "./twinSql";
 
 export const LOAD_TEMP = {
+  GEO_TWIN: "ej_geo_twins",
+  ACC_TWIN: "ej_acc_twin",
   COPY: "ej_copy",
   RENUM: "ej_renum",
   HELD: "ej_held",
@@ -44,9 +47,20 @@ export const createTemp = (name: string, body: string): string => `CREATE TEMP T
 
 export const buildAnalyzeTempSql = (name: string): string => `ANALYZE ${tmp(name)}`;
 
+/** The geometric losers the analysis of this transaction wrote to `ej_geo_twins`: they are no copy of the load. */
+const GEO_LOSERS_SQL = `(SELECT g.ref FROM ${tmp(LOAD_TEMP.GEO_TWIN)} AS g WHERE g.role = '${GEO_TWIN_ROLE.LOSER}')`;
+
 /** One row per kept copy: a copy is `reftramo + localidad + departamento`; the twin rules drop the copies of the localities they name. */
 export function buildCopyTableSql(layouts: EjesLayouts): string {
-  const ctes = [tipoMapCte(), fuenteMapCte(), ...twinGroupCtes(layouts), ...twinCtes(layouts), copyRawCte(layouts), copyKeptCte()];
+  const ctes = [
+    tipoMapCte(),
+    fuenteMapCte(),
+    ...twinGroupCtes(layouts),
+    ...twinCtes(layouts),
+    copyRawCte(layouts),
+    copyKeptCte(),
+    copyFinalCte(GEO_LOSERS_SQL),
+  ];
   return createTemp(
     LOAD_TEMP.COPY,
     [
@@ -54,7 +68,7 @@ export function buildCopyTableSql(layouts: EjesLayouts): string {
       "SELECT (row_number() OVER (ORDER BY length(k.ref), k.ref, k.localidad NULLS FIRST, k.departamento NULLS FIRST))::bigint AS copy_id,",
       "k.ref, k.idcalle, k.nombre, tm.id::text AS type_id, fm.id::text AS font_id, k.departamento, k.localidad,",
       `ST_SetSRID(ST_LineMerge(k.geom), ${EJES_SRID}) AS geom`,
-      `FROM ${q("copy_kept")} AS k`,
+      `FROM ${q("copy_final")} AS k`,
       `LEFT JOIN ${q(TIPO_MAP_CTE_NAME)} AS tm ON tm.label = k.tipo LEFT JOIN ${q(FUENTE_MAP_CTE_NAME)} AS fm ON fm.label = k.fuente`,
     ].join(" ")
   );
@@ -220,7 +234,8 @@ export const buildLoadCountsSql = (): string =>
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.STATE)} AS s WHERE s.geom_changed) AS "geom",`,
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.RENUM)}) AS "renumbered",`,
     `${distinctPairsCountSql(tmp(LOAD_TEMP.HELD))} AS "renumber_skipped",`,
-    `(SELECT count(*) FROM ${tmp(LOAD_TEMP.PLAIN_PLAN)} AS p WHERE p.reason IS NULL) AS "removed",`,
+    `(SELECT count(*) FROM ${tmp(LOAD_TEMP.PLAIN_PLAN)} AS p WHERE p.reason IS NULL AND p.kind = '${EJES_SKIP_KIND.REMOVAL}') AS "removed",`,
+    `(SELECT count(*) FROM ${tmp(LOAD_TEMP.PLAIN_PLAN)} AS p WHERE p.reason IS NULL AND p.kind = '${EJES_SKIP_KIND.TWIN}') AS "twins_removed",`,
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p WHERE p.reason IS NULL) AS "merged",`,
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.DEL)}) AS "deleted",`,
     `(SELECT count(DISTINCT d.master_id) FROM ${tmp(LOAD_TEMP.DEL)} AS d WHERE d.master_deleted) AS "masters_deleted",`,

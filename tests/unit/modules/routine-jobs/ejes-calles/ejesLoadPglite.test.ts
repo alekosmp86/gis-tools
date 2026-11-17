@@ -997,6 +997,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
           "renumbered",
           "splitsApplied",
           "topologyAssigned",
+          "twinsRemoved",
           "updated",
           "verticesCreated",
           "verticesDeleted",

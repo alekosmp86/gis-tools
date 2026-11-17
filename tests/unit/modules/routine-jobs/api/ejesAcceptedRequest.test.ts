@@ -22,6 +22,8 @@ const COUNT_KEYS = [
   "splitPointsAuto",
   "splitPointsReview",
   "splitPointsNoGeometry",
+  "geoTwinLosersRemovable",
+  "geoTwinLosersOmitted",
 ];
 const FINGERPRINT = { rows: 12, digest: "9f8e7d6c5b4a3210fedcba9876543210" };
 
@@ -59,7 +61,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
   it("should accept an empty accepted object as valid, with no plain removals and no merges", () => {
     const params = parse(realBody({}));
 
-    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] });
   });
 
   it("should deduplicate repeated plain removal refs and merge refs, keeping the first order", () => {
@@ -70,7 +72,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
       })
     );
 
-    expect(params.accepted).toEqual({ splits: [], plainRemovals: ["7", "3"], merges: ["9"] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: ["7", "3"], merges: ["9"], twinRemovals: [] });
   });
 
   it("should accept exactly ACCEPTED_KEYS_LIMIT distinct keys in one list (boundary)", () => {
@@ -89,7 +91,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
   it("should canonicalise leading zeros in the refs, so '0012' is sent as 12", () => {
     const params = parse(realBody({ plainRemovals: [{ ref: "0012" }], merges: [{ newRef: "007" }] }));
 
-    expect(params.accepted).toEqual({ splits: [], plainRemovals: ["12"], merges: ["7"] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: ["12"], merges: ["7"], twinRemovals: [] });
   });
 
   it("should accept a negative integer ref as its canonical text", () => {
@@ -190,7 +192,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
   it("should accept an empty splits list next to shaped merges", () => {
     const params = parse(realBody({ splits: [], merges: [{ newRef: "5" }] }));
 
-    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: ["5"] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: ["5"], twinRemovals: [] });
   });
 
   it("should refuse the whole request, not one entry, when one entry of a list is malformed", () => {

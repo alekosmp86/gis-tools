@@ -88,6 +88,7 @@ const resultOf = (twins: EjesTwinRow[], invalid: EjesInvalidGeometryRow[] = []):
     newStreets: [],
     attrChanges: [],
     twins,
+    geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
     blockers: [],

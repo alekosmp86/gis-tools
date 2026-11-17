@@ -7,6 +7,7 @@ export const EjesAcceptList = {
   SPLITS: "splits",
   PLAIN_REMOVALS: "plainRemovals",
   MERGES: "merges",
+  TWIN_REMOVALS: "twinRemovals",
 } as const;
 
 export type EjesAcceptList = (typeof EjesAcceptList)[keyof typeof EjesAcceptList];
@@ -39,6 +40,7 @@ export interface EjesAcceptKeys {
   splits: readonly string[];
   plainRemovals: readonly string[];
   merges: readonly string[];
+  twinRemovals: readonly string[];
 }
 
 /** The accepted keys, the point choices, and the analysis they were accepted on: a different analysis key means none of them apply. */
@@ -70,12 +72,12 @@ export interface EjesAcceptView {
   onPointChoicesChange: (change: EjesPointChoicesChange) => void;
 }
 
-const NO_ACCEPT_KEYS: EjesAcceptKeys = { splits: [], plainRemovals: [], merges: [] };
+const NO_ACCEPT_KEYS: EjesAcceptKeys = { splits: [], plainRemovals: [], merges: [], twinRemovals: [] };
 const NO_POINT_CHOICES: readonly EjesPointChoiceKey[] = [];
 
 export function acceptKeysOf(acceptance: EjesAcceptance | null, analysisKey: string | undefined): EjesAcceptKeys {
   if (acceptance === null || analysisKey === undefined || acceptance.analysisKey !== analysisKey) return NO_ACCEPT_KEYS;
-  return { splits: acceptance.splits, plainRemovals: acceptance.plainRemovals, merges: acceptance.merges };
+  return { splits: acceptance.splits, plainRemovals: acceptance.plainRemovals, merges: acceptance.merges, twinRemovals: acceptance.twinRemovals };
 }
 
 export function pointChoicesOf(acceptance: EjesAcceptance | null, analysisKey: string | undefined): readonly EjesPointChoiceKey[] {
@@ -165,5 +167,6 @@ export const acceptedRequestOf = (keys: EjesAcceptKeys, pointChoices: readonly E
     splits: keys.splits.map((oldRef) => ({ oldRef, choices: choicesBySplit.get(oldRef) ?? [] })),
     plainRemovals: keys.plainRemovals.map((ref) => ({ ref })),
     merges: keys.merges.map((newRef) => ({ newRef })),
+    twinRemovals: keys.twinRemovals.map((ref) => ({ ref })),
   };
 };

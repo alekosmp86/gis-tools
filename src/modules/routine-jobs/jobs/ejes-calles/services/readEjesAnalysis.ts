@@ -6,6 +6,7 @@ import { buildCreateRenumberTableSql, LOAD_TEMP, tmp } from "../domain/loadSelec
 import { buildCreateMergeTableSql, buildCreatePlainTableSql, buildCreateSplitTableSql } from "../domain/removalSql";
 import { buildCreateHeldTableSql } from "../domain/renumberSql";
 import { buildCreateSplitPointTableSql } from "../domain/splitPointSql";
+import { buildCreateGeoTwinTableSql } from "../domain/geoTwinSql";
 import { toEjesAnalysis, toEjesStagingReport } from "../domain/reportMapping";
 import { buildStagingChecksSql } from "../domain/stagingSql";
 import type { EjesAnalysis, EjesLayouts, EjesStagingReport } from "../types";
@@ -22,6 +23,7 @@ const LOAD_SINK_TABLE_SQL: readonly string[] = [
   buildCreatePlainTableSql(LOAD_TEMP.PLAIN),
   buildCreateSplitTableSql(LOAD_TEMP.SPLIT),
   buildCreateSplitPointTableSql(LOAD_TEMP.SPLIT_PTS),
+  buildCreateGeoTwinTableSql(LOAD_TEMP.GEO_TWIN),
 ];
 
 export async function readStagingReport(session: RunSession, layouts: EjesLayouts): Promise<EjesStagingReport> {
@@ -46,6 +48,7 @@ export async function readAnalysisForLoad(session: RunSession, layouts: EjesLayo
     plain: tmp(LOAD_TEMP.PLAIN),
     split: tmp(LOAD_TEMP.SPLIT),
     splitPoints: tmp(LOAD_TEMP.SPLIT_PTS),
+    geoTwins: tmp(LOAD_TEMP.GEO_TWIN),
   };
   return toEjesAnalysis((await session.query(buildEjesAnalysisSql(layouts, sinks))).rows[0] ?? {});
 }

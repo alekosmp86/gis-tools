@@ -151,9 +151,9 @@ describe("ejes removal plan SQL on PGlite (EJS-1, EJS-9, EJL-12)", () => {
       await database.exec(
         `INSERT INTO pg_temp."${LOAD_TEMP.MERGE_PLAN}" VALUES ('7100', '4', '6800,6801', 3, '${EJES_SKIP_REASON.NOT_ACCEPTED}'), ('7200', '4', '6810', 0, NULL)`
       );
-      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.PLAIN_PLAN}" (old_id bigint, ref text, idcalle text, points bigint, reason text)`);
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.PLAIN_PLAN}" (old_id bigint, ref text, idcalle text, points bigint, reason text, kind text)`);
       await database.exec(
-        `INSERT INTO pg_temp."${LOAD_TEMP.PLAIN_PLAN}" VALUES (5, '6700', '5', 0, '${EJES_SKIP_REASON.NOT_ACCEPTED}'), (6, '6701', '5', 0, NULL)`
+        `INSERT INTO pg_temp."${LOAD_TEMP.PLAIN_PLAN}" VALUES (5, '6700', '5', 0, '${EJES_SKIP_REASON.NOT_ACCEPTED}', '${EJES_SKIP_KIND.REMOVAL}'), (6, '6701', '5', 0, NULL, '${EJES_SKIP_KIND.REMOVAL}')`
       );
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.HELD}" (old_id bigint, old_ref text, new_ref text, idcalle text, points bigint, reason text)`);
       await database.exec(

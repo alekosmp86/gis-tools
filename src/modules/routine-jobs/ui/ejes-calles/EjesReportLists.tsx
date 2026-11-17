@@ -10,6 +10,7 @@ import { EjesAcceptList, splitKeyOf, type EjesAcceptView } from "./ejesAccept";
 import { acceptedCountTextOf } from "./ejesAcceptTexts";
 import { mergeColumnsOf } from "./compact/ejesMergeColumns";
 import { splitColumnsOf } from "./compact/ejesSplitColumns";
+import { GEO_TWIN_COLUMNS, GEO_TWIN_TEXT, isGeoTwinRemovable } from "./compact/ejesGeoTwinColumns";
 import {
   ATTR_COLUMNS,
   INVALID_GEOMETRY_COLUMNS,
@@ -127,6 +128,26 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
           />
         ),
         badgeOf(EjesAcceptList.PLAIN_REMOVALS, result.counts.plainRemovals)
+      )}
+      {section(
+        EJES_LIST.GEO_TWINS,
+        result.geoTwins.length,
+        accept === undefined ? (
+          <RowsTable columns={GEO_TWIN_COLUMNS} rows={result.geoTwins} rowKey={(row) => row.ref} />
+        ) : (
+          <EjesAcceptableRows
+            list={EjesAcceptList.TWIN_REMOVALS}
+            rows={result.geoTwins}
+            total={result.counts.geoTwinSections}
+            columns={GEO_TWIN_COLUMNS}
+            rowKey={(row) => row.ref}
+            acceptable={isGeoTwinRemovable}
+            notAcceptableText={GEO_TWIN_TEXT.NOT_REMOVABLE}
+            accept={accept}
+            counterText={acceptedCountTextOf(accept.keys.twinRemovals.length, result.counts.geoTwinLosersRemovable)}
+          />
+        ),
+        badgeOf(EjesAcceptList.TWIN_REMOVALS, result.counts.geoTwinLosersRemovable)
       )}
       {section(
         EJES_LIST.INVALID_GEOMETRIES,

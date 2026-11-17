@@ -1,5 +1,5 @@
 import { literal, q } from "../../shared/sqlFragments";
-import { INVALID_CHOICE_REFS_LIMIT, LOAD_CHUNK_SIZE } from "../constants";
+import { GEO_TWIN_ROLE, INVALID_CHOICE_REFS_LIMIT, LOAD_CHUNK_SIZE } from "../constants";
 import type { EjesAccepted } from "../types";
 import { LOAD_TEMP, tmp } from "./loadSelectionSql";
 
@@ -22,6 +22,8 @@ export function buildAcceptedTablesSql(accepted: EjesAccepted): string[] {
     ...insertRowsSql(LOAD_TEMP.ACC_MERGE, accepted.merges.map((ref) => [ref])),
     createTableSql(LOAD_TEMP.ACC_PLAIN, "ref text"),
     ...insertRowsSql(LOAD_TEMP.ACC_PLAIN, accepted.plainRemovals.map((ref) => [ref])),
+    createTableSql(LOAD_TEMP.ACC_TWIN, "ref text"),
+    ...insertRowsSql(LOAD_TEMP.ACC_TWIN, accepted.twinRemovals.map((ref) => [ref])),
     createTableSql(LOAD_TEMP.ACC_SPLIT, "ref text"),
     ...insertRowsSql(LOAD_TEMP.ACC_SPLIT, accepted.splits.map((split) => [split.oldRef])),
     createTableSql(LOAD_TEMP.ACC_CHOICE, "old_ref text, point_id text, new_ref text"),
@@ -34,6 +36,7 @@ export const buildMissingAcceptedSql = (): string =>
   [
     `SELECT (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_MERGE)} AS a WHERE a.ref NOT IN (SELECT m.new_ref FROM ${tmp(LOAD_TEMP.MERGE)} AS m))`,
     `+ (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_PLAIN)} AS a WHERE a.ref NOT IN (SELECT p.ref FROM ${tmp(LOAD_TEMP.PLAIN)} AS p WHERE p.ref IS NOT NULL))`,
+    `+ (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_TWIN)} AS a WHERE a.ref NOT IN (SELECT t.ref FROM ${tmp(LOAD_TEMP.GEO_TWIN)} AS t WHERE t.role = '${GEO_TWIN_ROLE.LOSER}' AND t.in_carto))`,
     `+ (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_SPLIT)} AS a WHERE a.ref NOT IN (SELECT s.old_ref FROM ${tmp(LOAD_TEMP.SPLIT)} AS s WHERE s.old_ref IS NOT NULL)) AS "missing"`,
   ].join(" ");
 

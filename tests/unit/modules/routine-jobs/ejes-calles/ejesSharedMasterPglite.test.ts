@@ -40,7 +40,7 @@ vi.mock("node:os", async (importOriginal) => {
 
 const HOOK_TIMEOUT_MS = 60_000;
 const timer = () => createStepTimer({ now: () => 0, total: 20 });
-const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [] };
+const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [] };
 const MASTER_DELETE = /DELETE FROM "carto"\."addresses_master"/;
 const SECTION_DELETE = /DELETE FROM "carto"\."road_section"/;
 
@@ -98,7 +98,7 @@ describe("ejes shared address masters, stub merges and touching neighbours on PG
       const before = await snapshotOf(database);
       const log: SqlLog = [];
 
-      const outcome = await persist({ splits: [], plainRemovals: ["8101"], merges: [] }, log);
+      const outcome = await persist({ splits: [], plainRemovals: ["8101"], merges: [], twinRemovals: [] }, log);
 
       expect(await sectionsByRef(8101)).toEqual([]);
       expect(await sectionsByRef(8102)).toHaveLength(1);
@@ -120,7 +120,7 @@ describe("ejes shared address masters, stub merges and touching neighbours on PG
       const before = await snapshotOf(database);
       const log: SqlLog = [];
 
-      const outcome = await persist({ splits: [], plainRemovals: ["8201"], merges: [] }, log);
+      const outcome = await persist({ splits: [], plainRemovals: ["8201"], merges: [], twinRemovals: [] }, log);
 
       expect(await sectionsByRef(8201)).toEqual([]);
       expect(await masterIds()).toContain(8201);
@@ -142,7 +142,7 @@ describe("ejes shared address masters, stub merges and touching neighbours on PG
       await database.query("INSERT INTO carto.padron (type_padron, geometry, id_address_master) VALUES ('URBANO', '0:10', $1)", [8301]);
       const log: SqlLog = [];
 
-      const outcome = await persist({ splits: [], plainRemovals: ["8301"], merges: [] }, log);
+      const outcome = await persist({ splits: [], plainRemovals: ["8301"], merges: [], twinRemovals: [] }, log);
 
       expect(await sectionsByRef(8301)).toEqual([]);
       expect(await masterIds()).toContain(8301);
@@ -159,7 +159,7 @@ describe("ejes shared address masters, stub merges and touching neighbours on PG
       const before = await snapshotOf(database);
       const log: SqlLog = [];
 
-      const outcome = await persist({ splits: [], plainRemovals: ["8401", "8402"], merges: [] }, log);
+      const outcome = await persist({ splits: [], plainRemovals: ["8401", "8402"], merges: [], twinRemovals: [] }, log);
 
       expect(await sectionsByRef(8401)).toEqual([]);
       expect(await sectionsByRef(8402)).toEqual([]);
@@ -183,7 +183,7 @@ describe("ejes shared address masters, stub merges and touching neighbours on PG
       const before = await snapshotOf(database);
       const log: SqlLog = [];
 
-      await expect(persist({ splits: [], plainRemovals: [""], merges: [] }, log)).rejects.toThrow(ANALYSIS_CHANGED_MESSAGE);
+      await expect(persist({ splits: [], plainRemovals: [""], merges: [], twinRemovals: [] }, log)).rejects.toThrow(ANALYSIS_CHANGED_MESSAGE);
 
       expect(await snapshotOf(database)).toEqual(before);
       expect(log.some((sql) => SECTION_DELETE.test(sql))).toBe(false);
@@ -216,7 +216,7 @@ describe("ejes shared address masters, stub merges and touching neighbours on PG
       expect(analysis.merges.map((row) => [row.newRef, row.oldRefs])).toEqual([["8603", ["8601", "8602"]]]);
       expect(analysis.splits).toEqual([]);
 
-      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["8603"] });
+      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["8603"], twinRemovals: [] });
 
       expect(await sectionsByRef(8601)).toEqual([]);
       expect(await sectionsByRef(8602)).toEqual([]);
@@ -308,7 +308,7 @@ describe("ejes merge plan and delete plan on PGlite, temp tables only (EJS-4, EJ
       );
 
     it("should refuse both accepted merges with shared_old_ref when they share an old section", async () => {
-      const rows = await planWith({ splits: [], plainRemovals: [], merges: ["9001", "9002"] });
+      const rows = await planWith({ splits: [], plainRemovals: [], merges: ["9001", "9002"], twinRemovals: [] });
 
       expect(rows.map((row) => [row.new_ref, row.reason])).toEqual([
         ["9001", "shared_old_ref"],
@@ -317,7 +317,7 @@ describe("ejes merge plan and delete plan on PGlite, temp tables only (EJS-4, EJ
     });
 
     it("should apply a single accepted merge whose old section also belongs to a merge that is not accepted", async () => {
-      const rows = await planWith({ splits: [], plainRemovals: [], merges: ["9001"] });
+      const rows = await planWith({ splits: [], plainRemovals: [], merges: ["9001"], twinRemovals: [] });
 
       expect(rows.map((row) => [row.new_ref, row.reason])).toEqual([
         ["9001", null],

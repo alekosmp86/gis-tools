@@ -41,6 +41,8 @@ const SUMMARY_COUNT_KEYS = [
   "splitPointsAuto",
   "splitPointsReview",
   "splitPointsNoGeometry",
+  "geoTwinLosersRemovable",
+  "geoTwinLosersOmitted",
 ];
 
 const FINGERPRINT = { rows: 12, digest: "9f8e7d6c5b4a3210fedcba9876543210" };
@@ -120,10 +122,10 @@ describe("parseEjesCallesStartRequest", () => {
     });
 
     it("should accept accepted lists that are present and empty", () => {
-      const params = parse(realBody({ accepted: { splits: [], merges: [], plainRemovals: [] } }));
+      const params = parse(realBody({ accepted: { splits: [], merges: [], twinRemovals: [], plainRemovals: [] } }));
 
       expect(params.dryRun).toBe(false);
-      expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [] });
+      expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] });
     });
 
     it("should refuse dryRun false without the password, with a Spanish message", () => {
@@ -250,7 +252,7 @@ describe("parseEjesCallesStartRequest", () => {
     it("should accept a non-empty merges and plainRemovals list when every entry is shaped", () => {
       const params = parse(realBody({ accepted: { merges: [{ newRef: "4" }], plainRemovals: [{ ref: "7" }] } }));
 
-      expect(params.accepted).toEqual({ splits: [], merges: ["4"], plainRemovals: ["7"] });
+      expect(params.accepted).toEqual({ splits: [], merges: ["4"], twinRemovals: [], plainRemovals: ["7"] });
     });
 
     it("should refuse an accepted list that is not a list", () => {

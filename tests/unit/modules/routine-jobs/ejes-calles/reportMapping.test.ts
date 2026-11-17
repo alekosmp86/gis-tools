@@ -179,6 +179,11 @@ describe("toEjesAnalysis", () => {
       splitPointsReview: 0,
       splitPointsNoGeometry: 0,
       splitPointsFar: 0,
+      geoTwinGroups: 0,
+      geoTwinSections: 0,
+      geoTwinLosersOmitted: 0,
+      geoTwinLosersRemovable: 0,
+      geoTwinSkippedRefs: 0,
     });
     expect(analysis.fingerprint).toEqual({ rows: 14, digest: "d41d8cd98f00b204e9800998ecf8427e" });
     expect(analysis.cloc).toEqual({ withLocality: 2, onlyDepartment: 1, withoutCode: 0 });

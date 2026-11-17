@@ -60,6 +60,7 @@ const LOAD_COUNTS = {
   verticesCreated: 0,
   verticesDeleted: 0,
   splitsApplied: 0,
+  twinsRemoved: 0,
 };
 
 const BACKUP: EjesBackup = {
@@ -120,6 +121,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     plainRemovals: [],
     newStreets: [],
     twins: [],
+    geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
     attrChanges: [],

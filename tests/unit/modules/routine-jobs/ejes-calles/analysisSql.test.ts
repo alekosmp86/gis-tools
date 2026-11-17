@@ -421,7 +421,7 @@ describe("buildEjesAnalysisSql", () => {
   });
 
   describe("ET-18 invalid geometries", () => {
-    const stgKeys = sql.slice(sql.indexOf('"stg_keys" AS ('), sql.indexOf('"stg" AS ('));
+    const stgKeys = sql.slice(sql.indexOf('"stg_keys" AS ('), sql.indexOf(",\n", sql.indexOf('"stg_keys" AS (')));
     const stg = sql.slice(sql.indexOf('"stg" AS ('), sql.indexOf(",\n", sql.indexOf('"stg" AS (')));
 
     it("should skip invalid geometries in stg, next to the null and empty conditions", () => {
@@ -591,6 +591,7 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
     plain: 'pg_temp."ej_plain"',
     split: 'pg_temp."ej_split"',
     splitPoints: 'pg_temp."ej_split_pts"',
+    geoTwins: 'pg_temp."ej_geo_twins"',
   };
   const sql = buildEjesAnalysisSql(ejesLayouts());
   const withSinks = buildEjesAnalysisSql(ejesLayouts(), SINKS);
@@ -627,7 +628,7 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
     });
 
     it("should count the kept copies per reftramo with one GROUP BY, the count the renumber reads", () => {
-      expect(sql).toContain('"copy_refs" AS (SELECT k.ref, count(*) AS copies FROM "copy_kept" AS k GROUP BY k.ref)');
+      expect(sql).toContain('"copy_refs" AS (SELECT k.ref, count(*) AS copies FROM "copy_final" AS k GROUP BY k.ref)');
       expect(sql).toContain('LEFT JOIN "copy_refs" AS kc ON kc.ref = c.new_ref');
       expect(sql).not.toMatch(/SELECT count\(\*\) FROM "copy_kept" AS k WHERE k\.ref = c\.new_ref/);
     });
@@ -658,7 +659,7 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
     });
 
     it("should write only the six sink tables, and read the counts from the CTEs, not from the sinks", () => {
-      expect(withSinks.match(/\bINSERT INTO\b/g)).toHaveLength(6);
+      expect(withSinks.match(/\bINSERT INTO\b/g)).toHaveLength(7);
       expect(withSinks).toContain('AS "renumbered"');
       expect(withSinks).not.toMatch(/FROM pg_temp\."ej_renum"/);
     });

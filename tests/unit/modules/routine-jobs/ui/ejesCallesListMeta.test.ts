@@ -63,6 +63,11 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
       renumberedWithPoints: 0,
       renumberedPoints: 0,
       renumberSkipped: 0,
+      geoTwinGroups: 0,
+      geoTwinSections: 0,
+      geoTwinLosersOmitted: 0,
+      geoTwinLosersRemovable: 0,
+      geoTwinSkippedRefs: 0,
       ...counts,
     },
     cloc: { withLocality: 0, onlyDepartment: 0, withoutCode: 0 },
@@ -72,6 +77,7 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
     newStreets: [],
     attrChanges: [],
     twins: [],
+    geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
     ...lists,
@@ -84,10 +90,10 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
 const row = (n: number) => ({ ref: String(n) });
 
 describe("stripOf", () => {
-  it("should return ten items in the fixed order", () => {
+  it("should return eleven items in the fixed order", () => {
     const strip = stripOf(resultOf());
 
-    expect(strip).toHaveLength(10);
+    expect(strip).toHaveLength(11);
     expect(strip.map((item) => item.label)).toEqual([
       "Filas del archivo",
       "Calles nuevas",
@@ -98,6 +104,7 @@ describe("stripOf", () => {
       "Unidos",
       "Sin reemplazo",
       "Repetidos por localidad",
+      "Gemelos por geometría",
       "Geometría inválida o colapsada",
     ]);
   });
@@ -106,7 +113,7 @@ describe("stripOf", () => {
     const strip = stripOf(
       resultOf({
         staging: { rows: 500, invalidGeometryRows: 3 },
-        counts: { newSections: 20, attr: 4, renumbered: 5, renumberSkipped: 11, splits: 6, merges: 7, plainRemovals: 8, twins: 9 },
+        counts: { newSections: 20, attr: 4, renumbered: 5, renumberSkipped: 11, splits: 6, merges: 7, plainRemovals: 8, twins: 9, geoTwinSections: 4 },
       })
     );
     const byLabel = Object.fromEntries(strip.map((item) => [item.label, item]));
@@ -119,6 +126,7 @@ describe("stripOf", () => {
     expect(byLabel["Unidos"]).toMatchObject({ value: 7, list: EJES_LIST.MERGES });
     expect(byLabel["Sin reemplazo"]).toMatchObject({ value: 8, list: EJES_LIST.PLAIN_REMOVALS });
     expect(byLabel["Repetidos por localidad"]).toMatchObject({ value: 9, list: EJES_LIST.TWINS });
+    expect(byLabel["Gemelos por geometría"]).toMatchObject({ value: 4, list: EJES_LIST.GEO_TWINS });
     expect(byLabel["Geometría inválida o colapsada"]).toMatchObject({ value: 3, list: EJES_LIST.INVALID_GEOMETRIES });
   });
 

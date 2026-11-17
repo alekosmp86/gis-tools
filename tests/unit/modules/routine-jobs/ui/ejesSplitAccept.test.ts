@@ -10,7 +10,7 @@ const acceptedWith = (overrides: Partial<EjesAcceptance> = {}): EjesAcceptance =
   analysisKey: ANALYSIS,
   splits: [],
   plainRemovals: [],
-  merges: [],
+  merges: [], twinRemovals: [],
   pointChoices: [],
   ...overrides,
 });

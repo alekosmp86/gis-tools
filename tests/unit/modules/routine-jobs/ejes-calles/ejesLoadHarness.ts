@@ -352,5 +352,6 @@ export const zeroLoadCounts = (overrides: Partial<Record<string, number>> = {}):
   verticesCreated: 0,
   verticesDeleted: 0,
   splitsApplied: 0,
+  twinsRemoved: 0,
   ...overrides,
 });

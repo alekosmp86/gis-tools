@@ -1,6 +1,6 @@
 import { listOf, nullableNumber, numberOf, textOf, type Row } from "../../shared/rowMapping";
 import { shortNameOf } from "./shortName";
-import { EJES_POINT_REASON, TWIN_CLASS, type EjesSkipReason, type RenumberSkipReason, type TwinClass } from "../constants";
+import { EJES_POINT_REASON, TWIN_CLASS, type EjesSkipReason, type GeoTwinRole, type RenumberSkipReason, type TwinClass } from "../constants";
 import { ANALYSIS_LIST_ALIAS } from "./analysisSql";
 import type {
   EjesStoredCandidate,
@@ -14,6 +14,7 @@ import type {
   EjesRenumberedRow,
   EjesRenumberSkippedRow,
   EjesSplitRow,
+  EjesGeoTwinRow,
   EjesTwinRow,
   EjesStagingReport,
   EjesUnknownValue,
@@ -134,6 +135,18 @@ const twinOf = (row: Row): EjesTwinRow => ({
   insideLocalities: textsOf(row.inside_localities),
 });
 
+const geoTwinOf = (row: Row): EjesGeoTwinRow => ({
+  ref: String(row.ref),
+  idcalle: textOf(row.idcalle),
+  localidad: textOf(row.localidad),
+  departamento: textOf(row.departamento),
+  groupKey: String(row.groupKey),
+  partners: (textOf(row.partners) ?? "").split(",").filter((ref) => ref !== ""),
+  role: String(row.role) as GeoTwinRole,
+  inCarto: row.inCarto === true,
+  points: numberOf(row.points),
+});
+
 export function toEjesStagingReport(row: Row): EjesStagingReport {
   return {
     rows: numberOf(row.rows),
@@ -169,6 +182,11 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       plainHeld: numberOf(row.plain_held),
       newStreets: numberOf(row.new_streets),
       twins: numberOf(row.twins),
+      geoTwinGroups: numberOf(row.geo_twin_groups),
+      geoTwinSections: numberOf(row.geo_twin_sections),
+      geoTwinLosersOmitted: numberOf(row.geo_twin_losers_omitted),
+      geoTwinLosersRemovable: numberOf(row.geo_twin_losers_removable),
+      geoTwinSkippedRefs: numberOf(row.geo_twin_skipped_refs),
       twinsUrban: numberOf(row.twins_urban),
       twinsRural: numberOf(row.twins_rural),
       twinsBoth: numberOf(row.twins_both),
@@ -198,6 +216,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
     newStreets: listOf(row[ANALYSIS_LIST_ALIAS.STREETS]).map(streetOf),
     attrChanges: listOf(row[ANALYSIS_LIST_ALIAS.ATTRS]).map(attrOf),
     twins: listOf(row[ANALYSIS_LIST_ALIAS.TWINS]).map(twinOf),
+    geoTwins: listOf(row[ANALYSIS_LIST_ALIAS.GEO_TWINS]).map(geoTwinOf),
     renumbered: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBERED]).map(renumberedOf),
     renumberSkipped: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED]).map(renumberSkippedOf),
     fingerprint: { rows: numberOf(row.staging_rows), digest: textOf(row.staging_digest) ?? "" },

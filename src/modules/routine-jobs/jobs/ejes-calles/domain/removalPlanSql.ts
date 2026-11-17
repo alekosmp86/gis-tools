@@ -1,4 +1,4 @@
-import { ADDRESS_COLUMN, EJES_SKIP_KIND, EJES_SKIP_REASON, PADRON_COLUMN, ROAD_SECTION_COLUMN } from "../constants";
+import { ADDRESS_COLUMN, EJES_SKIP_KIND, EJES_SKIP_REASON, GEO_TWIN_ROLE, PADRON_COLUMN, ROAD_SECTION_COLUMN } from "../constants";
 import type { EjesLayouts } from "../types";
 import { col, table } from "./layoutSql";
 import { createTemp, LOAD_TEMP, tmp } from "./loadSelectionSql";
@@ -38,17 +38,30 @@ export function buildMergePlanSql(): string {
   ].join(" "));
 }
 
-/** Plain removals: accepted, one current `reftramo`, and no access point left (by `reftramo` or by id). A section with points is never deleted. */
+/**
+ * Plain removals and accepted geometric twin losers in carto: accepted, one current `reftramo`, and no access point left (by `reftramo`
+ * or by id). A section with points is never deleted. `kind` tells the two sources apart (the skipped list counts them apart).
+ */
 export function buildPlainPlanSql(): string {
-  return createTemp(LOAD_TEMP.PLAIN_PLAN, [
-    "SELECT p.old_id, p.ref, p.idcalle, p.points, CASE",
+  const plain = [
+    `SELECT p.old_id, p.ref, p.idcalle, p.points, CASE`,
     `WHEN a.ref IS NULL THEN ${quoted(EJES_SKIP_REASON.NOT_ACCEPTED)}`,
     `WHEN p.ref IS NULL THEN ${quoted(EJES_SKIP_REASON.NO_REFTRAMO)}`,
     `WHEN p.old_rows > 1 THEN ${quoted(EJES_SKIP_REASON.REPEATED_OLD_REF)}`,
     `WHEN p.points > 0 THEN ${quoted(EJES_SKIP_REASON.HAS_POINTS)}`,
-    "END AS reason",
+    `END AS reason, ${quoted(EJES_SKIP_KIND.REMOVAL)} AS kind`,
     `FROM ${tmp(LOAD_TEMP.PLAIN)} AS p LEFT JOIN ${tmp(LOAD_TEMP.ACC_PLAIN)} AS a ON a.ref = p.ref`,
-  ].join(" "));
+  ].join(" ");
+  const twins = [
+    `SELECT t.section_id AS old_id, t.ref, t.idcalle, t.points, CASE`,
+    `WHEN a.ref IS NULL THEN ${quoted(EJES_SKIP_REASON.NOT_ACCEPTED)}`,
+    `WHEN t.cur_rows > 1 THEN ${quoted(EJES_SKIP_REASON.REPEATED_OLD_REF)}`,
+    `WHEN t.points > 0 THEN ${quoted(EJES_SKIP_REASON.HAS_POINTS)}`,
+    `END AS reason, ${quoted(EJES_SKIP_KIND.TWIN)} AS kind`,
+    `FROM ${tmp(LOAD_TEMP.GEO_TWIN)} AS t LEFT JOIN ${tmp(LOAD_TEMP.ACC_TWIN)} AS a ON a.ref = t.ref`,
+    `WHERE t.role = ${quoted(GEO_TWIN_ROLE.LOSER)} AND t.in_carto`,
+  ].join(" ");
+  return createTemp(LOAD_TEMP.PLAIN_PLAN, `${plain} UNION ALL ${twins}`);
 }
 
 /**
@@ -118,7 +131,7 @@ export const buildSkippedTableSql = (): string =>
     `SELECT ${quoted(EJES_SKIP_KIND.MERGE)}, p.refs, p.new_ref, p.idcalle, p.points, p.reason`,
     `FROM ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p WHERE p.reason IS NOT NULL`,
     "UNION ALL",
-    `SELECT ${quoted(EJES_SKIP_KIND.REMOVAL)}, p.ref, '', p.idcalle, p.points, p.reason`,
+    `SELECT p.kind, p.ref, '', p.idcalle, p.points, p.reason`,
     `FROM ${tmp(LOAD_TEMP.PLAIN_PLAN)} AS p WHERE p.reason IS NOT NULL`,
     "UNION ALL",
     `SELECT DISTINCT ${quoted(EJES_SKIP_KIND.RENUMBER)}, h.old_ref, h.new_ref, h.idcalle, h.points, h.reason`,

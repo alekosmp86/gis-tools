@@ -25,7 +25,7 @@ const SPLIT: EjesSplitRow = {
 const keysOf = (count: number): string[] => Array.from({ length: count }, (_, index) => `k${index}`);
 
 const viewWith = (splits: string[], onChange = vi.fn()): EjesAcceptView => ({
-  keys: { splits, plainRemovals: [], merges: [] },
+  keys: { splits, plainRemovals: [], merges: [], twinRemovals: [] },
   pointChoices: [],
   onChange,
   onPointChoicesChange: () => undefined,

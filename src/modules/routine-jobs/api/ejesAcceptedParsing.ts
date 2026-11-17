@@ -9,6 +9,7 @@ const ACCEPTED_KEY = {
   SPLITS: "splits",
   MERGES: "merges",
   PLAIN_REMOVALS: "plainRemovals",
+  TWIN_REMOVALS: "twinRemovals",
 } as const;
 
 const SPLIT_KEY = { OLD_REF: "oldRef", CHOICES: "choices" } as const;
@@ -112,5 +113,6 @@ export function readEjesAccepted(body: JsonRecord): EjesAccepted {
     splits: readSplits(accepted),
     plainRemovals: readRefs(accepted, ACCEPTED_KEY.PLAIN_REMOVALS, "ref"),
     merges: readRefs(accepted, ACCEPTED_KEY.MERGES, "newRef"),
+    twinRemovals: readRefs(accepted, ACCEPTED_KEY.TWIN_REMOVALS, "ref"),
   };
 }

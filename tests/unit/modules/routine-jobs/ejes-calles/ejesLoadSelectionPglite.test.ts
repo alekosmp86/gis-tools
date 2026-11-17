@@ -1,5 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { buildCreateGeoTwinTableSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/geoTwinSql";
 import {
   buildCopyTableSql,
   buildCreateRenumberTableSql,
@@ -37,6 +38,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
     const layouts = ejesLayouts();
     await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.RENUM));
     await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.HELD));
+    await database.exec(buildCreateGeoTwinTableSql(LOAD_TEMP.GEO_TWIN));
     for (const row of renumbered) {
       await database.query(`INSERT INTO pg_temp."${LOAD_TEMP.RENUM}" (old_id, old_ref, new_ref, points) VALUES ($1, $2, $3, 0)`, [row.oldId, row.oldRef, row.newRef]);
     }
@@ -220,7 +222,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.NEW}" (copy_id bigint, section_id bigint, master_id bigint)`);
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.WAY}" (way_id bigint, idcalle text, name text, short_name text, type_id text, font_id text)`);
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.MERGE_PLAN}" (new_ref text, idcalle text, refs text, points bigint, reason text)`);
-      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.PLAIN_PLAN}" (old_id bigint, ref text, idcalle text, points bigint, reason text)`);
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.PLAIN_PLAN}" (old_id bigint, ref text, idcalle text, points bigint, reason text, kind text)`);
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.SPLIT_PLAN}" (old_id bigint, old_ref text, idcalle text, points bigint, reason text)`);
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.SPLIT_FINAL}" (old_id bigint, old_ref text, point_id bigint, new_ref text, old_value text)`);
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.DEL}" (road_id bigint, ref text, points bigint, master_id bigint, master_deleted boolean)`);

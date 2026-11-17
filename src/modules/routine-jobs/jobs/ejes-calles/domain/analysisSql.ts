@@ -1,11 +1,11 @@
 import { cte, q, withClause } from "../../shared/sqlFragments";
+import { comparableLineSql } from "./geometryCompareSql";
 import {
   ACCESS_POINT_COLUMN,
   CIRCULATION_WAY_COLUMN,
   COVERAGE_RATIO,
   COVERAGE_TOLERANCE_M,
   DEPARTMENTS_COLUMN,
-  GEOMETRY_EQUALITY_DECIMALS,
   GEOMETRY_TOLERANCE_M,
   LOCALITIES_COLUMN,
   ROAD_SECTION_COLUMN,
@@ -29,10 +29,9 @@ import { isPieceSql } from "./pieceSql";
 import { groupPieceCtes, removalSinkCtes, type RemovalSinks } from "./removalSql";
 import { reviewPointCtes, reviewPointsColumn, splitPointCountColumns, splitPointCtes, splitPointSinkCtes } from "./splitPointSql";
 import { twinCountColumns, twinCtes, twinGroupCtes, twinListColumn } from "./twinSql";
+import { copyFinalCte, geoTwinCountColumns, geoTwinCtes, geoTwinListColumn, geoTwinSinkCtes, type GeoTwinSinks } from "./geoTwinSql";
 
-const SNAP_GRID = 10 ** -GEOMETRY_EQUALITY_DECIMALS;
-
-export type AnalysisSinks = RenumberSinks & RemovalSinks;
+export type AnalysisSinks = RenumberSinks & RemovalSinks & GeoTwinSinks;
 
 export const ANALYSIS_LIST_ALIAS = {
   SPLITS: "splits_json",
@@ -41,12 +40,12 @@ export const ANALYSIS_LIST_ALIAS = {
   STREETS: "streets_json",
   ATTRS: "attrs_json",
   TWINS: "twins_json",
+  GEO_TWINS: "geo_twins_json",
   RENUMBERED: "renumbered_json",
   RENUMBER_SKIPPED: "renumber_skipped_json",
 } as const;
 
-export const comparableLineSql = (geometry: string): string =>
-  `ST_Normalize(ST_SnapToGrid(ST_LineMerge(${geometry}), ${SNAP_GRID}))`;
+export { comparableLineSql };
 
 /** A coordinate that rounds to the other side of the snap grid is noise: the Hausdorff distance is read only for pairs the ordering test calls different. */
 export const geometriesDifferSql = (current: string, incoming: string): string =>
@@ -73,14 +72,21 @@ export function accessPointRefMatchSql(context: EjesLoadContext, value: string):
   return `a.${column} = CASE WHEN ${value} ~ '${CANONICAL_INTEGER_TEXT}' THEN (${inRange}) END`;
 }
 
-function stagingCtes(layouts: EjesLayouts): string[] {
+/** The references the staging holds: a geometric twin loser stays here (it is present), it only leaves `stg` (see `stagedCtes`). */
+function stagingKeyCtes(layouts: EjesLayouts): string[] {
+  const staging = table(layouts, "STAGING");
+  const reference = canonicalTextSql(`s.${col(layouts, "STAGING", EJES_STAGING_COLUMN.REFTRAMO)}`);
+  return [cte("stg_keys", `SELECT DISTINCT ${reference} AS ref FROM ${staging} AS s WHERE ${reference} IS NOT NULL`)];
+}
+
+/** The staging rows the classification reads: valid ones, minus the geometric twin losers (they are neither new nor changed nor split). */
+function stagedCtes(layouts: EjesLayouts): string[] {
   const staging = table(layouts, "STAGING");
   const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
   const reference = canonicalTextSql(column(EJES_STAGING_COLUMN.REFTRAMO));
   const street = canonicalTextSql(column(EJES_STAGING_COLUMN.IDCALLE));
   const geometry = column(EJES_STAGING_COLUMN.GEOM);
   return [
-    cte("stg_keys", `SELECT DISTINCT ${reference} AS ref FROM ${staging} AS s WHERE ${reference} IS NOT NULL`),
     cte(
       "stg",
       [
@@ -94,7 +100,8 @@ function stagingCtes(layouts: EjesLayouts): string[] {
         `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `${geometry} AS geom`,
         `FROM ${staging} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry)}`,
-        `AND ${reference} ~ '${INTEGER_PATTERN}') AS raw`,
+        `AND ${reference} ~ '${INTEGER_PATTERN}'`,
+        `AND NOT EXISTS (SELECT 1 FROM ${q("geo_losers")} AS l WHERE l.ref = ${reference})) AS raw`,
         "ORDER BY raw.ref, raw.idcalle, raw.nombre, raw.tipo, raw.fuente, raw.departamento, raw.localidad, ST_AsEWKB(raw.geom)",
       ].join(" ")
     ),
@@ -170,14 +177,15 @@ export function copyRawCte(layouts: EjesLayouts): string {
 const heldNewSql = (reference: string): string =>
   `${reference} NOT IN (SELECT new_ref FROM ${q("renum_skipped")}) AND ${reference} NOT IN (SELECT ref FROM ${q("group_pieces")})`;
 
+/** The copies the locality rule (ET-1 to ET-18) keeps. The geometric rule reads them, and only then removes its losers (`copyFinalCte`). */
 export const copyKeptCte = (): string =>
   cte(
     "copy_kept",
     `SELECT r.* FROM ${q("copy_raw")} AS r LEFT JOIN ${q("twins")} AS w ON w.ref = r.ref WHERE w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities))`
   );
 
-/** Kept copies per `reftramo`: a renumber onto a `reftramo` with one copy only. */
-const copyCountCte = (): string => cte("copy_refs", `SELECT k.ref, count(*) AS copies FROM ${q("copy_kept")} AS k GROUP BY k.ref`);
+/** Kept copies per `reftramo` after the geometric rule: a renumber onto a `reftramo` with one copy only. */
+const copyCountCte = (): string => cte("copy_refs", `SELECT k.ref, count(*) AS copies FROM ${q("copy_final")} AS k GROUP BY k.ref`);
 
 export function currentCtes(layouts: EjesLayouts): string[] {
   const section = (logical: string): string => `r.${col(layouts, "ROAD_SECTION", logical)}`;
@@ -358,6 +366,7 @@ function listColumns(): string[] {
     listOf(ANALYSIS_LIST_ALIAS.STREETS, "street_list", streetSelect),
     listOf(ANALYSIS_LIST_ALIAS.ATTRS, "attr_list", attrSelect),
     twinListColumn(ANALYSIS_LIST_ALIAS.TWINS),
+    geoTwinListColumn(ANALYSIS_LIST_ALIAS.GEO_TWINS),
     renumberListColumn(ANALYSIS_LIST_ALIAS.RENUMBERED),
     renumberSkippedListColumn(ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED),
   ];
@@ -381,6 +390,7 @@ function countColumns(): string[] {
     `${countOf("located", "cloc IS NULL AND dept_code IS NOT NULL")} AS "only_department"`,
     `${countOf("located", "cloc IS NULL AND dept_code IS NULL")} AS "without_code"`,
     ...twinCountColumns(),
+    ...geoTwinCountColumns(),
     ...renumberCountColumns(),
     `(SELECT row_count FROM ${q("staging_fp")}) AS "staging_rows"`,
     `(SELECT digest FROM ${q("staging_fp")}) AS "staging_digest"`,
@@ -395,16 +405,19 @@ export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks
   const ctes = [
     tipoMapCte(),
     fuenteMapCte(),
-    ...stagingCtes(layouts),
+    ...stagingKeyCtes(layouts),
     ...fingerprintCtes(layouts),
     ...currentCtes(layouts),
-    ...classifiedCtes(),
-    ...removalCtes(),
     ...twinGroupCtes(layouts),
     ...twinCtes(layouts),
     copyRawCte(layouts),
     copyKeptCte(),
+    ...geoTwinCtes(),
+    copyFinalCte(q("geo_losers")),
     copyCountCte(),
+    ...stagedCtes(layouts),
+    ...classifiedCtes(),
+    ...removalCtes(),
     ...renumberCtes(),
     ...(sinks === undefined ? [] : renumberSinkCtes(sinks)),
     ...splitCtes(),
@@ -412,6 +425,7 @@ export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks
     ...groupPieceCtes(),
     ...remainderCtes(),
     ...(sinks === undefined ? [] : removalSinkCtes(sinks)),
+    ...(sinks === undefined ? [] : geoTwinSinkCtes(sinks)),
     ...splitPointCtes(layouts),
     ...(sinks === undefined ? [] : splitPointSinkCtes(sinks.splitPoints)),
     ...reviewPointCtes(),

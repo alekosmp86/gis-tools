@@ -205,7 +205,7 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
       await insertSection(database, { ref: 3001, calle: 5, geom: "1000:1100", distance: "100.00" });
       await insertStaging(database, [
         { ref: "3002", calle: "5", nombre: "CALLE UNO", geom: "1000:1100" },
-        { ref: "3003", calle: "5", nombre: "CALLE UNO", geom: "1000:1100" },
+        { ref: "3003", calle: "5", nombre: "CALLE UNO", localidad: "SAN JOSE", geom: "1000:1100" },
       ]);
       const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
 

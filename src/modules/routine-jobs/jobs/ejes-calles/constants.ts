@@ -126,6 +126,15 @@ export const TWIN_CLASS = {
 
 export type TwinClass = (typeof TWIN_CLASS)[keyof typeof TWIN_CLASS];
 
+/** Roles of a geometric twin member: a keeper holds access points; the winner is the single member kept when none holds one. */
+export const GEO_TWIN_ROLE = {
+  KEEPER: "keeper",
+  WINNER: "winner",
+  LOSER: "loser",
+} as const;
+
+export type GeoTwinRole = (typeof GEO_TWIN_ROLE)[keyof typeof GEO_TWIN_ROLE];
+
 export const TWIN_PADRON_DISTANCE_M = 25;
 export const TWIN_NEAR_MIN_LENGTH_M = 1;
 export const RURAL_LOCALITY_SUFFIX = " RURAL";
@@ -287,6 +296,7 @@ export const EJES_SKIP_KIND = {
   MERGE: "merge",
   REMOVAL: "removal",
   RENUMBER: "renumber",
+  TWIN: "twin",
 } as const;
 
 export type EjesSkipKind = (typeof EJES_SKIP_KIND)[keyof typeof EJES_SKIP_KIND];
@@ -309,4 +319,6 @@ export const EJES_SUMMARY_COUNT_KEYS = [
   "splitPointsAuto",
   "splitPointsReview",
   "splitPointsNoGeometry",
+  "geoTwinLosersRemovable",
+  "geoTwinLosersOmitted",
 ] as const;

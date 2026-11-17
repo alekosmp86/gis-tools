@@ -75,6 +75,7 @@ const resultOf = (renumberSkipped: EjesRenumberSkippedRow[] = HELD_ROWS): EjesRe
     newStreets: [],
     attrChanges: [],
     twins: [],
+    geoTwins: [],
     renumbered: [],
     renumberSkipped,
     blockers: [],

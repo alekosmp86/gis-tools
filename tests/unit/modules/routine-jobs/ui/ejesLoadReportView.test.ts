@@ -26,6 +26,7 @@ const loadOf = (overrides: Partial<EjesLoadReport> = {}): EjesLoadReport => ({
     verticesCreated: 0,
     verticesDeleted: 0,
     splitsApplied: 0,
+    twinsRemoved: 0,
   },
   surplus: [],
   surplusTotal: 0,
@@ -113,7 +114,8 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
         { label: "Divisiones aplicadas", value: 0 },
         { label: "Uniones aplicadas", value: 2 },
         { label: "Tramos quitados", value: 5 },
-        { label: "Tramos borrados (divididos, unidos y quitados)", value: 7 },
+        { label: "Gemelos quitados", value: 0 },
+        { label: "Tramos borrados (divididos, unidos, gemelos y quitados)", value: 7 },
         { label: "Vías de circulación creadas", value: 4 },
         { label: "Puntos de acceso movidos", value: 9 },
         { label: EJES_LOAD_COUNT_TEXT.TOPOLOGY_ASSIGNED, value: 4 },
@@ -140,6 +142,7 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
             verticesCreated: 0,
             verticesDeleted: 0,
             splitsApplied: 0,
+            twinsRemoved: 0,
           },
         })
       );
@@ -165,17 +168,18 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
             verticesCreated: 0,
             verticesDeleted: 0,
             splitsApplied: 0,
+            twinsRemoved: 0,
           },
         })
       );
 
-      expect(view.counts.map((row) => row.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+      expect(view.counts.map((row) => row.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     });
 
     it("should show the sections deleted by the load (removed and merged) from counts.deleted", () => {
       const view = buildEjesLoadView(resultOf(), loadOf({ counts: { ...loadOf().counts, removed: 1, merged: 1, deleted: 3 } }));
 
-      expect(countOf(view, "Tramos borrados (divididos, unidos y quitados)")).toBe(3);
+      expect(countOf(view, "Tramos borrados (divididos, unidos, gemelos y quitados)")).toBe(3);
     });
 
     it("should show the applied merges and removed sections from the load counts", () => {

@@ -152,6 +152,7 @@ export interface EjesAcceptedRequest {
   splits: { oldRef: string; choices: EjesPointChoiceRequest[] }[];
   plainRemovals: { ref: string }[];
   merges: { newRef: string }[];
+  twinRemovals: { ref: string }[];
 }
 
 /** The real run: the counts and fingerprint of the finished dry-run, and the rows the user accepted on it. */

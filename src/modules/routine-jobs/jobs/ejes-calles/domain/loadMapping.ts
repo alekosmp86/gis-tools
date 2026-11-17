@@ -12,7 +12,7 @@ import type {
   EjesSurplusRow,
 } from "../types";
 
-export const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [] };
+export const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [] };
 
 export interface EjesLoadPlan {
   counts: EjesLoadCounts;
@@ -43,6 +43,7 @@ export const toEjesLoadPlan = (row: Row): EjesLoadPlan => {
       topologyAssigned: 0,
       verticesCreated: 0,
       verticesDeleted: 0,
+      twinsRemoved: numberOf(row.twins_removed),
     },
     attr: { idcalle: numberOf(row.idcalle), type: numberOf(row.type), font: numberOf(row.font), geom: numberOf(row.geom) },
     surplusTotal: numberOf(row.surplus),
