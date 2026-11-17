@@ -42,6 +42,7 @@ export const EJES_SPLIT_REVIEW_TEXT = {
   PIECE_LABEL: (newRef: string): string => `Tramo nuevo ${newRef}`,
   OLD_SECTION_LABEL: (oldRef: string): string => `Tramo anterior ${oldRef}`,
   DISTANCE_TEXT: (meters: number): string => `${meters} m del punto`,
+  METERS: (meters: string): string => `${meters} m`,
   HEADING: (oldRef: string, idcalle: string | null): string => `Tramo ${oldRef} · idcalle ${idcalle ?? "sin dato"}`,
 } as const;
 

@@ -215,88 +215,12 @@
   height: 12px;
   border-radius: 50%;
   flex-shrink: 0;
-  background-color: #2563eb;
+  background-color: var(--map-legend-color, #2563eb);
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
 }
 
-.legendDot[data-color-type="DB_FEATURE"] {
-  background-color: #0284c7;
-}
-
-.legendDot[data-color-type="FILE_FEATURE"] {
-  background-color: #ec4899;
-}
-
-.legendDot[data-color-type="GEOMETRY_MISMATCH"] {
-  background-color: #ec4899;
-}
-
-.legendDot[data-color-type="ATTRIBUTE_MISMATCH"] {
-  background-color: #eab308;
-}
-
-.legendDot[data-color-type="ONLY_IN_SHP"] {
-  background-color: #9333ea;
-}
-
-.legendDot[data-color-type="ONLY_IN_DB"] {
-  background-color: #0284c7;
-}
-
-.legendDot[data-color-type="DUPLICATE_SUID"] {
-  background-color: #f97316;
-}
-
-.legendDot[data-color-type="NULL_SUID"] {
-  background-color: #dc2626;
-}
-
-.legendDot[data-color-type="MATCH"] {
-  background-color: #059669;
-}
-
-.legendDot[data-color-type="PADRON_ANTERIOR"] {
-  background-color: #fb7185;
-}
-
-.legendDot[data-color-type="PADRON_NUEVO"] {
-  background-color: #34d399;
-}
-
-.legendDot[data-color-type="TRAMO_ANTERIOR"] {
-  background-color: #1d4ed8;
-}
-
-.legendDot[data-color-type="TRAMO_NUEVO"] {
-  background-color: #f97316;
-}
-
-.legendDot[data-color-type="PADRON_ZONA_URBANA"] {
-  background-color: #c026d3;
-}
-
-.legendDot[data-color-type="PADRON_ZONA_RURAL"] {
-  background-color: #92400e;
-}
-
-.legendDot[data-color-type="PADRON_CANDIDATO_1"] {
-  background-color: #f59e0b;
-}
-
-.legendDot[data-color-type="PADRON_CANDIDATO_2"] {
-  background-color: #a855f7;
-}
-
-.legendDot[data-color-type="PADRON_CANDIDATO_3"] {
-  background-color: #facc15;
-}
-
-.legendDot[data-color-type="PADRON_CANDIDATO_4"] {
-  background-color: #f97316;
-}
-
-.legendDot[data-color-type="PADRON_CANDIDATO_5"] {
-  background-color: #e879f9;
+.legendDot[data-point="true"] {
+  border: 2px solid #ffffff;
 }
 
 /* Leaflet Popup Custom Styling & Overflows Fix */
@@ -417,10 +341,3 @@
   border-left: 5px solid var(--map-label-color, rgba(15, 23, 42, 0.2));
 }
 
-.legendDot[data-color-type="TRAMO_SE_QUEDA"] {
-  background-color: #2563eb;
-}
-
-.legendDot[data-color-type="TRAMO_SE_QUITA"] {
-  background-color: #dc2626;
-}

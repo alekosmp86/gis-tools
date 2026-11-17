@@ -1,7 +1,8 @@
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { MAP_CANDIDATE_TYPES, MAP_SECTION_TYPE } from "@/core/constants/mapConstants";
+import { formatNumber } from "@/core/common/ValueFormatter";
+import { MAP_SECTION_TYPE, MAP_SPLIT_PIECE_TYPES } from "@/core/constants/mapConstants";
 import { EJES_POINT_REASON } from "../../../jobs/ejes-calles/constants";
-import type { EjesSplitPiece, EjesSplitReviewPoint } from "../../../jobs/ejes-calles/types";
+import type { EjesSplitPiece, EjesSplitPointCandidate, EjesSplitReviewPoint } from "../../../jobs/ejes-calles/types";
 import type { EjesPointChoiceRequest } from "../../shared/clientTypes";
 import { OUTLINE_LABEL_PROPERTY } from "../../shared/map/outlineMapCollection";
 import type { EjesPointChoiceKey } from "../ejesAccept";
@@ -40,11 +41,21 @@ export const suggestedChoicesOf = (
     return suggested === null ? [] : [{ pointId: point.pointId, newRef: suggested }];
   });
 
-const candidateTypeOf = (pieceIndex: number): string => MAP_CANDIDATE_TYPES[pieceIndex] ?? MAP_SECTION_TYPE.NEW;
+const candidateTypeOf = (pieceIndex: number): string => MAP_SPLIT_PIECE_TYPES[pieceIndex % MAP_SPLIT_PIECE_TYPES.length];
 
-const pieceLabelOf = (newRef: string, suggested: boolean, chosen: boolean): string => {
-  const marks: (string | null)[] = [chosen ? EJES_SPLIT_REVIEW_TEXT.CHOSEN : null, suggested ? EJES_SPLIT_REVIEW_TEXT.SUGGESTED : null];
-  return [EJES_SPLIT_REVIEW_TEXT.PIECE_LABEL(newRef), ...marks.filter((mark): mark is string => mark !== null)].join(" · ");
+const candidateOf = (point: EjesSplitReviewPoint, newRef: string): EjesSplitPointCandidate | undefined =>
+  point.candidates.find((candidate) => candidate.newRef === newRef);
+
+const distanceTextOf = (candidate: EjesSplitPointCandidate | undefined): string | null => {
+  if (candidate === undefined || candidate.distance === null) return null;
+  return EJES_SPLIT_REVIEW_TEXT.METERS(formatNumber(candidate.distance));
+};
+
+/** The name of a piece on the map and in its legend: the same text as the list, with its distance and marks. */
+const pieceLabelOf = (newRef: string, candidate: EjesSplitPointCandidate | undefined, suggested: boolean, chosen: boolean): string => {
+  const marks: (string | null)[] = [suggested ? EJES_SPLIT_REVIEW_TEXT.SUGGESTED : null, chosen ? EJES_SPLIT_REVIEW_TEXT.CHOSEN : null];
+  const parts: (string | null)[] = [EJES_SPLIT_REVIEW_TEXT.PIECE_LABEL(newRef), distanceTextOf(candidate), ...marks];
+  return parts.filter((part): part is string => part !== null).join(" · ");
 };
 
 const featureOf = (geometry: Geometry, type: string, label: string): Feature => ({
@@ -75,7 +86,7 @@ export function splitPointMapOf(
       featureOf(
         piece.geometry,
         candidateTypeOf(pieceIndex),
-        pieceLabelOf(piece.newRef, piece.newRef === suggested, piece.newRef === chosenRef)
+        pieceLabelOf(piece.newRef, candidateOf(point, piece.newRef), piece.newRef === suggested, piece.newRef === chosenRef)
       )
     )
   );

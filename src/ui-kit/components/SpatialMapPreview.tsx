@@ -11,7 +11,7 @@ import { useLeafletMap } from "@/ui-kit/hooks/useLeafletMap";
 import { MapProgressBar } from "./map/MapProgressBar";
 import { MapHeaderBar } from "./map/MapHeaderBar";
 import { MapLegend } from "./map/MapLegend";
-import { capPreview, containerClassOf, presentTypesOf } from "./spatialPreviewLogic";
+import { capPreview, containerClassOf, legendEntriesOf } from "./spatialPreviewLogic";
 import "leaflet/dist/leaflet.css";
 import styles from "./SpatialMapPreview.module.css";
 
@@ -37,6 +37,8 @@ export interface SpatialMapPreviewProps {
   showPopups?: boolean;
   /** Feature property drawn as a permanent label on each feature. */
   labelProperty?: string;
+  /** Name each legend entry by the label of its first feature (with `labelProperty`) instead of by its type. */
+  legendFromLabels?: boolean;
   /** Offset labels by their `_labelSlot` property and outline each in its feature colour; the selected feature keeps its colour. */
   codedLabels?: boolean;
   /** A click on empty map reports null through onSelectFeature. */
@@ -57,6 +59,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   neverCapViewportRender = false,
   showPopups = true,
   labelProperty,
+  legendFromLabels = false,
   clearOnBackgroundClick = false,
   codedLabels = false,
   fillParent = false,
@@ -91,7 +94,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   );
 
   const progressPct = totalFeatures > 0 ? Math.min(100, Math.round((renderedCount / totalFeatures) * 100)) : 0;
-  const presentTypes = presentTypesOf(previewGeojson);
+  const legendEntries = legendEntriesOf(previewGeojson, legendFromLabels ? labelProperty : undefined);
 
   const handleResetFeatureStyle = () => {
     setFeatureStyle(DEFAULT_MAP_FEATURE_STYLE);
@@ -112,7 +115,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
         featureStyle={featureStyle}
         onUpdateFeatureStyle={setFeatureStyle}
         onResetFeatureStyle={handleResetFeatureStyle}
-        hasDiscrepancies={presentTypes.length > 0}
+        hasDiscrepancies={legendEntries.length > 0}
       />
 
       {preview.isCapped && showCapNotice && (
@@ -126,7 +129,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
         </div>
       )}
 
-      <MapLegend presentTypes={presentTypes} />
+      <MapLegend entries={legendEntries} />
 
       {renderError !== null && (
         <div className={styles.renderError} role="alert">

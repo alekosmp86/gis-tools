@@ -86,3 +86,8 @@ export const KeyboardKey = {
   ENTER: "Enter",
   SPACE: " ",
 } as const;
+
+export interface SelectFieldOption<TValue extends string> {
+  value: TValue;
+  label: string;
+}

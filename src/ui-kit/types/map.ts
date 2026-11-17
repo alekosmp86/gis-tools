@@ -1,3 +1,9 @@
+/** One row of the map legend: a discrepancy type, and the text that names it. */
+export interface MapLegendEntry {
+  type: string;
+  label: string;
+}
+
 /** Click and label behaviour of a map beyond its data. Every flag is off unless a caller turns it on. */
 export interface MapInteractionOptions {
   /** Popups on click and on highlight. Default true, so existing previews keep their popups. */

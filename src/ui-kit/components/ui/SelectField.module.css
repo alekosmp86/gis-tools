@@ -1,0 +1,44 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.select {
+  min-width: 160px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-control);
+  color: var(--text-main);
+  font: inherit;
+  color-scheme: dark;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.select:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.select:focus-visible {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px var(--accent-cyan-glow);
+}
+
+.select option {
+  background: var(--bg-control);
+  color: var(--text-main);
+}
+
+.select option:checked {
+  background: var(--accent-cyan);
+  color: #000000;
+}

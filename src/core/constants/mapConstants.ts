@@ -84,10 +84,27 @@ export const MAP_CANDIDATE_TYPES = [
   "PADRON_CANDIDATO_5",
 ] as const;
 
+/** Pieces of an ejes split drawn on one point map, in piece order; past the last colour the palette cycles and the labels tell the pieces apart. */
+export const MAP_SPLIT_PIECE_TYPES = [
+  "TRAMO_CANDIDATO_1",
+  "TRAMO_CANDIDATO_2",
+  "TRAMO_CANDIDATO_3",
+  "TRAMO_CANDIDATO_4",
+  "TRAMO_CANDIDATO_5",
+  "TRAMO_CANDIDATO_6",
+  "TRAMO_CANDIDATO_7",
+  "TRAMO_CANDIDATO_8",
+] as const;
+
+/** Types drawn as points (a circle marker, not a line): the legend rings them in white like the marker. */
+export const MAP_POINT_TYPES: readonly string[] = [MAP_SECTION_TYPE.ACCESS_POINT];
+
 const CANDIDATE_COLORS = ["#f59e0b", "#a855f7", "#facc15", "#f97316", "#e879f9"] as const;
 
-const candidateRecordOf = (valueOf: (index: number) => string): Record<string, string> =>
-  Object.fromEntries(MAP_CANDIDATE_TYPES.map((type, index) => [type, valueOf(index)]));
+const SPLIT_PIECE_COLORS = ["#f97316", "#a855f7", "#facc15", "#ef4444", "#ec4899", "#22d3ee", "#84cc16", "#16a34a"] as const;
+
+const recordOf = (types: readonly string[], valueOf: (index: number) => string): Record<string, string> =>
+  Object.fromEntries(types.map((type, index) => [type, valueOf(index)]));
 
 const DISCREPANCY_COLORS: Record<string, string> = {
   DB_FEATURE: "#00e5ff",
@@ -98,7 +115,8 @@ const DISCREPANCY_COLORS: Record<string, string> = {
   [MAP_SECTION_TYPE.NEW]: "#f97316",
   [MAP_SECTION_TYPE.URBAN_ZONE]: "#c026d3",
   [MAP_SECTION_TYPE.RURAL_ZONE]: "#92400e",
-  ...candidateRecordOf((index) => CANDIDATE_COLORS[index]),
+  ...recordOf(MAP_CANDIDATE_TYPES, (index) => CANDIDATE_COLORS[index]),
+  ...recordOf(MAP_SPLIT_PIECE_TYPES, (index) => SPLIT_PIECE_COLORS[index]),
   [MAP_SECTION_TYPE.COPY_KEPT]: "#2563eb",
   [MAP_SECTION_TYPE.COPY_DROPPED]: "#dc2626",
   [MAP_SECTION_TYPE.ACCESS_POINT]: "#111827",
@@ -127,7 +145,8 @@ const DISCREPANCY_LABELS: Record<string, string> = {
   [MAP_SECTION_TYPE.NEW]: "Tramo nuevo",
   [MAP_SECTION_TYPE.URBAN_ZONE]: "Padrones urbanos cercanos",
   [MAP_SECTION_TYPE.RURAL_ZONE]: "Padrones rurales cercanos",
-  ...candidateRecordOf((index) => `Candidato ${index + 1}`),
+  ...recordOf(MAP_CANDIDATE_TYPES, (index) => `Candidato ${index + 1}`),
+  ...recordOf(MAP_SPLIT_PIECE_TYPES, (index) => `Tramo candidato ${index + 1}`),
   [MAP_SECTION_TYPE.ACCESS_POINT]: "Punto de acceso",
   [MAP_SECTION_TYPE.COPY_KEPT]: "Se queda",
   [MAP_SECTION_TYPE.COPY_DROPPED]: "Se quitaría",

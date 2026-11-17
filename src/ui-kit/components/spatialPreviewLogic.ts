@@ -1,5 +1,7 @@
 import type { FeatureCollection } from "geojson";
+import { getDiscrepancyLabel } from "@/core/constants/mapConstants";
 import { capFeaturesWithoutSplittingGroups } from "@/core/spatial/FeaturePreviewCap";
+import type { MapLegendEntry } from "@/ui-kit/types/map";
 
 export interface CappedPreview {
   collection: FeatureCollection;
@@ -22,14 +24,16 @@ export function capPreview(geojson: FeatureCollection, maxFeatures: number | nul
   };
 }
 
-/** The distinct discrepancy types of the collection, in first-seen order; the legend lists them. */
-export function presentTypesOf(collection: FeatureCollection): string[] {
-  const types = new Set<string>();
+/** The distinct discrepancy types of the collection, in first-seen order; the legend lists them, named by the type or, when asked, by the first feature's label. */
+export function legendEntriesOf(collection: FeatureCollection, labelProperty?: string): MapLegendEntry[] {
+  const labelByType = new Map<string, string>();
   for (const feature of collection?.features ?? []) {
     const type = feature.properties?._discrepancyType;
-    if (typeof type === "string" && type) types.add(type);
+    if (typeof type !== "string" || !type || labelByType.has(type)) continue;
+    const label = labelProperty === undefined ? undefined : feature.properties?.[labelProperty];
+    labelByType.set(type, typeof label === "string" && label !== "" ? label : getDiscrepancyLabel(type));
   }
-  return Array.from(types);
+  return Array.from(labelByType, ([type, label]) => ({ type, label }));
 }
 
 export function containerClassOf(fillParent: boolean, baseClass: string, fillClass: string): string {

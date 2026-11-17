@@ -36,6 +36,7 @@ export function EjesSplitPointMap({ collection }: EjesSplitPointMapProps) {
           title={EJES_SPLIT_REVIEW_TEXT.MAP_TITLE}
           showPopups={false}
           labelProperty={OUTLINE_LABEL_PROPERTY}
+          legendFromLabels
           codedLabels
           clearOnBackgroundClick
           fillParent
