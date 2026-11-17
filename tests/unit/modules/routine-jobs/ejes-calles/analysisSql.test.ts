@@ -9,6 +9,7 @@ import {
 import {
   COVERAGE_TOLERANCE_M,
   GEOMETRY_TOLERANCE_M,
+  PIECE_OWN_FRACTION,
   RURAL_LOCALITY_SUFFIX,
   SPLIT_PIECE_MIN_COVER_M,
   TWIN_NEAR_MIN_LENGTH_M,
@@ -178,11 +179,11 @@ describe("buildEjesAnalysisSql", () => {
     });
   });
 
-  describe("EJ-10 touching neighbours and id-linked points (SPLIT_PIECE_MIN_COVER_M, EJ-21)", () => {
-    it("should set the minimum cover of a split piece or a merge member to twice the coverage tolerance, 2 m", () => {
+  describe("EJ-10 touching neighbours and id-linked points (SPLIT_PIECE_MIN_COVER_M, PIECE_OWN_FRACTION, EJ-21)", () => {
+    it("should set the minimum cover of a split piece or a merge member to 10 m, and its own-length share to 50%", () => {
       expect(COVERAGE_TOLERANCE_M).toBe(1);
-      expect(SPLIT_PIECE_MIN_COVER_M).toBe(2 * COVERAGE_TOLERANCE_M);
-      expect(SPLIT_PIECE_MIN_COVER_M).toBe(2);
+      expect(SPLIT_PIECE_MIN_COVER_M).toBe(10);
+      expect(PIECE_OWN_FRACTION).toBe(0.5);
     });
 
     it("should measure the cover of each neighbour piece in piece_cover, one row per (removed section, new section)", () => {
@@ -193,22 +194,26 @@ describe("buildEjesAnalysisSql", () => {
       expect(pieceCover).not.toContain("GROUP BY");
     });
 
-    it("should count only the pieces whose cover is above 2 m in removed_cover, and never a piece at exactly 2 m", () => {
+    it("should count only the pieces that absorb 95% of the old section or cover more than 10 m and half their own length in removed_cover", () => {
       const removedCover = sql.slice(sql.indexOf('"removed_cover" AS ('), sql.indexOf('"splits" AS ('));
 
-      expect(removedCover).toContain('FROM "piece_cover" AS p WHERE (p.piece_covered > 2 OR p.piece_covered >= 0.95 * p.len)');
+      expect(removedCover).toContain(
+        'FROM "piece_cover" AS p WHERE (p.piece_covered >= 0.95 * p.len OR (p.piece_covered > 10 AND p.piece_covered >= 0.5 * p.piece_len))'
+      );
       expect(removedCover).toContain("count(p.new_ref) AS new_count");
       expect(removedCover).toContain("ST_Length(ST_Intersection(p.geometry, ST_Buffer(ST_Collect(p.geom), 1))) AS covered");
       expect(sql).not.toMatch(/piece_covered >= 2\b/);
     });
 
-    it("should take a merge member only when its cover is above 2 m or at least 95% of a short section, in the merge sums and in merged_ids", () => {
+    it("should take a merge member only when it absorbs 95% of the old section or covers more than 10 m and half its own length, in the merge sums and in merged_ids", () => {
       const mergeBlock = sql.slice(sql.indexOf('"merge_pairs" AS ('), sql.indexOf('"plain" AS ('));
 
       expect(mergeBlock).toContain(
-        "WHERE (p.covered > 2 OR p.covered >= 0.95 * p.len) GROUP BY p.new_ref HAVING count(*) >= 2 AND sum(p.covered) >= 0.95 * sum(p.len)"
+        "WHERE (p.covered >= 0.95 * p.len OR (p.covered > 10 AND p.covered >= 0.5 * p.piece_len)) GROUP BY p.new_ref HAVING count(*) >= 2 AND sum(p.covered) >= 0.95 * sum(p.len)"
       );
-      expect(mergeBlock).toContain('JOIN "merges" AS m ON m.new_ref = p.new_ref WHERE (p.covered > 2 OR p.covered >= 0.95 * p.len)');
+      expect(mergeBlock).toContain(
+        'JOIN "merges" AS m ON m.new_ref = p.new_ref WHERE (p.covered >= 0.95 * p.len OR (p.covered > 10 AND p.covered >= 0.5 * p.piece_len))'
+      );
       expect(sql).not.toContain("covered > 0");
     });
 
@@ -221,7 +226,9 @@ describe("buildEjesAnalysisSql", () => {
 
     it("should add the points matched by road_section.id to the points of a merge, summed over its members", () => {
       expect(sql).toContain('COALESCE(sum(ap.points), 0) + COALESCE(sum(apid.points), 0) AS points FROM "merge_pairs" AS p');
-      expect(sql).toContain('LEFT JOIN "ap" AS apid ON apid.ref = p.id::text WHERE (p.covered > 2 OR p.covered >= 0.95 * p.len)');
+      expect(sql).toContain(
+        'LEFT JOIN "ap" AS apid ON apid.ref = p.id::text WHERE (p.covered >= 0.95 * p.len OR (p.covered > 10 AND p.covered >= 0.5 * p.piece_len))'
+      );
     });
 
     it("should add the points matched by road_section.id to the points of a plain removal and sort the list by both", () => {
@@ -662,8 +669,8 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
     const plainMembers = withSinks.slice(withSinks.indexOf('"plain_members" AS ('), withSinks.indexOf('"merge_sink" AS ('));
     const splitMembers = withSinks.slice(withSinks.indexOf('"split_members" AS ('), withSinks.indexOf('"group_pieces" AS ('));
 
-    it("should take a merge member only when its cover is above 2 m, and record its reftramo and road_section.id points apart", () => {
-      expect(mergeMembers).toContain("WHERE (p.covered > 2 OR p.covered >= 0.95 * p.len)");
+    it("should take a merge member only when it absorbs 95% of the old section or covers more than 10 m and half its own length, and record its reftramo and road_section.id points apart", () => {
+      expect(mergeMembers).toContain("WHERE (p.covered >= 0.95 * p.len OR (p.covered > 10 AND p.covered >= 0.5 * p.piece_len))");
       expect(mergeMembers).toContain("COALESCE(ap.points, 0) AS points, COALESCE(apid.points, 0) AS id_points");
       expect(mergeMembers).toContain("LEFT JOIN \"ap\" AS apid ON apid.ref = p.id::text");
       expect(mergeMembers).not.toContain("covered > 0");

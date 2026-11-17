@@ -245,7 +245,7 @@ function splitCtes(): string[] {
     cte(
       "piece_cover",
       [
-        "SELECT r.id, r.ref, r.idcalle, r.len, r.geometry, n.ref AS new_ref, n.geom,",
+        "SELECT r.id, r.ref, r.idcalle, r.len, r.geometry, n.ref AS new_ref, n.geom, ST_Length(n.geom) AS piece_len,",
         `ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, ${tolerance}))) AS piece_covered`,
         `FROM ${q("removed_rest")} AS r JOIN ${q("new_rest")} AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
         "WHERE r.len > 0",
@@ -259,7 +259,7 @@ function splitCtes(): string[] {
         "array_agg(p.new_ref ORDER BY p.new_ref) AS new_refs,",
         "ST_Length(ST_Union(p.geom)) AS new_len,",
         `ST_Length(ST_Difference(ST_Union(p.geom), ST_Buffer(p.geometry, ${tolerance}))) AS outside_len`,
-        `FROM ${q("piece_cover")} AS p WHERE ${isPieceSql("p.piece_covered", "p.len")}`,
+        `FROM ${q("piece_cover")} AS p WHERE ${isPieceSql("p.piece_covered", "p.len", "p.piece_len")}`,
         "GROUP BY p.id, p.ref, p.idcalle, p.len, p.geometry",
       ].join(" ")
     ),
@@ -273,7 +273,7 @@ function mergeCtes(): string[] {
     cte(
       "merge_pairs",
       [
-        "SELECT n.ref AS new_ref, n.idcalle AS idcalle, r.id, r.ref AS old_ref, r.len, n.geom AS new_geom, r.geometry AS old_geom,",
+        "SELECT n.ref AS new_ref, n.idcalle AS idcalle, r.id, r.ref AS old_ref, r.len, n.geom AS new_geom, ST_Length(n.geom) AS piece_len, r.geometry AS old_geom,",
         `ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, ${tolerance}))) AS covered`,
         `FROM ${q("new_rest")} AS n JOIN ${q("removed_rest")} AS r ON r.idcalle = n.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
         `WHERE r.len > 0 AND r.id NOT IN (SELECT id FROM ${q("splits")})`,
@@ -287,12 +287,12 @@ function mergeCtes(): string[] {
         `ST_Length(ST_Difference((array_agg(p.new_geom))[1], ST_Buffer(ST_Collect(p.old_geom), ${tolerance}))) AS outside_len,`,
         `COALESCE(sum(ap.points), 0) + COALESCE(sum(apid.points), 0) AS points FROM ${q("merge_pairs")} AS p`,
         `LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.old_ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = p.id::text`,
-        `WHERE ${isPieceSql("p.covered", "p.len")} GROUP BY p.new_ref HAVING count(*) >= 2 AND ${coverageThresholdSql("sum(p.covered)", "sum(p.len)")}`,
+        `WHERE ${isPieceSql("p.covered", "p.len", "p.piece_len")} GROUP BY p.new_ref HAVING count(*) >= 2 AND ${coverageThresholdSql("sum(p.covered)", "sum(p.len)")}`,
       ].join(" ")
     ),
     cte(
       "merged_ids",
-      `SELECT DISTINCT p.id FROM ${q("merge_pairs")} AS p JOIN ${q("merges")} AS m ON m.new_ref = p.new_ref WHERE ${isPieceSql("p.covered", "p.len")}`
+      `SELECT DISTINCT p.id FROM ${q("merge_pairs")} AS p JOIN ${q("merges")} AS m ON m.new_ref = p.new_ref WHERE ${isPieceSql("p.covered", "p.len", "p.piece_len")}`
     ),
   ];
 }

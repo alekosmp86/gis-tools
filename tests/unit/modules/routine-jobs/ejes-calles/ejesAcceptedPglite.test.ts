@@ -493,7 +493,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
     });
   });
 
-  describe("touching neighbours and the 2 m cover of a split piece or a merge member (EJ-10, SPLIT_PIECE_MIN_COVER_M)", () => {
+  describe("touching neighbours and the 10 m cover of a split piece or a merge member (EJ-10, SPLIT_PIECE_MIN_COVER_M)", () => {
     it("should not list a neighbour that only overlaps the removed section by 1 m as a merge member, and keep the section a plain removal", async () => {
       await insertWay(database, 15, "CALLE QUINCE");
       await insertSection(database, { ref: 6801, calle: 15, geom: "0:50", distance: "50.00" });
@@ -509,12 +509,12 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       expect(analysis.plainRemovals.map((row) => row.ref)).toEqual(["6801"]);
     });
 
-    it("should not count a neighbour whose cover of the removed section is exactly 2 m as a split piece", async () => {
+    it("should not count a neighbour whose cover of the removed section is exactly 10 m as a split piece, the minimum is strict", async () => {
       await insertWay(database, 17, "CALLE DIECISIETE");
       await insertSection(database, { ref: 6811, calle: 17, geom: "0:50", distance: "50.00" });
       await insertStaging(database, [
         { ref: "6812", calle: "17", nombre: "CALLE DIECISIETE", geom: "0:30" },
-        { ref: "6813", calle: "17", nombre: "CALLE DIECISIETE", geom: "49:100" },
+        { ref: "6813", calle: "17", nombre: "CALLE DIECISIETE", geom: "41:100" },
       ]);
 
       const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
@@ -524,12 +524,12 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       expect(analysis.plainRemovals.map((row) => row.ref)).toEqual(["6811"]);
     });
 
-    it("should count a neighbour whose cover of the removed section is above 2 m as a split piece", async () => {
+    it("should count a neighbour whose cover of the removed section is just above 10 m, and more than half its own length, as a split piece", async () => {
       await insertWay(database, 17, "CALLE DIECISIETE");
       await insertSection(database, { ref: 6821, calle: 17, geom: "0:50", distance: "50.00" });
       await insertStaging(database, [
         { ref: "6822", calle: "17", nombre: "CALLE DIECISIETE", geom: "0:30" },
-        { ref: "6823", calle: "17", nombre: "CALLE DIECISIETE", geom: "48.5:100" },
+        { ref: "6823", calle: "17", nombre: "CALLE DIECISIETE", geom: "40.5:50" },
       ]);
 
       const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
@@ -538,11 +538,11 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       expect(analysis.plainRemovals).toEqual([]);
     });
 
-    it("should not count a merge member of a long section whose cover is exactly 2 m, so one section alone is no merge", async () => {
+    it("should not count a merge member of a long section whose cover is exactly 10 m, so one section alone is no merge", async () => {
       await insertWay(database, 18, "CALLE DIECIOCHO");
       await insertSection(database, { ref: 6831, calle: 18, geom: "0:50", distance: "50.00" });
-      await insertSection(database, { ref: 6832, calle: 18, geom: "98:150", distance: "52.00" });
-      await insertStaging(database, [{ ref: "6833", calle: "18", nombre: "CALLE DIECIOCHO", geom: "0:99" }]);
+      await insertSection(database, { ref: 6832, calle: 18, geom: "50:100", distance: "50.00" });
+      await insertStaging(database, [{ ref: "6833", calle: "18", nombre: "CALLE DIECIOCHO", geom: "0:59" }]);
 
       const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
 
@@ -564,7 +564,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       expect(analysis.plainRemovals).toEqual([]);
     });
 
-    it("should count a merge member whose cover is above 2 m, so the two removed sections merge into their new section", async () => {
+    it("should count a 3 m stub covered in full as a merge member through the 95% ratio, so the two removed sections merge into their new section", async () => {
       await insertWay(database, 19, "CALLE DIECINUEVE");
       await insertSection(database, { ref: 6841, calle: 19, geom: "0:50", distance: "50.00" });
       await insertSection(database, { ref: 6842, calle: 19, geom: "97:100", distance: "3.00" });

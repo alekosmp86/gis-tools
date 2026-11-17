@@ -207,8 +207,10 @@ export const COVERAGE_RATIO = 0.95;
 export const COVERAGE_TOLERANCE_M = 1;
 export const RENUMBER_HAUSDORFF_M = 0.5;
 export const RENUMBER_CANDIDATE_DISTANCE_M = COVERAGE_TOLERANCE_M;
-/** A neighbour counts as a split piece or a merge member only when it covers more than this of the old section: a neighbour that just touches an end reaches at most COVERAGE_TOLERANCE_M into it. */
-export const SPLIT_PIECE_MIN_COVER_M = 2 * COVERAGE_TOLERANCE_M;
+/** A new section of the same idcalle counts as a piece or a merge member of an old section only when it covers more than this many metres of it (EJ-10). Touching neighbours at a bend overlap 4-5 m on dev (old 1001462 / new 1030829, old 1001823 / new 1030832), so 2 m was too short. */
+export const SPLIT_PIECE_MIN_COVER_M = 10;
+/** A new section that counts as a piece must also lie mostly on the old section: at least this share of its own length (EJ-10). */
+export const PIECE_OWN_FRACTION = 0.5;
 /** A split point goes to its nearest piece only when the second nearest is at least this much farther (EJS-5). */
 export const AMBIGUOUS_POINT_GAP_M = 5;
 /** Split points farther than this from every piece are counted in the report only (EJS-8, informational). */

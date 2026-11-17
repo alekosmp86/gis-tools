@@ -45,7 +45,7 @@ export function splitPointCtes(layouts: EjesLayouts): string[] {
     ),
     cte(
       "split_piece_geo",
-      `SELECT DISTINCT ON (p.id, p.new_ref) p.id AS old_id, p.new_ref, p.geom FROM ${q("piece_cover")} AS p WHERE ${isPieceSql("p.piece_covered", "p.len")} ORDER BY p.id, p.new_ref`
+      `SELECT DISTINCT ON (p.id, p.new_ref) p.id AS old_id, p.new_ref, p.geom FROM ${q("piece_cover")} AS p WHERE ${isPieceSql("p.piece_covered", "p.len", "p.piece_len")} ORDER BY p.id, p.new_ref`
     ),
     cte(
       "split_point_dist",
