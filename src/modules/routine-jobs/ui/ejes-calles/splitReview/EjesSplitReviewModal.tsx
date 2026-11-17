@@ -6,7 +6,7 @@ import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { Modal } from "@/ui-kit/components/Modal";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
-import type { EjesSplitPointsPage, EjesSplitReviewPoint, EjesSplitRow } from "../../../jobs/ejes-calles/types";
+import type { EjesSplitPointsPage, EjesSplitReviewPoint, EjesSplitRow, EjesStreet } from "../../../jobs/ejes-calles/types";
 import type { EjesSplitPointsBase } from "../../shared/clientTypes";
 import { ReviewNavigation } from "../../shared/map/ReviewNavigation";
 import { isSplitAcceptable, pointReviewCountOf, type EjesAcceptView } from "../ejesAccept";
@@ -15,7 +15,7 @@ import { EjesSplitPointPanel } from "./EjesSplitPointPanel";
 import { EjesSplitReviewFooter } from "./EjesSplitReviewFooter";
 import { ReasonFilterSelect } from "./ReasonFilterSelect";
 import { EJES_SPLIT_REVIEW_TEXT } from "./ejesSplitReviewTexts";
-import { filterPointsByReason, REASON_FILTER, splitPointMapOf, type ReasonFilter } from "./ejesSplitReviewView";
+import { filterPointsByReason, REASON_FILTER, splitPointMapOf, streetTextOf, type ReasonFilter } from "./ejesSplitReviewView";
 import { SplitPointsStatus, useEjesSplitPoints } from "./useEjesSplitPoints";
 import { useSplitChoices } from "./useSplitChoices";
 import styles from "./EjesSplitReview.module.css";
@@ -55,6 +55,9 @@ export function EjesSplitReviewModal({ split, base, accept, onClose }: EjesSplit
     setIndex(0);
   };
 
+  const oldStreetOfHeader: EjesStreet | null =
+    page !== null ? page.oldStreet : split.idcalle === null ? null : { idcalle: split.idcalle, name: null };
+
   const renderPoints = (loaded: EjesSplitPointsPage) => (
     <>
       {countMismatch && <AlertMessage type={AlertType.WARNING} text={EJES_SPLIT_REVIEW_TEXT.COUNT_MISMATCH} />}
@@ -72,6 +75,7 @@ export function EjesSplitReviewModal({ split, base, accept, onClose }: EjesSplit
       {current !== undefined && (
         <EjesSplitPointPanel
           point={current}
+          oldStreet={loaded.oldStreet}
           chosenRef={choices.chosenByPoint.get(current.pointId)}
           disabled={choices.choiceBlocked(current)}
           mapOpen={mapOpen}
@@ -120,7 +124,7 @@ export function EjesSplitReviewModal({ split, base, accept, onClose }: EjesSplit
   return (
     <Modal title={EJES_SPLIT_REVIEW_TEXT.MODAL_TITLE} onClose={onClose}>
       <div className={styles.body}>
-        <p className={styles.intro}>{EJES_SPLIT_REVIEW_TEXT.HEADING(split.oldRef, split.idcalle)}</p>
+        <p className={styles.intro}>{EJES_SPLIT_REVIEW_TEXT.HEADING(split.oldRef, streetTextOf(oldStreetOfHeader, true))}</p>
         <p className={styles.progress}>{EJES_SPLIT_REVIEW_TEXT.PROGRESS(choices.chosenByPoint.size, pointReviewCountOf(split))}</p>
         {renderBody()}
       </div>

@@ -132,6 +132,19 @@
   overflow-wrap: anywhere;
 }
 
+.streetBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.streetLine {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .group {
   display: flex;
   flex-direction: column;

@@ -14,7 +14,7 @@ import {
   type EjesTableRole,
 } from "../constants";
 import { EJES_MAP_STATEMENT_TIMEOUT, newSectionOutlineSql, oldSectionOutlineSql } from "../domain/geometryMap";
-import { splitPointDetailSql } from "../domain/splitPointDetailSql";
+import { circulationWayNamesSql, oldSectionStreetSql, splitPointDetailSql } from "../domain/splitPointDetailSql";
 import type {
   EjesReviewStore,
   EjesSplitPiece,
@@ -22,6 +22,7 @@ import type {
   EjesSplitPointsParams,
   EjesSplitReviewPoint,
   EjesStoredReviewPoint,
+  EjesStreet,
 } from "../types";
 import { sridIssuesOf } from "./resolveLayouts";
 
@@ -41,10 +42,11 @@ interface ResolvedSplitTables {
   roadSection: ResolvedTable;
   access: ResolvedTable;
   address: ResolvedTable;
+  circulationWay: ResolvedTable;
   addressIssues: string[];
 }
 
-/** The four tables a page reads by key: their columns must exist; a wrong address SRID is information (its points have no geometry). */
+/** The five tables a page reads by key or small lookup: their columns must exist; a wrong address SRID is information (its points have no geometry). */
 async function resolveSplitTables(session: RunSession, params: EjesSplitPointsParams): Promise<ResolvedSplitTables> {
   // One pg client: catalog reads are awaited in turn, so they never overlap.
   // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
@@ -55,6 +57,8 @@ async function resolveSplitTables(session: RunSession, params: EjesSplitPointsPa
   const access = await resolveTable(session, specOf(params.tables[EJES_TABLE_ROLE.ACCESS_POINT], EJES_TABLE_ROLE.ACCESS_POINT));
   // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
   const address = await resolveTable(session, specOf(params.tables[EJES_TABLE_ROLE.ADDRESS], EJES_TABLE_ROLE.ADDRESS));
+  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+  const circulationWay = await resolveTable(session, specOf(params.tables[EJES_TABLE_ROLE.CIRCULATION_WAY], EJES_TABLE_ROLE.CIRCULATION_WAY));
   throwIfIssues([
     ...staging.issues,
     ...sridIssuesOf(staging, EJES_STAGING_COLUMN.GEOM),
@@ -62,8 +66,9 @@ async function resolveSplitTables(session: RunSession, params: EjesSplitPointsPa
     ...sridIssuesOf(roadSection, ROAD_SECTION_COLUMN.GEOMETRY),
     ...access.issues,
     ...address.issues,
+    ...circulationWay.issues,
   ]);
-  return { staging, roadSection, access, address, addressIssues: sridIssuesOf(address, ADDRESS_COLUMN.GEOMETRY, false) };
+  return { staging, roadSection, access, address, circulationWay, addressIssues: sridIssuesOf(address, ADDRESS_COLUMN.GEOMETRY, false) };
 }
 
 interface RawDetail {
@@ -72,6 +77,7 @@ interface RawDetail {
   letter: string | null;
   km: string | null;
   circulationWay: string | null;
+  idcalle: string | null;
   geometry: Geometry | null;
 }
 
@@ -93,6 +99,11 @@ async function readOldGeometry(session: RunSession, roadSection: ResolvedTable, 
   return (result.rows[0]?.geojson as Geometry | null | undefined) ?? null;
 }
 
+async function readOldIdcalle(session: RunSession, roadSection: ResolvedTable, oldRef: string): Promise<string | null> {
+  const result = await session.query(oldSectionStreetSql(roadSection.layout), [Number(oldRef)]);
+  return (result.rows[0]?.idcalle as string | null | undefined) ?? null;
+}
+
 async function readDetails(session: RunSession, tables: ResolvedSplitTables, pointIds: readonly string[]): Promise<RawDetail[]> {
   const result = await session.query(splitPointDetailSql(tables.access.layout, tables.address.layout), [pointIds]);
   return result.rows.map((row) => ({
@@ -101,12 +112,27 @@ async function readDetails(session: RunSession, tables: ResolvedSplitTables, poi
     letter: (row.letter as string | null | undefined) ?? null,
     km: (row.km as string | null | undefined) ?? null,
     circulationWay: (row.circulationWay as string | null | undefined) ?? null,
+    idcalle: (row.idcalle as string | null | undefined) ?? null,
     geometry: (row.geometry as Geometry | null | undefined) ?? null,
   }));
 }
 
-/** A stored point and its read detail as the page shows them: the stored reason and candidates, the door data and the geometry. */
-function pointOf(stored: EjesStoredReviewPoint, detail: RawDetail | undefined): EjesSplitReviewPoint {
+/** The name of each street, by its `idcalle`: the streets the page names, none twice. */
+async function readStreetNames(session: RunSession, circulationWay: ResolvedTable, idcalles: readonly string[]): Promise<Map<string, string | null>> {
+  if (idcalles.length === 0) return new Map();
+  const result = await session.query(circulationWayNamesSql(circulationWay.layout), [idcalles]);
+  return new Map(result.rows.map((row) => [String(row.idcalle), (row.name as string | null | undefined) ?? null]));
+}
+
+type StreetOf = (idcalle: string | null) => EjesStreet | null;
+
+const streetResolverOf =
+  (names: ReadonlyMap<string, string | null>): StreetOf =>
+  (idcalle) =>
+    idcalle === null ? null : { idcalle, name: names.get(idcalle) ?? null };
+
+/** A stored point and its read detail as the page shows them: the stored reason and candidates, the door data, the street and the geometry. */
+function pointOf(stored: EjesStoredReviewPoint, detail: RawDetail | undefined, streetOf: StreetOf): EjesSplitReviewPoint {
   return {
     pointId: stored.pointId,
     reason: stored.reason,
@@ -115,6 +141,7 @@ function pointOf(stored: EjesStoredReviewPoint, detail: RawDetail | undefined): 
     km: detail?.km ?? null,
     circulationWay: detail?.circulationWay ?? null,
     geometry: detail?.geometry ?? null,
+    pointStreet: streetOf(detail?.idcalle ?? null),
     candidates: stored.candidates.map((candidate) => ({
       newRef: candidate.newRef,
       distance: candidate.distance,
@@ -136,10 +163,18 @@ function storedRowsOf(stored: readonly EjesStoredReviewPoint[], oldRef: string):
 const piecesRefsOf = (rows: readonly EjesStoredReviewPoint[]): string[] =>
   (rows[0]?.candidates.map((candidate) => candidate.newRef) ?? []).sort(byNumericValue);
 
+/** The distinct streets of the page: the points' and the old section's, none null. */
+const streetIdcallesOf = (details: readonly RawDetail[], oldIdcalle: string | null): string[] => {
+  const values = [...details.map((detail) => detail.idcalle), oldIdcalle];
+  return [...new Set(values.filter((value): value is string => value !== null))];
+};
+
 interface SplitPageRead {
   pieces: EjesSplitPiece[];
   oldGeometry: Geometry | null;
+  oldIdcalle: string | null;
   details: RawDetail[];
+  streetNames: Map<string, string | null>;
   addressIssues: string[];
 }
 
@@ -151,19 +186,24 @@ async function readPage(
 ): Promise<SplitPageRead> {
   await session.query(`SET LOCAL statement_timeout = '${EJES_MAP_STATEMENT_TIMEOUT}'`);
   const tables = await resolveSplitTables(session, params);
-  // One pg client: the piece, section and point reads follow each other.
+  // One pg client: the piece, section, point and street reads follow each other.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const pieces = await readPieces(session, tables.staging, piecesRefsOf(rows));
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const oldGeometry = await readOldGeometry(session, tables.roadSection, params.oldRef);
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const oldIdcalle = await readOldIdcalle(session, tables.roadSection, params.oldRef);
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const details = await readDetails(session, tables, pageRows.map((point) => point.pointId));
-  return { pieces, oldGeometry, details, addressIssues: tables.addressIssues };
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const streetNames = await readStreetNames(session, tables.circulationWay, streetIdcallesOf(details, oldIdcalle));
+  return { pieces, oldGeometry, oldIdcalle, details, streetNames, addressIssues: tables.addressIssues };
 }
 
 /**
  * Read-only: one page of the review points of one split, from the points the dry run `jobId` kept (no analysis runs here). The page
- * reads the door fields, the point geometries and the sections by primary key. Null when the dry run is no longer kept.
+ * reads the door fields, the streets, the point geometries and the sections by primary key or small lookup. Null when the dry run is no
+ * longer kept.
  */
 export async function readEjesSplitPoints(
   params: EjesSplitPointsParams,
@@ -174,17 +214,19 @@ export async function readEjesSplitPoints(
   if (stored === undefined) return null;
   const rows = storedRowsOf(stored, params.oldRef);
   const pageRows = rows.slice(params.offset, params.offset + params.limit);
-  const empty: SplitPageRead = { pieces: [], oldGeometry: null, details: [], addressIssues: [] };
+  const empty: SplitPageRead = { pieces: [], oldGeometry: null, oldIdcalle: null, details: [], streetNames: new Map(), addressIssues: [] };
   const read = pageRows.length === 0 ? empty : await readSplitPage(params, deps, rows, pageRows);
   const detailById = new Map(read.details.map((detail) => [detail.pointId, detail]));
+  const streetOf = streetResolverOf(read.streetNames);
   return {
     oldRef: params.oldRef,
     total: rows.length,
     offset: params.offset,
     limit: params.limit,
-    points: pageRows.map((point) => pointOf(point, detailById.get(point.pointId))),
+    points: pageRows.map((point) => pointOf(point, detailById.get(point.pointId), streetOf)),
     pieces: read.pieces,
     oldGeometry: read.oldGeometry,
+    oldStreet: streetOf(read.oldIdcalle),
     addressIssues: read.addressIssues,
   };
 }

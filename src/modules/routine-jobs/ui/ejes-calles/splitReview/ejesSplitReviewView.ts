@@ -2,7 +2,7 @@ import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { formatNumber } from "@/core/common/ValueFormatter";
 import { MAP_SECTION_TYPE, MAP_SPLIT_PIECE_TYPES } from "@/core/constants/mapConstants";
 import { EJES_POINT_REASON } from "../../../jobs/ejes-calles/constants";
-import type { EjesSplitPiece, EjesSplitPointCandidate, EjesSplitReviewPoint } from "../../../jobs/ejes-calles/types";
+import type { EjesSplitPiece, EjesSplitPointCandidate, EjesSplitReviewPoint, EjesStreet } from "../../../jobs/ejes-calles/types";
 import type { EjesPointChoiceRequest } from "../../shared/clientTypes";
 import { OUTLINE_LABEL_PROPERTY } from "../../shared/map/outlineMapCollection";
 import type { EjesPointChoiceKey } from "../ejesAccept";
@@ -21,6 +21,39 @@ const DISCREPANCY_TYPE_PROPERTY = "_discrepancyType";
 
 export const filterPointsByReason = (points: readonly EjesSplitReviewPoint[], filter: ReasonFilter): EjesSplitReviewPoint[] =>
   filter === REASON_FILTER.ALL ? [...points] : points.filter((point) => point.reason === filter);
+
+/** A street as one phrase: "RUTA 25 (idcalle 71939)" in the long form, "RUTA 25 (71939)" in the compact one; no name gives "idcalle N". */
+export const streetTextOf = (street: EjesStreet | null, compact: boolean): string => {
+  if (street === null) return EJES_SPLIT_REVIEW_TEXT.STREET_NO_DATA;
+  if (street.name === null) return EJES_SPLIT_REVIEW_TEXT.STREET_ID_ONLY(street.idcalle);
+  return compact
+    ? EJES_SPLIT_REVIEW_TEXT.STREET_NAMED_COMPACT(street.name, street.idcalle)
+    : EJES_SPLIT_REVIEW_TEXT.STREET_NAMED(street.name, street.idcalle);
+};
+
+export interface SplitStreetView {
+  /** One line when both streets are the same street; otherwise the point's line and the old section's line. */
+  lines: string[];
+  /** True when both streets have an idcalle and they differ: the choices stay as they are, the screen only warns. */
+  mismatch: boolean;
+}
+
+/** The street lines of a point and of its old section: the same street gives one line, two different streets two lines and a warning. */
+export const splitStreetViewOf = (pointStreet: EjesStreet | null, oldStreet: EjesStreet | null): SplitStreetView => {
+  const pointId = pointStreet?.idcalle ?? null;
+  const oldId = oldStreet?.idcalle ?? null;
+  if (pointId === oldId) {
+    const named = pointStreet?.name != null ? pointStreet : oldStreet?.name != null ? oldStreet : (pointStreet ?? oldStreet);
+    return { lines: [EJES_SPLIT_REVIEW_TEXT.STREET_SINGLE(streetTextOf(named, true))], mismatch: false };
+  }
+  return {
+    lines: [
+      EJES_SPLIT_REVIEW_TEXT.STREET_POINT(streetTextOf(pointStreet, false)),
+      EJES_SPLIT_REVIEW_TEXT.STREET_OLD(streetTextOf(oldStreet, false)),
+    ],
+    mismatch: pointId !== null && oldId !== null,
+  };
+};
 
 /** The destinations chosen on one split, by point. */
 export const chosenByPointOf = (choices: readonly EjesPointChoiceKey[], oldRef: string): Map<string, string> =>

@@ -179,6 +179,7 @@ export function ejesSplitPointsBaseOf(state: EjesWizardState, jobId: string | un
       [EJES_TABLE_ROLE.ROAD_SECTION]: tables[EJES_TABLE_ROLE.ROAD_SECTION],
       [EJES_TABLE_ROLE.ACCESS_POINT]: tables[EJES_TABLE_ROLE.ACCESS_POINT],
       [EJES_TABLE_ROLE.ADDRESS]: tables[EJES_TABLE_ROLE.ADDRESS],
+      [EJES_TABLE_ROLE.CIRCULATION_WAY]: tables[EJES_TABLE_ROLE.CIRCULATION_WAY],
     },
     jobId,
   };

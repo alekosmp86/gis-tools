@@ -221,12 +221,13 @@ export const SPLIT_POINTS_PAGE_LIMIT = 200;
 export const INVALID_CHOICE_REFS_LIMIT = 5;
 /** The review points one dry run keeps for the review screen; a split whose points would pass this is not stored and is flagged incomplete. */
 export const REVIEW_POINTS_STORE_LIMIT = 20000;
-/** The tables the review points read by primary key: the access points, their addresses, the old sections and the new pieces. */
+/** The tables the review points read by primary key or small lookups: the access points, their addresses, the old sections, the new pieces and the circulation ways (street names). */
 export const EJES_SPLIT_POINTS_ROLES = [
   EJES_TABLE_ROLE.STAGING,
   EJES_TABLE_ROLE.ROAD_SECTION,
   EJES_TABLE_ROLE.ACCESS_POINT,
   EJES_TABLE_ROLE.ADDRESS,
+  EJES_TABLE_ROLE.CIRCULATION_WAY,
 ] as const;
 /** The answer of the review read when its dry run is no longer kept (evicted, or never stored because it was a real run). */
 export const SPLIT_REVIEW_GONE_MESSAGE = "El análisis ya no está disponible. Vuelva a analizar.";

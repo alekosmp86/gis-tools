@@ -44,7 +44,15 @@ export const EJES_SPLIT_REVIEW_TEXT = {
   OLD_SECTION_LABEL: (oldRef: string): string => `Tramo anterior ${oldRef}`,
   DISTANCE_TEXT: (meters: number): string => `${meters} m del punto`,
   METERS: (meters: string): string => `${meters} m`,
-  HEADING: (oldRef: string, idcalle: string | null): string => `Tramo ${oldRef} · idcalle ${idcalle ?? "sin dato"}`,
+  HEADING: (oldRef: string, street: string): string => `Tramo ${oldRef} · ${street}`,
+  STREET_SINGLE: (street: string): string => `Calle: ${street}`,
+  STREET_POINT: (street: string): string => `Calle del punto: ${street}`,
+  STREET_OLD: (street: string): string => `Calle del tramo anterior: ${street}`,
+  STREET_MISMATCH: "La calle del punto no coincide con la del tramo anterior",
+  STREET_NO_DATA: "sin dato",
+  STREET_ID_ONLY: (idcalle: string): string => `idcalle ${idcalle}`,
+  STREET_NAMED: (name: string, idcalle: string): string => `${name} (idcalle ${idcalle})`,
+  STREET_NAMED_COMPACT: (name: string, idcalle: string): string => `${name} (${idcalle})`,
 } as const;
 
 export const EJES_SPLIT_REASON_TEXT: Record<EjesPointReason, string> = {

@@ -3,7 +3,7 @@ import { readEjesCallesSplitPoints } from "@/modules/routine-jobs/api/ejesSplitP
 import { parseEjesSplitPointsRequest } from "@/modules/routine-jobs/api/ejesSplitPointsRequestParsing";
 import { getEjesReviewStore, withReviewRetention } from "@/modules/routine-jobs/api/ejesReviewStore";
 import { RequestInvalidError } from "@/modules/routine-jobs/api/requestParsing";
-import { EJES_SPLIT_POINTS_ROLES, SPLIT_POINTS_PAGE_LIMIT, SPLIT_REVIEW_GONE_MESSAGE } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
+import { EJES_SPLIT_POINTS_ROLES, EJES_TABLE_ROLE, SPLIT_POINTS_PAGE_LIMIT, SPLIT_REVIEW_GONE_MESSAGE } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { EjesResult, EjesReviewStore, EjesStoredReviewPoint } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import { readEjesSplitPoints } from "@/modules/routine-jobs/jobs/ejes-calles/services/readEjesSplitPoints";
 import type { JobStore } from "@/modules/routine-jobs/jobs/shared/jobStore";
@@ -31,10 +31,18 @@ const STORED_POINT: EjesStoredReviewPoint = {
 };
 
 describe("parseEjesSplitPointsRequest (EJS-6, EJ-13)", () => {
-  it("should keep only the four tables the review reads, whatever else the body carries", () => {
+  it("should keep only the five tables the review reads, circulation ways included, whatever else the body carries", () => {
     const params = parse();
 
     expect(Object.keys(params.tables).sort()).toEqual([...EJES_SPLIT_POINTS_ROLES].sort());
+    expect(params.tables[EJES_TABLE_ROLE.CIRCULATION_WAY]).toEqual({ schema: "carto", table: "circulation_way" });
+  });
+
+  it("should refuse a request without the circulation ways table (the fifth role) with a 400", () => {
+    const tables: Record<string, unknown> = { ...ejesTablesBody() };
+    delete tables[EJES_TABLE_ROLE.CIRCULATION_WAY];
+
+    expect(() => parse({ tables })).toThrow(RequestInvalidError);
   });
 
   it("should carry the job id and the old reftramo in canonical text", () => {
@@ -111,6 +119,7 @@ describe("readEjesSplitPoints for a dry run that is no longer kept (EJS-6)", () 
 
     expect(page?.total).toBe(0);
     expect(page?.points).toEqual([]);
+    expect(page?.oldStreet).toBeNull();
     expect(openSession).not.toHaveBeenCalled();
   });
 });

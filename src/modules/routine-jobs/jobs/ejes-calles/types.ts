@@ -325,7 +325,15 @@ export interface EjesSplitReviewPoint {
   circulationWay: string | null;
   /** The point in WGS84; null when the point has no usable address geometry. */
   geometry: Geometry | null;
+  /** The street of the access point; null when the point has no `idcalle`. */
+  pointStreet: EjesStreet | null;
   candidates: EjesSplitPointCandidate[];
+}
+
+/** A street named by its `idcalle` (the old section's or the access point's); `name` is null when no circulation way of it has a name. */
+export interface EjesStreet {
+  idcalle: string;
+  name: string | null;
 }
 
 /** A piece of the split, in WGS84, sent once per page and shared by its points. */
@@ -344,6 +352,8 @@ export interface EjesSplitPointsPage {
   pieces: EjesSplitPiece[];
   /** The old section in WGS84; null when the section has no geometry. */
   oldGeometry: Geometry | null;
+  /** The street of the old section; null when the section is not found or has no `idcalle`. */
+  oldStreet: EjesStreet | null;
   /** Problems of the address geometry (SRID): every point without them is a point without geometry. */
   addressIssues: string[];
 }

@@ -101,6 +101,7 @@ const point = (overrides: Partial<EjesSplitReviewPoint>): EjesSplitReviewPoint =
   km: null,
   circulationWay: null,
   geometry: null,
+  pointStreet: null,
   candidates: [
     { newRef: "6002", distance: 1.2, isSuggestion: true },
     { newRef: "6003", distance: 6.2, isSuggestion: false },

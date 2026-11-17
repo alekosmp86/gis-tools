@@ -29,13 +29,13 @@ function readTableRef(tables: JsonRecord, role: EjesTableRole): EjesTableRef {
   return { schema: readRequiredText(entry, "schema"), table: readRequiredText(entry, "table") };
 }
 
-/** The tables the page reads by key: the four of `EJES_SPLIT_POINTS_ROLES`, nothing else. */
+/** The tables the page reads by key or small lookup: the five of `EJES_SPLIT_POINTS_ROLES`, nothing else. */
 function readSplitTables(body: JsonRecord): EjesSplitPointsParams["tables"] {
   const tables = readRecord(body, SPLIT_POINTS_KEY.TABLES);
   return Object.fromEntries(EJES_SPLIT_POINTS_ROLES.map((role) => [role, readTableRef(tables, role)])) as EjesSplitPointsParams["tables"];
 }
 
-/** One page of the review points of one split of the dry run `jobId`: the connection, the four tables, the old `reftramo` and the window. */
+/** One page of the review points of one split of the dry run `jobId`: the connection, the five tables, the old `reftramo` and the window. */
 export function parseEjesSplitPointsRequest(body: JsonRecord): EjesSplitPointsParams {
   return {
     config: toDbConfig(parseConnection(body)),

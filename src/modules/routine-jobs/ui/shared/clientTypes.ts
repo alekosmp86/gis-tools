@@ -173,7 +173,7 @@ export interface EjesGeometryMapRequest extends EjesGeometryMapBase {
   items: EjesMapItem[];
 }
 
-/** The connection, the four tables the review reads by key, and the dry run whose stored points the review shows. */
+/** The connection, the five tables the review reads by key or small lookup, and the dry run whose stored points the review shows. */
 export interface EjesSplitPointsBase {
   connection: ClientConnection;
   tables: Pick<Record<EjesTableRole, EjesTableRef>, (typeof EJES_SPLIT_POINTS_ROLES)[number]>;
