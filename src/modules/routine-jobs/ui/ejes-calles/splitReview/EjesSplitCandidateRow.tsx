@@ -17,7 +17,10 @@ export interface EjesSplitCandidateRowProps {
 }
 
 const distanceTextOf = (distance: number | null): string =>
-  distance === null ? EJES_SPLIT_REVIEW_TEXT.NO_DISTANCE : EJES_SPLIT_REVIEW_TEXT.DISTANCE_TEXT(distance);
+  distance === null ? EJES_SPLIT_REVIEW_TEXT.NO_DISTANCE : EJES_SPLIT_REVIEW_TEXT.METERS(String(distance));
+
+const distanceTitleOf = (distance: number | null): string | undefined =>
+  distance === null ? undefined : EJES_SPLIT_REVIEW_TEXT.DISTANCE_TEXT(distance);
 
 const classesOf = (...classes: (string | false)[]): string => classes.filter(Boolean).join(" ");
 
@@ -37,6 +40,7 @@ export const EjesSplitCandidateRow: React.FC<EjesSplitCandidateRowProps> = ({
     role="radio"
     aria-checked={chosen}
     tabIndex={tabStop ? 0 : -1}
+    title={distanceTitleOf(candidate.distance)}
     disabled={disabled}
     className={classesOf(styles.candidate, chosen && styles.candidateChosen)}
     onClick={onToggle}
