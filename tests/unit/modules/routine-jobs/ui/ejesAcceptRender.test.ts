@@ -40,7 +40,7 @@ const COUNTS = {
 
 const MERGE_ROW = { newRef: "6103", idcalle: "7", oldRefs: ["6101", "6102"], points: 3, coverage: 1, oldLength: 100, newLength: 100, outsideLength: 0 };
 const PLAIN_ROW = { ref: "5001", idcalle: "5", points: 0 };
-const SPLIT_ROW = { oldRef: "6901", idcalle: "14", newRefs: ["6902", "6903"], points: 1, coverage: 1, oldLength: 100, newLength: 100, outsideLength: 0 };
+const SPLIT_ROW = { oldRef: "6901", idcalle: "14", newRefs: ["6902", "6903"], points: 1, refPoints: 1, autoPoints: 1, reviewPoints: 0, noGeometryPoints: 0, farPoints: 0, coverage: 1, oldLength: 100, newLength: 100, outsideLength: 0 };
 
 const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
   ({
@@ -98,8 +98,10 @@ const doneStep = (result: EjesResult, accept?: EjesAcceptView): string => {
 };
 
 const acceptView = (plainRemovals: string[] = [], merges: string[] = []): EjesAcceptView => ({
-  keys: { plainRemovals, merges },
+  keys: { splits: [], plainRemovals, merges },
+  pointChoices: [],
   onChange: () => undefined,
+  onPointChoicesChange: () => undefined,
 });
 
 const ROW_COLUMNS: TableColumn<{ ref: string }>[] = [{ header: "reftramo", cell: (row) => row.ref }];
@@ -194,7 +196,7 @@ describe("EjesAcceptableRows (EJ-24)", () => {
 });
 
 function renderAcceptFor(merges: string[]): EjesAcceptView {
-  return { keys: { plainRemovals: [], merges }, onChange: () => undefined };
+  return { keys: { splits: [], plainRemovals: [], merges }, pointChoices: [], onChange: () => undefined, onPointChoicesChange: () => undefined };
 }
 
 describe("accept controls on the Resultado step (EJ-24)", () => {
@@ -205,7 +207,7 @@ describe("accept controls on the Resultado step (EJ-24)", () => {
     expect(out).toContain(EJES_ACCEPT_TEXT.REJECT_ALL);
     expect(out).toContain(acceptedCountTextOf(1, 1));
     expect(out).toContain(acceptedCountTextOf(0, 1));
-    expect(out).toContain(EJES_ACCEPT_TEXT.SPLIT_PENDING);
+    expect(out).toContain(EJES_ACCEPT_TEXT.SPLIT_NOTE);
   });
 
   it("should show no accept control, no badge and no split note on a real-run result, even when accept is passed", () => {
@@ -214,7 +216,7 @@ describe("accept controls on the Resultado step (EJ-24)", () => {
 
     expect(out).not.toContain(EJES_ACCEPT_TEXT.ACCEPT_ALL);
     expect(out).not.toContain(EJES_ACCEPT_TEXT.REJECT_ALL);
-    expect(out).not.toContain(EJES_ACCEPT_TEXT.SPLIT_PENDING);
+    expect(out).not.toContain(EJES_ACCEPT_TEXT.SPLIT_NOTE);
     expect(out).not.toContain("aceptados de");
   });
 

@@ -59,6 +59,7 @@ const LOAD_COUNTS = {
   topologyAssigned: 0,
   verticesCreated: 0,
   verticesDeleted: 0,
+  splitsApplied: 0,
 };
 
 const BACKUP: EjesBackup = {
@@ -206,7 +207,7 @@ describe("EjesLoadResult (EJL-13, EJ-24)", () => {
         skipped: [SKIPPED_RENUMBER],
         skippedTotal: 1200,
         skippedByReason: [
-          { reason: "split_pending", count: 1100 },
+          { reason: "review_required", count: 1100 },
           { reason: "not_single_copy", count: 100 },
         ],
       })
@@ -214,7 +215,7 @@ describe("EjesLoadResult (EJL-13, EJ-24)", () => {
 
     expect(out).toContain(`${EJES_LOAD_SKIPPED_TITLE} (1200)`);
     expect(out).toContain(EJES_LOAD_SKIPPED_BY_REASON_TITLE);
-    expect(out).toContain("División pendiente: no se aplica en esta carga");
+    expect(out).toContain("Puntos de acceso sin destino automático: requiere revisión");
   });
 
   it("should render the cap note with the listed and total counts when the list holds fewer rows than the total", () => {

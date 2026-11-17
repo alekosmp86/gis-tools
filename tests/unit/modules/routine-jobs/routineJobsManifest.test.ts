@@ -20,6 +20,7 @@ const EXPECTED_ENDPOINTS = [
   "POST unidad-territorial/start",
   "GET unidad-territorial/status",
   "POST ejes-calles/start",
+  "POST ejes-calles/split-points",
   "GET ejes-calles/status",
   "POST ejes-calles/geometry-map",
   "POST centros-anep/start",

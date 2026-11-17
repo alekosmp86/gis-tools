@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import type { EjesResult } from "../../jobs/ejes-calles/types";
 import { CollapsibleSection } from "../shared/CollapsibleSection";
-import type { EjesGeometryMapBase } from "../shared/clientTypes";
+import type { EjesGeometryMapBase, EjesSplitPointsBase } from "../shared/clientTypes";
 import type { EjesAcceptView } from "./ejesAccept";
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
 import { subjectOfMerge, subjectOfRenumbered, subjectOfSplit, subjectOfTwin } from "./ejesMapSubject";
@@ -41,11 +41,13 @@ export interface EjesCallesReportProps {
   result: EjesResult;
   /** The connection of the wizard for the map; null when the wizard holds no password. */
   mapBase: EjesGeometryMapBase | null;
+  /** The connection and tables of the wizard for the split review; null when the wizard holds no password. */
+  splitBase?: EjesSplitPointsBase | null;
   /** Absent on a read-only report: the lists then show no accept controls. */
   accept?: EjesAcceptView;
 }
 
-export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapBase, accept }) => {
+export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapBase, splitBase = null, accept }) => {
   const view = buildEjesReportView(result);
   const [review, setReview] = useState<EjesMapReview | null>(null);
   const [openLists, setOpenLists] = useState<ReadonlySet<EjesListKey>>(
@@ -76,6 +78,7 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
         onShowOnMap={(listSubjects, index) => setReview({ subjects: listSubjects, index })}
         subjects={subjects}
         accept={accept}
+        splitBase={splitBase}
       />
       <TextList title="Tipos de vialidad fuera de la tabla" items={view.unknownTipos} />
       <TextList title="Fuentes fuera de la tabla" items={view.unknownFuentes} />

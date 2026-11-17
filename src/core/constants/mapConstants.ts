@@ -67,6 +67,7 @@ export const MAP_SECTION_TYPE = {
   RURAL_ZONE: "PADRON_ZONA_RURAL",
   COPY_KEPT: "TRAMO_SE_QUEDA",
   COPY_DROPPED: "TRAMO_SE_QUITA",
+  ACCESS_POINT: "PUNTO_ACCESO",
 } as const;
 
 /** Outline types drawn as the underlay of a comparison: thicker, so the outline over them stays visible. */
@@ -100,6 +101,7 @@ const DISCREPANCY_COLORS: Record<string, string> = {
   ...candidateRecordOf((index) => CANDIDATE_COLORS[index]),
   [MAP_SECTION_TYPE.COPY_KEPT]: "#2563eb",
   [MAP_SECTION_TYPE.COPY_DROPPED]: "#dc2626",
+  [MAP_SECTION_TYPE.ACCESS_POINT]: "#111827",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "#ff0055",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#f59e0b",
   [DiscrepancyType.ONLY_IN_SHP]: "#a855f7",
@@ -126,6 +128,7 @@ const DISCREPANCY_LABELS: Record<string, string> = {
   [MAP_SECTION_TYPE.URBAN_ZONE]: "Padrones urbanos cercanos",
   [MAP_SECTION_TYPE.RURAL_ZONE]: "Padrones rurales cercanos",
   ...candidateRecordOf((index) => `Candidato ${index + 1}`),
+  [MAP_SECTION_TYPE.ACCESS_POINT]: "Punto de acceso",
   [MAP_SECTION_TYPE.COPY_KEPT]: "Se queda",
   [MAP_SECTION_TYPE.COPY_DROPPED]: "Se quitaría",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "Discrepancia Geométrica",

@@ -138,9 +138,17 @@ export async function ejesAnalyzeWarnings(session: CatalogQuerySession, context:
   return warnings;
 }
 
-/** A real run writes only what slice 1 needs: any missing privilege, sequence or NOT NULL column is a blocker, not information. */
-export async function assertEjesLoadReady(session: CatalogQuerySession, context: EjesLoadContext): Promise<string[]> {
-  const issues: string[] = [];
+/**
+ * A real run writes only what slice 1 needs: any missing privilege, sequence or NOT NULL column is a blocker, not information.
+ * The address geometry problems block only when splits are accepted (only the split points need it); otherwise they are information.
+ */
+export async function assertEjesLoadReady(
+  session: CatalogQuerySession,
+  context: EjesLoadContext,
+  addressIssues: readonly string[],
+  splitsAccepted: boolean
+): Promise<string[]> {
+  const issues: string[] = splitsAccepted ? [...addressIssues] : [];
   for (const role of EJES_LOAD_ROLES) {
     const target = context.targets[role];
     // One pg client: checks are awaited in turn, so they never overlap.
@@ -157,5 +165,5 @@ export async function assertEjesLoadReady(session: CatalogQuerySession, context:
   }
   issues.push(...(await topologyIssuesOf(session, context)));
   throwIfIssues(issues);
-  return ejesAnalyzeWarnings(session, context);
+  return [...(splitsAccepted ? [] : addressIssues), ...(await ejesAnalyzeWarnings(session, context))];
 }

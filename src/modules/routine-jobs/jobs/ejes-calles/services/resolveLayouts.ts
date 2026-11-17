@@ -6,6 +6,7 @@ import { throwIfIssues } from "../../shared/preflightAsserts";
 import { readIdSequence } from "../../shared/tableFacts";
 import { resolveTable, type ResolvedTable, type WritableTargetLayout } from "../../shared/tableResolution";
 import {
+  ADDRESS_COLUMN,
   EJES_ID_LOGICAL_BY_ROLE,
   EJES_REQUIRED_COLUMNS_BY_ROLE,
   EJES_ROLES,
@@ -28,7 +29,12 @@ const GEOMETRY_LOGICAL_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
 const EXACT_GEOMETRY_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
   [EJES_TABLE_ROLE.LOCALITIES]: LOCALITIES_COLUMN.GEOM,
   [EJES_TABLE_ROLE.PADRONES]: PADRON_COLUMN.GEOMETRY,
+  [EJES_TABLE_ROLE.ADDRESS]: ADDRESS_COLUMN.GEOMETRY,
 };
+
+/** The address geometry is needed only by the split points: its SRID is a blocker in a real run and information in a dry run. */
+const DEFERRED_GEOMETRY_ROLES: readonly EjesTableRole[] = [EJES_TABLE_ROLE.ADDRESS];
+const isDeferredGeometry = (role: EjesTableRole): boolean => DEFERRED_GEOMETRY_ROLES.includes(role);
 
 export function sridIssuesOf(resolved: ResolvedTable, logicalGeometry: string, allowGeneric = true): string[] {
   const column = resolved.layout.columns[logicalGeometry];
@@ -83,7 +89,8 @@ async function resolveAllRoles(
 
 export async function resolveEjesLayouts(session: CatalogQuerySession, params: EjesParams): Promise<EjesResolvedLayouts> {
   const entries = await resolveAllRoles(session, params);
-  throwIfIssues(entries.flatMap(([role, resolved]) => [...resolved.issues, ...geometryIssuesOf(role, resolved)]));
+  throwIfIssues(entries.flatMap(([role, resolved]) => [...resolved.issues, ...(isDeferredGeometry(role) ? [] : geometryIssuesOf(role, resolved))]));
+  const addressIssues = entries.flatMap(([role, resolved]) => (isDeferredGeometry(role) ? geometryIssuesOf(role, resolved) : []));
   const layouts = Object.fromEntries(entries.map(([role, resolved]) => [role, resolved.layout])) as EjesLayouts;
   const writeTargets: WritableTargetLayout[] = [];
   for (const [role, resolved] of entries) {
@@ -91,5 +98,5 @@ export async function resolveEjesLayouts(session: CatalogQuerySession, params: E
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     writeTargets.push(await writeTargetOf(session, role, resolved));
   }
-  return { layouts, writeTargets };
+  return { layouts, writeTargets, addressIssues };
 }

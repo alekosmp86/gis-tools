@@ -45,11 +45,11 @@ describe("EJ-4 table roles", () => {
   });
 
   describe("EJ-4 ejes-address role (EJS-2, shared-master check of EJ-21)", () => {
-    it("should be named ejes-address, default to carto.address and require only id_address_master", () => {
+    it("should be named ejes-address, default to carto.address and require id, id_address_master and geometry", () => {
       expect(EJES_TABLE_ROLE.ADDRESS).toBe("ejes-address");
       expect(EJES_ROLES).toContain("ejes-address");
       expect(EJES_DEFAULT_TABLES[EJES_TABLE_ROLE.ADDRESS]).toEqual({ schema: "carto", table: "address" });
-      expect(EJES_REQUIRED_COLUMNS_BY_ROLE[EJES_TABLE_ROLE.ADDRESS]).toEqual(["id_address_master"]);
+      expect(EJES_REQUIRED_COLUMNS_BY_ROLE[EJES_TABLE_ROLE.ADDRESS]).toEqual(["id_address_master", "id", "geometry"]);
     });
 
     it("should be a read role and never a write role", () => {

@@ -50,6 +50,8 @@ describe("ejes removal plan SQL on PGlite (EJS-1, EJS-9, EJL-12)", () => {
           await createCopies(["7001", "7002", "7003", "7004", "7005"]);
           await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.SPLIT}" (old_id bigint, old_ref text, idcalle text, points bigint, new_ref text)`);
           await database.exec(`INSERT INTO pg_temp."${LOAD_TEMP.SPLIT}" VALUES (1, '6900', '3', 0, '7001')`);
+          await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.SPLIT_PLAN}" (old_id bigint, old_ref text, idcalle text, points bigint, reason text)`);
+          await database.exec(`INSERT INTO pg_temp."${LOAD_TEMP.SPLIT_PLAN}" VALUES (1, '6900', '3', 0, '${EJES_SKIP_REASON.NOT_ACCEPTED}')`);
           await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.MERGE_PLAN}" (new_ref text, idcalle text, refs text, points bigint, reason text)`);
           await database.exec(
             `INSERT INTO pg_temp."${LOAD_TEMP.MERGE_PLAN}" VALUES ('7002', '3', '6800,6801', 0, '${EJES_SKIP_REASON.NOT_ACCEPTED}'), ('7003', '3', '6802', 0, NULL)`
@@ -67,6 +69,7 @@ describe("ejes removal plan SQL on PGlite (EJS-1, EJS-9, EJL-12)", () => {
         async () => {
           await createCopies(["7101", "7102"]);
           await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.SPLIT}" (old_id bigint, old_ref text, idcalle text, points bigint, new_ref text)`);
+          await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.SPLIT_PLAN}" (old_id bigint, old_ref text, idcalle text, points bigint, reason text)`);
           await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.MERGE_PLAN}" (new_ref text, idcalle text, refs text, points bigint, reason text)`);
           await database.exec(buildHoldGroupCopiesSql());
         },
@@ -80,7 +83,7 @@ describe("ejes removal plan SQL on PGlite (EJS-1, EJS-9, EJL-12)", () => {
   describe("buildHoldGroupCopiesSql text (EJS-1, EJL-12)", () => {
     it("should keep the exact delete of the held split and merge copies, unchanged by the id-point rules", () => {
       expect(buildHoldGroupCopiesSql()).toBe(
-        'DELETE FROM pg_temp."ej_copy" AS c WHERE c.ref IN (SELECT s.new_ref FROM pg_temp."ej_split" AS s) OR c.ref IN (SELECT p.new_ref FROM pg_temp."ej_merge_plan" AS p WHERE p.reason IS NOT NULL)'
+        'DELETE FROM pg_temp."ej_copy" AS c WHERE c.ref IN (SELECT s.new_ref FROM pg_temp."ej_split" AS s JOIN pg_temp."ej_split_plan" AS sp ON sp.old_id = s.old_id WHERE sp.reason IS NOT NULL) OR c.ref IN (SELECT p.new_ref FROM pg_temp."ej_merge_plan" AS p WHERE p.reason IS NOT NULL)'
       );
     });
   });
@@ -142,6 +145,8 @@ describe("ejes removal plan SQL on PGlite (EJS-1, EJS-9, EJL-12)", () => {
       await database.exec(
         `INSERT INTO pg_temp."${LOAD_TEMP.SPLIT}" VALUES (1, '6900', '3', 2, '7001'), (1, '6900', '3', 2, '7002')`
       );
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.SPLIT_PLAN}" (old_id bigint, old_ref text, idcalle text, points bigint, reason text)`);
+      await database.exec(`INSERT INTO pg_temp."${LOAD_TEMP.SPLIT_PLAN}" VALUES (1, '6900', '3', 2, '${EJES_SKIP_REASON.REVIEW_REQUIRED}')`);
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.MERGE_PLAN}" (new_ref text, idcalle text, refs text, points bigint, reason text)`);
       await database.exec(
         `INSERT INTO pg_temp."${LOAD_TEMP.MERGE_PLAN}" VALUES ('7100', '4', '6800,6801', 3, '${EJES_SKIP_REASON.NOT_ACCEPTED}'), ('7200', '4', '6810', 0, NULL)`
@@ -164,7 +169,7 @@ describe("ejes removal plan SQL on PGlite (EJS-1, EJS-9, EJL-12)", () => {
 
       expect(rows.map((row) => [row.kind, row.refs, row.new_refs, row.reason])).toEqual(
         expect.arrayContaining([
-          [EJES_SKIP_KIND.SPLIT, "6900", "7001,7002", EJES_SKIP_REASON.SPLIT_PENDING],
+          [EJES_SKIP_KIND.SPLIT, "6900", "7001,7002", EJES_SKIP_REASON.REVIEW_REQUIRED],
           [EJES_SKIP_KIND.MERGE, "6800,6801", "7100", EJES_SKIP_REASON.NOT_ACCEPTED],
           [EJES_SKIP_KIND.REMOVAL, "6700", "", EJES_SKIP_REASON.NOT_ACCEPTED],
         ])
@@ -192,7 +197,7 @@ describe("ejes removal plan SQL on PGlite (EJS-1, EJS-9, EJL-12)", () => {
 
       expect(counts.map((row) => [row.reason, Number(row.count)]).sort()).toEqual(
         [
-          [EJES_SKIP_REASON.SPLIT_PENDING, 1],
+          [EJES_SKIP_REASON.REVIEW_REQUIRED, 1],
           [EJES_SKIP_REASON.NOT_ACCEPTED, 2],
           [RENUMBER_SKIP_REASON.NOT_SINGLE_COPY, 1],
         ].sort()

@@ -3,6 +3,12 @@ import { numberOf } from "../../shared/rowMapping";
 import { WRITTEN_ALIAS } from "../domain/loadWriteSql";
 
 export const ANALYSIS_CHANGED_MESSAGE = "Los ejes de origen o los tramos de destino cambiaron desde el análisis; vuelva a analizar.";
+export const CHOICE_NOT_APPLICABLE_MESSAGE =
+  "Se eligió un destino para un punto que no requiere revisión o para una división que no se puede aplicar. Vuelva a analizar.";
+
+/** The abort message of invalid choices, naming up to `INVALID_CHOICE_REFS_LIMIT` old `reftramo`s so the user can find them. */
+export const choiceNotApplicableOf = (oldRefs: readonly string[]): string =>
+  oldRefs.length === 0 ? CHOICE_NOT_APPLICABLE_MESSAGE : `${CHOICE_NOT_APPLICABLE_MESSAGE} Tramos: ${oldRefs.join(", ")}.`;
 
 export function assertWritten(label: string, written: number, expected: number): void {
   if (written !== expected) {

@@ -76,6 +76,7 @@ import type {
 } from "../types";
 import { discardEjesRevertBackup, writeEjesRevertBackup } from "./ejesRevertBackup";
 import { readAnalysisForLoad, readStagingReport } from "./readEjesAnalysis";
+import { writeSplitPoints } from "./splitLoad";
 import { createTopologyInputs, writeTopology } from "./topologyLoad";
 
 export interface EjesPersistBody {
@@ -205,10 +206,10 @@ async function writeRenumbered(session: RunSession, context: EjesLoadContext, pl
   if (plan.counts.renumbered > 0) {
     assertWritten("el reftramo de los tramos renumerados", await writtenBy(session, buildRenumberSectionsSql(context)), plan.counts.renumbered);
   }
-  if (plan.counts.pointsMoved === 0) return;
+  if (plan.movedPoints === 0) return;
   // Ordered: the points move after their sections took the new reftramo, in the same transaction; merged points follow their new section.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  assertWritten("los puntos de acceso movidos", await writtenBy(session, buildMovePointsSql(context)), plan.counts.pointsMoved);
+  assertWritten("los puntos de acceso movidos", await writtenBy(session, buildMovePointsSql(context)), plan.movedPoints);
 }
 
 async function analyzeChanged(session: RunSession, context: EjesLoadContext, plan: EjesLoadPlan): Promise<void> {
@@ -246,6 +247,7 @@ async function writeChanges(session: RunSession, context: EjesLoadContext, plan:
   await timer.run(EJES_STEP.SECTIONS, () => writeSections(session, context, plan));
   await timer.run(EJES_STEP.UPDATES, () => writeUpdates(session, context, plan));
   await timer.run(EJES_STEP.RENUMBER, () => writeRenumbered(session, context, plan));
+  await timer.run(EJES_STEP.SPLIT_POINTS, () => writeSplitPoints(session, context, plan));
   await timer.run(EJES_STEP.REMOVE, () => writeRemovals(session, context, plan));
   const topology = await timer.run(EJES_STEP.TOPOLOGY, () => writeTopology(session, context));
   const counts = { ...plan.counts, ...topology };

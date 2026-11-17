@@ -35,6 +35,11 @@ const COUNTS = {
   renumberedWithPoints: 1,
   renumberedPoints: 5,
   renumberSkipped: 0,
+  splitPointsTotal: 0,
+  splitPointsAuto: 0,
+  splitPointsReview: 0,
+  splitPointsNoGeometry: 0,
+  splitPointsFar: 0,
 };
 
 const TWIN: EjesTwinRow = {

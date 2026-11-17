@@ -547,7 +547,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
 
       expect((await sectionByRef(6001))[0]).toEqual(before);
       expect(outcome.load.skipped).toEqual([
-        { kind: "split", refs: ["6001"], newRefs: ["6002", "6003"], idcalle: "3", points: 1, reason: "split_pending" },
+        { kind: "split", refs: ["6001"], newRefs: ["6002", "6003"], idcalle: "3", points: 1, reason: "not_accepted" },
       ]);
       expect(await rowsOf(database, "SELECT count(*)::int AS n FROM carto.access_point WHERE id_road_section = '6001'")).toEqual([{ n: 1 }]);
     });
@@ -995,6 +995,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
           "removed",
           "renumberSkipped",
           "renumbered",
+          "splitsApplied",
           "topologyAssigned",
           "updated",
           "verticesCreated",

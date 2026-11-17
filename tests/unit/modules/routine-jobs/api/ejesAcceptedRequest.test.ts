@@ -19,6 +19,9 @@ const COUNT_KEYS = [
   "plainRemovals",
   "renumbered",
   "renumberSkipped",
+  "splitPointsAuto",
+  "splitPointsReview",
+  "splitPointsNoGeometry",
 ];
 const FINGERPRINT = { rows: 12, digest: "9f8e7d6c5b4a3210fedcba9876543210" };
 
@@ -56,7 +59,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
   it("should accept an empty accepted object as valid, with no plain removals and no merges", () => {
     const params = parse(realBody({}));
 
-    expect(params.accepted).toEqual({ plainRemovals: [], merges: [] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [] });
   });
 
   it("should deduplicate repeated plain removal refs and merge refs, keeping the first order", () => {
@@ -67,7 +70,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
       })
     );
 
-    expect(params.accepted).toEqual({ plainRemovals: ["7", "3"], merges: ["9"] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: ["7", "3"], merges: ["9"] });
   });
 
   it("should accept exactly ACCEPTED_KEYS_LIMIT distinct keys in one list (boundary)", () => {
@@ -86,7 +89,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
   it("should canonicalise leading zeros in the refs, so '0012' is sent as 12", () => {
     const params = parse(realBody({ plainRemovals: [{ ref: "0012" }], merges: [{ newRef: "007" }] }));
 
-    expect(params.accepted).toEqual({ plainRemovals: ["12"], merges: ["7"] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: ["12"], merges: ["7"] });
   });
 
   it("should accept a negative integer ref as its canonical text", () => {
@@ -142,14 +145,52 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
     expect(messageOf(body)).toContain("unexpected");
   });
 
-  it("should keep the unavailable message for a non-empty splits list, not a shape message", () => {
-    expect(messageOf(realBody({ splits: [{ oldRef: "1", newRefs: ["2", "3"] }] }))).toBe(REAL_RUN_UNAVAILABLE_MESSAGE);
+  it("should accept a split with its oldRef and the user's choices, and send it with its choices", () => {
+    const params = parse(realBody({ splits: [{ oldRef: "0012", choices: [{ pointId: "41", newRef: "6002" }] }] }));
+
+    expect(params.accepted?.splits).toEqual([{ oldRef: "12", choices: [{ pointId: "41", newRef: "6002" }] }]);
+  });
+
+  it("should accept a split with no choices as an empty choices list", () => {
+    const params = parse(realBody({ splits: [{ oldRef: "6001" }] }));
+
+    expect(params.accepted?.splits).toEqual([{ oldRef: "6001", choices: [] }]);
+  });
+
+  it("should refuse the old split shape with newRefs with a 400 that names the unknown key", () => {
+    const body = realBody({ splits: [{ oldRef: "1", newRefs: ["2", "3"] }] });
+
+    expect(() => parse(body)).toThrow(RequestInvalidError);
+    expect(messageOf(body)).toContain("newRefs");
+  });
+
+  it("should refuse an unknown key inside a split entry with a 400", () => {
+    expect(() => parse(realBody({ splits: [{ oldRef: "1", choices: [], extra: 1 }] }))).toThrow(RequestInvalidError);
+  });
+
+  it("should refuse an unknown key inside a choice with a 400", () => {
+    expect(() => parse(realBody({ splits: [{ oldRef: "1", choices: [{ pointId: "4", newRef: "5", extra: 1 }] }] }))).toThrow(RequestInvalidError);
+  });
+
+  it("should refuse a point chosen twice for two different pieces of one split with a 400", () => {
+    const body = realBody({
+      splits: [
+        { oldRef: "1", choices: [{ pointId: "4", newRef: "5" }] },
+        { oldRef: "1", choices: [{ pointId: "4", newRef: "6" }] },
+      ],
+    });
+
+    expect(() => parse(body)).toThrow(RequestInvalidError);
+  });
+
+  it("should refuse a splits list that is not an array with a 400", () => {
+    expect(() => parse(realBody({ splits: "1" }))).toThrow(RequestInvalidError);
   });
 
   it("should accept an empty splits list next to shaped merges", () => {
     const params = parse(realBody({ splits: [], merges: [{ newRef: "5" }] }));
 
-    expect(params.accepted).toEqual({ plainRemovals: [], merges: ["5"] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: ["5"] });
   });
 
   it("should refuse the whole request, not one entry, when one entry of a list is malformed", () => {

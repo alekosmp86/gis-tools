@@ -1,6 +1,6 @@
 import type { RunSession } from "../../cargar-padrones/types";
 import { numberOf } from "../../shared/rowMapping";
-import { buildAcceptedTablesSql, buildMissingAcceptedSql } from "../domain/acceptedSql";
+import { buildAcceptedTablesSql, buildInvalidChoiceRefsSql, buildMissingAcceptedSql } from "../domain/acceptedSql";
 import { buildDeleteMastersSql, buildDeleteSectionsSql } from "../domain/loadWriteSql";
 import type { EjesLoadPlan } from "../domain/loadMapping";
 import {
@@ -11,21 +11,28 @@ import {
   buildPlainPlanSql,
   buildSkippedTableSql,
 } from "../domain/removalPlanSql";
+import { buildSplitFinalSql, buildSplitPlanSql } from "../domain/splitPlanSql";
 import type { EjesAccepted, EjesLoadContext } from "../types";
-import { ANALYSIS_CHANGED_MESSAGE, assertWritten, runInOrder, writtenBy } from "./writeStatements";
+import { ANALYSIS_CHANGED_MESSAGE, assertWritten, choiceNotApplicableOf, runInOrder, writtenBy } from "./writeStatements";
 
-/** The accepted keys become temp tables; every one must name a merge or a plain removal of this transaction's analysis. */
+/** The accepted keys and choices become temp tables; every key must name a split, merge or plain removal of this transaction's analysis. */
 export async function prepareAccepted(session: RunSession, accepted: EjesAccepted): Promise<void> {
   await runInOrder(session, buildAcceptedTablesSql(accepted));
   const missing = numberOf((await session.query(buildMissingAcceptedSql())).rows[0]?.missing);
   if (missing > 0) throw new Error(ANALYSIS_CHANGED_MESSAGE);
 }
 
-/** The plans count the kept copies of each new `reftramo` before the held groups' copies leave the selection. */
+/**
+ * The plans count the kept copies of each new `reftramo` before the held groups' copies leave the selection. The split plan and the
+ * split points come before the holds, the delete list and the skipped list, which read them. The choices are checked against the
+ * split plan (a choice for an automatic point or for a held split aborts the load), before any write.
+ */
 export async function createRemovalPlans(session: RunSession, context: EjesLoadContext): Promise<void> {
+  await runInOrder(session, [buildMergePlanSql(), buildPlainPlanSql(), buildSplitPlanSql()]);
+  const invalidRefs = (await session.query(buildInvalidChoiceRefsSql())).rows.map((row) => String(row.old_ref));
+  if (invalidRefs.length > 0) throw new Error(choiceNotApplicableOf(invalidRefs));
   await runInOrder(session, [
-    buildMergePlanSql(),
-    buildPlainPlanSql(),
+    buildSplitFinalSql(context),
     buildHoldGroupCopiesSql(),
     buildMoveTableSql(),
     buildDeleteTableSql(context.layouts),
@@ -33,7 +40,7 @@ export async function createRemovalPlans(session: RunSession, context: EjesLoadC
   ]);
 }
 
-/** The sections of the applied merges and removals go only after their points moved; their masters go after their sections. */
+/** The sections of the applied merges, splits and removals go only after their points moved; their masters go after their sections. */
 export async function writeRemovals(session: RunSession, context: EjesLoadContext, plan: EjesLoadPlan): Promise<void> {
   if (plan.counts.deleted === 0) return;
   assertWritten("los tramos quitados", await writtenBy(session, buildDeleteSectionsSql(context)), plan.counts.deleted);

@@ -18,13 +18,19 @@ describe("ejes accept keys (EJ-24, EJL-22)", () => {
     it("should add a plain removal key on accept, for the analysis of the change", () => {
       const next = acceptanceAfter(null, ANALYSIS, { list: EjesAcceptList.PLAIN_REMOVALS, keys: ["5001"], accepted: true });
 
-      expect(next).toEqual({ analysisKey: ANALYSIS, plainRemovals: ["5001"], merges: [] });
+      expect(next).toEqual({ analysisKey: ANALYSIS, splits: [], plainRemovals: ["5001"], merges: [], pointChoices: [] });
     });
 
     it("should add a merge key to merges, leaving plainRemovals untouched", () => {
       const next = acceptanceAfter(null, ANALYSIS, { list: EjesAcceptList.MERGES, keys: ["6103"], accepted: true });
 
-      expect(next).toEqual({ analysisKey: ANALYSIS, plainRemovals: [], merges: ["6103"] });
+      expect(next).toEqual({ analysisKey: ANALYSIS, splits: [], plainRemovals: [], merges: ["6103"], pointChoices: [] });
+    });
+
+    it("should add a split key to splits, leaving the other lists untouched", () => {
+      const next = acceptanceAfter(null, ANALYSIS, { list: EjesAcceptList.SPLITS, keys: ["6901"], accepted: true });
+
+      expect(next).toEqual({ analysisKey: ANALYSIS, splits: ["6901"], plainRemovals: [], merges: [], pointChoices: [] });
     });
 
     it("should take the acceptance back on a second toggle, keeping the other keys of the list", () => {
@@ -54,7 +60,7 @@ describe("ejes accept keys (EJ-24, EJL-22)", () => {
 
       const next = acceptanceAfter(older, ANALYSIS, { list: EjesAcceptList.MERGES, keys: ["6103"], accepted: true });
 
-      expect(next).toEqual({ analysisKey: ANALYSIS, plainRemovals: [], merges: ["6103"] });
+      expect(next).toEqual({ analysisKey: ANALYSIS, splits: [], plainRemovals: [], merges: ["6103"], pointChoices: [] });
     });
   });
 
@@ -93,7 +99,7 @@ describe("ejes accept keys (EJ-24, EJL-22)", () => {
     });
 
     it("should still let a removal of keys work at the limit", () => {
-      const full: EjesAcceptance = { analysisKey: ANALYSIS, plainRemovals: keysOf(ACCEPTED_KEYS_LIMIT), merges: [] };
+      const full: EjesAcceptance = { analysisKey: ANALYSIS, splits: [], plainRemovals: keysOf(ACCEPTED_KEYS_LIMIT), merges: [], pointChoices: [] };
 
       const next = acceptanceAfter(full, ANALYSIS, { list: EjesAcceptList.PLAIN_REMOVALS, keys: ["k0"], accepted: false });
 
@@ -102,39 +108,63 @@ describe("ejes accept keys (EJ-24, EJL-22)", () => {
   });
 
   describe("acceptKeysOf: the analysis key gates the keys", () => {
-    const acceptance: EjesAcceptance = { analysisKey: ANALYSIS, plainRemovals: ["5001"], merges: ["6103"] };
+    const acceptance: EjesAcceptance = { analysisKey: ANALYSIS, splits: [], plainRemovals: ["5001"], merges: ["6103"], pointChoices: [] };
 
     it("should return no keys when nothing was accepted", () => {
-      expect(acceptKeysOf(null, ANALYSIS)).toEqual({ plainRemovals: [], merges: [] });
+      expect(acceptKeysOf(null, ANALYSIS)).toEqual({ splits: [], plainRemovals: [], merges: [] });
     });
 
     it("should return no keys when the analysis of the screen has no key", () => {
-      expect(acceptKeysOf(acceptance, undefined)).toEqual({ plainRemovals: [], merges: [] });
+      expect(acceptKeysOf(acceptance, undefined)).toEqual({ splits: [], plainRemovals: [], merges: [] });
     });
 
     it("should return no keys when the analysis key differs from the one they were accepted on", () => {
-      expect(acceptKeysOf(acceptance, "host|5432|gis|user|tables-b")).toEqual({ plainRemovals: [], merges: [] });
+      expect(acceptKeysOf(acceptance, "host|5432|gis|user|tables-b")).toEqual({ splits: [], plainRemovals: [], merges: [] });
     });
 
     it("should return the keys of both lists when the analysis key matches", () => {
-      expect(acceptKeysOf(acceptance, ANALYSIS)).toEqual({ plainRemovals: ["5001"], merges: ["6103"] });
+      expect(acceptKeysOf(acceptance, ANALYSIS)).toEqual({ splits: [], plainRemovals: ["5001"], merges: ["6103"] });
     });
   });
 
   describe("acceptedRequestOf: the accepted object of the real-run request", () => {
     it("should send plain removals as {ref} and merges as {newRef}, in order", () => {
-      expect(acceptedRequestOf({ plainRemovals: ["5001", "5002"], merges: ["6103"] })).toEqual({
+      expect(acceptedRequestOf({ splits: [], plainRemovals: ["5001", "5002"], merges: ["6103"] })).toEqual({
+        splits: [],
         plainRemovals: [{ ref: "5001" }, { ref: "5002" }],
         merges: [{ newRef: "6103" }],
       });
     });
 
-    it("should send both lists as empty arrays when nothing is accepted, a valid empty accepted object", () => {
-      expect(acceptedRequestOf({ plainRemovals: [], merges: [] })).toEqual({ plainRemovals: [], merges: [] });
+    it("should send all three lists as empty arrays when nothing is accepted, a valid empty accepted object", () => {
+      expect(acceptedRequestOf({ splits: [], plainRemovals: [], merges: [] })).toEqual({ splits: [], plainRemovals: [], merges: [] });
     });
 
-    it("should never include the splits key, which the request does not carry in this slice", () => {
-      expect(Object.keys(acceptedRequestOf({ plainRemovals: [], merges: [] })).sort()).toEqual(["merges", "plainRemovals"]);
+    it("should send an accepted split with the user's choices only, as {oldRef, choices}", () => {
+      const request = acceptedRequestOf(
+        { splits: ["6901"], plainRemovals: [], merges: [] },
+        [{ oldRef: "6901", pointId: "7", newRef: "6902" }]
+      );
+
+      expect(request.splits).toEqual([{ oldRef: "6901", choices: [{ pointId: "7", newRef: "6902" }] }]);
+    });
+
+    it("should send an accepted split with no choices as an empty choices list, and leave choices of other splits out", () => {
+      const request = acceptedRequestOf(
+        { splits: ["6901"], plainRemovals: [], merges: [] },
+        [{ oldRef: "6950", pointId: "3", newRef: "6951" }]
+      );
+
+      expect(request.splits).toEqual([{ oldRef: "6901", choices: [] }]);
+    });
+
+    it("should omit the choices of a split that is not accepted", () => {
+      const request = acceptedRequestOf(
+        { splits: [], plainRemovals: [], merges: [] },
+        [{ oldRef: "6901", pointId: "7", newRef: "6902" }]
+      );
+
+      expect(request.splits).toEqual([]);
     });
   });
 });

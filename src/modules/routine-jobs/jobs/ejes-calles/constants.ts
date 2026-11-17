@@ -79,6 +79,14 @@ export const ACCESS_POINT_COLUMN = {
   ROAD_SECTION: "id_road_section",
 } as const;
 
+/** Door fields of an access point, read by name from the row when the table has them (a missing one reads as no data). */
+export const ACCESS_POINT_DOOR_KEY = {
+  NUMBER: "number",
+  LETTER: "letter",
+  KM: "km",
+  CIRCULATION_WAY: "id_circulation_way",
+} as const;
+
 export const LOCALITIES_COLUMN = {
   CLOC_ISO: "cloc_iso",
   NAME: "nomloc",
@@ -98,6 +106,8 @@ export const PADRON_COLUMN = {
 
 export const ADDRESS_COLUMN = {
   ADDRESS_MASTER: "id_address_master",
+  ID: "id",
+  GEOMETRY: "geometry",
 } as const;
 
 export const PADRON_TYPE = {
@@ -199,6 +209,25 @@ export const RENUMBER_HAUSDORFF_M = 0.5;
 export const RENUMBER_CANDIDATE_DISTANCE_M = COVERAGE_TOLERANCE_M;
 /** A neighbour counts as a split piece or a merge member only when it covers more than this of the old section: a neighbour that just touches an end reaches at most COVERAGE_TOLERANCE_M into it. */
 export const SPLIT_PIECE_MIN_COVER_M = 2 * COVERAGE_TOLERANCE_M;
+/** A split point goes to its nearest piece only when the second nearest is at least this much farther (EJS-5). */
+export const AMBIGUOUS_POINT_GAP_M = 5;
+/** Split points farther than this from every piece are counted in the report only (EJS-8, informational). */
+export const FAR_POINT_REPORT_M = 25;
+/** Review points of one split are read in pages of this size; the review screen reads pages until every review point is loaded (EJS-6). */
+export const SPLIT_POINTS_PAGE_LIMIT = 200;
+/** The old `reftramo`s named in the abort message of an invalid choice: the first ones, in order. */
+export const INVALID_CHOICE_REFS_LIMIT = 5;
+/** The review points one dry run keeps for the review screen; a split whose points would pass this is not stored and is flagged incomplete. */
+export const REVIEW_POINTS_STORE_LIMIT = 20000;
+/** The tables the review points read by primary key: the access points, their addresses, the old sections and the new pieces. */
+export const EJES_SPLIT_POINTS_ROLES = [
+  EJES_TABLE_ROLE.STAGING,
+  EJES_TABLE_ROLE.ROAD_SECTION,
+  EJES_TABLE_ROLE.ACCESS_POINT,
+  EJES_TABLE_ROLE.ADDRESS,
+] as const;
+/** The answer of the review read when its dry run is no longer kept (evicted, or never stored because it was a real run). */
+export const SPLIT_REVIEW_GONE_MESSAGE = "El análisis ya no está disponible. Vuelva a analizar.";
 
 export const REAL_RUN_ENV_VAR = "EJES_CALLES_REAL_RUN_ENABLED";
 export const REAL_RUN_UNAVAILABLE_MESSAGE = "La carga real de ejes de calles todavía no está disponible.";
@@ -233,12 +262,20 @@ export type RenumberSkipReason = (typeof RENUMBER_SKIP_REASON)[keyof typeof RENU
 export const EJES_SKIP_REASON = {
   ...RENUMBER_SKIP_REASON,
   NOT_ACCEPTED: "not_accepted",
-  SPLIT_PENDING: "split_pending",
   HAS_POINTS: "has_points",
   NO_REFTRAMO: "no_reftramo",
   SHARED_OLD_REF: "shared_old_ref",
+  SHARED_PIECE: "shared_piece",
+  REVIEW_REQUIRED: "review_required",
   ID_LINKED_POINTS: "points_by_id",
 } as const;
+
+export const EJES_POINT_REASON = {
+  AMBIGUOUS: "ambiguous",
+  NO_GEOMETRY: "no_geometry",
+} as const;
+
+export type EjesPointReason = (typeof EJES_POINT_REASON)[keyof typeof EJES_POINT_REASON];
 
 export type EjesSkipReason = (typeof EJES_SKIP_REASON)[keyof typeof EJES_SKIP_REASON];
 
@@ -252,6 +289,7 @@ export const EJES_SKIP_KIND = {
 export type EjesSkipKind = (typeof EJES_SKIP_KIND)[keyof typeof EJES_SKIP_KIND];
 
 export const ACCEPTED_KEYS_LIMIT = 5000;
+export const ACCEPTED_CHOICES_LIMIT = 20000;
 
 export const EJES_SUMMARY_COUNT_KEYS = [
   "newSections",
@@ -265,4 +303,7 @@ export const EJES_SUMMARY_COUNT_KEYS = [
   "plainRemovals",
   "renumbered",
   "renumberSkipped",
+  "splitPointsAuto",
+  "splitPointsReview",
+  "splitPointsNoGeometry",
 ] as const;

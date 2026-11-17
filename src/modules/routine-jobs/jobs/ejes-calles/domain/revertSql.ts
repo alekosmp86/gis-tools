@@ -88,7 +88,10 @@ export function buildRevertSectionsSql(context: EjesLoadContext, layouts: EjesLa
   );
 }
 
-/** One UPDATE per old `reftramo` with the ids of its points, which hold the old value as it was written. */
+/**
+ * One UPDATE per old `reftramo` with the ids of its points, which hold the old value as it was written: the points the renumbered and
+ * merged sections move, and the points of the applied splits (whose old value the load read before its first write).
+ */
 export function buildRevertPointsSql(context: EjesLoadContext, layouts: EjesLayouts): string {
   const point = (logical: string): string => `a.${col(layouts, "ACCESS_POINT", logical)}`;
   const reference = point(ACCESS_POINT_COLUMN.ROAD_SECTION);
@@ -99,12 +102,17 @@ export function buildRevertPointsSql(context: EjesLoadContext, layouts: EjesLayo
     literal(physicalOf(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ID)),
     "g.ids",
   ];
+  const moved = [
+    `SELECT ${reference}::text AS old_value, ${point(ACCESS_POINT_COLUMN.ID)} AS point_id`,
+    `FROM ${table(layouts, "ACCESS_POINT")} AS a JOIN ${tmp(LOAD_TEMP.MOVE)} AS n ON ${accessPointRefMatchSql(context, "n.old_ref")}`,
+    "UNION ALL",
+    `SELECT f.old_value, f.point_id FROM ${tmp(LOAD_TEMP.SPLIT_FINAL)} AS f`,
+  ].join(" ");
   return createTemp(
     REVERT_TEMP.POINTS,
     [
       `SELECT (row_number() OVER (ORDER BY g.old_value))::bigint AS n, ${formatOf("UPDATE %s SET %s = %L WHERE %s IN (%s);", args)} AS line FROM (`,
-      `SELECT ${reference}::text AS old_value, string_agg(format('%L', ${point(ACCESS_POINT_COLUMN.ID)}), ', ' ORDER BY ${point(ACCESS_POINT_COLUMN.ID)}) AS ids`,
-      `FROM ${table(layouts, "ACCESS_POINT")} AS a JOIN ${tmp(LOAD_TEMP.MOVE)} AS n ON ${accessPointRefMatchSql(context, "n.old_ref")} GROUP BY ${reference}::text`,
+      `SELECT x.old_value, string_agg(format('%L', x.point_id), ', ' ORDER BY x.point_id) AS ids FROM (${moved}) AS x GROUP BY x.old_value`,
       ") AS g",
     ].join(" ")
   );

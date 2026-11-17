@@ -11,7 +11,7 @@ const SIMPLIFY_TOLERANCE_M = 2;
 const STAGING_ALIAS = "s";
 
 /** The outline as GeoJSON in WGS84: simplified in the metric SRID of the ejes, then transformed. */
-const outlineGeoJsonSql = (geometry: string): string =>
+export const outlineGeoJsonSql = (geometry: string): string =>
   `ST_AsGeoJSON(ST_Transform(ST_SimplifyPreserveTopology(${geometry}, ${SIMPLIFY_TOLERANCE_M}), ${WGS84_SRID}))::json`;
 
 /** An old section by its `reftramo_ideuy`. `$1` is the reference; the row has an outline and the street id. */

@@ -38,6 +38,9 @@ const SUMMARY_COUNT_KEYS = [
   "plainRemovals",
   "renumbered",
   "renumberSkipped",
+  "splitPointsAuto",
+  "splitPointsReview",
+  "splitPointsNoGeometry",
 ];
 
 const FINGERPRINT = { rows: 12, digest: "9f8e7d6c5b4a3210fedcba9876543210" };
@@ -110,7 +113,7 @@ describe("parseEjesCallesStartRequest", () => {
       expect(params.summary?.fingerprint).toEqual(FINGERPRINT);
     });
 
-    it("should keep only the 11 summary counts as numbers and drop any other key", () => {
+    it("should keep only the 14 summary counts as numbers and drop any other key", () => {
       const params = parse(realBody({ summary: summaryOf({ counts: { ...counts(), extra: 99 } }) }));
 
       expect(Object.keys(params.summary?.counts ?? {}).sort()).toEqual([...SUMMARY_COUNT_KEYS].sort());
@@ -120,7 +123,7 @@ describe("parseEjesCallesStartRequest", () => {
       const params = parse(realBody({ accepted: { splits: [], merges: [], plainRemovals: [] } }));
 
       expect(params.dryRun).toBe(false);
-      expect(params.accepted).toEqual({ plainRemovals: [], merges: [] });
+      expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [] });
     });
 
     it("should refuse dryRun false without the password, with a Spanish message", () => {
@@ -230,8 +233,14 @@ describe("parseEjesCallesStartRequest", () => {
       expect(() => parse(realBody({ accepted: value }))).toThrow(RequestInvalidError);
     });
 
-    it("should keep the unavailable message when accepted.splits is not empty", () => {
-      expect(messageOf(realBody({ accepted: { splits: [{ oldRef: "1", newRefs: ["2"] }] } }))).toBe(REAL_RUN_UNAVAILABLE_MESSAGE);
+    it("should accept a split with its oldRef and choices in accepted.splits", () => {
+      const params = parse(realBody({ accepted: { splits: [{ oldRef: "1", choices: [{ pointId: "4", newRef: "2" }] }] } }));
+
+      expect(params.accepted?.splits).toEqual([{ oldRef: "1", choices: [{ pointId: "4", newRef: "2" }] }]);
+    });
+
+    it("should refuse the old split shape with newRefs with a 400 that names the key", () => {
+      expect(messageOf(realBody({ accepted: { splits: [{ oldRef: "1", newRefs: ["2"] }] } }))).toMatch(/clave no admitida: newRefs/);
     });
 
     it("should refuse the removals key as an unknown key, since plain removals are plainRemovals", () => {
@@ -241,7 +250,7 @@ describe("parseEjesCallesStartRequest", () => {
     it("should accept a non-empty merges and plainRemovals list when every entry is shaped", () => {
       const params = parse(realBody({ accepted: { merges: [{ newRef: "4" }], plainRemovals: [{ ref: "7" }] } }));
 
-      expect(params.accepted).toEqual({ merges: ["4"], plainRemovals: ["7"] });
+      expect(params.accepted).toEqual({ splits: [], merges: ["4"], plainRemovals: ["7"] });
     });
 
     it("should refuse an accepted list that is not a list", () => {

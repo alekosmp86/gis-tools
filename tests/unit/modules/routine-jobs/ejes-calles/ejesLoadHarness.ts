@@ -36,6 +36,9 @@ const POSTGIS_STUBS_SQL = `
     SELECT sum(split_part(p, ':', 2)::float8 - split_part(p, ':', 1)::float8) FROM unnest(string_to_array($1::text, '|')) AS p
   $$ LANGUAGE sql;
   CREATE FUNCTION ST_AsEWKB(geometry) RETURNS bytea AS $$ SELECT convert_to($1::text, 'UTF8') $$ LANGUAGE sql;
+  CREATE FUNCTION ST_SRID(geometry) RETURNS integer AS $$ SELECT 32721 $$ LANGUAGE sql STRICT;
+  CREATE FUNCTION ST_Distance(geometry, geometry) RETURNS float8
+    AS $$ SELECT greatest(0, greatest(iv_a($1), iv_a($2)) - least(iv_b($1), iv_b($2))) $$ LANGUAGE sql STRICT;
   CREATE FUNCTION ST_Normalize(geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
   CREATE FUNCTION ST_SnapToGrid(geometry, float8) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
   CREATE FUNCTION ST_OrderingEquals(geometry, geometry) RETURNS boolean AS $$ SELECT $1::text = $2::text $$ LANGUAGE sql STRICT;
@@ -321,6 +324,11 @@ export async function insertPoints(database: PGlite, ref: string | null, count: 
   return ids;
 }
 
+/** The point geometry of an access point: `carto.address` row with the point's id (its text interval, e.g. "43:43"). */
+export async function insertAddress(database: PGlite, id: number, geometry: string | null): Promise<void> {
+  await database.query("INSERT INTO carto.address (id, geometry) VALUES ($1, $2)", [id, geometry]);
+}
+
 export async function insertPadron(database: PGlite, type: string, geometry: string): Promise<void> {
   await database.query("INSERT INTO carto.padron (type_padron, geometry) VALUES ($1, $2)", [type, geometry]);
 }
@@ -343,5 +351,6 @@ export const zeroLoadCounts = (overrides: Partial<Record<string, number>> = {}):
   topologyAssigned: 0,
   verticesCreated: 0,
   verticesDeleted: 0,
+  splitsApplied: 0,
   ...overrides,
 });

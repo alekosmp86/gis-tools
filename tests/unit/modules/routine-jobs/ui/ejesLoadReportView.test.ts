@@ -25,6 +25,7 @@ const loadOf = (overrides: Partial<EjesLoadReport> = {}): EjesLoadReport => ({
     topologyAssigned: 0,
     verticesCreated: 0,
     verticesDeleted: 0,
+    splitsApplied: 0,
   },
   surplus: [],
   surplusTotal: 0,
@@ -98,7 +99,7 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
   });
 
   describe("applied counts", () => {
-    it("should list inserted, updated, renumbered, renumbers held back, merges applied, sections removed, sections deleted, ways created, points moved and the topology counts, in this order", () => {
+    it("should list inserted, updated, renumbered, renumbers held back, splits applied, merges applied, sections removed, sections deleted, ways created, points moved and the topology counts, in this order", () => {
       const view = buildEjesLoadView(
         resultOf(),
         loadOf({ counts: { ...loadOf().counts, merged: 2, removed: 5, deleted: 7, topologyAssigned: 4, verticesCreated: 6, verticesDeleted: 1 } })
@@ -109,9 +110,10 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
         { label: "Tramos actualizados", value: 2 },
         { label: "Tramos renumerados", value: 1 },
         { label: "Renumerados retenidos", value: 0 },
+        { label: "Divisiones aplicadas", value: 0 },
         { label: "Uniones aplicadas", value: 2 },
         { label: "Tramos quitados", value: 5 },
-        { label: "Tramos borrados (quitados y unidos)", value: 7 },
+        { label: "Tramos borrados (divididos, unidos y quitados)", value: 7 },
         { label: "Vías de circulación creadas", value: 4 },
         { label: "Puntos de acceso movidos", value: 9 },
         { label: EJES_LOAD_COUNT_TEXT.TOPOLOGY_ASSIGNED, value: 4 },
@@ -137,6 +139,7 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
             topologyAssigned: 0,
             verticesCreated: 0,
             verticesDeleted: 0,
+            splitsApplied: 0,
           },
         })
       );
@@ -161,17 +164,18 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
             topologyAssigned: 0,
             verticesCreated: 0,
             verticesDeleted: 0,
+            splitsApplied: 0,
           },
         })
       );
 
-      expect(view.counts.map((row) => row.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+      expect(view.counts.map((row) => row.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     });
 
     it("should show the sections deleted by the load (removed and merged) from counts.deleted", () => {
       const view = buildEjesLoadView(resultOf(), loadOf({ counts: { ...loadOf().counts, removed: 1, merged: 1, deleted: 3 } }));
 
-      expect(countOf(view, "Tramos borrados (quitados y unidos)")).toBe(3);
+      expect(countOf(view, "Tramos borrados (divididos, unidos y quitados)")).toBe(3);
     });
 
     it("should show the applied merges and removed sections from the load counts", () => {
@@ -209,7 +213,7 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
         resultOf(),
         loadOf({
           skipped: [
-            skipped({ kind: "split", refs: ["6001"], newRefs: ["6002", "6003"], reason: EJES_SKIP_REASON.SPLIT_PENDING }),
+            skipped({ kind: "split", refs: ["6001"], newRefs: ["6002", "6003"], reason: EJES_SKIP_REASON.REVIEW_REQUIRED }),
             skipped({ kind: "removal", refs: ["7001"], newRefs: [], reason: EJES_SKIP_REASON.NOT_ACCEPTED }),
           ],
         })
@@ -244,7 +248,7 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
 
     it.each([
       [EJES_SKIP_REASON.NOT_ACCEPTED, "No aceptado en el análisis"],
-      [EJES_SKIP_REASON.SPLIT_PENDING, "División pendiente: no se aplica en esta carga"],
+      [EJES_SKIP_REASON.REVIEW_REQUIRED, "Puntos de acceso sin destino automático: requiere revisión"],
       [EJES_SKIP_REASON.HAS_POINTS, "Tiene puntos de acceso: no se quita"],
       [EJES_SKIP_REASON.NO_REFTRAMO, "Sin reftramo: no se puede verificar"],
       [EJES_SKIP_REASON.SHARED_OLD_REF, "Un tramo actual pertenece a otra unión aceptada"],
@@ -275,10 +279,10 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
       const view = buildEjesLoadView(
         resultOf(),
         loadOf({
-          skipped: [skipped({ kind: "split", reason: EJES_SKIP_REASON.SPLIT_PENDING })],
+          skipped: [skipped({ kind: "split", reason: EJES_SKIP_REASON.REVIEW_REQUIRED })],
           skippedTotal: 1250,
           skippedByReason: [
-            { reason: EJES_SKIP_REASON.SPLIT_PENDING, count: 900 },
+            { reason: EJES_SKIP_REASON.REVIEW_REQUIRED, count: 900 },
             { reason: EJES_SKIP_REASON.NOT_ACCEPTED, count: 350 },
           ],
         })
@@ -286,7 +290,7 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
 
       expect(view.skippedTotal).toBe(1250);
       expect(view.skippedByReason).toEqual([
-        { label: SKIP_REASON_TEXT[EJES_SKIP_REASON.SPLIT_PENDING], value: 900 },
+        { label: SKIP_REASON_TEXT[EJES_SKIP_REASON.REVIEW_REQUIRED], value: 900 },
         { label: SKIP_REASON_TEXT[EJES_SKIP_REASON.NOT_ACCEPTED], value: 350 },
       ]);
     });

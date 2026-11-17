@@ -213,8 +213,10 @@ describe("buildEjesAnalysisSql", () => {
     });
 
     it("should add the points matched by road_section.id to the points of a split, from the split list", () => {
-      expect(sql).toContain('COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points", s.covered / NULLIF(s.len, 0) AS "coverage"');
-      expect(sql).toContain('LEFT JOIN "ap" AS apid ON apid.ref = s.id::text ORDER BY s.ref');
+      expect(sql).toContain('COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points",');
+      expect(sql).toContain('s.covered / NULLIF(s.len, 0) AS "coverage"');
+      expect(sql).toContain('LEFT JOIN "ap" AS apid ON apid.ref = s.id::text');
+      expect(sql).toContain("ORDER BY s.ref");
     });
 
     it("should add the points matched by road_section.id to the points of a merge, summed over its members", () => {
@@ -581,6 +583,7 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
     merged: 'pg_temp."ej_merge"',
     plain: 'pg_temp."ej_plain"',
     split: 'pg_temp."ej_split"',
+    splitPoints: 'pg_temp."ej_split_pts"',
   };
   const sql = buildEjesAnalysisSql(ejesLayouts());
   const withSinks = buildEjesAnalysisSql(ejesLayouts(), SINKS);
@@ -647,8 +650,8 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
       expect(sql).not.toContain("RETURNING 1");
     });
 
-    it("should write only the five sink tables, and read the counts from the CTEs, not from the sinks", () => {
-      expect(withSinks.match(/\bINSERT INTO\b/g)).toHaveLength(5);
+    it("should write only the six sink tables, and read the counts from the CTEs, not from the sinks", () => {
+      expect(withSinks.match(/\bINSERT INTO\b/g)).toHaveLength(6);
       expect(withSinks).toContain('AS "renumbered"');
       expect(withSinks).not.toMatch(/FROM pg_temp\."ej_renum"/);
     });

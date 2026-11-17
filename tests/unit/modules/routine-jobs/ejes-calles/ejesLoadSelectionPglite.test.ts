@@ -221,6 +221,8 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.WAY}" (way_id bigint, idcalle text, name text, short_name text, type_id text, font_id text)`);
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.MERGE_PLAN}" (new_ref text, idcalle text, refs text, points bigint, reason text)`);
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.PLAIN_PLAN}" (old_id bigint, ref text, idcalle text, points bigint, reason text)`);
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.SPLIT_PLAN}" (old_id bigint, old_ref text, idcalle text, points bigint, reason text)`);
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.SPLIT_FINAL}" (old_id bigint, old_ref text, point_id bigint, new_ref text, old_value text)`);
       await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.DEL}" (road_id bigint, ref text, points bigint, master_id bigint, master_deleted boolean)`);
       for (const row of deleted) {
         await database.query(`INSERT INTO pg_temp."${LOAD_TEMP.DEL}" VALUES ($1, $2, 0, $3, $4)`, [row.road, String(row.road), row.master, row.masterDeleted]);

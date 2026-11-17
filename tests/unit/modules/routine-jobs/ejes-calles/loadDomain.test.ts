@@ -20,7 +20,7 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
     expect(plannedEjesStepLabels(true)).toEqual(plannedEjesStepLabels());
   });
 
-  it("should plan the 16 steps of the real run in order, the topology step after the removals and before the ANALYZE", () => {
+  it("should plan the 17 steps of the real run in order, the topology step after the removals and before the ANALYZE", () => {
     expect(plannedEjesStepLabels(false)).toEqual([
       "Validar tablas y columnas",
       "Comprobar privilegios",
@@ -34,7 +34,8 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
       "Insertar los tramos nuevos y sus direcciones maestras",
       "Actualizar los tramos con cambios",
       "Aplicar los tramos renumerados y mover sus puntos de acceso",
-      "Quitar los tramos unidos y sin reemplazo aceptados",
+      "Mover los puntos de acceso de los tramos divididos aceptados",
+      "Quitar los tramos divididos, unidos y sin reemplazo aceptados",
       "Actualizar la topología y limpiar los vértices sin uso",
       "Analizar las tablas modificadas",
       "Confirmar la transacción",
@@ -63,7 +64,7 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
     const labels = plannedEjesStepLabels(false);
     labels.pop();
 
-    expect(plannedEjesStepLabels(false)).toHaveLength(16);
+    expect(plannedEjesStepLabels(false)).toHaveLength(17);
   });
 });
 
@@ -101,6 +102,7 @@ describe("load mapping (EJL-12, EJL-13)", () => {
       renumber_skipped: "5",
       removed: "2",
       merged: "1",
+      splits: "2",
       deleted: "4",
       masters_deleted: "3",
       ways: "2",
@@ -119,6 +121,7 @@ describe("load mapping (EJL-12, EJL-13)", () => {
       renumberSkipped: 5,
       removed: 2,
       merged: 1,
+      splitsApplied: 2,
       deleted: 4,
       waysCreated: 2,
       pointsMoved: 9,
@@ -147,6 +150,7 @@ describe("load mapping (EJL-12, EJL-13)", () => {
       removed: 0,
       merged: 0,
       deleted: 0,
+      splitsApplied: 0,
       waysCreated: 0,
       pointsMoved: 0,
       topologyAssigned: 0,

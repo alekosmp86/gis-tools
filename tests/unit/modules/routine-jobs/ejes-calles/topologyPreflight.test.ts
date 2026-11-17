@@ -237,19 +237,19 @@ describe("real-run preflight with pgRouting on PGlite (EJ-20)", () => {
   }, HOOK_TIMEOUT_MS);
 
   it("should pass the real-run preflight when pgRouting and pgr_createTopology with the signature are present", async () => {
-    await expect(assertEjesLoadReady(sessionOn(database), await loadContextOn(database))).resolves.toEqual([]);
+    await expect(assertEjesLoadReady(sessionOn(database), await loadContextOn(database), [], false)).resolves.toEqual([]);
   });
 
   it("should block the real run with the pgRouting message when pgRouting is not installed", async () => {
     await database.exec("DROP FUNCTION pgr_version()");
 
-    await expect(assertEjesLoadReady(sessionOn(database), await loadContextOn(database))).rejects.toThrow(/pgRouting no .+instalado/);
+    await expect(assertEjesLoadReady(sessionOn(database), await loadContextOn(database), [], false)).rejects.toThrow(/pgRouting no .+instalado/);
   });
 
   it("should block the real run with the version text when the signature is missing", async () => {
     await database.exec(`DROP FUNCTION ${PGR_SIGNATURE}`);
 
-    await expect(assertEjesLoadReady(sessionOn(database), await loadContextOn(database))).rejects.toThrow(
+    await expect(assertEjesLoadReady(sessionOn(database), await loadContextOn(database), [], false)).rejects.toThrow(
       /pgRouting 3\.3\.0-stub no tiene pgr_createTopology/
     );
   });
@@ -257,7 +257,7 @@ describe("real-run preflight with pgRouting on PGlite (EJ-20)", () => {
   it("should block the real run naming the btree index on source when that index is dropped", async () => {
     await database.exec("DROP INDEX carto.road_section_source_idx");
 
-    await expect(assertEjesLoadReady(sessionOn(database), await loadContextOn(database))).rejects.toThrow(
+    await expect(assertEjesLoadReady(sessionOn(database), await loadContextOn(database), [], false)).rejects.toThrow(
       /Faltan índices que pgr_createTopology necesita: índice btree sobre carto\.road_section\(source\)\./
     );
   });
@@ -265,7 +265,7 @@ describe("real-run preflight with pgRouting on PGlite (EJ-20)", () => {
   it("should block the real run naming the GiST index on the vertices geometry when that index is dropped", async () => {
     await database.exec("DROP INDEX carto.road_section_vertices_geom_idx");
 
-    await expect(assertEjesLoadReady(sessionOn(database), await loadContextOn(database))).rejects.toThrow(
+    await expect(assertEjesLoadReady(sessionOn(database), await loadContextOn(database), [], false)).rejects.toThrow(
       /índice GiST sobre carto\.road_section_vertices_pgr\(the_geom\)/
     );
   });
@@ -279,6 +279,6 @@ describe("real-run preflight with pgRouting on PGlite (EJ-20)", () => {
     expect(shown[0]).toBe(
       "Faltan índices que pgr_createTopology necesita: índice btree sobre carto.road_section(target). Si faltan, pgRouting los crea en la tabla y la carga no los revierte: créelos antes de cargar."
     );
-    await expect(assertEjesLoadReady(sessionOn(database), context)).rejects.toThrow(shown[0]);
+    await expect(assertEjesLoadReady(sessionOn(database), context, [], false)).rejects.toThrow(shown[0]);
   });
 });

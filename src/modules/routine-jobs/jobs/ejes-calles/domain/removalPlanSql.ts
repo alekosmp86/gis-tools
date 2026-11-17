@@ -25,7 +25,7 @@ export function buildMergePlanSql(): string {
   return createTemp(LOAD_TEMP.MERGE_PLAN, [
     "SELECT g.new_ref, g.idcalle, g.refs, g.points, CASE",
     `WHEN NOT g.accepted THEN ${quoted(EJES_SKIP_REASON.NOT_ACCEPTED)}`,
-    `WHEN sp.new_ref IS NOT NULL THEN ${quoted(EJES_SKIP_REASON.SPLIT_PENDING)}`,
+    `WHEN sp.new_ref IS NOT NULL THEN ${quoted(EJES_SKIP_REASON.SHARED_PIECE)}`,
     `WHEN COALESCE(k.copies, 0) <> 1 THEN ${quoted(EJES_SKIP_REASON.NOT_SINGLE_COPY)}`,
     `WHEN g.no_ref THEN ${quoted(EJES_SKIP_REASON.NO_REFTRAMO)}`,
     `WHEN g.id_linked THEN ${quoted(EJES_SKIP_REASON.ID_LINKED_POINTS)}`,
@@ -52,13 +52,13 @@ export function buildPlainPlanSql(): string {
 }
 
 /**
- * The copies of split pieces and of the new `reftramo`s of merges that are not applied are held: they are not inserted, so no
+ * The copies of the pieces of splits and of the new `reftramo`s of merges that are not applied are held: they are not inserted, so no
  * section, master or way is created for them. Runs after the plans, which count the copies of each new `reftramo`.
  */
 export const buildHoldGroupCopiesSql = (): string =>
   [
     `DELETE FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE`,
-    `c.ref IN (SELECT s.new_ref FROM ${tmp(LOAD_TEMP.SPLIT)} AS s)`,
+    `c.ref IN (SELECT s.new_ref FROM ${tmp(LOAD_TEMP.SPLIT)} AS s JOIN ${tmp(LOAD_TEMP.SPLIT_PLAN)} AS sp ON sp.old_id = s.old_id WHERE sp.reason IS NOT NULL)`,
     `OR c.ref IN (SELECT p.new_ref FROM ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p WHERE p.reason IS NOT NULL)`,
   ].join(" ");
 
@@ -74,9 +74,9 @@ export const buildMoveTableSql = (): string =>
   );
 
 /**
- * The road sections the load deletes: applied merges' old sections and applied plain removals. `master_deleted` is true only when the
- * section has a master that nothing else holds: no other section outside this delete, no address, no padron. Only those masters are
- * counted, deleted and restored; a shared master stays and is never re-inserted by a revert.
+ * The road sections the load deletes: applied splits' and merges' old sections and applied plain removals. `master_deleted` is true only
+ * when the section has a master that nothing else holds: no other section outside this delete, no address, no padron. Only those masters
+ * are counted, deleted and restored; a shared master stays and is never re-inserted by a revert.
  */
 export function buildDeleteTableSql(layouts: EjesLayouts): string {
   const road = (logical: string): string => `r.${col(layouts, "ROAD_SECTION", logical)}`;
@@ -90,6 +90,8 @@ export function buildDeleteTableSql(layouts: EjesLayouts): string {
     `SELECT m.old_id AS road_id, m.old_ref AS ref, m.points FROM ${tmp(LOAD_TEMP.MERGE)} AS m JOIN ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p ON p.new_ref = m.new_ref WHERE p.reason IS NULL`,
     "UNION ALL",
     `SELECT p.old_id AS road_id, p.ref AS ref, p.points FROM ${tmp(LOAD_TEMP.PLAIN_PLAN)} AS p WHERE p.reason IS NULL`,
+    "UNION ALL",
+    `SELECT p.old_id AS road_id, p.old_ref AS ref, p.points FROM ${tmp(LOAD_TEMP.SPLIT_PLAN)} AS p WHERE p.reason IS NULL`,
   ].join(" ");
   return createTemp(
     LOAD_TEMP.DEL,
@@ -109,8 +111,9 @@ export function buildDeleteTableSql(layouts: EjesLayouts): string {
 export const buildSkippedTableSql = (): string =>
   createTemp(LOAD_TEMP.SKIPPED, [
     `SELECT ${quoted(EJES_SKIP_KIND.SPLIT)} AS kind, s.old_ref AS refs, string_agg(s.new_ref, ',' ORDER BY s.new_ref) AS new_refs,`,
-    `s.idcalle, s.points, ${quoted(EJES_SKIP_REASON.SPLIT_PENDING)} AS reason`,
-    `FROM ${tmp(LOAD_TEMP.SPLIT)} AS s GROUP BY s.old_id, s.old_ref, s.idcalle, s.points`,
+    `s.idcalle, s.points, p.reason`,
+    `FROM ${tmp(LOAD_TEMP.SPLIT)} AS s JOIN ${tmp(LOAD_TEMP.SPLIT_PLAN)} AS p ON p.old_id = s.old_id WHERE p.reason IS NOT NULL`,
+    "GROUP BY s.old_id, s.old_ref, s.idcalle, s.points, p.reason",
     "UNION ALL",
     `SELECT ${quoted(EJES_SKIP_KIND.MERGE)}, p.refs, p.new_ref, p.idcalle, p.points, p.reason`,
     `FROM ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p WHERE p.reason IS NOT NULL`,

@@ -1,4 +1,4 @@
-import { TWIN_CLASS, type TwinClass } from "../../jobs/ejes-calles/constants";
+import { AMBIGUOUS_POINT_GAP_M, FAR_POINT_REPORT_M, TWIN_CLASS, type TwinClass } from "../../jobs/ejes-calles/constants";
 import { ejesAttrChangesOf } from "../../jobs/ejes-calles/domain/attrChanges";
 import type { EjesAttrRow, EjesResult, EjesTwinRow, EjesUnknownValue } from "../../jobs/ejes-calles/types";
 import { plural } from "../../jobs/shared/text";
@@ -143,6 +143,16 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
         kpi("Unidos en uno nuevo", counts.merges),
         kpi("Sin reemplazo, se quitarían", counts.plainRemovals - counts.plainHeld),
         kpi("Sin reemplazo, con puntos de acceso: no se quitan", counts.plainHeld),
+      ],
+    },
+    {
+      title: "Puntos de acceso de los tramos divididos (por reftramo)",
+      kpis: [
+        kpi("Total", counts.splitPointsTotal),
+        kpi("Destino automático", counts.splitPointsAuto),
+        kpi(`A revisar: los dos tramos más cercanos a menos de ${AMBIGUOUS_POINT_GAP_M} m`, counts.splitPointsReview),
+        kpi("Sin geometría", counts.splitPointsNoGeometry),
+        kpi(`Lejos de todo tramo nuevo (más de ${FAR_POINT_REPORT_M} m, solo informativo)`, counts.splitPointsFar),
       ],
     },
     {

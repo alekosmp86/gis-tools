@@ -5,7 +5,9 @@ import type { StepTiming } from "../cargar-padrones/types";
 import type { WritableTargetLayout } from "../shared/tableResolution";
 import type {
   EJES_LOAD_ROLES,
+  EJES_SPLIT_POINTS_ROLES,
   EJES_SUMMARY_COUNT_KEYS,
+  EjesPointReason,
   EjesSkipKind,
   EjesSkipReason,
   EjesTableRole,
@@ -21,8 +23,21 @@ export interface EjesTableRef {
 
 export type EjesTables = Record<EjesTableRole, EjesTableRef>;
 
-/** The review rows the user accepted: plain removals by `reftramo`, merges by the new `reftramo` (the old ones are derived server-side). */
+/** A user's destination for one review point of an accepted split: one of that split's pieces, by its `reftramo`. */
+export interface EjesPointChoice {
+  pointId: string;
+  newRef: string;
+}
+
+/** An accepted split by its old `reftramo`, with the choices for its review points (none when all points are automatic). */
+export interface EjesAcceptedSplit {
+  oldRef: string;
+  choices: EjesPointChoice[];
+}
+
+/** The review rows the user accepted: splits by old `reftramo` (with choices), plain removals by `reftramo`, merges by the new `reftramo` (the old ones are derived server-side). */
 export interface EjesAccepted {
+  splits: EjesAcceptedSplit[];
   plainRemovals: string[];
   merges: string[];
 }
@@ -91,6 +106,11 @@ export interface EjesCounts {
   renumberedWithPoints: number;
   renumberedPoints: number;
   renumberSkipped: number;
+  splitPointsTotal: number;
+  splitPointsAuto: number;
+  splitPointsReview: number;
+  splitPointsNoGeometry: number;
+  splitPointsFar: number;
 }
 
 export interface EjesClocReport {
@@ -103,7 +123,18 @@ export interface EjesSplitRow {
   oldRef: string;
   idcalle: string | null;
   newRefs: string[];
+  /** Every access point of the old section: by `reftramo` and by `road_section.id`. */
   points: number;
+  /** The points by `reftramo` that the split decides on (the four counts below add up to this one). */
+  refPoints: number;
+  autoPoints: number;
+  reviewPoints: number;
+  noGeometryPoints: number;
+  farPoints: number;
+  /** The reason the load holds this split whatever the user chooses (the rules of `splitGroupsSql`); null when none holds it. */
+  heldReason: EjesSkipReason | null;
+  /** True when the review points of this split did not fit the stored review rows: its choices cannot be checked, so it is not acceptable. */
+  incompleteReview: boolean;
   coverage: number | null;
   oldLength: number | null;
   newLength: number | null;
@@ -186,6 +217,27 @@ export interface EjesFingerprint {
   digest: string;
 }
 
+/** A candidate piece of a stored review point: its `reftramo` and its distance in metres (null without geometry). */
+export interface EjesStoredCandidate {
+  newRef: string;
+  distance: number | null;
+}
+
+/** A review point of a dry run, kept server side for its review (never in the job status). */
+export interface EjesStoredReviewPoint {
+  oldRef: string;
+  pointId: string;
+  reason: EjesPointReason;
+  suggestedRef: string | null;
+  candidates: EjesStoredCandidate[];
+}
+
+/** The review points of the kept dry runs, by job: read by the review page, written when a dry run finishes. */
+export interface EjesReviewStore {
+  retain(jobId: string, points: EjesStoredReviewPoint[]): void;
+  read(jobId: string): EjesStoredReviewPoint[] | undefined;
+}
+
 export interface EjesAnalysis {
   counts: EjesCounts;
   cloc: EjesClocReport;
@@ -198,11 +250,15 @@ export interface EjesAnalysis {
   renumbered: EjesRenumberedRow[];
   renumberSkipped: EjesRenumberSkippedRow[];
   fingerprint: EjesFingerprint;
+  /** The review points of a dry run, stored server side and stripped from the job result (see `withReviewRetention`). */
+  reviewPoints?: EjesStoredReviewPoint[];
 }
 
 export interface EjesResolvedLayouts {
   layouts: EjesLayouts;
   writeTargets: WritableTargetLayout[];
+  /** Problems of `carto.address` geometry (SRID): information in a dry run, a blocker in a real run. */
+  addressIssues: string[];
 }
 
 export interface EjesResult extends EjesAnalysis {
@@ -243,6 +299,55 @@ export interface EjesGeometryMapParams {
   items: EjesMapItem[];
 }
 
+/** One page of the review points of one split, read from the dry run `jobId` keeps: the tables the read touches by key, the old `reftramo`, the window. */
+export interface EjesSplitPointsParams {
+  config: DbConfig;
+  tables: Pick<EjesTables, (typeof EJES_SPLIT_POINTS_ROLES)[number]>;
+  jobId: string;
+  oldRef: string;
+  offset: number;
+  limit: number;
+}
+
+/** A piece the point could go to. `distance` is in metres (one decimal) and null when the point has no geometry. */
+export interface EjesSplitPointCandidate {
+  newRef: string;
+  distance: number | null;
+  isSuggestion: boolean;
+}
+
+export interface EjesSplitReviewPoint {
+  pointId: string;
+  reason: EjesPointReason;
+  number: string | null;
+  letter: string | null;
+  km: string | null;
+  circulationWay: string | null;
+  /** The point in WGS84; null when the point has no usable address geometry. */
+  geometry: Geometry | null;
+  candidates: EjesSplitPointCandidate[];
+}
+
+/** A piece of the split, in WGS84, sent once per page and shared by its points. */
+export interface EjesSplitPiece {
+  newRef: string;
+  geometry: Geometry;
+}
+
+export interface EjesSplitPointsPage {
+  oldRef: string;
+  /** Every review point of the split, listed or not. */
+  total: number;
+  offset: number;
+  limit: number;
+  points: EjesSplitReviewPoint[];
+  pieces: EjesSplitPiece[];
+  /** The old section in WGS84; null when the section has no geometry. */
+  oldGeometry: Geometry | null;
+  /** Problems of the address geometry (SRID): every point without them is a point without geometry. */
+  addressIssues: string[];
+}
+
 export type EjesSummaryCountKey = (typeof EJES_SUMMARY_COUNT_KEYS)[number];
 
 /** The counts and the staging fingerprint of the Revisar analysis: the real run only goes on when the staging still gives the same ones. */
@@ -265,8 +370,10 @@ export interface EjesLoadCounts {
   renumberSkipped: number;
   removed: number;
   merged: number;
+  splitsApplied: number;
   deleted: number;
   waysCreated: number;
+  /** Every access point the load moved: renumbered, merged and split points. */
   pointsMoved: number;
   /** Sections of the topology set that hold a source and a target after pgr_createTopology. */
   topologyAssigned: number;

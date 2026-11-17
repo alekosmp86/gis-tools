@@ -7,7 +7,7 @@ import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertType } from "@/ui-kit/types/ui";
 import { EjesCallesReport } from "../EjesCallesReport";
 import { EjesLoadResult } from "../EjesLoadResult";
-import type { EjesGeometryMapBase } from "../../shared/clientTypes";
+import type { EjesGeometryMapBase, EjesSplitPointsBase } from "../../shared/clientTypes";
 import type { EjesAcceptView } from "../ejesAccept";
 import type { EjesRunSnapshot } from "../../shared/ejesCallesRunStore";
 import { RunPhase } from "../../shared/jobRunStore";
@@ -27,6 +27,8 @@ export interface EjesResultStepProps {
   nowMs: number;
   /** The connection of the wizard for the map; null when the wizard holds no password. */
   mapBase: EjesGeometryMapBase | null;
+  /** The connection and tables the review points of a split read; null when the wizard holds no password. */
+  splitBase?: EjesSplitPointsBase | null;
   /** Same gate as the Revisar step: finished dry-run of these tables, no blockers, password typed. */
   canLoad: boolean;
   /** The accept controls of the review lists; shown only on a dry-run report, and absent means read-only. */
@@ -54,6 +56,7 @@ export const EjesResultStep: React.FC<EjesResultStepProps> = ({
   snapshot,
   nowMs,
   mapBase,
+  splitBase = null,
   canLoad,
   accept,
   onLoad,
@@ -83,7 +86,12 @@ export const EjesResultStep: React.FC<EjesResultStepProps> = ({
         <div className={styles.stack}>
           {result && load && <EjesLoadResult result={result} load={load} />}
           {result ? (
-            <EjesCallesReport result={result} mapBase={mapBase} accept={result.dryRun ? accept : undefined} />
+            <EjesCallesReport
+              result={result}
+              mapBase={mapBase}
+              splitBase={splitBase}
+              accept={result.dryRun ? accept : undefined}
+            />
           ) : (
             <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />
           )}

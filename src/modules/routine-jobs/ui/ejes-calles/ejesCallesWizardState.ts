@@ -1,15 +1,25 @@
 import { EJES_DEFAULT_TABLES, EJES_ROLES, EJES_TABLE_ROLE, type EjesTableRole } from "../../jobs/ejes-calles/constants";
 import { summaryOf } from "../../jobs/ejes-calles/domain/loadMapping";
 import { connectionBlockingReason, type ConnectionField } from "../shared/wizardConnection";
-import type { ClientConnection, EjesGeometryMapBase, EjesLoadRequest, EjesStartRequest } from "../shared/clientTypes";
+import type {
+  ClientConnection,
+  EjesGeometryMapBase,
+  EjesLoadRequest,
+  EjesSplitPointsBase,
+  EjesStartRequest,
+} from "../shared/clientTypes";
 import { trimConnection } from "../shared/connectionProfiles";
 import {
   acceptanceAfter,
   acceptedRequestOf,
   acceptKeysOf,
+  pointChoicesAfter,
+  pointChoicesOf,
   type EjesAcceptance,
   type EjesAcceptChange,
   type EjesAcceptKeys,
+  type EjesPointChoiceKey,
+  type EjesPointChoicesChange,
 } from "./ejesAccept";
 import { ejesAnalysisKeyOf } from "../shared/ejesCallesAnalysisKey";
 import type { EjesRunSnapshot } from "../shared/ejesCallesRunStore";
@@ -49,6 +59,7 @@ export type EjesWizardAction =
   | { type: "slotTableChosen"; key: EjesTableRole; table: string; valid: boolean }
   | { type: "confirmationChanged"; patch: Partial<EjesConfirmation> }
   | { type: "acceptChanged"; analysisKey: string; change: EjesAcceptChange }
+  | { type: "pointChoicesChanged"; analysisKey: string; change: EjesPointChoicesChange }
   | { type: "next" }
   | { type: "back" }
   | { type: "goTo"; step: EjesStep }
@@ -157,6 +168,22 @@ export function ejesGeometryMapBaseOf(state: EjesWizardState): EjesGeometryMapBa
   };
 }
 
+/** The connection, the tables and the dry run (`jobId`) the review points of a split read; null while there is no password or no run. */
+export function ejesSplitPointsBaseOf(state: EjesWizardState, jobId: string | undefined): EjesSplitPointsBase | null {
+  if (state.connection.password === "" || jobId === undefined) return null;
+  const { tables } = toEjesStartRequest(state, { dryRun: true });
+  return {
+    connection: trimConnection(state.connection),
+    tables: {
+      [EJES_TABLE_ROLE.STAGING]: tables[EJES_TABLE_ROLE.STAGING],
+      [EJES_TABLE_ROLE.ROAD_SECTION]: tables[EJES_TABLE_ROLE.ROAD_SECTION],
+      [EJES_TABLE_ROLE.ACCESS_POINT]: tables[EJES_TABLE_ROLE.ACCESS_POINT],
+      [EJES_TABLE_ROLE.ADDRESS]: tables[EJES_TABLE_ROLE.ADDRESS],
+    },
+    jobId,
+  };
+}
+
 /** "Cargar ahora" needs an analysis of this same connection and tables that finished with no blocker. */
 export function canLoadNow(state: EjesWizardState, snapshot: EjesRunSnapshot): boolean {
   const result = snapshot.job?.result;
@@ -172,6 +199,9 @@ export const resultKeyOf = (snapshot: EjesRunSnapshot): string => JSON.stringify
 export const acceptKeysOfState = (state: EjesWizardState, snapshot: EjesRunSnapshot): EjesAcceptKeys =>
   acceptKeysOf(state.acceptance, resultKeyOf(snapshot));
 
+export const pointChoicesOfState = (state: EjesWizardState, snapshot: EjesRunSnapshot): readonly EjesPointChoiceKey[] =>
+  pointChoicesOf(state.acceptance, resultKeyOf(snapshot));
+
 /** The real-run request, its summary taken from the finished dry-run and its accepted rows; null while "Cargar ahora" is not allowed. */
 export function ejesLoadRequestOf(state: EjesWizardState, snapshot: EjesRunSnapshot): EjesLoadRequest | null {
   const result = snapshot.job?.result;
@@ -179,7 +209,7 @@ export function ejesLoadRequestOf(state: EjesWizardState, snapshot: EjesRunSnaps
   return {
     ...toEjesStartRequest(state, { dryRun: false }),
     dryRun: false,
-    accepted: acceptedRequestOf(acceptKeysOfState(state, snapshot)),
+    accepted: acceptedRequestOf(acceptKeysOfState(state, snapshot), pointChoicesOfState(state, snapshot)),
     summary: summaryOf(result),
   };
 }
@@ -240,6 +270,8 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
       return { ...state, confirmation: { ...state.confirmation, ...action.patch } };
     case "acceptChanged":
       return { ...state, acceptance: acceptanceAfter(state.acceptance, action.analysisKey, action.change) };
+    case "pointChoicesChanged":
+      return { ...state, acceptance: pointChoicesAfter(state.acceptance, action.analysisKey, action.change) };
     case "next":
       return canContinue(state) ? moveTo(state, stepAfter(state.step, 1)) : state;
     case "back":

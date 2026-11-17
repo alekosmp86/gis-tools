@@ -49,7 +49,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     targetModified: false,
     outcomeUnknown: false,
     blockers: [],
-    counts: { newSections: 2, unchanged: 3, attr: 0, geom: 0, both: 0, removed: 1, splits: 0, merges: 1, plainRemovals: 1, renumbered: 0, renumberSkipped: 0 },
+    counts: { newSections: 2, unchanged: 3, attr: 0, geom: 0, both: 0, removed: 1, splits: 0, merges: 1, plainRemovals: 1, renumbered: 0, renumberSkipped: 0, splitPointsAuto: 0, splitPointsReview: 0, splitPointsNoGeometry: 0 },
     fingerprint: { rows: 4, digest: "abc123" },
     ...overrides,
   }) as unknown as EjesResult;
@@ -64,7 +64,7 @@ const doneSnapshotFor = (state: EjesWizardState, jobId = "job-1"): EjesRunSnapsh
 
 const acceptedOn = (state: EjesWizardState, snapshot: EjesRunSnapshot): EjesWizardState => ({
   ...state,
-  acceptance: { analysisKey: resultKeyOf(snapshot), plainRemovals: ["5001"], merges: ["6103"] },
+  acceptance: { analysisKey: resultKeyOf(snapshot), splits: [], plainRemovals: ["5001"], merges: ["6103"], pointChoices: [] },
 });
 
 describe("ejes wizard accepted rows (EJ-24)", () => {
@@ -72,7 +72,7 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
     it("should store the accepted keys on the state, for the analysis key of the change", () => {
       const state = withAcceptance();
 
-      expect(state.acceptance).toEqual({ analysisKey: "key-1", plainRemovals: ["5001"], merges: ["6103"] });
+      expect(state.acceptance).toEqual({ analysisKey: "key-1", splits: [], plainRemovals: ["5001"], merges: ["6103"], pointChoices: [] });
     });
 
     it("should leave the wizard step and the typed confirmation as they were", () => {
@@ -125,13 +125,13 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
     it("should keep the acceptance when a real run starts, so the rows stay accepted on the result", () => {
       const next = ejesWizardReducer(withAcceptance(), { type: "runStarted", dryRun: false });
 
-      expect(next.acceptance).toEqual({ analysisKey: "key-1", plainRemovals: ["5001"], merges: ["6103"] });
+      expect(next.acceptance).toEqual({ analysisKey: "key-1", splits: [], plainRemovals: ["5001"], merges: ["6103"], pointChoices: [] });
     });
 
     it("should keep the acceptance when only the password changes", () => {
       const next = ejesWizardReducer(withAcceptance(), { type: "connectionChanged", field: "password", value: "otra-clave-2" });
 
-      expect(next.acceptance).toEqual({ analysisKey: "key-1", plainRemovals: ["5001"], merges: ["6103"] });
+      expect(next.acceptance).toEqual({ analysisKey: "key-1", splits: [], plainRemovals: ["5001"], merges: ["6103"], pointChoices: [] });
     });
   });
 
@@ -145,9 +145,9 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
 
       expect(request).not.toBeNull();
       expect(request?.dryRun).toBe(false);
-      expect(request?.accepted).toEqual({ plainRemovals: [{ ref: "5001" }], merges: [{ newRef: "6103" }] });
+      expect(request?.accepted).toEqual({ splits: [], plainRemovals: [{ ref: "5001" }], merges: [{ newRef: "6103" }] });
       expect(request?.summary).toEqual({
-        counts: { newSections: 2, unchanged: 3, attr: 0, geom: 0, both: 0, removed: 1, splits: 0, merges: 1, plainRemovals: 1, renumbered: 0, renumberSkipped: 0 },
+        counts: { newSections: 2, unchanged: 3, attr: 0, geom: 0, both: 0, removed: 1, splits: 0, merges: 1, plainRemovals: 1, renumbered: 0, renumberSkipped: 0, splitPointsAuto: 0, splitPointsReview: 0, splitPointsNoGeometry: 0 },
         fingerprint: { rows: 4, digest: "abc123" },
       });
     });
@@ -161,7 +161,7 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
       const request = ejesLoadRequestOf(reAnalysed, snapshot);
 
       expect(reAnalysed.acceptance).toBeNull();
-      expect(request?.accepted).toEqual({ plainRemovals: [], merges: [] });
+      expect(request?.accepted).toEqual({ splits: [], plainRemovals: [], merges: [] });
     });
 
     it("should not match an acceptance made on a result of another job id, even for the same analysis", () => {
@@ -169,8 +169,9 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
       const acceptedOnFirst = acceptedOn(state, doneSnapshotFor(state, "job-1"));
       const secondResult = doneSnapshotFor(state, "job-2");
 
-      expect(acceptKeysOfState(acceptedOnFirst, secondResult)).toEqual({ plainRemovals: [], merges: [] });
+      expect(acceptKeysOfState(acceptedOnFirst, secondResult)).toEqual({ splits: [], plainRemovals: [], merges: [] });
       expect(acceptKeysOfState(acceptedOnFirst, doneSnapshotFor(state, "job-1"))).toEqual({
+        splits: [],
         plainRemovals: ["5001"],
         merges: ["6103"],
       });
@@ -184,7 +185,7 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
       const retypedAgain = ejesWizardReducer(retyped, { type: "confirmationChanged", patch: { password: `${PASSWORD}x` } });
 
       expect(retyped.acceptance).toEqual(accepted.acceptance);
-      expect(acceptKeysOfState(retypedAgain, snapshot)).toEqual({ plainRemovals: ["5001"], merges: ["6103"] });
+      expect(acceptKeysOfState(retypedAgain, snapshot)).toEqual({ splits: [], plainRemovals: ["5001"], merges: ["6103"] });
     });
 
     it("should send an empty accepted object when the acceptance was made for another analysis", () => {
@@ -192,8 +193,8 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
       const acceptedElsewhere = accept(typed, "otra-analisis", { list: EjesAcceptList.MERGES, keys: ["6103"], accepted: true });
       const snapshot = doneSnapshotFor(acceptedElsewhere);
 
-      expect(acceptKeysOfState(acceptedElsewhere, snapshot)).toEqual({ plainRemovals: [], merges: [] });
-      expect(ejesLoadRequestOf(acceptedElsewhere, snapshot)?.accepted).toEqual({ plainRemovals: [], merges: [] });
+      expect(acceptKeysOfState(acceptedElsewhere, snapshot)).toEqual({ splits: [], plainRemovals: [], merges: [] });
+      expect(ejesLoadRequestOf(acceptedElsewhere, snapshot)?.accepted).toEqual({ splits: [], plainRemovals: [], merges: [] });
     });
 
     it("should return no real-run request without the typed password", () => {

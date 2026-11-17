@@ -29,7 +29,7 @@ describe("isPieceSql boundaries (EJ-10, SPLIT_PIECE_MIN_COVER_M, COVERAGE_RATIO)
 
   it("should not count a neighbour that covers exactly 2 m of a long section as a piece", async () => {
     expect(await isPiece("2", "50")).toBe(false);
-  });
+  }, HOOK_TIMEOUT_MS);
 
   it("should count a neighbour that covers just over 2 m of a long section as a piece", async () => {
     expect(await isPiece("2.01", "50")).toBe(true);

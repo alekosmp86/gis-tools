@@ -3,7 +3,7 @@ import type { CargarPadronesResult } from "../../jobs/cargar-padrones/types";
 import type { AcceptedGeometry, ActualizarPadronResult, GeometryMapItem, PairChoice } from "../../jobs/actualizar-padron/types";
 import type { CargarLocalidadesResult, LocalityOptions, LocalityTableRef } from "../../jobs/cargar-localidades/types";
 import type { UnitAddressMasterTable, UnitResult } from "../../jobs/unidad-territorial/types";
-import type { EjesTableRole } from "../../jobs/ejes-calles/constants";
+import type { EJES_SPLIT_POINTS_ROLES, EjesTableRole } from "../../jobs/ejes-calles/constants";
 import type { EjesMapItem, EjesResult, EjesSummary, EjesTableRef } from "../../jobs/ejes-calles/types";
 import type { CentrosTableRole } from "../../jobs/centros-anep/constants";
 import type { CentrosResult, CentrosTableRef } from "../../jobs/centros-anep/types";
@@ -141,8 +141,15 @@ export interface EjesStartRequest {
   dryRun: boolean;
 }
 
-/** The accepted review rows: plain removals by `reftramo`, merges by their new `reftramo` (the server derives the old ones). */
+/** One review point's destination the user chose: the point and one piece of its split. */
+export interface EjesPointChoiceRequest {
+  pointId: string;
+  newRef: string;
+}
+
+/** The accepted review rows: splits by their old `reftramo` with the user's choices for their review points only, plain removals by `reftramo`, merges by their new `reftramo` (the server derives the old ones). */
 export interface EjesAcceptedRequest {
+  splits: { oldRef: string; choices: EjesPointChoiceRequest[] }[];
   plainRemovals: { ref: string }[];
   merges: { newRef: string }[];
 }
@@ -164,6 +171,19 @@ export interface EjesGeometryMapBase {
 
 export interface EjesGeometryMapRequest extends EjesGeometryMapBase {
   items: EjesMapItem[];
+}
+
+/** The connection, the four tables the review reads by key, and the dry run whose stored points the review shows. */
+export interface EjesSplitPointsBase {
+  connection: ClientConnection;
+  tables: Pick<Record<EjesTableRole, EjesTableRef>, (typeof EJES_SPLIT_POINTS_ROLES)[number]>;
+  jobId: string;
+}
+
+export interface EjesSplitPointsRequest extends EjesSplitPointsBase {
+  oldRef: string;
+  offset: number;
+  limit: number;
 }
 
 export interface CentrosAnepStartRequest {

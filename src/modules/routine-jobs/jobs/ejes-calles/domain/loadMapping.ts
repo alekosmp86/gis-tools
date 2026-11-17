@@ -12,34 +12,45 @@ import type {
   EjesSurplusRow,
 } from "../types";
 
-export const NO_ACCEPTED: EjesAccepted = { plainRemovals: [], merges: [] };
+export const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [] };
 
 export interface EjesLoadPlan {
   counts: EjesLoadCounts;
   attr: { idcalle: number; type: number; font: number; geom: number };
   surplusTotal: number;
   deletedMasters: number;
+  /** The points the renumbered and merged sections move: by `reftramo`, before the split points. */
+  movedPoints: number;
+  /** The points of the applied splits, each moved to its own piece. */
+  splitPoints: number;
 }
 
-export const toEjesLoadPlan = (row: Row): EjesLoadPlan => ({
-  counts: {
-    inserted: numberOf(row.inserted),
-    updated: numberOf(row.updated),
-    renumbered: numberOf(row.renumbered),
-    renumberSkipped: numberOf(row.renumber_skipped),
-    removed: numberOf(row.removed),
-    merged: numberOf(row.merged),
-    deleted: numberOf(row.deleted),
-    waysCreated: numberOf(row.ways),
-    pointsMoved: numberOf(row.points_moved),
-    topologyAssigned: 0,
-    verticesCreated: 0,
-    verticesDeleted: 0,
-  },
-  attr: { idcalle: numberOf(row.idcalle), type: numberOf(row.type), font: numberOf(row.font), geom: numberOf(row.geom) },
-  surplusTotal: numberOf(row.surplus),
-  deletedMasters: numberOf(row.masters_deleted),
-});
+export const toEjesLoadPlan = (row: Row): EjesLoadPlan => {
+  const movedPoints = numberOf(row.points_moved);
+  const splitPoints = numberOf(row.split_points);
+  return {
+    counts: {
+      inserted: numberOf(row.inserted),
+      updated: numberOf(row.updated),
+      renumbered: numberOf(row.renumbered),
+      renumberSkipped: numberOf(row.renumber_skipped),
+      removed: numberOf(row.removed),
+      merged: numberOf(row.merged),
+      splitsApplied: numberOf(row.splits),
+      deleted: numberOf(row.deleted),
+      waysCreated: numberOf(row.ways),
+      pointsMoved: movedPoints + splitPoints,
+      topologyAssigned: 0,
+      verticesCreated: 0,
+      verticesDeleted: 0,
+    },
+    attr: { idcalle: numberOf(row.idcalle), type: numberOf(row.type), font: numberOf(row.font), geom: numberOf(row.geom) },
+    surplusTotal: numberOf(row.surplus),
+    deletedMasters: numberOf(row.masters_deleted),
+    movedPoints,
+    splitPoints,
+  };
+};
 
 export const toSurplusRow = (row: Row): EjesSurplusRow => ({
   ref: String(row.ref),

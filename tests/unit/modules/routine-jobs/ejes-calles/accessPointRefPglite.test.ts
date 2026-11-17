@@ -114,6 +114,7 @@ describe.each<AccessPointRefType>(["integer", "varchar"])(
         await database.query(RENUM_ROW_SQL, [oldRef, NEW_REF]);
         await database.exec(CREATE_MOVE_SQL);
         await database.query(MOVE_ROW_SQL, [oldRef, NEW_REF]);
+        await database.exec(`CREATE TEMP TABLE pg_temp."${LOAD_TEMP.SPLIT_FINAL}" (old_id bigint, old_ref text, point_id bigint, new_ref text, old_value text)`);
         await database.exec(buildRevertPointsSql(context, ejesLayouts()));
         await database.query(buildMovePointsSql(context));
         const moved = await matchingIds(database, TEXT_MATCH_SQL, NEW_REF);

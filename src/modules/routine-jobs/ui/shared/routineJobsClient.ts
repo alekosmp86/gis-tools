@@ -2,7 +2,7 @@ import type { ResolvedColumn, TableListing } from "@/core/types/tableCatalog";
 import type { TableRole } from "../../jobs/cargar-padrones/constants";
 import type { ActualizarTableRole } from "../../jobs/actualizar-padron/constants";
 import type { GeometryMapFeature } from "../../jobs/actualizar-padron/types";
-import type { EjesMapFeature } from "../../jobs/ejes-calles/types";
+import type { EjesMapFeature, EjesSplitPointsPage } from "../../jobs/ejes-calles/types";
 import type { LocalidadesTableRole } from "../../jobs/cargar-localidades/constants";
 import type { UnitTableRole } from "../../jobs/unidad-territorial/constants";
 import type { EjesTableRole } from "../../jobs/ejes-calles/constants";
@@ -16,6 +16,7 @@ import type {
   EjesJobStatusView,
   EjesStartRequest,
   EjesGeometryMapRequest,
+  EjesSplitPointsRequest,
   GeometryMapRequest,
   JobStatusView,
   LocalidadesJobStatusView,
@@ -44,6 +45,7 @@ const ACTUALIZAR_BACKUP_ROUTE = `${BASE_ROUTE}/actualizar-padron/backup`;
 const ACTUALIZAR_PENDING_CSV_ROUTE = `${BASE_ROUTE}/actualizar-padron/pending-csv`;
 const ACTUALIZAR_GEOMETRIES_ROUTE = `${BASE_ROUTE}/actualizar-padron/geometries`;
 const EJES_GEOMETRY_MAP_ROUTE = `${BASE_ROUTE}/ejes-calles/geometry-map`;
+const EJES_SPLIT_POINTS_ROUTE = `${BASE_ROUTE}/ejes-calles/split-points`;
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const NETWORK_MESSAGE = "No se pudo conectar con el servidor.";
 const INVALID_RESPONSE_MESSAGE = "El servidor devolvió una respuesta no válida.";
@@ -86,6 +88,7 @@ export interface RoutineJobsClient {
   fetchPendingGeometryCsv(planId: string): Promise<Blob>;
   fetchGeometryMap(request: GeometryMapRequest): Promise<GeometryMapFeature[]>;
   fetchEjesGeometryMap(request: EjesGeometryMapRequest): Promise<EjesMapFeature[]>;
+  fetchEjesSplitPoints(request: EjesSplitPointsRequest): Promise<EjesSplitPointsPage>;
 }
 
 export class RoutineJobsApiError extends Error {
@@ -264,6 +267,12 @@ export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): Routi
       const payload = await postJson(fetchImpl, EJES_GEOMETRY_MAP_ROUTE, request);
       if (!Array.isArray(payload.features)) throw invalidResponse();
       return payload.features as EjesMapFeature[];
+    },
+
+    async fetchEjesSplitPoints(request) {
+      const payload = await postJson(fetchImpl, EJES_SPLIT_POINTS_ROUTE, request);
+      if (!Array.isArray(payload.points) || !Array.isArray(payload.pieces)) throw invalidResponse();
+      return payload as unknown as EjesSplitPointsPage;
     },
   };
 }

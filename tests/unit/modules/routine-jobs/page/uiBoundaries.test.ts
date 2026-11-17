@@ -46,7 +46,7 @@ describe("routine-jobs UI boundaries", () => {
       "steps/ActualizarReviewStep.tsx",
       "steps/ActualizarResultStep.tsx",
     ]) {
-      expect(names, expected).toContain(expected);
+      expect(names.some((name) => name === expected || name.endsWith(`/${expected}`)), expected).toBe(true);
     }
   });
 

@@ -69,7 +69,7 @@ async function dryRunPrivilegeInfo(session: RunSession, params: EjesParams, reso
   // One pg client: the topology reads run before the ANALYZE ownership reads, which follow them in the return.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const topology = await topologyIssuesOf(session, context);
-  return [...privileges, ...(await ejesAnalyzeWarnings(session, context)), ...topology];
+  return [...privileges, ...resolved.addressIssues, ...(await ejesAnalyzeWarnings(session, context)), ...topology];
 }
 
 async function runAnalysisOnSession(session: RunSession, params: EjesParams, timer: StepTimer): Promise<EjesResult> {
@@ -96,7 +96,8 @@ async function runPersistOnSession(session: RunSession, params: EjesParams, time
   const context = ejesLoadContextOf(resolved.layouts, params.tables, resolved.writeTargets);
   // Ordered: the privileges are checked before the transaction takes the lock.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const privilegeInfo = await timer.run(EJES_STEP.PRIVILEGES, () => assertEjesLoadReady(session, context));
+  const splitsAccepted = (params.accepted?.splits.length ?? 0) > 0;
+  const privilegeInfo = await timer.run(EJES_STEP.PRIVILEGES, () => assertEjesLoadReady(session, context, resolved.addressIssues, splitsAccepted));
   // Ordered: the write transaction runs after the privilege checks, on the same pg client.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const outcome = await runEjesPersistTransaction(session, params, context, timer);

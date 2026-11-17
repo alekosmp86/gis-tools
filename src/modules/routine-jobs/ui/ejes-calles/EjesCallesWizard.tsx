@@ -15,8 +15,10 @@ import {
   canAnalyzeNow,
   canLoadNow,
   acceptKeysOfState,
+  pointChoicesOfState,
   resultKeyOf,
   ejesGeometryMapBaseOf,
+  ejesSplitPointsBaseOf,
   ejesLoadRequestOf,
   ejesWizardReducer,
   EjesStep,
@@ -143,10 +145,14 @@ export const EjesCallesWizard: React.FC = () => {
             snapshot={snapshot}
             nowMs={nowMs}
             mapBase={ejesGeometryMapBaseOf(state)}
+            splitBase={ejesSplitPointsBaseOf(state, snapshot.jobId)}
             canLoad={canLoadNow(state, snapshot)}
             accept={{
               keys: acceptKeysOfState(state, snapshot),
+              pointChoices: pointChoicesOfState(state, snapshot),
               onChange: (change) => dispatch({ type: "acceptChanged", analysisKey: resultKeyOf(snapshot), change }),
+              onPointChoicesChange: (change) =>
+                dispatch({ type: "pointChoicesChanged", analysisKey: resultKeyOf(snapshot), change }),
             }}
             onLoad={loadNow}
             onNewRun={newRun}

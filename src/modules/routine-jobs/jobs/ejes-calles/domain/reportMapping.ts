@@ -1,8 +1,10 @@
 import { listOf, nullableNumber, numberOf, textOf, type Row } from "../../shared/rowMapping";
 import { shortNameOf } from "./shortName";
-import { TWIN_CLASS, type RenumberSkipReason, type TwinClass } from "../constants";
+import { EJES_POINT_REASON, TWIN_CLASS, type EjesSkipReason, type RenumberSkipReason, type TwinClass } from "../constants";
 import { ANALYSIS_LIST_ALIAS } from "./analysisSql";
 import type {
+  EjesStoredCandidate,
+  EjesStoredReviewPoint,
   EjesAnalysis,
   EjesAttrRow,
   EjesInvalidGeometryRow,
@@ -21,11 +23,28 @@ const textsOf = (value: unknown): string[] => (Array.isArray(value) ? value.map(
 
 const unknownValueOf = (row: Row): EjesUnknownValue => ({ value: textOf(row.value), rows: numberOf(row.rows) });
 
+const candidateOf = (row: Row): EjesStoredCandidate => ({ newRef: String(row.newRef), distance: nullableNumber(row.distance) });
+
+const reviewPointOf = (row: Row): EjesStoredReviewPoint => ({
+  oldRef: textOf(row.oldRef) ?? "",
+  pointId: String(row.pointId),
+  reason: row.reason === EJES_POINT_REASON.AMBIGUOUS ? EJES_POINT_REASON.AMBIGUOUS : EJES_POINT_REASON.NO_GEOMETRY,
+  suggestedRef: textOf(row.suggestedRef),
+  candidates: listOf(row.candidates).map(candidateOf),
+});
+
 const splitOf = (row: Row): EjesSplitRow => ({
-  oldRef: String(row.old_ref),
+  oldRef: textOf(row.old_ref) ?? "",
   idcalle: textOf(row.idcalle),
   newRefs: textsOf(row.new_refs),
   points: numberOf(row.points),
+  refPoints: numberOf(row.ref_points),
+  autoPoints: numberOf(row.auto_points),
+  reviewPoints: numberOf(row.review_points),
+  noGeometryPoints: numberOf(row.no_geometry_points),
+  farPoints: numberOf(row.far_points),
+  heldReason: (textOf(row.held_reason) as EjesSkipReason | null) ?? null,
+  incompleteReview: row.review_incomplete === true,
   coverage: nullableNumber(row.coverage),
   oldLength: nullableNumber(row.old_length),
   newLength: nullableNumber(row.new_length),
@@ -161,6 +180,11 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       renumberedWithPoints: numberOf(row.renumbered_with_points),
       renumberedPoints: numberOf(row.renumbered_points),
       renumberSkipped: numberOf(row.renumber_skipped),
+      splitPointsTotal: numberOf(row.split_points),
+      splitPointsAuto: numberOf(row.split_points_auto),
+      splitPointsReview: numberOf(row.split_points_review),
+      splitPointsNoGeometry: numberOf(row.split_points_no_geometry),
+      splitPointsFar: numberOf(row.split_points_far),
     },
     cloc: {
       withLocality: numberOf(row.with_locality),
@@ -168,6 +192,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       withoutCode: numberOf(row.without_code),
     },
     splits: listOf(row[ANALYSIS_LIST_ALIAS.SPLITS]).map(splitOf),
+    reviewPoints: listOf(row.review_points).map(reviewPointOf),
     merges: listOf(row[ANALYSIS_LIST_ALIAS.MERGES]).map(mergeOf),
     plainRemovals: listOf(row[ANALYSIS_LIST_ALIAS.PLAIN]).map(removalOf),
     newStreets: listOf(row[ANALYSIS_LIST_ALIAS.STREETS]).map(streetOf),

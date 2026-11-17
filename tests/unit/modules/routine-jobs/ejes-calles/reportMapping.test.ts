@@ -104,7 +104,25 @@ describe("toEjesAnalysis", () => {
       with_locality: 2,
       only_department: 1,
       without_code: 0,
-      [ANALYSIS_LIST_ALIAS.SPLITS]: [{ old_ref: 10, idcalle: "5", new_refs: ["11", "12"], points: "3", coverage: 0.98, old_length: 100.5, new_length: "130", outside_length: 29.5 }],
+      [ANALYSIS_LIST_ALIAS.SPLITS]: [
+        {
+          old_ref: 10,
+          idcalle: "5",
+          new_refs: ["11", "12"],
+          points: "3",
+          ref_points: 3,
+          auto_points: 3,
+          review_points: 0,
+          no_geometry_points: 0,
+          far_points: 0,
+          held_reason: null,
+          review_incomplete: false,
+          coverage: 0.98,
+          old_length: 100.5,
+          new_length: "130",
+          outside_length: 29.5,
+        },
+      ],
       [ANALYSIS_LIST_ALIAS.MERGES]: [{ new_ref: "20", idcalle: "6", old_refs: ["21", "22"], points: 0, coverage: null, old_length: 80, new_length: 80, outside_length: 0 }],
       [ANALYSIS_LIST_ALIAS.PLAIN]: [{ ref: "30", idcalle: null, points: 2 }],
       [ANALYSIS_LIST_ALIAS.STREETS]: [
@@ -156,10 +174,33 @@ describe("toEjesAnalysis", () => {
       renumberedWithPoints: 2,
       renumberedPoints: 9,
       renumberSkipped: 2,
+      splitPointsTotal: 0,
+      splitPointsAuto: 0,
+      splitPointsReview: 0,
+      splitPointsNoGeometry: 0,
+      splitPointsFar: 0,
     });
     expect(analysis.fingerprint).toEqual({ rows: 14, digest: "d41d8cd98f00b204e9800998ecf8427e" });
     expect(analysis.cloc).toEqual({ withLocality: 2, onlyDepartment: 1, withoutCode: 0 });
-    expect(analysis.splits).toEqual([{ oldRef: "10", idcalle: "5", newRefs: ["11", "12"], points: 3, coverage: 0.98, oldLength: 100.5, newLength: 130, outsideLength: 29.5 }]);
+    expect(analysis.splits).toEqual([
+      {
+        oldRef: "10",
+        idcalle: "5",
+        newRefs: ["11", "12"],
+        points: 3,
+        refPoints: 3,
+        autoPoints: 3,
+        reviewPoints: 0,
+        noGeometryPoints: 0,
+        farPoints: 0,
+        heldReason: null,
+        incompleteReview: false,
+        coverage: 0.98,
+        oldLength: 100.5,
+        newLength: 130,
+        outsideLength: 29.5,
+      },
+    ]);
     expect(analysis.merges).toEqual([
       { newRef: "20", idcalle: "6", oldRefs: ["21", "22"], points: 0, coverage: null, oldLength: 80, newLength: 80, outsideLength: 0 },
     ]);

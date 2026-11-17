@@ -35,7 +35,8 @@ export const RENUMBER_SKIP_TEXT: Record<RenumberSkipReason, string> = {
 export const SKIP_REASON_TEXT: Record<EjesSkipReason, string> = {
   ...RENUMBER_SKIP_TEXT,
   [EJES_SKIP_REASON.NOT_ACCEPTED]: "No aceptado en el análisis",
-  [EJES_SKIP_REASON.SPLIT_PENDING]: "División pendiente: no se aplica en esta carga",
+  [EJES_SKIP_REASON.REVIEW_REQUIRED]: "Puntos de acceso sin destino automático: requiere revisión",
+  [EJES_SKIP_REASON.SHARED_PIECE]: "Un tramo nuevo también es pieza de otra división o unión: no se aplica",
   [EJES_SKIP_REASON.HAS_POINTS]: "Tiene puntos de acceso: no se quita",
   [EJES_SKIP_REASON.NO_REFTRAMO]: "Sin reftramo: no se puede verificar",
   [EJES_SKIP_REASON.SHARED_OLD_REF]: "Un tramo actual pertenece a otra unión aceptada",

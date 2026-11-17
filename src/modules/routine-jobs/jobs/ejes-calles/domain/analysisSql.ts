@@ -27,6 +27,7 @@ import {
 } from "./renumberSql";
 import { isPieceSql } from "./pieceSql";
 import { groupPieceCtes, removalSinkCtes, type RemovalSinks } from "./removalSql";
+import { reviewPointCtes, reviewPointsColumn, splitPointCountColumns, splitPointCtes, splitPointSinkCtes } from "./splitPointSql";
 import { twinCountColumns, twinCtes, twinGroupCtes, twinListColumn } from "./twinSql";
 
 const SNAP_GRID = 10 ** -GEOMETRY_EQUALITY_DECIMALS;
@@ -333,7 +334,14 @@ function clocCtes(layouts: EjesLayouts): string[] {
 }
 
 function listColumns(): string[] {
-  const splitSelect = `SELECT s.ref AS "old_ref", s.idcalle AS "idcalle", s.new_refs AS "new_refs", COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points", s.covered / NULLIF(s.len, 0) AS "coverage", s.len AS "old_length", s.new_len AS "new_length", s.outside_len AS "outside_length" FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = s.id::text ORDER BY s.ref`;
+  const splitSelect = [
+    'SELECT s.ref AS "old_ref", s.idcalle AS "idcalle", s.new_refs AS "new_refs", COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points",',
+    'COALESCE(st.ref_points, 0) AS "ref_points", COALESCE(st.auto_points, 0) AS "auto_points", COALESCE(st.review_points, 0) AS "review_points", COALESCE(st.no_geometry_points, 0) AS "no_geometry_points", COALESCE(st.far_points, 0) AS "far_points",',
+    'hg.hold_reason AS "held_reason", COALESCE(NOT rf.fits, false) AS "review_incomplete",',
+    's.covered / NULLIF(s.len, 0) AS "coverage", s.len AS "old_length", s.new_len AS "new_length", s.outside_len AS "outside_length"',
+    `FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = s.id::text LEFT JOIN ${q("split_stats")} AS st ON st.old_id = s.id`,
+    `LEFT JOIN ${q("split_groups")} AS hg ON hg.old_id = s.id LEFT JOIN ${q("review_fit")} AS rf ON rf.old_id = s.id ORDER BY s.ref`,
+  ].join(" ");
   const mergeSelect = `SELECT m.new_ref AS "new_ref", m.idcalle AS "idcalle", m.old_refs AS "old_refs", m.points AS "points", m.coverage AS "coverage", m.old_len AS "old_length", m.new_len AS "new_length", m.outside_len AS "outside_length" FROM ${q("merges")} AS m ORDER BY m.new_ref`;
   const plainSelect = `SELECT p.ref AS "ref", p.idcalle AS "idcalle", COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points" FROM ${q("plain")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = p.id::text ORDER BY COALESCE(ap.points, 0) + COALESCE(apid.points, 0) DESC, p.ref`;
   const streetSelect = `SELECT n.idcalle AS "idcalle", n.name AS "name", n.sections AS "sections", n.tipos AS "tipos", n.departments AS "departments", n.localities AS "localities" FROM ${q("new_streets")} AS n ORDER BY n.idcalle, n.name`;
@@ -344,6 +352,7 @@ function listColumns(): string[] {
   ].join(" ");
   return [
     listOf(ANALYSIS_LIST_ALIAS.SPLITS, "split_list", splitSelect),
+    reviewPointsColumn(),
     listOf(ANALYSIS_LIST_ALIAS.MERGES, "merge_list", mergeSelect),
     listOf(ANALYSIS_LIST_ALIAS.PLAIN, "plain_list", plainSelect),
     listOf(ANALYSIS_LIST_ALIAS.STREETS, "street_list", streetSelect),
@@ -364,6 +373,7 @@ function countColumns(): string[] {
     `${countOf("removed", `id NOT IN (SELECT old_id FROM ${q("renum_skipped")})`)} AS "removed"`,
     `${countOf("splits")} AS "splits"`,
     `${countOf("merges")} AS "merges"`,
+    ...splitPointCountColumns(),
     `${countOf("plain")} AS "plain_removals"`,
     `(SELECT count(*) FROM ${q("plain")} AS p WHERE EXISTS (SELECT 1 FROM ${q("ap")} AS ap WHERE ap.ref = p.ref AND ap.points > 0) OR EXISTS (SELECT 1 FROM ${q("ap")} AS apid WHERE apid.ref = p.id::text AND apid.points > 0)) AS "plain_held"`,
     `${countOf("new_streets")} AS "new_streets"`,
@@ -402,6 +412,9 @@ export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks
     ...groupPieceCtes(),
     ...remainderCtes(),
     ...(sinks === undefined ? [] : removalSinkCtes(sinks)),
+    ...splitPointCtes(layouts),
+    ...(sinks === undefined ? [] : splitPointSinkCtes(sinks.splitPoints)),
+    ...reviewPointCtes(),
     ...clocCtes(layouts),
   ];
   return `${withClause(ctes)}\nSELECT\n${[...countColumns(), ...listColumns()].join(",\n")}`;

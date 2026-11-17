@@ -1,0 +1,191 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.intro {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.progress {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.notice {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.fieldControl {
+  min-width: 160px;
+  padding: 6px 8px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.pointPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pointHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pointTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.reasonBadge {
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.doors {
+  display: grid;
+  grid-template-columns: fit-content(40%) minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.doorTerm {
+  opacity: 0.75;
+}
+
+.doorValue {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(127, 127, 127, 0.4);
+  border-radius: 8px;
+}
+
+.candidateChosen {
+  border-width: 2px;
+  border-color: currentColor;
+}
+
+.candidateText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.candidateName {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.candidateDistance {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.mapFrame {
+  height: 360px;
+  min-width: 0;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(127, 127, 127, 0.4);
+}
+
+.footerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.cellProgress {
+  font-size: 12px;
+  opacity: 0.85;
+}

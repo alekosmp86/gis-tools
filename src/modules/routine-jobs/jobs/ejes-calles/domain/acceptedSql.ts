@@ -1,26 +1,31 @@
 import { literal, q } from "../../shared/sqlFragments";
-import { LOAD_CHUNK_SIZE } from "../constants";
+import { INVALID_CHOICE_REFS_LIMIT, LOAD_CHUNK_SIZE } from "../constants";
 import type { EjesAccepted } from "../types";
 import { LOAD_TEMP, tmp } from "./loadSelectionSql";
 
-const createAcceptedSql = (name: string): string => `CREATE TEMP TABLE ${q(name)} (ref text) ON COMMIT DROP`;
+const createTableSql = (name: string, columns: string): string => `CREATE TEMP TABLE ${q(name)} (${columns}) ON COMMIT DROP`;
 
-function insertAcceptedSql(name: string, refs: readonly string[]): string[] {
+function insertRowsSql(name: string, rows: readonly (readonly string[])[]): string[] {
   const statements: string[] = [];
-  for (let start = 0; start < refs.length; start += LOAD_CHUNK_SIZE) {
-    const values = refs.slice(start, start + LOAD_CHUNK_SIZE).map((ref) => `(${literal(ref)})`);
-    statements.push(`INSERT INTO ${q(name)} (ref) VALUES ${values.join(", ")}`);
+  for (let start = 0; start < rows.length; start += LOAD_CHUNK_SIZE) {
+    const values = rows.slice(start, start + LOAD_CHUNK_SIZE).map((row) => `(${row.map(literal).join(", ")})`);
+    statements.push(`INSERT INTO ${q(name)} VALUES ${values.join(", ")}`);
   }
   return statements;
 }
 
-/** The accepted keys as temp tables, one row per key; the keys are canonical integer text (the request parser canonicalises them). */
+/** The accepted keys and split choices as temp tables; the keys are canonical integer text (the request parser canonicalises them). */
 export function buildAcceptedTablesSql(accepted: EjesAccepted): string[] {
+  const choices = accepted.splits.flatMap((split) => split.choices.map((choice) => [split.oldRef, choice.pointId, choice.newRef]));
   return [
-    createAcceptedSql(LOAD_TEMP.ACC_MERGE),
-    ...insertAcceptedSql(LOAD_TEMP.ACC_MERGE, accepted.merges),
-    createAcceptedSql(LOAD_TEMP.ACC_PLAIN),
-    ...insertAcceptedSql(LOAD_TEMP.ACC_PLAIN, accepted.plainRemovals),
+    createTableSql(LOAD_TEMP.ACC_MERGE, "ref text"),
+    ...insertRowsSql(LOAD_TEMP.ACC_MERGE, accepted.merges.map((ref) => [ref])),
+    createTableSql(LOAD_TEMP.ACC_PLAIN, "ref text"),
+    ...insertRowsSql(LOAD_TEMP.ACC_PLAIN, accepted.plainRemovals.map((ref) => [ref])),
+    createTableSql(LOAD_TEMP.ACC_SPLIT, "ref text"),
+    ...insertRowsSql(LOAD_TEMP.ACC_SPLIT, accepted.splits.map((split) => [split.oldRef])),
+    createTableSql(LOAD_TEMP.ACC_CHOICE, "old_ref text, point_id text, new_ref text"),
+    ...insertRowsSql(LOAD_TEMP.ACC_CHOICE, choices),
   ];
 }
 
@@ -28,5 +33,20 @@ export function buildAcceptedTablesSql(accepted: EjesAccepted): string[] {
 export const buildMissingAcceptedSql = (): string =>
   [
     `SELECT (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_MERGE)} AS a WHERE a.ref NOT IN (SELECT m.new_ref FROM ${tmp(LOAD_TEMP.MERGE)} AS m))`,
-    `+ (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_PLAIN)} AS a WHERE a.ref NOT IN (SELECT p.ref FROM ${tmp(LOAD_TEMP.PLAIN)} AS p WHERE p.ref IS NOT NULL)) AS "missing"`,
+    `+ (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_PLAIN)} AS a WHERE a.ref NOT IN (SELECT p.ref FROM ${tmp(LOAD_TEMP.PLAIN)} AS p WHERE p.ref IS NOT NULL))`,
+    `+ (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_SPLIT)} AS a WHERE a.ref NOT IN (SELECT s.old_ref FROM ${tmp(LOAD_TEMP.SPLIT)} AS s WHERE s.old_ref IS NOT NULL)) AS "missing"`,
+  ].join(" ");
+
+/**
+ * Choices that name a point which is not a review point of its split, a piece that is not one of its split's pieces, or a split the
+ * plan holds. Runs after `ej_split_plan` exists. Any such choice aborts the load (fail closed), never a skipped row.
+ */
+/** The old `reftramo`s of up to `INVALID_CHOICE_REFS_LIMIT` invalid choices, for the abort message. Empty when every choice is valid. */
+export const buildInvalidChoiceRefsSql = (): string =>
+  [
+    `SELECT DISTINCT c.old_ref FROM ${tmp(LOAD_TEMP.ACC_CHOICE)} AS c`,
+    `WHERE NOT EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.SPLIT_PTS)} AS p WHERE p.old_ref = c.old_ref AND p.point_id::text = c.point_id AND p.reason IS NOT NULL)`,
+    `OR NOT EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.SPLIT)} AS s WHERE s.old_ref = c.old_ref AND s.new_ref = c.new_ref)`,
+    `OR NOT EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.SPLIT_PLAN)} AS pl WHERE pl.old_ref = c.old_ref AND pl.reason IS NULL)`,
+    `ORDER BY c.old_ref LIMIT ${INVALID_CHOICE_REFS_LIMIT}`,
   ].join(" ");
