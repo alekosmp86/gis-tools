@@ -5,12 +5,12 @@ import { Map as MapIcon } from "lucide-react";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { ButtonVariant } from "@/ui-kit/types/ui";
 import type { EjesSplitReviewPoint } from "../../../jobs/ejes-calles/types";
-import { textOrNoData } from "../../shared/reportFormat";
-import { EjesSplitCandidateRow } from "./EjesSplitCandidateRow";
+import { EjesSplitCandidateGroup } from "./EjesSplitCandidateGroup";
 import { EJES_SPLIT_DOOR_TEXT, EJES_SPLIT_REASON_NOTE, EJES_SPLIT_REASON_TEXT, EJES_SPLIT_REVIEW_TEXT } from "./ejesSplitReviewTexts";
 import styles from "./EjesSplitReview.module.css";
 
 const ICON_SIZE = 15;
+const DOOR_SEPARATOR = " · ";
 
 export interface EjesSplitPointPanelProps {
   point: EjesSplitReviewPoint;
@@ -22,7 +22,20 @@ export interface EjesSplitPointPanelProps {
   onToggleMap: () => void;
 }
 
-/** The point on screen: its reason and door data, one row per candidate piece, and the switch of its map. */
+const doorFieldsOf = (point: EjesSplitReviewPoint): [string, string | null][] => [
+  [EJES_SPLIT_DOOR_TEXT.NUMBER, point.number],
+  [EJES_SPLIT_DOOR_TEXT.LETTER, point.letter],
+  [EJES_SPLIT_DOOR_TEXT.KM, point.km],
+  [EJES_SPLIT_DOOR_TEXT.CIRCULATION_WAY, point.circulationWay],
+];
+
+const doorLineOf = (point: EjesSplitReviewPoint): string => {
+  const filled = doorFieldsOf(point).filter(([, value]) => value !== null && value !== "");
+  if (filled.length === 0) return EJES_SPLIT_DOOR_TEXT.NO_DATA;
+  return filled.map(([label, value]) => `${label} ${value}`).join(DOOR_SEPARATOR);
+};
+
+/** The point on screen: its reason and door data, its pieces as a radio group, and the switch of its map. */
 export const EjesSplitPointPanel: React.FC<EjesSplitPointPanelProps> = ({
   point,
   chosenRef,
@@ -37,30 +50,8 @@ export const EjesSplitPointPanel: React.FC<EjesSplitPointPanelProps> = ({
       <span className={styles.reasonBadge}>{EJES_SPLIT_REASON_TEXT[point.reason]}</span>
     </div>
     <p className={styles.note}>{EJES_SPLIT_REASON_NOTE[point.reason]}</p>
-    <dl className={styles.doors}>
-      <dt className={styles.doorTerm}>{EJES_SPLIT_DOOR_TEXT.NUMBER}</dt>
-      <dd className={styles.doorValue}>{textOrNoData(point.number)}</dd>
-      <dt className={styles.doorTerm}>{EJES_SPLIT_DOOR_TEXT.LETTER}</dt>
-      <dd className={styles.doorValue}>{textOrNoData(point.letter)}</dd>
-      <dt className={styles.doorTerm}>{EJES_SPLIT_DOOR_TEXT.KM}</dt>
-      <dd className={styles.doorValue}>{textOrNoData(point.km)}</dd>
-      <dt className={styles.doorTerm}>{EJES_SPLIT_DOOR_TEXT.CIRCULATION_WAY}</dt>
-      <dd className={styles.doorValue}>{textOrNoData(point.circulationWay)}</dd>
-    </dl>
-    <ul className={styles.candidates}>
-      {point.candidates.map((candidate) => {
-        const chosen = chosenRef === candidate.newRef;
-        return (
-          <EjesSplitCandidateRow
-            key={candidate.newRef}
-            candidate={candidate}
-            chosen={chosen}
-            disabled={disabled}
-            onToggle={() => onChoose(candidate.newRef)}
-          />
-        );
-      })}
-    </ul>
+    <p className={styles.doorLine}>{doorLineOf(point)}</p>
+    <EjesSplitCandidateGroup candidates={point.candidates} chosenRef={chosenRef} disabled={disabled} onChoose={onChoose} />
     <div>
       <Button variant={ButtonVariant.SECONDARY} onClick={onToggleMap}>
         <MapIcon size={ICON_SIZE} />

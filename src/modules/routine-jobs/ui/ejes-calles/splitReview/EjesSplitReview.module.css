@@ -85,76 +85,130 @@
   font-size: 12px;
 }
 
-.doors {
-  display: grid;
-  grid-template-columns: fit-content(40%) minmax(0, 1fr);
-  gap: 4px 12px;
+.doorLine {
   margin: 0;
   font-size: 13px;
-}
-
-.doorTerm {
-  opacity: 0.75;
-}
-
-.doorValue {
-  margin: 0;
   overflow-wrap: anywhere;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .candidates {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  min-width: 0;
 }
 
 .candidate {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid rgba(127, 127, 127, 0.4);
+  gap: 10px;
+  width: 100%;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.candidate:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 1px;
+}
+
+.candidate:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .candidateChosen {
-  border-width: 2px;
-  border-color: currentColor;
+  border-color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.12);
 }
 
-.candidateText {
+.radioMark {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 50%;
+}
+
+.radioMarkChosen {
+  border-color: var(--accent-cyan);
+}
+
+.radioMarkChosen::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
 }
 
 .candidateName {
-  font-size: 14px;
+  flex-shrink: 0;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .candidateDistance {
+  min-width: 0;
+  overflow: hidden;
   font-size: 12px;
   opacity: 0.8;
-}
-
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tag {
+  flex-shrink: 0;
   padding: 1px 6px;
-  border: 1px solid currentColor;
+  border: 1px solid rgba(245, 158, 11, 0.5);
   border-radius: 4px;
+  color: var(--accent-amber);
   font-size: 11px;
+  white-space: nowrap;
+}
+
+.clearRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.clearButton {
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.clearButton:hover:not(:disabled) {
+  color: var(--text-main);
+}
+
+.clearButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .mapFrame {
@@ -177,4 +231,3 @@
   flex-wrap: wrap;
   gap: 8px;
 }
-

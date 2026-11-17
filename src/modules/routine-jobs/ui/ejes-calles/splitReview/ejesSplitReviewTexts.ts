@@ -15,7 +15,7 @@ export const EJES_SPLIT_REVIEW_TEXT = {
   POINT_TITLE: "Punto de acceso",
   SUGGESTED: "Sugerido",
   CHOSEN: "Elegido",
-  CHOOSE: "Elegir",
+  CHOICE_GROUP_LABEL: "Destino del punto",
   UNCHOOSE: "Quitar elección",
   NO_DISTANCE: "Sin distancia",
   SHOW_MAP: "Ver en mapa",
@@ -61,6 +61,7 @@ export const EJES_SPLIT_DOOR_TEXT = {
   LETTER: "Letra",
   KM: "Km",
   CIRCULATION_WAY: "Vía",
+  NO_DATA: "Sin dato",
 } as const;
 
 export const EJES_SPLIT_REASON_FILTER_TEXT = {
