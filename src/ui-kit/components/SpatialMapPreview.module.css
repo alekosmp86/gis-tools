@@ -341,3 +341,11 @@
   border-left: 5px solid var(--map-label-color, rgba(15, 23, 42, 0.2));
 }
 
+:global(.leaflet-tooltip.map-feature-label.map-feature-label-point) {
+  margin-top: 0;
+}
+
+:global(.leaflet-tooltip.map-feature-label.map-feature-label-point::before) {
+  display: none;
+}
+
