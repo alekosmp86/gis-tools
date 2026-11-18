@@ -10,6 +10,8 @@ import {
   resolveSchemaName,
 } from "@/core/services/sqlStatements";
 import type { SequenceRef } from "@/core/services/replaceSequences";
+import { normalizeGeometryRepairDecimals } from "@/core/services/geometryRepairSql";
+import { repairTargetGeometries } from "@/core/services/geometryRepairRunner";
 import { SqlScriptBuilder } from "@/core/workers/comparison/SqlScriptBuilder";
 import {
   getIgnoredSourceColumns,
@@ -20,7 +22,13 @@ import {
   type ReplaceInsertColumn,
 } from "@/core/services/replaceColumnMapping";
 import type { DbConfig, ExecuteChunkProgress } from "@/core/types/db";
-import { AnalyzeStatus, type AnalyzeOutcome, type SequenceAdjustment } from "@/core/types/replace";
+import {
+  AnalyzeStatus,
+  GeometryRepairStatus,
+  type AnalyzeOutcome,
+  type GeometryRepairOutcome,
+  type SequenceAdjustment,
+} from "@/core/types/replace";
 
 export const FULL_REPLACE_BATCH_SIZE = 500;
 const BUILD_YIELD_EVERY = 2000;
@@ -47,10 +55,12 @@ export interface FullReplaceResult {
   sourceRows: number;
   insertedRows: number;
   errorCount: number;
+  replaceErrorCount: number;
   errors: string[];
   ignoredSourceColumns: string[];
   targetModified: boolean;
   sequencesAdjusted: SequenceAdjustment[];
+  geometryRepair: GeometryRepairOutcome;
   analyze: AnalyzeOutcome;
 }
 
@@ -63,6 +73,8 @@ export interface FullReplaceParams {
   mapping: ReplaceColumnMapping;
   sequences: SequenceRef[];
   resetSequences: boolean;
+  repairGeometries?: boolean;
+  repairDecimals?: number;
   onProgress?: (progress: FullReplaceProgress) => void;
 }
 
@@ -279,8 +291,22 @@ async function repairSequences(
   }
 }
 
+const GEOMETRY_REPAIR_FAILURE_PREFIX = "Reparación de geometrías";
+
 export async function runFullReplace(params: FullReplaceParams): Promise<FullReplaceResult> {
-  const { sourceConfig, targetConfig, password, sourceColumns, targetColumns, mapping, sequences, resetSequences, onProgress } = params;
+  const {
+    sourceConfig,
+    targetConfig,
+    password,
+    sourceColumns,
+    targetColumns,
+    mapping,
+    sequences,
+    resetSequences,
+    repairGeometries = true,
+    repairDecimals,
+    onProgress,
+  } = params;
   const emit = (phase: FullReplacePhase, label: string, current: number, total: number) =>
     onProgress?.({ phase, label, current, total });
 
@@ -346,6 +372,15 @@ export async function runFullReplace(params: FullReplaceParams): Promise<FullRep
         )
       : { adjusted: [] };
 
+  const geometryRepair = await repairTargetGeometries(targetConfig, password, execution, targetMeta.columnTypes, {
+    enabled: repairGeometries,
+    decimals: normalizeGeometryRepairDecimals(repairDecimals),
+  });
+  const geometryErrors =
+    geometryRepair.status === GeometryRepairStatus.FAILED
+      ? [`${GEOMETRY_REPAIR_FAILURE_PREFIX}: ${geometryRepair.message ?? "Error desconocido"}`]
+      : [];
+
   if (execution.errorCount === 0 && execution.targetModified) {
     emit(FullReplacePhase.EXECUTE, "Actualizando estadísticas (ANALYZE)...", statements.length, statements.length);
   }
@@ -355,9 +390,11 @@ export async function runFullReplace(params: FullReplaceParams): Promise<FullRep
     sourceRows: source.records.length,
     ignoredSourceColumns: getIgnoredSourceColumns(insertColumns, sourceColumns),
     sequencesAdjusted: repair.adjusted,
+    geometryRepair,
     analyze,
     ...execution,
-    errors: repair.error ? [...execution.errors, repair.error] : execution.errors,
-    errorCount: repair.error ? execution.errorCount + 1 : execution.errorCount,
+    replaceErrorCount: execution.errorCount,
+    errors: [...execution.errors, ...(repair.error ? [repair.error] : []), ...geometryErrors],
+    errorCount: execution.errorCount + (repair.error ? 1 : 0) + geometryErrors.length,
   };
 }

@@ -57,6 +57,14 @@ Al terminar, **siempre se ajusta** cada secuencia de la tabla destino, tanto si 
 
 Limitación conocida: PostgreSQL no informa de un último valor para una secuencia que nunca se usó. Si esa secuencia tenía un inicio mayor que el id más alto + 1, puede quedar en el id más alto + 1. Es inofensivo para esta tabla y solo importa si otra tabla comparte la secuencia. El ajuste de secuencias tampoco es transaccional.
 
+### Reparar geometrías
+
+Si marca esta opción (viene marcada), las columnas de geometría poligonal del destino (`MultiPolygon`, `MultiPolygonZ` o `geometry` genérico) se revisan al terminar la carga. Los polígonos inválidos se corrigen y se quitan las partes que quedarían con menos de 4 vértices al redondearlas a los *Decimales de control en EPSG:4326* (4 por defecto, entre 0 y 8). Las coordenadas guardadas no se redondean. Solo cambia la columna de geometría.
+
+- Si todas las partes de una fila desaparecen, o si la geometría corregida no es válida, la fila conserva su geometría original. El resumen indica cuántas filas no se pudieron reparar.
+- Las columnas de polígono simple, `MultiPolygonM` o `MultiPolygonZM` se omiten y el resumen lo indica.
+- El resumen indica cuántas filas se repararon por columna. Si el reemplazo tuvo errores, esta reparación no se ejecuta. Un fallo de la reparación se informa como error, pero la carga no se marca como incompleta.
+
 ### Confirmar
 
 1. En **Para confirmar, escriba** tipee exactamente el nombre `esquema.tabla` que se muestra (si el esquema está vacío se usa `public`). Distingue mayúsculas y minúsculas.
