@@ -59,7 +59,9 @@ const ruralNamed = (locality: string): string => `upper(btrim(${locality})) LIKE
 
 /**
  * The localities of a twin row to drop, by class. `alias` names a relation with `class`, `localities` (text[]) and
- * `inside_localities` (text[], the upper-cased names of the locality polygons the section intersects).
+ * `inside_localities` (text[], the upper-cased names of the locality polygons the section intersects; filled for classes
+ * NEITHER and BOTH). BOTH keeps one copy, the winner: the one whose name is in `inside_localities`, else the non-rural-named,
+ * else the first by name; every other copy is dropped.
  */
 export function twinDropCaseSql(alias: string): string {
   const field = (name: string): string => `${alias}.${name}`;
@@ -69,11 +71,14 @@ export function twinDropCaseSql(alias: string): string {
   const noInside = `cardinality(${field("inside_localities")}) = 0`;
   const insideName = (locality: string): string => `upper(btrim(${locality})) = ANY(${field("inside_localities")})`;
   const isNeither = `${field("class")} = '${TWIN_CLASS.NEITHER}'`;
+  const isBoth = `${field("class")} = '${TWIN_CLASS.BOTH}'`;
+  const bothWinner = `(SELECT r FROM unnest(${localities}) AS r ORDER BY (${insideName("r")}) DESC, (${ruralNamed("r")}) ASC, r ASC LIMIT 1)`;
   return [
     "CASE",
     `WHEN ${field("class")} = '${TWIN_CLASS.URBAN}' AND ${hasLocality(false)} THEN ARRAY(SELECT l FROM unnest(${localities}) AS l WHERE ${ruralNamed("l")} ORDER BY l)`,
     `WHEN (${field("class")} = '${TWIN_CLASS.RURAL}' OR (${isNeither} AND ${noInside})) AND ${hasLocality(true)} THEN ARRAY(SELECT l FROM unnest(${localities}) AS l`,
     `WHERE NOT ${ruralNamed("l")} OR l <> (SELECT min(r) FROM unnest(${localities}) AS r WHERE ${ruralNamed("r")}) ORDER BY l)`,
+    `WHEN ${isBoth} THEN ARRAY(SELECT l FROM unnest(${localities}) AS l WHERE l <> ${bothWinner} ORDER BY l)`,
     `WHEN ${isNeither} AND NOT ${noInside}`,
     `AND EXISTS (SELECT 1 FROM unnest(${localities}) AS h WHERE ${insideName("h")})`,
     `THEN ARRAY(SELECT l FROM unnest(${localities}) AS l WHERE NOT ${insideName("l")} ORDER BY l)`,
@@ -84,7 +89,7 @@ export function twinDropCaseSql(alias: string): string {
 function insideLocalitiesSql(layouts: EjesLayouts): string {
   const locality = (logical: string): string => `l.${col(layouts, "LOCALITIES", logical)}`;
   return [
-    `CASE WHEN k.class = '${TWIN_CLASS.NEITHER}' THEN ARRAY(SELECT DISTINCT upper(btrim(${locality(LOCALITIES_COLUMN.NAME)}::text)) FROM ${table(layouts, "LOCALITIES")} AS l`,
+    `CASE WHEN k.class IN ('${TWIN_CLASS.NEITHER}', '${TWIN_CLASS.BOTH}') THEN ARRAY(SELECT DISTINCT upper(btrim(${locality(LOCALITIES_COLUMN.NAME)}::text)) FROM ${table(layouts, "LOCALITIES")} AS l`,
     `WHERE ${locality(LOCALITIES_COLUMN.NAME)} IS NOT NULL AND ST_Intersects(${locality(LOCALITIES_COLUMN.GEOM)}, k.geom))`,
     "ELSE ARRAY[]::text[] END AS inside_localities",
   ].join(" ");

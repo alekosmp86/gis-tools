@@ -11,8 +11,8 @@ across the copies. The business rules, to be applied in the real load (not built
 the padrones:
 
 1. Section next to urban padrones only: the rural copy is dropped.
-2. Section next to urban and rural padrones (a long section, or one at the edge of a city, same distance rule): all copies stay,
-   because an access point can be defined in either place.
+2. Section next to urban and rural padrones (a long section, or one at the edge of a city, same distance rule): one copy stays,
+   the one whose locality polygon the section intersects (else the non-rural-named one, else the first by name). See ET-10.
 3. Section next to rural padrones only: the urban copies are dropped and the rural-named copy stays. If several copies are
    rural-named, only one of them stays (the first by name; the rule does not say which, and the 9 such groups of dev are
    identical in everything but the name).
@@ -38,7 +38,7 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
 - **ET-12** The `ejes-localidades` role requires the column `nomloc` (name of the locality) besides `cloc_iso` and `geom`; the
   tables step note and the required-columns checks follow. Existing behaviour of the role (the `cloc_iso` computation) is unchanged. Its `geom` must be exactly SRID 32721 like the padrones
   (a generic SRID 0 is refused), because the twin analysis intersects it with the staging geometry in SRID 32721. The locality
-  polygons are intersected only for the twin rows that need them (class `NEITHER`).
+  polygons are intersected only for the twin rows that need them (classes `NEITHER` and `BOTH`).
 - **ET-13** The rule that picks the localities to drop (ET-10) is a standalone SQL builder, testable on its own against a real
   Postgres (PGlite, no PostGIS needed) with rows of localities and classes: a test runs it for every class and asserts the
   dropped localities, including groups with two rural-named localities, no rural-named locality, and the `NEITHER` branches.
@@ -67,10 +67,13 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
   - `URBAN`: the rural-named localities, when the group has at least one other (non-rural-named) locality; else empty.
   - `RURAL`: the non-rural-named localities, plus every rural-named one except the first by name, when the group has at least one
     rural-named locality; else empty.
-  - `BOTH`: empty.
+  - `BOTH`: let `inside` be the names of the locality polygons the section intersects. The one copy that stays (the winner) is
+    the first by: name in `inside` (first), then non-rural-named, then name ASC. Every other copy is dropped (exactly one kept).
   - `NEITHER`: let `inside` be the set of names of the locality polygons the section intersects. If `inside` is empty, the same as
     `RURAL`. If a copy's name is in `inside`, every copy whose name is not in `inside`. Otherwise empty.
-  It is never all the localities of the group. The analysis counts the rows with a non-empty `dropLocalities` (`twinsDrop`) and the
+  It is never all the localities of the group. (`BOTH` rule: `carto` and `mv_road_section` hold one section per `reftramo`; the
+  legacy load kept the urban-named locality in 19,327 of 19,327 comparable cases; the polygon match was chosen by the user on
+  2026-11-18, localities rarely change.) The analysis counts the rows with a non-empty `dropLocalities` (`twinsDrop`) and the
   rows with none (`twinsKeep`); `twinsDrop + twinsKeep = twins`.
 - **ET-5** The analysis stays read-only and its cost stays bounded: the proximity test uses the padron spatial index
   (`ST_DWithin`), not a cross join.
@@ -79,8 +82,7 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
 - **ET-6** The report has a KPI group "Tramos repetidos por localidad" with: total, near urban only, near rural only, near both,
   near none, and the cross-department count. A collapsible list shows the rows with the columns `reftramo`, `idcalle`,
   `Departamento`, `Localidades`, `Caso`, `Largo (m)`, `Cerca de urbanos (m)`, `Cerca de rurales (m)`, and a "Ver en mapa" button.
-  `Caso` text: URBAN "Cerca de padrones urbanos", RURAL "Cerca de padrones rurales", BOTH "Cerca de ambos: se mantienen
-  las dos", NEITHER "Lejos de padrones: sin regla".
+  `Caso` text: URBAN "Cerca de padrones urbanos", RURAL "Cerca de padrones rurales", BOTH "Cerca de ambos: se mantiene una", NEITHER "Lejos de padrones: sin regla".
 - **ET-11** The KPI group also shows the rows where a copy would be dropped and the rows where all copies stay. The list has a
   column `Qué pasa` with, per row: when `dropLocalities` is not empty "Se quitaría: <localities, comma separated>"; for class
   `NEITHER` "Sin regla: se mantienen todas"; otherwise "Se mantienen todas". The details of a twin row show the same text. A `NEITHER` row with no drop is the only case
@@ -139,7 +141,7 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
 ### Labels of the "far from padrones" case
 - **ET-19** For class NEITHER the "Caso" and "Qué pasa" texts say which rule decided, with no change to what is kept or dropped (the rule
   of ET-10 stays: a copy whose name matches ANY locality polygon the section intersects stays; there is no dominant-locality rule).
-  Each twin row carries `insideLocalities` (the upper-cased names of the polygons the section intersects, empty unless class NEITHER).
+  Each twin row carries `insideLocalities` (the upper-cased names of the polygons the section intersects, empty unless class NEITHER or BOTH).
   (a) No copy dropped and two or more copies match a polygon: case "Cruza varias localidades", what happens "Cruza varias localidades: se mantienen todas".
   (b) Copies dropped by polygon (`insideLocalities` not empty): case "Lejos de padrones: por polígono de localidad", what happens
   "Dentro de <insideLocalities>: se quita <dropped>" ("se quitan" for several).
@@ -160,7 +162,7 @@ This section COMPLEMENTS ET-1 to ET-18 and changes none of them: the locality ru
 - **ET-25** The accepted removal is re-validated inside the load transaction against the in-transaction geometric twin table: an accepted `reftramo` that is not a removable loser there is a stale analysis (ANALYSIS_CHANGED).
 - **ET-26** The report shows the rows of every member with the columns "Tramo" (reftramo, idcalle, locality), "Grupo" (the other members, collapsed), "Qué pasa" ("Se mantiene", "Se quita al aceptar", "No se carga") and the access point count. Only removable losers have "Aceptar"/"Rechazar"; the counter is "N aceptados de M" over the removable losers. The summary strip and the KPI group "Gemelos por geometría" count the groups, members, removable and omitted losers and the skipped references. The geometric rule has no map in this slice.
 - **ET-27** The load result shows "Gemelos quitados" (`twinsRemoved`), and the skipped list shows the twin rows with their reason (kind "twin"). The summary the user accepted carries `geoTwinLosersRemovable` and `geoTwinLosersOmitted`, so a change in them between the analysis and the load is ANALYSIS_CHANGED.
-- **Dev measurement (ET-20, user data, dev)**: with the one-kept-copy rule and the four-part key: about 95 groups, 234 members, 66 pairs (the earlier 188 groups, 449 sections, 134 pairs used a key without locality and department and are superseded); 3 groups have a member that holds points; 27,112 reftramos have several kept copies and are never grouped. These are measurements of dev, not rules: the load reads the environment it runs on.
+- **Dev measurement (ET-20, user data, dev)**: with the one-kept-copy rule and the four-part key: about 95 groups, 234 members, 66 pairs (the earlier 188 groups, 449 sections, 134 pairs used a key without locality and department and are superseded); 3 groups have a member that holds points; 27,112 reftramos had several kept copies and were never grouped (measured before the BOTH keep-one rule; BOTH refs are now single-copy and can be grouped, re-measure). These are measurements of dev, not rules: the load reads the environment it runs on.
 - **Known limit (ET-20)**: a `reftramo` with several kept copies is never grouped, even when its geometry matches a single-copy group. Its count is reported; no rule decides it in this slice.
 
 ## Out of scope

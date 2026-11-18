@@ -230,7 +230,7 @@ describe("buildEjesReportView (EJ-12)", () => {
     it.each([
       [TWIN_CLASS.URBAN, "Cerca de padrones urbanos"],
       [TWIN_CLASS.RURAL, "Cerca de padrones rurales"],
-      [TWIN_CLASS.BOTH, "Cerca de ambos: se mantienen las dos"],
+      [TWIN_CLASS.BOTH, "Cerca de ambos: se mantiene una"],
       [TWIN_CLASS.NEITHER, "Lejos de padrones: sin regla"],
     ])("should describe the class %s as %s", (twinClass, text) => {
       expect(twinCaseTextOf(twinClass)).toBe(text);
@@ -421,7 +421,7 @@ describe("buildEjesReportView (EJ-12)", () => {
 
     it("should leave the case of a non-NEITHER row to its class", () => {
       expect(twinRowCaseTextOf({ class: TWIN_CLASS.BOTH, dropLocalities: [], insideLocalities: ["A", "B"], localities: ["A", "B"] })).toBe(
-        "Cerca de ambos: se mantienen las dos"
+        "Cerca de ambos: se mantiene una"
       );
     });
   });

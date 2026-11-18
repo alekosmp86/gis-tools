@@ -27,8 +27,14 @@ const CASES: DropCase[] = [
   { name: "RURAL with two rural-named keeps the first by name and drops the other", twinClass: TWIN_CLASS.RURAL, localities: ["B RURAL", "A RURAL"], inside: [], dropped: ["B RURAL"] },
   { name: "RURAL with two rural-named and one urban-named drops the urban-named and the second rural-named", twinClass: TWIN_CLASS.RURAL, localities: ["C RURAL", "TRINIDAD", "A RURAL"], inside: [], dropped: ["C RURAL", "TRINIDAD"] },
   { name: "RURAL with no rural-named copy drops nothing", twinClass: TWIN_CLASS.RURAL, localities: ["TRINIDAD", "ISMAEL CORTINAS"], inside: [], dropped: [] },
-  { name: "BOTH drops nothing even with a rural-named copy", twinClass: TWIN_CLASS.BOTH, localities: ["FLORES RURAL", "TRINIDAD"], inside: [], dropped: [] },
-  { name: "BOTH drops nothing even when inside names a copy", twinClass: TWIN_CLASS.BOTH, localities: ["FLORES RURAL", "TRINIDAD"], inside: ["TRINIDAD"], dropped: [] },
+  { name: "BOTH with a copy inside its polygon drops the others", twinClass: TWIN_CLASS.BOTH, localities: ["FLORES RURAL", "TRINIDAD"], inside: ["TRINIDAD"], dropped: ["FLORES RURAL"] },
+  { name: "BOTH with only the rural-named copy inside keeps it and drops the other", twinClass: TWIN_CLASS.BOTH, localities: ["FLORES RURAL", "TRINIDAD"], inside: ["FLORES RURAL"], dropped: ["TRINIDAD"] },
+  { name: "BOTH with no polygon inside keeps the non-rural-named copy and drops the rural-named one", twinClass: TWIN_CLASS.BOTH, localities: ["FLORES RURAL", "TRINIDAD"], inside: [], dropped: ["FLORES RURAL"] },
+  { name: "BOTH with two non-rural-named copies and none inside keeps the lowest name", twinClass: TWIN_CLASS.BOTH, localities: ["ZETA", "ALFA"], inside: [], dropped: ["ZETA"] },
+  { name: "BOTH with three non-rural-named copies and none inside keeps the lowest name", twinClass: TWIN_CLASS.BOTH, localities: ["C", "A", "B"], inside: [], dropped: ["B", "C"] },
+  { name: "BOTH with only rural-named copies and none inside keeps the first by name", twinClass: TWIN_CLASS.BOTH, localities: ["B RURAL", "A RURAL"], inside: [], dropped: ["B RURAL"] },
+  { name: "BOTH with two copies inside keeps the non-rural-named lowest name", twinClass: TWIN_CLASS.BOTH, localities: ["FLORES RURAL", "TRINIDAD", "ALFA"], inside: ["TRINIDAD", "ALFA"], dropped: ["FLORES RURAL", "TRINIDAD"] },
+  { name: "BOTH with a rural-named and a non-rural-named copy both inside keeps the non-rural-named", twinClass: TWIN_CLASS.BOTH, localities: ["FLORES RURAL", "TRINIDAD", "ALFA"], inside: ["FLORES RURAL", "TRINIDAD"], dropped: ["ALFA", "FLORES RURAL"] },
   { name: "NEITHER inside no polygon follows the rural rule", twinClass: TWIN_CLASS.NEITHER, localities: ["FLORES RURAL", "TRINIDAD"], inside: [], dropped: ["TRINIDAD"] },
   { name: "NEITHER inside no polygon with two rural-named keeps the first by name", twinClass: TWIN_CLASS.NEITHER, localities: ["B RURAL", "A RURAL"], inside: [], dropped: ["B RURAL"] },
   { name: "NEITHER inside no polygon and no rural-named copy drops nothing", twinClass: TWIN_CLASS.NEITHER, localities: ["TRINIDAD", "ISMAEL CORTINAS"], inside: [], dropped: [] },
@@ -69,9 +75,15 @@ describe("twinDropCaseSql against PostgreSQL (ET-13)", () => {
     expect(dropped.every((locality) => testCase.localities.includes(locality))).toBe(true);
   });
 
+  it.each(CASES.filter((testCase) => testCase.twinClass === TWIN_CLASS.BOTH))("should keep exactly one copy when class BOTH: $name", async (testCase) => {
+    const dropped = await droppedBy(testCase);
+
+    expect(testCase.localities.filter((locality) => !dropped.includes(locality))).toHaveLength(1);
+  });
+
   it("should return an empty array, not null, when nothing is dropped", async () => {
     const result = await database.query<{ dropped: string[] | null }>(
-      `SELECT ${twinDropCaseSql("t")} AS dropped FROM (SELECT 'BOTH'::text AS class, ARRAY['A','B']::text[] AS localities, ARRAY[]::text[] AS inside_localities) AS t`
+      `SELECT ${twinDropCaseSql("t")} AS dropped FROM (SELECT 'URBAN'::text AS class, ARRAY['A','B']::text[] AS localities, ARRAY[]::text[] AS inside_localities) AS t`
     );
 
     expect(result.rows[0].dropped).toEqual([]);

@@ -60,7 +60,7 @@ export const metersTextOf = (meters: number | null): string => (meters === null 
 const TWIN_CASE_TEXT: Record<TwinClass, string> = {
   [TWIN_CLASS.URBAN]: "Cerca de padrones urbanos",
   [TWIN_CLASS.RURAL]: "Cerca de padrones rurales",
-  [TWIN_CLASS.BOTH]: "Cerca de ambos: se mantienen las dos",
+  [TWIN_CLASS.BOTH]: "Cerca de ambos: se mantiene una",
   [TWIN_CLASS.NEITHER]: "Lejos de padrones: sin regla",
 };
 

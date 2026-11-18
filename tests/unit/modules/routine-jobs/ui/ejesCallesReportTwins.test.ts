@@ -174,7 +174,7 @@ describe("EjesCallesReport twins (ET-6)", () => {
     expect(html).toContain("FLORES RURAL, TRINIDAD");
     expect(html).toContain("Lejos de padrones: sin regla");
     expect(html).toContain("250.3");
-    expect(html).toContain("Cerca de ambos: se mantienen las dos");
+    expect(html).toContain("Cerca de ambos: se mantiene una");
     expect(html).toContain("12.3");
     expect(html).toContain("sin dato");
   });

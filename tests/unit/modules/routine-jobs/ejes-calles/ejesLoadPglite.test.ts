@@ -467,7 +467,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       expect(outcome.load.surplus.map((row) => row.id)).toEqual([String(second)]);
     });
 
-    it("K = E and K > E with copies of several localities (BOTH kept): should pair the existing row, update it and insert the others as NEW", async () => {
+    it("BOTH keeps one copy: should drop the rural-named copy, pair the remaining copy with the existing row, leave it unchanged and insert nothing", async () => {
       await insertWay(database, 10, "CALLE UNO");
       const existing = await insertSection(database, { ref: 4100, calle: 10, geom: "0:50", distance: "50.00" });
       await insertPadron(database, "URBANO", "0:50");
@@ -480,9 +480,9 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       const outcome = await persist();
 
       const rows = await sectionByRef(4100);
-      expect(rows).toHaveLength(2);
-      expect(rows.some((row) => row.id === existing)).toBe(true);
-      expect(outcome.load.counts).toMatchObject({ inserted: 1, updated: 0 });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe(existing);
+      expect(outcome.load.counts).toMatchObject({ inserted: 0, updated: 0 });
       expect(outcome.load.surplus).toEqual([]);
     });
 

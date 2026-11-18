@@ -447,9 +447,9 @@ describe("buildEjesAnalysisSql", () => {
   });
 
   describe("ET-12 locality names", () => {
-    it("should collect in inside_localities the distinct upper-cased trimmed names of the locality polygons the twin intersects, only for the class NEITHER", () => {
+    it("should collect in inside_localities the distinct upper-cased trimmed names of the locality polygons the twin intersects, for the classes NEITHER and BOTH", () => {
       expect(sql).toContain(
-        `CASE WHEN k.class = 'NEITHER' THEN ARRAY(SELECT DISTINCT upper(btrim(l."nomloc"::text)) FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom)) ELSE ARRAY[]::text[] END AS inside_localities`
+        `CASE WHEN k.class IN ('NEITHER', 'BOTH') THEN ARRAY(SELECT DISTINCT upper(btrim(l."nomloc"::text)) FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom)) ELSE ARRAY[]::text[] END AS inside_localities`
       );
     });
 
@@ -520,9 +520,14 @@ describe("buildEjesAnalysisSql", () => {
       );
     });
 
-    it("should give an empty array to every other class, so BOTH and NEITHER drop nothing", () => {
+    it("should keep one copy of a BOTH row: drop every copy but the winner, the one inside its polygon, else the non-rural-named, else the first by name", () => {
+      expect(dropSql).toContain(
+        "WHEN c.class = 'BOTH' THEN ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE l <> (SELECT r FROM unnest(c.localities) AS r ORDER BY (upper(btrim(r)) = ANY(c.inside_localities)) DESC, (upper(btrim(r)) LIKE '% RURAL') ASC, r ASC LIMIT 1) ORDER BY l)"
+      );
+    });
+
+    it("should give an empty array to every other class, so a NEITHER row with nothing inside and no rural-named copy drops nothing", () => {
       expect(dropSql).toContain("ELSE ARRAY[]::text[] END AS drop_localities");
-      expect(dropSql).not.toContain("c.class = 'BOTH'");
     });
 
     it("should treat a NEITHER row inside no locality polygon like a RURAL row", () => {

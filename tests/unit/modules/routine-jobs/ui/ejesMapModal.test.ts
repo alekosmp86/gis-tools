@@ -126,7 +126,7 @@ describe("EjesMapDetails twin row (ET-9)", () => {
     expect(html).toContain("Departamento");
     expect(html).toContain("FLORES");
     expect(html).toContain("FLORES RURAL, TRINIDAD");
-    expect(html).toContain("Cerca de ambos: se mantienen las dos");
+    expect(html).toContain("Cerca de ambos: se mantiene una");
     expect(html).toContain("250.3");
     expect(html).toContain("Cerca de urbanos (m)");
     expect(html).toContain("120.5");
