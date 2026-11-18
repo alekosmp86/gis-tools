@@ -59,9 +59,9 @@ const ruralNamed = (locality: string): string => `upper(btrim(${locality})) LIKE
 
 /**
  * The localities of a twin row to drop, by class. `alias` names a relation with `class`, `localities` (text[]) and
- * `inside_localities` (text[], the upper-cased names of the locality polygons the section intersects; filled for classes
- * NEITHER and BOTH). BOTH keeps one copy, the winner: the one whose name is in `inside_localities`, else the non-rural-named,
- * else the first by name; every other copy is dropped.
+ * `inside_localities` (text[], the upper-cased names of the locality polygons the section intersects, ordered by overlap
+ * length descending, so the first is the longest; filled for classes NEITHER and BOTH). BOTH keeps one copy, the winner: the
+ * one with the highest rank in `inside_localities`, else the non-rural-named, else the first by name; every other copy is dropped.
  */
 export function twinDropCaseSql(alias: string): string {
   const field = (name: string): string => `${alias}.${name}`;
@@ -72,7 +72,7 @@ export function twinDropCaseSql(alias: string): string {
   const insideName = (locality: string): string => `upper(btrim(${locality})) = ANY(${field("inside_localities")})`;
   const isNeither = `${field("class")} = '${TWIN_CLASS.NEITHER}'`;
   const isBoth = `${field("class")} = '${TWIN_CLASS.BOTH}'`;
-  const bothWinner = `(SELECT r FROM unnest(${localities}) AS r ORDER BY (${insideName("r")}) DESC, (${ruralNamed("r")}) ASC, r ASC LIMIT 1)`;
+  const bothWinner = `(SELECT r FROM unnest(${localities}) AS r ORDER BY array_position(${field("inside_localities")}, upper(btrim(r))) ASC NULLS LAST, (${ruralNamed("r")}) ASC, r ASC LIMIT 1)`;
   return [
     "CASE",
     `WHEN ${field("class")} = '${TWIN_CLASS.URBAN}' AND ${hasLocality(false)} THEN ARRAY(SELECT l FROM unnest(${localities}) AS l WHERE ${ruralNamed("l")} ORDER BY l)`,
@@ -89,8 +89,9 @@ export function twinDropCaseSql(alias: string): string {
 function insideLocalitiesSql(layouts: EjesLayouts): string {
   const locality = (logical: string): string => `l.${col(layouts, "LOCALITIES", logical)}`;
   return [
-    `CASE WHEN k.class IN ('${TWIN_CLASS.NEITHER}', '${TWIN_CLASS.BOTH}') THEN ARRAY(SELECT DISTINCT upper(btrim(${locality(LOCALITIES_COLUMN.NAME)}::text)) FROM ${table(layouts, "LOCALITIES")} AS l`,
-    `WHERE ${locality(LOCALITIES_COLUMN.NAME)} IS NOT NULL AND ST_Intersects(${locality(LOCALITIES_COLUMN.GEOM)}, k.geom))`,
+    `CASE WHEN k.class IN ('${TWIN_CLASS.NEITHER}', '${TWIN_CLASS.BOTH}') THEN ARRAY(SELECT t.n FROM (SELECT upper(btrim(${locality(LOCALITIES_COLUMN.NAME)}::text)) AS n,`,
+    `sum(ST_Length(ST_Intersection(k.geom, ${locality(LOCALITIES_COLUMN.GEOM)}))) AS len FROM ${table(layouts, "LOCALITIES")} AS l`,
+    `WHERE ${locality(LOCALITIES_COLUMN.NAME)} IS NOT NULL AND ST_Intersects(${locality(LOCALITIES_COLUMN.GEOM)}, k.geom) GROUP BY 1) AS t ORDER BY t.len DESC, t.n)`,
     "ELSE ARRAY[]::text[] END AS inside_localities",
   ].join(" ");
 }

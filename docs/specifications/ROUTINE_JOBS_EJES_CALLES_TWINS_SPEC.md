@@ -12,7 +12,7 @@ the padrones:
 
 1. Section next to urban padrones only: the rural copy is dropped.
 2. Section next to urban and rural padrones (a long section, or one at the edge of a city, same distance rule): one copy stays,
-   the one whose locality polygon the section intersects (else the non-rural-named one, else the first by name). See ET-10.
+   the one whose locality polygon the section overlaps most (else the non-rural-named one, else the first by name). See ET-10.
 3. Section next to rural padrones only: the urban copies are dropped and the rural-named copy stays. If several copies are
    rural-named, only one of them stays (the first by name; the rule does not say which, and the 9 such groups of dev are
    identical in everything but the name).
@@ -67,8 +67,10 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
   - `URBAN`: the rural-named localities, when the group has at least one other (non-rural-named) locality; else empty.
   - `RURAL`: the non-rural-named localities, plus every rural-named one except the first by name, when the group has at least one
     rural-named locality; else empty.
-  - `BOTH`: let `inside` be the names of the locality polygons the section intersects. The one copy that stays (the winner) is
-    the first by: name in `inside` (first), then non-rural-named, then name ASC. Every other copy is dropped (exactly one kept).
+  - `BOTH`: let `inside` be the names of the locality polygons the section intersects, ordered by overlap length descending (the
+    total length of the section inside each name's polygons). The one copy that stays (the winner) is the first by: the copy whose
+    name is first in `inside` (longest overlap; copies not in `inside` last), then non-rural-named, then name ASC. Every other copy
+    is dropped (exactly one kept).
   - `NEITHER`: let `inside` be the set of names of the locality polygons the section intersects. If `inside` is empty, the same as
     `RURAL`. If a copy's name is in `inside`, every copy whose name is not in `inside`. Otherwise empty.
   It is never all the localities of the group. (`BOTH` rule: `carto` and `mv_road_section` hold one section per `reftramo`; the
@@ -141,7 +143,8 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
 ### Labels of the "far from padrones" case
 - **ET-19** For class NEITHER the "Caso" and "Qué pasa" texts say which rule decided, with no change to what is kept or dropped (the rule
   of ET-10 stays: a copy whose name matches ANY locality polygon the section intersects stays; there is no dominant-locality rule).
-  Each twin row carries `insideLocalities` (the upper-cased names of the polygons the section intersects, empty unless class NEITHER or BOTH).
+  Each twin row carries `insideLocalities` (the upper-cased names of the polygons the section intersects, ordered by overlap length
+  descending, the first is the longest; empty unless class NEITHER or BOTH).
   (a) No copy dropped and two or more copies match a polygon: case "Cruza varias localidades", what happens "Cruza varias localidades: se mantienen todas".
   (b) Copies dropped by polygon (`insideLocalities` not empty): case "Lejos de padrones: por polígono de localidad", what happens
   "Dentro de <insideLocalities>: se quita <dropped>" ("se quitan" for several).

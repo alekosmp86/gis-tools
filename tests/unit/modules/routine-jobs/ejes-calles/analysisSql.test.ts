@@ -447,9 +447,9 @@ describe("buildEjesAnalysisSql", () => {
   });
 
   describe("ET-12 locality names", () => {
-    it("should collect in inside_localities the distinct upper-cased trimmed names of the locality polygons the twin intersects, for the classes NEITHER and BOTH", () => {
+    it("should collect in inside_localities the distinct upper-cased trimmed names of the locality polygons the twin intersects, ordered by overlap length descending then name, for the classes NEITHER and BOTH", () => {
       expect(sql).toContain(
-        `CASE WHEN k.class IN ('NEITHER', 'BOTH') THEN ARRAY(SELECT DISTINCT upper(btrim(l."nomloc"::text)) FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom)) ELSE ARRAY[]::text[] END AS inside_localities`
+        `CASE WHEN k.class IN ('NEITHER', 'BOTH') THEN ARRAY(SELECT t.n FROM (SELECT upper(btrim(l."nomloc"::text)) AS n, sum(ST_Length(ST_Intersection(k.geom, l."geom"))) AS len FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom) GROUP BY 1) AS t ORDER BY t.len DESC, t.n) ELSE ARRAY[]::text[] END AS inside_localities`
       );
     });
 
@@ -520,9 +520,9 @@ describe("buildEjesAnalysisSql", () => {
       );
     });
 
-    it("should keep one copy of a BOTH row: drop every copy but the winner, the one inside its polygon, else the non-rural-named, else the first by name", () => {
+    it("should keep one copy of a BOTH row: drop every copy but the winner, the highest-ranked inside its polygons by overlap, else the non-rural-named, else the first by name", () => {
       expect(dropSql).toContain(
-        "WHEN c.class = 'BOTH' THEN ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE l <> (SELECT r FROM unnest(c.localities) AS r ORDER BY (upper(btrim(r)) = ANY(c.inside_localities)) DESC, (upper(btrim(r)) LIKE '% RURAL') ASC, r ASC LIMIT 1) ORDER BY l)"
+        "WHEN c.class = 'BOTH' THEN ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE l <> (SELECT r FROM unnest(c.localities) AS r ORDER BY array_position(c.inside_localities, upper(btrim(r))) ASC NULLS LAST, (upper(btrim(r)) LIKE '% RURAL') ASC, r ASC LIMIT 1) ORDER BY l)"
       );
     });
 
