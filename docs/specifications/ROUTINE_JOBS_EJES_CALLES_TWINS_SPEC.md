@@ -70,7 +70,7 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
   - `BOTH`: let `inside` be the names of the locality polygons the section intersects, ordered by overlap length descending (the
     total length of the section inside each name's polygons). The one copy that stays (the winner) is the first by: the copy whose
     name is first in `inside` (longest overlap; copies not in `inside` last), then non-rural-named, then name ASC. Every other copy
-    is dropped (exactly one kept).
+    is dropped (exactly one kept). The overlap length is measured on `ST_MakeValid` of the locality polygon, so an invalid INE polygon cannot abort the analysis.
   - `NEITHER`: let `inside` be the set of names of the locality polygons the section intersects. If `inside` is empty, the same as
     `RURAL`. If a copy's name is in `inside`, every copy whose name is not in `inside`. Otherwise empty.
   It is never all the localities of the group. (`BOTH` rule: `carto` and `mv_road_section` hold one section per `reftramo`; the
@@ -142,7 +142,7 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
 
 ### Labels of the "far from padrones" case
 - **ET-19** For class NEITHER the "Caso" and "Qué pasa" texts say which rule decided, with no change to what is kept or dropped (the rule
-  of ET-10 stays: a copy whose name matches ANY locality polygon the section intersects stays; there is no dominant-locality rule).
+  of ET-10 stays: a copy whose name matches ANY locality polygon the section intersects stays; there is no dominant-locality rule). Overlap is measured on the made-valid polygon (ET-10), so an invalid INE polygon cannot abort the analysis.
   Each twin row carries `insideLocalities` (the upper-cased names of the polygons the section intersects, ordered by overlap length
   descending, the first is the longest; empty unless class NEITHER or BOTH).
   (a) No copy dropped and two or more copies match a polygon: case "Cruza varias localidades", what happens "Cruza varias localidades: se mantienen todas".

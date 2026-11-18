@@ -449,7 +449,7 @@ describe("buildEjesAnalysisSql", () => {
   describe("ET-12 locality names", () => {
     it("should collect in inside_localities the distinct upper-cased trimmed names of the locality polygons the twin intersects, ordered by overlap length descending then name, for the classes NEITHER and BOTH", () => {
       expect(sql).toContain(
-        `CASE WHEN k.class IN ('NEITHER', 'BOTH') THEN ARRAY(SELECT t.n FROM (SELECT upper(btrim(l."nomloc"::text)) AS n, sum(ST_Length(ST_Intersection(k.geom, l."geom"))) AS len FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom) GROUP BY 1) AS t ORDER BY t.len DESC, t.n) ELSE ARRAY[]::text[] END AS inside_localities`
+        `CASE WHEN k.class IN ('NEITHER', 'BOTH') THEN ARRAY(SELECT t.n FROM (SELECT upper(btrim(l."nomloc"::text)) AS n, sum(ST_Length(ST_Intersection(k.geom, ST_MakeValid(l."geom")))) AS len FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom) GROUP BY 1) AS t ORDER BY t.len DESC, t.n) ELSE ARRAY[]::text[] END AS inside_localities`
       );
     });
 

@@ -90,7 +90,7 @@ function insideLocalitiesSql(layouts: EjesLayouts): string {
   const locality = (logical: string): string => `l.${col(layouts, "LOCALITIES", logical)}`;
   return [
     `CASE WHEN k.class IN ('${TWIN_CLASS.NEITHER}', '${TWIN_CLASS.BOTH}') THEN ARRAY(SELECT t.n FROM (SELECT upper(btrim(${locality(LOCALITIES_COLUMN.NAME)}::text)) AS n,`,
-    `sum(ST_Length(ST_Intersection(k.geom, ${locality(LOCALITIES_COLUMN.GEOM)}))) AS len FROM ${table(layouts, "LOCALITIES")} AS l`,
+    `sum(ST_Length(ST_Intersection(k.geom, ST_MakeValid(${locality(LOCALITIES_COLUMN.GEOM)})))) AS len FROM ${table(layouts, "LOCALITIES")} AS l`,
     `WHERE ${locality(LOCALITIES_COLUMN.NAME)} IS NOT NULL AND ST_Intersects(${locality(LOCALITIES_COLUMN.GEOM)}, k.geom) GROUP BY 1) AS t ORDER BY t.len DESC, t.n)`,
     "ELSE ARRAY[]::text[] END AS inside_localities",
   ].join(" ");
