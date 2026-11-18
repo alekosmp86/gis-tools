@@ -447,10 +447,11 @@ describe("buildEjesAnalysisSql", () => {
   });
 
   describe("ET-12 locality names", () => {
-    it("should collect in inside_localities the distinct upper-cased trimmed names of the locality polygons the twin intersects, ordered by overlap length descending then name, for the classes NEITHER and BOTH", () => {
+    it("should collect in inside_localities the distinct upper-cased trimmed names of the locality polygons the twin intersects, ordered by overlap length descending then name, for every class", () => {
       expect(sql).toContain(
-        `CASE WHEN k.class IN ('NEITHER', 'BOTH') THEN ARRAY(SELECT t.n FROM (SELECT upper(btrim(l."nomloc"::text)) AS n, sum(ST_Length(ST_Intersection(k.geom, ST_MakeValid(l."geom")))) AS len FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom) GROUP BY 1) AS t ORDER BY t.len DESC, t.n) ELSE ARRAY[]::text[] END AS inside_localities`
+        `ARRAY(SELECT t.n FROM (SELECT upper(btrim(l."nomloc"::text)) AS n, sum(ST_Length(ST_Intersection(k.geom, ST_MakeValid(l."geom")))) AS len FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom) GROUP BY 1) AS t ORDER BY t.len DESC, t.n) AS inside_localities`
       );
+      expect(sql).not.toContain("k.class IN ('NEITHER', 'BOTH')");
     });
 
     it("should compute inside_localities in its own twin_located CTE after the classification and before the drop rule", () => {
@@ -526,8 +527,27 @@ describe("buildEjesAnalysisSql", () => {
       );
     });
 
-    it("should give an empty array to every other class, so a NEITHER row with nothing inside and no rural-named copy drops nothing", () => {
-      expect(dropSql).toContain("ELSE ARRAY[]::text[] END AS drop_localities");
+    it("should give an empty base to every other class, so a NEITHER row with nothing inside and no rural-named copy drops nothing", () => {
+      expect(dropSql).toContain("ELSE ARRAY[]::text[] END AS base) AS twin_drop_base,");
+      expect(dropSql).toContain("ELSE twin_drop_base.base END");
+    });
+
+    it("should apply the single-copy step only when more than one copy remains and one remaining copy is inside", () => {
+      expect(dropSql).toContain(
+        "(SELECT CASE WHEN cardinality(twin_drop_rest.remaining) > 1 AND EXISTS (SELECT 1 FROM unnest(twin_drop_rest.remaining) AS h WHERE upper(btrim(h)) = ANY(c.inside_localities))"
+      );
+    });
+
+    it("should keep the highest-ranked remaining copy inside its polygons and drop every other remaining copy, falling back to the base drop otherwise", () => {
+      expect(dropSql).toContain(
+        "THEN ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE l = ANY(twin_drop_base.base) OR l <> (SELECT r FROM unnest(twin_drop_rest.remaining) AS r ORDER BY array_position(c.inside_localities, upper(btrim(r))) ASC NULLS LAST, (upper(btrim(r)) LIKE '% RURAL') ASC, r ASC LIMIT 1) ORDER BY l) ELSE twin_drop_base.base END"
+      );
+    });
+
+    it("should compute the remaining copies as the localities not in the base drop, for the single-copy step", () => {
+      expect(dropSql).toContain(
+        "LATERAL (SELECT ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE NOT l = ANY(twin_drop_base.base)) AS remaining) AS twin_drop_rest) AS drop_localities"
+      );
     });
 
     it("should treat a NEITHER row inside no locality polygon like a RURAL row", () => {

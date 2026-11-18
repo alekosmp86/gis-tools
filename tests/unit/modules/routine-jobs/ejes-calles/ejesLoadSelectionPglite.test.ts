@@ -95,9 +95,10 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       ]);
     });
 
-    it("should keep both copies of a twin next to urban and rural padrones", async () => {
+    it("should keep one copy of a twin next to urban and rural padrones, the one inside the locality polygon with the longest overlap", async () => {
       await insertPadron(database, "URBANO", "0:50");
       await insertPadron(database, "RURAL", "0:50");
+      await database.query("INSERT INTO bdj_carto.ine_localidades_pg (cloc_iso, nomloc, geom) VALUES ($1, $2, $3)", ["1", "FLORES RURAL", "0:50"]);
       await insertStaging(database, [
         { ref: "7", localidad: "TRINIDAD", geom: "0:50" },
         { ref: "7", localidad: "FLORES RURAL", geom: "0:50" },
@@ -105,7 +106,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
 
       await select();
 
-      expect((await copies()).map((row) => row.localidad)).toEqual(["FLORES RURAL", "TRINIDAD"]);
+      expect((await copies()).map((row) => row.localidad)).toEqual(["FLORES RURAL"]);
     });
 
     it("should drop the rural-named copy of a twin next to urban padrones only", async () => {
@@ -318,12 +319,11 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
   });
 
   describe("pairing by reftramo (EJL-7)", () => {
-    const twinBoth = async (ref: string): Promise<void> => {
-      await insertPadron(database, "URBANO", "0:50");
-      await insertPadron(database, "RURAL", "0:50");
+    /** Two copies of one reftramo with two non-rural localities and no padron or locality polygon: NEITHER, nothing dropped, both kept. */
+    const twinUndecided = async (ref: string): Promise<void> => {
       await insertStaging(database, [
         { ref, calle: "10", nombre: "CALLE UNO", localidad: "TRINIDAD", geom: "0:50" },
-        { ref, calle: "10", nombre: "CALLE UNO", localidad: "FLORES RURAL", geom: "0:50" },
+        { ref, calle: "10", nombre: "CALLE UNO", localidad: "ZETA", geom: "0:50" },
       ]);
     };
 
@@ -331,7 +331,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       await insertWay(database, 10, "CALLE UNO");
       const a = await insertSection(database, { ref: 7, calle: 10, geom: "0:50" });
       const b = await insertSection(database, { ref: 7, calle: 10, geom: "0:50" });
-      await twinBoth("7");
+      await twinUndecided("7");
 
       await select();
 
@@ -345,8 +345,6 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       await insertWay(database, 11, "CALLE ONCE");
       const lowOther = await insertSection(database, { ref: 7, calle: 11, geom: "0:50" });
       const highSame = await insertSection(database, { ref: 7, calle: 10, geom: "0:50" });
-      await insertPadron(database, "URBANO", "0:50");
-      await insertPadron(database, "RURAL", "0:50");
       await insertStaging(database, [
         { ref: "7", calle: "10", nombre: "CALLE UNO", localidad: "TRINIDAD", geom: "0:50" },
         { ref: "7", calle: "12", nombre: "OTRA", localidad: "ZETA", geom: "0:50" },
@@ -365,7 +363,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
     it("K > E: should pair E copies and leave K-E copies unpaired (NEW)", async () => {
       await insertWay(database, 10, "CALLE UNO");
       const existing = await insertSection(database, { ref: 7, calle: 10, geom: "0:50" });
-      await twinBoth("7");
+      await twinUndecided("7");
 
       await select();
 
@@ -375,7 +373,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
     });
 
     it("K > E with E = 0: should leave every copy unpaired", async () => {
-      await twinBoth("7");
+      await twinUndecided("7");
 
       await select();
 

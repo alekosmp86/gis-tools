@@ -70,31 +70,43 @@ export type TwinTextRow = Pick<EjesTwinRow, "class" | "dropLocalities"> & Partia
 
 const CROSSES_LOCALITIES = "Cruza varias localidades";
 
-const keptInsideCount = (row: TwinTextRow): number => {
+const NO_DATA_TEXT = "sin dato";
+
+const normalizedName = (locality: string): string => locality.trim().toUpperCase();
+
+const insideCountOf = (row: TwinTextRow): number => {
   const inside = new Set(row.insideLocalities ?? []);
-  return (row.localities ?? []).filter((locality) => inside.has(locality.trim().toUpperCase())).length;
+  return (row.localities ?? []).filter((locality) => inside.has(normalizedName(locality))).length;
 };
 
-const isPolygonCrossing = (row: TwinTextRow): boolean =>
-  row.class === TWIN_CLASS.NEITHER && row.dropLocalities.length === 0 && keptInsideCount(row) >= 2;
+const keptWinnerOf = (row: TwinTextRow): string | undefined => {
+  const dropped = new Set(row.dropLocalities.map(normalizedName));
+  const kept = new Set((row.localities ?? []).map(normalizedName).filter((locality) => !dropped.has(locality)));
+  return (row.insideLocalities ?? []).find((locality) => kept.has(locality));
+};
+
+const isCrossingDrop = (row: TwinTextRow): boolean =>
+  row.class === TWIN_CLASS.NEITHER && row.dropLocalities.length > 0 && insideCountOf(row) >= 2;
 
 const isPolygonDrop = (row: TwinTextRow): boolean =>
   row.class === TWIN_CLASS.NEITHER && row.dropLocalities.length > 0 && (row.insideLocalities ?? []).length > 0;
 
 export const twinRowCaseTextOf = (row: TwinTextRow): string => {
-  if (isPolygonCrossing(row)) return CROSSES_LOCALITIES;
+  if (isCrossingDrop(row)) return CROSSES_LOCALITIES;
   if (isPolygonDrop(row)) return "Lejos de padrones: por polígono de localidad";
   if (row.class === TWIN_CLASS.NEITHER && row.dropLocalities.length > 0) return "Lejos de padrones: regla rural";
   return TWIN_CASE_TEXT[row.class];
 };
 
 export const twinDecisionTextOf = (row: TwinTextRow): string => {
+  if (isCrossingDrop(row)) {
+    return `${CROSSES_LOCALITIES}: se queda ${keptWinnerOf(row) ?? NO_DATA_TEXT} (mayor largo dentro); se quitaría: ${row.dropLocalities.join(", ")}`;
+  }
   if (isPolygonDrop(row)) {
     const verb = row.dropLocalities.length === 1 ? "se quita" : "se quitan";
     return `Dentro de ${(row.insideLocalities ?? []).join(", ")}: ${verb} ${row.dropLocalities.join(", ")}`;
   }
   if (row.dropLocalities.length > 0) return `Se quitaría: ${row.dropLocalities.join(", ")}`;
-  if (isPolygonCrossing(row)) return `${CROSSES_LOCALITIES}: se mantienen todas`;
   return row.class === TWIN_CLASS.NEITHER ? "Sin regla: se mantienen todas" : "Se mantienen todas";
 };
 

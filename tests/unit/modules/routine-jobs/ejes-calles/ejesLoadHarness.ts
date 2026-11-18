@@ -40,6 +40,7 @@ const POSTGIS_STUBS_SQL = `
   CREATE FUNCTION ST_Distance(geometry, geometry) RETURNS float8
     AS $$ SELECT greatest(0, greatest(iv_a($1), iv_a($2)) - least(iv_b($1), iv_b($2))) $$ LANGUAGE sql STRICT;
   CREATE FUNCTION ST_Normalize(geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
+  CREATE FUNCTION ST_MakeValid(geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
   CREATE FUNCTION ST_SnapToGrid(geometry, float8) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
   CREATE FUNCTION ST_OrderingEquals(geometry, geometry) RETURNS boolean AS $$ SELECT $1::text = $2::text $$ LANGUAGE sql STRICT;
   CREATE FUNCTION ST_HausdorffDistance(geometry, geometry) RETURNS float8

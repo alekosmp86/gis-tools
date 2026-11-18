@@ -16,7 +16,8 @@ the padrones:
 3. Section next to rural padrones only: the urban copies are dropped and the rural-named copy stays. If several copies are
    rural-named, only one of them stays (the first by name; the rule does not say which, and the 9 such groups of dev are
    identical in everything but the name).
-4. Group with no rural-named copy, whatever the class: every copy stays (nothing identifies the rural one).
+4. Group with no rural-named copy, whatever the class: every copy stays (nothing identifies the rural one), unless the locality
+   polygons decide between the copies that remain (ET-10, single copy).
 5. Section near no padron: decided by the territorial unit, the INE locality polygons (role `ejes-localidades`, columns `nomloc`
    and `geom`). If the section intersects a polygon whose name (trimmed, upper-cased) is the name of one of the copies, the copy
    with that name stays and the others go. If it intersects no polygon at all it lies in rural territory: the rural rule of point 3
@@ -38,7 +39,7 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
 - **ET-12** The `ejes-localidades` role requires the column `nomloc` (name of the locality) besides `cloc_iso` and `geom`; the
   tables step note and the required-columns checks follow. Existing behaviour of the role (the `cloc_iso` computation) is unchanged. Its `geom` must be exactly SRID 32721 like the padrones
   (a generic SRID 0 is refused), because the twin analysis intersects it with the staging geometry in SRID 32721. The locality
-  polygons are intersected only for the twin rows that need them (classes `NEITHER` and `BOTH`).
+  polygons are intersected for every twin row (ET-5).
 - **ET-13** The rule that picks the localities to drop (ET-10) is a standalone SQL builder, testable on its own against a real
   Postgres (PGlite, no PostGIS needed) with rows of localities and classes: a test runs it for every class and asserts the
   dropped localities, including groups with two rural-named localities, no rural-named locality, and the `NEITHER` branches.
@@ -73,12 +74,19 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
     is dropped (exactly one kept). The overlap length is measured on `ST_MakeValid` of the locality polygon, so an invalid INE polygon cannot abort the analysis.
   - `NEITHER`: let `inside` be the set of names of the locality polygons the section intersects. If `inside` is empty, the same as
     `RURAL`. If a copy's name is in `inside`, every copy whose name is not in `inside`. Otherwise empty.
+  - Single copy (every class, after the bullets above): let `remaining` be the localities not dropped so far, and `inside` as in
+    `BOTH`. If `remaining` has two or more copies and one of them is in `inside`, the winner is the first of `remaining` by: the
+    copy whose name is first in `inside`, then non-rural-named, then name ASC. Every other remaining copy is dropped too, so
+    exactly one copy stays. Otherwise nothing more is dropped and the copies stay held. `BOTH` keeps one copy already, so this
+    step changes nothing for it.
   It is never all the localities of the group. (`BOTH` rule: `carto` and `mv_road_section` hold one section per `reftramo`; the
   legacy load kept the urban-named locality in 19,327 of 19,327 comparable cases; the polygon match was chosen by the user on
   2026-11-18, localities rarely change.) The analysis counts the rows with a non-empty `dropLocalities` (`twinsDrop`) and the
-  rows with none (`twinsKeep`); `twinsDrop + twinsKeep = twins`.
+  rows with none (`twinsKeep`); `twinsDrop + twinsKeep = twins`. Dev counts quoted in this spec (Background, ET-20 measurement) predate
+  the single-copy step and must be re-measured.
 - **ET-5** The analysis stays read-only and its cost stays bounded: the proximity test uses the padron spatial index
-  (`ST_DWithin`), not a cross join.
+  (`ST_DWithin`), not a cross join. The locality polygons are intersected for every twin row (`ST_Intersects` on the locality
+  spatial index), so their cost grows with the twin rows of every class, not only `NEITHER` and `BOTH`.
 
 ### Report
 - **ET-6** The report has a KPI group "Tramos repetidos por localidad" with: total, near urban only, near rural only, near both,
@@ -141,21 +149,24 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
   is the safety net that stays after it.
 
 ### Labels of the "far from padrones" case
-- **ET-19** For class NEITHER the "Caso" and "Qué pasa" texts say which rule decided, with no change to what is kept or dropped (the rule
-  of ET-10 stays: a copy whose name matches ANY locality polygon the section intersects stays; there is no dominant-locality rule). Overlap is measured on the made-valid polygon (ET-10), so an invalid INE polygon cannot abort the analysis.
+- **ET-19** For class NEITHER the "Caso" and "Qué pasa" texts say which rule decided. The kept copies are the ET-10 result
+  (the single-copy step included); this text does not change them. Overlap is measured on the made-valid polygon (ET-10), so an invalid INE polygon cannot abort the analysis.
   Each twin row carries `insideLocalities` (the upper-cased names of the polygons the section intersects, ordered by overlap length
-  descending, the first is the longest; empty unless class NEITHER or BOTH).
-  (a) No copy dropped and two or more copies match a polygon: case "Cruza varias localidades", what happens "Cruza varias localidades: se mantienen todas".
-  (b) Copies dropped by polygon (`insideLocalities` not empty): case "Lejos de padrones: por polígono de localidad", what happens
-  "Dentro de <insideLocalities>: se quita <dropped>" ("se quitan" for several).
+  descending, the first is the longest; filled for every class, empty when the section intersects no polygon).
+  (a) Two or more copies match a polygon and copies are dropped (the single-copy step): case "Cruza varias localidades", what happens
+  "Cruza varias localidades: se queda <winner> (mayor largo dentro); se quitaría: <dropped>". `<winner>` is the first of
+  `insideLocalities` that is among the group's localities (the longest overlap), and it is the kept copy.
+  (b) Copies dropped and exactly one copy matches a polygon (`insideLocalities` not empty): case "Lejos de padrones: por polígono de localidad",
+  what happens "Dentro de <insideLocalities>: se quita <dropped>" ("se quitan" for several).
   (c) No polygon found and a copy dropped: the rural rule, case "Lejos de padrones: regla rural", what happens "Se quitaría: <dropped>".
-  "Sin regla" ("Lejos de padrones: sin regla" / "Sin regla: se mantienen todas") remains only when no rule applies.
+  No copy dropped: "Sin regla: se mantienen todas" (class NEITHER) or "Se mantienen todas". "Lejos de padrones: sin regla" remains the case
+  text for class NEITHER when no rule applies; "Cruza varias localidades" is not used for a row that keeps every copy.
 
 ## Gemelas por geometría (complemento)
 
 This section COMPLEMENTS ET-1 to ET-18 and changes none of them: the locality rules, their class counts (`twinsDrop`, `twinsKeep`), their report, their map and their tests keep their meaning. Order: the locality rule runs first and decides the copies each `reftramo` keeps (`copy_kept`); the geometric rule runs afterwards, across DIFFERENT `reftramo`s, and reads only those kept copies. Both can affect one section: a geometric loser may be a `reftramo` whose other copies the locality rule already dropped; the SQL reads `copy_kept`, so analysis and load agree.
 
-- **ET-20** A geometric twin group is a set of two or more distinct `reftramo`s, each with EXACTLY ONE kept copy (after ET-10) whose `localidad` and `departamento` are not null and whose `idcalle` is not null, and whose kept copies have the same geometry: the same comparable line as the GEOM comparison of EJ-9 (merged, normalised, snapped to the 4-decimal grid of `GEOMETRY_EQUALITY_DECIMALS`), grouped by its md5. A group is the set of members that share the four parts: the snapped geometry, `idcalle`, locality and department (locality and department trimmed, upper-case). Members that differ in idcalle, locality or department are not grouped with each other: a geometry shared by sections of two streets gives two groups (or one group and a section that is no member), never one mixed group. A `reftramo` with several kept copies (class BOTH, or no rule) is never a member: a conservative limit, reported as "Con varias copias tras la regla de localidades: no agrupados" (`geoTwinSkippedRefs`: such a `reftramo` with a kept copy that has the same four parts, key, idcalle, localidad and departamento, as a copy of another `reftramo`).
+- **ET-20** A geometric twin group is a set of two or more distinct `reftramo`s, each with EXACTLY ONE kept copy (after ET-10) whose `localidad` and `departamento` are not null and whose `idcalle` is not null, and whose kept copies have the same geometry: the same comparable line as the GEOM comparison of EJ-9 (merged, normalised, snapped to the 4-decimal grid of `GEOMETRY_EQUALITY_DECIMALS`), grouped by its md5. A group is the set of members that share the four parts: the snapped geometry, `idcalle`, locality and department (locality and department trimmed, upper-case). Members that differ in idcalle, locality or department are not grouped with each other: a geometry shared by sections of two streets gives two groups (or one group and a section that is no member), never one mixed group. A `reftramo` with several kept copies (no polygon decides between them, ET-10) is never a member: a conservative limit, reported as "Con varias copias tras la regla de localidades: no agrupados" (`geoTwinSkippedRefs`: such a `reftramo` with a kept copy that has the same four parts, key, idcalle, localidad and departamento, as a copy of another `reftramo`).
 - **ET-21** Keepers: the members that hold a point reference, by `access_point.id_road_section` equal to the `reftramo` or to the `road_section.id` of a current section with that `reftramo`. Keepers are never removed; several keepers may remain.
 - **ET-22** Winner: when a group (the four parts of ET-20) has no keeper, the single winner is the member already in `carto.road_section` with the lowest `reftramo`, else the member with the lowest `reftramo`. Every other member of that group is a loser. Keepers and winners are decided per group, never across groups. A loser holds no reference by construction.
 - **ET-23** A loser NOT in carto is never inserted or updated, and is listed as "No se carga" (`geoTwinLosersOmitted`). It stays present in the staging keys: it is not a plain removal, split, merge or renumber, and it is excluded from NEW, ATTR and GEOM classification, renumber candidates, split pieces, merge members, locality copies and the load (`copy_final`). A split's pieces therefore never include a loser, so a point is never offered a section that will not exist.

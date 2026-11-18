@@ -380,11 +380,30 @@ describe("buildEjesReportView (EJ-12)", () => {
   describe("twinRowCaseTextOf and twinDecisionTextOf for NEITHER (ET-19)", () => {
     const neither = { class: TWIN_CLASS.NEITHER, localities: ["A", "B"], dropLocalities: [] as string[], insideLocalities: [] as string[] };
 
-    it("should say Cruza varias localidades when nothing is dropped and two or more polygons match", () => {
+    it("should say Sin regla when nothing is dropped even if two polygons match", () => {
       const row = { ...neither, insideLocalities: ["A", "B"] };
 
+      expect(twinRowCaseTextOf(row)).toBe("Lejos de padrones: sin regla");
+      expect(twinDecisionTextOf(row)).toBe("Sin regla: se mantienen todas");
+    });
+
+    it("should say Cruza varias localidades with the winner and the dropped copy when two polygons match and one is dropped", () => {
+      const row = { ...neither, localities: ["A", "B", "C"], insideLocalities: ["B", "C", "A"], dropLocalities: ["C"] };
+
       expect(twinRowCaseTextOf(row)).toBe("Cruza varias localidades");
-      expect(twinDecisionTextOf(row)).toBe("Cruza varias localidades: se mantienen todas");
+      expect(twinDecisionTextOf(row)).toBe("Cruza varias localidades: se queda B (mayor largo dentro); se quitaría: C");
+    });
+
+    it("should name the first kept inside locality as winner and every dropped copy", () => {
+      const row = { ...neither, localities: ["A", "B", "C"], insideLocalities: ["A", "C", "B"], dropLocalities: ["A", "C"] };
+
+      expect(twinDecisionTextOf(row)).toBe("Cruza varias localidades: se queda B (mayor largo dentro); se quitaría: A, C");
+    });
+
+    it("should say sin dato for the winner when no kept copy is inside the polygons", () => {
+      const row = { ...neither, localities: ["A", "B", "C"], insideLocalities: ["A", "B"], dropLocalities: ["A", "B"] };
+
+      expect(twinDecisionTextOf(row)).toBe("Cruza varias localidades: se queda sin dato (mayor largo dentro); se quitaría: A, B");
     });
 
     it("should not say Cruza varias localidades when only one polygon matches", () => {

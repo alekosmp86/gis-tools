@@ -54,12 +54,27 @@ describe("twinSql module (ET-13)", () => {
   it("should build the drop rule over any alias, reading only class, localities and inside_localities", () => {
     const sql = twinDropCaseSql("x");
 
-    expect(sql).toMatch(/^CASE /);
-    expect(sql).toMatch(/END$/);
+    expect(sql).toMatch(/^\(SELECT CASE /);
+    expect(sql).toMatch(/ AS twin_drop_rest\)$/);
+    expect(sql).toContain("cardinality(twin_drop_rest.remaining) > 1");
     expect(sql).toContain("x.class");
     expect(sql).toContain("x.localities");
     expect(sql).toContain("x.inside_localities");
     expect(sql).not.toContain("c.");
     expect(sql).not.toMatch(/\b(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TRUNCATE)\b/);
+  });
+
+  it("should not alias any internal relation as x or y when the caller alias is x", () => {
+    const sql = twinDropCaseSql("x");
+
+    expect(sql).not.toMatch(/\bAS x\b/);
+    expect(sql).not.toMatch(/\bAS y\b/);
+  });
+
+  it("should not alias any internal relation as x or y when the caller alias is y", () => {
+    const sql = twinDropCaseSql("y");
+
+    expect(sql).not.toMatch(/\bAS x\b/);
+    expect(sql).not.toMatch(/\bAS y\b/);
   });
 });

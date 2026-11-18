@@ -58,12 +58,12 @@ const nearLengthSql = (layouts: EjesLayouts, padronType: string): string => {
 const ruralNamed = (locality: string): string => `upper(btrim(${locality})) LIKE '%${RURAL_LOCALITY_SUFFIX}'`;
 
 /**
- * The localities of a twin row to drop, by class. `alias` names a relation with `class`, `localities` (text[]) and
- * `inside_localities` (text[], the upper-cased names of the locality polygons the section intersects, ordered by overlap
- * length descending, so the first is the longest; filled for classes NEITHER and BOTH). BOTH keeps one copy, the winner: the
- * one with the highest rank in `inside_localities`, else the non-rural-named, else the first by name; every other copy is dropped.
+ * The class rule of ET-10 (the base drop, before the single-copy step of `twinDropCaseSql`). `alias` names a relation with
+ * `class`, `localities` (text[]) and `inside_localities` (text[]). URBAN drops the rural-named copies; RURAL and NEITHER with
+ * no inside polygon keep the first rural-named copy; BOTH keeps the winner; NEITHER with an inside polygon keeps the copies
+ * whose name is in it.
  */
-export function twinDropCaseSql(alias: string): string {
+function twinClassDropSql(alias: string): string {
   const field = (name: string): string => `${alias}.${name}`;
   const localities = field("localities");
   const hasLocality = (rural: boolean): string =>
@@ -86,13 +86,34 @@ export function twinDropCaseSql(alias: string): string {
   ].join(" ");
 }
 
+/**
+ * The localities of a twin row to drop (ET-10, ET-19). `alias` names a relation with `class`, `localities` (text[]) and
+ * `inside_localities` (text[], the upper-cased names of the locality polygons the section intersects, ordered by overlap
+ * length descending, so the first is the longest; filled for every class). The base is the class rule (`twinClassDropSql`).
+ * Single copy: when more than one copy remains after the base and one remaining copy is in `inside_localities`, the winner
+ * among the remaining copies (the highest rank in `inside_localities`, else the non-rural-named, else the first by name) stays
+ * and every other remaining copy is dropped too. Otherwise the base is the drop. It never drops all the localities.
+ */
+export function twinDropCaseSql(alias: string): string {
+  const field = (name: string): string => `${alias}.${name}`;
+  const localities = field("localities");
+  const inside = field("inside_localities");
+  const winner = `(SELECT r FROM unnest(twin_drop_rest.remaining) AS r ORDER BY array_position(${inside}, upper(btrim(r))) ASC NULLS LAST, (${ruralNamed("r")}) ASC, r ASC LIMIT 1)`;
+  return [
+    `(SELECT CASE WHEN cardinality(twin_drop_rest.remaining) > 1 AND EXISTS (SELECT 1 FROM unnest(twin_drop_rest.remaining) AS h WHERE upper(btrim(h)) = ANY(${inside}))`,
+    `THEN ARRAY(SELECT l FROM unnest(${localities}) AS l WHERE l = ANY(twin_drop_base.base) OR l <> ${winner} ORDER BY l)`,
+    "ELSE twin_drop_base.base END",
+    `FROM (SELECT ${twinClassDropSql(alias)} AS base) AS twin_drop_base,`,
+    `LATERAL (SELECT ARRAY(SELECT l FROM unnest(${localities}) AS l WHERE NOT l = ANY(twin_drop_base.base)) AS remaining) AS twin_drop_rest)`,
+  ].join(" ");
+}
+
 function insideLocalitiesSql(layouts: EjesLayouts): string {
   const locality = (logical: string): string => `l.${col(layouts, "LOCALITIES", logical)}`;
   return [
-    `CASE WHEN k.class IN ('${TWIN_CLASS.NEITHER}', '${TWIN_CLASS.BOTH}') THEN ARRAY(SELECT t.n FROM (SELECT upper(btrim(${locality(LOCALITIES_COLUMN.NAME)}::text)) AS n,`,
+    `ARRAY(SELECT t.n FROM (SELECT upper(btrim(${locality(LOCALITIES_COLUMN.NAME)}::text)) AS n,`,
     `sum(ST_Length(ST_Intersection(k.geom, ST_MakeValid(${locality(LOCALITIES_COLUMN.GEOM)})))) AS len FROM ${table(layouts, "LOCALITIES")} AS l`,
-    `WHERE ${locality(LOCALITIES_COLUMN.NAME)} IS NOT NULL AND ST_Intersects(${locality(LOCALITIES_COLUMN.GEOM)}, k.geom) GROUP BY 1) AS t ORDER BY t.len DESC, t.n)`,
-    "ELSE ARRAY[]::text[] END AS inside_localities",
+    `WHERE ${locality(LOCALITIES_COLUMN.NAME)} IS NOT NULL AND ST_Intersects(${locality(LOCALITIES_COLUMN.GEOM)}, k.geom) GROUP BY 1) AS t ORDER BY t.len DESC, t.n) AS inside_localities`,
   ].join(" ");
 }
 
