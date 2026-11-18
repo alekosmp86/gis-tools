@@ -224,6 +224,8 @@ describe("useFullReplaceWorkflow", () => {
         mapping,
         sequences: [],
         resetSequences: true,
+        repairGeometries: true,
+        repairDecimals: 4,
       });
     });
 
@@ -309,6 +311,87 @@ describe("useFullReplaceWorkflow", () => {
     it("should discover nothing when there is no target config and no details", () => {
       const { result } = setup(null);
       expect(result.current.sequenceDiscovery.sequences).toEqual([]);
+    });
+  });
+
+  describe("geometry repair options (AC-6)", () => {
+    it("should default the repair checkbox to checked and the decimals to 4", () => {
+      const { result } = setup(target("geo"));
+      expect(result.current.repairGeometries).toBe(true);
+      expect(result.current.repairDecimalsInput).toBe("4");
+      expect(result.current.repairDecimalsValid).toBe(true);
+    });
+
+    it("should start with repairGeometries true and repairDecimals 4 when the defaults are kept", () => {
+      const api = setup(target("geo"));
+      fill(api);
+      api.act(() => api.result.current.run());
+      expect(startMock).toHaveBeenCalledOnce();
+      expect(startMock.mock.calls[0][0]).toMatchObject({ repairGeometries: true, repairDecimals: 4 });
+    });
+
+    it("should pass repairGeometries false to start when the checkbox is turned off", () => {
+      const api = setup(target("geo"));
+      api.act(() => api.result.current.setRepairGeometries(false));
+      expect(api.result.current.repairGeometries).toBe(false);
+      fill(api);
+      expect(api.result.current.canRun).toBe(true);
+      api.act(() => api.result.current.run());
+      expect(startMock).toHaveBeenCalledOnce();
+      expect(startMock.mock.calls[0][0].repairGeometries).toBe(false);
+    });
+
+    it("should pass repairDecimals 6 to start when the typed decimals are 6", () => {
+      const api = setup(target("geo"));
+      api.act(() => api.result.current.setRepairDecimalsInput("6"));
+      expect(api.result.current.repairDecimalsValid).toBe(true);
+      fill(api);
+      api.act(() => api.result.current.run());
+      expect(startMock.mock.calls[0][0]).toMatchObject({ repairGeometries: true, repairDecimals: 6 });
+    });
+
+    it("should pass the trimmed decimals to start when the typed decimals have surrounding spaces", () => {
+      const api = setup(target("geo"));
+      api.act(() => api.result.current.setRepairDecimalsInput(" 8 "));
+      fill(api);
+      api.act(() => api.result.current.run());
+      expect(startMock.mock.calls[0][0].repairDecimals).toBe(8);
+    });
+
+    it.each([
+      ["nine above the range", "9"],
+      ["an empty text", ""],
+      ["a whitespace-only text", "   "],
+      ["a fractional number", "2.5"],
+    ])("should disable the run and never call start when the decimals are %s", (_label, decimalsInput) => {
+      const api = setup(target("geo"));
+      api.act(() => api.result.current.setRepairDecimalsInput(decimalsInput));
+      fill(api);
+      expect(api.result.current.repairDecimalsValid).toBe(false);
+      expect(api.result.current.canRun).toBe(false);
+      api.act(() => api.result.current.run());
+      expect(startMock).not.toHaveBeenCalled();
+    });
+
+    it("should keep the run enabled with invalid decimals when the repair checkbox is off", () => {
+      const api = setup(target("geo"));
+      api.act(() => api.result.current.setRepairGeometries(false));
+      api.act(() => api.result.current.setRepairDecimalsInput("9"));
+      fill(api);
+      expect(api.result.current.repairDecimalsValid).toBe(false);
+      expect(api.result.current.canRun).toBe(true);
+      api.act(() => api.result.current.run());
+      expect(startMock).toHaveBeenCalledOnce();
+      expect(startMock.mock.calls[0][0].repairGeometries).toBe(false);
+    });
+
+    it("should enable the run again once the invalid decimals are corrected", () => {
+      const api = setup(target("geo"));
+      fill(api);
+      api.act(() => api.result.current.setRepairDecimalsInput("9"));
+      expect(api.result.current.canRun).toBe(false);
+      api.act(() => api.result.current.setRepairDecimalsInput("3"));
+      expect(api.result.current.canRun).toBe(true);
     });
   });
 

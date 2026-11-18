@@ -22,7 +22,18 @@ const params = (password = "pw") => ({
   resetSequences: true,
 });
 
-const outcome = { sourceRows: 3, insertedRows: 3, errorCount: 0, errors: [], ignoredSourceColumns: [], targetModified: true, sequencesAdjusted: [], analyze: { status: "ok" as const } };
+const outcome = {
+  sourceRows: 3,
+  insertedRows: 3,
+  errorCount: 0,
+  replaceErrorCount: 0,
+  errors: [],
+  ignoredSourceColumns: [],
+  targetModified: true,
+  sequencesAdjusted: [],
+  geometryRepair: { status: "off" as const, columns: [], skippedColumns: [] },
+  analyze: { status: "ok" as const },
+};
 
 const deferred = <T>() => {
   let resolve!: (v: T) => void;
@@ -129,6 +140,14 @@ describe("fullReplaceRunStore", () => {
       expect(arg.sequences).toEqual([]);
       expect(arg.resetSequences).toBe(true);
       expect(typeof arg.onProgress).toBe("function");
+    });
+
+    it("should forward the geometry repair options to runFullReplace", async () => {
+      runMock.mockResolvedValue(outcome);
+      await store.start({ ...params(), repairGeometries: false, repairDecimals: 6 });
+      const arg = runMock.mock.calls[0][0];
+      expect(arg.repairGeometries).toBe(false);
+      expect(arg.repairDecimals).toBe(6);
     });
 
     it("should never keep the password in any snapshot (AC-14)", async () => {
