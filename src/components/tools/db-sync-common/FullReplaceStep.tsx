@@ -13,6 +13,7 @@ import {
 } from "@/core/services/replaceColumnMapping";
 import type { DbColumnMetadata, DbConfig } from "@/core/types/db";
 import { useFullReplaceWorkflow } from "./useFullReplaceWorkflow";
+import { GeometryRepairOptions } from "./GeometryRepairOptions";
 import styles from "./FullReplaceStep.module.css";
 
 export interface FullReplaceStepProps {
@@ -115,6 +116,15 @@ export const FullReplaceStep: React.FC<FullReplaceStepProps> = ({
           text={`No se pudo interpretar el valor por defecto de estas columnas; sus secuencias no se ajustarán: ${workflow.sequenceDiscovery.unparsedDefaults.join("; ")}.`}
         />
       )}
+
+      <GeometryRepairOptions
+        enabled={workflow.repairGeometries}
+        decimalsInput={workflow.repairDecimalsInput}
+        decimalsValid={workflow.repairDecimalsValid}
+        disabled={workflow.isRunning}
+        onEnabledChange={workflow.setRepairGeometries}
+        onDecimalsInputChange={workflow.setRepairDecimalsInput}
+      />
 
       <div className={styles.formGroup}>
         <label htmlFor="fullReplaceConfirmInput" className={styles.formLabel}>

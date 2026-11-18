@@ -110,6 +110,18 @@ The run lives in a module-level store (`src/core/services/fullReplaceRunStore.ts
 - **ANALYZE.** After a run with zero errors, `ANALYZE "schema"."table";` is sent as its own request so the planner has fresh statistics (autovacuum may be off, and a full DELETE leaves them stale). A failure only produces a warning. On PostgreSQL 11 a non-owner gets a silent warning and a success, so the summary says "ANALYZE enviado", not "statistics updated".
 - Batch error labels ("Lote N (a-b)") count statements, and statement 1 is the DELETE.
 
+### 5.7 Geometry repair
+
+Spec: [`DB_GEOMETRY_REPAIR_SPEC.md`](../specifications/DB_GEOMETRY_REPAIR_SPEC.md) (slice 1, db-db Full Replace only).
+
+- **Checkbox "Reparar geometrías"** (on by default, absent means on). When checked, the input **"Decimales de control en EPSG:4326"** (integer 0..8, default 4) is shown; an invalid value shows an inline error and blocks the run.
+- Runs after the replace and the sequence repair, before ANALYZE, only when the replace finished with zero replace errors and the target was modified. Otherwise it is reported as skipped. Disabled is reported as "sin reparación".
+- Target columns of type `geometry` (generic), `MultiPolygon` and `MultiPolygonZ` (schema-qualified types included) are repaired. Single `Polygon`, M and ZM variants are reported as "omitida (tipo no soportado)" and not touched. Points, lines and geography are ignored.
+- Per row: `ST_MakeValid`, polygon parts only, keep a part when `ST_SnapToGrid(ST_Transform(part, 4326), 10^-decimals)` has at least 4 points and a non-zero area, rebuild `ST_Multi(ST_Collect(parts))` with the original SRID. Holes collapsed inside a kept part are not removed (known limit).
+- Per column, one count request returning `changed,unrepairable` and, only when `changed` is non-zero, one `UPDATE` request. The UPDATE writes only `geom` of rows whose new geometry is valid and that were invalid or whose number of parts changed. Rows with no surviving part, or whose new geometry is not valid, keep their original geometry (never NULL) and are counted as unrepairable.
+- The result carries `geometryRepair: { status, columns: { column, repairedRows, unrepairableRows }[], skippedColumns, message? }`. A failure appends one error line `Reparación de geometrías: columna X: …`, bumps `errorCount` and never changes `insertedRows`; the replace itself is not rolled back. The headline of the summary uses `replaceErrorCount`, so a failed repair does not mark the load as partial.
+- Builders: `src/core/services/geometryRepairSql.ts` (single-line statements, identifiers quoted, decimals validated, row identity `(tableoid, ctid)`). Orchestration: `src/core/services/geometryRepairRunner.ts`.
+
 ## 6. Record Selection
 
 The discrepancies table has one checkbox per record (not per field row). Only the selected records feed the SQL generator, the previews, the counters and the Copy, Download and Execute actions.

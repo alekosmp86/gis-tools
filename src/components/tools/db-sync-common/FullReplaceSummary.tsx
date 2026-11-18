@@ -3,6 +3,7 @@ import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { AlertType } from "@/ui-kit/types/ui";
 import { formatNumber } from "@/core/common/ValueFormatter";
 import { AnalyzeStatus, type FullReplaceResult } from "@/core/services/fullReplaceService";
+import { GeometryRepairSummary } from "./GeometryRepairSummary";
 import styles from "./FullReplaceStep.module.css";
 
 export interface FullReplaceSummaryProps {
@@ -11,7 +12,7 @@ export interface FullReplaceSummaryProps {
 
 export const FullReplaceSummary: React.FC<FullReplaceSummaryProps> = ({ result }) => {
   const isMismatch = result.insertedRows !== result.sourceRows;
-  const hasErrors = result.errorCount > 0;
+  const hasReplaceErrors = result.replaceErrorCount > 0;
 
   return (
     <div className={styles.summary}>
@@ -21,13 +22,13 @@ export const FullReplaceSummary: React.FC<FullReplaceSummaryProps> = ({ result }
           text="El primer lote falló y fue revertido: la tabla destino NO fue modificada y no se ejecutaron los lotes restantes."
         />
       )}
-      {result.targetModified && !isMismatch && !hasErrors && (
+      {result.targetModified && !isMismatch && !hasReplaceErrors && (
         <AlertMessage
           type={AlertType.SUCCESS}
           text="Reemplazo completado: la tabla destino contiene todos los registros del origen."
         />
       )}
-      {result.targetModified && (isMismatch || hasErrors) && (
+      {result.targetModified && (isMismatch || hasReplaceErrors) && (
         <AlertMessage
           type={AlertType.WARNING}
           text="Reemplazo incompleto: la tabla destino quedó parcialmente cargada. Puede volver a ejecutar el reemplazo completo de forma segura."
@@ -63,6 +64,8 @@ export const FullReplaceSummary: React.FC<FullReplaceSummaryProps> = ({ result }
           text={`Secuencia ${qualifiedLabel} ajustada: el próximo id será ${nextValue}.${resetToStart ? " (se reinició en 1 antes de la carga)." : ""}`}
         />
       ))}
+
+      <GeometryRepairSummary outcome={result.geometryRepair} />
 
       {result.analyze.status === AnalyzeStatus.OK && (
         <AlertMessage type={AlertType.INFO} text="ANALYZE enviado a la tabla destino." />

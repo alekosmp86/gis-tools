@@ -223,3 +223,35 @@
   height: 16px;
   cursor: pointer;
 }
+
+.decimalsRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.numberInput {
+  composes: input;
+  width: 90px;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+}
+
+.numberInputInvalid {
+  border-color: var(--accent-rose);
+}
+
+.helpText {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+.fieldError {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-rose);
+}
