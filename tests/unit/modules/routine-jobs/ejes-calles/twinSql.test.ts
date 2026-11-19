@@ -28,7 +28,7 @@ describe("twinSql module (ET-13)", () => {
     expect(raw).toContain(
       `WHERE s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE COALESCE(`
     );
-    expect(raw).toContain(`= CASE WHEN NULLIF(btrim(s."reftramo"::text), '') ~ '^[0-9]+$' THEN`);
+    expect(raw).toContain(`ELSE COALESCE(CASE WHEN NULLIF(btrim(s."reftramo"::text), '') ~ '^[0-9]+$' THEN`);
   });
 
   it("should build the list column under the given alias, limited and ordered", () => {
