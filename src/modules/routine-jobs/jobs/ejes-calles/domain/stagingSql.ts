@@ -25,7 +25,7 @@ export const accessPointRefSql = (layouts: EjesLayouts): string =>
   canonicalTextSql(`a.${col(layouts, "ACCESS_POINT", ACCESS_POINT_COLUMN.ROAD_SECTION)}`);
 
 const hasAccessPointsSql = (layouts: EjesLayouts, reference: string): string =>
-  `EXISTS (SELECT 1 FROM ${table(layouts, "ACCESS_POINT")} AS a WHERE ${accessPointRefSql(layouts)} = ${reference})`;
+  `COALESCE(${reference} IN (SELECT ${accessPointRefSql(layouts)} FROM ${table(layouts, "ACCESS_POINT")} AS a WHERE a.${col(layouts, "ACCESS_POINT", ACCESS_POINT_COLUMN.ROAD_SECTION)} IS NOT NULL), false)`;
 
 /**
  * Valid for every rule: empty, or valid, not collapsed, and at least `MIN_SECTION_LENGTH_M` long unless its canonical `reference` holds access points.

@@ -10,7 +10,9 @@ const canonicalOf = (column: string): string => {
 
 const STAGING_REFERENCE = canonicalOf('s."reftramo"');
 const ACCESS_POINT_REFERENCE = canonicalOf('a."id_road_section"');
-const SHORT_WITH_POINTS = `CASE WHEN ST_Length(g) >= 1 THEN true ELSE EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE ${ACCESS_POINT_REFERENCE} = r) END`;
+const POINTS_OF = (reference: string): string =>
+  `COALESCE(${reference} IN (SELECT ${ACCESS_POINT_REFERENCE} FROM "carto"."access_point" AS a WHERE a."id_road_section" IS NOT NULL), false)`;
+const SHORT_WITH_POINTS = `CASE WHEN ST_Length(g) >= 1 THEN true ELSE ${POINTS_OF("r")} END`;
 
 describe("buildStagingChecksSql (EJ-8)", () => {
   const sql = buildStagingChecksSql(ejesLayouts());
@@ -66,19 +68,26 @@ describe("buildStagingChecksSql (EJ-8)", () => {
     it("should discard a section shorter than 1 m unless its reftramo has access points, through a CASE that reads them only for short sections", () => {
       const predicate = validGeometrySql("g", "r", ejesLayouts());
 
-      expect(predicate).toContain("ST_Length(g) >= 0.001 AND (CASE WHEN ST_Length(g) >= 1 THEN true ELSE EXISTS (SELECT 1 FROM \"carto\".\"access_point\" AS a WHERE");
-      expect(predicate.indexOf("ST_Length(g) >= 1")).toBeLessThan(predicate.indexOf("EXISTS"));
+      expect(predicate).toContain("ST_Length(g) >= 0.001 AND (CASE WHEN ST_Length(g) >= 1 THEN true ELSE ");
+      expect(predicate).toContain(' IN (SELECT ');
+      expect(predicate).not.toMatch(/EXISTS \(SELECT 1 FROM "carto"\."access_point"/);
+      expect(predicate.indexOf("ST_Length(g) >= 1")).toBeLessThan(predicate.indexOf(" IN (SELECT "));
     });
 
     it("should match the access points against the reference the caller passes", () => {
-      expect(validGeometrySql("g", "CAND", ejesLayouts())).toContain(`${ACCESS_POINT_REFERENCE} = CAND) END))`);
+      expect(validGeometrySql("g", "CAND", ejesLayouts())).toContain(`ELSE ${POINTS_OF("CAND")} END))`);
+    });
+
+    it("should generate no correlated EXISTS over access_point for any reference", () => {
+      expect(validGeometrySql("g", "r", ejesLayouts())).not.toMatch(/EXISTS \(SELECT 1 FROM "carto"\."access_point"/);
+      expect(buildStagingChecksSql(ejesLayouts())).not.toMatch(/EXISTS \(SELECT 1 FROM "carto"\."access_point"/);
     });
 
     it("should carry localidad, departamento and invalid_geometry in the s CTE", () => {
       expect(sql).toContain("AS localidad");
       expect(sql).toContain("AS departamento");
       expect(sql).toContain(
-        `(NOT COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE ${ACCESS_POINT_REFERENCE} = ${STAGING_REFERENCE}) END)), true)) AS invalid_geometry`
+        `(NOT COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE ${POINTS_OF(STAGING_REFERENCE)} END)), true)) AS invalid_geometry`
       );
     });
 

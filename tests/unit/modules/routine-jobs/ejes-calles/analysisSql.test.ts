@@ -442,7 +442,7 @@ describe("buildEjesAnalysisSql", () => {
 
     it("should skip invalid and short geometries in stg, next to the null and empty conditions", () => {
       expect(stg).toContain(
-        `s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE ${ACCESS_POINT_CANONICAL} = ${CANONICAL_REFTRAMO}) END)), true) AND ${CANONICAL_REFTRAMO} ~ '^[0-9]+$'`
+        `s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE COALESCE(${CANONICAL_REFTRAMO} IN (SELECT ${ACCESS_POINT_CANONICAL} FROM "carto"."access_point" AS a WHERE a."id_road_section" IS NOT NULL), false) END)), true) AND ${CANONICAL_REFTRAMO} ~ '^[0-9]+$'`
       );
     });
 
@@ -460,7 +460,7 @@ describe("buildEjesAnalysisSql", () => {
       const twinRaw = sql.slice(sql.indexOf('"twin_raw" AS ('), sql.indexOf('"twin_groups" AS ('));
 
       expect(twinRaw).toContain(
-        `COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE ${ACCESS_POINT_CANONICAL} = ${CANONICAL_REFTRAMO}) END)), true)`
+        `COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE COALESCE(${CANONICAL_REFTRAMO} IN (SELECT ${ACCESS_POINT_CANONICAL} FROM "carto"."access_point" AS a WHERE a."id_road_section" IS NOT NULL), false) END)), true)`
       );
     });
   });

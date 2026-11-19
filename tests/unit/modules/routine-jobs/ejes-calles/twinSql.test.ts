@@ -26,7 +26,7 @@ describe("twinSql module (ET-13)", () => {
     const raw = twinGroupCtes(layouts)[0];
 
     expect(raw).toContain(
-      `WHERE s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE`
+      `WHERE s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE COALESCE(`
     );
     expect(raw).toContain(`= CASE WHEN NULLIF(btrim(s."reftramo"::text), '') ~ '^[0-9]+$' THEN`);
   });
