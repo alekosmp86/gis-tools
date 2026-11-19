@@ -9,11 +9,14 @@ import {
   EJES_STAGING_COLUMN,
   TWIN_CLASS,
   TWIN_NEAR_MIN_LENGTH_M,
+  TWIN_NEAREST_POLYGON_MAX_M,
   TWIN_PADRON_DISTANCE_M,
+  TWIN_PICKS_CTE,
   TWIN_POLYGON_MIN_COVER_RATIO,
 } from "../constants";
 import type { EjesLayouts } from "../types";
 import { col, countOf, listOf, table, trimmed } from "./layoutSql";
+import { pickNamesCopySql } from "./twinPickSql";
 import { canonicalTextSql, keptStagingRowSql } from "./stagingSql";
 
 /** True when a copy's department (`copy`, trimmed text) is the chosen one (`chosen`, upper-cased, NULL when none); a copy with no department is kept. */
@@ -92,15 +95,23 @@ const nearLengthSql = (layouts: EjesLayouts, padronType: string): string => {
   ].join(" ");
 };
 
-const ruralNamed = (locality: string): string => `upper(btrim(${locality})) LIKE '%${RURAL_LOCALITY_SUFFIX}'`;
+/** The name key of a locality (ET-10): upper-cased, the ' - KM 110' style suffix and every character but A-Z, 0-9 and space dropped, so accents and mojibake do not split one name. */
+export const localityKeySql = (expression: string): string =>
+  `regexp_replace(upper(btrim(split_part(${expression}, ' - ', 1))), '[^A-Z0-9 ]', '', 'g')`;
+
+const ruralNamed = (locality: string): string => `${localityKeySql(locality)} LIKE '%${RURAL_LOCALITY_SUFFIX}'`;
 
 /** The polygon winner: the first candidate by overlap rank in `inside`, then non-rural-named, then name ASC. */
 const polygonWinnerSql = (candidates: string, inside: string): string =>
-  `(SELECT r FROM unnest(${candidates}) AS r ORDER BY array_position(${inside}, upper(btrim(r))) ASC NULLS LAST, (${ruralNamed("r")}) ASC, r ASC LIMIT 1)`;
+  `(SELECT r FROM unnest(${candidates}) AS r ORDER BY array_position(${inside}, ${localityKeySql("r")}) ASC NULLS LAST, (${ruralNamed("r")}) ASC, r ASC LIMIT 1)`;
 
 /** The rural winner (ET-10): the rural-named candidate named `<department> RURAL`, else the rural-named candidate with the lowest name. */
 const ruralWinnerSql = (candidates: string, department: string): string =>
-  `(SELECT r FROM unnest(${candidates}) AS r WHERE ${ruralNamed("r")} ORDER BY COALESCE(upper(btrim(r)) = (upper(btrim(${department})) || '${RURAL_LOCALITY_SUFFIX}'), false) DESC, r ASC LIMIT 1)`;
+  `(SELECT r FROM unnest(${candidates}) AS r WHERE ${ruralNamed("r")} ORDER BY COALESCE(${localityKeySql("r")} = (${localityKeySql(department)} || '${RURAL_LOCALITY_SUFFIX}'), false) DESC, r ASC LIMIT 1)`;
+
+/** The default winner (ET-36): the padron class first (rural-named when the rural length is longer, else not rural-named), then the nearest polygon, then name ASC. */
+const defaultWinnerSql = (candidates: string, nearest: string, urbanLength: string, ruralLength: string): string =>
+  `(SELECT r FROM unnest(${candidates}) AS r ORDER BY CASE WHEN ${ruralLength} > ${urbanLength} THEN NOT (${ruralNamed("r")}) ELSE (${ruralNamed("r")}) END ASC, array_position(${nearest}, ${localityKeySql("r")}) ASC NULLS LAST, r ASC LIMIT 1)`;
 
 /** The section lies mostly outside the locality polygons (ET-10): its rural-named copy wins when one remains. */
 const belowCoverSql = (alias: string): string => `${alias}.inside_cover < ${TWIN_POLYGON_MIN_COVER_RATIO}`;
@@ -118,7 +129,7 @@ function twinClassDropSql(alias: string): string {
   const hasLocality = (rural: boolean): string =>
     `EXISTS (SELECT 1 FROM unnest(${localities}) AS h WHERE ${rural ? "" : "NOT "}${ruralNamed("h")})`;
   const noInside = `cardinality(${inside}) = 0`;
-  const insideName = (locality: string): string => `upper(btrim(${locality})) = ANY(${inside})`;
+  const insideName = (locality: string): string => `${localityKeySql(locality)} = ANY(${inside})`;
   const isNeither = `${field("class")} = '${TWIN_CLASS.NEITHER}'`;
   const isBoth = `${field("class")} = '${TWIN_CLASS.BOTH}'`;
   const bothWinner = `(CASE WHEN ${belowCoverSql(alias)} AND ${hasLocality(true)} THEN ${ruralWinnerSql(localities, field("department"))} ELSE ${polygonWinnerSql(localities, inside)} END)`;
@@ -136,14 +147,16 @@ function twinClassDropSql(alias: string): string {
 }
 
 /**
- * The localities of a twin row to drop (ET-10, ET-19). `alias` names a relation with `class`, `localities` (text[]), `inside_localities`
- * (text[], the upper-cased names of the locality polygons the section intersects, ordered by overlap length descending, so the first is
- * the longest), `inside_cover` (double precision: the overlap of the longest polygon over the section length, 0 when none) and
- * `department` (text, the group's department). The base is the class rule (`twinClassDropSql`).
- * Single copy: when more than one copy remains after the base, and one remaining copy is in `inside_localities` or the section lies
- * mostly outside the polygons (`inside_cover` below `TWIN_POLYGON_MIN_COVER_RATIO`) with a rural-named copy remaining, the winner among
- * the remaining copies stays and every other remaining copy is dropped too. The winner is the rural winner when the section lies mostly
- * outside the polygons and a rural-named copy remains, else the polygon winner. Otherwise the base is the drop. It never drops all the localities.
+ * The localities of a twin row to drop (ET-10, ET-19, ET-36). `alias` names a relation with `class`, `localities` (text[], the copies'
+ * localities as stored), `inside_localities` (text[], the name keys (`localityKeySql`) of the locality polygons the section intersects,
+ * ordered by overlap length descending, so the first is the longest), `nearest_localities` (text[], the name keys of the locality polygons
+ * within `TWIN_NEAREST_POLYGON_MAX_M` of the section, nearest first), `inside_cover` (double precision: the overlap of the longest polygon
+ * over the section length, 0 when none), `department` (text, the group's department), `urban_len` and `rural_len` (double precision: the
+ * section length near the urban and the rural padron). The base is the class rule (`twinClassDropSql`).
+ * Single copy: when more than one copy remains after the base, the winner among the remaining copies stays and every other remaining
+ * copy is dropped too. The winner is the rural winner when the section lies mostly outside the polygons and a rural-named copy remains,
+ * else the polygon winner when one remaining copy is in `inside_localities`, else the default winner (ET-36). Otherwise the base is the
+ * drop. It never drops all the localities.
  */
 export function twinDropCaseSql(alias: string): string {
   const field = (name: string): string => `${alias}.${name}`;
@@ -151,26 +164,54 @@ export function twinDropCaseSql(alias: string): string {
   const inside = field("inside_localities");
   const department = field("department");
   const rest = "twin_drop_rest.remaining";
-  const restInside = `EXISTS (SELECT 1 FROM unnest(${rest}) AS h WHERE upper(btrim(h)) = ANY(${inside}))`;
-  const outside = `(${belowCoverSql(alias)} AND EXISTS (SELECT 1 FROM unnest(${rest}) AS h WHERE ${ruralNamed("h")}))`;
-  const winner = `(CASE WHEN ${outside} THEN ${ruralWinnerSql(rest, department)} ELSE ${polygonWinnerSql(rest, inside)} END)`;
+  const restInside = restInsideSql(rest, inside);
+  const outside = restOutsideSql(alias, rest);
+  const defaultWinner = defaultWinnerSql(rest, field("nearest_localities"), field("urban_len"), field("rural_len"));
+  const winner = `(CASE WHEN ${outside} THEN ${ruralWinnerSql(rest, department)} WHEN ${restInside} THEN ${polygonWinnerSql(rest, inside)} ELSE ${defaultWinner} END)`;
   return [
-    `(SELECT CASE WHEN cardinality(${rest}) > 1 AND (${restInside} OR ${outside})`,
+    `(SELECT CASE WHEN cardinality(${rest}) > 1`,
     `THEN ARRAY(SELECT l FROM unnest(${localities}) AS l WHERE l = ANY(twin_drop_base.base) OR l <> ${winner} ORDER BY l)`,
     "ELSE twin_drop_base.base END",
-    `FROM (SELECT ${twinClassDropSql(alias)} AS base) AS twin_drop_base,`,
-    `LATERAL (SELECT ARRAY(SELECT l FROM unnest(${localities}) AS l WHERE NOT l = ANY(twin_drop_base.base)) AS remaining) AS twin_drop_rest)`,
+    `${twinRemainingSql(alias)})`,
   ].join(" ");
 }
 
-/** The locality polygons a section intersects: their upper-cased names (longest overlap first) and the overlap of the longest one. `k` is the section. */
+/** True when the default decision (ET-36) decides the twin row: more than one copy remains and no polygon or rural rule decided it. */
+export function twinDefaultedSql(alias: string): string {
+  const field = (name: string): string => `${alias}.${name}`;
+  const rest = "twin_drop_rest.remaining";
+  return `(SELECT cardinality(${rest}) > 1 AND NOT (${restInsideSql(rest, field("inside_localities"))} OR ${restOutsideSql(alias, rest)}) ${twinRemainingSql(alias)})`;
+}
+
+/** The copies left after the base drop, as `twin_drop_rest.remaining`; `twin_drop_base.base` is the base drop of the class rule. */
+const twinRemainingSql = (alias: string): string =>
+  `FROM (SELECT ${twinClassDropSql(alias)} AS base) AS twin_drop_base, LATERAL (SELECT ARRAY(SELECT l FROM unnest(${alias}.localities) AS l WHERE NOT l = ANY(twin_drop_base.base)) AS remaining) AS twin_drop_rest`;
+
+const restInsideSql = (rest: string, inside: string): string =>
+  `EXISTS (SELECT 1 FROM unnest(${rest}) AS h WHERE ${localityKeySql("h")} = ANY(${inside}))`;
+
+const restOutsideSql = (alias: string, rest: string): string =>
+  `(${belowCoverSql(alias)} AND EXISTS (SELECT 1 FROM unnest(${rest}) AS h WHERE ${ruralNamed("h")}))`;
+
+/** The locality polygons a section intersects: their name keys (longest overlap first) and the overlap of the longest one. `k` is the section. */
 function insideLocalitiesSql(layouts: EjesLayouts): string {
   const locality = (logical: string): string => `l.${col(layouts, "LOCALITIES", logical)}`;
   return [
     "SELECT COALESCE(array_agg(t.n ORDER BY t.len DESC, t.n), ARRAY[]::text[]) AS inside_localities, COALESCE(max(t.len), 0) AS inside_len FROM",
-    `(SELECT upper(btrim(${locality(LOCALITIES_COLUMN.NAME)}::text)) AS n,`,
+    `(SELECT ${localityKeySql(`${locality(LOCALITIES_COLUMN.NAME)}::text`)} AS n,`,
     `sum(ST_Length(ST_Intersection(k.geom, ST_MakeValid(${locality(LOCALITIES_COLUMN.GEOM)})))) AS len FROM ${table(layouts, "LOCALITIES")} AS l`,
     `WHERE ${locality(LOCALITIES_COLUMN.NAME)} IS NOT NULL AND ST_Intersects(${locality(LOCALITIES_COLUMN.GEOM)}, k.geom) GROUP BY 1) AS t`,
+  ].join(" ");
+}
+
+/** The name keys of the locality polygons within `TWIN_NEAREST_POLYGON_MAX_M` of the section, nearest first (ET-36). `k` is the section. */
+function nearestLocalitiesSql(layouts: EjesLayouts): string {
+  const locality = (logical: string): string => `l.${col(layouts, "LOCALITIES", logical)}`;
+  return [
+    "SELECT COALESCE(array_agg(t.n ORDER BY t.dist, t.n), ARRAY[]::text[]) AS nearest_localities FROM",
+    `(SELECT ${localityKeySql(`${locality(LOCALITIES_COLUMN.NAME)}::text`)} AS n,`,
+    `min(ST_Distance(k.geom, ST_MakeValid(${locality(LOCALITIES_COLUMN.GEOM)}))) AS dist FROM ${table(layouts, "LOCALITIES")} AS l`,
+    `WHERE ${locality(LOCALITIES_COLUMN.NAME)} IS NOT NULL AND ST_DWithin(${locality(LOCALITIES_COLUMN.GEOM)}, k.geom, ${TWIN_NEAREST_POLYGON_MAX_M}) GROUP BY 1) AS t`,
   ].join(" ");
 }
 
@@ -200,11 +241,14 @@ export function twinCtes(layouts: EjesLayouts): string[] {
     cte(
       "twin_located",
       [
-        `SELECT k.*, i.inside_localities, CASE WHEN k.len > 0 THEN i.inside_len / k.len ELSE 0 END AS inside_cover`,
-        `FROM ${q("twin_classed")} AS k CROSS JOIN LATERAL (${insideLocalitiesSql(layouts)}) AS i`,
+        `SELECT k.*, i.inside_localities, n.nearest_localities, CASE WHEN k.len > 0 THEN i.inside_len / k.len ELSE 0 END AS inside_cover`,
+        `FROM ${q("twin_classed")} AS k CROSS JOIN LATERAL (${insideLocalitiesSql(layouts)}) AS i CROSS JOIN LATERAL (${nearestLocalitiesSql(layouts)}) AS n`,
       ].join(" ")
     ),
-    cte("twins", `SELECT c.*, ${twinDropCaseSql("c")} AS drop_localities FROM ${q("twin_located")} AS c`),
+    cte(
+      "twins",
+      `SELECT c.*, ${twinDropCaseSql("c")} AS drop_localities, ${twinDefaultedSql("c")} AS drop_defaulted FROM ${q("twin_located")} AS c`
+    ),
   ];
 }
 
@@ -225,5 +269,6 @@ export const twinCountColumns = (): string[] => [
   ...Object.values(TWIN_CLASS).map((twinClass) => `${countOf("twins", `class = '${twinClass}'`)} AS "twins_${twinClass.toLowerCase()}"`),
   `${countOf("twins", "cardinality(drop_localities) > 0")} AS "twins_drop"`,
   `${countOf("twins", "cardinality(drop_localities) = 0")} AS "twins_keep"`,
+  `${countOf("twins", `drop_defaulted AND NOT EXISTS (SELECT 1 FROM ${q(TWIN_PICKS_CTE)} AS p JOIN ${q("copy_raw")} AS x ON ${pickNamesCopySql("p", "x")} WHERE p.ref = twins.ref)`)} AS "twins_defaulted"`,
   `${countOf("twin_groups", "departments > 1")} AS "twins_cross_department"`,
 ];

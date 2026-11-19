@@ -39,9 +39,30 @@ export function buildMergePlanSql(): string {
 }
 
 /**
+ * A twin winner that is not in carto and that no load writes: held (`ej_held`), dropped (`ej_dropped`), a held split piece, a held merge
+ * `reftramo`, or without a copy in `ej_copy`. Such a loser would move its points to a section that never exists. Reads the plans of
+ * the same transaction, so the split plan runs before the plain plan.
+ */
+const winnerNotLoadedSql = (winner: string): string => {
+  const inTable = (table: string, column: string, condition = "true"): string =>
+    `EXISTS (SELECT 1 FROM ${table} AS x WHERE x.${column} = ${winner} AND ${condition})`;
+  const heldSplitPiece = `EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.SPLIT)} AS s JOIN ${tmp(LOAD_TEMP.SPLIT_PLAN)} AS sp ON sp.old_id = s.old_id WHERE s.new_ref = ${winner} AND sp.reason IS NOT NULL)`;
+  const heldMergeRef = inTable(tmp(LOAD_TEMP.MERGE_PLAN), "new_ref", "x.reason IS NOT NULL");
+  const notLoaded = [
+    inTable(tmp(LOAD_TEMP.HELD), "new_ref"),
+    inTable(tmp(LOAD_TEMP.DROPPED), "ref"),
+    heldSplitPiece,
+    heldMergeRef,
+    `NOT ${inTable(tmp(LOAD_TEMP.COPY), "ref")}`,
+  ];
+  return `(NOT EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.GEO_TWIN)} AS w WHERE w.ref = ${winner} AND w.in_carto) AND (${notLoaded.join(" OR ")}))`;
+};
+
+/**
  * Plain removals and accepted geometric twin losers in carto: accepted, one current `reftramo`, and no access point left by `reftramo`
- * (plain removals) or by id (both). A twin loser keeps its points by `reftramo` until the load moves them to its winner (`new_ref`).
- * `kind` tells the two sources apart (the skipped list counts them apart).
+ * (plain removals) or by id (both). A twin loser keeps its points by `reftramo` until the load moves them to its winner (`new_ref`); a
+ * loser whose winner is not loaded (`winnerNotLoadedSql`) stays as it is, with `WINNER_NOT_LOADED`. `kind` tells the two sources apart
+ * (the skipped list counts them apart). Runs after the merge and split plans.
  */
 export function buildPlainPlanSql(): string {
   const plain = [
@@ -58,6 +79,7 @@ export function buildPlainPlanSql(): string {
     `WHEN a.ref IS NULL THEN ${quoted(EJES_SKIP_REASON.NOT_ACCEPTED)}`,
     `WHEN t.cur_rows > 1 THEN ${quoted(EJES_SKIP_REASON.REPEATED_OLD_REF)}`,
     `WHEN t.id_points > 0 THEN ${quoted(EJES_SKIP_REASON.ID_LINKED_POINTS)}`,
+    `WHEN ${winnerNotLoadedSql("t.winner_ref")} THEN ${quoted(EJES_SKIP_REASON.WINNER_NOT_LOADED)}`,
     `END AS reason, ${quoted(EJES_SKIP_KIND.TWIN)} AS kind`,
     `FROM ${tmp(LOAD_TEMP.GEO_TWIN)} AS t LEFT JOIN ${tmp(LOAD_TEMP.ACC_TWIN)} AS a ON a.ref = t.ref`,
     `WHERE t.role = ${quoted(GEO_TWIN_ROLE.LOSER)} AND t.in_carto`,

@@ -17,6 +17,7 @@ export const LOAD_TEMP = {
   COPY: "ej_copy",
   RENUM: "ej_renum",
   HELD: "ej_held",
+  DROPPED: "ej_dropped",
   SPLIT: "ej_split",
   SPLIT_PTS: "ej_split_pts",
   SPLIT_PLAN: "ej_split_plan",
@@ -52,6 +53,9 @@ export const buildAnalyzeTempSql = (name: string): string => `ANALYZE ${tmp(name
 /** The geometric losers the analysis of this transaction wrote to `ej_geo_twins`: they are no copy of the load. */
 const GEO_LOSERS_SQL = `(SELECT g.ref FROM ${tmp(LOAD_TEMP.GEO_TWIN)} AS g WHERE g.role = '${GEO_TWIN_ROLE.LOSER}')`;
 
+/** The discarded renumber candidates the analysis of this transaction wrote to `ej_dropped`: no copy of them is loaded. */
+const DROPPED_SQL = `(SELECT d.ref FROM ${tmp(LOAD_TEMP.DROPPED)} AS d)`;
+
 /** One row per kept copy: a copy is `reftramo + localidad + departamento`; the twin rules drop the copies of the localities they name, the picks keep one. */
 export function buildCopyTableSql(layouts: EjesLayouts): string {
   const ctes = [
@@ -62,7 +66,7 @@ export function buildCopyTableSql(layouts: EjesLayouts): string {
     copyRawCte(layouts),
     twinPicksTableCte(tmp(LOAD_TEMP.ACC_TWIN_PICK)),
     copyKeptCte(),
-    copyFinalCte(GEO_LOSERS_SQL),
+    copyFinalCte(GEO_LOSERS_SQL, DROPPED_SQL),
   ];
   return createTemp(
     LOAD_TEMP.COPY,

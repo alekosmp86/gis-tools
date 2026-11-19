@@ -84,8 +84,8 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
       const old = await insertSection(database, { ref: 3001, calle: 5, geom: "1000:1100", distance: "100.00" });
       await insertPoints(database, "3001", 2);
       await insertStaging(database, [
-        { ref: "3002", calle: "5", nombre: "CALLE UNO", localidad: "TRINIDAD", geom: "1000:1100" },
-        { ref: "3002", calle: "5", nombre: "CALLE UNO", localidad: "SAN JOSE", geom: "1000:1100" },
+        { ref: "3002", calle: "5", nombre: "CALLE UNO", localidad: "TRINIDAD", departamento: "FLORES", geom: "1000:1100" },
+        { ref: "3002", calle: "5", nombre: "CALLE UNO", localidad: "TRINIDAD", departamento: "SAN JOSE", geom: "1000:1100" },
       ]);
       return old;
     };
@@ -204,8 +204,8 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
       await insertSection(database, { ref: 3001, calle: 5, geom: "1000:1100", distance: "100.00" });
       await insertSection(database, { ref: 3001, calle: 5, geom: "1000:1100", distance: "100.00" });
       await insertStaging(database, [
-        { ref: "3002", calle: "5", nombre: "CALLE UNO", geom: "1000:1100" },
-        { ref: "3003", calle: "5", nombre: "CALLE UNO", localidad: "SAN JOSE", geom: "1000:1100" },
+        { ref: "3002", calle: "5", nombre: "CALLE UNO", geom: "1000.4:1100" },
+        { ref: "3003", calle: "5", nombre: "CALLE UNO", localidad: "SAN JOSE", geom: "999.6:1100" },
       ]);
       const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
 
@@ -229,8 +229,8 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
       await insertSection(database, { ref: 4001, calle: 5, geom: "2000:2100", distance: "100.00" });
       await insertStaging(database, [
         { ref: "3002", calle: "5", nombre: "CALLE UNO", geom: "1000:1100" },
-        { ref: "4002", calle: "5", nombre: "CALLE UNO", localidad: "TRINIDAD", geom: "2000:2100" },
-        { ref: "4002", calle: "5", nombre: "CALLE UNO", localidad: "SAN JOSE", geom: "2000:2100" },
+        { ref: "4002", calle: "5", nombre: "CALLE UNO", localidad: "TRINIDAD", departamento: "FLORES", geom: "2000:2100" },
+        { ref: "4002", calle: "5", nombre: "CALLE UNO", localidad: "TRINIDAD", departamento: "SAN JOSE", geom: "2000:2100" },
       ]);
       const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
 

@@ -81,6 +81,7 @@ const resultOf = (renumberSkipped: EjesRenumberSkippedRow[] = HELD_ROWS): EjesRe
     geoTwins: [],
     renumbered: [],
     renumberSkipped,
+    renumberDropped: [],
     blockers: [],
     privilegeInfo: [],
     tables: {},

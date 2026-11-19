@@ -33,9 +33,12 @@ const COUNTS = {
   twinsKeep: 4,
   twinsUndecided: 0,
   twinPicksApplied: 0,
+  twinsDefaulted: 2,
   renumbered: 2,
   renumberedWithPoints: 1,
   renumberedPoints: 5,
+  renumberedByGeometry: 0,
+  renumberDroppedCandidates: 0,
   renumberSkipped: 0,
   splitPointsTotal: 0,
   splitPointsAuto: 0,
@@ -98,6 +101,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
+    renumberDropped: [],
     fingerprint: { rows: 100, digest: "9f8e7d6c5b4a" },
     attrChanges: [
       {
@@ -210,16 +214,17 @@ describe("buildEjesReportView (EJ-12)", () => {
         { label: "Se quitaría alguna copia", value: 2 },
         { label: "Se mantienen todas", value: 4 },
         { label: "En más de un departamento: sin regla", value: 5 },
+        { label: "Decididos por defecto", value: 2 },
       ]);
     });
 
     it("should show zeros in the KPI group when there are no twin groups", () => {
-      const zero = { ...COUNTS, twins: 0, twinsUrban: 0, twinsRural: 0, twinsBoth: 0, twinsNeither: 0, twinsCrossDepartment: 0, twinsDrop: 0, twinsKeep: 0, renumbered: 0, renumberedWithPoints: 0, renumberedPoints: 0 };
+      const zero = { ...COUNTS, twins: 0, twinsUrban: 0, twinsRural: 0, twinsBoth: 0, twinsNeither: 0, twinsCrossDepartment: 0, twinsDrop: 0, twinsKeep: 0, twinsDefaulted: 0, renumbered: 0, renumberedWithPoints: 0, renumberedPoints: 0 };
       const group = buildEjesReportView(resultOf({ counts: zero })).kpiGroups.find(
         (candidate) => candidate.title === "Tramos repetidos por localidad"
       );
 
-      expect(group?.kpis.map((kpi) => kpi.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+      expect(group?.kpis.map((kpi) => kpi.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
     });
 
     it("should keep no summary of the twin rows, which are counted in the KPI group only", () => {
@@ -295,6 +300,22 @@ describe("buildEjesReportView (EJ-12)", () => {
 
     it("should summarize an empty held list with zero", () => {
       expect(buildEjesReportView(resultOf()).summaries.renumberHeld).toBe("Renumerados retenidos (ambos tramos quedan como están) (0)");
+    });
+  });
+
+  describe("renumbers dropped as candidates (EJL-27)", () => {
+    const dropped = { ref: "3002", oldRef: "3001", keptRef: "3003", hausdorff: 0.1, points: 0 };
+
+    it("should summarize the dropped list with the analysis count, in the list's own title", () => {
+      const view = buildEjesReportView(resultOf({ renumberDropped: [dropped], counts: { ...COUNTS, renumberDroppedCandidates: 1 } }));
+
+      expect(view.summaries.renumberDropped).toBe("Candidatos descartados (el tramo se renumera a otro reftramo) (1)");
+    });
+
+    it("should note a cut dropped list when the analysis count is larger than the rows shown", () => {
+      const view = buildEjesReportView(resultOf({ renumberDropped: [dropped], counts: { ...COUNTS, renumberDroppedCandidates: 700 } }));
+
+      expect(view.summaries.renumberDropped).toBe("Candidatos descartados (el tramo se renumera a otro reftramo) (primeras 1 de 700)");
     });
   });
 

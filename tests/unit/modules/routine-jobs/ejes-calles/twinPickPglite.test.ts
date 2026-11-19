@@ -8,6 +8,7 @@ import { buildAcceptedTablesSql } from "@/modules/routine-jobs/jobs/ejes-calles/
 import { buildCreateGeoTwinTableSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/geoTwinSql";
 import { summaryOf } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadMapping";
 import { buildCopyTableSql, LOAD_TEMP } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadSelectionSql";
+import { buildCreateDroppedTableSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/renumberSql";
 import { readAnalysis } from "@/modules/routine-jobs/jobs/ejes-calles/services/readEjesAnalysis";
 import { runEjesPersistTransaction, type EjesPersistOutcome } from "@/modules/routine-jobs/jobs/ejes-calles/services/writeEjesSteps";
 import { ANALYSIS_CHANGED_MESSAGE } from "@/modules/routine-jobs/jobs/ejes-calles/services/writeStatements";
@@ -110,7 +111,12 @@ describe("manual twin copy picks on PGlite (ET-28 to ET-33)", () => {
   /** The kept copies of one reftramo as the copy table of the load holds them, the analysis transaction's temp tables included. */
   const keptCopiesOf = async (twinPicks: EjesTwinPick[], ref: string): Promise<Array<{ localidad: string | null; departamento: string | null }>> => {
     await database.exec("BEGIN");
-    for (const sql of [...buildAcceptedTablesSql(withPicks(twinPicks)), buildCreateGeoTwinTableSql(LOAD_TEMP.GEO_TWIN), buildCopyTableSql(ejesLayouts())]) {
+    for (const sql of [
+      ...buildAcceptedTablesSql(withPicks(twinPicks)),
+      buildCreateDroppedTableSql(LOAD_TEMP.DROPPED),
+      buildCreateGeoTwinTableSql(LOAD_TEMP.GEO_TWIN),
+      buildCopyTableSql(ejesLayouts()),
+    ]) {
       await database.exec(sql);
     }
     const rows = await rowsOf<{ localidad: string | null; departamento: string | null }>(
@@ -138,10 +144,7 @@ describe("manual twin copy picks on PGlite (ET-28 to ET-33)", () => {
       await seedUrbanTwin("8002", ["TRINIDAD", "SAN JOSE", "FLORES RURAL"]);
 
       expect(await keptCopiesOf([pickOf("8002", "SORIANO", "SAN JOSE")], "8002")).toEqual(await keptCopiesOf([], "8002"));
-      expect(await keptCopiesOf([], "8002")).toEqual([
-        { localidad: "SAN JOSE", departamento: "FLORES" },
-        { localidad: "TRINIDAD", departamento: "FLORES" },
-      ]);
+      expect(await keptCopiesOf([], "8002")).toEqual([{ localidad: "SAN JOSE", departamento: "FLORES" }]);
     });
 
     it("should keep the picked copy over the locality rule and drop the other copy of its reftramo", async () => {

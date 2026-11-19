@@ -12,7 +12,7 @@ import { acceptedCountTextOf } from "./ejesAcceptTexts";
 import { mergeColumnsOf } from "./compact/ejesMergeColumns";
 import { splitColumnsOf } from "./compact/ejesSplitColumns";
 import { GEO_TWIN_COLUMNS, GEO_TWIN_TEXT, isGeoTwinRemovable } from "./compact/ejesGeoTwinColumns";
-import { ATTR_COLUMNS, HELD_RENUMBER_COLUMNS, INVALID_GEOMETRY_COLUMNS, REMOVAL_COLUMNS, STREET_COLUMNS } from "./ejesReportColumns";
+import { ATTR_COLUMNS, HELD_RENUMBER_COLUMNS, INVALID_GEOMETRY_COLUMNS, REMOVAL_COLUMNS, RENUMBER_DROPPED_COLUMNS, STREET_COLUMNS } from "./ejesReportColumns";
 import { heldRenumberKeyOf, type EjesHeldRenumberView } from "./ejesRenumberHeldView";
 import { subjectOfGeoTwin, subjectOfHeldCandidates, type EjesMapSubject } from "./ejesMapSubject";
 import { RowsTable } from "../shared/ReportParts";
@@ -93,6 +93,11 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
         EJES_LIST.RENUMBER_HELD,
         result.renumberSkipped.length,
         <RowsTable columns={HELD_RENUMBER_COLUMNS} rows={view.heldRenumbers} rowKey={heldRenumberKeyOf} onShowOnMap={showHeld} />
+      )}
+      {section(
+        EJES_LIST.RENUMBER_DROPPED,
+        result.renumberDropped.length,
+        <RowsTable columns={RENUMBER_DROPPED_COLUMNS} rows={result.renumberDropped} rowKey={(row) => row.ref} />
       )}
       {accept !== undefined &&
         section(

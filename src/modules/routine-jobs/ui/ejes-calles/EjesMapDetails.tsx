@@ -62,7 +62,6 @@ const renumberedFactsOf = (subject: EjesMapSubject, hausdorff: number | null): D
 const geoTwinFactsOf = (row: EjesGeoTwinRow): DetailRow[] => [
   ["idcalle", textOrNoData(row.idcalle)],
   ["Localidad", textOrNoData(row.localidad)],
-  ["Departamento", textOrNoData(row.departamento)],
   [GEO_TWIN_TEXT.KEPT_HEADER, geoTwinKeptTextOf(row)],
   [GEO_TWIN_TEXT.REMOVED_HEADER, geoTwinRemovedTextOf(row)],
 ];

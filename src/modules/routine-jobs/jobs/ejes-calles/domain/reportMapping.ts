@@ -12,6 +12,7 @@ import type {
   EjesNewStreetRow,
   EjesRemovalRow,
   EjesRenumberedRow,
+  EjesRenumberDroppedRow,
   EjesRenumberSkippedRow,
   EjesSplitRow,
   EjesGeoTwinRow,
@@ -83,6 +84,14 @@ const renumberSkippedOf = (row: Row): EjesRenumberSkippedRow => ({
   reason: String(row.reason) as RenumberSkipReason,
 });
 
+const renumberDroppedOf = (row: Row): EjesRenumberDroppedRow => ({
+  ref: String(row.ref),
+  oldRef: String(row.old_ref),
+  keptRef: String(row.kept_ref),
+  hausdorff: nullableNumber(row.hausdorff),
+  points: numberOf(row.points),
+});
+
 const removalOf = (row: Row): EjesRemovalRow => ({
   ref: textOf(row.ref) ?? "",
   idcalle: textOf(row.idcalle),
@@ -152,7 +161,6 @@ const geoTwinOf = (row: Row): EjesGeoTwinRow => ({
   ref: String(row.ref),
   idcalle: textOf(row.idcalle),
   localidad: textOf(row.localidad),
-  departamento: textOf(row.departamento),
   groupKey: String(row.groupKey),
   partners: (textOf(row.partners) ?? "").split(",").filter((ref) => ref !== ""),
   role: String(row.role) as GeoTwinRole,
@@ -216,9 +224,12 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       twinsKeep: numberOf(row.twins_keep),
       twinsUndecided: numberOf(row.twins_undecided),
       twinPicksApplied: numberOf(row.twin_picks_applied),
+      twinsDefaulted: numberOf(row.twins_defaulted),
       renumbered: numberOf(row.renumbered),
       renumberedWithPoints: numberOf(row.renumbered_with_points),
       renumberedPoints: numberOf(row.renumbered_points),
+      renumberedByGeometry: numberOf(row.renumbered_by_geometry),
+      renumberDroppedCandidates: numberOf(row.renumber_dropped_candidates),
       renumberSkipped: numberOf(row.renumber_skipped),
       splitPointsTotal: numberOf(row.split_points),
       splitPointsAuto: numberOf(row.split_points_auto),
@@ -242,6 +253,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
     geoTwins: listOf(row[ANALYSIS_LIST_ALIAS.GEO_TWINS]).map(geoTwinOf),
     renumbered: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBERED]).map(renumberedOf),
     renumberSkipped: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED]).map(renumberSkippedOf),
+    renumberDropped: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBER_DROPPED]).map(renumberDroppedOf),
     fingerprint: { rows: numberOf(row.staging_rows), digest: textOf(row.staging_digest) ?? "" },
   };
 }

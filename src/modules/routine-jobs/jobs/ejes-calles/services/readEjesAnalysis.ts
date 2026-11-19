@@ -4,7 +4,7 @@ import { buildEjesAnalysisSql } from "../domain/analysisSql";
 import { EJES_STEP } from "../domain/plannedSteps";
 import { buildCreateRenumberTableSql, LOAD_TEMP, tmp } from "../domain/loadSelectionSql";
 import { buildCreateMergeTableSql, buildCreatePlainTableSql, buildCreateSplitTableSql } from "../domain/removalSql";
-import { buildCreateHeldTableSql } from "../domain/renumberSql";
+import { buildCreateDroppedTableSql, buildCreateHeldTableSql } from "../domain/renumberSql";
 import { buildCreateSplitPointTableSql } from "../domain/splitPointSql";
 import { buildCreateGeoTwinTableSql } from "../domain/geoTwinSql";
 import { toEjesAnalysis, toEjesStagingReport } from "../domain/reportMapping";
@@ -19,6 +19,7 @@ export interface EjesAnalysisBody {
 const LOAD_SINK_TABLE_SQL: readonly string[] = [
   buildCreateRenumberTableSql(LOAD_TEMP.RENUM),
   buildCreateHeldTableSql(LOAD_TEMP.HELD),
+  buildCreateDroppedTableSql(LOAD_TEMP.DROPPED),
   buildCreateMergeTableSql(LOAD_TEMP.MERGE),
   buildCreatePlainTableSql(LOAD_TEMP.PLAIN),
   buildCreateSplitTableSql(LOAD_TEMP.SPLIT),
@@ -44,6 +45,7 @@ export async function readAnalysisForLoad(session: RunSession, layouts: EjesLayo
   const sinks = {
     renumbered: tmp(LOAD_TEMP.RENUM),
     skipped: tmp(LOAD_TEMP.HELD),
+    dropped: tmp(LOAD_TEMP.DROPPED),
     merged: tmp(LOAD_TEMP.MERGE),
     plain: tmp(LOAD_TEMP.PLAIN),
     split: tmp(LOAD_TEMP.SPLIT),

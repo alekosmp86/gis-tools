@@ -140,6 +140,8 @@ export const TWIN_NEAR_MIN_LENGTH_M = 1;
 export const RURAL_LOCALITY_SUFFIX = " RURAL";
 /** A section with less than this share of its length inside the locality polygons is rural: its rural-named copy wins (ET-10). */
 export const TWIN_POLYGON_MIN_COVER_RATIO = 0.5;
+/** A locality polygon within this distance of a section names the copy that the default decision (ET-36) may keep. */
+export const TWIN_NEAREST_POLYGON_MAX_M = 500;
 /** Two copies of a geometric twin group have geometries equal within this Hausdorff distance (ET-20). */
 export const GEO_TWIN_TOLERANCE_M = 0.5;
 
@@ -277,6 +279,7 @@ export const RENUMBER_SKIP_REASON = {
   AMBIGUOUS_OLD_REF: "ambiguous_old_ref",
   AMBIGUOUS_NEW_REF: "ambiguous_new_ref",
   NOT_SINGLE_COPY: "not_single_copy",
+  CANDIDATE_HAS_POINTS: "candidate_has_points",
 } as const;
 
 export type RenumberSkipReason = (typeof RENUMBER_SKIP_REASON)[keyof typeof RENUMBER_SKIP_REASON];
@@ -290,6 +293,7 @@ export const EJES_SKIP_REASON = {
   SHARED_PIECE: "shared_piece",
   REVIEW_REQUIRED: "review_required",
   ID_LINKED_POINTS: "points_by_id",
+  WINNER_NOT_LOADED: "winner_not_loaded",
 } as const;
 
 export const EJES_POINT_REASON = {
@@ -332,4 +336,7 @@ export const EJES_SUMMARY_COUNT_KEYS = [
   "geoTwinLosersRemovable",
   "geoTwinLosersOmitted",
   "twinPicksApplied",
+  "twinsDefaulted",
+  "renumberedByGeometry",
+  "renumberDroppedCandidates",
 ] as const;

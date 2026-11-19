@@ -332,14 +332,73 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
     });
   });
 
+  describe("loser whose winner is not loaded (ET-25, EJL-29)", () => {
+    it("should skip an accepted loser in carto as winner_not_loaded when its winner is held by a renumber, moving and deleting nothing", async () => {
+      await seedCurrent(7002, "0:50");
+      await seedCurrent(8001, "0:50");
+      await seedCurrent(8002, "0:50");
+      await insertPoints(database, "7001", 2);
+      await insertPoints(database, "7002", 1);
+      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0:50")]);
+      const countBefore = await accessPointsCount();
+
+      const outcome = await persist({ ...NO_ACCEPTED, twinRemovals: ["7002"] });
+
+      expect(await sectionsByRef(7002)).toHaveLength(1);
+      expect(await pointsOn("7002")).toBe(1);
+      expect(await pointsOn("7001")).toBe(2);
+      expect(await accessPointsCount()).toBe(countBefore);
+      expect(outcome.load.skipped.filter((row) => row.kind === EJES_SKIP_KIND.TWIN)).toEqual([
+        expect.objectContaining({ refs: ["7002"], points: 1, reason: EJES_SKIP_REASON.WINNER_NOT_LOADED }),
+      ]);
+      expect(outcome.load.counts).toMatchObject({ twinsRemoved: 0, deleted: 0, pointsMoved: 0 });
+    });
+
+    it("should move the points of an accepted loser in carto to its winner when the winner is loaded as a new section", async () => {
+      await seedCurrent(7002, "0:50");
+      await insertPoints(database, "7001", 2);
+      await insertPoints(database, "7002", 1);
+      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0:50")]);
+      const countBefore = await accessPointsCount();
+
+      const outcome = await persist({ ...NO_ACCEPTED, twinRemovals: ["7002"] });
+
+      expect(await sectionsByRef(7001)).toHaveLength(1);
+      expect(await sectionsByRef(7002)).toEqual([]);
+      expect(await pointsOn("7001")).toBe(3);
+      expect(await accessPointsCount()).toBe(countBefore);
+      expect(outcome.load.counts).toMatchObject({ twinsRemoved: 1, deleted: 1, pointsMoved: 1 });
+    });
+  });
+
   describe("classification of the members (ET-23)", () => {
-    it("should group a shared geometry only within its own street and locality, leaving the member of another locality out", async () => {
+    it("should group a shared geometry of one street across its localities, the locality being informational only", async () => {
       await insertStaging(database, [staged("7001", "0:50", "TRINIDAD"), staged("7002", "0:50", "TRINIDAD"), staged("7003", "0:50", "SAN JOSE")]);
 
       const analysis = await analysisOf();
 
-      expect(analysis.geoTwins.map((row) => row.ref)).toEqual(["7001", "7002"]);
-      expect(analysis.counts).toMatchObject({ geoTwinGroups: 1, geoTwinSections: 2, newSections: 2 });
+      expect(analysis.geoTwins.map((row) => row.ref)).toEqual(["7001", "7002", "7003"]);
+      expect(analysis.counts).toMatchObject({ geoTwinGroups: 1, geoTwinSections: 3, geoTwinLosersOmitted: 2, newSections: 1 });
+    });
+
+    it("should group two geometries 0.3 m apart on different localities of one street", async () => {
+      await insertStaging(database, [staged("7001", "0:50", "TRINIDAD"), staged("7002", "0.3:50.3", "SAN JOSE")]);
+
+      const analysis = await analysisOf();
+
+      expect(rolesOf(analysis)).toEqual([
+        ["7001", GEO_TWIN_ROLE.WINNER, false],
+        ["7002", GEO_TWIN_ROLE.LOSER, false],
+      ]);
+    });
+
+    it("should not group two geometries 0.7 m apart on different localities of one street", async () => {
+      await insertStaging(database, [staged("7001", "0:50", "TRINIDAD"), staged("7002", "0.7:50.7", "SAN JOSE")]);
+
+      const analysis = await analysisOf();
+
+      expect(analysis.geoTwins).toEqual([]);
+      expect(analysis.counts).toMatchObject({ geoTwinGroups: 0, geoTwinSections: 0 });
     });
 
     it("should leave a loser out of the split pieces, so the split takes the winner and the other piece only", async () => {

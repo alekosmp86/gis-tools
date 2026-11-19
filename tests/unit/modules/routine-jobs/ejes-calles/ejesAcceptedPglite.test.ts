@@ -263,8 +263,8 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       await insertSection(database, { ref: 6301, calle: 9, geom: "0:50", distance: "50.00" });
       await insertSection(database, { ref: 6311, calle: 9, geom: "50:100", distance: "50.00" });
       await insertStaging(database, [
-        { ref: "6302", calle: "9", nombre: "CALLE NUEVE", localidad: "TRINIDAD", geom: "0:100" },
-        { ref: "6302", calle: "9", nombre: "CALLE NUEVE", localidad: "SAN JOSE", geom: "0:100" },
+        { ref: "6302", calle: "9", nombre: "CALLE NUEVE", localidad: "TRINIDAD", departamento: "FLORES", geom: "0:100" },
+        { ref: "6302", calle: "9", nombre: "CALLE NUEVE", localidad: "TRINIDAD", departamento: "SAN JOSE", geom: "0:100" },
       ]);
       const before = await snapshotOf(database);
 

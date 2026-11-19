@@ -126,6 +126,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
+    renumberDropped: [],
     attrChanges: [],
     blockers: [],
     privilegeInfo: [],

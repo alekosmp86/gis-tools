@@ -93,6 +93,7 @@ const resultOf = (twins: EjesTwinRow[], invalid: EjesInvalidGeometryRow[] = []):
     geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
+    renumberDropped: [],
     blockers: [],
     privilegeInfo: [],
     tables: {},

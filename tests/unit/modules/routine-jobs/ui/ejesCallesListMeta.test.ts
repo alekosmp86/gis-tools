@@ -13,6 +13,7 @@ type ListField =
   | "splits"
   | "merges"
   | "renumberSkipped"
+  | "renumberDropped"
   | "twinUndecided"
   | "plainRemovals"
   | "geoTwins"
@@ -74,6 +75,8 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
       renumbered: 0,
       renumberedWithPoints: 0,
       renumberedPoints: 0,
+      renumberedByGeometry: 0,
+      renumberDroppedCandidates: 0,
       renumberSkipped: 0,
       geoTwinGroups: 0,
       geoTwinSections: 0,
@@ -91,6 +94,7 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
     twinUndecided: [],
     geoTwins: [],
     renumberSkipped: [],
+    renumberDropped: [],
     ...lists,
     blockers: [],
     privilegeInfo: [],
@@ -101,15 +105,17 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
 const row = (n: number) => ({ ref: String(n) });
 
 describe("stripOf", () => {
-  it("should return twelve items in the fixed order", () => {
+  it("should return fourteen items in the fixed order", () => {
     const strip = stripOf(resultOf());
 
-    expect(strip).toHaveLength(12);
+    expect(strip).toHaveLength(14);
     expect(strip.map((item) => item.label)).toEqual([
       "Filas del archivo",
       "Calles nuevas",
       "Cambios de atributos",
       "Renumerados",
+      "de ellos, eligiendo por geometría",
+      "Candidatos descartados",
       "Renumerados retenidos",
       "Divididos",
       "Unidos",
@@ -130,6 +136,7 @@ describe("stripOf", () => {
           attr: 4,
           renumbered: 5,
           renumberSkipped: 11,
+          renumberDroppedCandidates: 12,
           splits: 6,
           merges: 7,
           plainRemovals: 8,
@@ -145,6 +152,7 @@ describe("stripOf", () => {
     expect(byLabel["Cambios de atributos"]).toMatchObject({ value: 4, list: EJES_LIST.ATTR_CHANGES });
     expect(byLabel["Renumerados"]).toMatchObject({ value: 5, list: null });
     expect(byLabel["Renumerados retenidos"]).toMatchObject({ value: 11, list: EJES_LIST.RENUMBER_HELD });
+    expect(byLabel["Candidatos descartados"]).toMatchObject({ value: 12, list: EJES_LIST.RENUMBER_DROPPED });
     expect(byLabel["Divididos"]).toMatchObject({ value: 6, list: EJES_LIST.SPLITS });
     expect(byLabel["Unidos"]).toMatchObject({ value: 7, list: EJES_LIST.MERGES });
     expect(byLabel["Sin reemplazo"]).toMatchObject({ value: 8, list: EJES_LIST.PLAIN_REMOVALS });
@@ -154,12 +162,13 @@ describe("stripOf", () => {
     expect(byLabel["Geometría inválida, colapsada o menor de 1 m"]).toMatchObject({ value: 3, list: EJES_LIST.INVALID_GEOMETRIES });
   });
 
-  it("should have no list for the count-only cells: rows, renumbered and the repeated-by-locality count", () => {
+  it("should have no list for the count-only cells: rows, renumbered, the renumbers by geometry and the repeated-by-locality count", () => {
     const strip = stripOf(resultOf());
 
     expect(strip.filter((item) => item.list === null).map((item) => item.label)).toEqual([
       "Filas del archivo",
       "Renumerados",
+      "de ellos, eligiendo por geometría",
       "Repetidos por localidad",
     ]);
   });
@@ -211,6 +220,7 @@ describe("defaultOpenListOf", () => {
     ["splits", EJES_LIST.SPLITS],
     ["merges", EJES_LIST.MERGES],
     ["renumberSkipped", EJES_LIST.RENUMBER_HELD],
+    ["renumberDropped", EJES_LIST.RENUMBER_DROPPED],
     ["plainRemovals", EJES_LIST.PLAIN_REMOVALS],
     ["geoTwins", EJES_LIST.GEO_TWINS],
     ["newStreets", EJES_LIST.NEW_STREETS],

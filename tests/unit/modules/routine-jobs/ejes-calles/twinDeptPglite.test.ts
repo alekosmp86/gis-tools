@@ -108,7 +108,7 @@ describe("twin department choice on PGlite (ET-2a)", () => {
 
       const result = await analysis();
 
-      expect(result.twins[0]).toMatchObject({ department: "FLORES", localities: ["BARRIO", "TRINIDAD"], dropLocalities: [] });
+      expect(result.twins[0]).toMatchObject({ department: "FLORES", localities: ["BARRIO", "TRINIDAD"], dropLocalities: ["TRINIDAD"] });
     });
 
     it("should keep every copy and count the reftramo as cross-department when no department polygon exists", async () => {

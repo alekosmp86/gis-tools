@@ -36,12 +36,13 @@ export async function assertTwinPicksExist(session: RunSession, layouts: EjesLay
 }
 
 /**
- * The plans count the kept copies of each new `reftramo` before the held groups' copies leave the selection. The split plan and the
- * split points come before the holds, the delete list and the skipped list, which read them. The choices are checked against the
- * split plan (a choice for an automatic point or for a held split aborts the load), before any write.
+ * The plans count the kept copies of each new `reftramo` before the held groups' copies leave the selection. The merge and split plans
+ * come before the plain plan, which reads them (a twin winner held as a piece or a merge `reftramo`), then the split points, the holds,
+ * the delete list and the skipped list, which read them. The choices are checked against the split plan (a choice for an automatic
+ * point or for a held split aborts the load), before any write.
  */
 export async function createRemovalPlans(session: RunSession, context: EjesLoadContext): Promise<void> {
-  await runInOrder(session, [buildMergePlanSql(), buildPlainPlanSql(), buildSplitPlanSql()]);
+  await runInOrder(session, [buildMergePlanSql(), buildSplitPlanSql(), buildPlainPlanSql()]);
   const invalidRefs = (await session.query(buildInvalidChoiceRefsSql())).rows.map((row) => String(row.old_ref));
   if (invalidRefs.length > 0) throw new Error(choiceNotApplicableOf(invalidRefs));
   await runInOrder(session, [

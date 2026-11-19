@@ -21,6 +21,9 @@ import { accessPointRefSql, canonicalTextSql, keptStagingRowSql } from "./stagin
 import {
   renumberCountColumns,
   renumberCtes,
+  renumberDroppedListColumn,
+  renumberOutcomeCtes,
+  renumberPruneCtes,
   renumberListColumn,
   renumberSinkCtes,
   renumberSkippedListColumn,
@@ -47,6 +50,7 @@ export const ANALYSIS_LIST_ALIAS = {
   GEO_TWINS: "geo_twins_json",
   RENUMBERED: "renumbered_json",
   RENUMBER_SKIPPED: "renumber_skipped_json",
+  RENUMBER_DROPPED: "renumber_dropped_json",
 } as const;
 
 export { comparableLineSql };
@@ -175,7 +179,7 @@ export function copyRawCte(layouts: EjesLayouts): string {
 
 /** A new `reftramo` held by a skipped renumber pair is neither new nor inserted: its section and its old one stay as they are. */
 const heldNewSql = (reference: string): string =>
-  `${reference} NOT IN (SELECT new_ref FROM ${q("renum_skipped")}) AND ${reference} NOT IN (SELECT ref FROM ${q("group_pieces")})`;
+  `${reference} NOT IN (SELECT new_ref FROM ${q("renum_skipped")}) AND ${reference} NOT IN (SELECT ref FROM ${q("group_pieces")}) AND ${reference} NOT IN (SELECT ref FROM ${q("renum_dropped")})`;
 
 /**
  * The copies the rules keep, and the copy a user picked (ET-28) for each `reftramo` in `twin_picks`. A pick that names a copy keeps only that
@@ -189,7 +193,8 @@ export const copyKeptCte = (): string =>
       `SELECT r.* FROM ${q("copy_raw")} AS r LEFT JOIN ${q("twins")} AS w ON w.ref = r.ref LEFT JOIN ${q("twin_dept")} AS d ON d.ref = r.ref`,
       `WHERE (NOT EXISTS (SELECT 1 FROM ${q(TWIN_PICKS_CTE)} AS p JOIN ${q("copy_raw")} AS x ON ${pickNamesCopySql("p", "x")} WHERE p.ref = r.ref)`,
       `AND ${departmentKeepsSql("r.departamento", "d.department")}`,
-      "AND (w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities))))",
+      "AND (w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities)))",
+      `AND (r.localidad IS NOT NULL OR NOT EXISTS (SELECT 1 FROM ${q("copy_raw")} AS x WHERE x.ref = r.ref AND x.localidad IS NOT NULL AND ${departmentKeepsSql("x.departamento", "d.department")})))`,
       `OR EXISTS (SELECT 1 FROM ${q(TWIN_PICKS_CTE)} AS p WHERE ${pickNamesCopySql("p", "r")})`,
     ].join(" ")
   );
@@ -380,6 +385,7 @@ function listColumns(): string[] {
     geoTwinListColumn(ANALYSIS_LIST_ALIAS.GEO_TWINS),
     renumberListColumn(ANALYSIS_LIST_ALIAS.RENUMBERED),
     renumberSkippedListColumn(ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED),
+    renumberDroppedListColumn(ANALYSIS_LIST_ALIAS.RENUMBER_DROPPED),
   ];
 }
 
@@ -390,7 +396,7 @@ function countColumns(): string[] {
     `${countOf("classified", "attr_changed")} AS "attr"`,
     `${countOf("classified", "geom_changed")} AS "geom"`,
     `${countOf("classified", "attr_changed AND geom_changed")} AS "both"`,
-    `${countOf("removed", `id NOT IN (SELECT old_id FROM ${q("renum_skipped")})`)} AS "removed"`,
+    `${countOf("removed", `id NOT IN (SELECT old_id FROM ${q("renum_status")} WHERE skip_reason IS NOT NULL)`)} AS "removed"`,
     `${countOf("splits")} AS "splits"`,
     `${countOf("merges")} AS "merges"`,
     ...splitPointCountColumns(),
@@ -427,12 +433,14 @@ export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks
     twinPicksValuesCte(twinPicks),
     copyKeptCte(),
     ...geoTwinCtes(),
-    copyFinalCte(q("geo_losers")),
-    copyCountCte(),
-    twinUndecidedCte(),
     ...stagedCtes(layouts),
     ...classifiedCtes(),
     ...removalCtes(),
+    ...renumberPruneCtes(),
+    ...renumberOutcomeCtes(),
+    copyFinalCte(q("geo_losers"), q("renum_dropped")),
+    copyCountCte(),
+    twinUndecidedCte(),
     ...renumberCtes(),
     ...(sinks === undefined ? [] : renumberSinkCtes(sinks)),
     ...splitCtes(),

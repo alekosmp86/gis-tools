@@ -10,13 +10,17 @@ import {
   renumberCountColumns,
   renumberCtes,
   renumberListColumn,
+  renumberOutcomeCtes,
+  renumberPruneCtes,
   renumberSkippedListColumn,
   renumberSinkCtes,
 } from "@/modules/routine-jobs/jobs/ejes-calles/domain/renumberSql";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { ejesLayouts } from "./ejesFixtures";
 
-const cteNamed = (name: string): string => renumberCtes().find((entry) => entry.startsWith(`"${name}" AS (`)) ?? "";
+const renumberChain = (): string[] => [...renumberPruneCtes(), ...renumberOutcomeCtes(), ...renumberCtes()];
+
+const cteNamed = (name: string): string => renumberChain().find((entry) => entry.startsWith(`"${name}" AS (`)) ?? "";
 
 describe("renumber constants (ER-1)", () => {
   it("should be 0.5 m for the Hausdorff distance and the existing 1 m tolerance for the candidates", () => {
@@ -25,23 +29,31 @@ describe("renumber constants (ER-1)", () => {
     expect(RENUMBER_CANDIDATE_DISTANCE_M).toBe(1);
   });
 
-  it("should name the four refusal reasons of EJL-17 in the spec's words", () => {
+  it("should name the four refusal reasons of EJL-17 in the spec's words and the candidate with points", () => {
     expect(RENUMBER_SKIP_REASON).toEqual({
       REPEATED_OLD_REF: "repeated_old_ref",
       AMBIGUOUS_OLD_REF: "ambiguous_old_ref",
       AMBIGUOUS_NEW_REF: "ambiguous_new_ref",
       NOT_SINGLE_COPY: "not_single_copy",
+      CANDIDATE_HAS_POINTS: "candidate_has_points",
     });
   });
 });
 
 describe("renumberCtes (ER-1, ER-2, ER-6, EJL-10, EJL-12, EJL-17)", () => {
-  it("should build the eight CTEs in order: candidates, counts, status, renumbered, skipped, then the rests", () => {
-    expect(renumberCtes().map((entry) => /^"(\w+)" AS/.exec(entry)?.[1])).toEqual([
+  it("should build the CTEs in order: candidates, the best candidate per old section, the outcomes of the losers, renumbered, skipped, then the rests", () => {
+    expect(renumberChain().map((entry) => /^"(\w+)" AS/.exec(entry)?.[1])).toEqual([
       "renum_cand",
+      "renum_ranked",
+      "renum_best",
       "cur_rows",
+      "copy_pre_refs",
       "renum_counted",
       "renum_status",
+      "renum_winners",
+      "renum_losers",
+      "renum_held_extra",
+      "renum_dropped",
       "renumbered",
       "renum_skipped",
       "removed_rest",
@@ -95,10 +107,11 @@ describe("renumberCtes (ER-1, ER-2, ER-6, EJL-10, EJL-12, EJL-17)", () => {
       expect(counted).not.toContain("PARTITION BY c.old_id");
     });
 
-    it("should count the current rows of the old reftramo and the kept copies of the new reftramo", () => {
+    it("should count the current rows of the old reftramo and the kept copies of the new reftramo, before the geometric losers are removed", () => {
       expect(cteNamed("cur_rows")).toContain('SELECT c.ref, count(*) AS rows FROM "cur" AS c GROUP BY c.ref');
+      expect(cteNamed("copy_pre_refs")).toContain('WHERE NOT EXISTS (SELECT 1 FROM "geo_losers" AS l WHERE l.ref = k.ref) GROUP BY k.ref');
       expect(counted).toContain('LEFT JOIN "cur_rows" AS k ON k.ref = c.old_ref');
-      expect(counted).toContain('LEFT JOIN "copy_refs" AS kc ON kc.ref = c.new_ref');
+      expect(counted).toContain('LEFT JOIN "copy_pre_refs" AS kc ON kc.ref = c.new_ref');
       expect(counted).toContain("COALESCE(k.rows, 0) AS old_rows");
       expect(counted).toContain("COALESCE(kc.copies, 0) AS new_copies");
     });
@@ -163,20 +176,25 @@ describe("renumberCtes (ER-1, ER-2, ER-6, EJL-10, EJL-12, EJL-17)", () => {
         'FROM "new_sections" AS n WHERE n.ref NOT IN (SELECT new_ref FROM "renumbered") AND n.ref NOT IN (SELECT new_ref FROM "renum_skipped")'
       );
     });
+
+    it("should leave a discarded new reftramo out of new_rest, so the load keeps none of its copies", () => {
+      expect(cteNamed("new_rest")).toContain('AND n.ref NOT IN (SELECT ref FROM "renum_dropped")');
+    });
   });
 });
 
 describe("renumber sinks (EJL-23)", () => {
-  it("should insert the renumbered pairs and the held pairs into the two temp tables, one data-modifying CTE each", () => {
-    const sinks = renumberSinkCtes({ renumbered: "pg_temp.\"ej_renum\"", skipped: "pg_temp.\"ej_held\"" });
+  it("should insert the renumbered pairs, the held pairs and the discarded candidates into the three temp tables, one data-modifying CTE each", () => {
+    const sinks = renumberSinkCtes({ renumbered: "pg_temp.\"ej_renum\"", skipped: "pg_temp.\"ej_held\"", dropped: "pg_temp.\"ej_dropped\"" });
 
-    expect(sinks).toHaveLength(2);
+    expect(sinks).toHaveLength(3);
     expect(sinks[0]).toBe(
       '"renum_sink" AS (INSERT INTO pg_temp."ej_renum" (old_id, old_ref, new_ref, points) SELECT r.old_id, r.old_ref, r.new_ref, r.points FROM "renumbered" AS r RETURNING 1)'
     );
     expect(sinks[1]).toBe(
       '"held_sink" AS (INSERT INTO pg_temp."ej_held" (old_id, old_ref, new_ref, idcalle, points, reason) SELECT r.old_id, r.old_ref, r.new_ref, r.idcalle, r.points, r.reason FROM "renum_skipped" AS r RETURNING 1)'
     );
+    expect(sinks[2]).toBe('"dropped_sink" AS (INSERT INTO pg_temp."ej_dropped" (ref) SELECT d.ref FROM "renum_dropped" AS d RETURNING 1)');
   });
 });
 
@@ -186,6 +204,8 @@ describe("renumber counts and list (ER-3, EJL-12, EJL-13)", () => {
       '(SELECT count(*) FROM "renumbered" WHERE true) AS "renumbered"',
       '(SELECT count(*) FROM "renumbered" WHERE points > 0) AS "renumbered_with_points"',
       '(SELECT COALESCE(sum(points), 0) FROM "renumbered") AS "renumbered_points"',
+      '(SELECT count(*) FROM "renumbered" WHERE by_geometry) AS "renumbered_by_geometry"',
+      '(SELECT count(*) FROM "renum_dropped" WHERE true) AS "renumber_dropped_candidates"',
       '(SELECT count(*) FROM (SELECT DISTINCT p.old_ref, p.new_ref FROM "renum_skipped" AS p) AS pairs) AS "renumber_skipped"',
     ]);
   });
@@ -225,7 +245,7 @@ describe("renumbered wiring in the analysis (ER-1, ER-2, ER-3)", () => {
   const sql = buildEjesAnalysisSql(ejesLayouts());
 
   it("should select the counts and the lists under their alias", () => {
-    for (const alias of ["renumbered", "renumbered_with_points", "renumbered_points", "renumber_skipped"]) {
+    for (const alias of ["renumbered", "renumbered_with_points", "renumbered_points", "renumbered_by_geometry", "renumber_dropped_candidates", "renumber_skipped"]) {
       expect(sql).toContain(`AS "${alias}"`);
     }
     expect(sql).toContain(`AS "${ANALYSIS_LIST_ALIAS.RENUMBERED}"`);
@@ -249,7 +269,7 @@ describe("renumbered wiring in the analysis (ER-1, ER-2, ER-3)", () => {
   it("should keep removed as the raw count of current sections no longer in the file, held ones aside (EJL-12)", () => {
     expect(sql).toContain('NOT EXISTS (SELECT 1 FROM "stg_keys" AS k WHERE k.ref = c.ref)');
     expect(sql).toContain('AS "removed"');
-    expect(sql).toContain('WHERE id NOT IN (SELECT old_id FROM "renum_skipped")) AS "removed"');
+    expect(sql).toContain('WHERE id NOT IN (SELECT old_id FROM "renum_status" WHERE skip_reason IS NOT NULL)) AS "removed"');
   });
 
   it("should make the split, merge and plain logic read the rest, never the full removed or new sets", () => {

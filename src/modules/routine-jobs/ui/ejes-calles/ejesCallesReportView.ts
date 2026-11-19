@@ -21,6 +21,7 @@ export interface EjesListSummaries {
   geoTwins: string;
   invalidGeometries: string;
   renumberHeld: string;
+  renumberDropped: string;
 }
 
 export interface EjesAttrRowView extends EjesAttrRow {
@@ -180,6 +181,7 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
         kpi("Se quitaría alguna copia", counts.twinsDrop),
         kpi("Se mantienen todas", counts.twinsKeep),
         kpi("En más de un departamento: sin regla", counts.twinsCrossDepartment),
+        kpi("Decididos por defecto", counts.twinsDefaulted),
       ],
     },
     {
@@ -212,6 +214,7 @@ const summariesOf = (result: EjesResult): EjesListSummaries => ({
   attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
   invalidGeometries: listSummaryOf("Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso (se omiten)",result.staging.invalidGeometries.length, result.staging.invalidGeometryRows),
   renumberHeld: listSummaryOf("Renumerados retenidos (ambos tramos quedan como están)", result.renumberSkipped.length, result.counts.renumberSkipped),
+  renumberDropped: listSummaryOf("Candidatos descartados (el tramo se renumera a otro reftramo)", result.renumberDropped.length, result.counts.renumberDroppedCandidates),
   twinUndecided: listSummaryOf("Tramos con varias copias sin decidir", result.twinUndecided.length, result.counts.twinsUndecided),
   geoTwins: listSummaryOf("Tramos gemelos por geometría (complemento de las localidades)", result.geoTwins.length, result.counts.geoTwinSections),
 });

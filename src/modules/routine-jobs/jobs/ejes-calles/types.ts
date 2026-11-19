@@ -122,9 +122,15 @@ export interface EjesCounts {
   twinsKeep: number;
   twinsUndecided: number;
   twinPicksApplied: number;
+  /** Twin rows decided by the default (ET-36) after every other rule and the picks. */
+  twinsDefaulted: number;
   renumbered: number;
   renumberedWithPoints: number;
   renumberedPoints: number;
+  /** Renumbers that chose their new section among several candidates of one old section (the best by geometry). */
+  renumberedByGeometry: number;
+  /** New `reftramo`s discarded as copies of the place a better candidate of the same old section took (EJL-28). */
+  renumberDroppedCandidates: number;
   renumberSkipped: number;
   splitPointsTotal: number;
   splitPointsAuto: number;
@@ -217,8 +223,8 @@ export interface EjesTwinRow {
 export interface EjesGeoTwinRow {
   ref: string;
   idcalle: string | null;
+  /** Informational only: the locality is not part of the group key. */
   localidad: string | null;
-  departamento: string | null;
   groupKey: string;
   partners: string[];
   role: GeoTwinRole;
@@ -269,6 +275,15 @@ export interface EjesRenumberSkippedRow {
   reason: RenumberSkipReason;
 }
 
+/** A losing candidate not loaded: its `reftramo`, the old section it lost for, the `reftramo` kept for that old one, and the old section's points. */
+export interface EjesRenumberDroppedRow {
+  ref: string;
+  oldRef: string;
+  keptRef: string;
+  hausdorff: number | null;
+  points: number;
+}
+
 /** The staging as the analysis reads it: its row count and an md5 over its rows (see `fingerprintCtes`). */
 export interface EjesFingerprint {
   rows: number;
@@ -309,6 +324,7 @@ export interface EjesAnalysis {
   geoTwins: EjesGeoTwinRow[];
   renumbered: EjesRenumberedRow[];
   renumberSkipped: EjesRenumberSkippedRow[];
+  renumberDropped: EjesRenumberDroppedRow[];
   fingerprint: EjesFingerprint;
   /** The review points of a dry run, stored server side and stripped from the job result (see `withReviewRetention`). */
   reviewPoints?: EjesStoredReviewPoint[];

@@ -39,7 +39,7 @@ describe("twinSql module (ET-13)", () => {
     expect(column).toContain("ORDER BY CASE t.class WHEN 'NEITHER' THEN 0 WHEN 'BOTH' THEN 1 WHEN 'RURAL' THEN 2 WHEN 'URBAN' THEN 3 END, t.ref");
   });
 
-  it("should build the eight twin count columns", () => {
+  it("should build the nine twin count columns, the defaulted rows among them", () => {
     const aliases = twinCountColumns().map((column) => /AS "(\w+)"$/.exec(column)?.[1]);
 
     expect(aliases).toEqual([
@@ -50,6 +50,7 @@ describe("twinSql module (ET-13)", () => {
       "twins_neither",
       "twins_drop",
       "twins_keep",
+      "twins_defaulted",
       "twins_cross_department",
     ]);
   });

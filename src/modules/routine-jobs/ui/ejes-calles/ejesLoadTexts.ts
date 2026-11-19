@@ -31,6 +31,7 @@ export const RENUMBER_SKIP_TEXT: Record<RenumberSkipReason, string> = {
   [RENUMBER_SKIP_REASON.AMBIGUOUS_OLD_REF]: "El tramo actual tiene más de un candidato",
   [RENUMBER_SKIP_REASON.AMBIGUOUS_NEW_REF]: "El reftramo nuevo tiene más de un candidato",
   [RENUMBER_SKIP_REASON.NOT_SINGLE_COPY]: "El reftramo nuevo no tiene exactamente una copia",
+  [RENUMBER_SKIP_REASON.CANDIDATE_HAS_POINTS]: "El reftramo candidato tiene puntos de acceso: no se descarta",
 };
 
 export const SKIP_REASON_TEXT: Record<EjesSkipReason, string> = {
@@ -42,6 +43,7 @@ export const SKIP_REASON_TEXT: Record<EjesSkipReason, string> = {
   [EJES_SKIP_REASON.NO_REFTRAMO]: "Sin reftramo: no se puede verificar",
   [EJES_SKIP_REASON.SHARED_OLD_REF]: "Un tramo actual pertenece a otra unión aceptada",
   [EJES_SKIP_REASON.ID_LINKED_POINTS]: "Puntos de acceso ligados por id: el tramo no se quita",
+  [EJES_SKIP_REASON.WINNER_NOT_LOADED]: "El gemelo que se queda no se carga: este tramo queda como está y sus puntos no se mueven",
 };
 
 export const NO_REFTRAMO_TEXT = "sin reftramo";

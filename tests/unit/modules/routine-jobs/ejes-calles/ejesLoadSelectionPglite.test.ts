@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildAcceptedTablesSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/acceptedSql";
 import { buildCreateGeoTwinTableSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/geoTwinSql";
 import { NO_ACCEPTED } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadMapping";
+import { buildCreateDroppedTableSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/renumberSql";
 import {
   buildCopyTableSql,
   buildCreateRenumberTableSql,
@@ -40,6 +41,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
     const layouts = ejesLayouts();
     await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.RENUM));
     await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.HELD));
+    await database.exec(buildCreateDroppedTableSql(LOAD_TEMP.DROPPED));
     await database.exec(buildCreateGeoTwinTableSql(LOAD_TEMP.GEO_TWIN));
     for (const row of renumbered) {
       await database.query(`INSERT INTO pg_temp."${LOAD_TEMP.RENUM}" (old_id, old_ref, new_ref, points) VALUES ($1, $2, $3, 0)`, [row.oldId, row.oldRef, row.newRef]);
@@ -322,11 +324,11 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
   });
 
   describe("pairing by reftramo (EJL-7)", () => {
-    /** Two copies of one reftramo with two non-rural localities and no padron or locality polygon: NEITHER, nothing dropped, both kept. */
+    /** Two copies of one reftramo in two departments with one locality: not a twin, so both are kept. */
     const twinUndecided = async (ref: string): Promise<void> => {
       await insertStaging(database, [
-        { ref, calle: "10", nombre: "CALLE UNO", localidad: "TRINIDAD", geom: "0:50" },
-        { ref, calle: "10", nombre: "CALLE UNO", localidad: "ZETA", geom: "0:50" },
+        { ref, calle: "10", nombre: "CALLE UNO", localidad: "TRINIDAD", departamento: "FLORES", geom: "0:50" },
+        { ref, calle: "10", nombre: "CALLE UNO", localidad: "TRINIDAD", departamento: "SAN JOSE", geom: "0:50" },
       ]);
     };
 
@@ -349,18 +351,18 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       const lowOther = await insertSection(database, { ref: 7, calle: 11, geom: "0:50" });
       const highSame = await insertSection(database, { ref: 7, calle: 10, geom: "0:50" });
       await insertStaging(database, [
-        { ref: "7", calle: "10", nombre: "CALLE UNO", localidad: "TRINIDAD", geom: "0:50" },
-        { ref: "7", calle: "12", nombre: "OTRA", localidad: "ZETA", geom: "0:50" },
+        { ref: "7", calle: "10", nombre: "CALLE UNO", localidad: "TRINIDAD", departamento: "FLORES", geom: "0:50" },
+        { ref: "7", calle: "12", nombre: "OTRA", localidad: "TRINIDAD", departamento: "SAN JOSE", geom: "0:50" },
       ]);
 
       await select();
 
-      const found = await rowsOf<{ localidad: string; road_id: number }>(
+      const found = await rowsOf<{ departamento: string; road_id: number }>(
         database,
-        `SELECT c.localidad, p.road_id FROM pg_temp."${LOAD_TEMP.COPY}" c JOIN pg_temp."${LOAD_TEMP.PAIR}" p ON p.copy_id = c.copy_id ORDER BY c.localidad`
+        `SELECT c.departamento, p.road_id FROM pg_temp."${LOAD_TEMP.COPY}" c JOIN pg_temp."${LOAD_TEMP.PAIR}" p ON p.copy_id = c.copy_id ORDER BY c.departamento`
       );
-      expect(found.find((row) => row.localidad === "TRINIDAD")?.road_id).toBe(highSame);
-      expect(found.find((row) => row.localidad === "ZETA")?.road_id).toBe(lowOther);
+      expect(found.find((row) => row.departamento === "FLORES")?.road_id).toBe(highSame);
+      expect(found.find((row) => row.departamento === "SAN JOSE")?.road_id).toBe(lowOther);
     });
 
     it("K > E: should pair E copies and leave K-E copies unpaired (NEW)", async () => {

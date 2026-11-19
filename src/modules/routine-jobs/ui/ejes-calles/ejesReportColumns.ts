@@ -1,4 +1,5 @@
-import type { EjesInvalidGeometryRow, EjesNewStreetRow, EjesRemovalRow } from "../../jobs/ejes-calles/types";
+import { DISTANCE_DECIMALS } from "../../jobs/ejes-calles/constants";
+import type { EjesInvalidGeometryRow, EjesNewStreetRow, EjesRemovalRow, EjesRenumberDroppedRow } from "../../jobs/ejes-calles/types";
 import type { EjesAttrRowView } from "./ejesCallesReportView";
 import type { EjesHeldRenumberView } from "./ejesRenumberHeldView";
 import { NO_REFTRAMO_TEXT, RENUMBER_SKIP_TEXT } from "./ejesLoadTexts";
@@ -11,6 +12,14 @@ export const HELD_RENUMBER_COLUMNS: TableColumn<EjesHeldRenumberView>[] = [
   { header: "idcalle", cell: (view) => textOrNoData(view.idcalle) },
   { header: "Puntos de acceso", cell: (view) => String(view.points) },
   { header: "Motivo", cell: (view) => RENUMBER_SKIP_TEXT[view.reason] },
+];
+
+export const RENUMBER_DROPPED_COLUMNS: TableColumn<EjesRenumberDroppedRow>[] = [
+  { header: "reftramo descartado", cell: (row) => row.ref },
+  { header: "reftramo anterior", cell: (row) => row.oldRef },
+  { header: "reftramo que se queda", cell: (row) => row.keptRef },
+  { header: "Hausdorff (m)", cell: (row) => textOrNoData(row.hausdorff === null ? null : row.hausdorff.toFixed(DISTANCE_DECIMALS)) },
+  { header: "Puntos de acceso", cell: (row) => String(row.points) },
 ];
 
 export const REMOVAL_COLUMNS: TableColumn<EjesRemovalRow>[] = [
