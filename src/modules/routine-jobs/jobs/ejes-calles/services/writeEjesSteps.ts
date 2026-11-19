@@ -207,7 +207,7 @@ async function writeRenumbered(session: RunSession, context: EjesLoadContext, pl
     assertWritten("el reftramo de los tramos renumerados", await writtenBy(session, buildRenumberSectionsSql(context)), plan.counts.renumbered);
   }
   if (plan.movedPoints === 0) return;
-  // Ordered: the points move after their sections took the new reftramo, in the same transaction; merged points follow their new section.
+  // Ordered: the points move after their sections took the new reftramo, in the same transaction; merged and twin-loser points follow their new section.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   assertWritten("los puntos de acceso movidos", await writtenBy(session, buildMovePointsSql(context)), plan.movedPoints);
 }

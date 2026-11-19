@@ -1,112 +1,117 @@
 import { cte, q } from "../../shared/sqlFragments";
-import { GEO_TWIN_ROLE } from "../constants";
-import { comparableLineSql } from "./geometryCompareSql";
+import { GEO_TWIN_ROLE, GEO_TWIN_TOLERANCE_M } from "../constants";
 import { countOf, listOf } from "./layoutSql";
 
 /**
  * Geometric twins (ET-20 to ET-27, a complement of the locality twins of ET-1 to ET-18). They run AFTER the locality rule: they read
- * `copy_kept`, the copies the locality rule keeps. A reftramo takes part only with exactly one kept copy, whose locality, department,
- * idcalle and geometry define its key. A group is the set of members sharing the four of them (key, idcalle, localidad, departamento):
- * a geometry shared by sections of another street or locality splits into its own groups, and a section that matches none is no member.
+ * `copy_kept`, the copies the locality rule keeps. A reftramo takes part only with exactly one kept copy, whose locality, department and
+ * idcalle are complete. Members that share the three of them and whose geometries are equal within the tolerance are grouped by anchor
+ * (the lowest reftramo among the members within the tolerance of a member); chains are not merged transitively.
  */
 export interface GeoTwinSinks {
   geoTwins: string;
 }
 
 const GEO_TWIN_TABLE_COLUMNS =
-  "ref text, group_key text, role text, in_carto boolean, section_id bigint, cur_rows bigint, points bigint, idcalle text, localidad text, departamento text, partners text";
+  "ref text, group_key text, role text, in_carto boolean, section_id bigint, cur_rows bigint, points bigint, id_points bigint, idcalle text, localidad text, departamento text, partners text, winner_ref text";
 
 /** One row per member of a geometric twin group, as the analysis decided it (the load reads the same rows). */
 export const buildCreateGeoTwinTableSql = (name: string): string => `CREATE TEMP TABLE ${q(name)} (${GEO_TWIN_TABLE_COLUMNS}) ON COMMIT DROP`;
 
-/** The grouping key: an md5 of the comparable line (the same snap grid as the GEOM comparison, EJ-9), short enough to group and sort. */
-const geometryKeySql = (geometry: string): string => `md5(ST_AsEWKB(${comparableLineSql(geometry)}))`;
-
 const roleLiteral = (role: keyof typeof GEO_TWIN_ROLE): string => `'${GEO_TWIN_ROLE[role]}'`;
+
+/** A loser the load removes: in carto, one current section, and no point by the `road_section.id` of that section. */
+const removableSql = (prefix: string): string =>
+  `${prefix}role = ${roleLiteral("LOSER")} AND ${prefix}in_carto AND ${prefix}cur_rows = 1 AND ${prefix}id_points = 0`;
 
 /**
  * The geometric rule, after the locality rule. `cur` and `ap` are the current sections and the points by `reftramo` (`currentCtes`),
- * `copy_kept` the copies the locality rule keeps. Keepers hold a point reference (by `reftramo`, or by the `road_section.id` of a section
- * with that reftramo); the winner is the single member kept when no member of its group holds one (a member in carto first, then the
- * lowest reftramo); every other member is a loser. Losers are never inserted, classified or split, and a loser in carto is a removal offer.
+ * `copy_kept` the copies the locality rule keeps. The winner of a group is its member with the most access points (by `reftramo` and by
+ * the `road_section.id` of its section), a member in carto first, then the lowest reftramo. Every other member is a loser: never inserted,
+ * classified or split; a loser in carto is a removal offer, and its points move to the winner when it is accepted.
  */
 export function geoTwinCtes(): string[] {
   return [
     cte(
       "geo_keys",
-      `SELECT k.ref, k.idcalle, upper(btrim(k.localidad)) AS localidad, upper(btrim(k.departamento)) AS departamento, ${geometryKeySql("k.geom")} AS key FROM ${q("copy_kept")} AS k`
+      `SELECT k.ref, k.idcalle, upper(btrim(k.localidad)) AS localidad, upper(btrim(k.departamento)) AS departamento, k.geom FROM ${q("copy_kept")} AS k`
     ),
     cte(
       "geo_refs",
       [
-        "SELECT g.ref, count(*) AS copies, min(g.idcalle) AS idcalle, min(g.localidad) AS localidad, min(g.departamento) AS departamento, min(g.key) AS key,",
+        "SELECT g.ref, count(*) AS copies, min(g.idcalle) AS idcalle, min(g.localidad) AS localidad, min(g.departamento) AS departamento, (array_agg(g.geom))[1] AS geom,",
         "bool_and(g.idcalle IS NOT NULL AND g.localidad IS NOT NULL AND g.departamento IS NOT NULL) AS complete",
         `FROM ${q("geo_keys")} AS g GROUP BY g.ref`,
       ].join(" ")
     ),
     cte("geo_members", `SELECT r.* FROM ${q("geo_refs")} AS r WHERE r.copies = 1 AND r.complete`),
     cte(
-      "geo_groups",
+      "geo_pairs",
       [
-        `SELECT m.key, m.idcalle, m.localidad, m.departamento FROM ${q("geo_members")} AS m`,
-        "GROUP BY m.key, m.idcalle, m.localidad, m.departamento HAVING count(*) >= 2",
+        "SELECT a.ref, a.idcalle, a.localidad, a.departamento, b.ref AS other",
+        `FROM ${q("geo_members")} AS a JOIN ${q("geo_members")} AS b`,
+        "ON b.idcalle = a.idcalle AND b.localidad = a.localidad AND b.departamento = a.departamento",
+        `AND a.geom && ST_Expand(b.geom, ${GEO_TWIN_TOLERANCE_M}) AND ST_HausdorffDistance(a.geom, b.geom) < ${GEO_TWIN_TOLERANCE_M}`,
+      ].join(" ")
+    ),
+    cte(
+      "geo_anchors",
+      [
+        "SELECT p.ref, p.idcalle, p.localidad, p.departamento, (array_agg(p.other ORDER BY CAST(p.other AS numeric), p.other))[1] AS group_key",
+        `FROM ${q("geo_pairs")} AS p GROUP BY p.ref, p.idcalle, p.localidad, p.departamento`,
       ].join(" ")
     ),
     cte(
       "geo_grouped",
       [
-        "SELECT m.ref, m.key, m.idcalle, m.localidad, m.departamento,",
-        "concat_ws('|', m.key, m.idcalle, m.localidad, m.departamento) AS gid, COALESCE(ap.points, 0) AS ref_points",
-        `FROM ${q("geo_members")} AS m`,
-        `JOIN ${q("geo_groups")} AS gg ON gg.key = m.key AND gg.idcalle = m.idcalle AND gg.localidad = m.localidad AND gg.departamento = m.departamento`,
-        `LEFT JOIN ${q("ap")} AS ap ON ap.ref = m.ref`,
+        "SELECT a.ref, a.group_key, a.idcalle, a.localidad, a.departamento, COALESCE(ap.points, 0) AS ref_points",
+        `FROM ${q("geo_anchors")} AS a LEFT JOIN ${q("ap")} AS ap ON ap.ref = a.ref`,
       ].join(" ")
+    ),
+    cte(
+      "geo_sized",
+      `SELECT x.* FROM ${q("geo_grouped")} AS x WHERE x.group_key IN (SELECT g.group_key FROM ${q("geo_grouped")} AS g GROUP BY g.group_key HAVING count(*) >= 2)`
     ),
     cte(
       "geo_cur",
       [
         "SELECT c.ref, min(c.id) AS section_id, count(*) AS cur_rows, COALESCE(sum(apid.points), 0) AS id_points",
         `FROM ${q("cur")} AS c LEFT JOIN ${q("ap")} AS apid ON apid.ref = c.id::text`,
-        `WHERE c.ref IN (SELECT x.ref FROM ${q("geo_grouped")} AS x) GROUP BY c.ref`,
+        `WHERE c.ref IN (SELECT x.ref FROM ${q("geo_sized")} AS x) GROUP BY c.ref`,
       ].join(" ")
     ),
     cte(
       "geo_held",
       [
-        "SELECT x.ref, x.key, x.idcalle, x.localidad, x.departamento, x.gid, x.ref_points, COALESCE(g.id_points, 0) AS id_points,",
+        "SELECT x.ref, x.group_key, x.idcalle, x.localidad, x.departamento, x.ref_points, COALESCE(g.id_points, 0) AS id_points,",
         "g.section_id, COALESCE(g.cur_rows, 0) AS cur_rows",
-        `FROM ${q("geo_grouped")} AS x LEFT JOIN ${q("geo_cur")} AS g ON g.ref = x.ref`,
+        `FROM ${q("geo_sized")} AS x LEFT JOIN ${q("geo_cur")} AS g ON g.ref = x.ref`,
       ].join(" ")
     ),
     cte(
       "geo_ranked",
       [
-        "SELECT h.*, (h.ref_points + h.id_points > 0) AS holds,",
-        "bool_or(h.ref_points + h.id_points > 0) OVER (PARTITION BY h.gid) AS group_keeps,",
-        "row_number() OVER (PARTITION BY h.gid ORDER BY (h.section_id IS NULL), CAST(h.ref AS numeric)) AS rn,",
-        "min(CAST(h.ref AS numeric)) OVER (PARTITION BY h.gid) AS group_label",
+        "SELECT h.*, h.ref_points + h.id_points AS points,",
+        "row_number() OVER (PARTITION BY h.group_key ORDER BY h.ref_points + h.id_points DESC, (h.section_id IS NULL), CAST(h.ref AS numeric)) AS rn",
         `FROM ${q("geo_held")} AS h`,
       ].join(" ")
     ),
     cte(
       "geo_roles",
       [
-        "SELECT r.ref, r.group_label::text AS group_key, r.idcalle, r.localidad, r.departamento, r.section_id IS NOT NULL AS in_carto, r.section_id, r.cur_rows,",
-        "r.ref_points + r.id_points AS points, CASE",
-        `WHEN r.holds THEN ${roleLiteral("KEEPER")}`,
-        `WHEN NOT r.group_keeps AND r.rn = 1 THEN ${roleLiteral("WINNER")}`,
-        `ELSE ${roleLiteral("LOSER")} END AS role,`,
-        `(SELECT string_agg(o.ref, ',' ORDER BY CAST(o.ref AS numeric)) FROM ${q("geo_ranked")} AS o WHERE o.gid = r.gid AND o.ref <> r.ref) AS partners`,
+        "SELECT r.ref, r.group_key, r.idcalle, r.localidad, r.departamento, r.section_id IS NOT NULL AS in_carto, r.section_id, r.cur_rows, r.points, r.id_points,",
+        `CASE WHEN r.rn = 1 THEN ${roleLiteral("WINNER")} ELSE ${roleLiteral("LOSER")} END AS role,`,
+        `(SELECT w.ref FROM ${q("geo_ranked")} AS w WHERE w.group_key = r.group_key AND w.rn = 1) AS winner_ref,`,
+        `(SELECT string_agg(o.ref, ',' ORDER BY CAST(o.ref AS numeric)) FROM ${q("geo_ranked")} AS o WHERE o.group_key = r.group_key AND o.ref <> r.ref) AS partners`,
         `FROM ${q("geo_ranked")} AS r`,
       ].join(" ")
     ),
     cte(
-      "geo_keepers",
+      "geo_winners",
       [
-        "SELECT DISTINCT ON (r.group_key) r.group_key, r.ref AS keeper_ref, r.points AS keeper_points, r.in_carto AS keeper_in_carto,",
-        `ST_Length(k.geom) AS keeper_length, k.fuente AS keeper_fuente FROM ${q("geo_roles")} AS r JOIN ${q("copy_kept")} AS k ON k.ref = r.ref`,
-        `WHERE r.role <> ${roleLiteral("LOSER")}`,
-        `ORDER BY r.group_key, (r.role = ${roleLiteral("KEEPER")}) DESC, r.points DESC, CAST(r.ref AS numeric)`,
+        "SELECT r.group_key, r.points AS winner_points, r.in_carto AS winner_in_carto, ST_Length(k.geom) AS winner_length, k.fuente AS winner_fuente",
+        `FROM ${q("geo_roles")} AS r JOIN ${q("copy_kept")} AS k ON k.ref = r.ref`,
+        `WHERE r.role = ${roleLiteral("WINNER")}`,
       ].join(" ")
     ),
     cte("geo_losers", `SELECT l.ref FROM ${q("geo_roles")} AS l WHERE l.role = ${roleLiteral("LOSER")}`),
@@ -121,7 +126,7 @@ export const copyFinalCte = (losers: string): string =>
 export const geoTwinSinkCtes = (sinks: GeoTwinSinks): string[] => [
   cte(
     "geo_twin_sink",
-    `INSERT INTO ${sinks.geoTwins} (ref, group_key, role, in_carto, section_id, cur_rows, points, idcalle, localidad, departamento, partners) SELECT r.ref, r.group_key, r.role, r.in_carto, r.section_id, r.cur_rows, r.points, r.idcalle, r.localidad, r.departamento, r.partners FROM ${q("geo_roles")} AS r RETURNING 1`
+    `INSERT INTO ${sinks.geoTwins} (ref, group_key, role, in_carto, section_id, cur_rows, points, id_points, idcalle, localidad, departamento, partners, winner_ref) SELECT r.ref, r.group_key, r.role, r.in_carto, r.section_id, r.cur_rows, r.points, r.id_points, r.idcalle, r.localidad, r.departamento, r.partners, r.winner_ref FROM ${q("geo_roles")} AS r RETURNING 1`
   ),
 ];
 
@@ -129,13 +134,13 @@ export const geoTwinCountColumns = (): string[] => [
   `(SELECT count(DISTINCT r.group_key) FROM ${q("geo_roles")} AS r) AS "geo_twin_groups"`,
   `${countOf("geo_roles")} AS "geo_twin_sections"`,
   `${countOf("geo_roles", `role = ${roleLiteral("LOSER")} AND NOT in_carto`)} AS "geo_twin_losers_omitted"`,
-  `${countOf("geo_roles", `role = ${roleLiteral("LOSER")} AND in_carto`)} AS "geo_twin_losers_removable"`,
-  // Reftramos with several kept copies are never grouped (conservative): counted when one of their kept copies has the same four parts
-  // (key, idcalle, localidad, departamento) as a copy of another reftramo, i.e. they would have been a member of a group.
+  `${countOf("geo_roles", removableSql(""))} AS "geo_twin_losers_removable"`,
+  // Reftramos with several kept copies are never grouped (conservative): counted when one of their kept copies is within the tolerance of a copy of another reftramo of the same idcalle, localidad and departamento.
   [
     `(SELECT count(DISTINCT k.ref) FROM ${q("geo_keys")} AS k WHERE k.ref IN (SELECT r.ref FROM ${q("geo_refs")} AS r WHERE r.copies > 1)`,
-    `AND EXISTS (SELECT 1 FROM ${q("geo_keys")} AS o WHERE o.key = k.key AND o.idcalle IS NOT DISTINCT FROM k.idcalle`,
-    "AND o.localidad IS NOT DISTINCT FROM k.localidad AND o.departamento IS NOT DISTINCT FROM k.departamento AND o.ref <> k.ref)) AS \"geo_twin_skipped_refs\"",
+    `AND EXISTS (SELECT 1 FROM ${q("geo_keys")} AS o WHERE o.ref <> k.ref AND COALESCE(o.idcalle, '') = COALESCE(k.idcalle, '')`,
+    "AND COALESCE(o.localidad, '') = COALESCE(k.localidad, '') AND COALESCE(o.departamento, '') = COALESCE(k.departamento, '')",
+    `AND k.geom && ST_Expand(o.geom, ${GEO_TWIN_TOLERANCE_M}) AND ST_HausdorffDistance(k.geom, o.geom) < ${GEO_TWIN_TOLERANCE_M})) AS "geo_twin_skipped_refs"`,
   ].join(" "),
 ];
 
@@ -145,10 +150,11 @@ export const geoTwinListColumn = (alias: string): string =>
     "geo_twin_list",
     [
       'SELECT r.ref AS "ref", r.idcalle AS "idcalle", r.localidad AS "localidad", r.departamento AS "departamento", r.group_key AS "groupKey",',
-      `r.partners AS "partners", r.role AS "role", r.in_carto AS "inCarto", r.points AS "points", k.keeper_ref AS "keeperRef",`,
-      `k.keeper_points AS "keeperPoints", k.keeper_length AS "keeperLength", k.keeper_fuente AS "keeperFuente", k.keeper_in_carto AS "keeperInCarto"`,
-      `FROM ${q("geo_roles")} AS r JOIN ${q("geo_keepers")} AS k ON k.group_key = r.group_key`,
+      `r.partners AS "partners", r.role AS "role", r.in_carto AS "inCarto", r.points AS "points", r.id_points AS "pointsById",`,
+      `(${removableSql("r.")}) AS "removable", r.winner_ref AS "winnerRef", w.winner_points AS "winnerPoints", w.winner_length AS "winnerLength",`,
+      'w.winner_fuente AS "winnerFuente", w.winner_in_carto AS "winnerInCarto"',
+      `FROM ${q("geo_roles")} AS r JOIN ${q("geo_winners")} AS w ON w.group_key = r.group_key`,
       // Removable losers first, so the list limit never cuts one of them.
-      `ORDER BY (r.role = '${GEO_TWIN_ROLE.LOSER}' AND r.in_carto) DESC, r.group_key, CAST(r.ref AS numeric)`,
+      `ORDER BY (${removableSql("r.")}) DESC, r.group_key, CAST(r.ref AS numeric)`,
     ].join(" ")
   );

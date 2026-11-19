@@ -90,7 +90,7 @@ export function buildRevertSectionsSql(context: EjesLoadContext, layouts: EjesLa
 
 /**
  * One UPDATE per old `reftramo` with the ids of its points, which hold the old value as it was written: the points the renumbered and
- * merged sections move, and the points of the applied splits (whose old value the load read before its first write).
+ * merged and accepted twin sections move, and the points of the applied splits (whose old value the load read before its first write).
  */
 export function buildRevertPointsSql(context: EjesLoadContext, layouts: EjesLayouts): string {
   const point = (logical: string): string => `a.${col(layouts, "ACCESS_POINT", logical)}`;

@@ -158,11 +158,13 @@ const geoTwinOf = (row: Row): EjesGeoTwinRow => ({
   role: String(row.role) as GeoTwinRole,
   inCarto: row.inCarto === true,
   points: numberOf(row.points),
-  keeperRef: String(row.keeperRef),
-  keeperPoints: numberOf(row.keeperPoints),
-  keeperLength: nullableNumber(row.keeperLength),
-  keeperFuente: textOf(row.keeperFuente),
-  keeperInCarto: row.keeperInCarto === true,
+  pointsById: numberOf(row.pointsById),
+  removable: row.removable === true,
+  winnerRef: String(row.winnerRef),
+  winnerPoints: numberOf(row.winnerPoints),
+  winnerLength: nullableNumber(row.winnerLength),
+  winnerFuente: textOf(row.winnerFuente),
+  winnerInCarto: row.winnerInCarto === true,
 });
 
 export function toEjesStagingReport(row: Row): EjesStagingReport {

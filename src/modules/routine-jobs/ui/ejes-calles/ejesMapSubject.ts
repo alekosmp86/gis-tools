@@ -229,11 +229,11 @@ const geoEntry = (ref: string, suffix: string, dropped: boolean): OutlineEntry =
   },
 });
 
-/** A geometric twin: the kept member, then the copy the row would remove. Both lie on the same geometry, so both are labelled. */
+/** A geometric twin: the winner of its group, then the copy the row would remove. Both lie on the same geometry, so both are labelled. */
 export const subjectOfGeoTwin = (row: EjesGeoTwinRow): EjesMapSubject => {
-  const kept = geoEntry(row.keeperRef, COPY_STAYS, false);
-  const entries = row.ref === row.keeperRef ? [kept] : [kept, geoEntry(row.ref, COPY_DROPPED, true)];
-  const facts: EjesMapFacts = { idcalle: row.idcalle, points: row.points, coverage: null, oldLength: null, newLength: row.keeperLength, outsideLength: null };
+  const kept = geoEntry(row.winnerRef, COPY_STAYS, false);
+  const entries = row.ref === row.winnerRef ? [kept] : [kept, geoEntry(row.ref, COPY_DROPPED, true)];
+  const facts: EjesMapFacts = { idcalle: row.idcalle, points: row.points, coverage: null, oldLength: null, newLength: row.winnerLength, outsideLength: null };
   return subjectOf(EJES_SUBJECT_TITLE.GEO_TWIN, entries, facts, { geoTwin: row });
 };
 

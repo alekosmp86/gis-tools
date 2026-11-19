@@ -223,13 +223,17 @@ export interface EjesGeoTwinRow {
   partners: string[];
   role: GeoTwinRole;
   inCarto: boolean;
+  /** Access points of the member: by `reftramo` plus by its `road_section.id`. */
   points: number;
-  /** The member the group keeps (a keeper, else the winner): the one a loser's copy is removed in favour of. */
-  keeperRef: string;
-  keeperPoints: number;
-  keeperLength: number | null;
-  keeperFuente: string | null;
-  keeperInCarto: boolean;
+  pointsById: number;
+  /** A loser in carto with one section and no point by id: accepting it moves its points to the winner and removes it. */
+  removable: boolean;
+  /** The survivor of the group: the one a loser's points move to. */
+  winnerRef: string;
+  winnerPoints: number;
+  winnerLength: number | null;
+  winnerFuente: string | null;
+  winnerInCarto: boolean;
 }
 
 export interface EjesTwinCopy {

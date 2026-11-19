@@ -104,6 +104,8 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
   const pointsOn = async (ref: string): Promise<number> =>
     Number((await rowsOf(database, `SELECT count(*)::int AS n FROM carto.access_point WHERE id_road_section = '${ref}'`))[0].n);
 
+  const accessPointsCount = async (): Promise<number> => Number((await rowsOf(database, "SELECT count(*)::int AS n FROM carto.access_point"))[0].n);
+
   const seedMaster = async (id: number): Promise<void> => {
     await database.query("INSERT INTO carto.addresses_master (addresses_master_id, urn, latitud, longitud) VALUES ($1, 'seed', 0, 0)", [id]);
   };
@@ -114,6 +116,15 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
   /** A section of the test street already in carto, with its geometry and reftramo. */
   const seedCurrent = (ref: number, geom: string, master?: number): Promise<number> =>
     insertSection(database, { ref, calle: STREET, geom, distance: "50.00", master: master ?? null });
+
+  /** Two members in carto with their own masters and no point: 7001 wins on the lower reftramo, 7002 is the removable loser. */
+  const seedTwinsInCarto = async (): Promise<void> => {
+    await seedMaster(7001);
+    await seedMaster(7002);
+    await seedCurrent(7001, "0:50", 7001);
+    await seedCurrent(7002, "0:50", 7002);
+    await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0:50")]);
+  };
 
   describe("roles of the members of a group (ET-21, ET-22)", () => {
     it("should make the lowest reftramo the winner and leave the other member out of the load when no member is in carto", async () => {
@@ -152,8 +163,8 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
     });
   });
 
-  describe("keepers (ET-21)", () => {
-    it("should make a member holding a point by its reftramo a keeper, and its partner in carto the only removable loser", async () => {
+  describe("winner by access points (ET-21)", () => {
+    it("should make a member holding a point by its reftramo the winner, and its partner in carto the only removable loser", async () => {
       await seedCurrent(7001, "0:50");
       await seedCurrent(7002, "0:50");
       await insertPoints(database, "7001", 1);
@@ -162,13 +173,13 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
       const analysis = await analysisOf();
 
       expect(rolesOf(analysis)).toEqual([
-        ["7001", GEO_TWIN_ROLE.KEEPER, true],
+        ["7001", GEO_TWIN_ROLE.WINNER, true],
         ["7002", GEO_TWIN_ROLE.LOSER, true],
       ]);
       expect(analysis.counts).toMatchObject({ geoTwinLosersRemovable: 1, geoTwinLosersOmitted: 0 });
     });
 
-    it("should make a member whose road_section.id holds a point a keeper, and omit the partner that is not in carto", async () => {
+    it("should make a member whose road_section.id holds a point the winner, and omit the partner that is not in carto", async () => {
       const id = await seedCurrent(7002, "0:50");
       await insertPoints(database, String(id), 1);
       await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0:50")]);
@@ -177,12 +188,62 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
 
       expect(rolesOf(analysis)).toEqual([
         ["7001", GEO_TWIN_ROLE.LOSER, false],
-        ["7002", GEO_TWIN_ROLE.KEEPER, true],
+        ["7002", GEO_TWIN_ROLE.WINNER, true],
       ]);
       expect(analysis.counts).toMatchObject({ geoTwinLosersOmitted: 1, geoTwinLosersRemovable: 0 });
     });
 
-    it("should never remove a keeper even when its partner is also in carto: an accepted keeper aborts before any write", async () => {
+    it("should make the member with three points the winner over the lower reftramo, and the other the removable loser", async () => {
+      await seedCurrent(7001, "0:50");
+      await seedCurrent(7002, "0:50");
+      await insertPoints(database, "7002", 3);
+      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0:50")]);
+
+      const analysis = await analysisOf();
+
+      expect(rolesOf(analysis)).toEqual([
+        ["7001", GEO_TWIN_ROLE.LOSER, true],
+        ["7002", GEO_TWIN_ROLE.WINNER, true],
+      ]);
+      expect(analysis.counts).toMatchObject({ geoTwinLosersRemovable: 1, geoTwinLosersOmitted: 0 });
+    });
+
+    it("should keep the member in carto as the winner on a tie of points, over a lower reftramo not in carto", async () => {
+      await seedCurrent(7002, "0:50");
+      await insertPoints(database, "7001", 1);
+      await insertPoints(database, "7002", 1);
+      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0:50")]);
+
+      const analysis = await analysisOf();
+
+      expect(rolesOf(analysis)).toEqual([
+        ["7001", GEO_TWIN_ROLE.LOSER, false],
+        ["7002", GEO_TWIN_ROLE.WINNER, true],
+      ]);
+    });
+
+    it("should group two geometries 0.3 m apart and make the lower reftramo the winner", async () => {
+      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0.3:50.3")]);
+
+      const analysis = await analysisOf();
+
+      expect(rolesOf(analysis)).toEqual([
+        ["7001", GEO_TWIN_ROLE.WINNER, false],
+        ["7002", GEO_TWIN_ROLE.LOSER, false],
+      ]);
+      expect(analysis.counts).toMatchObject({ geoTwinGroups: 1, geoTwinSections: 2 });
+    });
+
+    it("should not group two geometries 0.7 m apart", async () => {
+      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0.7:50.7")]);
+
+      const analysis = await analysisOf();
+
+      expect(analysis.geoTwins).toEqual([]);
+      expect(analysis.counts).toMatchObject({ geoTwinGroups: 0, geoTwinSections: 0 });
+    });
+
+    it("should never remove a winner even when its partner is also in carto: an accepted winner aborts before any write", async () => {
       await seedCurrent(7001, "0:50");
       await seedCurrent(7002, "0:50");
       await insertPoints(database, "7001", 1);
@@ -195,7 +256,7 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
       expect(await backupFiles()).toEqual([]);
     });
 
-    it("should remove only the accepted loser when its keeper partner holds points, keeping the keeper with its points", async () => {
+    it("should remove only the accepted loser when its winner partner holds points, keeping the winner with its points", async () => {
       await seedCurrent(7001, "0:50");
       await seedCurrent(7002, "0:50");
       await insertPoints(database, "7001", 1);
@@ -207,6 +268,67 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
       expect(await sectionsByRef(7001)).toHaveLength(1);
       expect(await pointsOn("7001")).toBe(1);
       expect(outcome.load.counts).toMatchObject({ twinsRemoved: 1, removed: 0, deleted: 1 });
+    });
+  });
+
+  describe("points of a loser (ET-25)", () => {
+    it("should move the points of an accepted loser in carto to the winner, delete the loser row and keep every access point", async () => {
+      await seedTwinsInCarto();
+      await insertPoints(database, "7001", 3);
+      await insertPoints(database, "7002", 2);
+      const countBefore = await accessPointsCount();
+
+      const outcome = await persist({ ...NO_ACCEPTED, twinRemovals: ["7002"] });
+
+      expect(await sectionsByRef(7002)).toEqual([]);
+      expect(await pointsOn("7001")).toBe(5);
+      expect(await pointsOn("7002")).toBe(0);
+      expect(await accessPointsCount()).toBe(countBefore);
+      expect(outcome.load.counts).toMatchObject({ twinsRemoved: 1, deleted: 1, pointsMoved: 2 });
+    });
+
+    it("should restore the points of the loser by its reftramo when the revert SQL is applied", async () => {
+      await seedTwinsInCarto();
+      await insertPoints(database, "7001", 3);
+      await insertPoints(database, "7002", 2);
+      const before = await snapshotOf(database);
+      const outcome = await persist({ ...NO_ACCEPTED, twinRemovals: ["7002"] });
+
+      await database.exec(await readBackup(outcome));
+
+      expect(await pointsOn("7002")).toBe(2);
+      expect(await snapshotOf(database)).toEqual(before);
+    });
+
+    it("should leave an accepted loser with a point linked by road_section.id in place and move nothing", async () => {
+      await seedCurrent(7001, "0:50");
+      const id = await seedCurrent(7002, "0:50");
+      await insertPoints(database, "7001", 1);
+      await insertPoints(database, String(id), 1);
+      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0:50")]);
+      const before = await snapshotOf(database);
+
+      const outcome = await persist({ ...NO_ACCEPTED, twinRemovals: ["7002"] });
+
+      expect(await snapshotOf(database)).toEqual(before);
+      expect(outcome.load.counts).toMatchObject({ twinsRemoved: 0, deleted: 0, pointsMoved: 0 });
+      expect(outcome.load.skipped).toEqual([
+        { kind: EJES_SKIP_KIND.TWIN, refs: ["7002"], newRefs: [], idcalle: String(STREET), points: 1, reason: EJES_SKIP_REASON.ID_LINKED_POINTS },
+      ]);
+    });
+
+    it("should move nothing and delete nothing when the loser with points is not accepted", async () => {
+      await seedCurrent(7001, "0:50");
+      await seedCurrent(7002, "0:50");
+      await insertPoints(database, "7001", 2);
+      await insertPoints(database, "7002", 1);
+      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0:50")]);
+      const before = await snapshotOf(database);
+
+      const outcome = await persist();
+
+      expect(await snapshotOf(database)).toEqual(before);
+      expect(outcome.load.counts).toMatchObject({ twinsRemoved: 0, deleted: 0, pointsMoved: 0 });
     });
   });
 
@@ -289,15 +411,6 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
   });
 
   describe("accepted removal of a loser in carto (ET-24, ET-25)", () => {
-    /** Two members in carto with their own masters: 7001 wins, 7002 is the removable loser. */
-    const seedTwinsInCarto = async (): Promise<void> => {
-      await seedMaster(7001);
-      await seedMaster(7002);
-      await seedCurrent(7001, "0:50", 7001);
-      await seedCurrent(7002, "0:50", 7002);
-      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0:50")]);
-    };
-
     it("should delete the accepted loser with its master, count it as a removed twin and keep the winner", async () => {
       await seedTwinsInCarto();
 

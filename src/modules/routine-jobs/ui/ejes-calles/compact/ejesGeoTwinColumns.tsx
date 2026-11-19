@@ -11,29 +11,37 @@ export const GEO_TWIN_TEXT = {
   REMOVED_ON_ACCEPT: "Se quita al aceptar; si no, queda como está",
   NOT_LOADED: "No se carga",
   NOT_REMOVABLE: "No se quita",
+  LINKED_BY_ID: "No se puede quitar: sus puntos están enlazados por id",
+  SEVERAL_SECTIONS: "No se puede quitar: hay varios tramos con ese reftramo en carto",
   KEPT_HEADER: "Se queda",
   REMOVED_HEADER: "Se quita",
+  KEPT_PREFIX: "Se queda:",
+  REMOVED_PREFIX: "Se quita:",
   IN_CARTO: (inCarto: boolean) => `en carto: ${inCarto ? "sí" : "no"}`,
 } as const;
 
-/** The status of a member: a keeper or the winner stays; a loser is removed only when it is in carto and accepted, else not loaded. */
-const geoTwinStatusOf = (row: Pick<EjesGeoTwinRow, "role" | "inCarto">): string => {
+/** The status of a member: the winner stays; a loser is removed when accepted and removable, else it is not loaded (or it stays in carto). */
+const geoTwinStatusOf = (row: Pick<EjesGeoTwinRow, "role" | "inCarto" | "removable">): string => {
   if (row.role !== GEO_TWIN_ROLE.LOSER) return GEO_TWIN_TEXT.KEPT;
-  return row.inCarto ? GEO_TWIN_TEXT.REMOVED_ON_ACCEPT : GEO_TWIN_TEXT.NOT_LOADED;
+  if (row.removable) return GEO_TWIN_TEXT.REMOVED_ON_ACCEPT;
+  return row.inCarto ? GEO_TWIN_TEXT.NOT_REMOVABLE : GEO_TWIN_TEXT.NOT_LOADED;
 };
 
-/** Only a loser in carto is offered for removal; a keeper, the winner and a loser not in carto never are. */
-export const isGeoTwinRemovable = (row: Pick<EjesGeoTwinRow, "role" | "inCarto">): boolean => row.role === GEO_TWIN_ROLE.LOSER && row.inCarto;
+/** Only a loser in carto with one section and no point by id is offered for removal (the load applies the same rule). */
+export const isGeoTwinRemovable = (row: Pick<EjesGeoTwinRow, "removable">): boolean => row.removable;
 
-/** The group member kept: its reftramo, points, length, fuente and whether it is in carto. */
+/** The winner of the group, with its points, length, fuente and whether it is in carto. */
 export const geoTwinKeptTextOf = (row: EjesGeoTwinRow): string =>
-  `${row.keeperRef} (${row.keeperPoints} puntos de acceso, ${metersTextOf(row.keeperLength)} m, fuente ${textOrNoData(row.keeperFuente)}, ${GEO_TWIN_TEXT.IN_CARTO(row.keeperInCarto)})`;
+  `${GEO_TWIN_TEXT.KEPT_PREFIX} ${row.winnerRef} (${row.winnerPoints} puntos de acceso, ${metersTextOf(row.winnerLength)} m, fuente ${textOrNoData(row.winnerFuente)}, ${GEO_TWIN_TEXT.IN_CARTO(row.winnerInCarto)})`;
 
-/** The row's own copy when it is removable, else the text that says it is not. */
-export const geoTwinRemovedTextOf = (row: EjesGeoTwinRow): string =>
-  isGeoTwinRemovable(row) ? `${row.ref} (${row.points} puntos de acceso)` : GEO_TWIN_TEXT.NOT_REMOVABLE;
+/** The row's own copy when it is removable, with the points that move to the winner; else the text that says why it is not. */
+export const geoTwinRemovedTextOf = (row: EjesGeoTwinRow): string => {
+  if (row.removable) return `${GEO_TWIN_TEXT.REMOVED_PREFIX} ${row.ref} (${row.points} puntos de acceso pasan al ${row.winnerRef})`;
+  if (row.role !== GEO_TWIN_ROLE.LOSER || !row.inCarto) return GEO_TWIN_TEXT.NOT_REMOVABLE;
+  return row.pointsById > 0 ? GEO_TWIN_TEXT.LINKED_BY_ID : GEO_TWIN_TEXT.SEVERAL_SECTIONS;
+};
 
-/** The columns of a geometric twin row, before the accept column: the kept member against the copy this row would remove. */
+/** The columns of a geometric twin row, before the accept column: the winner against the copy this row would remove. */
 export const GEO_TWIN_COLUMNS: TableColumn<EjesGeoTwinRow>[] = [
   {
     header: "Tramo",

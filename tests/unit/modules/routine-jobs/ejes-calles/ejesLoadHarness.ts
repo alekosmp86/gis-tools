@@ -54,6 +54,9 @@ const POSTGIS_STUBS_SQL = `
       THEN (greatest(iv_a($1), iv_a($2))::text || ':' || least(iv_b($1), iv_b($2))::text)::geometry ELSE '0:0'::geometry END
   $$ LANGUAGE sql STRICT;
   CREATE FUNCTION ST_Buffer(geometry, float8) RETURNS geometry AS $$ SELECT ((iv_a($1) - $2)::text || ':' || (iv_b($1) + $2)::text)::geometry $$ LANGUAGE sql STRICT;
+  CREATE FUNCTION ST_Expand(geometry, float8) RETURNS geometry AS $$ SELECT ((iv_a($1) - $2)::text || ':' || (iv_b($1) + $2)::text)::geometry $$ LANGUAGE sql STRICT;
+  CREATE FUNCTION geometry_overlaps(geometry, geometry) RETURNS boolean AS $$ SELECT ST_Intersects($1, $2) $$ LANGUAGE sql STRICT;
+  CREATE OPERATOR && (LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overlaps);
   CREATE FUNCTION ST_Difference(geometry, geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql STRICT;
   CREATE FUNCTION hull_step(geometry, geometry) RETURNS geometry AS $$
     SELECT CASE WHEN $1 IS NULL THEN $2 WHEN $2 IS NULL THEN $1

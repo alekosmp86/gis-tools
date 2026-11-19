@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { GEO_TWIN_ROLE } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import {
   acceptanceAfter,
   acceptedRequestOf,
@@ -23,13 +22,10 @@ const acceptedWith = (overrides: Partial<EjesAcceptance> = {}): EjesAcceptance =
 
 describe("isGeoTwinRemovable (ET-24, ET-26)", () => {
   it.each([
-    ["a loser in carto", { role: GEO_TWIN_ROLE.LOSER, inCarto: true }, true],
-    ["a loser not in carto", { role: GEO_TWIN_ROLE.LOSER, inCarto: false }, false],
-    ["a winner in carto", { role: GEO_TWIN_ROLE.WINNER, inCarto: true }, false],
-    ["a keeper in carto", { role: GEO_TWIN_ROLE.KEEPER, inCarto: true }, false],
-    ["a keeper not in carto", { role: GEO_TWIN_ROLE.KEEPER, inCarto: false }, false],
-  ])("should be removable only for %s when it is a loser in carto", (_label, row, removable) => {
-    expect(isGeoTwinRemovable(row)).toBe(removable);
+    ["a removable loser in carto", true, true],
+    ["a loser that is not removable (linked by id, several sections or not in carto)", false, false],
+  ])("should follow the removable flag of the row for %s", (_label, removable, expected) => {
+    expect(isGeoTwinRemovable({ removable })).toBe(expected);
   });
 });
 

@@ -127,9 +127,8 @@ export const TWIN_CLASS = {
 
 export type TwinClass = (typeof TWIN_CLASS)[keyof typeof TWIN_CLASS];
 
-/** Roles of a geometric twin member: a keeper holds access points; the winner is the single member kept when none holds one. */
+/** Roles of a geometric twin member: the winner is the survivor of its group (most access points); every other member is a loser. */
 export const GEO_TWIN_ROLE = {
-  KEEPER: "keeper",
   WINNER: "winner",
   LOSER: "loser",
 } as const;
@@ -141,6 +140,8 @@ export const TWIN_NEAR_MIN_LENGTH_M = 1;
 export const RURAL_LOCALITY_SUFFIX = " RURAL";
 /** A section with less than this share of its length inside the locality polygons is rural: its rural-named copy wins (ET-10). */
 export const TWIN_POLYGON_MIN_COVER_RATIO = 0.5;
+/** Two copies of a geometric twin group have geometries equal within this Hausdorff distance (ET-20). */
+export const GEO_TWIN_TOLERANCE_M = 0.5;
 
 export const EJES_REQUIRED_COLUMNS_BY_ROLE: Record<EjesTableRole, readonly string[]> = {
   [EJES_TABLE_ROLE.STAGING]: Object.values(EJES_STAGING_COLUMN),

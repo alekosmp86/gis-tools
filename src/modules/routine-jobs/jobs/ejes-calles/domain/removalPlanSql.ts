@@ -39,12 +39,13 @@ export function buildMergePlanSql(): string {
 }
 
 /**
- * Plain removals and accepted geometric twin losers in carto: accepted, one current `reftramo`, and no access point left (by `reftramo`
- * or by id). A section with points is never deleted. `kind` tells the two sources apart (the skipped list counts them apart).
+ * Plain removals and accepted geometric twin losers in carto: accepted, one current `reftramo`, and no access point left by `reftramo`
+ * (plain removals) or by id (both). A twin loser keeps its points by `reftramo` until the load moves them to its winner (`new_ref`).
+ * `kind` tells the two sources apart (the skipped list counts them apart).
  */
 export function buildPlainPlanSql(): string {
   const plain = [
-    `SELECT p.old_id, p.ref, p.idcalle, p.points, CASE`,
+    `SELECT p.old_id, p.ref, p.idcalle, p.points, NULL::text AS new_ref, CASE`,
     `WHEN a.ref IS NULL THEN ${quoted(EJES_SKIP_REASON.NOT_ACCEPTED)}`,
     `WHEN p.ref IS NULL THEN ${quoted(EJES_SKIP_REASON.NO_REFTRAMO)}`,
     `WHEN p.old_rows > 1 THEN ${quoted(EJES_SKIP_REASON.REPEATED_OLD_REF)}`,
@@ -53,10 +54,10 @@ export function buildPlainPlanSql(): string {
     `FROM ${tmp(LOAD_TEMP.PLAIN)} AS p LEFT JOIN ${tmp(LOAD_TEMP.ACC_PLAIN)} AS a ON a.ref = p.ref`,
   ].join(" ");
   const twins = [
-    `SELECT t.section_id AS old_id, t.ref, t.idcalle, t.points, CASE`,
+    `SELECT t.section_id AS old_id, t.ref, t.idcalle, t.points, t.winner_ref AS new_ref, CASE`,
     `WHEN a.ref IS NULL THEN ${quoted(EJES_SKIP_REASON.NOT_ACCEPTED)}`,
     `WHEN t.cur_rows > 1 THEN ${quoted(EJES_SKIP_REASON.REPEATED_OLD_REF)}`,
-    `WHEN t.points > 0 THEN ${quoted(EJES_SKIP_REASON.HAS_POINTS)}`,
+    `WHEN t.id_points > 0 THEN ${quoted(EJES_SKIP_REASON.ID_LINKED_POINTS)}`,
     `END AS reason, ${quoted(EJES_SKIP_KIND.TWIN)} AS kind`,
     `FROM ${tmp(LOAD_TEMP.GEO_TWIN)} AS t LEFT JOIN ${tmp(LOAD_TEMP.ACC_TWIN)} AS a ON a.ref = t.ref`,
     `WHERE t.role = ${quoted(GEO_TWIN_ROLE.LOSER)} AND t.in_carto`,
@@ -75,7 +76,10 @@ export const buildHoldGroupCopiesSql = (): string =>
     `OR c.ref IN (SELECT p.new_ref FROM ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p WHERE p.reason IS NOT NULL)`,
   ].join(" ");
 
-/** Every access point move of the load: the renumbered `reftramo`s and the old sections of the applied merges, each to its new `reftramo`. */
+/**
+ * Every access point move of the load: the renumbered `reftramo`s, the old sections of the applied merges and the applied twin losers,
+ * each to its new `reftramo` (the twin's winner).
+ */
 export const buildMoveTableSql = (): string =>
   createTemp(
     LOAD_TEMP.MOVE,
@@ -83,6 +87,8 @@ export const buildMoveTableSql = (): string =>
       `SELECT n.old_ref, n.new_ref, n.points FROM ${tmp(LOAD_TEMP.RENUM)} AS n`,
       "UNION ALL",
       `SELECT m.old_ref, m.new_ref, m.points FROM ${tmp(LOAD_TEMP.MERGE)} AS m JOIN ${tmp(LOAD_TEMP.MERGE_PLAN)} AS p ON p.new_ref = m.new_ref WHERE p.reason IS NULL`,
+      "UNION ALL",
+      `SELECT p.ref, p.new_ref, p.points FROM ${tmp(LOAD_TEMP.PLAIN_PLAN)} AS p WHERE p.kind = ${quoted(EJES_SKIP_KIND.TWIN)} AND p.reason IS NULL`,
     ].join(" ")
   );
 

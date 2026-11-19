@@ -34,7 +34,7 @@ export const EJES_LIST_INTROS: Record<EjesListKey, string> = {
   [EJES_LIST.RENUMBER_HELD]: "Renumeración no aplicada: ambos tramos quedan como están y sus puntos de acceso no se mueven.",
   [EJES_LIST.TWIN_UNDECIDED]: "Ninguna regla decide cuál copia se queda: elíjala en el mapa.",
   [EJES_LIST.PLAIN_REMOVALS]: "Tramos actuales sin equivalente en el archivo; con puntos de acceso no se quitan.",
-  [EJES_LIST.GEO_TWINS]: "Mismo trazado, idcalle, localidad y departamento con reftramo distinto: se mantiene el que tiene puntos de acceso o el primero; el resto no se carga.",
+  [EJES_LIST.GEO_TWINS]: "Mismo trazado, idcalle, localidad y departamento con reftramo distinto: se queda el que tiene más puntos de acceso; los demás no se cargan y, al aceptarlos, sus puntos pasan al que se queda.",
   [EJES_LIST.INVALID_GEOMETRIES]: "Filas del archivo con geometría inválida o colapsada, o menor de 1 m sin puntos de acceso: se omiten.",
   [EJES_LIST.NEW_STREETS]: "Calles que no existen hoy y entrarían con los tramos nuevos.",
   [EJES_LIST.ATTR_CHANGES]: "Tramos con el mismo trazado pero distinto nombre, calle, tipo o fuente.",
