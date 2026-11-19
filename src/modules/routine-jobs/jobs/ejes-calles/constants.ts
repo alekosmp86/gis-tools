@@ -321,6 +321,13 @@ export type EjesSkipKind = (typeof EJES_SKIP_KIND)[keyof typeof EJES_SKIP_KIND];
 export const ACCEPTED_KEYS_LIMIT = 5000;
 export const ACCEPTED_CHOICES_LIMIT = 20000;
 
+export const EJES_KEPT_BY_DISCARDED_REASON = {
+  SAME_REFTRAMO: "same_reftramo",
+  PLACE: "place",
+} as const;
+
+export type EjesKeptByDiscardedReason = (typeof EJES_KEPT_BY_DISCARDED_REASON)[keyof typeof EJES_KEPT_BY_DISCARDED_REASON];
+
 export const EJES_SUMMARY_COUNT_KEYS = [
   "newSections",
   "unchanged",
@@ -331,6 +338,7 @@ export const EJES_SUMMARY_COUNT_KEYS = [
   "splits",
   "merges",
   "plainRemovals",
+  "keptByDiscardedCandidate",
   "renumbered",
   "renumberSkipped",
   "splitPointsAuto",

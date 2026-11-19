@@ -127,6 +127,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     renumbered: [],
     renumberSkipped: [],
     renumberDropped: [],
+    keptByDiscarded: [],
     attrChanges: [],
     blockers: [],
     privilegeInfo: [],

@@ -7,6 +7,7 @@ import type {
   EJES_LOAD_ROLES,
   EJES_SPLIT_POINTS_ROLES,
   EJES_SUMMARY_COUNT_KEYS,
+  EjesKeptByDiscardedReason,
   EjesPointReason,
   EjesSkipKind,
   EjesSkipReason,
@@ -105,6 +106,8 @@ export interface EjesCounts {
   merges: number;
   plainRemovals: number;
   plainHeld: number;
+  /** Old sections of the plain removals kept because a discarded file row of their place is the only candidate. */
+  keptByDiscardedCandidate: number;
   newStreets: number;
   twins: number;
   /** Geometric twins (ET-20 to ET-27): groups, members, losers not in carto (omitted), losers in carto (removable), reftramos skipped by the conservative rule. */
@@ -182,6 +185,15 @@ export interface EjesRemovalRow {
   ref: string;
   idcalle: string | null;
   points: number;
+}
+
+/** An old section kept because a discarded file row of its place is its only candidate (`discardedRef`, the nearest one). */
+export interface EjesKeptByDiscardedRow {
+  ref: string;
+  idcalle: string | null;
+  points: number;
+  discardedRef: string;
+  reason: EjesKeptByDiscardedReason;
 }
 
 export interface EjesNewStreetRow {
@@ -317,6 +329,7 @@ export interface EjesAnalysis {
   splits: EjesSplitRow[];
   merges: EjesMergeRow[];
   plainRemovals: EjesRemovalRow[];
+  keptByDiscarded: EjesKeptByDiscardedRow[];
   newStreets: EjesNewStreetRow[];
   attrChanges: EjesAttrRow[];
   twins: EjesTwinRow[];

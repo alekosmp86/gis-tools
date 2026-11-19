@@ -16,6 +16,7 @@ type ListField =
   | "renumberDropped"
   | "twinUndecided"
   | "plainRemovals"
+  | "keptByDiscarded"
   | "geoTwins"
   | "newStreets"
   | "attrChanges";
@@ -61,6 +62,7 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
       merges: 0,
       plainRemovals: 0,
       plainHeld: 0,
+      keptByDiscardedCandidate: 0,
       newStreets: 0,
       twins: 0,
       twinsUrban: 0,
@@ -89,6 +91,7 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
     splits: [],
     merges: [],
     plainRemovals: [],
+    keptByDiscarded: [],
     newStreets: [],
     attrChanges: [],
     twinUndecided: [],
@@ -105,10 +108,10 @@ const resultOf = ({ counts = {}, staging = {}, lists = {}, invalid = [] }: Overr
 const row = (n: number) => ({ ref: String(n) });
 
 describe("stripOf", () => {
-  it("should return fourteen items in the fixed order", () => {
+  it("should return fifteen items in the fixed order", () => {
     const strip = stripOf(resultOf());
 
-    expect(strip).toHaveLength(14);
+    expect(strip).toHaveLength(15);
     expect(strip.map((item) => item.label)).toEqual([
       "Filas del archivo",
       "Calles nuevas",
@@ -120,6 +123,7 @@ describe("stripOf", () => {
       "Divididos",
       "Unidos",
       "Sin reemplazo",
+      "Se conservan por candidato descartado",
       "Repetidos por localidad",
       "Varias copias sin decidir",
       "Gemelos por geometría",
@@ -140,6 +144,7 @@ describe("stripOf", () => {
           splits: 6,
           merges: 7,
           plainRemovals: 8,
+          keptByDiscardedCandidate: 3,
           twins: 9,
           twinsUndecided: 2,
           geoTwinSections: 4,
@@ -156,6 +161,7 @@ describe("stripOf", () => {
     expect(byLabel["Divididos"]).toMatchObject({ value: 6, list: EJES_LIST.SPLITS });
     expect(byLabel["Unidos"]).toMatchObject({ value: 7, list: EJES_LIST.MERGES });
     expect(byLabel["Sin reemplazo"]).toMatchObject({ value: 8, list: EJES_LIST.PLAIN_REMOVALS });
+    expect(byLabel["Se conservan por candidato descartado"]).toMatchObject({ value: 3, list: EJES_LIST.KEPT_BY_DISCARDED });
     expect(byLabel["Repetidos por localidad"]).toMatchObject({ value: 9, list: null });
     expect(byLabel["Varias copias sin decidir"]).toMatchObject({ value: 2, list: EJES_LIST.TWIN_UNDECIDED });
     expect(byLabel["Gemelos por geometría"]).toMatchObject({ value: 4, list: EJES_LIST.GEO_TWINS });

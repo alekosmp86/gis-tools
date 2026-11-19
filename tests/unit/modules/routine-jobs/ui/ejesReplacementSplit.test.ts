@@ -92,6 +92,7 @@ const resultOf = (plainRemovals: EjesRemovalRow[]): EjesResult =>
     renumbered: [],
     renumberSkipped: [],
     renumberDropped: [],
+    keptByDiscarded: [],
     attrChanges: [],
     blockers: [],
     privilegeInfo: [],

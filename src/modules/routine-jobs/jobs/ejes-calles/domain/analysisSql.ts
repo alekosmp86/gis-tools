@@ -6,6 +6,7 @@ import {
   COVERAGE_RATIO,
   COVERAGE_TOLERANCE_M,
   DEPARTMENTS_COLUMN,
+  EJES_KEPT_BY_DISCARDED_REASON,
   GEOMETRY_TOLERANCE_M,
   LOCALITIES_COLUMN,
   REPLACEMENT_PIECES,
@@ -19,7 +20,7 @@ import type { EjesLayouts, EjesLoadContext, EjesTwinPick } from "../types";
 import { integerColumnOf, physicalOf } from "./loadContext";
 import { col, countOf, listOf, table, trimmed } from "./layoutSql";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
-import { accessPointRefSql, canonicalTextSql, keptStagingRowSql } from "./stagingSql";
+import { accessPointRefSql, canonicalTextSql, INTEGER_PATTERN, keptStagingRowSql } from "./stagingSql";
 import {
   renumberCountColumns,
   renumberCtes,
@@ -51,6 +52,7 @@ export const ANALYSIS_LIST_ALIAS = {
   TWINS: "twins_json",
   TWIN_UNDECIDED: "twin_undecided_json",
   GEO_TWINS: "geo_twins_json",
+  KEPT_BY_DISCARDED: "kept_by_discarded_json",
   RENUMBERED: "renumbered_json",
   RENUMBER_SKIPPED: "renumber_skipped_json",
   RENUMBER_DROPPED: "renumber_dropped_json",
@@ -85,7 +87,28 @@ function stagingKeyCtes(layouts: EjesLayouts): string[] {
   const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
   const reference = canonicalTextSql(column(EJES_STAGING_COLUMN.REFTRAMO));
   const geometry = column(EJES_STAGING_COLUMN.GEOM);
-  return [cte("stg_keys", `SELECT DISTINCT ${reference} AS ref FROM ${staging} AS s WHERE ${keptStagingRowSql(layouts, geometry, reference)}`)];
+  return [
+    cte("stg_keys", `SELECT DISTINCT ${reference} AS ref FROM ${staging} AS s WHERE ${keptStagingRowSql(layouts, geometry, reference)}`),
+    cte("stg_all_keys", `SELECT DISTINCT ${reference} AS ref FROM ${staging} AS s WHERE ${reference} ~ '${INTEGER_PATTERN}'`),
+  ];
+}
+
+/** The discarded rows that still place a section: an integer `reftramo` and a usable geometry (not null, not empty, valid). Only `keptByDiscardedCtes` reads them. */
+function discardedCandidateCtes(layouts: EjesLayouts): string[] {
+  const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
+  const reference = canonicalTextSql(column(EJES_STAGING_COLUMN.REFTRAMO));
+  const street = canonicalTextSql(column(EJES_STAGING_COLUMN.IDCALLE));
+  const geometry = column(EJES_STAGING_COLUMN.GEOM);
+  return [
+    cte(
+      "disc_candidates",
+      [
+        `SELECT ${reference} AS ref, ${street} AS idcalle, ${geometry} AS geom FROM ${table(layouts, "STAGING")} AS s`,
+        `WHERE ${reference} ~ '${INTEGER_PATTERN}' AND ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ST_IsValid(${geometry})`,
+        `AND NOT (${keptStagingRowSql(layouts, geometry, reference)})`,
+      ].join(" ")
+    ),
+  ];
 }
 
 /** The staging rows the classification reads: kept ones, minus the geometric twin losers (they are neither new nor changed nor split). */
@@ -342,11 +365,35 @@ function mergeCtes(): string[] {
   ];
 }
 
-function remainderCtes(): string[] {
+/**
+ * A plain removal kept because the file still names its place: its `reftramo` has a row of the file (`stg_all_keys`, any geometry), or a
+ * discarded row of its street lies within the tolerance (`disc_candidates`). Only when no kept new section lies there: then the old section
+ * keeps the place alone and the normal rules (renumber, split, merge) decided before. A discarded row is never loaded. One row per section.
+ */
+function keptByDiscardedCtes(): string[] {
+  const tolerance = COVERAGE_TOLERANCE_M;
+  const sameReference = `r.ref IN (SELECT ref FROM ${q("stg_all_keys")})`;
   return [
     cte(
+      "kept_by_candidate",
+      [
+        `SELECT r.id, r.ref, r.idcalle, CASE WHEN ${sameReference} THEN r.ref ELSE d.ref END AS discarded_ref,`,
+        `CASE WHEN ${sameReference} THEN '${EJES_KEPT_BY_DISCARDED_REASON.SAME_REFTRAMO}' ELSE '${EJES_KEPT_BY_DISCARDED_REASON.PLACE}' END AS reason`,
+        `FROM ${q("removed_rest")} AS r LEFT JOIN LATERAL (SELECT c.ref FROM ${q("disc_candidates")} AS c WHERE c.idcalle = r.idcalle AND ST_DWithin(r.geometry, c.geom, ${tolerance}) ORDER BY ST_Distance(r.geometry, c.geom), c.ref LIMIT 1) AS d ON true`,
+        `WHERE r.id NOT IN (SELECT id FROM ${q("splits")}) AND r.id NOT IN (SELECT id FROM ${q("merged_ids")})`,
+        `AND NOT EXISTS (SELECT 1 FROM ${q("new_sections")} AS n WHERE n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance}))`,
+        `AND (${sameReference} OR d.ref IS NOT NULL)`,
+      ].join(" ")
+    ),
+  ];
+}
+
+function remainderCtes(): string[] {
+  return [
+    ...keptByDiscardedCtes(),
+    cte(
       "plain",
-      `SELECT r.id, r.ref, r.idcalle FROM ${q("removed_rest")} AS r WHERE r.id NOT IN (SELECT id FROM ${q("splits")}) AND r.id NOT IN (SELECT id FROM ${q("merged_ids")})`
+      `SELECT r.id, r.ref, r.idcalle FROM ${q("removed_rest")} AS r WHERE r.id NOT IN (SELECT id FROM ${q("splits")}) AND r.id NOT IN (SELECT id FROM ${q("merged_ids")}) AND r.id NOT IN (SELECT id FROM ${q("kept_by_candidate")})`
     ),
     cte(
       "new_streets",
@@ -389,6 +436,7 @@ function listColumns(): string[] {
   ].join(" ");
   const mergeSelect = `SELECT m.new_ref AS "new_ref", m.idcalle AS "idcalle", m.old_refs AS "old_refs", m.points AS "points", m.coverage AS "coverage", m.old_len AS "old_length", m.new_len AS "new_length", m.outside_len AS "outside_length" FROM ${q("merges")} AS m ORDER BY m.new_ref`;
   const plainSelect = `SELECT p.ref AS "ref", p.idcalle AS "idcalle", COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points" FROM ${q("plain")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = p.id::text ORDER BY COALESCE(ap.points, 0) + COALESCE(apid.points, 0) DESC, p.ref`;
+  const keptSelect = `SELECT k.ref AS "ref", k.idcalle AS "idcalle", COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points", k.discarded_ref AS "discarded_ref", k.reason AS "reason" FROM ${q("kept_by_candidate")} AS k LEFT JOIN ${q("ap")} AS ap ON ap.ref = k.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = k.id::text ORDER BY COALESCE(ap.points, 0) + COALESCE(apid.points, 0) DESC, k.ref`;
   const streetSelect = `SELECT n.idcalle AS "idcalle", n.name AS "name", n.sections AS "sections", n.tipos AS "tipos", n.departments AS "departments", n.localities AS "localities" FROM ${q("new_streets")} AS n ORDER BY n.idcalle, n.name`;
   const attrSelect = [
     'SELECT c.ref AS "ref", c.nombre AS "name", c.cur_name AS "current_name", c.idcalle AS "idcalle", c.cur_idcalle AS "current_idcalle",',
@@ -400,6 +448,7 @@ function listColumns(): string[] {
     reviewPointsColumn(),
     listOf(ANALYSIS_LIST_ALIAS.MERGES, "merge_list", mergeSelect),
     listOf(ANALYSIS_LIST_ALIAS.PLAIN, "plain_list", plainSelect),
+    listOf(ANALYSIS_LIST_ALIAS.KEPT_BY_DISCARDED, "kept_by_candidate_list", keptSelect),
     listOf(ANALYSIS_LIST_ALIAS.STREETS, "street_list", streetSelect),
     listOf(ANALYSIS_LIST_ALIAS.ATTRS, "attr_list", attrSelect),
     twinListColumn(ANALYSIS_LIST_ALIAS.TWINS),
@@ -424,6 +473,7 @@ function countColumns(): string[] {
     ...splitPointCountColumns(),
     `${countOf("plain")} AS "plain_removals"`,
     `(SELECT count(*) FROM ${q("plain")} AS p WHERE EXISTS (SELECT 1 FROM ${q("ap")} AS ap WHERE ap.ref = p.ref AND ap.points > 0) OR EXISTS (SELECT 1 FROM ${q("ap")} AS apid WHERE apid.ref = p.id::text AND apid.points > 0)) AS "plain_held"`,
+    `${countOf("kept_by_candidate")} AS "kept_by_discarded_candidate"`,
     `${countOf("new_streets")} AS "new_streets"`,
     `${countOf("located", "cloc IS NOT NULL")} AS "with_locality"`,
     `${countOf("located", "cloc IS NULL AND dept_code IS NOT NULL")} AS "only_department"`,
@@ -447,6 +497,7 @@ export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks
     tipoMapCte(),
     fuenteMapCte(),
     ...stagingKeyCtes(layouts),
+    ...discardedCandidateCtes(layouts),
     ...fingerprintCtes(layouts),
     ...currentCtes(layouts),
     ...twinGroupCtes(layouts),

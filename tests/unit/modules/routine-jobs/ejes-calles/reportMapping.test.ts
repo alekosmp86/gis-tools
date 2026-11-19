@@ -86,6 +86,7 @@ describe("toEjesAnalysis", () => {
       merges: 1,
       plain_removals: 2,
       plain_held: 1,
+      kept_by_discarded_candidate: 1,
       new_streets: 1,
       twins: "6",
       twins_urban: 1,
@@ -130,6 +131,7 @@ describe("toEjesAnalysis", () => {
       ],
       [ANALYSIS_LIST_ALIAS.MERGES]: [{ new_ref: "20", idcalle: "6", old_refs: ["21", "22"], points: 0, coverage: null, old_length: 80, new_length: 80, outside_length: 0 }],
       [ANALYSIS_LIST_ALIAS.PLAIN]: [{ ref: "30", idcalle: null, points: 2 }],
+      [ANALYSIS_LIST_ALIAS.KEPT_BY_DISCARDED]: [{ ref: "50", idcalle: "8", points: 1, discarded_ref: "51", reason: "place" }],
       [ANALYSIS_LIST_ALIAS.STREETS]: [
         {
           idcalle: "7",
@@ -166,6 +168,7 @@ describe("toEjesAnalysis", () => {
       merges: 1,
       plainRemovals: 2,
       plainHeld: 1,
+      keptByDiscardedCandidate: 1,
       newStreets: 1,
       twins: 6,
       twinsUrban: 1,
@@ -220,6 +223,7 @@ describe("toEjesAnalysis", () => {
       { newRef: "20", idcalle: "6", oldRefs: ["21", "22"], points: 0, coverage: null, oldLength: 80, newLength: 80, outsideLength: 0 },
     ]);
     expect(analysis.plainRemovals).toEqual([{ ref: "30", idcalle: null, points: 2 }]);
+    expect(analysis.keptByDiscarded).toEqual([{ ref: "50", idcalle: "8", points: 1, discardedRef: "51", reason: "place" }]);
     expect(analysis.newStreets).toEqual([
       {
         idcalle: "7",
@@ -249,6 +253,7 @@ describe("toEjesAnalysis", () => {
     expect(analysis.splits).toEqual([]);
     expect(analysis.merges).toEqual([]);
     expect(analysis.plainRemovals).toEqual([]);
+    expect(analysis.keptByDiscarded).toEqual([]);
     expect(analysis.newStreets).toEqual([]);
     expect(analysis.attrChanges).toEqual([]);
     expect(analysis.twins).toEqual([]);

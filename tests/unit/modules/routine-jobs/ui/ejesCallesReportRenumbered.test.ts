@@ -73,6 +73,7 @@ const resultOf = (renumbered: EjesRenumberedRow[]): EjesResult =>
     renumbered,
     renumberSkipped: [],
     renumberDropped: [],
+    keptByDiscarded: [],
     blockers: [],
     privilegeInfo: [],
     tables: {},

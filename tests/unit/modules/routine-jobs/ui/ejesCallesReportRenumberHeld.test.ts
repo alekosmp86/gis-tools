@@ -82,6 +82,7 @@ const resultOf = (renumberSkipped: EjesRenumberSkippedRow[] = HELD_ROWS): EjesRe
     renumbered: [],
     renumberSkipped,
     renumberDropped: [],
+    keptByDiscarded: [],
     blockers: [],
     privilegeInfo: [],
     tables: {},

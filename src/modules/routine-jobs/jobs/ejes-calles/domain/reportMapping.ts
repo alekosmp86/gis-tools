@@ -1,6 +1,6 @@
 import { listOf, nullableNumber, numberOf, textOf, type Row } from "../../shared/rowMapping";
 import { shortNameOf } from "./shortName";
-import { EJES_POINT_REASON, TWIN_CLASS, type EjesSkipReason, type GeoTwinRole, type RenumberSkipReason, type TwinClass } from "../constants";
+import { EJES_POINT_REASON, TWIN_CLASS, type EjesKeptByDiscardedReason, type EjesSkipReason, type GeoTwinRole, type RenumberSkipReason, type TwinClass } from "../constants";
 import { ANALYSIS_LIST_ALIAS } from "./analysisSql";
 import type {
   EjesStoredCandidate,
@@ -10,6 +10,7 @@ import type {
   EjesInvalidGeometryRow,
   EjesMergeRow,
   EjesNewStreetRow,
+  EjesKeptByDiscardedRow,
   EjesRemovalRow,
   EjesRenumberedRow,
   EjesRenumberDroppedRow,
@@ -96,6 +97,14 @@ const removalOf = (row: Row): EjesRemovalRow => ({
   ref: textOf(row.ref) ?? "",
   idcalle: textOf(row.idcalle),
   points: numberOf(row.points),
+});
+
+const keptByDiscardedOf = (row: Row): EjesKeptByDiscardedRow => ({
+  ref: textOf(row.ref) ?? "",
+  idcalle: textOf(row.idcalle),
+  points: numberOf(row.points),
+  discardedRef: String(row.discarded_ref),
+  reason: String(row.reason) as EjesKeptByDiscardedReason,
 });
 
 const streetOf = (row: Row): EjesNewStreetRow => {
@@ -208,6 +217,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       merges: numberOf(row.merges),
       plainRemovals: numberOf(row.plain_removals),
       plainHeld: numberOf(row.plain_held),
+      keptByDiscardedCandidate: numberOf(row.kept_by_discarded_candidate),
       newStreets: numberOf(row.new_streets),
       twins: numberOf(row.twins),
       geoTwinGroups: numberOf(row.geo_twin_groups),
@@ -246,6 +256,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
     reviewPoints: listOf(row.review_points).map(reviewPointOf),
     merges: listOf(row[ANALYSIS_LIST_ALIAS.MERGES]).map(mergeOf),
     plainRemovals: listOf(row[ANALYSIS_LIST_ALIAS.PLAIN]).map(removalOf),
+    keptByDiscarded: listOf(row[ANALYSIS_LIST_ALIAS.KEPT_BY_DISCARDED]).map(keptByDiscardedOf),
     newStreets: listOf(row[ANALYSIS_LIST_ALIAS.STREETS]).map(streetOf),
     attrChanges: listOf(row[ANALYSIS_LIST_ALIAS.ATTRS]).map(attrOf),
     twins: listOf(row[ANALYSIS_LIST_ALIAS.TWINS]).map(twinOf),

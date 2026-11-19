@@ -36,6 +36,7 @@ const SUMMARY_COUNT_KEYS = [
   "splits",
   "merges",
   "plainRemovals",
+  "keptByDiscardedCandidate",
   "renumbered",
   "renumberSkipped",
   "splitPointsAuto",

@@ -150,11 +150,11 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
   (new, unchanged, changed, removed, split, merge), the new streets, the locality computation and the twin analysis never see them,
   so a degenerate line (on dev 795 invalid rows plus 878 valid-but-collapsed rows, 676 distinct `reftramo` among the collapsed, e.g. reftramo 1001006 with two points ~1e-9 m apart)
   is never classified, dropped, kept or counted as a new section. A `reftramo` whose staging rows are all discarded does not count as present (`stg_keys` reads only the kept rows): a current
-  section with no kept row is a removal candidate like any section absent from the file, unless it holds access points (never removed); on dev 557 of the 615 invalid
+  section with no kept row is a removal candidate like any section absent from the file (renumber, split and merge decide it first), unless it holds access points (never removed) or a discarded row keeps it at the plain-removal stage (EJS-19); on dev 557 of the 615 invalid
   `reftramo` exist in `carto` with a valid geometry, so under this rule they are removal candidates: confirm before a real run). They are reported in the file-problems part of the report: a KPI
   "Filas con geometría inválida o colapsada, o menor de 1 m sin puntos de acceso (se omiten)" (rows) and "Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso" (distinct `reftramo`), and a collapsible list
   of up to `DETAIL_LIST_LIMIT` rows with `reftramo`, `idcalle`, locality and department. The raw file counts (`rows`, distinct refs,
-  repeated groups) are unchanged. It is a warning, not a blocker. The criterion is validity or length: under the 1 mm geometry tolerance (`GEOMETRY_TOLERANCE_M`) always; under `MIN_SECTION_LENGTH_M` (1 m) unless the `reftramo` holds access points (one shared definition `validGeometrySql`). Discarded rows feed no other rule (classification, twins, new streets, removals, `stg_keys`); only the staging fingerprint reads them. Real
+  repeated groups) are unchanged. It is a warning, not a blocker. The criterion is validity or length: under the 1 mm geometry tolerance (`GEOMETRY_TOLERANCE_M`) always; under `MIN_SECTION_LENGTH_M` (1 m) unless the `reftramo` holds access points (one shared definition `validGeometrySql`). Discarded rows feed no other rule (classification, twins, new streets, renumber, splits, merges, inserts); they only protect a plain removal (EJS-19) and the staging fingerprint reads them. Real
   sections of 1 mm or more are kept as before. The root cause (the csv-db tool writing these geometries) is a separate fix outside this job; this step
   is the safety net that stays after it.
 

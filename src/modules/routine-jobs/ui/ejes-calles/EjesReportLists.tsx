@@ -12,7 +12,7 @@ import { acceptedCountTextOf } from "./ejesAcceptTexts";
 import { mergeColumnsOf } from "./compact/ejesMergeColumns";
 import { splitColumnsOf } from "./compact/ejesSplitColumns";
 import { GEO_TWIN_COLUMNS, GEO_TWIN_TEXT, isGeoTwinRemovable } from "./compact/ejesGeoTwinColumns";
-import { ATTR_COLUMNS, HELD_RENUMBER_COLUMNS, INVALID_GEOMETRY_COLUMNS, REMOVAL_COLUMNS, RENUMBER_DROPPED_COLUMNS, STREET_COLUMNS } from "./ejesReportColumns";
+import { ATTR_COLUMNS, HELD_RENUMBER_COLUMNS, INVALID_GEOMETRY_COLUMNS, KEPT_BY_DISCARDED_COLUMNS, REMOVAL_COLUMNS, RENUMBER_DROPPED_COLUMNS, STREET_COLUMNS } from "./ejesReportColumns";
 import { heldRenumberKeyOf, type EjesHeldRenumberView } from "./ejesRenumberHeldView";
 import { subjectOfGeoTwin, subjectOfHeldCandidates, type EjesMapSubject } from "./ejesMapSubject";
 import { RowsTable } from "../shared/ReportParts";
@@ -128,6 +128,11 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
           />
         ),
         badgeOf(EjesAcceptList.PLAIN_REMOVALS, result.counts.plainRemovals)
+      )}
+      {section(
+        EJES_LIST.KEPT_BY_DISCARDED,
+        result.keptByDiscarded.length,
+        <RowsTable columns={KEPT_BY_DISCARDED_COLUMNS} rows={result.keptByDiscarded} rowKey={(row) => `${row.ref}|${row.idcalle}|${row.discardedRef}`} />
       )}
       {section(
         EJES_LIST.GEO_TWINS,

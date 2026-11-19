@@ -1,8 +1,8 @@
 import { DISTANCE_DECIMALS } from "../../jobs/ejes-calles/constants";
-import type { EjesInvalidGeometryRow, EjesNewStreetRow, EjesRemovalRow, EjesRenumberDroppedRow } from "../../jobs/ejes-calles/types";
+import type { EjesInvalidGeometryRow, EjesKeptByDiscardedRow, EjesNewStreetRow, EjesRemovalRow, EjesRenumberDroppedRow } from "../../jobs/ejes-calles/types";
 import type { EjesAttrRowView } from "./ejesCallesReportView";
 import type { EjesHeldRenumberView } from "./ejesRenumberHeldView";
-import { NO_REFTRAMO_TEXT, RENUMBER_SKIP_TEXT } from "./ejesLoadTexts";
+import { KEPT_BY_DISCARDED_REASON_TEXT, NO_REFTRAMO_TEXT, RENUMBER_SKIP_TEXT } from "./ejesLoadTexts";
 import type { TableColumn } from "../shared/ReportParts";
 import { textOrNoData } from "../shared/reportFormat";
 
@@ -27,6 +27,14 @@ export const REMOVAL_COLUMNS: TableColumn<EjesRemovalRow>[] = [
   { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
   { header: "Puntos de acceso", cell: (row) => String(row.points) },
   { header: "Qué pasa", cell: (row) => (row.points > 0 ? "No se quita: tiene puntos de acceso" : "Se quita") },
+];
+
+export const KEPT_BY_DISCARDED_COLUMNS: TableColumn<EjesKeptByDiscardedRow>[] = [
+  { header: "reftramo anterior", cell: (row) => (row.ref === "" ? NO_REFTRAMO_TEXT : row.ref) },
+  { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
+  { header: "Puntos de acceso", cell: (row) => String(row.points) },
+  { header: "reftramo descartado", cell: (row) => row.discardedRef },
+  { header: "motivo", cell: (row) => KEPT_BY_DISCARDED_REASON_TEXT[row.reason] },
 ];
 
 export const STREET_COLUMNS: TableColumn<EjesNewStreetRow>[] = [

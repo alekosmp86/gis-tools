@@ -15,6 +15,7 @@ export interface EjesListSummaries {
   splits: string;
   merges: string;
   plainRemovals: string;
+  keptByDiscarded: string;
   newStreets: string;
   attrChanges: string;
   twinUndecided: string;
@@ -158,6 +159,7 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
         kpi("Unidos en uno nuevo", counts.merges),
         kpi("Sin reemplazo, se quitarían", counts.plainRemovals - counts.plainHeld),
         kpi("Sin reemplazo, con puntos de acceso: no se quitan", counts.plainHeld),
+        kpi("Se conservan por candidato descartado", counts.keptByDiscardedCandidate),
       ],
     },
     {
@@ -210,6 +212,7 @@ const summariesOf = (result: EjesResult): EjesListSummaries => ({
   splits: listSummaryOf("Tramos divididos", result.splits.length, result.counts.splits),
   merges: listSummaryOf("Tramos unidos", result.merges.length, result.counts.merges),
   plainRemovals: listSummaryOf("Tramos sin reemplazo (primero los que tienen puntos de acceso)", result.plainRemovals.length, result.counts.plainRemovals),
+  keptByDiscarded: listSummaryOf("Tramos que se conservan por candidato descartado", result.keptByDiscarded.length, result.counts.keptByDiscardedCandidate),
   newStreets: listSummaryOf("Calles nuevas", result.newStreets.length, result.counts.newStreets),
   attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
   invalidGeometries: listSummaryOf("Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso (se omiten)",result.staging.invalidGeometries.length, result.staging.invalidGeometryRows),

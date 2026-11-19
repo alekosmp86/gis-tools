@@ -1,4 +1,13 @@
-import { EJES_SKIP_KIND, EJES_SKIP_REASON, RENUMBER_SKIP_REASON, type EjesSkipKind, type EjesSkipReason, type RenumberSkipReason } from "../../jobs/ejes-calles/constants";
+import {
+  EJES_KEPT_BY_DISCARDED_REASON,
+  EJES_SKIP_KIND,
+  EJES_SKIP_REASON,
+  RENUMBER_SKIP_REASON,
+  type EjesKeptByDiscardedReason,
+  type EjesSkipKind,
+  type EjesSkipReason,
+  type RenumberSkipReason,
+} from "../../jobs/ejes-calles/constants";
 
 export const EJES_LOAD_TITLE = "Resultado de la carga";
 export const EJES_LOAD_DONE_BANNER = "Carga confirmada: las tablas de ejes de calles fueron modificadas.";
@@ -47,6 +56,11 @@ export const SKIP_REASON_TEXT: Record<EjesSkipReason, string> = {
 };
 
 export const NO_REFTRAMO_TEXT = "sin reftramo";
+
+export const KEPT_BY_DISCARDED_REASON_TEXT: Record<EjesKeptByDiscardedReason, string> = {
+  [EJES_KEPT_BY_DISCARDED_REASON.SAME_REFTRAMO]: "mismo reftramo descartado",
+  [EJES_KEPT_BY_DISCARDED_REASON.PLACE]: "candidato descartado en el lugar",
+};
 
 export const EJES_LOAD_SKIPPED_BY_REASON_TITLE = "Omitidos por motivo (conteo completo)";
 

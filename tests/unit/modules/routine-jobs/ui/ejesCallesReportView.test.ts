@@ -22,6 +22,7 @@ const COUNTS = {
   merges: 1,
   plainRemovals: 2,
   plainHeld: 1,
+  keptByDiscardedCandidate: 0,
   newStreets: 1,
   twins: 6,
   twinsUrban: 1,
@@ -102,6 +103,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     renumbered: [],
     renumberSkipped: [],
     renumberDropped: [],
+    keptByDiscarded: [],
     fingerprint: { rows: 100, digest: "9f8e7d6c5b4a" },
     attrChanges: [
       {

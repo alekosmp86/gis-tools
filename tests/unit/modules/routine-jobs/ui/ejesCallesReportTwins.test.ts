@@ -94,6 +94,7 @@ const resultOf = (twins: EjesTwinRow[], invalid: EjesInvalidGeometryRow[] = []):
     renumbered: [],
     renumberSkipped: [],
     renumberDropped: [],
+    keptByDiscarded: [],
     blockers: [],
     privilegeInfo: [],
     tables: {},
