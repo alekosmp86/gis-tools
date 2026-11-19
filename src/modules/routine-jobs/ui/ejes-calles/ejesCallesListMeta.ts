@@ -32,7 +32,7 @@ const EJES_LIST_ORDER: readonly EjesListKey[] = [
 export const ejesListAnchorOf = (key: EjesListKey): string => `ejes-list-${key}`;
 
 export const EJES_LIST_INTROS: Record<EjesListKey, string> = {
-  [EJES_LIST.SPLITS]: "Un tramo actual que el archivo reemplaza por varios nuevos.",
+  [EJES_LIST.SPLITS]: "Divisiones y reemplazos: un tramo actual se reemplaza por uno o varios nuevos; sus puntos de acceso pasan al nuevo o se reparten entre los nuevos, y el tramo actual se quita al aceptarlo.",
   [EJES_LIST.MERGES]: "Varios tramos actuales que el archivo reemplaza por uno nuevo.",
   [EJES_LIST.RENUMBER_HELD]: "Renumeración no aplicada: ambos tramos quedan como están y sus puntos de acceso no se mueven.",
   [EJES_LIST.RENUMBER_DROPPED]: "Reftramos nuevos de la misma calle y trazado que ya se renumeran a otro reftramo: no se cargan y no tienen puntos de acceso.",
@@ -76,7 +76,7 @@ export function stripOf(result: EjesResult): EjesStripItem[] {
     { key: "renumberedByGeometry", label: "de ellos, eligiendo por geometría", value: counts.renumberedByGeometry, list: null },
     { key: EJES_LIST.RENUMBER_DROPPED, label: "Candidatos descartados", value: counts.renumberDroppedCandidates, list: EJES_LIST.RENUMBER_DROPPED },
     { key: EJES_LIST.RENUMBER_HELD, label: "Renumerados retenidos", value: counts.renumberSkipped, list: EJES_LIST.RENUMBER_HELD },
-    { key: EJES_LIST.SPLITS, label: "Divididos", value: counts.splits, list: EJES_LIST.SPLITS },
+    { key: EJES_LIST.SPLITS, label: "Divisiones y reemplazos", value: counts.splits, list: EJES_LIST.SPLITS },
     { key: EJES_LIST.MERGES, label: "Unidos", value: counts.merges, list: EJES_LIST.MERGES },
     { key: EJES_LIST.PLAIN_REMOVALS, label: "Sin reemplazo", value: counts.plainRemovals, list: EJES_LIST.PLAIN_REMOVALS },
     { key: EJES_LIST.KEPT_BY_DISCARDED, label: "Se conservan por candidato descartado", value: counts.keptByDiscardedCandidate, list: EJES_LIST.KEPT_BY_DISCARDED },

@@ -336,6 +336,7 @@ export const EJES_SUMMARY_COUNT_KEYS = [
   "both",
   "removed",
   "splits",
+  "replacements",
   "merges",
   "plainRemovals",
   "keptByDiscardedCandidate",

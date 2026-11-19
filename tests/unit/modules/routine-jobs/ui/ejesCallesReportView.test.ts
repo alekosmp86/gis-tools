@@ -19,6 +19,7 @@ const COUNTS = {
   both: 1,
   removed: 4,
   splits: 1,
+  replacements: 0,
   merges: 1,
   plainRemovals: 2,
   plainHeld: 1,
@@ -243,6 +244,18 @@ describe("buildEjesReportView (EJ-12)", () => {
       [TWIN_CLASS.NEITHER, "Lejos de padrones: sin regla"],
     ])("should describe the class %s as %s", (twinClass, text) => {
       expect(twinCaseTextOf(twinClass)).toBe(text);
+    });
+  });
+
+  describe("splits and replacements (one-piece replacement)", () => {
+    const kpisOf = (result: EjesResult): Record<string, number> =>
+      Object.fromEntries(buildEjesReportView(result).kpiGroups.flatMap((group) => group.kpis).map((kpi) => [kpi.label, kpi.value]));
+
+    it("should show the split KPI without the replacements and the replacement KPI with them", () => {
+      const kpis = kpisOf(resultOf({ counts: { ...COUNTS, splits: 5, replacements: 2 } }));
+
+      expect(kpis["Divididos en varios nuevos"]).toBe(3);
+      expect(kpis["Reemplazados por un nuevo tramo"]).toBe(2);
     });
   });
 

@@ -111,11 +111,11 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
         { label: "Tramos actualizados", value: 2 },
         { label: "Tramos renumerados", value: 1 },
         { label: "Renumerados retenidos", value: 0 },
-        { label: "Divisiones aplicadas", value: 0 },
+        { label: "Divisiones y reemplazos aplicados", value: 0 },
         { label: "Uniones aplicadas", value: 2 },
         { label: "Tramos quitados", value: 5 },
         { label: "Gemelos quitados", value: 0 },
-        { label: "Tramos borrados (divididos, unidos, gemelos y quitados)", value: 7 },
+        { label: "Tramos borrados (divididos o reemplazados, unidos, gemelos y quitados)", value: 7 },
         { label: "Vías de circulación creadas", value: 4 },
         { label: "Puntos de acceso movidos", value: 9 },
         { label: EJES_LOAD_COUNT_TEXT.TOPOLOGY_ASSIGNED, value: 4 },
@@ -179,7 +179,7 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
     it("should show the sections deleted by the load (removed and merged) from counts.deleted", () => {
       const view = buildEjesLoadView(resultOf(), loadOf({ counts: { ...loadOf().counts, removed: 1, merged: 1, deleted: 3 } }));
 
-      expect(countOf(view, "Tramos borrados (divididos, unidos, gemelos y quitados)")).toBe(3);
+      expect(countOf(view, "Tramos borrados (divididos o reemplazados, unidos, gemelos y quitados)")).toBe(3);
     });
 
     it("should show the applied merges and removed sections from the load counts", () => {
@@ -192,7 +192,7 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
 
   describe("skipped list", () => {
     it.each([
-      ["split", "Tramo dividido"],
+      ["split", "Tramo dividido o reemplazado"],
       ["merge", "Tramos unidos"],
       ["removal", "Sin reemplazo"],
       ["renumber", "Renumeración no aplicada"],

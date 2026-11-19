@@ -120,7 +120,7 @@ describe("stripOf", () => {
       "de ellos, eligiendo por geometría",
       "Candidatos descartados",
       "Renumerados retenidos",
-      "Divididos",
+      "Divisiones y reemplazos",
       "Unidos",
       "Sin reemplazo",
       "Se conservan por candidato descartado",
@@ -158,7 +158,7 @@ describe("stripOf", () => {
     expect(byLabel["Renumerados"]).toMatchObject({ value: 5, list: null });
     expect(byLabel["Renumerados retenidos"]).toMatchObject({ value: 11, list: EJES_LIST.RENUMBER_HELD });
     expect(byLabel["Candidatos descartados"]).toMatchObject({ value: 12, list: EJES_LIST.RENUMBER_DROPPED });
-    expect(byLabel["Divididos"]).toMatchObject({ value: 6, list: EJES_LIST.SPLITS });
+    expect(byLabel["Divisiones y reemplazos"]).toMatchObject({ value: 6, list: EJES_LIST.SPLITS });
     expect(byLabel["Unidos"]).toMatchObject({ value: 7, list: EJES_LIST.MERGES });
     expect(byLabel["Sin reemplazo"]).toMatchObject({ value: 8, list: EJES_LIST.PLAIN_REMOVALS });
     expect(byLabel["Se conservan por candidato descartado"]).toMatchObject({ value: 3, list: EJES_LIST.KEPT_BY_DISCARDED });

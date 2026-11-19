@@ -28,7 +28,7 @@ export const EJES_LOAD_BACKUP_INSTRUCTIONS = [
 ];
 
 export const EJES_SKIP_KIND_TEXT: Record<EjesSkipKind, string> = {
-  [EJES_SKIP_KIND.SPLIT]: "Tramo dividido",
+  [EJES_SKIP_KIND.SPLIT]: "Tramo dividido o reemplazado",
   [EJES_SKIP_KIND.MERGE]: "Tramos unidos",
   [EJES_SKIP_KIND.REMOVAL]: "Sin reemplazo",
   [EJES_SKIP_KIND.RENUMBER]: "Renumeración no aplicada",

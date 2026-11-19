@@ -155,7 +155,8 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
         kpi("Renumerados (mismo trazado, otro reftramo)", counts.renumbered),
         kpi("Renumerados con puntos de acceso", counts.renumberedWithPoints),
         kpi("Puntos de acceso que seguirían al renumerar", counts.renumberedPoints),
-        kpi("Divididos en varios nuevos", counts.splits),
+        kpi("Divididos en varios nuevos", counts.splits - counts.replacements),
+        kpi("Reemplazados por un nuevo tramo", counts.replacements),
         kpi("Unidos en uno nuevo", counts.merges),
         kpi("Sin reemplazo, se quitarían", counts.plainRemovals - counts.plainHeld),
         kpi("Sin reemplazo, con puntos de acceso: no se quitan", counts.plainHeld),
@@ -163,7 +164,7 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
       ],
     },
     {
-      title: "Puntos de acceso de los tramos divididos (por reftramo)",
+      title: "Puntos de acceso de las divisiones y reemplazos (por reftramo)",
       kpis: [
         kpi("Total", counts.splitPointsTotal),
         kpi("Destino automático", counts.splitPointsAuto),

@@ -469,6 +469,7 @@ function countColumns(): string[] {
     `${countOf("classified", "attr_changed AND geom_changed")} AS "both"`,
     `${countOf("removed", `id NOT IN (SELECT old_id FROM ${q("renum_status")} WHERE skip_reason IS NOT NULL)`)} AS "removed"`,
     `${countOf("splits")} AS "splits"`,
+    `${countOf("splits", `cardinality(new_refs) = ${REPLACEMENT_PIECES}`)} AS "replacements"`,
     `${countOf("merges")} AS "merges"`,
     ...splitPointCountColumns(),
     `${countOf("plain")} AS "plain_removals"`,

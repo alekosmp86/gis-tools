@@ -214,6 +214,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       both: numberOf(row.both),
       removed: numberOf(row.removed),
       splits: numberOf(row.splits),
+      replacements: numberOf(row.replacements),
       merges: numberOf(row.merges),
       plainRemovals: numberOf(row.plain_removals),
       plainHeld: numberOf(row.plain_held),

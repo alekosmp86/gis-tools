@@ -103,6 +103,7 @@ export interface EjesCounts {
   both: number;
   removed: number;
   splits: number;
+  replacements: number;
   merges: number;
   plainRemovals: number;
   plainHeld: number;
