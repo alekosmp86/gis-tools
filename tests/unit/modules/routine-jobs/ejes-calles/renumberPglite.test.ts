@@ -293,13 +293,13 @@ describe("renumbered pairs against PostgreSQL (ER-1, ER-2, ER-3, EJL-12, EJL-17)
   it("should leave in removed_rest every removed section that is neither renumbered nor held, and no renumbered one", async () => {
     const result = await database.query<{ ref: string }>(withRenumber('SELECT ref FROM "removed_rest" ORDER BY ref'));
 
-    expect(result.rows.map((row) => row.ref)).toEqual(["o11", "o2", "o3", "o4", "o7", "o8"]);
+    expect(result.rows.map((row) => row.ref)).toEqual(["o11", "o2", "o3", "o4", "o6a", "o6b", "o7", "o8"]);
   });
 
   it("should leave in new_rest every new section that is neither renumbered, held nor discarded, and no renumbered one", async () => {
     const result = await database.query<{ ref: string }>(withRenumber('SELECT ref FROM "new_rest" ORDER BY ref'));
 
-    expect(result.rows.map((row) => row.ref)).toEqual(["102", "103", "104", "108", "109", "112"]);
+    expect(result.rows.map((row) => row.ref)).toEqual(["102", "103", "104", "107", "108", "109", "112"]);
   });
 
   it("should split the raw removed count into the renumbered pairs, the removed rest and the held old sections (EJL-12)", async () => {
@@ -312,10 +312,10 @@ describe("renumbered pairs against PostgreSQL (ER-1, ER-2, ER-3, EJL-12, EJL-17)
 
     expect(Number(row.removed)).toBe(12);
     expect(Number(row.renumbered) + Number(row.rest) + Number(row.held)).toBe(12);
-    expect(Number(row.held)).toBe(2);
+    expect(Number(row.held)).toBe(0);
   });
 
-  it("should count the pairs, the pairs with points, the points, the pairs chosen by geometry, the discarded candidates and the held pairs", async () => {
+  it("should count the pairs, the pairs with points, the points, the pairs chosen by geometry and the discarded candidates, with no held pair when two old sections claim one new section", async () => {
     const select = `SELECT ${renumberCountColumns().join(", ")}`;
     const result = await database.query<Record<string, unknown>>(withRenumber(select));
     const row = result.rows[0];
@@ -325,7 +325,7 @@ describe("renumbered pairs against PostgreSQL (ER-1, ER-2, ER-3, EJL-12, EJL-17)
     expect(Number(row.renumbered_points)).toBe(10);
     expect(Number(row.renumbered_by_geometry)).toBe(1);
     expect(Number(row.renumber_dropped_candidates)).toBe(1);
-    expect(Number(row.renumber_skipped)).toBe(2);
+    expect(Number(row.renumber_skipped)).toBe(0);
   });
 
   it("should list the pairs by points descending, then old reftramo", async () => {
@@ -395,13 +395,12 @@ describe("renumber refusal reasons against PostgreSQL (EJL-12, EJL-17)", () => {
     expect(held).toEqual([]);
   });
 
-  it("should refuse both old candidates of a new reftramo with two candidates as ambiguous_new_ref", async () => {
+  it("should neither renumber nor hold the two old candidates of a new reftramo that both claim it, and leave no ambiguous_new_ref reason", async () => {
     const pairs = (await skipped()).filter((row) => row.new_ref === "204");
+    const renumberedPairs = (await renumbered()).filter((row) => row.new_ref === "204");
 
-    expect(pairs.map((row) => [row.old_ref, row.reason])).toEqual([
-      ["b1", "ambiguous_new_ref"],
-      ["b2", "ambiguous_new_ref"],
-    ]);
+    expect(pairs).toEqual([]);
+    expect(renumberedPairs).toEqual([]);
   });
 
   it("should refuse a new reftramo with no kept copy as not_single_copy", async () => {
@@ -416,7 +415,7 @@ describe("renumber refusal reasons against PostgreSQL (EJL-12, EJL-17)", () => {
     const found = await skipped();
 
     expect(found.every((row) => typeof row.reason === "string" && row.reason !== "")).toBe(true);
-    expect(new Set(found.map((row) => row.reason))).toEqual(new Set(["repeated_old_ref", "ambiguous_new_ref", "not_single_copy"]));
+    expect(new Set(found.map((row) => row.reason))).toEqual(new Set(["repeated_old_ref", "not_single_copy"]));
   });
 
   it("should keep the points of the old reftramo on every skipped pair, and move none", async () => {
@@ -427,23 +426,23 @@ describe("renumber refusal reasons against PostgreSQL (EJL-12, EJL-17)", () => {
     expect(found.find((row) => row.old_ref === "c2")?.points).toBe(0);
   });
 
-  it("should give one skipped row per candidate pair, each with both refs", async () => {
-    expect((await skipped()).map((row) => `${row.old_ref}/${row.new_ref}`)).toEqual(["b1/204", "b2/204", "c1/205", "c2/206", "r1/201"]);
+  it("should give one skipped row per refused candidate pair, each with both refs", async () => {
+    expect((await skipped()).map((row) => `${row.old_ref}/${row.new_ref}`)).toEqual(["c1/205", "c2/206", "r1/201"]);
   });
 
-  it("should hold both sections of a skipped pair: the old out of removed_rest, the new out of new_rest", async () => {
+  it("should hold both sections of a refused pair out of removed_rest and new_rest, and leave a shared new reftramo's old sections and new section in the rest", async () => {
     const removedRest = await database.query<{ ref: string }>(withRenumber('SELECT ref FROM "removed_rest" ORDER BY ref'));
     const newRest = await database.query<{ ref: string }>(withRenumber('SELECT ref FROM "new_rest" ORDER BY ref'));
 
-    expect(removedRest.rows.map((row) => row.ref)).toEqual(["k1"]);
-    expect(newRest.rows).toEqual([]);
+    expect(removedRest.rows.map((row) => row.ref)).toEqual(["b1", "b2", "k1"]);
+    expect(newRest.rows.map((row) => row.ref)).toEqual(["204"]);
   });
 
-  it("should count the held pairs as renumber_skipped and not as renumbered", async () => {
+  it("should count the refused pairs as renumber_skipped and not as renumbered", async () => {
     const result = await database.query<Record<string, unknown>>(withRenumber(`SELECT ${renumberCountColumns().join(", ")}`));
 
     expect(Number(result.rows[0].renumbered)).toBe(2);
-    expect(Number(result.rows[0].renumber_skipped)).toBe(5);
+    expect(Number(result.rows[0].renumber_skipped)).toBe(3);
   });
 
   it("should list the held pairs with their refs, street, points and reason, points descending then old reftramo", async () => {
@@ -454,8 +453,6 @@ describe("renumber refusal reasons against PostgreSQL (EJL-12, EJL-17)", () => {
     expect(result.rows[0].list.map((entry) => [entry.old_ref, entry.points, entry.reason])).toEqual([
       ["c1", 4, "not_single_copy"],
       ["r1", 2, "repeated_old_ref"],
-      ["b1", 0, "ambiguous_new_ref"],
-      ["b2", 0, "ambiguous_new_ref"],
       ["c2", 0, "not_single_copy"],
     ]);
   });

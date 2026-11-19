@@ -37,12 +37,16 @@ export function renumberPruneCtes(): string[] {
   ];
 }
 
+/** A pair renumbers when no reason holds it and its new `reftramo` is the best candidate of this old section only (`renum_status`). */
+const renumbersSql = (status: string): string => `${status}.skip_reason IS NULL AND ${status}.new_candidates = 1`;
+
 /**
  * The decisions behind the renumber, before the copies are counted (`copyFinalCte` reads `renum_dropped`). Each old section is judged
- * through its best candidate (`renum_status`): the pair renumbers only when no reason holds it. A losing candidate is dropped only when
- * its old section's best pair renumbers, no best pair takes its `reftramo`, it holds no access points and it is not a geometric twin
- * winner. Otherwise it is held (`renum_held_extra`) with the best pair's reason, or `CANDIDATE_HAS_POINTS`. A twin winner is never
- * dropped nor held: it stays a new section.
+ * through its best candidate (`renum_status`): the pair renumbers only when no reason holds it and no other old section's best candidate
+ * is the same new `reftramo`. Such a shared pair is neither renumbered nor held: both sections stay in the normal chain (splits, merges,
+ * plain). A losing candidate is dropped only when its old section's best pair renumbers, no best pair takes its `reftramo`, it holds no
+ * access points and it is not a geometric twin winner. Otherwise it is held (`renum_held_extra`) with the best pair's reason, or
+ * `CANDIDATE_HAS_POINTS` when the best pair renumbers. A twin winner is never dropped nor held: it stays a new section.
  */
 export function renumberOutcomeCtes(): string[] {
   return [
@@ -65,8 +69,7 @@ export function renumberOutcomeCtes(): string[] {
         "SELECT c.*, CASE",
         `WHEN c.old_rows > 1 THEN '${RENUMBER_SKIP_REASON.REPEATED_OLD_REF}'`,
         `WHEN c.old_candidates > 1 THEN '${RENUMBER_SKIP_REASON.AMBIGUOUS_OLD_REF}'`,
-        `WHEN c.new_candidates > 1 THEN '${RENUMBER_SKIP_REASON.AMBIGUOUS_NEW_REF}'`,
-        `WHEN c.new_copies <> 1 THEN '${RENUMBER_SKIP_REASON.NOT_SINGLE_COPY}'`,
+        `WHEN c.new_candidates = 1 AND c.new_copies <> 1 THEN '${RENUMBER_SKIP_REASON.NOT_SINGLE_COPY}'`,
         "END AS skip_reason",
         `FROM ${q("renum_counted")} AS c`,
       ].join(" ")
@@ -76,6 +79,7 @@ export function renumberOutcomeCtes(): string[] {
       "renum_losers",
       [
         "SELECT c.old_id, c.old_ref, c.new_ref, c.idcalle, c.hausdorff, COALESCE(oap.points, 0) AS points, COALESCE(nap.points, 0) AS new_points, s.skip_reason,",
+        `${renumbersSql("s")} AS renumbers,`,
         `c.new_ref IN (SELECT b.new_ref FROM ${q("renum_best")} AS b) AS is_best_new, c.new_ref IN (SELECT w.ref FROM ${q("renum_winners")} AS w) AS is_winner`,
         `FROM ${q("renum_ranked")} AS c JOIN ${q("renum_status")} AS s ON s.old_id = c.old_id`,
         `LEFT JOIN ${q("ap")} AS oap ON oap.ref = c.old_ref LEFT JOIN ${q("ap")} AS nap ON nap.ref = c.new_ref WHERE c.candidate_rank > 1`,
@@ -85,7 +89,7 @@ export function renumberOutcomeCtes(): string[] {
       "renum_held_extra",
       [
         `SELECT l.old_id, l.old_ref, l.new_ref, l.idcalle, l.points, COALESCE(l.skip_reason, '${RENUMBER_SKIP_REASON.CANDIDATE_HAS_POINTS}') AS reason`,
-        `FROM ${q("renum_losers")} AS l WHERE NOT l.is_best_new AND NOT l.is_winner AND (l.skip_reason IS NOT NULL OR l.new_points > 0)`,
+        `FROM ${q("renum_losers")} AS l WHERE NOT l.is_best_new AND NOT l.is_winner AND (l.skip_reason IS NOT NULL OR (l.renumbers AND l.new_points > 0))`,
       ].join(" ")
     ),
     cte(
@@ -93,7 +97,7 @@ export function renumberOutcomeCtes(): string[] {
       [
         "SELECT DISTINCT ON (l.new_ref) l.new_ref AS ref, l.old_ref AS old_ref, b.new_ref AS kept_ref, l.hausdorff AS hausdorff, l.points AS points",
         `FROM ${q("renum_losers")} AS l JOIN ${q("renum_best")} AS b ON b.old_id = l.old_id`,
-        "WHERE NOT l.is_best_new AND NOT l.is_winner AND l.skip_reason IS NULL AND l.new_points = 0",
+        "WHERE NOT l.is_best_new AND NOT l.is_winner AND l.renumbers AND l.new_points = 0",
         `AND l.new_ref NOT IN (SELECT h.new_ref FROM ${q("renum_held_extra")} AS h)`,
         "ORDER BY l.new_ref, l.hausdorff, l.old_ref",
       ].join(" ")
@@ -105,8 +109,9 @@ export function renumberOutcomeCtes(): string[] {
  * Renumbered pairs: a removed section and a new one of the same street with the same shape, only the `reftramo` changed. The pairs
  * are the best candidates of `renumberPruneCtes`, judged by `renumberOutcomeCtes`. A pair renumbers only when its old `reftramo` names
  * exactly one current section, it is the only candidate of that old and of that new `reftramo`, and the new `reftramo` has exactly one
- * kept copy. Every other candidate is skipped with its reason, and its old and new sections are held: neither is removed nor inserted
- * (`removed_rest` and `new_rest` leave them out). A dropped new `reftramo` (`renum_dropped`) is left out of `new_rest` too.
+ * kept copy. A pair with a reason is skipped (`renum_skipped`) and its old and new sections are held: neither is removed nor inserted
+ * (`removed_rest` and `new_rest` leave them out). A new `reftramo` that several old sections claim is neither renumbered nor held: those
+ * old sections take the splits, merges and plain removals as usual. A dropped new `reftramo` (`renum_dropped`) is left out of `new_rest` too.
  */
 export function renumberCtes(): string[] {
   return [
@@ -114,7 +119,7 @@ export function renumberCtes(): string[] {
       "renumbered",
       [
         "SELECT c.old_id, c.old_ref, c.new_ref, c.idcalle, COALESCE(ap.points, 0) AS points, c.old_len, c.new_len, c.hausdorff, c.raw_candidates > 1 AS by_geometry",
-        `FROM ${q("renum_status")} AS c LEFT JOIN ${q("ap")} AS ap ON ap.ref = c.old_ref WHERE c.skip_reason IS NULL`,
+        `FROM ${q("renum_status")} AS c LEFT JOIN ${q("ap")} AS ap ON ap.ref = c.old_ref WHERE ${renumbersSql("c")}`,
       ].join(" ")
     ),
     cte(

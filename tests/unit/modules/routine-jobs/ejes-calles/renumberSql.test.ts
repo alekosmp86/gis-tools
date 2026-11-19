@@ -128,23 +128,24 @@ describe("renumberCtes (ER-1, ER-2, ER-6, EJL-10, EJL-12, EJL-17)", () => {
       expect(status).toContain(`WHEN c.old_candidates > 1 THEN '${RENUMBER_SKIP_REASON.AMBIGUOUS_OLD_REF}'`);
     });
 
-    it("should give ambiguous_new_ref when the new reftramo has more than one candidate", () => {
-      expect(status).toContain(`WHEN c.new_candidates > 1 THEN '${RENUMBER_SKIP_REASON.AMBIGUOUS_NEW_REF}'`);
+    it("should not give ambiguous_new_ref when the new reftramo has more than one candidate", () => {
+      expect(status).not.toContain("ambiguous_new_ref");
+      expect(status).not.toContain(RENUMBER_SKIP_REASON.AMBIGUOUS_NEW_REF);
     });
 
-    it("should give not_single_copy when the new reftramo has zero or several kept copies", () => {
-      expect(status).toContain(`WHEN c.new_copies <> 1 THEN '${RENUMBER_SKIP_REASON.NOT_SINGLE_COPY}'`);
+    it("should give not_single_copy only when the new reftramo is the single candidate and has zero or several kept copies", () => {
+      expect(status).toContain(`WHEN c.new_candidates = 1 AND c.new_copies <> 1 THEN '${RENUMBER_SKIP_REASON.NOT_SINGLE_COPY}'`);
     });
 
-    it("should check the four reasons in the order of EJL-17 and leave the reason NULL for a renumber", () => {
-      const order = ["repeated_old_ref", "ambiguous_old_ref", "ambiguous_new_ref", "not_single_copy"].map((reason) => status.indexOf(reason));
+    it("should check the three reasons in the order of EJL-17 and leave the reason NULL for a renumber", () => {
+      const order = ["repeated_old_ref", "ambiguous_old_ref", "not_single_copy"].map((reason) => status.indexOf(reason));
 
       expect([...order].sort((first, second) => first - second)).toEqual(order);
       expect(status).toContain("END AS skip_reason");
     });
 
     it("should report a pair with one candidate on each side and one kept copy as renumbering", () => {
-      expect(cteNamed("renumbered")).toContain("WHERE c.skip_reason IS NULL");
+      expect(cteNamed("renumbered")).toContain("WHERE c.skip_reason IS NULL AND c.new_candidates = 1");
     });
   });
 

@@ -241,6 +241,54 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
     });
   });
 
+  describe("two old sections claiming one new reftramo (EJL-17, EJS-4)", () => {
+    /** Old 6201 and 6202 both identical to new 6203 (same street, 0:100): the new section is claimed twice, so it is no renumber. */
+    const seedSharedNew = async (): Promise<void> => {
+      await insertWay(database, 10, "CALLE DIEZ");
+      await seedMaster(6201);
+      await seedMaster(6202);
+      await insertSection(database, { ref: 6201, calle: 10, geom: "0:100", distance: "100.00", master: 6201 });
+      await insertSection(database, { ref: 6202, calle: 10, geom: "0:100", distance: "100.00", master: 6202 });
+      await insertPoints(database, "6201", 1);
+      await insertPoints(database, "6202", 2);
+      await insertStaging(database, [{ ref: "6203", calle: "10", nombre: "CALLE DIEZ", geom: "0:100" }]);
+    };
+
+    it("should list one merge of the new 6203 from the old 6201 and 6202, and no renumber pair nor skipped renumber", async () => {
+      await seedSharedNew();
+
+      const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
+
+      expect(analysis.renumbered).toEqual([]);
+      expect(analysis.renumberSkipped).toEqual([]);
+      expect(analysis.merges.map((row) => [row.newRef, row.oldRefs])).toEqual([["6203", ["6201", "6202"]]]);
+    });
+
+    it("should move the points of both old sections to 6203, delete both old sections and insert 6203, with the access point count unchanged", async () => {
+      await seedSharedNew();
+      const pointsBefore = Number((await rowsOf(database, "SELECT count(*)::int AS n FROM carto.access_point"))[0].n);
+
+      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6203"], twinRemovals: [], twinPicks: [] });
+
+      expect(await sectionsByRef(6201)).toEqual([]);
+      expect(await sectionsByRef(6202)).toEqual([]);
+      expect(await sectionsByRef(6203)).toHaveLength(1);
+      expect(await pointsOn("6203")).toBe(3);
+      expect(outcome.load.counts).toMatchObject({ merged: 1, deleted: 2, inserted: 1, pointsMoved: 3 });
+      expect(Number((await rowsOf(database, "SELECT count(*)::int AS n FROM carto.access_point"))[0].n)).toBe(pointsBefore);
+    });
+
+    it("should change nothing when the merge is not accepted", async () => {
+      await seedSharedNew();
+      const before = await snapshotOf(database);
+
+      const outcome = await persist();
+
+      expect(await snapshotOf(database)).toEqual(before);
+      expect(outcome.load.counts).toMatchObject({ merged: 0, deleted: 0, inserted: 0 });
+    });
+  });
+
   describe("accepted merges refused with nothing deleted (EJS-4, EJL-12)", () => {
     it("should refuse a merge whose old reftramo names two current sections (repeated_old_ref), deleting nothing", async () => {
       await insertWay(database, 8, "CALLE OCHO");
