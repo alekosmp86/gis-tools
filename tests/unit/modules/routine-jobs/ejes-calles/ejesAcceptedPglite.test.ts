@@ -478,7 +478,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
   });
 
   describe("classification of a plain replacement next to a continuing street (EJ-10)", () => {
-    it("should classify a removed section replaced by one new section as a plain removal, not a split, when another new section only touches its end", async () => {
+    it("should classify a removed section fully covered by one single-copy new section as a one-piece replacement split, not a plain removal, when another new section only touches its end", async () => {
       await insertWay(database, 15, "CALLE QUINCE");
       await insertSection(database, { ref: 6801, calle: 15, geom: "0:50", distance: "50.00" });
       await insertStaging(database, [
@@ -488,13 +488,13 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
 
       const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
 
-      expect(analysis.splits.map((row) => row.oldRef)).toEqual([]);
-      expect(analysis.plainRemovals.map((row) => row.ref)).toEqual(["6801"]);
+      expect(analysis.splits.map((row) => [row.oldRef, row.newRefs])).toEqual([["6801", ["6802"]]]);
+      expect(analysis.plainRemovals).toEqual([]);
     });
   });
 
   describe("touching neighbours and the 10 m cover of a split piece or a merge member (EJ-10, SPLIT_PIECE_MIN_COVER_M)", () => {
-    it("should not list a neighbour that only overlaps the removed section by 1 m as a merge member, and keep the section a plain removal", async () => {
+    it("should not list a neighbour that only overlaps the removed section by 1 m as a merge member, and keep the section a one-piece replacement", async () => {
       await insertWay(database, 15, "CALLE QUINCE");
       await insertSection(database, { ref: 6801, calle: 15, geom: "0:50", distance: "50.00" });
       await insertStaging(database, [
@@ -505,8 +505,8 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
 
       expect(analysis.merges).toEqual([]);
-      expect(analysis.splits).toEqual([]);
-      expect(analysis.plainRemovals.map((row) => row.ref)).toEqual(["6801"]);
+      expect(analysis.splits.map((row) => [row.oldRef, row.newRefs])).toEqual([["6801", ["6802"]]]);
+      expect(analysis.plainRemovals).toEqual([]);
     });
 
     it("should not count a neighbour whose cover of the removed section is exactly 10 m as a split piece, the minimum is strict", async () => {
@@ -547,8 +547,8 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       const analysis = await readAnalysis(sessionOn(database), ejesLayouts());
 
       expect(analysis.merges).toEqual([]);
-      expect(analysis.splits).toEqual([]);
-      expect(analysis.plainRemovals.map((row) => row.ref)).toEqual(["6831", "6832"]);
+      expect(analysis.splits.map((row) => [row.oldRef, row.newRefs])).toEqual([["6831", ["6833"]]]);
+      expect(analysis.plainRemovals.map((row) => row.ref)).toEqual(["6832"]);
     });
 
     it("should count a 2 m stub covered in full as a merge member through the 95% ratio, so the two sections merge", async () => {

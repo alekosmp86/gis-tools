@@ -7,7 +7,7 @@ import { EjesAcceptableRows } from "./EjesAcceptableRows";
 import { EjesListSection } from "./EjesListSection";
 import { EjesSplitsSection } from "./EjesSplitsSection";
 import { TwinUndecidedSection } from "./TwinUndecidedSection";
-import { EjesAcceptList, splitKeyOf, type EjesAcceptView } from "./ejesAccept";
+import { EjesAcceptList, isPlainRemovalAcceptable, plainRemovalNotAcceptableText, splitKeyOf, type EjesAcceptView } from "./ejesAccept";
 import { acceptedCountTextOf } from "./ejesAcceptTexts";
 import { mergeColumnsOf } from "./compact/ejesMergeColumns";
 import { splitColumnsOf } from "./compact/ejesSplitColumns";
@@ -122,7 +122,8 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
             total={result.counts.plainRemovals}
             columns={REMOVAL_COLUMNS}
             rowKey={(row) => row.ref}
-            acceptable={(row) => row.ref !== ""}
+            acceptable={isPlainRemovalAcceptable}
+            notAcceptableText={plainRemovalNotAcceptableText}
             accept={accept}
           />
         ),

@@ -4,7 +4,7 @@ import React, { useMemo, useState } from "react";
 import type { EjesSplitRow } from "../../jobs/ejes-calles/types";
 import type { EjesSplitPointsBase } from "../shared/clientTypes";
 import { EjesAcceptableRows } from "./EjesAcceptableRows";
-import { EjesAcceptList, chosenCountsOf, isSplitAcceptable, splitKeyOf, toggleSplitAcceptance, type EjesAcceptView } from "./ejesAccept";
+import { EjesAcceptList, chosenCountsOf, isReplacementSplit, isSplitAcceptable, splitKeyOf, toggleSplitAcceptance, type EjesAcceptView } from "./ejesAccept";
 import { acceptedCountTextOf, EJES_ACCEPT_TEXT } from "./ejesAcceptTexts";
 import acceptStyles from "./EjesAccept.module.css";
 import { EJES_COMPACT_TEXT } from "./compact/ejesCompactTexts";
@@ -61,6 +61,7 @@ export const EjesSplitsSection: React.FC<EjesSplitsSectionProps> = ({ rows, tota
     <>
       {filtering && <p className={acceptStyles.note}>{EJES_SPLIT_REVIEW_TEXT.FILTERED_LIST(listed.length, rows.length)}</p>}
       <p className={acceptStyles.note}>{EJES_ACCEPT_TEXT.SPLIT_NOTE}</p>
+      {rows.some(isReplacementSplit) && <p className={acceptStyles.note}>{EJES_ACCEPT_TEXT.REPLACEMENT_NOTE}</p>}
       {capNote !== null && <p className={acceptStyles.note}>{capNote}</p>}
       <EjesAcceptableRows
         list={EjesAcceptList.SPLITS}

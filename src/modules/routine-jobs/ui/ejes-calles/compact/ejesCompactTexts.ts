@@ -4,6 +4,7 @@ import { plural } from "../../../jobs/shared/text";
 export const EJES_COMPACT_TEXT = {
   SPLIT_TRACE: "Tramo quitado",
   SPLIT_PIECES: "Tramos nuevos",
+  REPLACEMENT: "Reemplazo",
   MERGE_TRACE: "Tramo nuevo",
   MERGE_PIECES: "Tramos quitados",
   POINTS: "Puntos de acceso",

@@ -16,8 +16,8 @@ export interface EjesAcceptableRowsProps<Row> {
   rowKey: (row: Row) => string;
   /** A row that cannot be accepted (no key to send) is shown without its button and never sent. */
   acceptable?: (row: Row) => boolean;
-  /** The text a row shows instead of its button when it is not acceptable. */
-  notAcceptableText?: string;
+  /** The text a row shows instead of its button when it is not acceptable: one text, or one per row. */
+  notAcceptableText?: string | ((row: Row) => string);
   /** Takes over a row's toggle (a split is accepted through its own rule); absent, the change goes straight to the accept state. */
   onToggleRow?: (row: Row, accepted: boolean) => void;
   accept: EjesAcceptView;
@@ -30,6 +30,9 @@ export interface EjesAcceptableRowsProps<Row> {
 }
 
 const ALWAYS_ACCEPTABLE = (): boolean => true;
+
+const notAcceptableTextOf = <Row,>(text: string | ((row: Row) => string), row: Row): string =>
+  typeof text === "string" ? text : text(row);
 
 /** A review list whose rows carry "Aceptar"; the accepted keys live in the wizard, so the list only reports the change. */
 export function EjesAcceptableRows<Row>({
@@ -58,7 +61,7 @@ export function EjesAcceptableRows<Row>({
     {
       header: EJES_ACCEPT_TEXT.COLUMN,
       cell: (row) => {
-        if (!acceptable(row)) return notAcceptableText;
+        if (!acceptable(row)) return notAcceptableTextOf(notAcceptableText, row);
         const key = rowKey(row);
         const isAccepted = accepted.has(key);
         const toggle = () => (onToggleRow === undefined ? accept.onChange(change([key], !isAccepted)) : onToggleRow(row, isAccepted));

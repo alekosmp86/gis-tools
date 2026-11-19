@@ -134,7 +134,7 @@ describe("buildEjesAnalysisSql", () => {
 
     it("should use a 95% coverage threshold", () => {
       expect(coverageThresholdSql("covered", "len")).toBe("covered >= 0.95 * len");
-      expect(sql).toContain("covered >= 0.95 * len");
+      expect(sql).toContain("s.covered >= 0.95 * s.len");
       expect(sql).toContain("sum(p.covered) >= 0.95 * sum(p.len)");
     });
 

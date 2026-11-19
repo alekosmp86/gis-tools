@@ -1,4 +1,13 @@
+import { cte, q } from "../../shared/sqlFragments";
 import { EJES_SKIP_REASON } from "../constants";
+
+/** Whether each new `reftramo` has copies with different geometries (`copy_raw`, before the geometric rule); the copy holds read it. */
+export const copyVariantCte = (): string =>
+  cte("copy_variant", `SELECT r.ref, count(DISTINCT ST_AsEWKB(r.geom)) > 1 AS variant FROM ${q("copy_raw")} AS r GROUP BY r.ref`);
+
+/** The new `reftramo`s with exactly one kept copy and no geometry variant: the only pieces a one-piece replacement may hold (as a split does). */
+export const singleCopyCte = (): string =>
+  cte("single_copy_refs", `SELECT k.ref FROM ${q("copy_refs")} AS k LEFT JOIN ${q("copy_variant")} AS v ON v.ref = k.ref WHERE k.copies = 1 AND NOT COALESCE(v.variant, false)`);
 
 /**
  * The hold measures of every split: its old `reftramo`, its points, its pieces that are shared with another split or a merge, and

@@ -7,10 +7,14 @@ import { EjesDetailCell } from "./EjesDetailCell";
 import { EjesPointsCell } from "./EjesPointsCell";
 import { EjesRefCell } from "./EjesRefCell";
 import { EjesRefsCell } from "./EjesRefsCell";
+import { isReplacementSplit } from "../ejesAccept";
 import { EJES_COMPACT_TEXT } from "./ejesCompactTexts";
 import { geometryFactsOf } from "./ejesDetailFacts";
 
 const oldRefTextOf = (row: EjesSplitRow): string => (row.oldRef === "" ? NO_REFTRAMO_TEXT : row.oldRef);
+
+const piecesTextOf = (row: EjesSplitRow): string =>
+  isReplacementSplit(row) ? EJES_COMPACT_TEXT.REPLACEMENT : EJES_COMPACT_TEXT.PIECE_COUNT(row.newRefs.length);
 
 /** The columns of a split row: the removed reftramo, the new pieces, the points, an optional status, and the technical details. */
 export const splitColumnsOf = (
@@ -28,7 +32,7 @@ export const splitColumnsOf = (
         />
       ),
     },
-    { header: EJES_COMPACT_TEXT.SPLIT_PIECES, cell: (row) => <EjesRefsCell label={EJES_COMPACT_TEXT.PIECE_COUNT(row.newRefs.length)} refs={row.newRefs} /> },
+    { header: EJES_COMPACT_TEXT.SPLIT_PIECES, cell: (row) => <EjesRefsCell label={piecesTextOf(row)} refs={row.newRefs} /> },
     { header: EJES_COMPACT_TEXT.POINTS, cell: (row) => <EjesPointsCell row={row} /> },
   ];
   if (statusCell !== undefined) columns.push({ header: EJES_COMPACT_TEXT.STATUS, cell: statusCell });

@@ -8,9 +8,11 @@ import {
   DEPARTMENTS_COLUMN,
   GEOMETRY_TOLERANCE_M,
   LOCALITIES_COLUMN,
+  REPLACEMENT_PIECES,
   ROAD_SECTION_COLUMN,
   EJES_STAGING_COLUMN,
   EJES_TABLE_ROLE,
+  SPLIT_MIN_PIECES,
   TWIN_PICKS_CTE,
 } from "../constants";
 import type { EjesLayouts, EjesLoadContext, EjesTwinPick } from "../types";
@@ -31,6 +33,7 @@ import {
 } from "./renumberSql";
 import { isPieceSql } from "./pieceSql";
 import { groupPieceCtes, removalSinkCtes, type RemovalSinks } from "./removalSql";
+import { copyVariantCte, singleCopyCte } from "./splitHoldSql";
 import { reviewPointCtes, reviewPointsColumn, splitPointCountColumns, splitPointCtes, splitPointSinkCtes } from "./splitPointSql";
 import { departmentKeepsSql, twinCountColumns, twinCtes, twinGroupCtes, twinListColumn } from "./twinSql";
 import { copyFinalCte, geoTwinCountColumns, geoTwinCtes, geoTwinListColumn, geoTwinSinkCtes, type GeoTwinSinks } from "./geoTwinSql";
@@ -265,6 +268,8 @@ function removalCtes(): string[] {
 function splitCtes(): string[] {
   const tolerance = COVERAGE_TOLERANCE_M;
   return [
+    copyVariantCte(),
+    singleCopyCte(),
     cte(
       "piece_cover",
       [
@@ -286,9 +291,26 @@ function splitCtes(): string[] {
         "GROUP BY p.id, p.ref, p.idcalle, p.len, p.geometry",
       ].join(" ")
     ),
-    cte("splits", `SELECT * FROM ${q("removed_cover")} WHERE new_count >= 2 AND ${coverageThresholdSql("covered", "len")}`),
+    cte(
+      "splits",
+      [
+        `SELECT * FROM ${q("removed_cover")} AS s WHERE (s.new_count >= ${SPLIT_MIN_PIECES} OR ${replacementSql()})`,
+        `AND ${coverageThresholdSql("s.covered", "s.len")}`,
+      ].join(" ")
+    ),
   ];
 }
+
+/**
+ * A one-piece replacement: its old section has a `reftramo`, its piece is a single copy, and no other removed section claims that piece
+ * (`isPieceSql` against it). A piece claimed by two old sections is a merge, which keeps precedence.
+ */
+const replacementSql = (): string =>
+  [
+    `(s.new_count = ${REPLACEMENT_PIECES} AND s.ref IS NOT NULL AND s.new_refs[1] IN (SELECT x.ref FROM ${q("single_copy_refs")} AS x)`,
+    `AND NOT EXISTS (SELECT 1 FROM ${q("piece_cover")} AS o WHERE o.new_ref = s.new_refs[1] AND o.id <> s.id`,
+    `AND ${isPieceSql("o.piece_covered", "o.len", "o.piece_len")}))`,
+  ].join(" ");
 
 function mergeCtes(): string[] {
   const tolerance = COVERAGE_TOLERANCE_M;

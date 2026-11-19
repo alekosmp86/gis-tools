@@ -228,6 +228,9 @@ export const RENUMBER_CANDIDATE_DISTANCE_M = COVERAGE_TOLERANCE_M;
 export const SPLIT_PIECE_MIN_COVER_M = 10;
 /** A new section that counts as a piece must also lie mostly on the old section: at least this share of its own length (EJ-10). */
 export const PIECE_OWN_FRACTION = 0.5;
+/** A split has at least this many pieces; a section with exactly REPLACEMENT_PIECES covering piece is a replacement (one-piece split). */
+export const SPLIT_MIN_PIECES = 2;
+export const REPLACEMENT_PIECES = 1;
 /** A split point goes to its nearest piece only when the second nearest is at least this much farther (EJS-5). */
 export const AMBIGUOUS_POINT_GAP_M = 5;
 /** Split points farther than this from every piece are counted in the report only (EJS-8, informational). */

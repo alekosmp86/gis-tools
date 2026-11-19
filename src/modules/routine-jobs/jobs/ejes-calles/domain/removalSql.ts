@@ -32,7 +32,7 @@ export const groupPieceCtes = (): string[] => [
     [
       "SELECT s.id AS old_id, s.ref AS old_ref, s.idcalle, COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS points, COALESCE(apid.points, 0) AS id_points, COALESCE(k.rows, 0) AS old_rows, u.new_ref, COALESCE(gv.variant, false) AS geom_variant",
       `FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = s.id::text LEFT JOIN ${q("cur_rows")} AS k ON k.ref = s.ref CROSS JOIN LATERAL unnest(s.new_refs) AS u(new_ref)`,
-      `LEFT JOIN (SELECT r.ref, count(DISTINCT ST_AsEWKB(r.geom)) > 1 AS variant FROM ${q("copy_raw")} AS r GROUP BY r.ref) AS gv ON gv.ref = u.new_ref`,
+      `LEFT JOIN ${q("copy_variant")} AS gv ON gv.ref = u.new_ref`,
     ].join(" ")
   ),
   cte(

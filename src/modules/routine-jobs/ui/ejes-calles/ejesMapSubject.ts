@@ -11,11 +11,13 @@ import type {
   EjesTwinRow,
   EjesTwinUndecidedRow,
 } from "../../jobs/ejes-calles/types";
+import { isReplacementSplit } from "./ejesAccept";
 import { OUTLINE_ROLE, type OutlineLabel, type OutlineMapSubject, type OutlineRole } from "../shared/map/outlineTypes";
 import { textOrNoData } from "../shared/reportFormat";
 
 export const EJES_SUBJECT_TITLE = {
   SPLIT: "División de tramo",
+  REPLACEMENT: "Reemplazo de tramo",
   MERGE: "Unión de tramos",
   RENUMBERED: "Tramo renumerado",
   TWIN: "Tramo repetido por localidad",
@@ -174,7 +176,11 @@ const factsOf = (row: EjesSplitRow | EjesMergeRow): EjesMapFacts => ({
 
 /** A split: the old section first, then its new sections, so a cut at the request limit never drops the old one. */
 export const subjectOfSplit = (row: EjesSplitRow): EjesMapSubject =>
-  subjectOf(EJES_SUBJECT_TITLE.SPLIT, [oldEntry(row.oldRef), ...row.newRefs.map(newEntry)], factsOf(row));
+  subjectOf(
+    isReplacementSplit(row) ? EJES_SUBJECT_TITLE.REPLACEMENT : EJES_SUBJECT_TITLE.SPLIT,
+    [oldEntry(row.oldRef), ...row.newRefs.map(newEntry)],
+    factsOf(row)
+  );
 
 /** A merge: the new section first, then the old sections it replaces. */
 export const subjectOfMerge = (row: EjesMergeRow): EjesMapSubject =>

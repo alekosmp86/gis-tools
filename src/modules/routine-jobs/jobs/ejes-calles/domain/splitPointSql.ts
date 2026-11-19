@@ -6,6 +6,7 @@ import {
   EJES_POINT_REASON,
   EJES_SRID,
   FAR_POINT_REPORT_M,
+  REPLACEMENT_PIECES,
   REVIEW_POINTS_STORE_LIMIT,
 } from "../constants";
 import type { EjesLayouts } from "../types";
@@ -21,8 +22,9 @@ const reasonLiteral = (reason: string): string => `'${reason}'`;
 
 /**
  * The points of every split, by `reftramo` only (the `road_section.id` links are counted by the split rows, not moved). A point goes to
- * its nearest piece of its split when the second nearest is at least AMBIGUOUS_POINT_GAP_M farther or when it has one candidate. Other
- * points are review points: the nearest piece is their suggestion, and a point with no address geometry has none. The address geometry
+ * its nearest piece of its split when the second nearest is at least AMBIGUOUS_POINT_GAP_M farther or when it has one candidate. A
+ * replacement (one piece) sends every point to that piece, geometry or not. Other points are review points: the nearest piece is their
+ * suggestion, and a point with no address geometry has none. The address geometry
  * is used only when it has the expected SRID; a point whose geometry does not is a point without geometry. Pieces are the pieces that
  * count under `isPieceSql`, the same set the split's `new_refs` holds.
  */
@@ -65,14 +67,19 @@ export function splitPointCtes(layouts: EjesLayouts): string[] {
       ].join(" ")
     ),
     cte(
+      "split_one_piece",
+      `SELECT s.id AS old_id, s.new_refs[1] AS new_ref FROM ${q("splits")} AS s WHERE cardinality(s.new_refs) = ${REPLACEMENT_PIECES}`
+    ),
+    cte(
       "split_point_decided",
       [
-        "SELECT k.old_id, k.old_ref, k.point_id, k.near_ref AS new_ref, CASE",
+        "SELECT k.old_id, k.old_ref, k.point_id, COALESCE(one.new_ref, k.near_ref) AS new_ref, CASE",
+        "WHEN one.new_ref IS NOT NULL THEN NULL",
         `WHEN NOT k.has_geom OR k.near_ref IS NULL OR k.near_dist IS NULL THEN ${reasonLiteral(EJES_POINT_REASON.NO_GEOMETRY)}`,
         `WHEN k.second_dist IS NOT NULL AND k.second_dist - k.near_dist < ${AMBIGUOUS_POINT_GAP_M} THEN ${reasonLiteral(EJES_POINT_REASON.AMBIGUOUS)}`,
         "END AS reason,",
         `COALESCE(k.near_dist > ${FAR_POINT_REPORT_M}, false) AS far`,
-        `FROM ${q("split_point_pick")} AS k`,
+        `FROM ${q("split_point_pick")} AS k LEFT JOIN ${q("split_one_piece")} AS one ON one.old_id = k.old_id`,
       ].join(" ")
     ),
     cte(

@@ -1,6 +1,7 @@
-import { ACCEPTED_CHOICES_LIMIT, ACCEPTED_KEYS_LIMIT } from "../../jobs/ejes-calles/constants";
-import type { EjesSplitRow, EjesTwinPick } from "../../jobs/ejes-calles/types";
+import { ACCEPTED_CHOICES_LIMIT, ACCEPTED_KEYS_LIMIT, REPLACEMENT_PIECES } from "../../jobs/ejes-calles/constants";
+import type { EjesRemovalRow, EjesSplitRow, EjesTwinPick } from "../../jobs/ejes-calles/types";
 import type { EjesAcceptedRequest, EjesPointChoiceRequest } from "../shared/clientTypes";
+import { EJES_ACCEPT_TEXT } from "./ejesAcceptTexts";
 import { EJES_SPLIT_REVIEW_TEXT } from "./splitReview/ejesSplitReviewTexts";
 
 export const EjesAcceptList = {
@@ -17,6 +18,15 @@ export const splitKeyOf = (row: EjesSplitRow): string => (row.oldRef === "" ? `p
 
 /** The review points of a split the user must decide: the ambiguous ones and the ones with no geometry. */
 export const pointReviewCountOf = (row: EjesSplitRow): number => row.reviewPoints + row.noGeometryPoints;
+
+/** A split with one new section replaces its old section: its points move to that section and the old one goes. */
+export const isReplacementSplit = (row: EjesSplitRow): boolean => row.newRefs.length === REPLACEMENT_PIECES;
+
+/** A plain removal applies only without access points: the load holds one that still has any (`has_points`), so it is not offered. */
+export const isPlainRemovalAcceptable = (row: EjesRemovalRow): boolean => row.ref !== "" && row.points === 0;
+
+export const plainRemovalNotAcceptableText = (row: EjesRemovalRow): string =>
+  row.ref === "" ? EJES_ACCEPT_TEXT.NOT_ACCEPTABLE : EJES_ACCEPT_TEXT.NO_RECEIVING_SECTION;
 
 /**
  * A split is accepted only when the load does not hold it whatever the user chooses (`heldReason`, the analysis's own rules), its review
