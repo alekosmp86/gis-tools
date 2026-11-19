@@ -7,6 +7,7 @@ import {
   buildDeleteTableSql,
   buildHoldGroupCopiesSql,
   buildMergePlanSql,
+  buildMissingMoveTargetsSql,
   buildMoveTableSql,
   buildPlainPlanSql,
   buildSkippedTableSql,
@@ -17,6 +18,7 @@ import {
   ANALYSIS_CHANGED_MESSAGE,
   assertWritten,
   choiceNotApplicableOf,
+  moveTargetMissingOf,
   runInOrder,
   twinPickNotApplicableOf,
   writtenBy,
@@ -52,6 +54,14 @@ export async function createRemovalPlans(session: RunSession, context: EjesLoadC
     buildDeleteTableSql(context.layouts),
     buildSkippedTableSql(),
   ]);
+}
+
+/** Fail closed: a point move whose target `reftramo` no copy and no section holds would orphan the points. Runs after `createRemovalPlans`, before any write or backup. */
+export async function assertMoveTargetsExist(session: RunSession, layouts: EjesLayouts): Promise<void> {
+  const missing = (await session.query(buildMissingMoveTargetsSql(layouts))).rows.map(
+    (row) => `${String(row.new_ref)} (de ${String(row.old_ref)})`
+  );
+  if (missing.length > 0) throw new Error(moveTargetMissingOf(missing));
 }
 
 /** The sections of the applied merges, splits and removals go only after their points moved; their masters go after their sections. */

@@ -9,6 +9,9 @@ export const CHOICE_NOT_APPLICABLE_MESSAGE =
 export const TWIN_PICK_NOT_APPLICABLE_MESSAGE =
   "Se eligió una copia para un tramo que no existe en el origen con esa localidad y departamento. Vuelva a analizar.";
 
+export const MOVE_TARGET_MISSING_MESSAGE =
+  "Los puntos de acceso se moverían a un reftramo que no existirá después de la carga. Vuelva a analizar.";
+
 const withRefsNote = (message: string, refs: readonly string[]): string =>
   refs.length === 0 ? message : `${message} Tramos: ${refs.join(", ")}.`;
 
@@ -17,6 +20,10 @@ export const choiceNotApplicableOf = (oldRefs: readonly string[]): string => wit
 
 /** The abort message of picks that name no copy of the staging, naming up to `INVALID_TWIN_PICK_REFS_LIMIT` `reftramo`s. */
 export const twinPickNotApplicableOf = (refs: readonly string[]): string => withRefsNote(TWIN_PICK_NOT_APPLICABLE_MESSAGE, refs);
+
+/** The abort message of move targets no section will hold, naming up to `INVALID_CHOICE_REFS_LIMIT` as `destino (de origen)`. */
+export const moveTargetMissingOf = (targets: readonly string[]): string =>
+  `${MOVE_TARGET_MISSING_MESSAGE} Destinos: ${targets.join(", ")}.`;
 
 export function assertWritten(label: string, written: number, expected: number): void {
   if (written !== expected) {

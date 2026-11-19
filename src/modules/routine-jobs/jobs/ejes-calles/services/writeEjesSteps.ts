@@ -5,7 +5,7 @@ import { throwIfIssues } from "../../shared/preflightAsserts";
 import { numberOf } from "../../shared/rowMapping";
 import { buildSequenceRepairSql, runTransaction, type TransactionMessages } from "../../shared/transaction";
 import { EJES_TABLE_ROLE } from "../constants";
-import { assertTwinPicksExist, prepareAccepted, createRemovalPlans, writeRemovals } from "./removalLoad";
+import { assertMoveTargetsExist, assertTwinPicksExist, prepareAccepted, createRemovalPlans, writeRemovals } from "./removalLoad";
 import { ANALYSIS_CHANGED_MESSAGE, assertWritten, runInOrder, writtenBy } from "./writeStatements";
 import { ejesBlockersOf } from "../domain/blockers";
 import {
@@ -157,6 +157,7 @@ async function createWays(session: RunSession, context: EjesLoadContext): Promis
 async function prepareLoad(session: RunSession, context: EjesLoadContext): Promise<EjesLoadPlan> {
   await createSelection(session, context);
   await createRemovalPlans(session, context);
+  await assertMoveTargetsExist(session, context.layouts);
   await assertSingleParts(session);
   await session.query(buildNewTableSql(context));
   await createTopologyInputs(session, context);

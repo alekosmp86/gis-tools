@@ -1,5 +1,7 @@
-import { ADDRESS_COLUMN, EJES_SKIP_KIND, EJES_SKIP_REASON, GEO_TWIN_ROLE, PADRON_COLUMN, ROAD_SECTION_COLUMN } from "../constants";
+import { withClause, q } from "../../shared/sqlFragments";
+import { ADDRESS_COLUMN, EJES_SKIP_KIND, EJES_SKIP_REASON, GEO_TWIN_ROLE, INVALID_CHOICE_REFS_LIMIT, PADRON_COLUMN, ROAD_SECTION_COLUMN } from "../constants";
 import type { EjesLayouts } from "../types";
+import { currentCtes } from "./analysisSql";
 import { col, table } from "./layoutSql";
 import { createTemp, LOAD_TEMP, tmp } from "./loadSelectionSql";
 
@@ -113,6 +115,26 @@ export const buildMoveTableSql = (): string =>
       `SELECT p.ref, p.new_ref, p.points FROM ${tmp(LOAD_TEMP.PLAIN_PLAN)} AS p WHERE p.kind = ${quoted(EJES_SKIP_KIND.TWIN)} AND p.reason IS NULL`,
     ].join(" ")
   );
+
+/**
+ * The move targets of the split points and of the move table that no section will hold: no kept copy of the load names them (a renumber
+ * pair joins its copy, so a renumbered target counts only when its copy is kept) and no existing section has them. One row per target,
+ * with its first old `reftramo`. Runs after the holds, so the copies are the ones the writes will insert or pair.
+ */
+export const buildMissingMoveTargetsSql = (layouts: EjesLayouts): string =>
+  [
+    withClause(currentCtes(layouts)),
+    "SELECT m.new_ref AS \"new_ref\", m.old_ref AS \"old_ref\" FROM (",
+    "SELECT DISTINCT ON (t.new_ref) t.new_ref, t.old_ref FROM (",
+    `SELECT f.new_ref, f.old_ref FROM ${tmp(LOAD_TEMP.SPLIT_FINAL)} AS f`,
+    "UNION ALL",
+    `SELECT n.new_ref, n.old_ref FROM ${tmp(LOAD_TEMP.MOVE)} AS n`,
+    ") AS t",
+    `WHERE NOT EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE c.ref = t.new_ref)`,
+    `AND NOT EXISTS (SELECT 1 FROM ${q("cur")} AS r WHERE r.ref = t.new_ref)`,
+    "ORDER BY t.new_ref, t.old_ref) AS m",
+    `ORDER BY m.new_ref LIMIT ${INVALID_CHOICE_REFS_LIMIT}`,
+  ].join(" ");
 
 /**
  * The road sections the load deletes: applied splits' and merges' old sections and applied plain removals. `master_deleted` is true only

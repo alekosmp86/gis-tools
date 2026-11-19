@@ -1,16 +1,19 @@
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { EJES_SKIP_KIND, EJES_SKIP_REASON, RENUMBER_SKIP_REASON } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
+import { EJES_SKIP_KIND, EJES_SKIP_REASON, INVALID_CHOICE_REFS_LIMIT, RENUMBER_SKIP_REASON } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import { LOAD_TEMP } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadSelectionSql";
 import {
   buildHoldGroupCopiesSql,
   buildMergePlanSql,
+  buildMissingMoveTargetsSql,
   buildPlainPlanSql,
   buildSkippedListSql,
   buildSkippedReasonCountsSql,
   buildSkippedTableSql,
 } from "@/modules/routine-jobs/jobs/ejes-calles/domain/removalPlanSql";
-import { createEjesDatabase, rowsOf, type Row } from "./ejesLoadHarness";
+import { MOVE_TARGET_MISSING_MESSAGE, moveTargetMissingOf } from "@/modules/routine-jobs/jobs/ejes-calles/services/writeStatements";
+import { ejesLayouts } from "./ejesFixtures";
+import { createEjesDatabase, insertSection, rowsOf, type Row } from "./ejesLoadHarness";
 
 const HOOK_TIMEOUT_MS = 60_000;
 
@@ -213,6 +216,96 @@ describe("ejes removal plan SQL on PGlite (EJS-1, EJS-9, EJL-12)", () => {
       expect(rows).toHaveLength(1);
       expect(rows[0].kind).toBe(EJES_SKIP_KIND.MERGE);
       expect(Number(rows[0].points)).toBe(3);
+    });
+  });
+
+  describe("buildMissingMoveTargetsSql and moveTargetMissingOf (EJL-29)", () => {
+    const createMoveTables = async (): Promise<void> => {
+      await database.exec(
+        `CREATE TEMP TABLE "${LOAD_TEMP.SPLIT_FINAL}" (old_id bigint, old_ref text, point_id bigint, new_ref text, old_value text)`
+      );
+      await database.exec(`CREATE TEMP TABLE "${LOAD_TEMP.MOVE}" (old_ref text, new_ref text, points bigint)`);
+    };
+
+    it("should read the split points and the moves, keep the targets with no kept copy and no section, and limit them to INVALID_CHOICE_REFS_LIMIT", () => {
+      const sql = buildMissingMoveTargetsSql(ejesLayouts());
+
+      expect(sql).toContain(`FROM pg_temp."${LOAD_TEMP.SPLIT_FINAL}" AS f`);
+      expect(sql).toContain(`FROM pg_temp."${LOAD_TEMP.MOVE}" AS n`);
+      expect(sql).toContain(`WHERE NOT EXISTS (SELECT 1 FROM pg_temp."${LOAD_TEMP.COPY}" AS c WHERE c.ref = t.new_ref)`);
+      expect(sql).toContain('AND NOT EXISTS (SELECT 1 FROM "cur" AS r WHERE r.ref = t.new_ref)');
+      expect(sql.endsWith(`ORDER BY m.new_ref LIMIT ${INVALID_CHOICE_REFS_LIMIT}`)).toBe(true);
+    });
+
+    it("should return no target when every move target is a kept copy or an existing section", async () => {
+      const rows = await inTransaction(
+        async () => {
+          await createMoveTables();
+          await createCopies(["6501"]);
+          await insertSection(database, { ref: 6502, calle: 1, geom: "0:10" });
+          await database.exec(`INSERT INTO pg_temp."${LOAD_TEMP.SPLIT_FINAL}" VALUES (1, '6500', 1, '6501', '6500')`);
+          await database.exec(`INSERT INTO pg_temp."${LOAD_TEMP.MOVE}" VALUES ('6500', '6502', 2)`);
+        },
+        buildMissingMoveTargetsSql(ejesLayouts())
+      );
+
+      expect(rows).toEqual([]);
+    });
+
+    it("should list only the target that no kept copy and no section holds, with its old reftramo", async () => {
+      const rows = await inTransaction(
+        async () => {
+          await createMoveTables();
+          await createCopies(["6511"]);
+          await insertSection(database, { ref: 6512, calle: 1, geom: "0:10" });
+          await database.exec(`INSERT INTO pg_temp."${LOAD_TEMP.SPLIT_FINAL}" VALUES (1, '6510', 1, '6511', '6510')`);
+          await database.exec(`INSERT INTO pg_temp."${LOAD_TEMP.MOVE}" VALUES ('6510', '6512', 1), ('6514', '6513', 1)`);
+        },
+        buildMissingMoveTargetsSql(ejesLayouts())
+      );
+
+      expect(rows.map((row) => [row.new_ref, row.old_ref])).toEqual([["6513", "6514"]]);
+    });
+
+    it("should list a missing target once, with its first old reftramo, when several points move to it", async () => {
+      const rows = await inTransaction(
+        async () => {
+          await createMoveTables();
+          await createCopies([]);
+          await database.exec(
+            `INSERT INTO pg_temp."${LOAD_TEMP.SPLIT_FINAL}" VALUES (1, '6601', 1, '7001', '6601'), (2, '6600', 2, '7001', '6600')`
+          );
+          await database.exec(`INSERT INTO pg_temp."${LOAD_TEMP.MOVE}" VALUES ('6602', '7001', 3)`);
+        },
+        buildMissingMoveTargetsSql(ejesLayouts())
+      );
+
+      expect(rows.map((row) => [row.new_ref, row.old_ref])).toEqual([["7001", "6600"]]);
+    });
+
+    it("should cut the missing targets at INVALID_CHOICE_REFS_LIMIT, the lowest refs first (boundary)", async () => {
+      const rows = await inTransaction(
+        async () => {
+          await createMoveTables();
+          await createCopies([]);
+          for (let index = 1; index <= INVALID_CHOICE_REFS_LIMIT + 2; index += 1) {
+            await database.query(`INSERT INTO pg_temp."${LOAD_TEMP.MOVE}" VALUES ('6700', $1, 1)`, [`710${index}`]);
+          }
+        },
+        buildMissingMoveTargetsSql(ejesLayouts())
+      );
+
+      expect(rows.map((row) => row.new_ref)).toEqual(["7101", "7102", "7103", "7104", "7105"]);
+    });
+
+    it("should name each missing target as destino (de origen) in the message, after the plain message", () => {
+      expect(MOVE_TARGET_MISSING_MESSAGE).toBe(
+        "Los puntos de acceso se moverían a un reftramo que no existirá después de la carga. Vuelva a analizar."
+      );
+      expect(moveTargetMissingOf(["8888 (de 7777)"])).toBe(`${MOVE_TARGET_MISSING_MESSAGE} Destinos: 8888 (de 7777).`);
+      expect(moveTargetMissingOf(["8888 (de 7777)", "8889 (de 7778)"])).toBe(
+        `${MOVE_TARGET_MISSING_MESSAGE} Destinos: 8888 (de 7777), 8889 (de 7778).`
+      );
     });
   });
 });

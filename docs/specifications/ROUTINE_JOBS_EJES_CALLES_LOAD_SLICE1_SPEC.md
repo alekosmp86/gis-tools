@@ -1,4 +1,4 @@
-# Routine jobs: "Carga de ejes de calles", real load slice 1 (EJL-1 to EJL-26)
+# Routine jobs: "Carga de ejes de calles", real load slice 1 (EJL-1 to EJL-29)
 
 Scope: real load of NEW, ATTR, GEOM, twin and renumbered sections. Out of scope: topology and vertex cleanup (EJ-20, EJ-27, EJ-28; built later in the topology slice), splits and merges (EJ-19), plain removals (EJ-21), UI wiring beyond the "Cargar ahora" buttons of EJ-24 (Revisar and Resultado, built). Builds on EJ-3, EJ-13 to EJ-18, EJ-22, EJ-23 of `ROUTINE_JOBS_EJES_CALLES_SKELETON_SPEC.md`.
 
@@ -34,5 +34,6 @@ Superseded for merges and plain removals by slice A (`ROUTINE_JOBS_EJES_CALLES_S
 - EJL-24: Privileges before the lock. Before `LOCK`, the real run checks the write privileges each table of EJL-2 needs (`road_section`: SELECT, INSERT, UPDATE, DELETE; `circulation_way`: SELECT, INSERT; `addresses_master`: SELECT, INSERT, DELETE; `access_point`: SELECT, UPDATE; DELETE on the two tables is for the removals and merges of slice A), and one of UPDATE, DELETE or TRUNCATE on each of the four locked tables, since `SHARE ROW EXCLUSIVE` needs one of them. `ANALYZE` skipped because the user does not own a table is only a warning: the server skips it, the load goes on, and the warning is listed in `privilegeInfo` of the dry-run result and of the real-run result.
 - EJL-25: The revert file name carries the milliseconds of its run after the seconds (`ejes-revert-<schema>-<table>-<yyyymmdd>-<hhmmss>-<mmm>.sql.gz`), so two real runs in the same second on the same table do not collide (`EEXIST`). The shared `BACKUP_FILE_PATTERN` (`^(padron|centros-anep|ejes)-revert-.*\.sql\.gz$`) still matches.
 - EJL-26: Sections without a `reftramo` are never renumbered. A removed section whose `reftramo_ideuy` is NULL (or empty) is never a renumber candidate (EJL-17): it is neither renumbered nor held, and it stays an ordinary removed row of the splits, merges and plain removals, as before.
+- EJL-29: Moves need an existing target (fail closed). Every target `reftramo` of the split points (`ej_split_final`) and of the access point moves (`ej_move`) must be a kept copy of the load (inserted, paired or renumbered, EJL-6/EJL-10) or an existing `road_section` `reftramo`. Otherwise the load aborts after the plans and the holds, before the backup and any write, naming up to five targets as `destino (de origen)`. No point is ever moved to a `reftramo` that no section will hold.
 
-EJL-1 to EJL-26 (26 criteria).
+EJL-1 to EJL-29 (29 criteria).

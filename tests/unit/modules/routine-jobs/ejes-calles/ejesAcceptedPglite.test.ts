@@ -9,11 +9,14 @@ import { createStepTimer } from "@/modules/routine-jobs/jobs/cargar-padrones/ser
 import { EJES_SKIP_KIND, EJES_SKIP_REASON } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import { readAnalysis } from "@/modules/routine-jobs/jobs/ejes-calles/services/readEjesAnalysis";
 import { runEjesPersistTransaction, type EjesPersistOutcome } from "@/modules/routine-jobs/jobs/ejes-calles/services/writeEjesSteps";
+import { MOVE_TARGET_MISSING_MESSAGE } from "@/modules/routine-jobs/jobs/ejes-calles/services/writeStatements";
 import type { EjesAccepted } from "@/modules/routine-jobs/jobs/ejes-calles/types";
+import type { RunSession } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
 import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { ejesLayouts } from "./ejesFixtures";
 import {
   createEjesDatabase,
+  insertAddress,
   insertPoints,
   insertSection,
   insertStaging,
@@ -767,6 +770,69 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
 
       expect(await snapshotOf(database)).toEqual(before);
       expect(await backupFiles()).toEqual([]);
+    });
+  });
+
+  describe("move targets no section will hold (EJL-29)", () => {
+    const sessionWithUnheldMove = (log: SqlLog): RunSession => {
+      const base = sessionOn(database, log);
+      return {
+        async query(sql: string, values?: unknown[]) {
+          const result = await base.query(sql, values);
+          if (/^CREATE TEMP TABLE "ej_move" /.test(sql)) {
+            await database.query("INSERT INTO pg_temp.\"ej_move\" (old_ref, new_ref, points) VALUES ('7777', '8888', 2)");
+          }
+          return result;
+        },
+        close: base.close,
+      };
+    };
+
+    it("should abort before the backup and any write when a moved point's target reftramo is held by no copy and no section", async () => {
+      await seedMerge();
+      const before = await snapshotOf(database);
+      const log: SqlLog = [];
+      const summary = await summaryOn(database);
+      const context = await loadContextOn(database);
+      const accepted: EjesAccepted = { splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] };
+
+      await expect(
+        runEjesPersistTransaction(sessionWithUnheldMove(log), { ...paramsWith(summary), accepted }, context, timer())
+      ).rejects.toThrow(`${MOVE_TARGET_MISSING_MESSAGE} Destinos: 8888 (de 7777).`);
+
+      expect(await snapshotOf(database)).toEqual(before);
+      expect(await backupFiles()).toEqual([]);
+      expect(log.filter((sql) => /^WITH "written"|^(INSERT INTO|UPDATE|DELETE FROM) "?carto/.test(sql))).toEqual([]);
+    });
+
+    it("should pass the guard and load a renumber, an accepted merge and an accepted replacement together, with every point on a kept copy", async () => {
+      await seedMerge();
+      await insertWay(database, 22, "CALLE VEINTIDOS");
+      await insertSection(database, { ref: 3001, calle: 22, geom: "1000:1100", distance: "100.00" });
+      await insertPoints(database, "3001", 2);
+      await insertStaging(database, [{ ref: "3002", calle: "22", nombre: "CALLE VEINTIDOS", geom: "1000:1100" }]);
+      await insertWay(database, 23, "CALLE VEINTITRES");
+      await insertSection(database, { ref: 6001, calle: 23, geom: "0:100", distance: "100.00" });
+      const [point] = await insertPoints(database, "6001", 1);
+      await insertAddress(database, point, "10:10");
+      await insertStaging(database, [{ ref: "6002", calle: "23", nombre: "CALLE VEINTITRES", geom: "0:150" }]);
+
+      const outcome = await persist({
+        splits: [{ oldRef: "6001", choices: [] }],
+        plainRemovals: [],
+        merges: ["6103"],
+        twinRemovals: [],
+        twinPicks: [],
+      });
+
+      expect(await sectionsByRef(6103)).toHaveLength(1);
+      expect(await pointsOn("6103")).toBe(3);
+      expect(await sectionsByRef(3002)).toHaveLength(1);
+      expect(await pointsOn("3002")).toBe(2);
+      expect(await sectionsByRef(6001)).toEqual([]);
+      expect(await sectionsByRef(6002)).toHaveLength(1);
+      expect(await pointsOn("6002")).toBe(1);
+      expect(outcome.load.counts).toMatchObject({ merged: 1, renumbered: 1 });
     });
   });
 });
