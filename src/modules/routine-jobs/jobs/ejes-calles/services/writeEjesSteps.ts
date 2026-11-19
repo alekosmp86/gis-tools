@@ -5,7 +5,7 @@ import { throwIfIssues } from "../../shared/preflightAsserts";
 import { numberOf } from "../../shared/rowMapping";
 import { buildSequenceRepairSql, runTransaction, type TransactionMessages } from "../../shared/transaction";
 import { EJES_TABLE_ROLE } from "../constants";
-import { prepareAccepted, createRemovalPlans, writeRemovals } from "./removalLoad";
+import { assertTwinPicksExist, prepareAccepted, createRemovalPlans, writeRemovals } from "./removalLoad";
 import { ANALYSIS_CHANGED_MESSAGE, assertWritten, runInOrder, writtenBy } from "./writeStatements";
 import { ejesBlockersOf } from "../domain/blockers";
 import {
@@ -270,9 +270,10 @@ async function persistBody(
   throwIfIssues(ejesBlockersOf(staging));
   // Ordered: a blocker aborts the run before the classification and the backup.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const analysis = await timer.run(EJES_STEP.ANALYZE, () => readAnalysisForLoad(session, context.layouts));
+  const analysis = await timer.run(EJES_STEP.ANALYZE, () => readAnalysisForLoad(session, context.layouts, accepted.twinPicks));
   assertSummaryMatches(params.summary, analysis);
   await prepareAccepted(session, accepted);
+  await assertTwinPicksExist(session, context.layouts);
   await timer.run(EJES_STEP.SEQUENCES, () => repairSequences(session, context));
   // Ordered: the ids come from the repaired sequences.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await

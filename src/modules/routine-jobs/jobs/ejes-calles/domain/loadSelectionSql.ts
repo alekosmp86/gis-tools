@@ -8,10 +8,12 @@ import { nextvalSql } from "./loadContext";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
 import { distinctPairsCountSql } from "./renumberSql";
 import { twinCtes, twinGroupCtes } from "./twinSql";
+import { twinPicksTableCte } from "./twinPickSql";
 
 export const LOAD_TEMP = {
   GEO_TWIN: "ej_geo_twins",
   ACC_TWIN: "ej_acc_twin",
+  ACC_TWIN_PICK: "ej_acc_twin_pick",
   COPY: "ej_copy",
   RENUM: "ej_renum",
   HELD: "ej_held",
@@ -50,7 +52,7 @@ export const buildAnalyzeTempSql = (name: string): string => `ANALYZE ${tmp(name
 /** The geometric losers the analysis of this transaction wrote to `ej_geo_twins`: they are no copy of the load. */
 const GEO_LOSERS_SQL = `(SELECT g.ref FROM ${tmp(LOAD_TEMP.GEO_TWIN)} AS g WHERE g.role = '${GEO_TWIN_ROLE.LOSER}')`;
 
-/** One row per kept copy: a copy is `reftramo + localidad + departamento`; the twin rules drop the copies of the localities they name. */
+/** One row per kept copy: a copy is `reftramo + localidad + departamento`; the twin rules drop the copies of the localities they name, the picks keep one. */
 export function buildCopyTableSql(layouts: EjesLayouts): string {
   const ctes = [
     tipoMapCte(),
@@ -58,6 +60,7 @@ export function buildCopyTableSql(layouts: EjesLayouts): string {
     ...twinGroupCtes(layouts),
     ...twinCtes(layouts),
     copyRawCte(layouts),
+    twinPicksTableCte(tmp(LOAD_TEMP.ACC_TWIN_PICK)),
     copyKeptCte(),
     copyFinalCte(GEO_LOSERS_SQL),
   ];

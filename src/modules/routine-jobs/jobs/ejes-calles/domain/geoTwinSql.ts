@@ -100,6 +100,15 @@ export function geoTwinCtes(): string[] {
         `FROM ${q("geo_ranked")} AS r`,
       ].join(" ")
     ),
+    cte(
+      "geo_keepers",
+      [
+        "SELECT DISTINCT ON (r.group_key) r.group_key, r.ref AS keeper_ref, r.points AS keeper_points, r.in_carto AS keeper_in_carto,",
+        `ST_Length(k.geom) AS keeper_length, k.fuente AS keeper_fuente FROM ${q("geo_roles")} AS r JOIN ${q("copy_kept")} AS k ON k.ref = r.ref`,
+        `WHERE r.role <> ${roleLiteral("LOSER")}`,
+        `ORDER BY r.group_key, (r.role = ${roleLiteral("KEEPER")}) DESC, r.points DESC, CAST(r.ref AS numeric)`,
+      ].join(" ")
+    ),
     cte("geo_losers", `SELECT l.ref FROM ${q("geo_roles")} AS l WHERE l.role = ${roleLiteral("LOSER")}`),
   ];
 }
@@ -136,7 +145,9 @@ export const geoTwinListColumn = (alias: string): string =>
     "geo_twin_list",
     [
       'SELECT r.ref AS "ref", r.idcalle AS "idcalle", r.localidad AS "localidad", r.departamento AS "departamento", r.group_key AS "groupKey",',
-      `r.partners AS "partners", r.role AS "role", r.in_carto AS "inCarto", r.points AS "points" FROM ${q("geo_roles")} AS r`,
+      `r.partners AS "partners", r.role AS "role", r.in_carto AS "inCarto", r.points AS "points", k.keeper_ref AS "keeperRef",`,
+      `k.keeper_points AS "keeperPoints", k.keeper_length AS "keeperLength", k.keeper_fuente AS "keeperFuente", k.keeper_in_carto AS "keeperInCarto"`,
+      `FROM ${q("geo_roles")} AS r JOIN ${q("geo_keepers")} AS k ON k.group_key = r.group_key`,
       // Removable losers first, so the list limit never cuts one of them.
       `ORDER BY (r.role = '${GEO_TWIN_ROLE.LOSER}' AND r.in_carto) DESC, r.group_key, CAST(r.ref AS numeric)`,
     ].join(" ")

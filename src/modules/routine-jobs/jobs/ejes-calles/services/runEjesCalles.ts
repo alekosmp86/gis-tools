@@ -44,7 +44,7 @@ async function analyzeInReadOnlyTransaction(
       steps: { commit: EJES_STEP.ANALYZE, rollback: EJES_STEP.ANALYZE },
       messages: EJES_TRANSACTION,
     },
-    () => readStagingAndAnalysis(session, resolved.layouts, timer)
+    () => readStagingAndAnalysis(session, resolved.layouts, timer, params.accepted?.twinPicks ?? [])
   );
   return outcome.body;
 }

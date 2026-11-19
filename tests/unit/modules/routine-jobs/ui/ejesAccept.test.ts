@@ -134,11 +134,28 @@ describe("ejes accept keys (EJ-24, EJL-22)", () => {
         plainRemovals: [{ ref: "5001" }, { ref: "5002" }],
         merges: [{ newRef: "6103" }],
         twinRemovals: [],
+        twinPicks: [],
       });
     });
 
-    it("should send all three lists as empty arrays when nothing is accepted, a valid empty accepted object", () => {
-      expect(acceptedRequestOf({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] })).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] });
+    it("should send all lists as empty arrays when nothing is accepted, a valid empty accepted object", () => {
+      expect(acceptedRequestOf({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] })).toEqual({
+        splits: [],
+        plainRemovals: [],
+        merges: [],
+        twinRemovals: [],
+        twinPicks: [],
+      });
+    });
+
+    it("should send the twin copy picks as {ref, department, locality}, in order", () => {
+      const request = acceptedRequestOf(
+        { splits: [], plainRemovals: [], merges: [], twinRemovals: [] },
+        [],
+        [{ ref: "3002", department: "SORIANO", locality: "MERCEDES" }]
+      );
+
+      expect(request.twinPicks).toEqual([{ ref: "3002", department: "SORIANO", locality: "MERCEDES" }]);
     });
 
     it("should send an accepted split with the user's choices only, as {oldRef, choices}", () => {

@@ -135,7 +135,7 @@ const schemaSqlOf = (accessPointRefType: AccessPointRefType): string => `
   CREATE TABLE carto.road_section_vertices_pgr (id bigserial PRIMARY KEY, cnt integer, chk integer, ein integer, eout integer, the_geom geometry);
   CREATE TABLE carto.access_point (id serial PRIMARY KEY, id_road_section ${accessPointRefType});
   CREATE TABLE bdj_carto.ine_localidades_pg (cloc_iso text, nomloc text, geom geometry);
-  CREATE TABLE carto.mv_country_province (iso_code_dpto text, name_dpto text);
+  CREATE TABLE carto.mv_country_province (iso_code_dpto text, name_dpto text, geometry geometry);
   CREATE TABLE carto.padron (type_padron text, geometry geometry, id_address_master integer);
   CREATE TABLE carto.address (id serial PRIMARY KEY, id_address_master integer, geometry geometry);
 `;
@@ -328,6 +328,11 @@ export async function insertPoints(database: PGlite, ref: string | null, count: 
 /** The point geometry of an access point: `carto.address` row with the point's id (its text interval, e.g. "43:43"). */
 export async function insertAddress(database: PGlite, id: number, geometry: string | null): Promise<void> {
   await database.query("INSERT INTO carto.address (id, geometry) VALUES ($1, $2)", [id, geometry]);
+}
+
+/** A department polygon of the national table (`carto.mv_country_province`): the interval it covers, as the other geometries of the harness. */
+export async function insertDepartment(database: PGlite, name: string, geometry: string, iso = "00"): Promise<void> {
+  await database.query("INSERT INTO carto.mv_country_province (iso_code_dpto, name_dpto, geometry) VALUES ($1, $2, $3)", [iso, name, geometry]);
 }
 
 export async function insertPadron(database: PGlite, type: string, geometry: string): Promise<void> {

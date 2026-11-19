@@ -159,11 +159,13 @@ describe("ejes wizard state", () => {
       expect(ejesGeometryMapBaseOf(state)).toBeNull();
     });
 
-    it("should carry the trimmed connection and only the staging, road section and padrones tables (ET-7, ET-8)", () => {
+    it("should carry the trimmed connection and the staging, road section, padrones, localities and departments tables (ET-7, ET-8)", () => {
       const state = validState();
       state.slots["ejes-origen"] = { schema: " s ", table: " t ", valid: true };
       state.slots["ejes-tramos"] = { schema: " carto ", table: " road_section ", valid: true };
       state.slots["ejes-padrones"] = { schema: " carto ", table: " padron ", valid: true };
+      state.slots["ejes-localidades"] = { schema: " bdj_carto ", table: " ine_localidades_pg ", valid: true };
+      state.slots["ejes-departamentos"] = { schema: " carto ", table: " mv_country_province ", valid: true };
       state.connection = { ...state.connection, host: " h " };
 
       const base = ejesGeometryMapBaseOf(state);
@@ -174,6 +176,8 @@ describe("ejes wizard state", () => {
         "ejes-origen": { schema: "s", table: "t" },
         "ejes-tramos": { schema: "carto", table: "road_section" },
         "ejes-padrones": { schema: "carto", table: "padron" },
+        "ejes-localidades": { schema: "bdj_carto", table: "ine_localidades_pg" },
+        "ejes-departamentos": { schema: "carto", table: "mv_country_province" },
       });
     });
   });

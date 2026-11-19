@@ -1,10 +1,9 @@
 import type { EjesResult } from "../../jobs/ejes-calles/types";
 
 export const EJES_LIST = {
-  TWINS: "twins",
+  TWIN_UNDECIDED: "twinUndecided",
   SPLITS: "splits",
   MERGES: "merges",
-  RENUMBERED: "renumbered",
   RENUMBER_HELD: "renumberHeld",
   PLAIN_REMOVALS: "plainRemovals",
   GEO_TWINS: "geoTwins",
@@ -18,9 +17,8 @@ export type EjesListKey = (typeof EJES_LIST)[keyof typeof EJES_LIST];
 const EJES_LIST_ORDER: readonly EjesListKey[] = [
   EJES_LIST.SPLITS,
   EJES_LIST.MERGES,
-  EJES_LIST.RENUMBERED,
   EJES_LIST.RENUMBER_HELD,
-  EJES_LIST.TWINS,
+  EJES_LIST.TWIN_UNDECIDED,
   EJES_LIST.PLAIN_REMOVALS,
   EJES_LIST.GEO_TWINS,
   EJES_LIST.INVALID_GEOMETRIES,
@@ -33,12 +31,11 @@ export const ejesListAnchorOf = (key: EjesListKey): string => `ejes-list-${key}`
 export const EJES_LIST_INTROS: Record<EjesListKey, string> = {
   [EJES_LIST.SPLITS]: "Un tramo actual que el archivo reemplaza por varios nuevos.",
   [EJES_LIST.MERGES]: "Varios tramos actuales que el archivo reemplaza por uno nuevo.",
-  [EJES_LIST.RENUMBERED]: "Mismo trazado con otro reftramo: los puntos de acceso siguen al nuevo.",
   [EJES_LIST.RENUMBER_HELD]: "Renumeración no aplicada: ambos tramos quedan como están y sus puntos de acceso no se mueven.",
-  [EJES_LIST.TWINS]: "Mismo reftramo en varias localidades: revisar en el mapa cuál copia se queda.",
+  [EJES_LIST.TWIN_UNDECIDED]: "Ninguna regla decide cuál copia se queda: elíjala en el mapa.",
   [EJES_LIST.PLAIN_REMOVALS]: "Tramos actuales sin equivalente en el archivo; con puntos de acceso no se quitan.",
   [EJES_LIST.GEO_TWINS]: "Mismo trazado, idcalle, localidad y departamento con reftramo distinto: se mantiene el que tiene puntos de acceso o el primero; el resto no se carga.",
-  [EJES_LIST.INVALID_GEOMETRIES]: "Filas del archivo con geometría inválida o colapsada: se omiten.",
+  [EJES_LIST.INVALID_GEOMETRIES]: "Filas del archivo con geometría inválida o colapsada, o menor de 1 m sin puntos de acceso: se omiten.",
   [EJES_LIST.NEW_STREETS]: "Calles que no existen hoy y entrarían con los tramos nuevos.",
   [EJES_LIST.ATTR_CHANGES]: "Tramos con el mismo trazado pero distinto nombre, calle, tipo o fuente.",
 };
@@ -46,9 +43,8 @@ export const EJES_LIST_INTROS: Record<EjesListKey, string> = {
 const listSizeOf = (result: EjesResult): Record<EjesListKey, number> => ({
   [EJES_LIST.SPLITS]: result.splits.length,
   [EJES_LIST.MERGES]: result.merges.length,
-  [EJES_LIST.RENUMBERED]: result.renumbered.length,
   [EJES_LIST.RENUMBER_HELD]: result.renumberSkipped.length,
-  [EJES_LIST.TWINS]: result.twins.length,
+  [EJES_LIST.TWIN_UNDECIDED]: result.twinUndecided.length,
   [EJES_LIST.PLAIN_REMOVALS]: result.plainRemovals.length,
   [EJES_LIST.GEO_TWINS]: result.geoTwins.length,
   [EJES_LIST.INVALID_GEOMETRIES]: result.staging.invalidGeometries.length,
@@ -69,20 +65,21 @@ export function stripOf(result: EjesResult): EjesStripItem[] {
     { key: "rows", label: "Filas del archivo", value: staging.rows, list: null },
     { key: EJES_LIST.NEW_STREETS, label: "Calles nuevas", value: result.newStreets.length, list: EJES_LIST.NEW_STREETS },
     { key: EJES_LIST.ATTR_CHANGES, label: "Cambios de atributos", value: counts.attr, list: EJES_LIST.ATTR_CHANGES },
-    { key: EJES_LIST.RENUMBERED, label: "Renumerados", value: counts.renumbered, list: EJES_LIST.RENUMBERED },
+    { key: "renumbered", label: "Renumerados", value: counts.renumbered, list: null },
     { key: EJES_LIST.RENUMBER_HELD, label: "Renumerados retenidos", value: counts.renumberSkipped, list: EJES_LIST.RENUMBER_HELD },
     { key: EJES_LIST.SPLITS, label: "Divididos", value: counts.splits, list: EJES_LIST.SPLITS },
     { key: EJES_LIST.MERGES, label: "Unidos", value: counts.merges, list: EJES_LIST.MERGES },
     { key: EJES_LIST.PLAIN_REMOVALS, label: "Sin reemplazo", value: counts.plainRemovals, list: EJES_LIST.PLAIN_REMOVALS },
-    { key: EJES_LIST.TWINS, label: "Repetidos por localidad", value: counts.twins, list: EJES_LIST.TWINS },
+    { key: "twins", label: "Repetidos por localidad", value: counts.twins, list: null },
+    { key: EJES_LIST.TWIN_UNDECIDED, label: "Varias copias sin decidir", value: counts.twinsUndecided, list: EJES_LIST.TWIN_UNDECIDED },
     { key: EJES_LIST.GEO_TWINS, label: "Gemelos por geometría", value: counts.geoTwinSections, list: EJES_LIST.GEO_TWINS },
-    { key: EJES_LIST.INVALID_GEOMETRIES, label: "Geometría inválida o colapsada", value: staging.invalidGeometryRows, list: EJES_LIST.INVALID_GEOMETRIES },
+    { key: EJES_LIST.INVALID_GEOMETRIES, label: "Geometría inválida, colapsada o menor de 1 m", value: staging.invalidGeometryRows, list: EJES_LIST.INVALID_GEOMETRIES },
   ];
 }
 
 export function defaultOpenListOf(result: EjesResult): EjesListKey | null {
   const sizes = listSizeOf(result);
-  const preferred = sizes[EJES_LIST.TWINS] > 0 ? EJES_LIST.TWINS : EJES_LIST_ORDER.find((key) => sizes[key] > 0);
+  const preferred = sizes[EJES_LIST.TWIN_UNDECIDED] > 0 ? EJES_LIST.TWIN_UNDECIDED : EJES_LIST_ORDER.find((key) => sizes[key] > 0);
   return preferred ?? null;
 }
 

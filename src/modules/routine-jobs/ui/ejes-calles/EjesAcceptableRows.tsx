@@ -25,6 +25,8 @@ export interface EjesAcceptableRowsProps<Row> {
   filters?: React.ReactNode;
   /** The "N aceptados de M" counter on the toolbar row. */
   counterText?: string;
+  /** Adds the "Ver en mapa" button to each row when given. */
+  onShowOnMap?: (row: Row) => void;
 }
 
 const ALWAYS_ACCEPTABLE = (): boolean => true;
@@ -42,6 +44,7 @@ export function EjesAcceptableRows<Row>({
   accept,
   filters,
   counterText,
+  onShowOnMap,
 }: EjesAcceptableRowsProps<Row>) {
   const current = accept.keys[list];
   const accepted = new Set(current);
@@ -76,7 +79,7 @@ export function EjesAcceptableRows<Row>({
         filters={filters}
         counterText={counterText}
       />
-      <RowsTable columns={withAccept} rows={rows} rowKey={rowKey} />
+      <RowsTable columns={withAccept} rows={rows} rowKey={rowKey} onShowOnMap={onShowOnMap} />
     </>
   );
 }

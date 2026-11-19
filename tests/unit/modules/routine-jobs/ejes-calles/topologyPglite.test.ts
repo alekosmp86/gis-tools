@@ -320,7 +320,7 @@ describe("ejes topology and vertex cleanup on PGlite (EJ-20, EJ-27, EJ-28)", () 
     it("should delete the endpoints of a plain-removed section that no other section uses, and count them as deleted", async () => {
       const { start, end, orphan } = await seedRemoval();
 
-      const outcome = await persist([], undefined, { splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [] });
+      const outcome = await persist([], undefined, { splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [], twinPicks: [] });
 
       const ids = (await vertices()).map((row) => row.id);
       expect(ids).not.toContain(start);
@@ -332,7 +332,7 @@ describe("ejes topology and vertex cleanup on PGlite (EJ-20, EJ-27, EJ-28)", () 
     it("should restore the deleted endpoints with their original ids and geometry when the revert is applied", async () => {
       const { start, end } = await seedRemoval();
       const before = await snapshotOf(database);
-      const outcome = await persist([], undefined, { splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [] });
+      const outcome = await persist([], undefined, { splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [], twinPicks: [] });
       expect((await vertices()).map((row) => row.id)).not.toContain(start);
 
       await database.exec(await readBackup(outcome));
@@ -348,7 +348,7 @@ describe("ejes topology and vertex cleanup on PGlite (EJ-20, EJ-27, EJ-28)", () 
       await insertSection(database, { ref: 2002, calle: 5, geom: "50:100", distance: "50.00", source: end, target: null });
       await insertStaging(database, [{ ref: "2002", calle: "5", nombre: "CALLE CINCO", geom: "50:100" }]);
 
-      const outcome = await persist([], undefined, { splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [] });
+      const outcome = await persist([], undefined, { splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [], twinPicks: [] });
 
       const ids = (await vertices()).map((row) => row.id);
       expect(ids).toContain(end);
@@ -360,7 +360,7 @@ describe("ejes topology and vertex cleanup on PGlite (EJ-20, EJ-27, EJ-28)", () 
     it("should keep a pre-existing orphan vertex that no candidate names, when a removal deletes its sections", async () => {
       const { orphan } = await seedRemoval();
 
-      await persist([], undefined, { splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [] });
+      await persist([], undefined, { splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [], twinPicks: [] });
 
       expect(await vertices()).toContainEqual({ id: orphan, the_geom: "999" });
     });
@@ -368,7 +368,7 @@ describe("ejes topology and vertex cleanup on PGlite (EJ-20, EJ-27, EJ-28)", () 
     it("should delete the endpoint of a merged-away section that the merged section does not reuse, and keep the ones it reuses", async () => {
       const { start, middle, end, orphan } = await seedMergeEndpoints();
 
-      const outcome = await persist([], undefined, { splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] });
+      const outcome = await persist([], undefined, { splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] });
 
       const ids = (await vertices()).map((row) => row.id);
       expect(ids).toContain(start);
@@ -382,7 +382,7 @@ describe("ejes topology and vertex cleanup on PGlite (EJ-20, EJ-27, EJ-28)", () 
     it("should restore the merged-away endpoint with its original id when the revert is applied", async () => {
       const { middle } = await seedMergeEndpoints();
       const before = await snapshotOf(database);
-      const outcome = await persist([], undefined, { splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] });
+      const outcome = await persist([], undefined, { splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] });
       expect((await vertices()).map((row) => row.id)).not.toContain(middle);
 
       await database.exec(await readBackup(outcome));

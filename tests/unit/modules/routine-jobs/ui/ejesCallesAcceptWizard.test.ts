@@ -145,7 +145,7 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
 
       expect(request).not.toBeNull();
       expect(request?.dryRun).toBe(false);
-      expect(request?.accepted).toEqual({ splits: [], plainRemovals: [{ ref: "5001" }], merges: [{ newRef: "6103" }], twinRemovals: [] });
+      expect(request?.accepted).toEqual({ splits: [], plainRemovals: [{ ref: "5001" }], merges: [{ newRef: "6103" }], twinRemovals: [], twinPicks: [] });
       expect(request?.summary).toEqual({
         counts: { newSections: 2, unchanged: 3, attr: 0, geom: 0, both: 0, removed: 1, splits: 0, merges: 1, plainRemovals: 1, renumbered: 0, renumberSkipped: 0, splitPointsAuto: 0, splitPointsReview: 0, splitPointsNoGeometry: 0 },
         fingerprint: { rows: 4, digest: "abc123" },
@@ -161,7 +161,7 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
       const request = ejesLoadRequestOf(reAnalysed, snapshot);
 
       expect(reAnalysed.acceptance).toBeNull();
-      expect(request?.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] });
+      expect(request?.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] });
     });
 
     it("should not match an acceptance made on a result of another job id, even for the same analysis", () => {
@@ -194,7 +194,7 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
       const snapshot = doneSnapshotFor(acceptedElsewhere);
 
       expect(acceptKeysOfState(acceptedElsewhere, snapshot)).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] });
-      expect(ejesLoadRequestOf(acceptedElsewhere, snapshot)?.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] });
+      expect(ejesLoadRequestOf(acceptedElsewhere, snapshot)?.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] });
     });
 
     it("should return no real-run request without the typed password", () => {

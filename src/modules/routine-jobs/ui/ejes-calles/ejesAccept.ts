@@ -1,5 +1,5 @@
 import { ACCEPTED_CHOICES_LIMIT, ACCEPTED_KEYS_LIMIT } from "../../jobs/ejes-calles/constants";
-import type { EjesSplitRow } from "../../jobs/ejes-calles/types";
+import type { EjesSplitRow, EjesTwinPick } from "../../jobs/ejes-calles/types";
 import type { EjesAcceptedRequest, EjesPointChoiceRequest } from "../shared/clientTypes";
 import { EJES_SPLIT_REVIEW_TEXT } from "./splitReview/ejesSplitReviewTexts";
 
@@ -64,16 +64,30 @@ export interface EjesPointChoicesChange {
   needed: number;
 }
 
-/** What a report needs to show and change the accepted keys and the point choices; absent on a read-only report. */
+/** The copy a `reftramo` keeps: a department and a locality, both named (a copy without one cannot be picked). */
+export type EjesTwinPickCopy = Omit<EjesTwinPick, "ref">;
+
+/** The copy the user keeps for one `reftramo`; a null copy clears its pick. */
+export interface EjesTwinPickChange {
+  ref: string;
+  copy: EjesTwinPickCopy | null;
+}
+
+/** What a report needs to show and change the accepted keys, the point choices and the twin picks; absent on a read-only report. */
 export interface EjesAcceptView {
   keys: EjesAcceptKeys;
   pointChoices: readonly EjesPointChoiceKey[];
   onChange: (change: EjesAcceptChange) => void;
   onPointChoicesChange: (change: EjesPointChoicesChange) => void;
+  twinPicks: readonly EjesTwinPick[];
+  onTwinPickChange: (change: EjesTwinPickChange) => void;
+  canAnalyzeWithPicks: boolean;
+  onAnalyzeWithPicks: () => void;
 }
 
 const NO_ACCEPT_KEYS: EjesAcceptKeys = { splits: [], plainRemovals: [], merges: [], twinRemovals: [] };
 const NO_POINT_CHOICES: readonly EjesPointChoiceKey[] = [];
+const NO_TWIN_PICKS: readonly EjesTwinPick[] = [];
 
 export function acceptKeysOf(acceptance: EjesAcceptance | null, analysisKey: string | undefined): EjesAcceptKeys {
   if (acceptance === null || analysisKey === undefined || acceptance.analysisKey !== analysisKey) return NO_ACCEPT_KEYS;
@@ -155,8 +169,25 @@ export function toggleSplitAcceptance(accept: EjesAcceptView, oldRef: string, cu
   return null;
 }
 
+/** The twin picks after one `reftramo`'s copy is set (its pick replaced) or cleared. A new pick past the request limit is not added. */
+export function twinPicksAfter(picks: readonly EjesTwinPick[], change: EjesTwinPickChange): EjesTwinPick[] {
+  const others = picks.filter((pick) => pick.ref !== change.ref);
+  if (change.copy === null) return others;
+  if (others.length >= ACCEPTED_KEYS_LIMIT) return [...picks];
+  return [...others, { ref: change.ref, department: change.copy.department, locality: change.copy.locality }];
+}
+
+export const twinPickOf = (picks: readonly EjesTwinPick[], ref: string): EjesTwinPick | undefined =>
+  picks.find((pick) => pick.ref === ref);
+
+export const twinPicksCapReached = (picks: readonly EjesTwinPick[]): boolean => picks.length >= ACCEPTED_KEYS_LIMIT;
+
 /** The request of the accepted splits: each with the user's choices only, never a point the user did not decide. */
-export const acceptedRequestOf = (keys: EjesAcceptKeys, pointChoices: readonly EjesPointChoiceKey[] = NO_POINT_CHOICES): EjesAcceptedRequest => {
+export const acceptedRequestOf = (
+  keys: EjesAcceptKeys,
+  pointChoices: readonly EjesPointChoiceKey[] = NO_POINT_CHOICES,
+  twinPicks: readonly EjesTwinPick[] = NO_TWIN_PICKS
+): EjesAcceptedRequest => {
   const choicesBySplit = new Map<string, EjesPointChoiceRequest[]>();
   for (const choice of pointChoices) {
     const list = choicesBySplit.get(choice.oldRef) ?? [];
@@ -168,5 +199,6 @@ export const acceptedRequestOf = (keys: EjesAcceptKeys, pointChoices: readonly E
     plainRemovals: keys.plainRemovals.map((ref) => ({ ref })),
     merges: keys.merges.map((newRef) => ({ newRef })),
     twinRemovals: keys.twinRemovals.map((ref) => ({ ref })),
+    twinPicks: twinPicks.map(({ ref, department, locality }) => ({ ref, department, locality })),
   };
 };

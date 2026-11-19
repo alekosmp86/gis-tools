@@ -35,8 +35,8 @@ const COPY_BY_ROLE: Record<EjesTableRole, Omit<SlotCopy<EjesTableRole, EjesTable
     tableLabel: "Tabla de localidades INE",
   },
   [EJES_TABLE_ROLE.DEPARTMENTS]: {
-    note: "Código de departamento de los tramos fuera de toda localidad. Solo se lee.",
-    tableLabel: "Tabla de departamentos",
+    note: "Polígonos de departamento: decide qué departamento se queda con los tramos repetidos entre departamentos y da el código de los tramos fuera de toda localidad. Solo se lee.",
+    tableLabel: "Tabla de departamentos (polígonos)",
   },
   [EJES_TABLE_ROLE.PADRONES]: {
     note: "Padrones urbanos y rurales cercanos a los tramos repetidos por localidad. Solo se lee.",

@@ -36,6 +36,13 @@ export interface EjesAcceptedSplit {
   choices: EjesPointChoice[];
 }
 
+/** The copy a user keeps for a `reftramo` with several copies: its `reftramo`, department and locality (as the staging holds them, trimmed). */
+export interface EjesTwinPick {
+  ref: string;
+  department: string;
+  locality: string;
+}
+
 /** The review rows the user accepted: splits by old `reftramo` (with choices), plain removals by `reftramo`, merges by the new `reftramo` (the old ones are derived server-side). */
 export interface EjesAccepted {
   splits: EjesAcceptedSplit[];
@@ -43,6 +50,8 @@ export interface EjesAccepted {
   merges: string[];
   /** Geometric twin losers in carto, by `reftramo` (ET-26): removed only when accepted per row. */
   twinRemovals: string[];
+  /** One copy kept per `reftramo` with several copies (ET-28): the locality rule does not apply to that `reftramo`. */
+  twinPicks: EjesTwinPick[];
 }
 
 export interface EjesParams {
@@ -111,6 +120,8 @@ export interface EjesCounts {
   twinsCrossDepartment: number;
   twinsDrop: number;
   twinsKeep: number;
+  twinsUndecided: number;
+  twinPicksApplied: number;
   renumbered: number;
   renumberedWithPoints: number;
   renumberedPoints: number;
@@ -213,6 +224,27 @@ export interface EjesGeoTwinRow {
   role: GeoTwinRole;
   inCarto: boolean;
   points: number;
+  /** The member the group keeps (a keeper, else the winner): the one a loser's copy is removed in favour of. */
+  keeperRef: string;
+  keeperPoints: number;
+  keeperLength: number | null;
+  keeperFuente: string | null;
+  keeperInCarto: boolean;
+}
+
+export interface EjesTwinCopy {
+  department: string | null;
+  locality: string | null;
+}
+
+/** A `reftramo` that keeps several copies after the rules and the picks: its copies, its points, and the held rows waiting for one copy. */
+export interface EjesTwinUndecidedRow {
+  ref: string;
+  idcalle: string | null;
+  name: string | null;
+  copies: EjesTwinCopy[];
+  points: number;
+  waiting: number;
 }
 
 export interface EjesRenumberedRow {
@@ -269,6 +301,7 @@ export interface EjesAnalysis {
   newStreets: EjesNewStreetRow[];
   attrChanges: EjesAttrRow[];
   twins: EjesTwinRow[];
+  twinUndecided: EjesTwinUndecidedRow[];
   geoTwins: EjesGeoTwinRow[];
   renumbered: EjesRenumberedRow[];
   renumberSkipped: EjesRenumberSkippedRow[];
@@ -304,12 +337,14 @@ export interface EjesMapItem {
   newRef?: string;
   locality?: string;
   zoneOf?: string;
+  localitiesOf?: string;
+  departmentOf?: string;
   type?: PadronType;
 }
 
 export interface EjesMapFeature {
   itemIndex: number;
-  role: "old" | "new" | "zone";
+  role: "old" | "new" | "zone" | "locality" | "department";
   label: string;
   geometry: Geometry;
 }
@@ -319,6 +354,8 @@ export interface EjesGeometryMapParams {
   staging: EjesTableRef;
   roadSection: EjesTableRef;
   padrones: EjesTableRef;
+  localities: EjesTableRef;
+  departments: EjesTableRef;
   items: EjesMapItem[];
 }
 

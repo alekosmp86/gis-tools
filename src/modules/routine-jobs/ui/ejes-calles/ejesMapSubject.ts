@@ -1,14 +1,27 @@
 import { getDiscrepancyLabel, MAP_SECTION_TYPE } from "@/core/constants/mapConstants";
 import { PADRON_TYPE, type PadronType } from "../../jobs/ejes-calles/constants";
 import { EJES_MAP_ITEMS_LIMIT } from "../../jobs/ejes-calles/domain/geometryMap";
-import type { EjesMapItem, EjesMergeRow, EjesRenumberedRow, EjesSplitRow, EjesTwinRow } from "../../jobs/ejes-calles/types";
+import type {
+  EjesGeoTwinRow,
+  EjesMapItem,
+  EjesMergeRow,
+  EjesRenumberedRow,
+  EjesSplitRow,
+  EjesTwinCopy,
+  EjesTwinRow,
+  EjesTwinUndecidedRow,
+} from "../../jobs/ejes-calles/types";
 import { OUTLINE_ROLE, type OutlineLabel, type OutlineMapSubject, type OutlineRole } from "../shared/map/outlineTypes";
+import { textOrNoData } from "../shared/reportFormat";
 
 export const EJES_SUBJECT_TITLE = {
   SPLIT: "División de tramo",
   MERGE: "Unión de tramos",
   RENUMBERED: "Tramo renumerado",
   TWIN: "Tramo repetido por localidad",
+  HELD: "Renumeración retenida",
+  GEO_TWIN: "Tramo gemelo por geometría",
+  UNDECIDED: "Tramo con varias copias sin decidir",
 } as const;
 
 const OUTLINE_SUFFIX = {
@@ -48,12 +61,21 @@ export interface EjesTwinFacts {
   insideLocalities: string[];
 }
 
+/** A `reftramo` with several copies and no decision yet: the copies the user picks from, in the row's order. */
+interface EjesUndecidedFacts {
+  ref: string;
+  copies: EjesTwinCopy[];
+}
+
 /** One split, merge, twin or renumbered row on the map. `items[i]` is the request item of `outlines[i]`; `twin` and `renumbered` are set on their own rows only. */
 export interface EjesMapSubject extends OutlineMapSubject<EjesMapItem, EjesMapOutline> {
   facts: EjesMapFacts;
   twin?: EjesTwinFacts;
   /** The largest distance in metres between the old and the new shape. */
   renumbered?: { hausdorff: number | null };
+  geoTwin?: EjesGeoTwinRow;
+  undecided?: EjesUndecidedFacts;
+  held?: boolean;
   /** How many outlines the row has; larger than `items.length` when the row was cut at the request limit. */
   total: number;
 }
@@ -85,14 +107,48 @@ const zoneEntry = (ref: string, type: PadronType): OutlineEntry => ({
   outline: { ref, role: OUTLINE_ROLE.ZONE, label: getDiscrepancyLabel(ZONE_TYPE[type]), mapType: ZONE_TYPE[type] },
 });
 
-/** Zones are areas and go first so they lie below the lines; the new section goes last, on top. */
+const departmentEntry = (ref: string): OutlineEntry => ({
+  item: { departmentOf: ref },
+  outline: {
+    ref,
+    role: OUTLINE_ROLE.DEPARTMENT,
+    label: getDiscrepancyLabel(MAP_SECTION_TYPE.DEPARTMENT),
+    mapType: MAP_SECTION_TYPE.DEPARTMENT,
+    featureLabels: true,
+  },
+});
+
+const localitiesEntry = (ref: string): OutlineEntry => ({
+  item: { localitiesOf: ref },
+  outline: {
+    ref,
+    role: OUTLINE_ROLE.LOCALITY,
+    label: getDiscrepancyLabel(MAP_SECTION_TYPE.LOCALITY),
+    mapType: MAP_SECTION_TYPE.LOCALITY,
+    featureLabels: true,
+  },
+});
+
+const undecidedSectionEntry = (row: EjesTwinUndecidedRow): OutlineEntry => ({
+  item: { newRef: row.ref },
+  outline: {
+    ref: row.ref,
+    role: OUTLINE_ROLE.NEW,
+    label: `${row.ref} · idcalle ${textOrNoData(row.idcalle)}`,
+    mapType: MAP_SECTION_TYPE.NEW,
+  },
+});
+
+/** Areas go first so they lie below the lines: departments, localities, padrone zones; the new section goes last, on top. */
 const DRAW_ORDER: Record<EjesMapOutline["role"], number> = {
-  [OUTLINE_ROLE.ZONE]: 0,
-  [OUTLINE_ROLE.OLD]: 1,
-  [OUTLINE_ROLE.NEW]: 2,
+  [OUTLINE_ROLE.DEPARTMENT]: 0,
+  [OUTLINE_ROLE.LOCALITY]: 1,
+  [OUTLINE_ROLE.ZONE]: 2,
+  [OUTLINE_ROLE.OLD]: 3,
+  [OUTLINE_ROLE.NEW]: 4,
 };
 
-type SubjectExtras = Pick<EjesMapSubject, "twin" | "renumbered">;
+type SubjectExtras = Pick<EjesMapSubject, "twin" | "renumbered" | "geoTwin" | "held" | "undecided">;
 
 function subjectOf(title: string, entries: OutlineEntry[], facts: EjesMapFacts, extras: SubjectExtras = {}): EjesMapSubject {
   const order = (entry: OutlineEntry): number => DRAW_ORDER[entry.outline.role];
@@ -153,6 +209,34 @@ export const subjectOfRenumbered = (row: EjesRenumberedRow): EjesMapSubject =>
     { renumbered: { hausdorff: row.hausdorff } }
   );
 
+/** A held renumber: the old section first, then every candidate new section it could have become. */
+export const subjectOfHeldCandidates = (oldRef: string, newRefs: string[], idcalle: string | null, points: number): EjesMapSubject =>
+  subjectOf(
+    EJES_SUBJECT_TITLE.HELD,
+    [oldEntry(oldRef), ...newRefs.map(newEntry)],
+    { idcalle, points, coverage: null, oldLength: null, newLength: null, outsideLength: null },
+    { held: true }
+  );
+
+const geoEntry = (ref: string, suffix: string, dropped: boolean): OutlineEntry => ({
+  item: { newRef: ref },
+  outline: {
+    ref,
+    role: OUTLINE_ROLE.NEW,
+    label: labelOf(ref, suffix),
+    mapType: dropped ? MAP_SECTION_TYPE.COPY_DROPPED : MAP_SECTION_TYPE.COPY_KEPT,
+    dropped,
+  },
+});
+
+/** A geometric twin: the kept member, then the copy the row would remove. Both lie on the same geometry, so both are labelled. */
+export const subjectOfGeoTwin = (row: EjesGeoTwinRow): EjesMapSubject => {
+  const kept = geoEntry(row.keeperRef, COPY_STAYS, false);
+  const entries = row.ref === row.keeperRef ? [kept] : [kept, geoEntry(row.ref, COPY_DROPPED, true)];
+  const facts: EjesMapFacts = { idcalle: row.idcalle, points: row.points, coverage: null, oldLength: null, newLength: row.keeperLength, outsideLength: null };
+  return subjectOf(EJES_SUBJECT_TITLE.GEO_TWIN, entries, facts, { geoTwin: row });
+};
+
 /** The dropped copies first and the kept ones after, so the kept ones are drawn on top; each group by locality name. */
 const copyEntriesOf = (row: EjesTwinRow): OutlineEntry[] => {
   const entries = [...row.localities].sort().map((locality) => copyEntry(row, locality));
@@ -179,6 +263,21 @@ export function subjectOfTwin(row: EjesTwinRow): EjesMapSubject {
   };
   return subjectOf(EJES_SUBJECT_TITLE.TWIN, [...zones, ...copyEntriesOf(row)], facts, { twin });
 }
+
+/** A twin `reftramo` with no copy picked: the department and the localities its section crosses, the padrones near it, then the section once, since its copies share it. */
+export const subjectOfUndecided = (row: EjesTwinUndecidedRow): EjesMapSubject =>
+  subjectOf(
+    EJES_SUBJECT_TITLE.UNDECIDED,
+    [
+      departmentEntry(row.ref),
+      localitiesEntry(row.ref),
+      zoneEntry(row.ref, PADRON_TYPE.URBAN),
+      zoneEntry(row.ref, PADRON_TYPE.RURAL),
+      undecidedSectionEntry(row),
+    ],
+    { idcalle: row.idcalle, points: row.points, coverage: null, oldLength: null, newLength: null, outsideLength: null },
+    { undecided: { ref: row.ref, copies: row.copies } }
+  );
 
 /** The note of a row that was cut at the request limit; null when every outline is shown. */
 export const truncationNoteOf = (subject: EjesMapSubject): string | null =>

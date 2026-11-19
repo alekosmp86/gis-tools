@@ -4,7 +4,7 @@ import type { EjesGeometryMapParams, EjesMapItem, EjesTableRef } from "../jobs/e
 import { invalid, isRecord, parseConnection, readRecord, readRequiredText, toDbConfig, type JsonRecord } from "./requestParsing";
 
 const MAP_ITEMS_MESSAGE = `El campo items debe ser una lista de 1 a ${EJES_MAP_ITEMS_LIMIT} elementos.`;
-const MAP_ITEM_MESSAGE = "Cada elemento de items necesita oldRef, newRef o zoneOf.";
+const MAP_ITEM_MESSAGE = "Cada elemento de items necesita oldRef, newRef, zoneOf, localitiesOf o departmentOf.";
 const ZONE_TYPE_MESSAGE = `El campo items.type debe ser ${Object.values(PADRON_TYPE).join(" o ")}.`;
 const PADRON_TYPES: readonly unknown[] = Object.values(PADRON_TYPE);
 const LOCALITY_MESSAGE = "El campo items.locality debe ser un texto no vacío y solo se admite junto a newRef.";
@@ -43,13 +43,17 @@ function readMapItem(entry: unknown): EjesMapItem {
   const hasOld = isPresent(entry.oldRef);
   const hasNew = isPresent(entry.newRef);
   const hasZone = isPresent(entry.zoneOf);
-  if (!hasOld && !hasNew && !hasZone) throw invalid(MAP_ITEM_MESSAGE);
+  const hasLocalities = isPresent(entry.localitiesOf);
+  const hasDepartment = isPresent(entry.departmentOf);
+  if (!hasOld && !hasNew && !hasZone && !hasLocalities && !hasDepartment) throw invalid(MAP_ITEM_MESSAGE);
   if (isPresent(entry.locality) && !hasNew) throw invalid(LOCALITY_MESSAGE);
   return {
     ...(hasOld ? { oldRef: readOldRef(entry.oldRef) } : {}),
     ...(hasNew ? { newRef: referenceOf(entry.newRef, "newRef") } : {}),
     ...(isPresent(entry.locality) ? { locality: readLocality(entry.locality) } : {}),
     ...(hasZone ? { zoneOf: referenceOf(entry.zoneOf, "zoneOf"), type: readZoneType(entry.type) } : {}),
+    ...(hasLocalities ? { localitiesOf: referenceOf(entry.localitiesOf, "localitiesOf") } : {}),
+    ...(hasDepartment ? { departmentOf: referenceOf(entry.departmentOf, "departmentOf") } : {}),
   };
 }
 
@@ -64,7 +68,7 @@ function readTableRef(tables: JsonRecord, role: string): EjesTableRef {
   return { schema: readRequiredText(entry, "schema"), table: readRequiredText(entry, "table") };
 }
 
-/** The map request: the connection and the staging, road section and padrones tables of the start request; the map reads no other table. */
+/** The map request: the connection and the staging, road section, padrones, localities and departments tables of the start request; the map reads no other table. */
 export function parseEjesGeometryMapRequest(body: JsonRecord): EjesGeometryMapParams {
   const tables = readRecord(body, "tables");
   return {
@@ -72,6 +76,8 @@ export function parseEjesGeometryMapRequest(body: JsonRecord): EjesGeometryMapPa
     staging: readTableRef(tables, EJES_TABLE_ROLE.STAGING),
     roadSection: readTableRef(tables, EJES_TABLE_ROLE.ROAD_SECTION),
     padrones: readTableRef(tables, EJES_TABLE_ROLE.PADRONES),
+    localities: readTableRef(tables, EJES_TABLE_ROLE.LOCALITIES),
+    departments: readTableRef(tables, EJES_TABLE_ROLE.DEPARTMENTS),
     items: readMapItems(body),
   };
 }

@@ -6,9 +6,17 @@ export const ANALYSIS_CHANGED_MESSAGE = "Los ejes de origen o los tramos de dest
 export const CHOICE_NOT_APPLICABLE_MESSAGE =
   "Se eligió un destino para un punto que no requiere revisión o para una división que no se puede aplicar. Vuelva a analizar.";
 
+export const TWIN_PICK_NOT_APPLICABLE_MESSAGE =
+  "Se eligió una copia para un tramo que no existe en el origen con esa localidad y departamento. Vuelva a analizar.";
+
+const withRefsNote = (message: string, refs: readonly string[]): string =>
+  refs.length === 0 ? message : `${message} Tramos: ${refs.join(", ")}.`;
+
 /** The abort message of invalid choices, naming up to `INVALID_CHOICE_REFS_LIMIT` old `reftramo`s so the user can find them. */
-export const choiceNotApplicableOf = (oldRefs: readonly string[]): string =>
-  oldRefs.length === 0 ? CHOICE_NOT_APPLICABLE_MESSAGE : `${CHOICE_NOT_APPLICABLE_MESSAGE} Tramos: ${oldRefs.join(", ")}.`;
+export const choiceNotApplicableOf = (oldRefs: readonly string[]): string => withRefsNote(CHOICE_NOT_APPLICABLE_MESSAGE, oldRefs);
+
+/** The abort message of picks that name no copy of the staging, naming up to `INVALID_TWIN_PICK_REFS_LIMIT` `reftramo`s. */
+export const twinPickNotApplicableOf = (refs: readonly string[]): string => withRefsNote(TWIN_PICK_NOT_APPLICABLE_MESSAGE, refs);
 
 export function assertWritten(label: string, written: number, expected: number): void {
   if (written !== expected) {

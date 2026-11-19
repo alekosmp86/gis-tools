@@ -7,14 +7,36 @@ import type { RunDeps, RunSession } from "../../cargar-padrones/types";
 import { throwIfIssues } from "../../shared/preflightAsserts";
 import { resolveTable, type ResolvedTable, type TableSpec } from "../../shared/tableResolution";
 import { runTransaction, withRunSession } from "../../shared/transaction";
-import { EJES_REQUIRED_COLUMNS_BY_ROLE, EJES_TABLE_ROLE, PADRON_TYPE, ROAD_SECTION_COLUMN, EJES_STAGING_COLUMN, type EjesTableRole, type PadronType } from "../constants";
-import { EJES_MAP_ROLE, EJES_MAP_STATEMENT_TIMEOUT, newSectionOutlineSql, oldSectionOutlineSql, zoneOutlineSql } from "../domain/geometryMap";
-import type { EjesGeometryMapParams, EjesMapFeature, EjesTableRef } from "../types";
+import {
+  DEPARTMENTS_COLUMN,
+  EJES_REQUIRED_COLUMNS_BY_ROLE,
+  EJES_TABLE_ROLE,
+  LOCALITIES_COLUMN,
+  PADRON_TYPE,
+  ROAD_SECTION_COLUMN,
+  EJES_STAGING_COLUMN,
+  type EjesTableRole,
+  type PadronType,
+} from "../constants";
+import {
+  departmentOutlineSql,
+  EJES_MAP_ROLE,
+  EJES_MAP_STATEMENT_TIMEOUT,
+  localityOverlapSql,
+  newSectionOutlineSql,
+  oldSectionOutlineSql,
+  zoneOutlineSql,
+} from "../domain/geometryMap";
+import type { EjesGeometryMapParams, EjesMapFeature, EjesMapItem, EjesTableRef } from "../types";
 import { padronSridIssuesOf, sridIssuesOf } from "./resolveLayouts";
 
 const MAP_JOB_LABEL = "lectura de geometrías de ejes";
 const MAP_UNTOUCHED = "No se modificó ninguna tabla.";
 const MAP_UNVERIFIED = "No se pudo confirmar que la sesión terminara limpia.";
+const LOCALITY_LABEL_SEPARATOR = " · ";
+const PERCENT = 100;
+
+type MapItemKey = "zoneOf" | "localitiesOf" | "departmentOf";
 
 const specOf = (ref: EjesTableRef, role: EjesTableRole): TableSpec => ({
   label: buildQualifiedTableLabel(ref.schema, ref.table),
@@ -27,6 +49,18 @@ const ZONE_LABEL: Record<PadronType, string> = {
   [PADRON_TYPE.URBAN]: getDiscrepancyLabel(MAP_SECTION_TYPE.URBAN_ZONE),
   [PADRON_TYPE.RURAL]: getDiscrepancyLabel(MAP_SECTION_TYPE.RURAL_ZONE),
 };
+
+/** A locality on the map: its name, the metres of the section inside it and the share of the section that is. */
+const localityLabelOf = (name: string, overlap: number, length: number): string => {
+  const percent = length > 0 ? Math.round((overlap / length) * PERCENT) : 0;
+  return `${name}${LOCALITY_LABEL_SEPARATOR}${Math.round(overlap)} m (${percent}%)`;
+};
+
+const usesItem = (params: EjesGeometryMapParams, key: MapItemKey): boolean => params.items.some((item) => item[key] !== undefined);
+
+async function resolveIf(session: RunSession, used: boolean, table: EjesTableRef, role: EjesTableRole): Promise<ResolvedTable | null> {
+  return used ? resolveTable(session, specOf(table, role)) : null;
+}
 
 async function outlineOf(session: RunSession, sql: string, values: Array<string | number>): Promise<Geometry | null> {
   const result = await session.query(sql, values);
@@ -60,10 +94,103 @@ async function zoneFeatureOf(
   return geometry === null ? [] : [{ itemIndex, role: EJES_MAP_ROLE.ZONE, label: ZONE_LABEL[type], geometry }];
 }
 
-/** Split and merge maps never touch the padrones table: it is resolved only when an item asks for a zone. */
-async function resolvePadronesIfZoned(session: RunSession, params: EjesGeometryMapParams): Promise<ResolvedTable | null> {
-  if (!params.items.some((item) => item.zoneOf !== undefined)) return null;
-  return resolveTable(session, specOf(params.padrones, EJES_TABLE_ROLE.PADRONES));
+/** One feature per locality the section crosses, each named by its own label; a section crossing none is no feature and no error. */
+async function localityFeaturesOf(session: RunSession, sql: string, reference: string, itemIndex: number): Promise<EjesMapFeature[]> {
+  const result = await session.query(sql, [reference]);
+  return result.rows.map((row) => ({
+    itemIndex,
+    role: EJES_MAP_ROLE.LOCALITY,
+    label: localityLabelOf(String(row.name), Number(row.overlap), Number(row.length)),
+    geometry: row.geojson as Geometry,
+  }));
+}
+
+async function departmentFeaturesOf(session: RunSession, sql: string, reference: string, itemIndex: number): Promise<EjesMapFeature[]> {
+  const result = await session.query(sql, [reference]);
+  return result.rows.map((row) => ({ itemIndex, role: EJES_MAP_ROLE.DEPARTMENT, label: String(row.name), geometry: row.geojson as Geometry }));
+}
+
+interface MapTables {
+  staging: ResolvedTable;
+  roadSection: ResolvedTable;
+  padrones: ResolvedTable | null;
+  localities: ResolvedTable | null;
+  departments: ResolvedTable | null;
+}
+
+const optionalIssuesOf = (resolved: ResolvedTable | null, sridIssues: (table: ResolvedTable) => string[]): string[] =>
+  resolved === null ? [] : [...resolved.issues, ...sridIssues(resolved)];
+
+/** Split and merge maps never touch the padrones, localities or departments tables: each is resolved only when an item asks for it. */
+async function resolveMapTables(session: RunSession, params: EjesGeometryMapParams): Promise<MapTables> {
+  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+  const staging = await resolveTable(session, specOf(params.staging, EJES_TABLE_ROLE.STAGING));
+  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+  const roadSection = await resolveTable(session, specOf(params.roadSection, EJES_TABLE_ROLE.ROAD_SECTION));
+  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+  const padrones = await resolveIf(session, usesItem(params, "zoneOf"), params.padrones, EJES_TABLE_ROLE.PADRONES);
+  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+  const localities = await resolveIf(session, usesItem(params, "localitiesOf"), params.localities, EJES_TABLE_ROLE.LOCALITIES);
+  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+  const departments = await resolveIf(session, usesItem(params, "departmentOf"), params.departments, EJES_TABLE_ROLE.DEPARTMENTS);
+  throwIfIssues([
+    ...staging.issues,
+    ...sridIssuesOf(staging, EJES_STAGING_COLUMN.GEOM),
+    ...roadSection.issues,
+    ...sridIssuesOf(roadSection, ROAD_SECTION_COLUMN.GEOMETRY),
+    ...optionalIssuesOf(padrones, padronSridIssuesOf),
+    ...optionalIssuesOf(localities, (table) => sridIssuesOf(table, LOCALITIES_COLUMN.GEOM, false)),
+    ...optionalIssuesOf(departments, (table) => sridIssuesOf(table, DEPARTMENTS_COLUMN.GEOM, false)),
+  ]);
+  return { staging, roadSection, padrones, localities, departments };
+}
+
+/** The SQL of each kind of item; a kind whose table was not resolved has none. */
+interface MapSql {
+  old: string;
+  newRef: string;
+  copy: string;
+  zone: string | null;
+  locality: string | null;
+  department: string | null;
+}
+
+function mapSqlOf({ staging, roadSection, padrones, localities, departments }: MapTables): MapSql {
+  return {
+    old: oldSectionOutlineSql(roadSection.layout),
+    newRef: newSectionOutlineSql(staging.layout),
+    copy: newSectionOutlineSql(staging.layout, true),
+    zone: padrones === null ? null : zoneOutlineSql(staging.layout, padrones.layout),
+    locality: localities === null ? null : localityOverlapSql(staging.layout, localities.layout),
+    department: departments === null ? null : departmentOutlineSql(staging.layout, departments.layout),
+  };
+}
+
+/** The features of one request item, in the order of its kinds. Every read is awaited in turn: one pg client runs one query at a time. */
+async function itemFeaturesOf(session: RunSession, sql: MapSql, entry: EjesMapItem, itemIndex: number): Promise<EjesMapFeature[]> {
+  const features: EjesMapFeature[] = [];
+  if (entry.oldRef !== undefined) {
+    // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+    features.push(await featureOf(session, sql.old, entry.oldRef, itemIndex, EJES_MAP_ROLE.OLD, `Tramo anterior ${entry.oldRef}`));
+  }
+  if (entry.newRef !== undefined) {
+    // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+    const newSql = entry.locality === undefined ? sql.newRef : sql.copy;
+    features.push(await featureOf(session, newSql, entry.newRef, itemIndex, EJES_MAP_ROLE.NEW, `Tramo nuevo ${entry.newRef}`, entry.locality));
+  }
+  if (sql.zone !== null && entry.zoneOf !== undefined && entry.type !== undefined) {
+    // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+    features.push(...(await zoneFeatureOf(session, sql.zone, entry.zoneOf, entry.type, itemIndex)));
+  }
+  if (sql.locality !== null && entry.localitiesOf !== undefined) {
+    // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+    features.push(...(await localityFeaturesOf(session, sql.locality, entry.localitiesOf, itemIndex)));
+  }
+  if (sql.department !== null && entry.departmentOf !== undefined) {
+    // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+    features.push(...(await departmentFeaturesOf(session, sql.department, entry.departmentOf, itemIndex)));
+  }
+  return features;
 }
 
 /**
@@ -72,38 +199,11 @@ async function resolvePadronesIfZoned(session: RunSession, params: EjesGeometryM
  */
 async function readFeatures(session: RunSession, params: EjesGeometryMapParams): Promise<EjesMapFeature[]> {
   await session.query(`SET LOCAL statement_timeout = '${EJES_MAP_STATEMENT_TIMEOUT}'`);
-  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
-  const staging = await resolveTable(session, specOf(params.staging, EJES_TABLE_ROLE.STAGING));
-  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
-  const roadSection = await resolveTable(session, specOf(params.roadSection, EJES_TABLE_ROLE.ROAD_SECTION));
-  const padrones = await resolvePadronesIfZoned(session, params);
-  throwIfIssues([
-    ...staging.issues,
-    ...sridIssuesOf(staging, EJES_STAGING_COLUMN.GEOM),
-    ...roadSection.issues,
-    ...sridIssuesOf(roadSection, ROAD_SECTION_COLUMN.GEOMETRY),
-    ...(padrones === null ? [] : [...padrones.issues, ...padronSridIssuesOf(padrones)]),
-  ]);
-  const oldSql = oldSectionOutlineSql(roadSection.layout);
-  const newSql = newSectionOutlineSql(staging.layout);
-  const copySql = newSectionOutlineSql(staging.layout, true);
-  const zoneSql = padrones === null ? null : zoneOutlineSql(staging.layout, padrones.layout);
+  const sql = mapSqlOf(await resolveMapTables(session, params));
   const features: EjesMapFeature[] = [];
-  for (const [itemIndex, item] of params.items.entries()) {
-    const entry = item;
-    if (entry.oldRef !== undefined) {
-      // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
-      features.push(await featureOf(session, oldSql, entry.oldRef, itemIndex, EJES_MAP_ROLE.OLD, `Tramo anterior ${entry.oldRef}`));
-    }
-    if (entry.newRef !== undefined) {
-      // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
-      const sql = entry.locality === undefined ? newSql : copySql;
-      features.push(await featureOf(session, sql, entry.newRef, itemIndex, EJES_MAP_ROLE.NEW, `Tramo nuevo ${entry.newRef}`, entry.locality));
-    }
-    if (zoneSql !== null && entry.zoneOf !== undefined && entry.type !== undefined) {
-      // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
-      features.push(...(await zoneFeatureOf(session, zoneSql, entry.zoneOf, entry.type, itemIndex)));
-    }
+  for (const [itemIndex, entry] of params.items.entries()) {
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
+    features.push(...(await itemFeaturesOf(session, sql, entry, itemIndex)));
   }
   return features;
 }

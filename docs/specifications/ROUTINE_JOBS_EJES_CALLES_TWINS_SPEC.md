@@ -51,8 +51,10 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
 
 ### Analysis
 - **ET-2** A *twin group* is the set of valid staging rows (non-empty geometry, integer `reftramo`) that share a trimmed `reftramo`,
-  have exactly one non-null department and at least two distinct non-null localities. Groups with more than one department are not
-  twin groups, whatever their locality count; their number is reported as one count ("sin regla").
+  have exactly one non-null department (after ET-2a) and at least two distinct non-null localities. A `reftramo` with more than one
+  department is not a twin group unless ET-2a chooses one of its departments. One that still has several departments is not a twin
+  group, whatever its locality count, and is counted once as "sin regla" (`twinsCrossDepartment`).
+- **ET-2a** Department by geometry (after ET-2; the copies of the other departments are dropped before the locality rules). For a `reftramo` whose valid copies span more than one department (count of distinct non-null `departamento` above 1), the chosen department is the one whose polygons overlap the section most: the sum of `ST_Length(ST_Intersection(section, ST_MakeValid(polygon)))` per department name, the name taken as `upper(btrim(name_dpto))`, name ASC on a tie. A polygon counts when `ST_Intersects` says so (a touch at a point counts with length 0, as for the locality polygons). The polygons are role `ejes-departamentos` (default `carto.mv_country_province`, columns `name_dpto` and `geometry`; the geometry must be exactly SRID 32721, like the localities). The copies of the other departments are dropped BEFORE the locality rules: the chosen department's copies then form the `reftramo`'s group as an ordinary one-department group (ET-2), take the ET-10 rules and the single-copy step, and feed the geometric rule. Staging `departamento` matches a polygon name with `upper(btrim())` on both sides and no accent folding, as the department code join of EJ-11; a text that differs in accents matches no polygon and stays undecided (fail closed). A copy with no department is kept. When no department polygon intersects the section, nothing is dropped and the `reftramo` stays undecided (`twinsCrossDepartment`). The choice is the `twin_dept` relation (one row per multi-department `reftramo`, `department` NULL when undecided), read by `copy_kept`, `twin_groups` and the load. Not verified on dev: the polygon names are assumed to equal the staging names (no database access when this was written).
 - **ET-3** For each twin group, `urbanLength` is the length of the section within `TWIN_PADRON_DISTANCE_M` (25) metres of any padron
   whose `type_padron` is `URBANO`; `ruralLength` likewise for `RURAL`. A section is *near* a type when that length is at least
   `TWIN_NEAR_MIN_LENGTH_M` (1) metre, whatever the length of the section: a long section that only touches one padron of a type
@@ -75,10 +77,18 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
   - `NEITHER`: let `inside` be the set of names of the locality polygons the section intersects. If `inside` is empty, the same as
     `RURAL`. If a copy's name is in `inside`, every copy whose name is not in `inside`. Otherwise empty.
   - Single copy (every class, after the bullets above): let `remaining` be the localities not dropped so far, and `inside` as in
-    `BOTH`. If `remaining` has two or more copies and one of them is in `inside`, the winner is the first of `remaining` by: the
-    copy whose name is first in `inside`, then non-rural-named, then name ASC. Every other remaining copy is dropped too, so
-    exactly one copy stays. Otherwise nothing more is dropped and the copies stay held. `BOTH` keeps one copy already, so this
-    step changes nothing for it.
+    `BOTH`. If `remaining` has two or more copies and one of them is in `inside`, or the rural fallback below applies, the winner is
+    the first of `remaining` by: the copy whose name is first in `inside`, then non-rural-named, then name ASC (the rural winner of the
+    fallback replaces this order when it applies). Every other remaining copy is dropped too, so exactly one copy stays. Otherwise
+    nothing more is dropped and the copies stay held. `BOTH` keeps one copy already, so this step changes nothing for it.
+  - **Rural fallback** (`BOTH` and the single-copy step, every class): `inside_cover` is the overlap of the longest polygon (the first of
+    `inside`) over the section length, 0 when no polygon intersects. Below `TWIN_POLYGON_MIN_COVER_RATIO` (0.5) the section lies mostly
+    outside the localities, so it is rural: when a copy that remains is rural-named, the winner is the rural-named copy named
+    `<department> RURAL` (the group's department, upper-cased and trimmed), else the rural-named copy with the lowest name. With no
+    rural-named copy the polygon winner applies as above. At 0.5 or more the polygon winner applies. In the single-copy step the fallback
+    also lets the step fire when no polygon intersects the section (cover 0) and a rural-named copy remains. `URBAN` drops its
+    rural-named copies first, so the fallback reaches it only in a group with no non-rural-named copy; `RURAL` keeps its first
+    rural-named copy already.
   It is never all the localities of the group. (`BOTH` rule: `carto` and `mv_road_section` hold one section per `reftramo`; the
   legacy load kept the urban-named locality in 19,327 of 19,327 comparable cases; the polygon match was chosen by the user on
   2026-11-18, localities rarely change.) The analysis counts the rows with a non-empty `dropLocalities` (`twinsDrop`) and the
@@ -139,13 +149,13 @@ extended to 15 m and then to 25 m after a verified case at 20 m; on dev, of a 1/
 - **ET-18** Staging rows whose geometry is invalid (`NOT ST_IsValid`) or collapsed (`ST_Length` < `GEOMETRY_TOLERANCE_M`, 0.001) are skipped by the whole analysis: the section classification
   (new, unchanged, changed, removed, split, merge), the new streets, the locality computation and the twin analysis never see them,
   so a degenerate line (on dev 795 invalid rows plus 878 valid-but-collapsed rows, 676 distinct `reftramo` among the collapsed, e.g. reftramo 1001006 with two points ~1e-9 m apart)
-  is never classified, dropped, kept or counted as a new section. The `reftramo` still counts as present in the file: a current
-  section whose only staging rows are invalid is left as it is and is NOT reported as removed (on dev 557 of the 615 invalid
-  `reftramo` exist in `carto` with a valid geometry; reporting them as removed would flag 557 sections for a file error). They are reported in the file-problems part of the report: a KPI
-  "Filas con geometría inválida o colapsada (se omiten)" (rows) and "Tramos con geometría inválida o colapsada" (distinct `reftramo`), and a collapsible list
+  is never classified, dropped, kept or counted as a new section. A `reftramo` whose staging rows are all discarded does not count as present (`stg_keys` reads only the kept rows): a current
+  section with no kept row is a removal candidate like any section absent from the file, unless it holds access points (never removed); on dev 557 of the 615 invalid
+  `reftramo` exist in `carto` with a valid geometry, so under this rule they are removal candidates: confirm before a real run). They are reported in the file-problems part of the report: a KPI
+  "Filas con geometría inválida o colapsada, o menor de 1 m sin puntos de acceso (se omiten)" (rows) and "Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso" (distinct `reftramo`), and a collapsible list
   of up to `DETAIL_LIST_LIMIT` rows with `reftramo`, `idcalle`, locality and department. The raw file counts (`rows`, distinct refs,
-  repeated groups) are unchanged. It is a warning, not a blocker. The criterion is validity or collapse (length under the 1 mm geometry tolerance, one shared definition `validGeometrySql`); real short
-  sections of 1 mm or more are kept. The root cause (the csv-db tool writing these geometries) is a separate fix outside this job; this step
+  repeated groups) are unchanged. It is a warning, not a blocker. The criterion is validity or length: under the 1 mm geometry tolerance (`GEOMETRY_TOLERANCE_M`) always; under `MIN_SECTION_LENGTH_M` (1 m) unless the `reftramo` holds access points (one shared definition `validGeometrySql`). Discarded rows feed no other rule (classification, twins, new streets, removals, `stg_keys`); only the staging fingerprint reads them. Real
+  sections of 1 mm or more are kept as before. The root cause (the csv-db tool writing these geometries) is a separate fix outside this job; this step
   is the safety net that stays after it.
 
 ### Labels of the "far from padrones" case
@@ -179,7 +189,16 @@ This section COMPLEMENTS ET-1 to ET-18 and changes none of them: the locality ru
 - **Dev measurement (ET-20, user data, dev)**: with the one-kept-copy rule and the four-part key: about 95 groups, 234 members, 66 pairs (the earlier 188 groups, 449 sections, 134 pairs used a key without locality and department and are superseded); 3 groups have a member that holds points; 27,112 reftramos had several kept copies and were never grouped (measured before the BOTH keep-one rule; BOTH refs are now single-copy and can be grouped, re-measure). These are measurements of dev, not rules: the load reads the environment it runs on.
 - **Known limit (ET-20)**: a `reftramo` with several kept copies is never grouped, even when its geometry matches a single-copy group. Its count is reported; no rule decides it in this slice.
 
+## Elección manual de la copia
+
+- **ET-28** For a `reftramo` with several copies, the user picks the one copy that stays: `accepted.twinPicks`, one entry per `reftramo`, `{ ref, department, locality }` (text trimmed, never empty; `ref` canonical integer). A `reftramo` named twice is refused, never merged; the list is refused above `ACCEPTED_KEYS_LIMIT`. The Analizar re-run takes the same field (`accepted` with `twinPicks` only), so the analysis and the load see the same picks.
+- **ET-29** A pick overrides the locality rule (ET-1 to ET-18) for its `reftramo`: the picked copy is kept even when the rule would drop it, and every other copy of that `reftramo` is dropped. A `reftramo` without a pick keeps the rules as they are. The picked copy is one of `copy_kept`, so the geometric rule (ET-20 to ET-27) reads it like any single copy: it is a member of a group and can still be a loser there. A pick that names no copy of the staging has no effect: the rules apply as if there were no pick, while the load still aborts on it (ET-31).
+- **ET-30** A pick names a copy by `reftramo`, `departamento` and `localidad` as the staging holds them (trimmed, as `copy_raw` defines them). A copy with an empty locality or department has no text to name it, so it cannot be picked.
+- **ET-31** Fail closed: the load aborts before any write when a pick names no copy of the staging, with a Spanish message naming up to `INVALID_TWIN_PICK_REFS_LIMIT` `reftramo`s. The stale-analysis guard compares `twinPicksApplied` (the picks that name a copy) between the analysis the user saw and the load, so picks changed since the analysis give ANALYSIS_CHANGED.
+- **ET-32** The analysis reports `twinUndecided`: one row per `reftramo` that keeps more than one copy after the rules and the picks, with `ref`, `idcalle`, `name`, `copies` (`{ department, locality }` each), `points` (access points by `reftramo`) and `waiting`. `twinsUndecided` counts the rows. A picked `reftramo` has one copy and is never listed; `twinPicksApplied` counts the picks.
+- **ET-33** `waiting` counts the renumber pairs and the split pieces held as `not_single_copy` whose new `reftramo` is this one (the same rules as the holds themselves). Merges and removals are not counted: their hold depends on acceptance. A `reftramo` that keeps one copy after a pick releases its renumber and split holds through the existing rules.
+- **Known limit (ET-33)**: the classification (NEW, ATTR, GEOM counts) still reads one staging row per `reftramo`, as before. For a picked `reftramo` the counts may compare another copy's geometry, while the load writes the picked copy; the summary guard holds because both sides read the same classification.
 ## Out of scope
 Applying anything (the real load: deleting a copy, how several copies are stored in the final table), a rule for sections near rural
-padrones only or near none, cross-department groups, groups with a section that the
+padrones only or near none, cross-department groups still undecided after ET-2a, groups with a section that the
 final table already holds being treated differently, any write.

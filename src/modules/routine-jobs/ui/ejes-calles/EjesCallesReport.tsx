@@ -6,11 +6,12 @@ import { CollapsibleSection } from "../shared/CollapsibleSection";
 import type { EjesGeometryMapBase, EjesSplitPointsBase } from "../shared/clientTypes";
 import type { EjesAcceptView } from "./ejesAccept";
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
-import { subjectOfMerge, subjectOfRenumbered, subjectOfSplit, subjectOfTwin } from "./ejesMapSubject";
+import { subjectOfMerge, subjectOfSplit, subjectOfUndecided } from "./ejesMapSubject";
 import { ejesListAnchorOf, type EjesListKey } from "./ejesCallesListMeta";
 import { buildEjesReportView } from "./ejesCallesReportView";
 import { EjesReportLists } from "./EjesReportLists";
 import { EjesSummaryStrip } from "./EjesSummaryStrip";
+import { TwinPicksPanel } from "./TwinPicksPanel";
 import { KpiCards, OutcomeBanners, SectionTitle, TimingsSection } from "../shared/ReportParts";
 import sharedStyles from "../shared/ReportShared.module.css";
 
@@ -56,8 +57,7 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
   const subjects = {
     splits: result.splits.map(subjectOfSplit),
     merges: result.merges.map(subjectOfMerge),
-    twins: result.twins.map(subjectOfTwin),
-    renumbered: result.renumbered.map(subjectOfRenumbered),
+    twinUndecided: result.twinUndecided.map(subjectOfUndecided),
   };
   const selectList = (list: EjesListKey) => {
     const opening = !openLists.has(list);
@@ -70,6 +70,15 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
       <EjesSummaryStrip items={view.strip} openLists={openLists} onSelect={selectList} />
       <TextList title="Bloqueos para la carga" items={view.blockers} />
       <TextList title="Privilegios de escritura (información del análisis)" items={view.privilegeInfo} />
+      {accept !== undefined && (result.twinUndecided.length > 0 || accept.twinPicks.length > 0) && (
+        <TwinPicksPanel
+          picks={accept.twinPicks}
+          applied={result.counts.twinPicksApplied}
+          canAnalyze={accept.canAnalyzeWithPicks}
+          onAnalyze={accept.onAnalyzeWithPicks}
+          onRemove={(ref) => accept.onTwinPickChange({ ref, copy: null })}
+        />
+      )}
       <EjesReportLists
         result={result}
         view={view}
@@ -94,6 +103,7 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
       <EjesMapModal
         review={review}
         base={mapBase}
+        accept={accept}
         onNavigate={(index) => setReview((current) => (current === null ? null : { ...current, index }))}
         onClose={() => setReview(null)}
       />

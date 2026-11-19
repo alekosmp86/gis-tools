@@ -21,6 +21,9 @@ import { ejesLayouts } from "./ejesFixtures";
 const CANONICAL_REFTRAMO =
   "CASE WHEN NULLIF(btrim(s.\"reftramo\"::text), '') ~ '^[0-9]+$' THEN (NULLIF(btrim(s.\"reftramo\"::text), ''))::numeric::text ELSE NULLIF(btrim(s.\"reftramo\"::text), '') END";
 
+const ACCESS_POINT_CANONICAL =
+  "CASE WHEN NULLIF(btrim(a.\"id_road_section\"::text), '') ~ '^[0-9]+$' THEN (NULLIF(btrim(a.\"id_road_section\"::text), ''))::numeric::text ELSE NULLIF(btrim(a.\"id_road_section\"::text), '') END";
+
 const positionOf = (text: string, fragment: string): number => {
   const index = text.indexOf(fragment);
   expect(index, `missing ${fragment}`).toBeGreaterThanOrEqual(0);
@@ -339,6 +342,17 @@ describe("buildEjesAnalysisSql", () => {
     it("should report the number of groups with more than one department as twins_cross_department", () => {
       expect(sql).toContain('(SELECT count(*) FROM "twin_groups" WHERE departments > 1) AS "twins_cross_department"');
     });
+
+    it("should choose the department of each multi-department reftramo before grouping, and group only the copies of that department (ET-2a)", () => {
+      expect(positionOf(sql, '"twin_dept" AS (')).toBeLessThan(positionOf(sql, '"twin_groups" AS ('));
+      expect(sql).toContain('LEFT JOIN "twin_dept" AS d ON d.ref = t.ref');
+      expect(sql).toContain("WHERE (d.department IS NULL OR t.departamento IS NULL OR upper(btrim(t.departamento)) = d.department) GROUP BY t.ref");
+    });
+
+    it("should pick the department whose polygon the section overlaps most, the lowest name on a tie, and none when no polygon intersects (ET-2a)", () => {
+      expect(sql).toContain('FROM "carto"."mv_country_province" AS dp WHERE dp."name_dpto" IS NOT NULL AND ST_Intersects(dp."geometry", m.geom) GROUP BY 1) AS d');
+      expect(sql).toContain("ORDER BY d.len DESC, d.name LIMIT 1) AS department");
+    });
   });
 
   describe("ET-3 near lengths and class", () => {
@@ -424,15 +438,16 @@ describe("buildEjesAnalysisSql", () => {
     const stgKeys = sql.slice(sql.indexOf('"stg_keys" AS ('), sql.indexOf(",\n", sql.indexOf('"stg_keys" AS (')));
     const stg = sql.slice(sql.indexOf('"stg" AS ('), sql.indexOf(",\n", sql.indexOf('"stg" AS (')));
 
-    it("should skip invalid geometries in stg, next to the null and empty conditions", () => {
-      expect(stg).toContain('s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001), true)');
+    it("should skip invalid and short geometries in stg, next to the null and empty conditions", () => {
+      expect(stg).toContain(
+        `s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE ${ACCESS_POINT_CANONICAL} = ${CANONICAL_REFTRAMO}) END)), true) AND ${CANONICAL_REFTRAMO} ~ '^[0-9]+$'`
+      );
     });
 
-    it("should not filter stg_keys on validity or on geometry at all, so a reftramo with only invalid rows stays present", () => {
-      expect(stgKeys).not.toContain("ST_IsValid");
-      expect(stgKeys).not.toContain("ST_IsEmpty");
-      expect(stgKeys).not.toContain("geom");
-      expect(stgKeys).toContain(`WHERE ${CANONICAL_REFTRAMO} IS NOT NULL`);
+    it("should read stg_keys from the kept rows only, so a reftramo whose rows are all discarded is not present", () => {
+      expect(stgKeys).toContain(`AS ref FROM "bdj_carto"."ide_ejesviacirculacion" AS s WHERE s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(`);
+      expect(stgKeys).toContain("ST_IsValid(s.\"geom\")");
+      expect(stgKeys).toContain(`${CANONICAL_REFTRAMO} ~ '^[0-9]+$'`);
     });
 
     it("should still compare the current sections with stg_keys when looking for removed ones", () => {
@@ -442,14 +457,16 @@ describe("buildEjesAnalysisSql", () => {
     it("should use the validity predicate in the twin analysis too", () => {
       const twinRaw = sql.slice(sql.indexOf('"twin_raw" AS ('), sql.indexOf('"twin_groups" AS ('));
 
-      expect(twinRaw).toContain('COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001), true)');
+      expect(twinRaw).toContain(
+        `COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE ${ACCESS_POINT_CANONICAL} = ${CANONICAL_REFTRAMO}) END)), true)`
+      );
     });
   });
 
   describe("ET-12 locality names", () => {
     it("should collect in inside_localities the distinct upper-cased trimmed names of the locality polygons the twin intersects, ordered by overlap length descending then name, for every class", () => {
       expect(sql).toContain(
-        `ARRAY(SELECT t.n FROM (SELECT upper(btrim(l."nomloc"::text)) AS n, sum(ST_Length(ST_Intersection(k.geom, ST_MakeValid(l."geom")))) AS len FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom) GROUP BY 1) AS t ORDER BY t.len DESC, t.n) AS inside_localities`
+        `SELECT COALESCE(array_agg(t.n ORDER BY t.len DESC, t.n), ARRAY[]::text[]) AS inside_localities, COALESCE(max(t.len), 0) AS inside_len FROM (SELECT upper(btrim(l."nomloc"::text)) AS n, sum(ST_Length(ST_Intersection(k.geom, ST_MakeValid(l."geom")))) AS len FROM "bdj_carto"."ine_localidades_pg" AS l WHERE l."nomloc" IS NOT NULL AND ST_Intersects(l."geom", k.geom) GROUP BY 1) AS t`
       );
       expect(sql).not.toContain("k.class IN ('NEITHER', 'BOTH')");
     });
@@ -463,7 +480,8 @@ describe("buildEjesAnalysisSql", () => {
       expect(located).toBeGreaterThan(classed);
       expect(twins).toBeGreaterThan(located);
       expect(sql.slice(located, twins)).toContain("AS inside_localities");
-      expect(sql.slice(located, twins)).toContain('FROM "twin_classed" AS k');
+      expect(sql.slice(located, twins)).toContain('FROM "twin_classed" AS k CROSS JOIN LATERAL (');
+      expect(sql.slice(located, twins)).toContain("AS inside_cover");
     });
 
     it("should not touch the localities polygons while measuring or classifying", () => {
@@ -498,7 +516,7 @@ describe("buildEjesAnalysisSql", () => {
   });
 
   describe("ET-10 localities to drop", () => {
-    const dropSql = sql.slice(sql.indexOf('"twins" AS ('), sql.indexOf('"twins" AS (') + 2500);
+    const dropSql = sql.slice(sql.indexOf('"twins" AS ('), sql.indexOf('"copy_raw" AS ('));
     const rural = (alias: string): string => `upper(btrim(${alias})) LIKE '%${RURAL_LOCALITY_SUFFIX}'`;
 
     it("should take the rural suffix from the constant", () => {
@@ -521,9 +539,9 @@ describe("buildEjesAnalysisSql", () => {
       );
     });
 
-    it("should keep one copy of a BOTH row: drop every copy but the winner, the highest-ranked inside its polygons by overlap, else the non-rural-named, else the first by name", () => {
+    it("should keep one copy of a BOTH row: drop every copy but the winner, the rural copy of its department when the section lies mostly outside the polygons, else the highest-ranked inside its polygons by overlap, else the non-rural-named, else the first by name", () => {
       expect(dropSql).toContain(
-        "WHEN c.class = 'BOTH' THEN ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE l <> (SELECT r FROM unnest(c.localities) AS r ORDER BY array_position(c.inside_localities, upper(btrim(r))) ASC NULLS LAST, (upper(btrim(r)) LIKE '% RURAL') ASC, r ASC LIMIT 1) ORDER BY l)"
+        "WHEN c.class = 'BOTH' THEN ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE l <> (CASE WHEN c.inside_cover < 0.5 AND EXISTS (SELECT 1 FROM unnest(c.localities) AS h WHERE upper(btrim(h)) LIKE '% RURAL') THEN (SELECT r FROM unnest(c.localities) AS r WHERE upper(btrim(r)) LIKE '% RURAL' ORDER BY COALESCE(upper(btrim(r)) = (upper(btrim(c.department)) || ' RURAL'), false) DESC, r ASC LIMIT 1) ELSE (SELECT r FROM unnest(c.localities) AS r ORDER BY array_position(c.inside_localities, upper(btrim(r))) ASC NULLS LAST, (upper(btrim(r)) LIKE '% RURAL') ASC, r ASC LIMIT 1) END) ORDER BY l)"
       );
     });
 
@@ -532,15 +550,15 @@ describe("buildEjesAnalysisSql", () => {
       expect(dropSql).toContain("ELSE twin_drop_base.base END");
     });
 
-    it("should apply the single-copy step only when more than one copy remains and one remaining copy is inside", () => {
+    it("should apply the single-copy step only when more than one copy remains and one remaining copy is inside, or the section lies mostly outside with a rural-named copy remaining", () => {
       expect(dropSql).toContain(
-        "(SELECT CASE WHEN cardinality(twin_drop_rest.remaining) > 1 AND EXISTS (SELECT 1 FROM unnest(twin_drop_rest.remaining) AS h WHERE upper(btrim(h)) = ANY(c.inside_localities))"
+        "(SELECT CASE WHEN cardinality(twin_drop_rest.remaining) > 1 AND (EXISTS (SELECT 1 FROM unnest(twin_drop_rest.remaining) AS h WHERE upper(btrim(h)) = ANY(c.inside_localities)) OR (c.inside_cover < 0.5 AND EXISTS (SELECT 1 FROM unnest(twin_drop_rest.remaining) AS h WHERE upper(btrim(h)) LIKE '% RURAL')))"
       );
     });
 
-    it("should keep the highest-ranked remaining copy inside its polygons and drop every other remaining copy, falling back to the base drop otherwise", () => {
+    it("should keep the rural copy of the department among the remaining ones when the section lies mostly outside, the highest-ranked inside copy otherwise, and drop every other remaining copy", () => {
       expect(dropSql).toContain(
-        "THEN ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE l = ANY(twin_drop_base.base) OR l <> (SELECT r FROM unnest(twin_drop_rest.remaining) AS r ORDER BY array_position(c.inside_localities, upper(btrim(r))) ASC NULLS LAST, (upper(btrim(r)) LIKE '% RURAL') ASC, r ASC LIMIT 1) ORDER BY l) ELSE twin_drop_base.base END"
+        "THEN ARRAY(SELECT l FROM unnest(c.localities) AS l WHERE l = ANY(twin_drop_base.base) OR l <> (CASE WHEN (c.inside_cover < 0.5 AND EXISTS (SELECT 1 FROM unnest(twin_drop_rest.remaining) AS h WHERE upper(btrim(h)) LIKE '% RURAL')) THEN (SELECT r FROM unnest(twin_drop_rest.remaining) AS r WHERE upper(btrim(r)) LIKE '% RURAL' ORDER BY COALESCE(upper(btrim(r)) = (upper(btrim(c.department)) || ' RURAL'), false) DESC, r ASC LIMIT 1) ELSE (SELECT r FROM unnest(twin_drop_rest.remaining) AS r ORDER BY array_position(c.inside_localities, upper(btrim(r))) ASC NULLS LAST, (upper(btrim(r)) LIKE '% RURAL') ASC, r ASC LIMIT 1) END) ORDER BY l) ELSE twin_drop_base.base END"
       );
     });
 
@@ -564,7 +582,7 @@ describe("buildEjesAnalysisSql", () => {
     });
 
     it("should guard each branch so a drop list is never every locality of the group", () => {
-      expect(dropSql.split("AND EXISTS (SELECT 1 FROM unnest(c.localities)")).toHaveLength(4);
+      expect(dropSql.split("AND EXISTS (SELECT 1 FROM unnest(c.localities)")).toHaveLength(5);
     });
 
     it("should read the classed twins and select drop_localities in the list", () => {
@@ -626,6 +644,7 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
       const order = [
         '"twins" AS (',
         '"copy_raw" AS (',
+        '"twin_picks" AS (',
         '"copy_kept" AS (',
         '"copy_refs" AS (',
         '"renum_cand" AS (',
@@ -646,9 +665,9 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
       );
     });
 
-    it("should keep a copy unless the twin rules drop its locality (copy_kept reads the twins)", () => {
+    it("should keep a copy of the chosen department unless the twin rules drop its locality, and keep only the picked copy of a picked reftramo naming a copy (copy_kept reads the twins, the twin department and the picks)", () => {
       expect(sql).toContain(
-        '"copy_kept" AS (SELECT r.* FROM "copy_raw" AS r LEFT JOIN "twins" AS w ON w.ref = r.ref WHERE w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities)))'
+        '"copy_kept" AS (SELECT r.* FROM "copy_raw" AS r LEFT JOIN "twins" AS w ON w.ref = r.ref LEFT JOIN "twin_dept" AS d ON d.ref = r.ref WHERE (NOT EXISTS (SELECT 1 FROM "twin_picks" AS p JOIN "copy_raw" AS x ON p.ref = x.ref AND p.department = x.departamento AND p.locality = x.localidad WHERE p.ref = r.ref) AND (d.department IS NULL OR r.departamento IS NULL OR upper(btrim(r.departamento)) = d.department) AND (w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities)))) OR EXISTS (SELECT 1 FROM "twin_picks" AS p WHERE p.ref = r.ref AND p.department = r.departamento AND p.locality = r.localidad))'
       );
     });
 

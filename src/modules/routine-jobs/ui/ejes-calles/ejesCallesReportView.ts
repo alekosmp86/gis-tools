@@ -4,6 +4,7 @@ import type { EjesAttrRow, EjesResult, EjesSplitRow, EjesTwinRow, EjesUnknownVal
 import { plural } from "../../jobs/shared/text";
 import type { ReportBannerView, ReportKpiView, TimingItemView } from "../shared/ReportParts";
 import { defaultOpenListOf, stripOf, type EjesListKey, type EjesStripItem } from "./ejesCallesListMeta";
+import { heldRenumberViewsOf, type EjesHeldRenumberView } from "./ejesRenumberHeldView";
 import { listSummaryOf, timingsViewOf } from "../shared/reportViewParts";
 
 export const EJES_DRY_RUN_BANNER = "Análisis: no se modificó ninguna tabla.";
@@ -16,10 +17,9 @@ export interface EjesListSummaries {
   plainRemovals: string;
   newStreets: string;
   attrChanges: string;
-  twins: string;
+  twinUndecided: string;
   geoTwins: string;
   invalidGeometries: string;
-  renumbered: string;
   renumberHeld: string;
 }
 
@@ -42,6 +42,7 @@ export interface EjesReportView {
   unknownFuentes: string[];
   summaries: EjesListSummaries;
   attrRows: EjesAttrRowView[];
+  heldRenumbers: EjesHeldRenumberView[];
   strip: EjesStripItem[];
   defaultOpenList: EjesListKey | null;
   timings: TimingItemView[];
@@ -118,8 +119,8 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
     kpi("reftramo que no es un número", staging.nonIntegerRefs),
     kpi("Filas sin geometría", staging.emptyGeometry),
     kpi("Filas sin idcalle", staging.emptyIdcalle),
-    kpi("Filas con geometría inválida o colapsada (se omiten)", staging.invalidGeometryRows),
-    kpi("Tramos con geometría inválida o colapsada", staging.invalidGeometryRefs),
+    kpi("Filas con geometría inválida o colapsada, o menor de 1 m sin puntos de acceso (se omiten)", staging.invalidGeometryRows),
+    kpi("Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso", staging.invalidGeometryRefs),
     kpi("Filas con caracteres dañados (�)", staging.damagedTextRows),
     kpi("Filas con tipo de vía desconocido", staging.unknownTipoRows),
     kpi("Filas con fuente desconocida", staging.unknownFuenteRows),
@@ -209,10 +210,9 @@ const summariesOf = (result: EjesResult): EjesListSummaries => ({
   plainRemovals: listSummaryOf("Tramos sin reemplazo (primero los que tienen puntos de acceso)", result.plainRemovals.length, result.counts.plainRemovals),
   newStreets: listSummaryOf("Calles nuevas", result.newStreets.length, result.counts.newStreets),
   attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
-  invalidGeometries: listSummaryOf("Tramos con geometría inválida o colapsada (se omiten)", result.staging.invalidGeometries.length, result.staging.invalidGeometryRows),
-  renumbered: listSummaryOf("Tramos renumerados (primero los que tienen puntos de acceso)", result.renumbered.length, result.counts.renumbered),
+  invalidGeometries: listSummaryOf("Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso (se omiten)",result.staging.invalidGeometries.length, result.staging.invalidGeometryRows),
   renumberHeld: listSummaryOf("Renumerados retenidos (ambos tramos quedan como están)", result.renumberSkipped.length, result.counts.renumberSkipped),
-  twins: listSummaryOf("Tramos repetidos por localidad (primero los que se deciden en el mapa)", result.twins.length, result.counts.twins),
+  twinUndecided: listSummaryOf("Tramos con varias copias sin decidir", result.twinUndecided.length, result.counts.twinsUndecided),
   geoTwins: listSummaryOf("Tramos gemelos por geometría (complemento de las localidades)", result.geoTwins.length, result.counts.geoTwinSections),
 });
 
@@ -227,6 +227,7 @@ export function buildEjesReportView(result: EjesResult): EjesReportView {
     unknownFuentes: result.staging.unknownFuentes.map(unknownTextOf),
     summaries: summariesOf(result),
     attrRows: result.attrChanges.map((row) => ({ ...row, changes: ejesAttrChangesOf(row).join(", ") })),
+    heldRenumbers: heldRenumberViewsOf(result.renumberSkipped),
     strip: stripOf(result),
     defaultOpenList: defaultOpenListOf(result),
     timings,

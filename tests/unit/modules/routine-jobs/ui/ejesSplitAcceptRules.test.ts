@@ -29,6 +29,10 @@ const viewWith = (splits: string[], onChange = vi.fn()): EjesAcceptView => ({
   pointChoices: [],
   onChange,
   onPointChoicesChange: () => undefined,
+  twinPicks: [],
+  onTwinPickChange: () => undefined,
+  canAnalyzeWithPicks: false,
+  onAnalyzeWithPicks: () => undefined,
 });
 
 describe("isSplitAcceptable: a split is accepted only when every point is decided (EJS-6, EJS-8)", () => {

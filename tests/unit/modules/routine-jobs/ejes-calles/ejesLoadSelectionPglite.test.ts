@@ -1,6 +1,8 @@
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { buildAcceptedTablesSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/acceptedSql";
 import { buildCreateGeoTwinTableSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/geoTwinSql";
+import { NO_ACCEPTED } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadMapping";
 import {
   buildCopyTableSql,
   buildCreateRenumberTableSql,
@@ -46,6 +48,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       await database.query(`INSERT INTO pg_temp."${LOAD_TEMP.HELD}" (old_id, old_ref, new_ref, points) VALUES ($1, $2, $3, 0)`, [row.oldId, row.oldRef, row.newRef]);
     }
     for (const sql of [
+      ...buildAcceptedTablesSql(NO_ACCEPTED),
       buildCopyTableSql(layouts),
       buildHeldCopiesSql(),
       buildExistTableSql(layouts),

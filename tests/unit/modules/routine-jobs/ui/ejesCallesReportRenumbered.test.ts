@@ -30,6 +30,8 @@ const COUNTS = {
   renumberedWithPoints: 1,
   renumberedPoints: 4,
   renumberSkipped: 0,
+  twinsUndecided: 0,
+  twinPicksApplied: 0,
 };
 
 const ROWS: EjesRenumberedRow[] = [
@@ -66,7 +68,7 @@ const resultOf = (renumbered: EjesRenumberedRow[]): EjesResult =>
     plainRemovals: [],
     newStreets: [],
     attrChanges: [],
-    twins: [],
+    twinUndecided: [],
     geoTwins: [],
     renumbered,
     renumberSkipped: [],
@@ -89,32 +91,18 @@ describe("EjesCallesReport renumbered (ER-4)", () => {
     expect(html).toContain("Nuevos");
   });
 
-  it("should show a collapsible list Tramos renumerados with the six columns and a Ver en mapa button per row", () => {
+  it("should show no list of the renumbered rows on screen, only their counts, when there are renumbered rows", () => {
     const html = render(ROWS);
 
-    expect(html).toContain("Tramos renumerados");
-    for (const header of ["reftramo anterior", "reftramo nuevo", "idcalle", "Puntos de acceso", "Largo anterior (m)", "Largo nuevo (m)"]) {
-      expect(html).toContain(`>${header}</th>`);
-    }
-    expect(html.match(/aria-label="Ver en mapa"/g)).toHaveLength(2);
+    expect(html).not.toContain("Tramos renumerados");
+    expect(html).not.toContain("reftramo anterior");
+    expect(html).not.toContain('aria-label="Ver en mapa"');
   });
 
-  it("should show the cells of a row: both references, idcalle, points and the lengths with one decimal, sin dato for null", () => {
-    const html = render(ROWS);
-
-    expect(html).toContain("1001634");
-    expect(html).toContain("1035386");
-    expect(html).toContain("72006");
-    expect(html).toContain("100.6");
-    expect(html).toContain("100.5");
-    expect(html).toContain("20.0");
-    expect(html).toContain("sin dato");
-  });
-
-  it("should hide the list, and show no Ver en mapa for it, when there are no renumbered rows", () => {
+  it("should show no list and no Ver en mapa button when there are no renumbered rows", () => {
     const html = render([]);
 
-    expect(html).not.toContain("Tramos renumerados (");
+    expect(html).not.toContain("Tramos renumerados");
     expect(html).not.toContain("Ver en mapa");
   });
 });

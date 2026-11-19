@@ -17,6 +17,7 @@ import {
   acceptKeysOfState,
   pointChoicesOfState,
   resultKeyOf,
+  ejesAnalysisRequestOf,
   ejesGeometryMapBaseOf,
   ejesSplitPointsBaseOf,
   ejesLoadRequestOf,
@@ -85,6 +86,8 @@ export const EjesCallesWizard: React.FC = () => {
     dispatch({ type: "runStarted", dryRun: request.dryRun });
   };
 
+  const analyzeNow = () => startRun(ejesAnalysisRequestOf(state));
+
   const loadNow = () => {
     const request = ejesLoadRequestOf(state, snapshot);
     if (request !== null) startRun(request);
@@ -134,7 +137,7 @@ export const EjesCallesWizard: React.FC = () => {
             runBlockedReason={runBlockedReason(state)}
             onConfirmationChange={(patch) => dispatch({ type: "confirmationChanged", patch })}
             onAnalyze={() => {
-              if (canAnalyzeNow(state)) startRun(toEjesStartRequest(state, ANALYZE));
+              if (canAnalyzeNow(state)) analyzeNow();
             }}
             onLoad={loadNow}
           />
@@ -153,6 +156,10 @@ export const EjesCallesWizard: React.FC = () => {
               onChange: (change) => dispatch({ type: "acceptChanged", analysisKey: resultKeyOf(snapshot), change }),
               onPointChoicesChange: (change) =>
                 dispatch({ type: "pointChoicesChanged", analysisKey: resultKeyOf(snapshot), change }),
+              twinPicks: state.twinPicks,
+              onTwinPickChange: (change) => dispatch({ type: "twinPickChanged", change }),
+              canAnalyzeWithPicks: state.twinPicks.length > 0 && !isRunActive && runBlockedReason(state) === null,
+              onAnalyzeWithPicks: analyzeNow,
             }}
             onLoad={loadNow}
             onNewRun={newRun}

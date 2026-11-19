@@ -4,6 +4,8 @@ export const OUTLINE_ROLE = {
   OLD: "old",
   NEW: "new",
   ZONE: "zone",
+  LOCALITY: "locality",
+  DEPARTMENT: "department",
 } as const;
 
 export type OutlineRole = (typeof OUTLINE_ROLE)[keyof typeof OUTLINE_ROLE];
@@ -20,6 +22,8 @@ export interface OutlineFeature {
 export interface OutlineLabel {
   label: string;
   mapType?: string;
+  /** True when each feature of the outline names itself (one item, several areas): the map draws each feature's own label. */
+  featureLabels?: boolean;
 }
 
 /** The items of one map request. `items[i]` is the request item of `outlines[i]`: the two lists are parallel. */

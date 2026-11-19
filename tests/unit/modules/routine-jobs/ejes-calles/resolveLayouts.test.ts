@@ -17,6 +17,7 @@ const GEOMETRY_COLUMN_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
   [EJES_TABLE_ROLE.STAGING]: "geom",
   [EJES_TABLE_ROLE.ROAD_SECTION]: "geometry",
   [EJES_TABLE_ROLE.LOCALITIES]: "geom",
+  [EJES_TABLE_ROLE.DEPARTMENTS]: "geometry",
   [EJES_TABLE_ROLE.PADRONES]: "geometry",
 };
 
@@ -29,7 +30,12 @@ const columnsOf = (role: EjesTableRole, geometryType: string): Row[] =>
   }));
 
 /** Every table has its required columns; the geometry type of the padrones table is `padronGeometry`, the others are 32721. */
-function sessionOf(padronGeometry: string, missingPadronColumns = false, localitiesGeometry = "geometry(MultiPolygon,32721)"): CatalogQuerySession {
+function sessionOf(
+  padronGeometry: string,
+  missingPadronColumns = false,
+  localitiesGeometry = "geometry(MultiPolygon,32721)",
+  departmentsGeometry = "geometry(MultiPolygon,32721)"
+): CatalogQuerySession {
   const roleOfTable = new Map<string, EjesTableRole>(
     (Object.keys(EJES_DEFAULT_TABLES) as EjesTableRole[]).map((role) => [EJES_DEFAULT_TABLES[role].table, role])
   );
@@ -42,6 +48,7 @@ function sessionOf(padronGeometry: string, missingPadronColumns = false, localit
         return { rows: missingPadronColumns ? [] : columnsOf(role, padronGeometry) };
       }
       if (role === EJES_TABLE_ROLE.LOCALITIES) return { rows: columnsOf(role, localitiesGeometry) };
+      if (role === EJES_TABLE_ROLE.DEPARTMENTS) return { rows: columnsOf(role, departmentsGeometry) };
       return { rows: columnsOf(role, "geometry(MultiLineString,32721)") };
     },
   } as CatalogQuerySession;
@@ -135,6 +142,16 @@ describe("resolveEjesLayouts ejes-localidades geometry (ET-12)", () => {
     await expect(resolveEjesLayouts(sessionOf(OK, false, "geometry(MultiPolygon,4326)"), paramsOf())).rejects.toThrow(
       /ine_localidades_pg.*SRID 4326; debe ser 32721/
     );
+  });
+
+  it("should refuse a departments geometry of SRID 0, naming the table and the column", async () => {
+    await expect(resolveEjesLayouts(sessionOf(OK, false, OK, "geometry(MultiPolygon,0)"), paramsOf())).rejects.toThrow(
+      /"geometry".*carto\.mv_country_province.*SRID 0; debe ser 32721/
+    );
+  });
+
+  it("should accept a departments geometry of SRID 32721", async () => {
+    await expect(resolveEjesLayouts(sessionOf(OK, false, OK, OK), paramsOf())).resolves.toBeDefined();
   });
 
   it("should still accept a generic SRID 0 on the staging and road section geometry", async () => {

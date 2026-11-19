@@ -7,6 +7,7 @@ import { readIdSequence } from "../../shared/tableFacts";
 import { resolveTable, type ResolvedTable, type WritableTargetLayout } from "../../shared/tableResolution";
 import {
   ADDRESS_COLUMN,
+  DEPARTMENTS_COLUMN,
   EJES_ID_LOGICAL_BY_ROLE,
   EJES_REQUIRED_COLUMNS_BY_ROLE,
   EJES_ROLES,
@@ -28,6 +29,7 @@ const GEOMETRY_LOGICAL_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
 
 const EXACT_GEOMETRY_BY_ROLE: Partial<Record<EjesTableRole, string>> = {
   [EJES_TABLE_ROLE.LOCALITIES]: LOCALITIES_COLUMN.GEOM,
+  [EJES_TABLE_ROLE.DEPARTMENTS]: DEPARTMENTS_COLUMN.GEOM,
   [EJES_TABLE_ROLE.PADRONES]: PADRON_COLUMN.GEOMETRY,
   [EJES_TABLE_ROLE.ADDRESS]: ADDRESS_COLUMN.GEOMETRY,
 };

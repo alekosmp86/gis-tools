@@ -96,6 +96,7 @@ export const LOCALITIES_COLUMN = {
 export const DEPARTMENTS_COLUMN = {
   ISO_CODE: "iso_code_dpto",
   NAME: "name_dpto",
+  GEOM: "geometry",
 } as const;
 
 export const PADRON_COLUMN = {
@@ -138,6 +139,8 @@ export type GeoTwinRole = (typeof GEO_TWIN_ROLE)[keyof typeof GEO_TWIN_ROLE];
 export const TWIN_PADRON_DISTANCE_M = 25;
 export const TWIN_NEAR_MIN_LENGTH_M = 1;
 export const RURAL_LOCALITY_SUFFIX = " RURAL";
+/** A section with less than this share of its length inside the locality polygons is rural: its rural-named copy wins (ET-10). */
+export const TWIN_POLYGON_MIN_COVER_RATIO = 0.5;
 
 export const EJES_REQUIRED_COLUMNS_BY_ROLE: Record<EjesTableRole, readonly string[]> = {
   [EJES_TABLE_ROLE.STAGING]: Object.values(EJES_STAGING_COLUMN),
@@ -212,6 +215,8 @@ export const FUENTE_IDS: Readonly<Record<string, number>> = {
 
 export const GEOMETRY_EQUALITY_DECIMALS = 4;
 export const GEOMETRY_TOLERANCE_M = 0.001;
+/** Staging sections shorter than this are discarded like invalid ones, unless their `reftramo` holds access points. */
+export const MIN_SECTION_LENGTH_M = 1;
 export const COVERAGE_RATIO = 0.95;
 export const COVERAGE_TOLERANCE_M = 1;
 export const RENUMBER_HAUSDORFF_M = 0.5;
@@ -228,6 +233,10 @@ export const FAR_POINT_REPORT_M = 25;
 export const SPLIT_POINTS_PAGE_LIMIT = 200;
 /** The old `reftramo`s named in the abort message of an invalid choice: the first ones, in order. */
 export const INVALID_CHOICE_REFS_LIMIT = 5;
+/** The old `reftramo`s named in the abort message of a twin pick that names no copy of the staging: the first ones, in order. */
+export const INVALID_TWIN_PICK_REFS_LIMIT = 5;
+/** The CTE of the copies the user picked for a `reftramo` with several copies (`twin_picks(ref, department, locality)`). */
+export const TWIN_PICKS_CTE = "twin_picks";
 /** The review points one dry run keeps for the review screen; a split whose points would pass this is not stored and is flagged incomplete. */
 export const REVIEW_POINTS_STORE_LIMIT = 20000;
 /** The tables the review points read by primary key or small lookups: the access points, their addresses, the old sections, the new pieces and the circulation ways (street names). */
@@ -321,4 +330,5 @@ export const EJES_SUMMARY_COUNT_KEYS = [
   "splitPointsNoGeometry",
   "geoTwinLosersRemovable",
   "geoTwinLosersOmitted",
+  "twinPicksApplied",
 ] as const;

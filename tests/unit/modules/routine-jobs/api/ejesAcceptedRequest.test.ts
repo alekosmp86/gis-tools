@@ -24,6 +24,7 @@ const COUNT_KEYS = [
   "splitPointsNoGeometry",
   "geoTwinLosersRemovable",
   "geoTwinLosersOmitted",
+  "twinPicksApplied",
 ];
 const FINGERPRINT = { rows: 12, digest: "9f8e7d6c5b4a3210fedcba9876543210" };
 
@@ -61,7 +62,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
   it("should accept an empty accepted object as valid, with no plain removals and no merges", () => {
     const params = parse(realBody({}));
 
-    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] });
   });
 
   it("should deduplicate repeated plain removal refs and merge refs, keeping the first order", () => {
@@ -72,7 +73,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
       })
     );
 
-    expect(params.accepted).toEqual({ splits: [], plainRemovals: ["7", "3"], merges: ["9"], twinRemovals: [] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: ["7", "3"], merges: ["9"], twinRemovals: [], twinPicks: [] });
   });
 
   it("should accept exactly ACCEPTED_KEYS_LIMIT distinct keys in one list (boundary)", () => {
@@ -91,7 +92,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
   it("should canonicalise leading zeros in the refs, so '0012' is sent as 12", () => {
     const params = parse(realBody({ plainRemovals: [{ ref: "0012" }], merges: [{ newRef: "007" }] }));
 
-    expect(params.accepted).toEqual({ splits: [], plainRemovals: ["12"], merges: ["7"], twinRemovals: [] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: ["12"], merges: ["7"], twinRemovals: [], twinPicks: [] });
   });
 
   it("should accept a negative integer ref as its canonical text", () => {
@@ -192,7 +193,7 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
   it("should accept an empty splits list next to shaped merges", () => {
     const params = parse(realBody({ splits: [], merges: [{ newRef: "5" }] }));
 
-    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: ["5"], twinRemovals: [] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: ["5"], twinRemovals: [], twinPicks: [] });
   });
 
   it("should refuse the whole request, not one entry, when one entry of a list is malformed", () => {
@@ -203,5 +204,68 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
     vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "false");
 
     expect(messageOf(realBody({ merges: "broken", removals: [] }))).toBe(REAL_RUN_UNAVAILABLE_MESSAGE);
+  });
+
+  describe("twin picks (ET-28)", () => {
+    const pick = (ref: string, department = "FLORES", locality = "TRINIDAD") => ({ ref, department, locality });
+
+    it("should accept a valid pick with its canonical ref and its department and locality trimmed", () => {
+      const params = parse(realBody({ twinPicks: [{ ref: "0012", department: " FLORES ", locality: "TRINIDAD " }] }));
+
+      expect(params.accepted?.twinPicks).toEqual([{ ref: "12", department: "FLORES", locality: "TRINIDAD" }]);
+    });
+
+    it("should read an absent twinPicks as an empty list", () => {
+      expect(parse(realBody({ plainRemovals: [] })).accepted?.twinPicks).toEqual([]);
+    });
+
+    it("should refuse two picks of one reftramo with a 400 that names it, never merging them", () => {
+      const body = realBody({ twinPicks: [pick("0012", "FLORES", "TRINIDAD"), pick("12", "FLORES", "SAN JOSE")] });
+
+      expect(() => parse(body)).toThrow(RequestInvalidError);
+      expect(messageOf(body)).toBe("El tramo 12 tiene más de una copia elegida.");
+    });
+
+    it.each([
+      ["an empty department", { department: "" }, "accepted.twinPicks.department"],
+      ["a whitespace-only locality", { locality: "   " }, "accepted.twinPicks.locality"],
+      ["a missing department", { department: undefined }, "accepted.twinPicks.department"],
+      ["a non-integer ref", { ref: "abc" }, "accepted.twinPicks.ref"],
+      ["an empty ref", { ref: "" }, "accepted.twinPicks.ref"],
+    ])("should refuse a pick with %s with a 400 that names the field", (_label, patch, field) => {
+      const body = realBody({ twinPicks: [{ ...pick("7"), ...patch }] });
+
+      expect(() => parse(body)).toThrow(RequestInvalidError);
+      expect(messageOf(body)).toContain(field);
+    });
+
+    it("should refuse a pick with an unknown key with a 400 that names the key", () => {
+      const body = realBody({ twinPicks: [{ ...pick("7"), extra: 1 }] });
+
+      expect(() => parse(body)).toThrow(RequestInvalidError);
+      expect(messageOf(body)).toContain("extra");
+    });
+
+    it("should refuse a pick that is not an object with a 400", () => {
+      expect(() => parse(realBody({ twinPicks: ["7"] }))).toThrow(RequestInvalidError);
+    });
+
+    it("should refuse a twinPicks value that is not a list with a 400", () => {
+      expect(() => parse(realBody({ twinPicks: "7" }))).toThrow(RequestInvalidError);
+    });
+
+    it("should accept exactly ACCEPTED_KEYS_LIMIT picks (boundary)", () => {
+      const params = parse(realBody({ twinPicks: distinctRefs(ACCEPTED_KEYS_LIMIT).map((entry) => pick(entry.ref)) }));
+
+      expect(params.accepted?.twinPicks).toHaveLength(ACCEPTED_KEYS_LIMIT);
+    });
+
+    it("should refuse ACCEPTED_KEYS_LIMIT plus one picks with a 400 that names the field, never truncating", () => {
+      const body = realBody({ twinPicks: distinctRefs(ACCEPTED_KEYS_LIMIT + 1).map((entry) => pick(entry.ref)) });
+
+      expect(() => parse(body)).toThrow(RequestInvalidError);
+      expect(messageOf(body)).toContain("accepted.twinPicks");
+      expect(messageOf(body)).toContain(String(ACCEPTED_KEYS_LIMIT));
+    });
   });
 });

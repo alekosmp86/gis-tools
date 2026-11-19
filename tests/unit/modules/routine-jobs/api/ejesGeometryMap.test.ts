@@ -3,6 +3,7 @@ import { readEjesCallesGeometryMap } from "@/modules/routine-jobs/api/ejesGeomet
 import type { RunDeps, RunSession } from "@/modules/routine-jobs/jobs/cargar-padrones/types";
 
 const PASSWORD = "Mapa!secreto-2026";
+const HOSTILE = "1'); DROP TABLE carto.road_section; --";
 const NOW = 1_700_000_000_000;
 const MAP_URL = "http://localhost/api/modules/routine-jobs/ejes-calles/geometry-map";
 const BEGIN_READ_ONLY = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY";
@@ -15,6 +16,8 @@ const WRITE_KEYWORD = /\b(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|COMMIT
 const STAGING_TABLE = "ide_ejesviacirculacion";
 const ROAD_SECTION_TABLE = "road_section";
 const PADRONES_TABLE = "padron";
+const LOCALITIES_TABLE = "ine_localidades_pg";
+const DEPARTMENTS_TABLE = "mv_country_province";
 const METRE_SPATIAL_REF = {
   srtext: 'PROJCS["WGS 84 / UTM zone 21S",UNIT["metre",1]]',
   proj4text: "+proj=utm +zone=21 +south +datum=WGS84 +units=m +no_defs",
@@ -35,6 +38,8 @@ interface FakeOptions {
   oldRows?: Row[];
   newRows?: Row[];
   zoneRows?: Row[];
+  localityRows?: Row[];
+  departmentRows?: Row[];
   failOn?: (sql: string) => Error | undefined;
 }
 
@@ -70,10 +75,16 @@ const PADRONES_COLUMNS: Row[] = [
   column("id_address_master", "integer"),
 ];
 
+const LOCALITIES_COLUMNS: Row[] = [column("cloc_iso"), column("nomloc"), column("geom", "geometry(MultiPolygon,32721)")];
+
+const DEPARTMENTS_COLUMNS: Row[] = [column("iso_code_dpto"), column("name_dpto"), column("geometry", "geometry(MultiPolygon,32721)")];
+
 const columnsOf = (table: string): Row[] => {
   if (table === STAGING_TABLE) return STAGING_COLUMNS;
   if (table === ROAD_SECTION_TABLE) return ROAD_SECTION_COLUMNS;
   if (table === PADRONES_TABLE) return PADRONES_COLUMNS;
+  if (table === LOCALITIES_TABLE) return LOCALITIES_COLUMNS;
+  if (table === DEPARTMENTS_TABLE) return DEPARTMENTS_COLUMNS;
   return [];
 };
 
@@ -81,7 +92,7 @@ const columnsOf = (table: string): Row[] => {
  * A scripted session: the catalog answers for the two tables, the old-section query answers `oldRows`, the new-section
  * query (the one that labels the SRID) answers `newRows`, and every other statement answers no row. Every statement is recorded.
  */
-function fakeSessionOf({ oldRows = [], newRows = [], zoneRows = [], failOn }: FakeOptions = {}): FakeSession {
+function fakeSessionOf({ oldRows = [], newRows = [], zoneRows = [], localityRows = [], departmentRows = [], failOn }: FakeOptions = {}): FakeSession {
   const statements: string[] = [];
   let closed = false;
   const session: RunSession = {
@@ -91,6 +102,8 @@ function fakeSessionOf({ oldRows = [], newRows = [], zoneRows = [], failOn }: Fa
       if (failure !== undefined) throw failure;
       if (sql.includes("format_type(a.atttypid")) return { rows: columnsOf(String(values?.[1])) };
       if (sql.includes("FROM spatial_ref_sys")) return { rows: [METRE_SPATIAL_REF] };
+      if (sql.includes(LOCALITIES_TABLE) && sql.includes("ST_AsGeoJSON")) return { rows: localityRows };
+      if (sql.includes(DEPARTMENTS_TABLE) && sql.includes("ST_AsGeoJSON")) return { rows: departmentRows };
       if (sql.includes("ST_AsGeoJSON")) {
         if (sql.includes("ST_Union")) return { rows: zoneRows };
         return { rows: sql.includes("ST_SetSRID") ? newRows : oldRows };
@@ -128,6 +141,8 @@ const validBody = (items: unknown[] = [{ oldRef: 1001634 }]): Record<string, unk
     "ejes-origen": { schema: "bdj_carto", table: STAGING_TABLE },
     "ejes-tramos": { schema: "carto", table: ROAD_SECTION_TABLE },
     "ejes-padrones": { schema: "carto", table: PADRONES_TABLE },
+    "ejes-localidades": { schema: "bdj_carto", table: LOCALITIES_TABLE },
+    "ejes-departamentos": { schema: "carto", table: DEPARTMENTS_TABLE },
   },
   items,
 });
@@ -251,6 +266,95 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
 
       expect(withOld.status).toBe(400);
       expect(empty.status).toBe(400);
+      expect(fake.statements).toEqual([]);
+    });
+  });
+
+  describe("locality and department items", () => {
+    const LOCALITY_OUTLINE = { type: "Polygon", coordinates: [[[-56.1, -34.9], [-56.0, -34.9], [-56.0, -34.8], [-56.1, -34.9]]] };
+    const DEPARTMENT_OUTLINE = { type: "Polygon", coordinates: [[[-57.0, -34.9], [-56.0, -34.9], [-56.0, -33.8], [-57.0, -34.9]]] };
+
+    it("should answer one feature per locality the section crosses, labelled with its metres and share", async () => {
+      const fake = fakeSessionOf({
+        localityRows: [
+          { name: "TRINIDAD", overlap: 120, length: 200, geojson: LOCALITY_OUTLINE },
+          { name: "FLORES RURAL", overlap: 80, length: 200, geojson: ZONE_OUTLINE },
+        ],
+      });
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([{ localitiesOf: "1035386" }])), depsOf(fake));
+
+      expect(response.status).toBe(200);
+      expect(await bodyOf(response)).toEqual({
+        success: true,
+        features: [
+          { itemIndex: 0, role: "locality", label: "TRINIDAD · 120 m (60%)", geometry: LOCALITY_OUTLINE },
+          { itemIndex: 0, role: "locality", label: "FLORES RURAL · 80 m (40%)", geometry: ZONE_OUTLINE },
+        ],
+      });
+    });
+
+    it("should answer 200 with no feature and no error when the section crosses no locality", async () => {
+      const fake = fakeSessionOf({ localityRows: [] });
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([{ localitiesOf: "1035386" }])), depsOf(fake));
+
+      expect(response.status).toBe(200);
+      expect(await bodyOf(response)).toEqual({ success: true, features: [] });
+    });
+
+    it("should answer one feature per department the section crosses, labelled with its name", async () => {
+      const fake = fakeSessionOf({ departmentRows: [{ name: "FLORES", geojson: DEPARTMENT_OUTLINE }] });
+
+      const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([{ departmentOf: "1035386" }])), depsOf(fake));
+
+      expect(response.status).toBe(200);
+      expect(await bodyOf(response)).toEqual({
+        success: true,
+        features: [{ itemIndex: 0, role: "department", label: "FLORES", geometry: DEPARTMENT_OUTLINE }],
+      });
+    });
+
+    it("should pass the reference of a locality item as the only parameter, never inlined in the statement", async () => {
+      const calls: Array<{ sql: string; values: unknown[] }> = [];
+      const fake = fakeSessionOf({ localityRows: [{ name: "TRINIDAD", overlap: 1, length: 2, geojson: LOCALITY_OUTLINE }] });
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) => {
+        if (sql.includes(LOCALITIES_TABLE) && sql.includes("ST_AsGeoJSON")) calls.push({ sql, values: params ?? [] });
+        return inner(sql, params);
+      };
+
+      await readEjesCallesGeometryMap(mapRequestOf(validBody([{ localitiesOf: "1035386" }])), depsOf(fake));
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0].values).toEqual(["1035386"]);
+      expect(calls[0].sql).toContain("ORDER BY \"overlap\" DESC");
+      expect(calls[0].sql).not.toContain("1035386");
+    });
+
+    it("should read the localities and departments tables only when an item asks for them", async () => {
+      const asked: unknown[] = [];
+      const fake = fakeSessionOf({ oldRows: [{ idcalle: "1", geojson: OLD_OUTLINE }] });
+      const inner = fake.session.query.bind(fake.session);
+      fake.session.query = async (sql: string, params?: unknown[]) => {
+        if (sql.includes("format_type(a.atttypid")) asked.push(params?.[1]);
+        return inner(sql, params);
+      };
+
+      await readEjesCallesGeometryMap(mapRequestOf(validBody([{ oldRef: 1 }])), depsOf(fake));
+
+      expect(asked).not.toContain(LOCALITIES_TABLE);
+      expect(asked).not.toContain(DEPARTMENTS_TABLE);
+    });
+
+    it("should answer 400 and open no session for a localitiesOf or departmentOf reference that is not an integer", async () => {
+      const fake = fakeSessionOf();
+
+      const locality = await readEjesCallesGeometryMap(mapRequestOf(validBody([{ localitiesOf: "12.5" }])), depsOf(fake));
+      const department = await readEjesCallesGeometryMap(mapRequestOf(validBody([{ departmentOf: HOSTILE }])), depsOf(fake));
+
+      expect(locality.status).toBe(400);
+      expect(department.status).toBe(400);
       expect(fake.statements).toEqual([]);
     });
   });

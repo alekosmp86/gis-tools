@@ -20,6 +20,10 @@ const scopeOf = (base: EjesGeometryMapBase): string =>
     base.tables["ejes-tramos"].table,
     base.tables["ejes-padrones"].schema,
     base.tables["ejes-padrones"].table,
+    base.tables["ejes-localidades"].schema,
+    base.tables["ejes-localidades"].table,
+    base.tables["ejes-departamentos"].schema,
+    base.tables["ejes-departamentos"].table,
   ].join("|");
 
 /** The outlines of one split or merge: the shared hook with the ejes geometry map request. */

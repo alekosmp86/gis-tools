@@ -15,6 +15,8 @@ const mapBody = (overrides: Body = {}): Body => ({
     "ejes-origen": { schema: "bdj_carto", table: "ide_ejesviacirculacion" },
     "ejes-tramos": { schema: "carto", table: "road_section" },
     "ejes-padrones": { schema: "carto", table: "padron" },
+    "ejes-localidades": { schema: "bdj_carto", table: "ine_localidades_pg" },
+    "ejes-departamentos": { schema: "carto", table: "mv_country_province" },
   },
   items: [{ oldRef: 1001634 }],
   ...overrides,
@@ -39,7 +41,7 @@ function expectRejected(body: Body, mention: RegExp): void {
 }
 
 describe("parseEjesGeometryMapRequest", () => {
-  it("should read the connection, the staging, road section and padrones tables and the items", () => {
+  it("should read the connection, the staging, road section, padrones, localities and departments tables and the items", () => {
     const params = parseEjesGeometryMapRequest(mapBody({ items: [{ oldRef: 1001634 }, { newRef: "1035386" }] }));
 
     expect(params.config.db_name).toBe("gis");
@@ -47,6 +49,8 @@ describe("parseEjesGeometryMapRequest", () => {
     expect(params.staging).toEqual({ schema: "bdj_carto", table: "ide_ejesviacirculacion" });
     expect(params.roadSection).toEqual({ schema: "carto", table: "road_section" });
     expect(params.padrones).toEqual({ schema: "carto", table: "padron" });
+    expect(params.localities).toEqual({ schema: "bdj_carto", table: "ine_localidades_pg" });
+    expect(params.departments).toEqual({ schema: "carto", table: "mv_country_province" });
     expect(params.items).toEqual([{ oldRef: 1001634 }, { newRef: "1035386" }]);
   });
 
@@ -66,7 +70,7 @@ describe("parseEjesGeometryMapRequest", () => {
   });
 
   it("should refuse an item without oldRef or newRef", () => {
-    expectRejected(mapBody({ items: [{}] }), /oldRef, newRef o zoneOf/);
+    expectRejected(mapBody({ items: [{}] }), /oldRef, newRef, zoneOf, localitiesOf o departmentOf/);
   });
 
   it("should refuse an item that is not an object", () => {
@@ -86,11 +90,60 @@ describe("parseEjesGeometryMapRequest", () => {
     expectRejected(mapBody({ items: [{ newRef: HOSTILE }] }), /entero/);
   });
 
-  it("should refuse a request without one of the three tables", () => {
+  it("should refuse a request without one of the five tables", () => {
     expect(() => parseEjesGeometryMapRequest(mapBody({ tables: {} }))).toThrow(RequestInvalidError);
     expect(() => parseEjesGeometryMapRequest(mapBody({ tables: { "ejes-origen": { schema: "a", table: "b" } } }))).toThrow(
       RequestInvalidError
     );
+  });
+
+  it.each(["ejes-localidades", "ejes-departamentos"])("should refuse a request without the %s table", (role) => {
+    const tables = { ...(mapBody().tables as Body) };
+    delete tables[role];
+
+    expect(() => parseEjesGeometryMapRequest(mapBody({ tables }))).toThrow(RequestInvalidError);
+  });
+
+  describe("localitiesOf and departmentOf items", () => {
+    it("should accept a localitiesOf item with the reference as text or number", () => {
+      expect(parseEjesGeometryMapRequest(mapBody({ items: [{ localitiesOf: "1035386" }, { localitiesOf: 7 }] })).items).toEqual([
+        { localitiesOf: "1035386" },
+        { localitiesOf: "7" },
+      ]);
+    });
+
+    it("should accept a departmentOf item with the reference as text or number", () => {
+      expect(parseEjesGeometryMapRequest(mapBody({ items: [{ departmentOf: "1035386" }, { departmentOf: 7 }] })).items).toEqual([
+        { departmentOf: "1035386" },
+        { departmentOf: "7" },
+      ]);
+    });
+
+    it("should accept localitiesOf and departmentOf items mixed with old, new and zone items", () => {
+      const items = [{ oldRef: 1 }, { newRef: "2" }, { zoneOf: "2", type: "URBANO" }, { localitiesOf: "3" }, { departmentOf: "4" }];
+
+      expect(parseEjesGeometryMapRequest(mapBody({ items })).items).toEqual(items);
+    });
+
+    it.each([["abc"], ["12.5"], ["-3"], [""], [true], [HOSTILE]])("should refuse a localitiesOf reference that is not an integer: %j", (reference) => {
+      expectRejected(mapBody({ items: [{ localitiesOf: reference }] }), /entero/);
+    });
+
+    it.each([["abc"], ["12.5"], ["-3"], [""], [true], [HOSTILE]])("should refuse a departmentOf reference that is not an integer: %j", (reference) => {
+      expectRejected(mapBody({ items: [{ departmentOf: reference }] }), /entero/);
+    });
+
+    it("should refuse a locality on a localitiesOf or departmentOf item, which only a new-section item takes", () => {
+      expectRejected(mapBody({ items: [{ localitiesOf: "1", locality: "A" }] }), /locality/);
+      expectRejected(mapBody({ items: [{ departmentOf: "1", locality: "A" }] }), /locality/);
+    });
+
+    it("should keep the limit of 30 items with localitiesOf items", () => {
+      const item = { localitiesOf: "1" };
+
+      expect(parseEjesGeometryMapRequest(mapBody({ items: itemsOf(EJES_MAP_ITEMS_LIMIT, item) })).items).toHaveLength(30);
+      expectRejected(mapBody({ items: itemsOf(EJES_MAP_ITEMS_LIMIT + 1, item) }), /1 a 30/);
+    });
   });
 
   describe("zone items (ET-7)", () => {
@@ -128,7 +181,7 @@ describe("parseEjesGeometryMapRequest", () => {
     });
 
     it("should still refuse an item with none of oldRef, newRef or zoneOf", () => {
-      expectRejected(mapBody({ items: [{ type: "URBANO" }] }), /oldRef, newRef o zoneOf/);
+      expectRejected(mapBody({ items: [{ type: "URBANO" }] }), /oldRef, newRef, zoneOf, localitiesOf o departmentOf/);
     });
 
     it("should keep the limit of 30 items with zone items", () => {

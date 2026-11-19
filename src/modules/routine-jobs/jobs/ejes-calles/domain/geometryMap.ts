@@ -1,11 +1,19 @@
 import { physicalColumn, qualifiedName, type TableLayout } from "../../actualizar-padron/domain/layouts";
 import { GEOMETRY_MAP_ROLE } from "../../actualizar-padron/constants";
-import { EJES_SRID, PADRON_COLUMN, ROAD_SECTION_COLUMN, EJES_STAGING_COLUMN, TWIN_PADRON_DISTANCE_M } from "../constants";
+import {
+  DEPARTMENTS_COLUMN,
+  EJES_SRID,
+  LOCALITIES_COLUMN,
+  PADRON_COLUMN,
+  ROAD_SECTION_COLUMN,
+  EJES_STAGING_COLUMN,
+  TWIN_PADRON_DISTANCE_M,
+} from "../constants";
 import { canonicalIntegerSql } from "./stagingSql";
 
 export const EJES_MAP_ITEMS_LIMIT = 30;
 export const EJES_MAP_STATEMENT_TIMEOUT = "20s";
-export const EJES_MAP_ROLE = { ...GEOMETRY_MAP_ROLE, ZONE: "zone" } as const;
+export const EJES_MAP_ROLE = { ...GEOMETRY_MAP_ROLE, ZONE: "zone", LOCALITY: "locality", DEPARTMENT: "department" } as const;
 const WGS84_SRID = 4326;
 const SIMPLIFY_TOLERANCE_M = 2;
 const STAGING_ALIAS = "s";
@@ -42,22 +50,54 @@ export function newSectionOutlineSql(staging: TableLayout, byLocality = false): 
   ].join(" ");
 }
 
+/** The geometry of a new section in the ejes SRID, as one row. `$1` is the staging `reftramo`; its staging rows share the geometry. */
+function sectionGeometrySql(staging: TableLayout): string {
+  const column = (logical: string): string => `${STAGING_ALIAS}.${physicalColumn(staging, logical)}`;
+  return [
+    `SELECT ST_SetSRID(${column(EJES_STAGING_COLUMN.GEOM)}, ${EJES_SRID}) AS geom FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
+    `WHERE ${canonicalIntegerSql(`trim(${column(EJES_STAGING_COLUMN.REFTRAMO)}::text)`)} = $1 AND ${column(EJES_STAGING_COLUMN.GEOM)} IS NOT NULL`,
+    `AND NOT ST_IsEmpty(${column(EJES_STAGING_COLUMN.GEOM)}) LIMIT 1`,
+  ].join(" ");
+}
+
 /**
  * The padrones of one type within `TWIN_PADRON_DISTANCE_M` of a new section, dissolved into one outline. `$1` is the staging
  * `reftramo`, `$2` the padron type. No padron near, or no such section: no row.
  */
 export function zoneOutlineSql(staging: TableLayout, padrones: TableLayout): string {
-  const column = (logical: string): string => `${STAGING_ALIAS}.${physicalColumn(staging, logical)}`;
   const geometry = `p.${physicalColumn(padrones, PADRON_COLUMN.GEOMETRY)}`;
-  const section = [
-    `SELECT ST_SetSRID(${column(EJES_STAGING_COLUMN.GEOM)}, ${EJES_SRID}) FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
-    `WHERE ${canonicalIntegerSql(`trim(${column(EJES_STAGING_COLUMN.REFTRAMO)}::text)`)} = $1 AND ${column(EJES_STAGING_COLUMN.GEOM)} IS NOT NULL`,
-    `AND NOT ST_IsEmpty(${column(EJES_STAGING_COLUMN.GEOM)}) LIMIT 1`,
-  ].join(" ");
   return [
     `SELECT ${outlineGeoJsonSql(`ST_Union(ST_MakeValid(${geometry}))`)} AS "geojson"`,
     `FROM ${qualifiedName(padrones)} AS p`,
     `WHERE upper(btrim(p.${physicalColumn(padrones, PADRON_COLUMN.TYPE)}::text)) = $2::text`,
-    `AND ST_DWithin(${geometry}, (${section}), ${TWIN_PADRON_DISTANCE_M}) HAVING count(*) > 0`,
+    `AND ST_DWithin(${geometry}, (${sectionGeometrySql(staging)}), ${TWIN_PADRON_DISTANCE_M}) HAVING count(*) > 0`,
+  ].join(" ");
+}
+
+/**
+ * The locality polygons a new section crosses (`ST_Intersects`, as the twin rule): one row each, with the name, the length of the section
+ * inside the polygon, the section length and the outline. `$1` is the staging `reftramo`; the longest overlap comes first.
+ */
+export function localityOverlapSql(staging: TableLayout, localities: TableLayout): string {
+  const polygon = `l.${physicalColumn(localities, LOCALITIES_COLUMN.GEOM)}`;
+  const name = `l.${physicalColumn(localities, LOCALITIES_COLUMN.NAME)}`;
+  return [
+    `SELECT btrim(${name}::text) AS "name", ST_Length(ST_Intersection(k.geom, ST_MakeValid(${polygon}))) AS "overlap",`,
+    `ST_Length(k.geom) AS "length", ${outlineGeoJsonSql(`ST_MakeValid(${polygon})`)} AS "geojson"`,
+    `FROM ${qualifiedName(localities)} AS l CROSS JOIN (${sectionGeometrySql(staging)}) AS k`,
+    `WHERE ${name} IS NOT NULL AND ST_Intersects(${polygon}, k.geom)`,
+    `ORDER BY "overlap" DESC, "name"`,
+  ].join(" ");
+}
+
+/** The department polygons a new section crosses (`ST_Intersects`, as the twin rule): one row each, with the name and the outline. `$1` is the staging `reftramo`. */
+export function departmentOutlineSql(staging: TableLayout, departments: TableLayout): string {
+  const polygon = `d.${physicalColumn(departments, DEPARTMENTS_COLUMN.GEOM)}`;
+  const name = `d.${physicalColumn(departments, DEPARTMENTS_COLUMN.NAME)}`;
+  return [
+    `SELECT btrim(${name}::text) AS "name", ${outlineGeoJsonSql(`ST_MakeValid(${polygon})`)} AS "geojson"`,
+    `FROM ${qualifiedName(departments)} AS d CROSS JOIN (${sectionGeometrySql(staging)}) AS k`,
+    `WHERE ${name} IS NOT NULL AND ST_Intersects(${polygon}, k.geom)`,
+    `ORDER BY "name"`,
   ].join(" ");
 }

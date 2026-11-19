@@ -135,10 +135,23 @@ export interface UnidadStartRequest {
 
 export type UnidadJobStatusView = JobStatusBase<UnitResult>;
 
+/** One copy the user keeps for a `reftramo` that keeps several copies. */
+export interface EjesTwinPickRequest {
+  ref: string;
+  department: string;
+  locality: string;
+}
+
+/** The picks the Analizar re-run sends: the analysis then sees the picks the load will. */
+export interface EjesAnalysisAcceptedRequest {
+  twinPicks: EjesTwinPickRequest[];
+}
+
 export interface EjesStartRequest {
   connection: ClientConnection;
   tables: Record<EjesTableRole, EjesTableRef>;
   dryRun: boolean;
+  accepted?: EjesAnalysisAcceptedRequest;
 }
 
 /** One review point's destination the user chose: the point and one piece of its split. */
@@ -148,7 +161,7 @@ export interface EjesPointChoiceRequest {
 }
 
 /** The accepted review rows: splits by their old `reftramo` with the user's choices for their review points only, plain removals by `reftramo`, merges by their new `reftramo` (the server derives the old ones). */
-export interface EjesAcceptedRequest {
+export interface EjesAcceptedRequest extends EjesAnalysisAcceptedRequest {
   splits: { oldRef: string; choices: EjesPointChoiceRequest[] }[];
   plainRemovals: { ref: string }[];
   merges: { newRef: string }[];
@@ -167,7 +180,7 @@ export type EjesJobStatusView = JobStatusBase<EjesResult>;
 /** The connection and the tables the ejes map reads: the wizard's, with no option and no plan. */
 export interface EjesGeometryMapBase {
   connection: ClientConnection;
-  tables: Pick<Record<EjesTableRole, EjesTableRef>, "ejes-origen" | "ejes-tramos" | "ejes-padrones">;
+  tables: Pick<Record<EjesTableRole, EjesTableRef>, "ejes-origen" | "ejes-tramos" | "ejes-padrones" | "ejes-localidades" | "ejes-departamentos">;
 }
 
 export interface EjesGeometryMapRequest extends EjesGeometryMapBase {

@@ -72,6 +72,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     plainRemovals: [PLAIN_ROW],
     newStreets: [],
     twins: [],
+    twinUndecided: [],
     geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
@@ -103,6 +104,10 @@ const acceptView = (plainRemovals: string[] = [], merges: string[] = []): EjesAc
   pointChoices: [],
   onChange: () => undefined,
   onPointChoicesChange: () => undefined,
+  twinPicks: [],
+  onTwinPickChange: () => undefined,
+  canAnalyzeWithPicks: false,
+  onAnalyzeWithPicks: () => undefined,
 });
 
 const ROW_COLUMNS: TableColumn<{ ref: string }>[] = [{ header: "reftramo", cell: (row) => row.ref }];
@@ -197,7 +202,16 @@ describe("EjesAcceptableRows (EJ-24)", () => {
 });
 
 function renderAcceptFor(merges: string[]): EjesAcceptView {
-  return { keys: { splits: [], plainRemovals: [], merges, twinRemovals: [] }, pointChoices: [], onChange: () => undefined, onPointChoicesChange: () => undefined };
+  return {
+    keys: { splits: [], plainRemovals: [], merges, twinRemovals: [] },
+    pointChoices: [],
+    onChange: () => undefined,
+    onPointChoicesChange: () => undefined,
+    twinPicks: [],
+    onTwinPickChange: () => undefined,
+    canAnalyzeWithPicks: false,
+    onAnalyzeWithPicks: () => undefined,
+  };
 }
 
 describe("accept controls on the Resultado step (EJ-24)", () => {

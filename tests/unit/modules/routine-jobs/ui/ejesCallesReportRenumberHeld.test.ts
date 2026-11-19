@@ -6,6 +6,7 @@ import type { EjesRenumberSkippedRow, EjesResult } from "@/modules/routine-jobs/
 import { EjesCallesReport } from "@/modules/routine-jobs/ui/ejes-calles/EjesCallesReport";
 import { EJES_LIST, stripOf, type EjesListKey } from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesListMeta";
 import { EjesSummaryStrip } from "@/modules/routine-jobs/ui/ejes-calles/EjesSummaryStrip";
+import { heldRenumberKeyOf, heldRenumberViewsOf } from "@/modules/routine-jobs/ui/ejes-calles/ejesRenumberHeldView";
 import { RENUMBER_SKIP_TEXT } from "@/modules/routine-jobs/ui/ejes-calles/ejesLoadTexts";
 
 const HELD_TITLE = "Renumerados retenidos (ambos tramos quedan como están)";
@@ -39,6 +40,8 @@ const COUNTS = {
   twinsCrossDepartment: 0,
   twinsDrop: 0,
   twinsKeep: 0,
+  twinsUndecided: 0,
+  twinPicksApplied: 0,
   renumbered: 0,
   renumberedWithPoints: 0,
   renumberedPoints: 0,
@@ -74,7 +77,7 @@ const resultOf = (renumberSkipped: EjesRenumberSkippedRow[] = HELD_ROWS): EjesRe
     plainRemovals: [],
     newStreets: [],
     attrChanges: [],
-    twins: [],
+    twinUndecided: [],
     geoTwins: [],
     renumbered: [],
     renumberSkipped,
@@ -95,15 +98,15 @@ describe("EjesCallesReport held renumbers list (EJ-25, EJL-12)", () => {
     expect(html).toContain(ANCHOR);
   });
 
-  it("should show the columns reftramo anterior, reftramo nuevo, idcalle, Puntos de acceso and Motivo", () => {
+  it("should show the columns reftramo anterior, Candidatos, idcalle, Puntos de acceso and Motivo", () => {
     const html = render();
 
-    for (const header of ["reftramo anterior", "reftramo nuevo", "idcalle", "Puntos de acceso", "Motivo"]) {
+    for (const header of ["reftramo anterior", "Candidatos", "idcalle", "Puntos de acceso", "Motivo"]) {
       expect(html).toContain(`>${header}</th>`);
     }
   });
 
-  it("should show both refs, the street, the points and the reason of each held row", () => {
+  it("should show the old ref, the candidate, the points and the reason of each held row, sin dato for a null street", () => {
     const html = render();
 
     for (const row of HELD_ROWS) {
@@ -129,11 +132,21 @@ describe("EjesCallesReport held renumbers list (EJ-25, EJL-12)", () => {
     expect(html).toContain(`>${RENUMBER_SKIP_TEXT.not_single_copy}</td>`);
   });
 
-  it("should offer no Ver en mapa button on any held row", () => {
+  it("should offer one Ver en mapa button per held row", () => {
     const html = render();
 
-    expect(html).not.toContain(MAP_BUTTON);
-    expect(html).not.toContain("Ver en mapa");
+    expect(html.match(/aria-label="Ver en mapa"/g)).toHaveLength(HELD_ROWS.length);
+  });
+
+  it("should list the candidates of an old reftramo with several candidates on one row", () => {
+    const html = render([
+      { oldRef: "3011", newRef: "3012", idcalle: "6", points: 1, reason: RENUMBER_SKIP_REASON.AMBIGUOUS_OLD_REF },
+      { oldRef: "3011", newRef: "3013", idcalle: "6", points: 1, reason: RENUMBER_SKIP_REASON.AMBIGUOUS_OLD_REF },
+    ]);
+
+    expect(html).toContain(">3012, 3013</td>");
+    expect(html.match(/>3011<\/td>/g)).toHaveLength(1);
+    expect(html.match(/aria-label="Ver en mapa"/g)).toHaveLength(1);
   });
 
   it("should omit the held list when no renumber was held back", () => {
@@ -141,6 +154,53 @@ describe("EjesCallesReport held renumbers list (EJ-25, EJL-12)", () => {
 
     expect(html).not.toContain(ANCHOR);
     expect(html).not.toContain(HELD_TITLE);
+    expect(html).not.toContain(MAP_BUTTON);
+  });
+});
+
+describe("heldRenumberViewsOf (EJ-25)", () => {
+  const ambiguous = (oldRef: string, newRef: string): EjesRenumberSkippedRow => ({
+    oldRef,
+    newRef,
+    idcalle: "7",
+    points: 3,
+    reason: RENUMBER_SKIP_REASON.AMBIGUOUS_OLD_REF,
+  });
+
+  it("should return no view for no held rows", () => {
+    expect(heldRenumberViewsOf([])).toEqual([]);
+  });
+
+  it("should keep one view per pair for every reason other than an ambiguous old reftramo", () => {
+    const views = heldRenumberViewsOf(HELD_ROWS.filter((row) => row.reason !== RENUMBER_SKIP_REASON.AMBIGUOUS_OLD_REF));
+
+    expect(views.map((view) => [view.oldRef, view.newRefs])).toEqual([
+      ["3001", ["3002"]],
+      ["3021", ["3022"]],
+      ["3031", ["3032"]],
+    ]);
+  });
+
+  it("should group the ambiguous rows of one old reftramo into one view, with every candidate in order of appearance", () => {
+    const views = heldRenumberViewsOf([ambiguous("3011", "3013"), ambiguous("3012", "3014"), ambiguous("3011", "3012")]);
+
+    expect(views).toEqual([
+      { oldRef: "3011", newRefs: ["3013", "3012"], idcalle: "7", points: 3, reason: RENUMBER_SKIP_REASON.AMBIGUOUS_OLD_REF },
+      { oldRef: "3012", newRefs: ["3014"], idcalle: "7", points: 3, reason: RENUMBER_SKIP_REASON.AMBIGUOUS_OLD_REF },
+    ]);
+  });
+
+  it("should not merge a repeated-old-reftramo row into a view of the same old reftramo", () => {
+    const repeated: EjesRenumberSkippedRow = { ...ambiguous("3011", "3013"), reason: RENUMBER_SKIP_REASON.REPEATED_OLD_REF };
+    const views = heldRenumberViewsOf([repeated, ambiguous("3011", "3012")]);
+
+    expect(views.map((view) => view.newRefs)).toEqual([["3013"], ["3012"]]);
+  });
+
+  it("should give every view its own key, so two views of one old reftramo never collide", () => {
+    const keys = heldRenumberViewsOf([ambiguous("3011", "3013"), ambiguous("3011", "3012"), ambiguous("3020", "3021")]).map(heldRenumberKeyOf);
+
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
 

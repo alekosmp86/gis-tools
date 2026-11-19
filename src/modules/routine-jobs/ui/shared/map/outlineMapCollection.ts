@@ -8,8 +8,10 @@ export const OUTLINE_LABEL_PROPERTY = "label";
 /** More outlines than this and the permanent labels would cover the map: none is drawn, and a click names the outline. */
 export const OUTLINE_LABEL_LIMIT = 6;
 
-const labelOf = (outline: OutlineLabel | undefined, labelled: boolean): string =>
-  outline === undefined || !labelled ? "" : outline.label;
+const labelOf = (feature: OutlineFeature, outline: OutlineLabel | undefined, labelled: boolean): string => {
+  if (outline === undefined || !labelled) return "";
+  return outline.featureLabels === true ? feature.label : outline.label;
+};
 
 const roleTypeOf = (feature: OutlineFeature): string => (feature.role === OUTLINE_ROLE.OLD ? MAP_ROLE_TYPE.OLD : MAP_ROLE_TYPE.NEW);
 
@@ -25,7 +27,7 @@ export function toMapCollection(features: readonly OutlineFeature[], outlines: r
         geometry: feature.geometry,
         properties: {
           _discrepancyType: outline?.mapType ?? roleTypeOf(feature),
-          [OUTLINE_LABEL_PROPERTY]: labelOf(outline, labelled),
+          [OUTLINE_LABEL_PROPERTY]: labelOf(feature, outline, labelled),
           _labelSlot: labelSlot,
         },
       };

@@ -29,3 +29,10 @@ export interface MapFeatureStyle {
   strokePattern: MapStrokePattern;
   overrideDiscrepancyColors: boolean;
 }
+
+/** The stroke and fill of one outline type that differs from the wide solid default: a dashed thin outline, a translucent area. */
+export interface MapTypeLineStyle {
+  weight?: number;
+  dashArray?: string;
+  fillOpacity?: number;
+}

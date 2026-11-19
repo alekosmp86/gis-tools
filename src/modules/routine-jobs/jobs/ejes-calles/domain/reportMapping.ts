@@ -15,7 +15,9 @@ import type {
   EjesRenumberSkippedRow,
   EjesSplitRow,
   EjesGeoTwinRow,
+  EjesTwinCopy,
   EjesTwinRow,
+  EjesTwinUndecidedRow,
   EjesStagingReport,
   EjesUnknownValue,
 } from "../types";
@@ -135,6 +137,17 @@ const twinOf = (row: Row): EjesTwinRow => ({
   insideLocalities: textsOf(row.inside_localities),
 });
 
+const twinCopyOf = (row: Row): EjesTwinCopy => ({ department: textOf(row.department), locality: textOf(row.locality) });
+
+const twinUndecidedOf = (row: Row): EjesTwinUndecidedRow => ({
+  ref: String(row.ref),
+  idcalle: textOf(row.idcalle),
+  name: textOf(row.name),
+  copies: listOf(row.copies).map(twinCopyOf),
+  points: numberOf(row.points),
+  waiting: numberOf(row.waiting),
+});
+
 const geoTwinOf = (row: Row): EjesGeoTwinRow => ({
   ref: String(row.ref),
   idcalle: textOf(row.idcalle),
@@ -145,6 +158,11 @@ const geoTwinOf = (row: Row): EjesGeoTwinRow => ({
   role: String(row.role) as GeoTwinRole,
   inCarto: row.inCarto === true,
   points: numberOf(row.points),
+  keeperRef: String(row.keeperRef),
+  keeperPoints: numberOf(row.keeperPoints),
+  keeperLength: nullableNumber(row.keeperLength),
+  keeperFuente: textOf(row.keeperFuente),
+  keeperInCarto: row.keeperInCarto === true,
 });
 
 export function toEjesStagingReport(row: Row): EjesStagingReport {
@@ -194,6 +212,8 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       twinsCrossDepartment: numberOf(row.twins_cross_department),
       twinsDrop: numberOf(row.twins_drop),
       twinsKeep: numberOf(row.twins_keep),
+      twinsUndecided: numberOf(row.twins_undecided),
+      twinPicksApplied: numberOf(row.twin_picks_applied),
       renumbered: numberOf(row.renumbered),
       renumberedWithPoints: numberOf(row.renumbered_with_points),
       renumberedPoints: numberOf(row.renumbered_points),
@@ -216,6 +236,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
     newStreets: listOf(row[ANALYSIS_LIST_ALIAS.STREETS]).map(streetOf),
     attrChanges: listOf(row[ANALYSIS_LIST_ALIAS.ATTRS]).map(attrOf),
     twins: listOf(row[ANALYSIS_LIST_ALIAS.TWINS]).map(twinOf),
+    twinUndecided: listOf(row[ANALYSIS_LIST_ALIAS.TWIN_UNDECIDED]).map(twinUndecidedOf),
     geoTwins: listOf(row[ANALYSIS_LIST_ALIAS.GEO_TWINS]).map(geoTwinOf),
     renumbered: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBERED]).map(renumberedOf),
     renumberSkipped: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED]).map(renumberSkippedOf),

@@ -10,7 +10,7 @@ describe("twinSql module (ET-13)", () => {
   it("should build the group and class CTEs in the order the analysis needs them", () => {
     const names = [...twinGroupCtes(layouts), ...twinCtes(layouts)].map((cte) => /^"?(\w+)"? AS/.exec(cte)?.[1]);
 
-    expect(names).toEqual(["twin_raw", "twin_groups", "twin_measured", "twin_classed", "twin_located", "twins"]);
+    expect(names).toEqual(["twin_raw", "twin_dept", "twin_groups", "twin_measured", "twin_classed", "twin_located", "twins"]);
   });
 
   it("should put the whole twin SQL into the analysis, once", () => {
@@ -25,7 +25,10 @@ describe("twinSql module (ET-13)", () => {
   it("should read only valid, non-empty geometries into twin_raw (ET-18)", () => {
     const raw = twinGroupCtes(layouts)[0];
 
-    expect(raw).toContain('s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001), true)');
+    expect(raw).toContain(
+      `WHERE s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE`
+    );
+    expect(raw).toContain(`= CASE WHEN NULLIF(btrim(s."reftramo"::text), '') ~ '^[0-9]+$' THEN`);
   });
 
   it("should build the list column under the given alias, limited and ordered", () => {
@@ -51,7 +54,7 @@ describe("twinSql module (ET-13)", () => {
     ]);
   });
 
-  it("should build the drop rule over any alias, reading only class, localities and inside_localities", () => {
+  it("should build the drop rule over any alias, reading only class, localities, inside_localities, inside_cover and department", () => {
     const sql = twinDropCaseSql("x");
 
     expect(sql).toMatch(/^\(SELECT CASE /);
@@ -60,6 +63,8 @@ describe("twinSql module (ET-13)", () => {
     expect(sql).toContain("x.class");
     expect(sql).toContain("x.localities");
     expect(sql).toContain("x.inside_localities");
+    expect(sql).toContain("x.inside_cover < 0.5");
+    expect(sql).toContain("x.department");
     expect(sql).not.toContain("c.");
     expect(sql).not.toMatch(/\b(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TRUNCATE)\b/);
   });

@@ -39,7 +39,7 @@ vi.mock("node:os", async (importOriginal) => {
 
 const HOOK_TIMEOUT_MS = 60_000;
 const timer = () => createStepTimer({ now: () => 0, total: 20 });
-const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [] };
+const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] };
 const ANALYSIS_CHANGED = /vuelva a analizar/;
 
 describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9, EJS-10, EJS-11, EJL-12, EJL-13, EJL-14, EJ-19, EJ-21)", () => {
@@ -122,7 +122,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       await seedPlainRemoval();
       const mastersBefore = await mastersCount();
 
-      const outcome = await persist({ splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [] });
+      const outcome = await persist({ splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [], twinPicks: [] });
 
       expect(await sectionsByRef(5001)).toEqual([]);
       expect(await rowsOf(database, "SELECT addresses_master_id FROM carto.addresses_master WHERE addresses_master_id = 901")).toEqual([]);
@@ -134,7 +134,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
     it("should restore the removed section and its master with their original ids when the revert SQL is applied", async () => {
       const id = await seedPlainRemoval();
       const before = await snapshotOf(database);
-      const outcome = await persist({ splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [] });
+      const outcome = await persist({ splits: [], plainRemovals: ["5001"], merges: [], twinRemovals: [], twinPicks: [] });
       expect(await sectionsByRef(5001)).toEqual([]);
 
       await database.exec(await readBackup(outcome));
@@ -148,7 +148,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       await seedPlainRemoval(5002, 2);
       const log: SqlLog = [];
 
-      const outcome = await persist({ splits: [], plainRemovals: ["5002"], merges: [], twinRemovals: [] }, log);
+      const outcome = await persist({ splits: [], plainRemovals: ["5002"], merges: [], twinRemovals: [], twinPicks: [] }, log);
 
       expect(await sectionsByRef(5002)).toHaveLength(1);
       expect(await pointsOn("5002")).toBe(2);
@@ -173,7 +173,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       const before = await snapshotOf(database);
       const log: SqlLog = [];
 
-      await expect(persist({ splits: [], plainRemovals: ["9999"], merges: [], twinRemovals: [] }, log)).rejects.toThrow(ANALYSIS_CHANGED);
+      await expect(persist({ splits: [], plainRemovals: ["9999"], merges: [], twinRemovals: [], twinPicks: [] }, log)).rejects.toThrow(ANALYSIS_CHANGED);
 
       expect(await snapshotOf(database)).toEqual(before);
       expect(await backupFiles()).toEqual([]);
@@ -185,7 +185,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
     it("should move every point of the old sections to the new reftramo, delete the old sections and masters, and insert the new one", async () => {
       await seedMerge();
 
-      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] });
+      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] });
 
       expect(await sectionsByRef(6101)).toEqual([]);
       expect(await sectionsByRef(6102)).toEqual([]);
@@ -200,7 +200,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       await seedMerge();
       const log: SqlLog = [];
 
-      await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] }, log);
+      await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] }, log);
 
       const move = log.findIndex((sql) => /UPDATE "carto"\."access_point"/.test(sql));
       const remove = log.findIndex((sql) => /DELETE FROM "carto"\."road_section"/.test(sql));
@@ -211,7 +211,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
     it("should restore the old sections with their ids, their masters and their points when the revert SQL is applied", async () => {
       await seedMerge();
       const before = await snapshotOf(database);
-      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] });
+      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] });
       expect(await snapshotOf(database)).not.toEqual(before);
 
       await database.exec(await readBackup(outcome));
@@ -221,7 +221,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
 
     it("should change nothing on a second run when the merge is no longer in the analysis, with no accepted key", async () => {
       await seedMerge();
-      await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] });
+      await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] });
       const afterFirst = await snapshotOf(database);
 
       const second = await persist(NO_ACCEPTED);
@@ -232,10 +232,10 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
 
     it("should keep the merge's new section and points untouched when the same accepted key is sent again", async () => {
       await seedMerge();
-      await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] });
+      await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] });
       const afterFirst = await snapshotOf(database);
 
-      await expect(persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] })).rejects.toThrow(ANALYSIS_CHANGED);
+      await expect(persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] })).rejects.toThrow(ANALYSIS_CHANGED);
 
       expect(await snapshotOf(database)).toEqual(afterFirst);
     });
@@ -249,7 +249,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       await insertStaging(database, [{ ref: "6202", calle: "8", nombre: "CALLE OCHO", geom: "0:100" }]);
       const before = await snapshotOf(database);
 
-      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6202"], twinRemovals: [] });
+      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6202"], twinRemovals: [], twinPicks: [] });
 
       expect(await snapshotOf(database)).toEqual(before);
       expect(outcome.load.skipped.map((row) => [row.kind, row.newRefs, row.reason])).toEqual([
@@ -268,7 +268,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       ]);
       const before = await snapshotOf(database);
 
-      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6302"], twinRemovals: [] });
+      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6302"], twinRemovals: [], twinPicks: [] });
 
       expect(await snapshotOf(database)).toEqual(before);
       expect(outcome.load.skipped.map((row) => [row.kind, row.newRefs, row.reason])).toEqual([
@@ -284,7 +284,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       await insertStaging(database, [{ ref: "6402", calle: "11", nombre: "CALLE ONCE", geom: "0:100" }]);
       const before = await snapshotOf(database);
 
-      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6402"], twinRemovals: [] });
+      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6402"], twinRemovals: [], twinPicks: [] });
 
       expect(await snapshotOf(database)).toEqual(before);
       expect(outcome.load.skipped.map((row) => row.reason)).toEqual([EJES_SKIP_REASON.NO_REFTRAMO]);
@@ -301,7 +301,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       ]);
       const before = await snapshotOf(database);
 
-      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6702"], twinRemovals: [] });
+      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6702"], twinRemovals: [], twinPicks: [] });
 
       expect(await snapshotOf(database)).toEqual(before);
       expect(await sectionsByRef(6702)).toEqual([]);
@@ -333,7 +333,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       const context = await loadContextOn(database);
 
       await expect(
-        runEjesPersistTransaction(racing, { ...paramsWith(summary), accepted: { splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] } }, context, timer())
+        runEjesPersistTransaction(racing, { ...paramsWith(summary), accepted: { splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] } }, context, timer())
       ).rejects.toThrow();
 
       expect(await snapshotOf(database)).toEqual(before);
@@ -343,7 +343,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
     it("should never print the password in the error of a refused accepted merge", async () => {
       await seedMerge();
 
-      const failure = await persist({ splits: [], plainRemovals: [], merges: ["9999"], twinRemovals: [] }).catch((error: unknown) => error as Error);
+      const failure = await persist({ splits: [], plainRemovals: [], merges: ["9999"], twinRemovals: [], twinPicks: [] }).catch((error: unknown) => error as Error);
 
       expect((failure as Error).message).not.toContain(PASSWORD);
     });
@@ -446,7 +446,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
         await insertPoints(database, String(10000 + index), 1);
       }
 
-      const accepted = { splits: [], plainRemovals: Array.from({ length: withPoints }, (_, offset) => String(10000 + plain + offset)), merges: [], twinRemovals: [] };
+      const accepted = { splits: [], plainRemovals: Array.from({ length: withPoints }, (_, offset) => String(10000 + plain + offset)), merges: [], twinRemovals: [], twinPicks: [] };
       return { total: plain + withPoints, hasPoints: withPoints, accepted };
     };
 
@@ -621,7 +621,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       const id = await seedPlainRemovalByIdPoint();
       const log: SqlLog = [];
 
-      const outcome = await persist({ splits: [], plainRemovals: ["5003"], merges: [], twinRemovals: [] }, log);
+      const outcome = await persist({ splits: [], plainRemovals: ["5003"], merges: [], twinRemovals: [], twinPicks: [] }, log);
 
       expect(await sectionsByRef(5003)).toHaveLength(1);
       expect(await pointsByIdOn(id)).toHaveLength(1);
@@ -647,7 +647,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       await insertPoints(database, String(id), 1);
       const before = await snapshotOf(database);
 
-      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] });
+      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] });
 
       expect(await snapshotOf(database)).toEqual(before);
       expect(outcome.load.skipped).toEqual([
@@ -688,7 +688,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       const unchanged = Number((await sectionsByRef(6150))[0].id);
       await insertPoints(database, String(unchanged), 1);
 
-      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] });
+      const outcome = await persist({ splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] });
 
       expect(await pointsOn("6103")).toBe(3);
       expect(outcome.load.counts).toMatchObject({ merged: 1, deleted: 2, inserted: 1, pointsMoved: 3 });
@@ -714,7 +714,7 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
       const context = await loadContextOn(database);
 
       await expect(
-        runEjesPersistTransaction(racing, { ...paramsWith(summary), accepted: { splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [] } }, context, timer())
+        runEjesPersistTransaction(racing, { ...paramsWith(summary), accepted: { splits: [], plainRemovals: [], merges: ["6103"], twinRemovals: [], twinPicks: [] } }, context, timer())
       ).rejects.toThrow();
 
       expect(await snapshotOf(database)).toEqual(before);

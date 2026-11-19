@@ -29,6 +29,8 @@ const COUNTS = {
   renumberedWithPoints: 0,
   renumberedPoints: 0,
   renumberSkipped: 0,
+  twinsUndecided: 0,
+  twinPicksApplied: 0,
 };
 
 const TWINS: EjesTwinRow[] = [
@@ -87,7 +89,7 @@ const resultOf = (twins: EjesTwinRow[], invalid: EjesInvalidGeometryRow[] = []):
     plainRemovals: [],
     newStreets: [],
     attrChanges: [],
-    twins,
+    twinUndecided: [],
     geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
@@ -106,10 +108,10 @@ describe("EjesCallesReport invalid geometries (ET-18)", () => {
     { ref: "1002", idcalle: null, localidad: null, departamento: null },
   ];
 
-  it("should show a collapsible list titled Tramos con geometría inválida o colapsada (se omiten) with the four columns and the rows", () => {
+  it("should show a collapsible list titled Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso (se omiten) with the four columns and the rows", () => {
     const html = render([], INVALID);
 
-    expect(html).toContain("Tramos con geometría inválida o colapsada (se omiten)");
+    expect(html).toContain("Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso (se omiten)");
     for (const header of ["reftramo", "idcalle", "Localidad", "Departamento"]) {
       expect(html).toContain(`>${header}</th>`);
     }
@@ -126,8 +128,8 @@ describe("EjesCallesReport invalid geometries (ET-18)", () => {
   it("should show the two KPIs of the file problems", () => {
     const html = render([], INVALID);
 
-    expect(html).toContain("Filas con geometría inválida o colapsada (se omiten)");
-    expect(html).toContain("Tramos con geometría inválida o colapsada");
+    expect(html).toContain("Filas con geometría inválida o colapsada, o menor de 1 m sin puntos de acceso (se omiten)");
+    expect(html).toContain("Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso");
   });
 
   it("should hide the list and the KPIs when there are none", () => {
@@ -157,49 +159,13 @@ describe("EjesCallesReport twins (ET-6)", () => {
     }
   });
 
-  it("should show the collapsible list with the spec columns and a Ver en mapa button per row", () => {
+  it("should show the twin count in the KPI group and no list of the twin rows", () => {
     const html = render(TWINS);
 
-    expect(html).toContain("<details");
-    for (const header of ["reftramo", "idcalle", "Departamento", "Localidades", "Caso", "Largo (m)", "Cerca de urbanos (m)", "Cerca de rurales (m)", "Qué pasa"]) {
-      expect(html).toContain(`>${header}</th>`);
-    }
-    expect(html.match(/aria-label="Ver en mapa"/g)).toHaveLength(2);
-  });
-
-  it("should show the cells of a row: localities joined, the case text and the meters with one decimal, sin dato for null", () => {
-    const html = render(TWINS);
-
-    expect(html).toContain("1035386");
-    expect(html).toContain("FLORES RURAL, TRINIDAD");
-    expect(html).toContain("Lejos de padrones: sin regla");
-    expect(html).toContain("250.3");
-    expect(html).toContain("Cerca de ambos: se mantiene una");
-    expect(html).toContain("12.3");
-    expect(html).toContain("sin dato");
-  });
-
-  it("should show the decision of each row in the Qué pasa column", () => {
-    const urban: EjesTwinRow = {
-      ...TWINS[0],
-      ref: "1035400",
-      class: TWIN_CLASS.URBAN,
-      localities: ["TRINIDAD", "FLORES RURAL"],
-      dropLocalities: ["FLORES RURAL"],
-    };
-    const rural: EjesTwinRow = {
-      ...TWINS[0],
-      ref: "1035401",
-      class: TWIN_CLASS.RURAL,
-      localities: ["A RURAL", "B RURAL", "TRINIDAD"],
-      dropLocalities: ["TRINIDAD", "B RURAL"],
-    };
-    const html = render([urban, rural, ...TWINS]);
-
-    expect(html).toContain("Se quitaría: FLORES RURAL");
-    expect(html).toContain("Se quitaría: TRINIDAD, B RURAL");
-    expect(html).toContain("Sin regla: se mantienen todas");
-    expect(html).toContain("Se mantienen todas");
+    expect(html).not.toContain('aria-label="Ver en mapa"');
+    expect(html).not.toContain("FLORES RURAL, TRINIDAD");
+    expect(html).not.toContain("Qué pasa");
+    expect(html).not.toContain("Cerca de urbanos (m)");
   });
 
   it("should show no list, only the KPI group, when there are no twin rows", () => {

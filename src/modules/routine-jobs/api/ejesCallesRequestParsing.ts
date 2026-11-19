@@ -1,8 +1,9 @@
 import { EJES_ROLES, EJES_SUMMARY_COUNT_KEYS, type EjesTableRole } from "../jobs/ejes-calles/constants";
+import { NO_ACCEPTED } from "../jobs/ejes-calles/domain/loadMapping";
 import { assertEjesRealRunEnabled } from "../jobs/ejes-calles/domain/realRunSwitch";
 import { assertDistinctEjesTables } from "../jobs/ejes-calles/domain/tableRoles";
 import type { EjesFingerprint, EjesParams, EjesSummary, EjesTableRef, EjesTables } from "../jobs/ejes-calles/types";
-import { readEjesAccepted } from "./ejesAcceptedParsing";
+import { readAnalysisTwinPicks, readEjesAccepted } from "./ejesAcceptedParsing";
 import {
   assertTablesDistinct,
   invalid,
@@ -61,11 +62,15 @@ function realRunParams(body: JsonRecord, config: EjesParams["config"], tables: E
   return { config, tables, dryRun: false, accepted, summary: readSummary(body) };
 }
 
+function analysisParams(body: JsonRecord, config: EjesParams["config"], tables: EjesTables): EjesParams {
+  return { config, tables, dryRun: true, accepted: { ...NO_ACCEPTED, twinPicks: readAnalysisTwinPicks(body) } };
+}
+
 export function parseEjesCallesStartRequest(body: JsonRecord): EjesParams {
   const config = toDbConfig(parseConnection(body));
   const tables = readTables(body);
   const dryRun = readBoolean(body, "dryRun");
-  const params: EjesParams = dryRun ? { config, tables, dryRun } : realRunParams(body, config, tables);
+  const params: EjesParams = dryRun ? analysisParams(body, config, tables) : realRunParams(body, config, tables);
   assertTablesDistinct(params, assertDistinctEjesTables);
   return params;
 }

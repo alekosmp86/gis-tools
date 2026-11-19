@@ -5,6 +5,7 @@ import type { EjesGeometryMapBase } from "../shared/clientTypes";
 import { EjesMapDetails } from "./EjesMapDetails";
 import { EjesMapView } from "./EjesMapView";
 import type { EjesMapOutline, EjesMapSubject } from "./ejesMapSubject";
+import type { EjesAcceptView } from "./ejesAccept";
 import { OutlineMapBody } from "../shared/map/OutlineMapBody";
 import { OutlineMapModal } from "../shared/map/OutlineMapModal";
 
@@ -21,6 +22,8 @@ export interface EjesMapModalProps {
   review: EjesMapReview | null;
   /** The connection of the wizard for the map; null when the wizard holds no password. */
   base: EjesGeometryMapBase | null;
+  /** The wizard's accept state, for the copies of an undecided row; absent on a read-only report. */
+  accept?: EjesAcceptView;
   onNavigate: (index: number) => void;
   onClose: () => void;
 }
@@ -32,7 +35,7 @@ const outlineAt = (outlines: readonly EjesMapOutline[], outlineIndex: number | n
  * The map of one split or merge in a dialog, with the way to the previous and next rows of the same table. Mounted only while a
  * review is open, so the dialog's behaviour starts and ends with it; moving keeps the dialog and its map.
  */
-export function EjesMapModal({ review, base, onNavigate, onClose }: EjesMapModalProps) {
+export function EjesMapModal({ review, base, accept, onNavigate, onClose }: EjesMapModalProps) {
   if (review === null) return null;
   const subject = review.subjects[review.index];
   if (subject === undefined) return null;
@@ -53,6 +56,7 @@ export function EjesMapModal({ review, base, onNavigate, onClose }: EjesMapModal
         renderDetails={(selectedOutlineIndex, onSelectOutline) => (
           <EjesMapDetails
             subject={subject}
+            accept={accept}
             outline={outlineAt(subject.outlines, selectedOutlineIndex)}
             selectedOutlineIndex={selectedOutlineIndex}
             onSelectOutline={onSelectOutline}

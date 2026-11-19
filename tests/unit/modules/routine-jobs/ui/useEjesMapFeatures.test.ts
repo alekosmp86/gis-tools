@@ -32,6 +32,8 @@ const baseOf = (padrones: { schema: string; table: string }): EjesGeometryMapBas
     "ejes-origen": { schema: "bdj_carto", table: "ide_ejesviacirculacion" },
     "ejes-tramos": { schema: "carto", table: "road_section" },
     "ejes-padrones": padrones,
+    "ejes-localidades": { schema: "a", table: "l" },
+    "ejes-departamentos": { schema: "a", table: "dp" },
   },
 });
 

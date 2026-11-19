@@ -15,7 +15,16 @@ const NULL_ROW = { ref: "", idcalle: "5", points: 0 } as unknown as EjesRemovalR
 const KEYED_ROW = { ref: "5001", idcalle: "5", points: 0 } as unknown as EjesRemovalRow;
 
 function acceptViewRecording(changes: EjesAcceptChange[]): EjesAcceptView {
-  return { keys: { splits: [], plainRemovals: [], merges: [], twinRemovals: [] }, pointChoices: [], onChange: (change) => changes.push(change), onPointChoicesChange: () => undefined };
+  return {
+    keys: { splits: [], plainRemovals: [], merges: [], twinRemovals: [] },
+    pointChoices: [],
+    onChange: (change) => changes.push(change),
+    onPointChoicesChange: () => undefined,
+    twinPicks: [],
+    onTwinPickChange: () => undefined,
+    canAnalyzeWithPicks: false,
+    onAnalyzeWithPicks: () => undefined,
+  };
 }
 
 const listOf = (rows: EjesRemovalRow[], accept: EjesAcceptView): React.ReactElement =>

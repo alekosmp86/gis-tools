@@ -1,5 +1,5 @@
 import { DiscrepancyType } from "@/core/types/comparison";
-import { MapStrokePattern, type MapFeatureStyle, type TileLayerConfig } from "@/core/types/map";
+import { MapStrokePattern, type MapFeatureStyle, type MapTypeLineStyle, type TileLayerConfig } from "@/core/types/map";
 
 export const DEFAULT_MAP_FEATURE_STYLE: MapFeatureStyle = {
   color: "#06b6d4",
@@ -65,6 +65,8 @@ export const MAP_SECTION_TYPE = {
   NEW: "TRAMO_NUEVO",
   URBAN_ZONE: "PADRON_ZONA_URBANA",
   RURAL_ZONE: "PADRON_ZONA_RURAL",
+  LOCALITY: "LOCALIDAD_POLIGONO",
+  DEPARTMENT: "DEPARTAMENTO_POLIGONO",
   COPY_KEPT: "TRAMO_SE_QUEDA",
   COPY_DROPPED: "TRAMO_SE_QUITA",
   ACCESS_POINT: "PUNTO_ACCESO",
@@ -99,6 +101,12 @@ export const MAP_SPLIT_PIECE_TYPES = [
 /** Types drawn as points (a circle marker, not a line): the legend rings them in white like the marker. */
 export const MAP_POINT_TYPES: readonly string[] = [MAP_SECTION_TYPE.ACCESS_POINT];
 
+/** Outline types with their own stroke or fill: a department is a thin dashed outline without fill, a locality a translucent area. */
+export const MAP_TYPE_LINE_STYLE: Record<string, MapTypeLineStyle | undefined> = {
+  [MAP_SECTION_TYPE.LOCALITY]: { fillOpacity: 0.2 },
+  [MAP_SECTION_TYPE.DEPARTMENT]: { weight: 1.5, dashArray: "6, 6", fillOpacity: 0 },
+};
+
 const CANDIDATE_COLORS = ["#f59e0b", "#a855f7", "#facc15", "#f97316", "#e879f9"] as const;
 
 const SPLIT_PIECE_COLORS = ["#f97316", "#a855f7", "#facc15", "#ef4444", "#ec4899", "#22d3ee", "#84cc16", "#16a34a"] as const;
@@ -115,6 +123,8 @@ const DISCREPANCY_COLORS: Record<string, string> = {
   [MAP_SECTION_TYPE.NEW]: "#f97316",
   [MAP_SECTION_TYPE.URBAN_ZONE]: "#c026d3",
   [MAP_SECTION_TYPE.RURAL_ZONE]: "#92400e",
+  [MAP_SECTION_TYPE.LOCALITY]: "#14b8a6",
+  [MAP_SECTION_TYPE.DEPARTMENT]: "#94a3b8",
   ...recordOf(MAP_CANDIDATE_TYPES, (index) => CANDIDATE_COLORS[index]),
   ...recordOf(MAP_SPLIT_PIECE_TYPES, (index) => SPLIT_PIECE_COLORS[index]),
   [MAP_SECTION_TYPE.COPY_KEPT]: "#2563eb",
@@ -145,6 +155,8 @@ const DISCREPANCY_LABELS: Record<string, string> = {
   [MAP_SECTION_TYPE.NEW]: "Tramo nuevo",
   [MAP_SECTION_TYPE.URBAN_ZONE]: "Padrones urbanos cercanos",
   [MAP_SECTION_TYPE.RURAL_ZONE]: "Padrones rurales cercanos",
+  [MAP_SECTION_TYPE.LOCALITY]: "Localidades que cruza el tramo",
+  [MAP_SECTION_TYPE.DEPARTMENT]: "Departamento",
   ...recordOf(MAP_CANDIDATE_TYPES, (index) => `Candidato ${index + 1}`),
   ...recordOf(MAP_SPLIT_PIECE_TYPES, (index) => `Tramo candidato ${index + 1}`),
   [MAP_SECTION_TYPE.ACCESS_POINT]: "Punto de acceso",

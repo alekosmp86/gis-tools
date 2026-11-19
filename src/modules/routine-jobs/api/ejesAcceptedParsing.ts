@@ -1,5 +1,5 @@
 import { ACCEPTED_CHOICES_LIMIT, ACCEPTED_KEYS_LIMIT } from "../jobs/ejes-calles/constants";
-import type { EjesAccepted, EjesAcceptedSplit, EjesPointChoice } from "../jobs/ejes-calles/types";
+import type { EjesAccepted, EjesAcceptedSplit, EjesPointChoice, EjesTwinPick } from "../jobs/ejes-calles/types";
 import { invalid, isRecord, readRecord, type JsonRecord } from "./requestParsing";
 
 const ACCEPTED_REQUIRED_MESSAGE = "El campo accepted es obligatorio y debe ser un objeto.";
@@ -10,12 +10,15 @@ const ACCEPTED_KEY = {
   MERGES: "merges",
   PLAIN_REMOVALS: "plainRemovals",
   TWIN_REMOVALS: "twinRemovals",
+  TWIN_PICKS: "twinPicks",
 } as const;
 
 const SPLIT_KEY = { OLD_REF: "oldRef", CHOICES: "choices" } as const;
 const CHOICE_KEY = { POINT_ID: "pointId", NEW_REF: "newRef" } as const;
+const TWIN_PICK_KEY = { REF: "ref", DEPARTMENT: "department", LOCALITY: "locality" } as const;
 
 const ACCEPTED_KEYS: readonly string[] = Object.values(ACCEPTED_KEY);
+const TWIN_PICK_FIELDS: readonly string[] = Object.values(TWIN_PICK_KEY);
 
 function readAcceptedRecord(body: JsonRecord): JsonRecord {
   if (body.accepted === undefined || body.accepted === null) throw invalid(ACCEPTED_REQUIRED_MESSAGE);
@@ -105,6 +108,42 @@ function readSplits(accepted: JsonRecord): EjesAcceptedSplit[] {
   return splits;
 }
 
+/** A text field of a pick: required, trimmed, never empty. */
+function readPickText(path: string, value: unknown): string {
+  if (typeof value !== "string" || value.trim() === "") throw invalid(`El campo ${path} debe ser un texto no vacío.`);
+  return value.trim();
+}
+
+function readTwinPick(entry: unknown): EjesTwinPick {
+  if (!isRecord(entry)) throw invalid(`Cada elemento de accepted.${ACCEPTED_KEY.TWIN_PICKS} debe ser un objeto.`);
+  assertOnlyKeys(entry, TWIN_PICK_FIELDS, `accepted.${ACCEPTED_KEY.TWIN_PICKS}`);
+  return {
+    ref: canonicalRef(`accepted.${ACCEPTED_KEY.TWIN_PICKS}.${TWIN_PICK_KEY.REF}`, entry[TWIN_PICK_KEY.REF]),
+    department: readPickText(`accepted.${ACCEPTED_KEY.TWIN_PICKS}.${TWIN_PICK_KEY.DEPARTMENT}`, entry[TWIN_PICK_KEY.DEPARTMENT]),
+    locality: readPickText(`accepted.${ACCEPTED_KEY.TWIN_PICKS}.${TWIN_PICK_KEY.LOCALITY}`, entry[TWIN_PICK_KEY.LOCALITY]),
+  };
+}
+
+/** One pick per `reftramo`: a second copy named for the same `reftramo` is refused, never merged. */
+function assertOneCopyPerRef(picks: readonly EjesTwinPick[]): void {
+  const refs = new Set<string>();
+  for (const pick of picks) {
+    if (refs.has(pick.ref)) throw invalid(`El tramo ${pick.ref} tiene más de una copia elegida.`);
+    refs.add(pick.ref);
+  }
+}
+
+/** Absent means none. The list is refused above the key limit; a repeated `reftramo` is refused. */
+function readTwinPicks(accepted: JsonRecord): EjesTwinPick[] {
+  const list = accepted[ACCEPTED_KEY.TWIN_PICKS];
+  if (list === undefined) return [];
+  if (!Array.isArray(list)) throw invalid(`El campo accepted.${ACCEPTED_KEY.TWIN_PICKS} debe ser una lista.`);
+  if (list.length > ACCEPTED_KEYS_LIMIT) throw invalid(`El campo accepted.${ACCEPTED_KEY.TWIN_PICKS} admite como máximo ${ACCEPTED_KEYS_LIMIT} elementos.`);
+  const picks = list.map(readTwinPick);
+  assertOneCopyPerRef(picks);
+  return picks;
+}
+
 /** The accepted review rows of a real run (EJS-16, EJ-13): splits with their choices, plain removals and merges; every other key is refused. */
 export function readEjesAccepted(body: JsonRecord): EjesAccepted {
   const accepted = readAcceptedRecord(body);
@@ -114,5 +153,14 @@ export function readEjesAccepted(body: JsonRecord): EjesAccepted {
     plainRemovals: readRefs(accepted, ACCEPTED_KEY.PLAIN_REMOVALS, "ref"),
     merges: readRefs(accepted, ACCEPTED_KEY.MERGES, "newRef"),
     twinRemovals: readRefs(accepted, ACCEPTED_KEY.TWIN_REMOVALS, "ref"),
+    twinPicks: readTwinPicks(accepted),
   };
+}
+
+/** The Analizar re-run's picks: `accepted` is optional there and may carry `twinPicks` only, so the analysis sees the picks the load will. */
+export function readAnalysisTwinPicks(body: JsonRecord): EjesTwinPick[] {
+  if (body.accepted === undefined || body.accepted === null) return [];
+  const accepted = readRecord(body, "accepted");
+  assertOnlyKeys(accepted, [ACCEPTED_KEY.TWIN_PICKS], "accepted");
+  return readTwinPicks(accepted);
 }

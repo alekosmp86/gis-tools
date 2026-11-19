@@ -4,7 +4,11 @@ import React from "react";
 import { OUTLINE_ROLE } from "../shared/map/outlineTypes";
 import { coverageTextOf, metersTextOf, twinDecisionTextOf, twinRowCaseTextOf } from "./ejesCallesReportView";
 import { truncationNoteOf, type EjesMapOutline, type EjesMapSubject, type EjesTwinFacts } from "./ejesMapSubject";
+import { geoTwinKeptTextOf, geoTwinRemovedTextOf, GEO_TWIN_TEXT } from "./compact/ejesGeoTwinColumns";
 import { textOrNoData } from "../shared/reportFormat";
+import type { EjesAcceptView } from "./ejesAccept";
+import { EjesUndecidedCopies } from "./EjesUndecidedCopies";
+import type { EjesGeoTwinRow } from "../../jobs/ejes-calles/types";
 import styles from "./EjesMapDetails.module.css";
 
 const HINT = "Haga clic en un tramo del mapa o de la lista para ver su referencia.";
@@ -13,6 +17,8 @@ const ROLE_TEXT = {
   [OUTLINE_ROLE.OLD]: "Tramo anterior (en la tabla de tramos)",
   [OUTLINE_ROLE.NEW]: "Tramo nuevo (en el origen)",
   [OUTLINE_ROLE.ZONE]: "Padrones cerca del tramo",
+  [OUTLINE_ROLE.LOCALITY]: "Localidad que cruza el tramo",
+  [OUTLINE_ROLE.DEPARTMENT]: "Departamento del tramo",
 } as const;
 
 type DetailRow = [string, string];
@@ -53,9 +59,24 @@ const renumberedFactsOf = (subject: EjesMapSubject, hausdorff: number | null): D
   ["Distancia máxima entre trazados (m)", metersTextOf(hausdorff)],
 ];
 
+const geoTwinFactsOf = (row: EjesGeoTwinRow): DetailRow[] => [
+  ["idcalle", textOrNoData(row.idcalle)],
+  ["Localidad", textOrNoData(row.localidad)],
+  ["Departamento", textOrNoData(row.departamento)],
+  [GEO_TWIN_TEXT.KEPT_HEADER, geoTwinKeptTextOf(row)],
+  [GEO_TWIN_TEXT.REMOVED_HEADER, geoTwinRemovedTextOf(row)],
+];
+
+const idAndPointsFactsOf = (subject: EjesMapSubject): DetailRow[] => [
+  ["idcalle", textOrNoData(subject.facts.idcalle)],
+  ["Puntos de acceso", String(subject.facts.points)],
+];
+
 function rowFactsOf(subject: EjesMapSubject): DetailRow[] {
   if (subject.twin !== undefined) return twinFactsOf(subject.facts.idcalle, subject.twin);
+  if (subject.geoTwin !== undefined) return geoTwinFactsOf(subject.geoTwin);
   if (subject.renumbered !== undefined) return renumberedFactsOf(subject, subject.renumbered.hausdorff);
+  if (subject.held === true || subject.undecided !== undefined) return idAndPointsFactsOf(subject);
   return splitMergeFactsOf(subject);
 }
 
@@ -86,6 +107,8 @@ export interface EjesMapDetailsProps {
   selectedOutlineIndex?: number | null;
   /** Selecting from the list reaches outlines that lie under others on the map. */
   onSelectOutline?: (outlineIndex: number | null) => void;
+  /** The wizard's accept state: the copies of an undecided row are picked from the map through it. */
+  accept?: EjesAcceptView;
 }
 
 const LIST_TITLE = "Tramos";
@@ -121,13 +144,21 @@ function OutlineList({ outlines, selectedOutlineIndex, onSelectOutline }: Outlin
 }
 
 /** The facts of the whole row, the cut note when the row has more outlines than one request carries, the list of outlines and the selected one. */
-export function EjesMapDetails({ subject, outline, selectedOutlineIndex = null, onSelectOutline }: EjesMapDetailsProps) {
+export function EjesMapDetails({ subject, outline, selectedOutlineIndex = null, onSelectOutline, accept }: EjesMapDetailsProps) {
   const note = truncationNoteOf(subject);
   return (
     <section className={styles.details} aria-live="polite">
       <h4 className={styles.sectionTitle}>{ROW_TITLE}</h4>
       <DetailList rows={rowFactsOf(subject)} />
       {note !== null && <p className={styles.note}>{note}</p>}
+      {subject.undecided !== undefined && accept !== undefined && (
+        <EjesUndecidedCopies
+          reference={subject.undecided.ref}
+          copies={subject.undecided.copies}
+          picks={accept.twinPicks}
+          onChange={accept.onTwinPickChange}
+        />
+      )}
       {onSelectOutline !== undefined && (
         <OutlineList outlines={subject.outlines} selectedOutlineIndex={selectedOutlineIndex} onSelectOutline={onSelectOutline} />
       )}

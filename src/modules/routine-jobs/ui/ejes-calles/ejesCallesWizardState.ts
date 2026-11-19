@@ -1,5 +1,6 @@
 import { EJES_DEFAULT_TABLES, EJES_ROLES, EJES_TABLE_ROLE, type EjesTableRole } from "../../jobs/ejes-calles/constants";
 import { summaryOf } from "../../jobs/ejes-calles/domain/loadMapping";
+import type { EjesTwinPick } from "../../jobs/ejes-calles/types";
 import { connectionBlockingReason, type ConnectionField } from "../shared/wizardConnection";
 import type {
   ClientConnection,
@@ -15,11 +16,13 @@ import {
   acceptKeysOf,
   pointChoicesAfter,
   pointChoicesOf,
+  twinPicksAfter,
   type EjesAcceptance,
   type EjesAcceptChange,
   type EjesAcceptKeys,
   type EjesPointChoiceKey,
   type EjesPointChoicesChange,
+  type EjesTwinPickChange,
 } from "./ejesAccept";
 import { ejesAnalysisKeyOf } from "../shared/ejesCallesAnalysisKey";
 import type { EjesRunSnapshot } from "../shared/ejesCallesRunStore";
@@ -51,6 +54,8 @@ export interface EjesWizardState {
   confirmation: EjesConfirmation;
   /** The rows accepted on the review lists; cleared when the connection or a table changes. */
   acceptance: EjesAcceptance | null;
+  /** The copies the user keeps for `reftramo`s with several copies: inputs of every analysis, so they survive a re-analysis. */
+  twinPicks: readonly EjesTwinPick[];
 }
 
 export type EjesWizardAction =
@@ -60,6 +65,7 @@ export type EjesWizardAction =
   | { type: "confirmationChanged"; patch: Partial<EjesConfirmation> }
   | { type: "acceptChanged"; analysisKey: string; change: EjesAcceptChange }
   | { type: "pointChoicesChanged"; analysisKey: string; change: EjesPointChoicesChange }
+  | { type: "twinPickChanged"; change: EjesTwinPickChange }
   | { type: "next" }
   | { type: "back" }
   | { type: "goTo"; step: EjesStep }
@@ -92,6 +98,7 @@ export function initialEjesWizardState(): EjesWizardState {
     slots: mapSlots((role) => ({ ...EJES_DEFAULT_TABLES[role], valid: false })),
     confirmation: emptyConfirmation(),
     acceptance: null,
+    twinPicks: [],
   };
 }
 
@@ -137,6 +144,12 @@ export function blockingReason(state: EjesWizardState): string | null {
 export const runBlockedReason = (state: EjesWizardState): string | null =>
   connectionBlockingReason(state.connection) ?? tablesBlockingReason(state);
 
+/** The dry run (Analizar) with the twin picks: the analysis sees the picks the load will. */
+export const ejesAnalysisRequestOf = (state: EjesWizardState): EjesStartRequest => ({
+  ...toEjesStartRequest(state, { dryRun: true }),
+  accepted: { twinPicks: state.twinPicks.map(({ ref, department, locality }) => ({ ref, department, locality })) },
+});
+
 export function canContinue(state: EjesWizardState): boolean {
   return (state.step === EjesStep.CONNECTION || state.step === EjesStep.TABLES) && blockingReason(state) === null;
 }
@@ -164,6 +177,8 @@ export function ejesGeometryMapBaseOf(state: EjesWizardState): EjesGeometryMapBa
       [EJES_TABLE_ROLE.STAGING]: tables[EJES_TABLE_ROLE.STAGING],
       [EJES_TABLE_ROLE.ROAD_SECTION]: tables[EJES_TABLE_ROLE.ROAD_SECTION],
       [EJES_TABLE_ROLE.PADRONES]: tables[EJES_TABLE_ROLE.PADRONES],
+      [EJES_TABLE_ROLE.LOCALITIES]: tables[EJES_TABLE_ROLE.LOCALITIES],
+      [EJES_TABLE_ROLE.DEPARTMENTS]: tables[EJES_TABLE_ROLE.DEPARTMENTS],
     },
   };
 }
@@ -210,7 +225,7 @@ export function ejesLoadRequestOf(state: EjesWizardState, snapshot: EjesRunSnaps
   return {
     ...toEjesStartRequest(state, { dryRun: false }),
     dryRun: false,
-    accepted: acceptedRequestOf(acceptKeysOfState(state, snapshot), pointChoicesOfState(state, snapshot)),
+    accepted: acceptedRequestOf(acceptKeysOfState(state, snapshot), pointChoicesOfState(state, snapshot), state.twinPicks),
     summary: summaryOf(result),
   };
 }
@@ -243,6 +258,7 @@ const withoutDependents = (state: EjesWizardState): EjesWizardState => ({
   slots: mapSlots((role) => ({ ...state.slots[role], valid: false })),
   confirmation: emptyConfirmation(),
   acceptance: null,
+  twinPicks: [],
 });
 
 function connectionReducer(state: EjesWizardState, field: ConnectionField, value: string): EjesWizardState {
@@ -260,12 +276,14 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
         ...state,
         slots: { ...state.slots, [action.key]: { schema: action.schema, table: "", valid: false } },
         acceptance: null,
+        twinPicks: [],
       };
     case "slotTableChosen":
       return {
         ...state,
         slots: { ...state.slots, [action.key]: { ...state.slots[action.key], table: action.table, valid: action.valid } },
         acceptance: null,
+        twinPicks: [],
       };
     case "confirmationChanged":
       return { ...state, confirmation: { ...state.confirmation, ...action.patch } };
@@ -273,6 +291,8 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
       return { ...state, acceptance: acceptanceAfter(state.acceptance, action.analysisKey, action.change) };
     case "pointChoicesChanged":
       return { ...state, acceptance: pointChoicesAfter(state.acceptance, action.analysisKey, action.change) };
+    case "twinPickChanged":
+      return { ...state, twinPicks: twinPicksAfter(state.twinPicks, action.change) };
     case "next":
       return canContinue(state) ? moveTo(state, stepAfter(state.step, 1)) : state;
     case "back":

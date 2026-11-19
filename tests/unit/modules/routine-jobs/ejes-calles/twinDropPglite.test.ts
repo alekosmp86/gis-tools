@@ -10,6 +10,8 @@ interface TwinGroup {
   twinClass: string;
   localities: string[];
   inside: string[];
+  cover?: number;
+  department?: string;
 }
 
 interface DropCase extends TwinGroup {
@@ -23,6 +25,15 @@ const subsetsOf = (values: string[]): string[][] =>
   Array.from({ length: 2 ** values.length }, (_, mask) => values.filter((_value, index) => ((mask >> index) & 1) === 1));
 
 const POOL = ["A RURAL", "B RURAL", "C", "D"];
+
+const DEFAULT_COVER = 1;
+
+const coverOf = (group: TwinGroup): number => group.cover ?? DEFAULT_COVER;
+
+const departmentSql = (group: TwinGroup): string => (group.department === undefined ? "NULL::text" : `'${group.department}'::text`);
+
+const groupRowSql = (group: TwinGroup, index: number): string =>
+  `(${index}, '${group.twinClass}', ${textArray(group.localities)}, ${textArray(group.inside)}, ${coverOf(group)}::double precision, ${departmentSql(group)})`;
 
 const CASES: DropCase[] = [
   { name: "URBAN with a rural-named copy drops it", twinClass: TWIN_CLASS.URBAN, localities: ["FLORES RURAL", "TRINIDAD"], inside: [], dropped: ["FLORES RURAL"] },
@@ -62,6 +73,19 @@ const CASES: DropCase[] = [
   { name: "NEITHER inside two copies keeps the first inside by overlap, not the lowest name", twinClass: TWIN_CLASS.NEITHER, localities: ["ALFA", "BETA"], inside: ["BETA", "ALFA"], dropped: ["ALFA"] },
   { name: "NEITHER inside a polygon that matches no copy drops nothing", twinClass: TWIN_CLASS.NEITHER, localities: ["FLORES RURAL", "TRINIDAD"], inside: ["OTRA LOCALIDAD"], dropped: [] },
   { name: "NEITHER inside one of three copies drops the other two", twinClass: TWIN_CLASS.NEITHER, localities: ["C", "A", "B"], inside: ["B"], dropped: ["A", "C"] },
+  { name: "BOTH with a section mostly outside the polygons keeps the rural copy of its department, whatever the polygon says", twinClass: TWIN_CLASS.BOTH, localities: ["CERRO LARGO RURAL", "EJIDO DE SAN JOSE", "ISLA PATRULLA", "TREINTA Y TRES RURAL"], inside: ["ISLA PATRULLA"], cover: 0.03, department: "TREINTA Y TRES", dropped: ["CERRO LARGO RURAL", "EJIDO DE SAN JOSE", "ISLA PATRULLA"] },
+  { name: "BOTH with a section mostly outside and no polygon inside keeps the rural copy of its department", twinClass: TWIN_CLASS.BOTH, localities: ["CERRO LARGO RURAL", "EJIDO DE SAN JOSE", "ISLA PATRULLA", "TREINTA Y TRES RURAL"], inside: [], cover: 0.03, department: "TREINTA Y TRES", dropped: ["CERRO LARGO RURAL", "EJIDO DE SAN JOSE", "ISLA PATRULLA"] },
+  { name: "BOTH with a section mostly outside matches the department name trimmed and in any case", twinClass: TWIN_CLASS.BOTH, localities: ["CERRO LARGO RURAL", "TREINTA Y TRES RURAL", "ISLA PATRULLA"], inside: [], cover: 0.03, department: "treinta y tres ", dropped: ["CERRO LARGO RURAL", "ISLA PATRULLA"] },
+  { name: "BOTH with a section mostly outside and no copy named for its department keeps the rural copy with the lowest name", twinClass: TWIN_CLASS.BOTH, localities: ["CERRO LARGO RURAL", "TREINTA Y TRES RURAL", "ISLA PATRULLA"], inside: [], cover: 0.03, department: "MONTEVIDEO", dropped: ["ISLA PATRULLA", "TREINTA Y TRES RURAL"] },
+  { name: "BOTH with a section mostly outside and no rural-named copy keeps the polygon winner, the lowest name", twinClass: TWIN_CLASS.BOTH, localities: ["ISLA PATRULLA", "EJIDO DE SAN JOSE"], inside: [], cover: 0.03, department: "TREINTA Y TRES", dropped: ["ISLA PATRULLA"] },
+  { name: "BOTH with a section mostly inside the polygons keeps the polygon winner, not the rural copy", twinClass: TWIN_CLASS.BOTH, localities: ["CERRO LARGO RURAL", "EJIDO DE SAN JOSE", "ISLA PATRULLA", "TREINTA Y TRES RURAL"], inside: ["ISLA PATRULLA"], cover: 0.65, department: "TREINTA Y TRES", dropped: ["CERRO LARGO RURAL", "EJIDO DE SAN JOSE", "TREINTA Y TRES RURAL"] },
+  { name: "BOTH with a section exactly half outside the polygons keeps the polygon winner", twinClass: TWIN_CLASS.BOTH, localities: ["CERRO LARGO RURAL", "EJIDO DE SAN JOSE", "ISLA PATRULLA", "TREINTA Y TRES RURAL"], inside: ["ISLA PATRULLA"], cover: 0.5, department: "TREINTA Y TRES", dropped: ["CERRO LARGO RURAL", "EJIDO DE SAN JOSE", "TREINTA Y TRES RURAL"] },
+  { name: "BOTH with a section just under half outside keeps the rural copy of its department", twinClass: TWIN_CLASS.BOTH, localities: ["CERRO LARGO RURAL", "EJIDO DE SAN JOSE", "ISLA PATRULLA", "TREINTA Y TRES RURAL"], inside: ["ISLA PATRULLA"], cover: 0.49, department: "TREINTA Y TRES", dropped: ["CERRO LARGO RURAL", "EJIDO DE SAN JOSE", "ISLA PATRULLA"] },
+  { name: "BOTH with a section mostly outside and a rural-named copy but no polygon inside keeps the rural copy", twinClass: TWIN_CLASS.BOTH, localities: ["FLORES RURAL", "TRINIDAD"], inside: [], cover: 0.03, department: "FLORES", dropped: ["TRINIDAD"] },
+  { name: "URBAN with a section mostly outside still drops its rural-named copies", twinClass: TWIN_CLASS.URBAN, localities: ["CERRO LARGO RURAL", "TREINTA Y TRES RURAL", "ISLA PATRULLA"], inside: [], cover: 0.03, department: "TREINTA Y TRES", dropped: ["CERRO LARGO RURAL", "TREINTA Y TRES RURAL"] },
+  { name: "RURAL with a section mostly outside keeps the rural copy as before", twinClass: TWIN_CLASS.RURAL, localities: ["CERRO LARGO RURAL", "TREINTA Y TRES RURAL", "ISLA PATRULLA"], inside: [], cover: 0.03, department: "TREINTA Y TRES", dropped: ["ISLA PATRULLA", "TREINTA Y TRES RURAL"] },
+  { name: "NEITHER with a section mostly outside keeps the rural copy among the remaining inside copies", twinClass: TWIN_CLASS.NEITHER, localities: ["ALFA", "BETA RURAL", "GAMMA"], inside: ["ALFA", "BETA RURAL"], cover: 0.03, department: "ALFA", dropped: ["ALFA", "GAMMA"] },
+  { name: "NEITHER with a section mostly inside keeps the polygon winner among the remaining inside copies", twinClass: TWIN_CLASS.NEITHER, localities: ["ALFA", "BETA RURAL", "GAMMA"], inside: ["ALFA", "BETA RURAL"], cover: 0.65, department: "ALFA", dropped: ["BETA RURAL", "GAMMA"] },
 ];
 
 const MATRIX: TwinGroup[] = Object.values(TWIN_CLASS).flatMap((twinClass) =>
@@ -85,15 +109,15 @@ describe("twinDropCaseSql against PostgreSQL (ET-13, ET-19)", () => {
   });
 
   const droppedBy = async (group: TwinGroup, alias = "t"): Promise<string[]> => {
-    const source = `(SELECT '${group.twinClass}'::text AS class, ${textArray(group.localities)} AS localities, ${textArray(group.inside)} AS inside_localities) AS ${alias}`;
+    const source = `(SELECT '${group.twinClass}'::text AS class, ${textArray(group.localities)} AS localities, ${textArray(group.inside)} AS inside_localities, ${coverOf(group)}::double precision AS inside_cover, ${departmentSql(group)} AS department) AS ${alias}`;
     const result = await database.query<{ dropped: string[] }>(`SELECT ${twinDropCaseSql(alias)} AS dropped FROM ${source}`);
     return result.rows[0].dropped;
   };
 
   const droppedRowsOf = async (groups: TwinGroup[], alias = "t"): Promise<string[][]> => {
-    const rows = groups.map((group, index) => `(${index}, '${group.twinClass}', ${textArray(group.localities)}, ${textArray(group.inside)})`).join(", ");
+    const rows = groups.map(groupRowSql).join(", ");
     const result = await database.query<{ dropped: string[] }>(
-      `SELECT ${twinDropCaseSql(alias)} AS dropped FROM (VALUES ${rows}) AS ${alias}(id, class, localities, inside_localities) ORDER BY ${alias}.id`
+      `SELECT ${twinDropCaseSql(alias)} AS dropped FROM (VALUES ${rows}) AS ${alias}(id, class, localities, inside_localities, inside_cover, department) ORDER BY ${alias}.id`
     );
     return result.rows.map((row) => row.dropped);
   };
@@ -120,11 +144,9 @@ describe("twinDropCaseSql against PostgreSQL (ET-13, ET-19)", () => {
   });
 
   it("should never drop every locality of any group, over every class, locality set and inside set", async () => {
-    const rows = MATRIX.map(
-      (group, index) => `(${index}, '${group.twinClass}', ${textArray(group.localities)}, ${textArray(group.inside)})`
-    ).join(", ");
+    const rows = MATRIX.map(groupRowSql).join(", ");
     const result = await database.query<{ id: number; dropped: string[] }>(
-      `SELECT t.id, ${twinDropCaseSql("t")} AS dropped FROM (VALUES ${rows}) AS t(id, class, localities, inside_localities) ORDER BY t.id`
+      `SELECT t.id, ${twinDropCaseSql("t")} AS dropped FROM (VALUES ${rows}) AS t(id, class, localities, inside_localities, inside_cover, department) ORDER BY t.id`
     );
     const violations = result.rows
       .map((row) => ({ group: MATRIX[row.id], dropped: row.dropped }))
@@ -137,18 +159,16 @@ describe("twinDropCaseSql against PostgreSQL (ET-13, ET-19)", () => {
 
   it("should return an empty array, not null, when nothing is dropped", async () => {
     const result = await database.query<{ dropped: string[] | null }>(
-      `SELECT ${twinDropCaseSql("t")} AS dropped FROM (SELECT 'URBAN'::text AS class, ARRAY['A','B']::text[] AS localities, ARRAY[]::text[] AS inside_localities) AS t`
+      `SELECT ${twinDropCaseSql("t")} AS dropped FROM (SELECT 'URBAN'::text AS class, ARRAY['A','B']::text[] AS localities, ARRAY[]::text[] AS inside_localities, 1::double precision AS inside_cover, NULL::text AS department) AS t`
     );
 
     expect(result.rows[0].dropped).toEqual([]);
   });
 
   it("should work over many rows at once, one answer per row", async () => {
-    const rows = CASES.map(
-      (testCase, index) => `(${index}, '${testCase.twinClass}', ${textArray(testCase.localities)}, ${textArray(testCase.inside)})`
-    ).join(", ");
+    const rows = CASES.map(groupRowSql).join(", ");
     const result = await database.query<{ id: number; dropped: string[] }>(
-      `SELECT t.id, ${twinDropCaseSql("t")} AS dropped FROM (VALUES ${rows}) AS t(id, class, localities, inside_localities) ORDER BY t.id`
+      `SELECT t.id, ${twinDropCaseSql("t")} AS dropped FROM (VALUES ${rows}) AS t(id, class, localities, inside_localities, inside_cover, department) ORDER BY t.id`
     );
 
     expect(result.rows.map((row) => row.dropped)).toEqual(CASES.map((testCase) => testCase.dropped));

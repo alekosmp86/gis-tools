@@ -108,6 +108,14 @@
   background-color: #2563eb;
 }
 
+.swatch[data-map-type="LOCALIDAD_POLIGONO"] {
+  background-color: #14b8a6;
+}
+
+.swatch[data-map-type="DEPARTAMENTO_POLIGONO"] {
+  background-color: #94a3b8;
+}
+
 .swatch[data-map-type="TRAMO_SE_QUITA"] {
   background-color: #dc2626;
 }

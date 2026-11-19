@@ -43,6 +43,7 @@ const SUMMARY_COUNT_KEYS = [
   "splitPointsNoGeometry",
   "geoTwinLosersRemovable",
   "geoTwinLosersOmitted",
+  "twinPicksApplied",
 ];
 
 const FINGERPRINT = { rows: 12, digest: "9f8e7d6c5b4a3210fedcba9876543210" };
@@ -115,7 +116,7 @@ describe("parseEjesCallesStartRequest", () => {
       expect(params.summary?.fingerprint).toEqual(FINGERPRINT);
     });
 
-    it("should keep only the 14 summary counts as numbers and drop any other key", () => {
+    it("should keep only the summary counts as numbers and drop any other key", () => {
       const params = parse(realBody({ summary: summaryOf({ counts: { ...counts(), extra: 99 } }) }));
 
       expect(Object.keys(params.summary?.counts ?? {}).sort()).toEqual([...SUMMARY_COUNT_KEYS].sort());
@@ -125,7 +126,7 @@ describe("parseEjesCallesStartRequest", () => {
       const params = parse(realBody({ accepted: { splits: [], merges: [], twinRemovals: [], plainRemovals: [] } }));
 
       expect(params.dryRun).toBe(false);
-      expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] });
+      expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] });
     });
 
     it("should refuse dryRun false without the password, with a Spanish message", () => {
@@ -252,7 +253,7 @@ describe("parseEjesCallesStartRequest", () => {
     it("should accept a non-empty merges and plainRemovals list when every entry is shaped", () => {
       const params = parse(realBody({ accepted: { merges: [{ newRef: "4" }], plainRemovals: [{ ref: "7" }] } }));
 
-      expect(params.accepted).toEqual({ splits: [], merges: ["4"], twinRemovals: [], plainRemovals: ["7"] });
+      expect(params.accepted).toEqual({ splits: [], merges: ["4"], twinRemovals: [], plainRemovals: ["7"], twinPicks: [] });
     });
 
     it("should refuse an accepted list that is not a list", () => {
@@ -332,5 +333,49 @@ describe("parseEjesCallesStartRequest", () => {
     const body = startBody({ connection: { host: "", port: "5432", db_name: "gis", user: "u", password: PASSWORD } });
 
     expect(() => parse(body)).toThrow(RequestInvalidError);
+  });
+
+  describe("dry run with optional accepted twinPicks (ET-28)", () => {
+    const PICK = { ref: "0012", department: "FLORES", locality: "TRINIDAD" };
+
+    it("should read a dry run without accepted as no picks, with the other accepted lists empty", () => {
+      const params = parse(startBody());
+
+      expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] });
+      expect(params.summary).toBeUndefined();
+    });
+
+    it("should read a dry run with accepted null as no picks", () => {
+      expect(parse(startBody({ accepted: null })).accepted?.twinPicks).toEqual([]);
+    });
+
+    it("should read the picks of a dry run's accepted, canonical and trimmed, for the analysis to see", () => {
+      const params = parse(startBody({ accepted: { twinPicks: [{ ...PICK, department: " FLORES " }] } }));
+
+      expect(params.accepted).toEqual({
+        splits: [],
+        plainRemovals: [],
+        merges: [],
+        twinRemovals: [],
+        twinPicks: [{ ref: "12", department: "FLORES", locality: "TRINIDAD" }],
+      });
+    });
+
+    it("should refuse a dry run whose accepted carries a key other than twinPicks, with a 400 that names it", () => {
+      const body = startBody({ accepted: { plainRemovals: [{ ref: "7" }] } });
+
+      expect(() => parse(body)).toThrow(RequestInvalidError);
+      expect(messageOf(body)).toMatch(/clave no admitida: plainRemovals/);
+    });
+
+    it("should refuse a dry run whose picks repeat a reftramo, with the same message as a real run", () => {
+      const body = startBody({ accepted: { twinPicks: [PICK, { ...PICK, locality: "SAN JOSE" }] } });
+
+      expect(messageOf(body)).toBe("El tramo 12 tiene más de una copia elegida.");
+    });
+
+    it("should refuse a dry run whose accepted is not an object with a 400", () => {
+      expect(() => parse(startBody({ accepted: "x" }))).toThrow(RequestInvalidError);
+    });
   });
 });

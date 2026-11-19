@@ -41,6 +41,8 @@ const BASE: EjesGeometryMapBase = {
     "ejes-origen": { schema: "a", table: "b" },
     "ejes-tramos": { schema: "a", table: "c" },
     "ejes-padrones": { schema: "a", table: "d" },
+    "ejes-localidades": { schema: "a", table: "l" },
+    "ejes-departamentos": { schema: "a", table: "dp" },
   },
 };
 

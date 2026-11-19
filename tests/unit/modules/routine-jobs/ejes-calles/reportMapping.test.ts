@@ -95,6 +95,8 @@ describe("toEjesAnalysis", () => {
       twins_cross_department: 5,
       twins_drop: "2",
       twins_keep: 4,
+      twins_undecided: "2",
+      twin_picks_applied: 1,
       renumbered: "3",
       renumbered_with_points: 2,
       renumbered_points: "9",
@@ -170,6 +172,8 @@ describe("toEjesAnalysis", () => {
       twinsCrossDepartment: 5,
       twinsDrop: 2,
       twinsKeep: 4,
+      twinsUndecided: 2,
+      twinPicksApplied: 1,
       renumbered: 3,
       renumberedWithPoints: 2,
       renumberedPoints: 9,
@@ -246,6 +250,9 @@ describe("toEjesAnalysis", () => {
     expect(analysis.counts.twinsCrossDepartment).toBe(0);
     expect(analysis.counts.twinsDrop).toBe(0);
     expect(analysis.counts.twinsKeep).toBe(0);
+    expect(analysis.counts.twinsUndecided).toBe(0);
+    expect(analysis.counts.twinPicksApplied).toBe(0);
+    expect(analysis.twinUndecided).toEqual([]);
     expect(analysis.counts.renumbered).toBe(0);
     expect(analysis.counts.renumberedWithPoints).toBe(0);
     expect(analysis.counts.renumberedPoints).toBe(0);
@@ -438,5 +445,24 @@ describe("toEjesAnalysis renumber skipped (EJL-12, EJL-17)", () => {
 
   it("should map a missing staging digest to an empty string and a missing row count to zero", () => {
     expect(toEjesAnalysis({ staging_rows: 3 }).fingerprint).toEqual({ rows: 3, digest: "" });
+  });
+});
+
+describe("toEjesAnalysis twins undecided (ET-28)", () => {
+  it("should map an undecided reftramo with its copies, its points and the held rows waiting for it", () => {
+    const copies = [
+      { department: "FLORES", locality: "A" },
+      { department: null, locality: null },
+    ];
+
+    const analysis = toEjesAnalysis({
+      [ANALYSIS_LIST_ALIAS.TWIN_UNDECIDED]: [{ ref: "50", idcalle: "3", name: "RIVERA", copies, points: "2", waiting: 1 }],
+    });
+
+    expect(analysis.twinUndecided).toEqual([{ ref: "50", idcalle: "3", name: "RIVERA", copies, points: 2, waiting: 1 }]);
+  });
+
+  it("should map a missing undecided list to an empty list", () => {
+    expect(toEjesAnalysis({}).twinUndecided).toEqual([]);
   });
 });

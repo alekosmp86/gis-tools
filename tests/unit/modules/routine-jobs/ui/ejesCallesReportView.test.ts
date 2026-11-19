@@ -31,6 +31,8 @@ const COUNTS = {
   twinsCrossDepartment: 5,
   twinsDrop: 2,
   twinsKeep: 4,
+  twinsUndecided: 0,
+  twinPicksApplied: 0,
   renumbered: 2,
   renumberedWithPoints: 1,
   renumberedPoints: 5,
@@ -92,6 +94,7 @@ const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
     plainRemovals: [],
     newStreets: [],
     twins: [],
+    twinUndecided: [],
     geoTwins: [],
     renumbered: [],
     renumberSkipped: [],
@@ -219,12 +222,11 @@ describe("buildEjesReportView (EJ-12)", () => {
       expect(group?.kpis.map((kpi) => kpi.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
     });
 
-    it("should summarize the list with the shown rows and the total, noting a cut list", () => {
-      const full = buildEjesReportView(resultOf({ twins: [TWIN], counts: { ...COUNTS, twins: 1 } }));
-      const cut = buildEjesReportView(resultOf({ twins: [TWIN], counts: { ...COUNTS, twins: 700 } }));
+    it("should keep no summary of the twin rows, which are counted in the KPI group only", () => {
+      const view = buildEjesReportView(resultOf({ counts: { ...COUNTS, twins: 700 } }));
 
-      expect(full.summaries.twins).toBe("Tramos repetidos por localidad (primero los que se deciden en el mapa) (1)");
-      expect(cut.summaries.twins).toBe("Tramos repetidos por localidad (primero los que se deciden en el mapa) (primeras 1 de 700)");
+      expect(Object.keys(view.summaries)).not.toContain("twins");
+      expect(view.kpiGroups.find((group) => group.title === "Tramos repetidos por localidad")?.kpis[0]).toEqual({ label: "Total", value: 700 });
     });
 
     it.each([
@@ -268,13 +270,11 @@ describe("buildEjesReportView (EJ-12)", () => {
       expect(kpisOf(resultOf({ counts: { ...COUNTS, removed: 4, renumbered: 2 } }))["Sin reemplazo, se quitarían"]).toBe(1);
     });
 
-    it("should summarize the list with the shown rows and the total, noting a cut list", () => {
-      expect(buildEjesReportView(resultOf({ renumbered: [row], counts: { ...COUNTS, renumbered: 1 } })).summaries.renumbered).toBe(
-        "Tramos renumerados (primero los que tienen puntos de acceso) (1)"
-      );
-      expect(buildEjesReportView(resultOf({ renumbered: [row], counts: { ...COUNTS, renumbered: 4037 } })).summaries.renumbered).toBe(
-        "Tramos renumerados (primero los que tienen puntos de acceso) (primeras 1 de 4037)"
-      );
+    it("should keep no summary of the renumbered rows, which are counted in the KPI group only", () => {
+      const view = buildEjesReportView(resultOf({ counts: { ...COUNTS, renumbered: 4037 } }));
+
+      expect(Object.keys(view.summaries)).not.toContain("renumbered");
+      expect(kpisOf(resultOf({ counts: { ...COUNTS, renumbered: 4037 } }))["Renumerados (mismo trazado, otro reftramo)"]).toBe(4037);
     });
   });
 
@@ -310,31 +310,33 @@ describe("buildEjesReportView (EJ-12)", () => {
         buildEjesReportView(withInvalid(795, 615)).kpiGroups.flatMap((group) => group.kpis).map((kpi) => [kpi.label, kpi.value])
       );
 
-      expect(kpis["Filas con geometría inválida o colapsada (se omiten)"]).toBe(795);
-      expect(kpis["Tramos con geometría inválida o colapsada"]).toBe(615);
+      expect(kpis["Filas con geometría inválida o colapsada, o menor de 1 m sin puntos de acceso (se omiten)"]).toBe(795);
+      expect(kpis["Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso"]).toBe(615);
     });
 
     it("should show neither KPI when there are no invalid geometries", () => {
       const labels = kpiLabels(withInvalid(0, 0));
 
-      expect(labels).not.toContain("Filas con geometría inválida o colapsada (se omiten)");
-      expect(labels).not.toContain("Tramos con geometría inválida o colapsada");
+      expect(labels).not.toContain("Filas con geometría inválida o colapsada, o menor de 1 m sin puntos de acceso (se omiten)");
+      expect(labels).not.toContain("Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso");
     });
 
     it("should show the KPIs in the file-problems part, next to the other file problems", () => {
-      const problems = buildEjesReportView(withInvalid(3, 2)).kpiGroups.find((group) => group.kpis.some((kpi) => kpi.label === "Tramos con geometría inválida o colapsada"));
+      const problems = buildEjesReportView(withInvalid(3, 2)).kpiGroups.find((group) => group.title === "Problemas en el archivo");
       const labels = problems?.kpis.map((kpi) => kpi.label) ?? [];
 
-      expect(labels).toContain("Filas con caracteres dañados (�)");
-      expect(labels).toContain("Filas con geometría inválida o colapsada (se omiten)");
+      expect(labels).toContain("Filas con geometría inválida o colapsada, o menor de 1 m sin puntos de acceso (se omiten)");
+      expect(labels).toContain("Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso");
     });
 
     it("should summarize the list with the shown rows and the row total, noting a cut list", () => {
       const row = { ref: "1", idcalle: "2", localidad: "A", departamento: "B" };
 
-      expect(buildEjesReportView(withInvalid(1, 1, [row])).summaries.invalidGeometries).toBe("Tramos con geometría inválida o colapsada (se omiten) (1)");
+      expect(buildEjesReportView(withInvalid(1, 1, [row])).summaries.invalidGeometries).toBe(
+        "Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso (se omiten) (1)"
+      );
       expect(buildEjesReportView(withInvalid(795, 615, [row])).summaries.invalidGeometries).toBe(
-        "Tramos con geometría inválida o colapsada (se omiten) (primeras 1 de 795)"
+        "Tramos con geometría inválida o colapsada, o menores de 1 m sin puntos de acceso (se omiten) (primeras 1 de 795)"
       );
     });
 

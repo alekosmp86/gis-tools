@@ -3,6 +3,15 @@ import { DETAIL_LIST_LIMIT } from "@/modules/routine-jobs/jobs/shared/limits";
 import { buildStagingChecksSql, validGeometrySql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/stagingSql";
 import { ejesLayouts } from "./ejesFixtures";
 
+const canonicalOf = (column: string): string => {
+  const text = `NULLIF(btrim(${column}::text), '')`;
+  return `CASE WHEN ${text} ~ '^[0-9]+$' THEN (${text})::numeric::text ELSE ${text} END`;
+};
+
+const STAGING_REFERENCE = canonicalOf('s."reftramo"');
+const ACCESS_POINT_REFERENCE = canonicalOf('a."id_road_section"');
+const SHORT_WITH_POINTS = `CASE WHEN ST_Length(g) >= 1 THEN true ELSE EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE ${ACCESS_POINT_REFERENCE} = r) END`;
+
 describe("buildStagingChecksSql (EJ-8)", () => {
   const sql = buildStagingChecksSql(ejesLayouts());
 
@@ -51,13 +60,26 @@ describe("buildStagingChecksSql (EJ-8)", () => {
 
   describe("ET-18 invalid geometries", () => {
     it("should define the validity predicate so a null or empty geometry is not invalid", () => {
-      expect(validGeometrySql("g")).toBe("COALESCE(ST_IsEmpty(g) OR (ST_IsValid(g) AND ST_Length(g) >= 0.001), true)");
+      expect(validGeometrySql("g", "r", ejesLayouts())).toBe(`COALESCE(ST_IsEmpty(g) OR (ST_IsValid(g) AND ST_Length(g) >= 0.001 AND (${SHORT_WITH_POINTS})), true)`);
+    });
+
+    it("should discard a section shorter than 1 m unless its reftramo has access points, through a CASE that reads them only for short sections", () => {
+      const predicate = validGeometrySql("g", "r", ejesLayouts());
+
+      expect(predicate).toContain("ST_Length(g) >= 0.001 AND (CASE WHEN ST_Length(g) >= 1 THEN true ELSE EXISTS (SELECT 1 FROM \"carto\".\"access_point\" AS a WHERE");
+      expect(predicate.indexOf("ST_Length(g) >= 1")).toBeLessThan(predicate.indexOf("EXISTS"));
+    });
+
+    it("should match the access points against the reference the caller passes", () => {
+      expect(validGeometrySql("g", "CAND", ejesLayouts())).toContain(`${ACCESS_POINT_REFERENCE} = CAND) END))`);
     });
 
     it("should carry localidad, departamento and invalid_geometry in the s CTE", () => {
       expect(sql).toContain("AS localidad");
       expect(sql).toContain("AS departamento");
-      expect(sql).toContain('(NOT COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001), true)) AS invalid_geometry');
+      expect(sql).toContain(
+        `(NOT COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE EXISTS (SELECT 1 FROM "carto"."access_point" AS a WHERE ${ACCESS_POINT_REFERENCE} = ${STAGING_REFERENCE}) END)), true)) AS invalid_geometry`
+      );
     });
 
     it("should count the invalid rows and the distinct invalid reftramo", () => {

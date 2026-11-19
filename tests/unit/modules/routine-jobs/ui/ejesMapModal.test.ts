@@ -55,6 +55,8 @@ const BASE: EjesGeometryMapBase = {
     "ejes-origen": { schema: "bdj_carto", table: "ide_ejesviacirculacion" },
     "ejes-tramos": { schema: "carto", table: "road_section" },
     "ejes-padrones": { schema: "carto", table: "padron" },
+    "ejes-localidades": { schema: "bdj_carto", table: "ine_localidades_pg" },
+    "ejes-departamentos": { schema: "carto", table: "mv_country_province" },
   },
 };
 

@@ -1,8 +1,9 @@
 import { physicalColumn, qualifiedName } from "../../actualizar-padron/domain/layouts";
 import { cte, jsonArrayOf, q, withClause } from "../../shared/sqlFragments";
 import { DETAIL_LIST_LIMIT } from "../../shared/limits";
-import { EJES_TABLE_ROLE, EJES_STAGING_COLUMN, GEOMETRY_TOLERANCE_M } from "../constants";
+import { ACCESS_POINT_COLUMN, EJES_TABLE_ROLE, EJES_STAGING_COLUMN, GEOMETRY_TOLERANCE_M, MIN_SECTION_LENGTH_M } from "../constants";
 import type { EjesLayouts } from "../types";
+import { col, table } from "./layoutSql";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
 
 export const INTEGER_PATTERN = "^[0-9]+$";
@@ -19,25 +20,43 @@ export const canonicalTextSql = (expression: string): string => canonicalInteger
 const textOf = (layouts: EjesLayouts, column: string): string =>
   `NULLIF(btrim(s.${physicalColumn(layouts[EJES_TABLE_ROLE.STAGING], column)}::text), '')`;
 
-/** Invalid or collapsed (shorter than the geometry tolerance). A NULL or empty geometry is not one of those: it has its own count. */
-export const validGeometrySql = (geometry: string): string =>
-  `COALESCE(ST_IsEmpty(${geometry}) OR (ST_IsValid(${geometry}) AND ST_Length(${geometry}) >= ${GEOMETRY_TOLERANCE_M}), true)`;
+/** The `reftramo` of an access point, in the same canonical form as the sections it points to. */
+export const accessPointRefSql = (layouts: EjesLayouts): string =>
+  canonicalTextSql(`a.${col(layouts, "ACCESS_POINT", ACCESS_POINT_COLUMN.ROAD_SECTION)}`);
+
+const hasAccessPointsSql = (layouts: EjesLayouts, reference: string): string =>
+  `EXISTS (SELECT 1 FROM ${table(layouts, "ACCESS_POINT")} AS a WHERE ${accessPointRefSql(layouts)} = ${reference})`;
+
+/**
+ * Valid for every rule: empty, or valid, not collapsed, and at least `MIN_SECTION_LENGTH_M` long unless its canonical `reference` holds access points.
+ * The access points are read only for a short section (CASE), so long sections never touch them. Any other row is discarded from every rule.
+ */
+export const validGeometrySql = (geometry: string, reference: string, layouts: EjesLayouts): string => {
+  const length = `ST_Length(${geometry})`;
+  const longEnoughOrHeld = `CASE WHEN ${length} >= ${MIN_SECTION_LENGTH_M} THEN true ELSE ${hasAccessPointsSql(layouts, reference)} END`;
+  return `COALESCE(ST_IsEmpty(${geometry}) OR (ST_IsValid(${geometry}) AND ${length} >= ${GEOMETRY_TOLERANCE_M} AND (${longEnoughOrHeld})), true)`;
+};
+
+/** A staging row every rule reads: geometry present and valid (`validGeometrySql`), reference an integer. */
+export const keptStagingRowSql = (layouts: EjesLayouts, geometry: string, reference: string): string =>
+  `${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry, reference, layouts)} AND ${reference} ~ '${INTEGER_PATTERN}'`;
 
 function stagingRowsCte(layouts: EjesLayouts): string {
   const staging = layouts[EJES_TABLE_ROLE.STAGING];
   const geometry = `s.${physicalColumn(staging, EJES_STAGING_COLUMN.GEOM)}`;
+  const reference = canonicalTextSql(`s.${physicalColumn(staging, EJES_STAGING_COLUMN.REFTRAMO)}`);
   return cte(
     "s",
     [
       "SELECT",
-      `${canonicalIntegerSql(textOf(layouts, EJES_STAGING_COLUMN.REFTRAMO))} AS ref,`,
+      `${reference} AS ref,`,
       `${textOf(layouts, EJES_STAGING_COLUMN.IDCALLE)} AS idcalle,`,
       `${textOf(layouts, EJES_STAGING_COLUMN.TIPO_VIALIDAD)} AS tipo,`,
       `${textOf(layouts, EJES_STAGING_COLUMN.FUENTE)} AS fuente,`,
       `${textOf(layouts, EJES_STAGING_COLUMN.LOCALIDAD)} AS localidad,`,
       `${textOf(layouts, EJES_STAGING_COLUMN.DEPARTAMENTO)} AS departamento,`,
       `(${geometry} IS NULL OR ST_IsEmpty(${geometry})) AS empty_geometry,`,
-      `(NOT ${validGeometrySql(geometry)}) AS invalid_geometry,`,
+      `(NOT ${validGeometrySql(geometry, reference, layouts)}) AS invalid_geometry,`,
       `(${DAMAGED_COLUMNS.map((column) => `position(chr(65533) in COALESCE(s.${physicalColumn(staging, column)}::text, '')) > 0`).join(" OR ")}) AS damaged_text`,
       `FROM ${qualifiedName(staging)} AS s`,
     ].join(" ")

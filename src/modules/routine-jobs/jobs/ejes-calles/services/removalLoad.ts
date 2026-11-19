@@ -1,6 +1,6 @@
 import type { RunSession } from "../../cargar-padrones/types";
 import { numberOf } from "../../shared/rowMapping";
-import { buildAcceptedTablesSql, buildInvalidChoiceRefsSql, buildMissingAcceptedSql } from "../domain/acceptedSql";
+import { buildAcceptedTablesSql, buildInvalidChoiceRefsSql, buildInvalidTwinPickRefsSql, buildMissingAcceptedSql } from "../domain/acceptedSql";
 import { buildDeleteMastersSql, buildDeleteSectionsSql } from "../domain/loadWriteSql";
 import type { EjesLoadPlan } from "../domain/loadMapping";
 import {
@@ -12,14 +12,27 @@ import {
   buildSkippedTableSql,
 } from "../domain/removalPlanSql";
 import { buildSplitFinalSql, buildSplitPlanSql } from "../domain/splitPlanSql";
-import type { EjesAccepted, EjesLoadContext } from "../types";
-import { ANALYSIS_CHANGED_MESSAGE, assertWritten, choiceNotApplicableOf, runInOrder, writtenBy } from "./writeStatements";
+import type { EjesAccepted, EjesLayouts, EjesLoadContext } from "../types";
+import {
+  ANALYSIS_CHANGED_MESSAGE,
+  assertWritten,
+  choiceNotApplicableOf,
+  runInOrder,
+  twinPickNotApplicableOf,
+  writtenBy,
+} from "./writeStatements";
 
 /** The accepted keys and choices become temp tables; every key must name a split, merge or plain removal of this transaction's analysis. */
 export async function prepareAccepted(session: RunSession, accepted: EjesAccepted): Promise<void> {
   await runInOrder(session, buildAcceptedTablesSql(accepted));
   const missing = numberOf((await session.query(buildMissingAcceptedSql())).rows[0]?.missing);
   if (missing > 0) throw new Error(ANALYSIS_CHANGED_MESSAGE);
+}
+
+/** Fail closed (ET-28): a pick that names no copy of the staging aborts the load before any write. Runs after `prepareAccepted`. */
+export async function assertTwinPicksExist(session: RunSession, layouts: EjesLayouts): Promise<void> {
+  const invalidRefs = (await session.query(buildInvalidTwinPickRefsSql(layouts))).rows.map((row) => String(row.ref));
+  if (invalidRefs.length > 0) throw new Error(twinPickNotApplicableOf(invalidRefs));
 }
 
 /**

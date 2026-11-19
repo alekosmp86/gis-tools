@@ -131,7 +131,7 @@ describe("split review points of the analysis on PGlite (EJS-6, EJS-7, EJS-8, EJ
     await pointAt(String(sectionId), "10:10");
 
     const row = (await analysis()).splits[0];
-    const outcome = await persist({ splits: [{ oldRef: OLD_REF, choices: [] }], plainRemovals: [], merges: [], twinRemovals: [] });
+    const outcome = await persist({ splits: [{ oldRef: OLD_REF, choices: [] }], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] });
 
     expect(row.heldReason).toBe(EJES_SKIP_REASON.ID_LINKED_POINTS);
     expect(outcome.load.skipped).toEqual([
@@ -144,7 +144,7 @@ describe("split review points of the analysis on PGlite (EJS-6, EJS-7, EJS-8, EJ
     await pointAt(OLD_REF, "10:10");
 
     const row = (await analysis()).splits[0];
-    const outcome = await persist({ splits: [], plainRemovals: [], merges: [], twinRemovals: [] });
+    const outcome = await persist({ splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] });
 
     expect(row.heldReason).toBeNull();
     expect(outcome.load.skipped).toEqual([expect.objectContaining({ kind: EJES_SKIP_KIND.SPLIT, reason: EJES_SKIP_REASON.NOT_ACCEPTED })]);
