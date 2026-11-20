@@ -42,6 +42,8 @@ const COUNTS = {
   twinsKeep: 0,
   twinsUndecided: 0,
   twinPicksApplied: 0,
+  manualSplitsApplied: 0,
+  manualSplitsIgnored: 0,
   renumbered: 2,
   renumberedWithPoints: 1,
   renumberedPoints: 5,

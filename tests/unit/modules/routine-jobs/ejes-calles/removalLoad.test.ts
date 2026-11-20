@@ -50,19 +50,19 @@ describe("prepareAccepted (EJS-4, EJ-21, F7)", () => {
   it("should resolve when every accepted key is a merge or a plain removal of this analysis", async () => {
     const { session } = sessionWith((sql) => (sql.includes('AS "missing"') ? [{ missing: 0 }] : []));
 
-    await expect(prepareAccepted(session, { splits: [], plainRemovals: ["5001"], merges: ["6103"], twinRemovals: [], twinPicks: [] })).resolves.toBeUndefined();
+    await expect(prepareAccepted(session, { splits: [], plainRemovals: ["5001"], merges: ["6103"], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false })).resolves.toBeUndefined();
   });
 
   it("should reject with the analysis-changed message when an accepted key is not in the analysis", async () => {
     const { session } = sessionWith((sql) => (sql.includes('AS "missing"') ? [{ missing: 1 }] : []));
 
-    await expect(prepareAccepted(session, { splits: [], plainRemovals: ["9999"], merges: [], twinRemovals: [], twinPicks: [] })).rejects.toThrow(ANALYSIS_CHANGED_MESSAGE);
+    await expect(prepareAccepted(session, { splits: [], plainRemovals: ["9999"], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false })).rejects.toThrow(ANALYSIS_CHANGED_MESSAGE);
   });
 
   it("should build the accepted temp tables before it checks them against the analysis", async () => {
     const { session, statements } = sessionWith((sql) => (sql.includes('AS "missing"') ? [{ missing: 0 }] : []));
 
-    await prepareAccepted(session, { splits: [], plainRemovals: ["5001"], merges: ["6103"], twinRemovals: [], twinPicks: [] });
+    await prepareAccepted(session, { splits: [], plainRemovals: ["5001"], merges: ["6103"], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false });
 
     const missingAt = statements.findIndex((sql) => sql.includes('AS "missing"'));
     const createAt = statements.findIndex((sql) => sql.includes("CREATE TEMP TABLE"));
@@ -73,7 +73,7 @@ describe("prepareAccepted (EJS-4, EJ-21, F7)", () => {
   it("should check nothing but still create the empty accepted tables when nothing is accepted", async () => {
     const { session, statements } = sessionWith((sql) => (sql.includes('AS "missing"') ? [{ missing: 0 }] : []));
 
-    await prepareAccepted(session, { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] });
+    await prepareAccepted(session, { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false });
 
     expect(statements.filter((sql) => sql.includes("CREATE TEMP TABLE")).length).toBeGreaterThan(0);
     expect(statements.filter((sql) => sql.includes("INSERT INTO"))).toEqual([]);

@@ -26,7 +26,7 @@ describe("readEjesAnalysis work memory (EJES analysis)", () => {
   it("should send SET LOCAL work_mem immediately before the analysis query in readAnalysisForLoad", async () => {
     const log: string[] = [];
 
-    await readAnalysisForLoad(recordingSession(log), ejesLayouts(), []);
+    await readAnalysisForLoad(recordingSession(log), ejesLayouts(), [], []);
 
     expect(log.slice(-2)[0]).toBe(WORK_MEM_SQL);
     expect(log.slice(-1)[0]).toMatch(/^WITH /);

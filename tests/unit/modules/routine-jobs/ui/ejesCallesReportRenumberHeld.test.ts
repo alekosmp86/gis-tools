@@ -42,6 +42,8 @@ const COUNTS = {
   twinsKeep: 0,
   twinsUndecided: 0,
   twinPicksApplied: 0,
+  manualSplitsApplied: 0,
+  manualSplitsIgnored: 0,
   renumbered: 0,
   renumberedWithPoints: 0,
   renumberedPoints: 0,
@@ -209,7 +211,7 @@ describe("heldRenumberViewsOf (EJ-25)", () => {
 describe("EjesSummaryStrip held cell", () => {
   const heldCell = (count: number) => {
     const result = resultOf(HELD_ROWS.slice(0, count));
-    const item = stripOf(result).find((candidate) => candidate.list === EJES_LIST.RENUMBER_HELD);
+    const item = stripOf(result, 0, 0).find((candidate) => candidate.list === EJES_LIST.RENUMBER_HELD);
     if (item === undefined) throw new Error("the strip has no held cell");
     return item;
   };

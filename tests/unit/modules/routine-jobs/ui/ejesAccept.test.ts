@@ -135,6 +135,8 @@ describe("ejes accept keys (EJ-24, EJL-22)", () => {
         merges: [{ newRef: "6103" }],
         twinRemovals: [],
         twinPicks: [],
+        manualSplits: [],
+        autoPlainRemovals: true,
       });
     });
 
@@ -145,6 +147,8 @@ describe("ejes accept keys (EJ-24, EJL-22)", () => {
         merges: [],
         twinRemovals: [],
         twinPicks: [],
+        manualSplits: [],
+        autoPlainRemovals: true,
       });
     });
 

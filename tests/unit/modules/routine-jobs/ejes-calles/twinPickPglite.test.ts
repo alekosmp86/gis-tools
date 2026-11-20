@@ -39,7 +39,7 @@ vi.mock("node:os", async (importOriginal) => {
 
 const HOOK_TIMEOUT_MS = 60_000;
 const timer = () => createStepTimer({ now: () => 0, total: 20 });
-const NO_PICKS: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] };
+const NO_PICKS: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false };
 const WRITE_SQL = /^WITH "written"|^(INSERT INTO|UPDATE|DELETE FROM) "?carto/;
 const INVALID_PICK_MESSAGE = /no existe en el origen con esa localidad y departamento\. Vuelva a analizar\./;
 

@@ -144,6 +144,7 @@ describe("EjesMapView showLabels (ET-17)", () => {
         farPoints: 0,
         heldReason: null,
         incompleteReview: false,
+        manual: false,
         coverage: 1,
         oldLength: 1,
         newLength: 1,

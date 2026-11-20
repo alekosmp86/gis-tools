@@ -40,7 +40,7 @@ vi.mock("node:os", async (importOriginal) => {
 const HOOK_TIMEOUT_MS = 60_000;
 const STREET = 5;
 const STREET_NAME = "CALLE CINCO";
-const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] };
+const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false };
 const WRITE_SQL = /^WITH "written"|^(INSERT INTO|UPDATE|DELETE FROM) "?carto/;
 const timer = () => createStepTimer({ now: () => 0, total: 20 });
 

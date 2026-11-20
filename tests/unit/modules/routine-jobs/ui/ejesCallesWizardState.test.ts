@@ -40,8 +40,8 @@ const validState = (overrides: Partial<EjesWizardState> = {}): EjesWizardState =
   };
 };
 
-const jobOf = (blockers: string[]): EjesRunSnapshot["job"] =>
-  ({ state: "DONE", result: { blockers } as unknown as EjesResult }) as unknown as EjesRunSnapshot["job"];
+const jobOf = (blockers: string[], manualSplitsIgnored = 0): EjesRunSnapshot["job"] =>
+  ({ state: "DONE", result: { blockers, counts: { manualSplitsIgnored } } as unknown as EjesResult }) as unknown as EjesRunSnapshot["job"];
 
 const doneSnapshot = (
   state: EjesWizardState,
@@ -217,6 +217,18 @@ describe("ejes wizard state", () => {
       const state = validState();
 
       expect(canLoadNow(state, doneSnapshot(state))).toBe(true);
+    });
+
+    it("should be false while the analysis ignores a manual split (manualSplitsIgnored > 0)", () => {
+      const state = validState();
+
+      expect(canLoadNow(state, { ...doneSnapshot(state), job: jobOf([], 1) })).toBe(false);
+    });
+
+    it("should be true when the analysis ignores no manual split and has no blocker", () => {
+      const state = validState();
+
+      expect(canLoadNow(state, { ...doneSnapshot(state), job: jobOf([], 0) })).toBe(true);
     });
 
     it("should be false when the analysis has blockers", () => {

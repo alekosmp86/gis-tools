@@ -22,7 +22,7 @@ const COUNTS = {
   splits: 1,
   merges: 1,
   plainRemovals: 1,
-  plainHeld: 0,
+  plainHeld: 1,
   newStreets: 0,
   twins: 0,
   twinsUrban: 0,
@@ -39,7 +39,7 @@ const COUNTS = {
 };
 
 const MERGE_ROW = { newRef: "6103", idcalle: "7", oldRefs: ["6101", "6102"], points: 3, coverage: 1, oldLength: 100, newLength: 100, outsideLength: 0 };
-const PLAIN_ROW = { ref: "5001", idcalle: "5", points: 0 };
+const PLAIN_ROW = { ref: "5001", idcalle: "5", points: 1 };
 const SPLIT_ROW = { oldRef: "6901", idcalle: "14", newRefs: ["6902", "6903"], points: 1, refPoints: 1, autoPoints: 1, reviewPoints: 0, noGeometryPoints: 0, farPoints: 0, coverage: 1, oldLength: 100, newLength: 100, outsideLength: 0 };
 
 const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
@@ -108,6 +108,8 @@ const acceptView = (plainRemovals: string[] = [], merges: string[] = []): EjesAc
   onPointChoicesChange: () => undefined,
   twinPicks: [],
   onTwinPickChange: () => undefined,
+  manualSplits: [],
+  onManualSplitChange: () => undefined,
   canAnalyzeWithPicks: false,
   onAnalyzeWithPicks: () => undefined,
 });
@@ -211,6 +213,8 @@ function renderAcceptFor(merges: string[]): EjesAcceptView {
     onPointChoicesChange: () => undefined,
     twinPicks: [],
     onTwinPickChange: () => undefined,
+    manualSplits: [],
+    onManualSplitChange: () => undefined,
     canAnalyzeWithPicks: false,
     onAnalyzeWithPicks: () => undefined,
   };

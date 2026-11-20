@@ -48,7 +48,7 @@ describe("parseEjesCallesStartRequest accepted.twinRemovals (ET-24, EJS-16)", ()
   it("should read the twin removal refs in canonical text, deduplicated and in their first order", () => {
     const params = parse(realBody({ twinRemovals: [{ ref: "0012" }, { ref: "7" }, { ref: "0012" }] }));
 
-    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: ["12", "7"], twinPicks: [] });
+    expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: ["12", "7"], twinPicks: [], manualSplits: [], autoPlainRemovals: false });
   });
 
   it("should accept exactly ACCEPTED_KEYS_LIMIT twin removals (boundary)", () => {

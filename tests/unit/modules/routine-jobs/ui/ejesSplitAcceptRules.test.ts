@@ -16,6 +16,7 @@ const SPLIT: EjesSplitRow = {
   farPoints: 0,
   heldReason: null,
   incompleteReview: false,
+  manual: false,
   coverage: 1,
   oldLength: 100,
   newLength: 100,
@@ -31,6 +32,8 @@ const viewWith = (splits: string[], onChange = vi.fn()): EjesAcceptView => ({
   onPointChoicesChange: () => undefined,
   twinPicks: [],
   onTwinPickChange: () => undefined,
+  manualSplits: [],
+  onManualSplitChange: () => undefined,
   canAnalyzeWithPicks: false,
   onAnalyzeWithPicks: () => undefined,
 });

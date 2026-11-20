@@ -22,6 +22,8 @@ function acceptViewRecording(changes: EjesAcceptChange[]): EjesAcceptView {
     onPointChoicesChange: () => undefined,
     twinPicks: [],
     onTwinPickChange: () => undefined,
+    manualSplits: [],
+    onManualSplitChange: () => undefined,
     canAnalyzeWithPicks: false,
     onAnalyzeWithPicks: () => undefined,
   };

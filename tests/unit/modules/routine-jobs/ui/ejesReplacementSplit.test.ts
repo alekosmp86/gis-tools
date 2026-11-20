@@ -31,6 +31,7 @@ const splitOf = (newRefs: string[]): EjesSplitRow => ({
   farPoints: 0,
   heldReason: null,
   incompleteReview: false,
+  manual: false,
   coverage: 1,
   oldLength: 100,
   newLength: 150,
@@ -70,6 +71,8 @@ const acceptView = (): EjesAcceptView => ({
   onPointChoicesChange: () => undefined,
   twinPicks: [],
   onTwinPickChange: () => undefined,
+  manualSplits: [],
+  onManualSplitChange: () => undefined,
   canAnalyzeWithPicks: false,
   onAnalyzeWithPicks: () => undefined,
 });
@@ -221,15 +224,16 @@ describe("isPlainRemovalAcceptable (EJ-21, EJS-9)", () => {
 });
 
 describe("plain removal list render (EJ-21)", () => {
-  it("should show the accept button only on the acceptable row, and the receiving-section text on the row with points", () => {
+  it("should list only the removals with access points: no accept button on them, the receiving-section text on each", () => {
     const out = resultStepOf(resultOf([FREE_REMOVAL, POINTS_REMOVAL]), acceptView());
 
-    expect(out.split(`<span>${EJES_ACCEPT_TEXT.ACCEPT}</span>`).length - 1).toBe(1);
+    expect(out.split(`<span>${EJES_ACCEPT_TEXT.ACCEPT}</span>`).length - 1).toBe(0);
     expect(out).toContain(EJES_ACCEPT_TEXT.NO_RECEIVING_SECTION);
+    expect(out).not.toContain(FREE_REMOVAL.ref);
   });
 
-  it("should show the no-reftramo text on a removal with no reftramo, and never the replacement note", () => {
-    const out = resultStepOf(resultOf([NO_REF_REMOVAL]), acceptView());
+  it("should show the no-reftramo text on a removal with access points and no reftramo, and never the replacement note", () => {
+    const out = resultStepOf(resultOf([{ ref: "", idcalle: null, points: 2 }]), acceptView());
 
     expect(out).toContain(EJES_ACCEPT_TEXT.NOT_ACCEPTABLE);
     expect(out).not.toContain(EJES_ACCEPT_TEXT.REPLACEMENT_NOTE);

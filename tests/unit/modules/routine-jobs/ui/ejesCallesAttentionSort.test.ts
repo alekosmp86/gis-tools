@@ -21,6 +21,7 @@ const splitOf = (overrides: Partial<EjesSplitRow> = {}): EjesSplitRow => ({
   farPoints: 0,
   heldReason: null,
   incompleteReview: false,
+  manual: false,
   coverage: null,
   oldLength: null,
   newLength: null,

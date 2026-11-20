@@ -41,13 +41,13 @@ const HOOK_TIMEOUT_MS = 60_000;
 const timer = () => createStepTimer({ now: () => 0, total: 20 });
 const OLD_REF = "6001";
 const NEW_REF = "6002";
-const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] };
+const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false };
 const replacementOf = (): EjesAccepted => ({
   splits: [{ oldRef: OLD_REF, choices: [] }],
   plainRemovals: [],
   merges: [],
   twinRemovals: [],
-  twinPicks: [],
+  twinPicks: [], manualSplits: [], autoPlainRemovals: false,
 });
 
 describe("one-piece replacements on PGlite (EJS-3, EJS-10, EJS-11, EJS-16, EJ-10, EJ-21)", () => {
@@ -337,7 +337,7 @@ describe("one-piece replacements on PGlite (EJS-3, EJS-10, EJS-11, EJS-16, EJ-10
         plainRemovals: [],
         merges: [],
         twinRemovals: [],
-        twinPicks: [],
+        twinPicks: [], manualSplits: [], autoPlainRemovals: false,
       });
 
       expect(await refOfPoint(first)).toBe(NEW_REF);

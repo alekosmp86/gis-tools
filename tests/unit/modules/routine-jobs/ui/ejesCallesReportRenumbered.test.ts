@@ -32,6 +32,8 @@ const COUNTS = {
   renumberSkipped: 0,
   twinsUndecided: 0,
   twinPicksApplied: 0,
+  manualSplitsApplied: 0,
+  manualSplitsIgnored: 0,
 };
 
 const ROWS: EjesRenumberedRow[] = [

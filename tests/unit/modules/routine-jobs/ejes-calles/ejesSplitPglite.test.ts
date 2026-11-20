@@ -37,12 +37,12 @@ vi.mock("node:os", async (importOriginal) => {
 const HOOK_TIMEOUT_MS = 60_000;
 const timer = () => createStepTimer({ now: () => 0, total: 20 });
 const OLD_REF = "6001";
-const NO_SPLIT: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] };
+const NO_SPLIT: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false };
 
 const acceptedSplit = (choices: EjesPointChoice[] = []): EjesAccepted => ({
   splits: [{ oldRef: OLD_REF, choices }],
   plainRemovals: [],
-  merges: [], twinRemovals: [], twinPicks: [],
+  merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false,
 });
 
 describe("accepted splits on PGlite (EJS-3, EJS-5, EJS-6, EJS-7, EJS-8, EJS-10, EJS-11, EJS-16)", () => {
@@ -323,7 +323,7 @@ describe("accepted splits on PGlite (EJS-3, EJS-5, EJS-6, EJS-7, EJS-8, EJS-10, 
       await pointAt(OLD_REF, "10:10");
       const before = await snapshotOf(database);
 
-      await expect(persist({ splits: [{ oldRef: "9999", choices: [] }], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] })).rejects.toThrow(ANALYSIS_CHANGED_MESSAGE);
+      await expect(persist({ splits: [{ oldRef: "9999", choices: [] }], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false })).rejects.toThrow(ANALYSIS_CHANGED_MESSAGE);
 
       expect(await snapshotOf(database)).toEqual(before);
       expect(await backupFiles()).toEqual([]);

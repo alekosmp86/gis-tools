@@ -35,6 +35,8 @@ const COUNTS = {
   twinsKeep: 4,
   twinsUndecided: 0,
   twinPicksApplied: 0,
+  manualSplitsApplied: 0,
+  manualSplitsIgnored: 0,
   twinsDefaulted: 2,
   renumbered: 2,
   renumberedWithPoints: 1,
@@ -155,8 +157,8 @@ describe("buildEjesReportView (EJ-12)", () => {
     expect(kpis["Sin cambios"]).toBe(80);
     expect(kpis["Divididos en varios nuevos"]).toBe(1);
     expect(kpis["Unidos en uno nuevo"]).toBe(1);
-    expect(kpis["Sin reemplazo, se quitarían"]).toBe(1);
-    expect(kpis["Sin reemplazo, con puntos de acceso: no se quitan"]).toBe(1);
+    expect(kpis["Se quitan automáticamente"]).toBe(1);
+    expect(kpis["Con puntos de acceso, sin resolver"]).toBe(1);
     expect(kpis["Con localidad"]).toBe(6);
     expect(kpis["Solo con departamento"]).toBe(2);
   });
@@ -287,7 +289,7 @@ describe("buildEjesReportView (EJ-12)", () => {
     });
 
     it("should leave the raw removed count as it is", () => {
-      expect(kpisOf(resultOf({ counts: { ...COUNTS, removed: 4, renumbered: 2 } }))["Sin reemplazo, se quitarían"]).toBe(1);
+      expect(kpisOf(resultOf({ counts: { ...COUNTS, removed: 4, renumbered: 2 } }))["Se quitan automáticamente"]).toBe(1);
     });
 
     it("should keep no summary of the renumbered rows, which are counted in the KPI group only", () => {

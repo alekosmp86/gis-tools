@@ -19,6 +19,7 @@ const SPLIT: EjesSplitRow = {
   farPoints: 0,
   heldReason: null,
   incompleteReview: false,
+  manual: false,
   coverage: 1,
   oldLength: 1087.76,
   newLength: 1120.5,
