@@ -21,9 +21,6 @@ import { ejesLayouts } from "./ejesFixtures";
 const CANONICAL_REFTRAMO =
   "CASE WHEN NULLIF(btrim(s.\"reftramo\"::text), '') ~ '^[0-9]+$' THEN (NULLIF(btrim(s.\"reftramo\"::text), ''))::numeric::text ELSE NULLIF(btrim(s.\"reftramo\"::text), '') END";
 
-const ACCESS_POINT_CANONICAL =
-  "CASE WHEN NULLIF(btrim(a.\"id_road_section\"::text), '') ~ '^[0-9]+$' THEN (NULLIF(btrim(a.\"id_road_section\"::text), ''))::numeric::text ELSE NULLIF(btrim(a.\"id_road_section\"::text), '') END";
-
 const positionOf = (text: string, fragment: string): number => {
   const index = text.indexOf(fragment);
   expect(index, `missing ${fragment}`).toBeGreaterThanOrEqual(0);
@@ -190,7 +187,7 @@ describe("buildEjesAnalysisSql", () => {
     });
 
     it("should measure the cover of each neighbour piece in piece_cover, one row per (removed section, new section)", () => {
-      const pieceCover = sql.slice(sql.indexOf('"piece_cover" AS ('), sql.indexOf('"removed_cover" AS ('));
+      const pieceCover = sql.slice(sql.indexOf('"piece_cover" AS ('), sql.indexOf('"piece_claims" AS ('));
 
       expect(pieceCover).toContain("ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, 1))) AS piece_covered");
       expect(pieceCover).toContain('FROM "removed_rest" AS r JOIN "new_rest" AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, 1)');
@@ -241,7 +238,7 @@ describe("buildEjesAnalysisSql", () => {
 
     it("should count a plain removal as held when either its reftramo or its road_section.id has points", () => {
       expect(sql).toContain(
-        '(SELECT count(*) FROM "plain" AS p WHERE EXISTS (SELECT 1 FROM "ap" AS ap WHERE ap.ref = p.ref AND ap.points > 0) OR EXISTS (SELECT 1 FROM "ap" AS apid WHERE apid.ref = p.id::text AND apid.points > 0)) AS "plain_held"'
+        '(SELECT count(*) FROM "plain" AS p LEFT JOIN "ap" AS ap ON ap.ref = p.ref LEFT JOIN "ap" AS apid ON apid.ref = p.id::text WHERE COALESCE(ap.points, 0) + COALESCE(apid.points, 0) > 0) AS "plain_held"'
       );
     });
   });
@@ -442,7 +439,7 @@ describe("buildEjesAnalysisSql", () => {
 
     it("should skip invalid and short geometries in stg, next to the null and empty conditions", () => {
       expect(stg).toContain(
-        `s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE COALESCE(${CANONICAL_REFTRAMO} IN (SELECT ${ACCESS_POINT_CANONICAL} FROM "carto"."access_point" AS a WHERE a."id_road_section" IS NOT NULL), false) END)), true) AND ${CANONICAL_REFTRAMO} ~ '^[0-9]+$'`
+        `s."geom" IS NOT NULL AND NOT ST_IsEmpty(s."geom") AND COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE COALESCE(${CANONICAL_REFTRAMO} IS NOT NULL AND ${CANONICAL_REFTRAMO} NOT IN (SELECT ref FROM "short_unheld"), false) END)), true) AND ${CANONICAL_REFTRAMO} ~ '^[0-9]+$'`
       );
     });
 
@@ -460,7 +457,7 @@ describe("buildEjesAnalysisSql", () => {
       const twinRaw = sql.slice(sql.indexOf('"twin_raw" AS ('), sql.indexOf('"twin_groups" AS ('));
 
       expect(twinRaw).toContain(
-        `COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE COALESCE(${CANONICAL_REFTRAMO} IN (SELECT ${ACCESS_POINT_CANONICAL} FROM "carto"."access_point" AS a WHERE a."id_road_section" IS NOT NULL), false) END)), true)`
+        `COALESCE(ST_IsEmpty(s."geom") OR (ST_IsValid(s."geom") AND ST_Length(s."geom") >= 0.001 AND (CASE WHEN ST_Length(s."geom") >= 1 THEN true ELSE COALESCE(${CANONICAL_REFTRAMO} IS NOT NULL AND ${CANONICAL_REFTRAMO} NOT IN (SELECT ref FROM "short_unheld"), false) END)), true)`
       );
     });
   });
@@ -672,7 +669,13 @@ describe("buildEjesAnalysisSql real-run analysis (EJL-12, EJL-17, EJL-19, EJL-20
 
     it("should keep a copy of the chosen department unless the twin rules drop its locality, keep a NULL-locality copy only when no named copy of the department remains, and keep only the picked copy of a picked reftramo naming a copy (copy_kept reads the twins, the twin department and the picks)", () => {
       expect(sql).toContain(
-        '"copy_kept" AS (SELECT r.* FROM "copy_raw" AS r LEFT JOIN "twins" AS w ON w.ref = r.ref LEFT JOIN "twin_dept" AS d ON d.ref = r.ref WHERE (NOT EXISTS (SELECT 1 FROM "twin_picks" AS p JOIN "copy_raw" AS x ON p.ref = x.ref AND p.department = x.departamento AND p.locality = x.localidad WHERE p.ref = r.ref) AND (d.department IS NULL OR r.departamento IS NULL OR upper(btrim(r.departamento)) = d.department) AND (w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities))) AND (r.localidad IS NOT NULL OR NOT EXISTS (SELECT 1 FROM "copy_raw" AS x WHERE x.ref = r.ref AND x.localidad IS NOT NULL AND (d.department IS NULL OR x.departamento IS NULL OR upper(btrim(x.departamento)) = d.department)))) OR EXISTS (SELECT 1 FROM "twin_picks" AS p WHERE p.ref = r.ref AND p.department = r.departamento AND p.locality = r.localidad))'
+        '"copy_kept" AS (SELECT r.* FROM "copy_raw" AS r LEFT JOIN "twins" AS w ON w.ref = r.ref LEFT JOIN "twin_dept" AS d ON d.ref = r.ref WHERE (NOT EXISTS (SELECT 1 FROM "twin_picks" AS p JOIN "copy_raw" AS x ON p.ref = x.ref AND p.department = x.departamento AND p.locality = x.localidad WHERE p.ref = r.ref) AND (d.department IS NULL OR r.departamento IS NULL OR upper(btrim(r.departamento)) = d.department) AND (w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities))) AND (r.localidad IS NOT NULL OR r.ref NOT IN (SELECT ref FROM "copy_localized"))) OR EXISTS (SELECT 1 FROM "twin_picks" AS p WHERE p.ref = r.ref AND p.department = r.departamento AND p.locality = r.localidad))'
+      );
+    });
+
+    it("should name the reftramos with a localized copy of a kept department in copy_localized, which copy_kept tests with NOT IN", () => {
+      expect(sql).toContain(
+        '"copy_localized" AS (SELECT DISTINCT x.ref FROM "copy_raw" AS x LEFT JOIN "twin_dept" AS d ON d.ref = x.ref WHERE x.localidad IS NOT NULL AND (d.department IS NULL OR x.departamento IS NULL OR upper(btrim(x.departamento)) = d.department))'
       );
     });
 

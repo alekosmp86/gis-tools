@@ -20,7 +20,7 @@ import type { EjesLayouts, EjesLoadContext, EjesTwinPick } from "../types";
 import { integerColumnOf, physicalOf } from "./loadContext";
 import { col, countOf, listOf, table, trimmed } from "./layoutSql";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
-import { accessPointRefSql, canonicalTextSql, INTEGER_PATTERN, keptStagingRowSql } from "./stagingSql";
+import { accessPointRefSql, canonicalTextSql, INTEGER_PATTERN, keptStagingRowSql, shortUnheldCte } from "./stagingSql";
 import {
   renumberCountColumns,
   renumberCtes,
@@ -88,7 +88,7 @@ function stagingKeyCtes(layouts: EjesLayouts): string[] {
   const reference = canonicalTextSql(column(EJES_STAGING_COLUMN.REFTRAMO));
   const geometry = column(EJES_STAGING_COLUMN.GEOM);
   return [
-    cte("stg_keys", `SELECT DISTINCT ${reference} AS ref FROM ${staging} AS s WHERE ${keptStagingRowSql(layouts, geometry, reference)}`),
+    cte("stg_keys", `SELECT DISTINCT ${reference} AS ref FROM ${staging} AS s WHERE ${keptStagingRowSql(geometry, reference)}`),
     cte("stg_all_keys", `SELECT DISTINCT ${reference} AS ref FROM ${staging} AS s WHERE ${reference} ~ '${INTEGER_PATTERN}'`),
   ];
 }
@@ -105,7 +105,7 @@ function discardedCandidateCtes(layouts: EjesLayouts): string[] {
       [
         `SELECT ${reference} AS ref, ${street} AS idcalle, ${geometry} AS geom FROM ${table(layouts, "STAGING")} AS s`,
         `WHERE ${reference} ~ '${INTEGER_PATTERN}' AND ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ST_IsValid(${geometry})`,
-        `AND NOT (${keptStagingRowSql(layouts, geometry, reference)})`,
+        `AND NOT (${keptStagingRowSql(geometry, reference)})`,
       ].join(" ")
     ),
   ];
@@ -131,7 +131,7 @@ function stagedCtes(layouts: EjesLayouts): string[] {
         `${trimmed(column(EJES_STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
         `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `${geometry} AS geom`,
-        `FROM ${staging} AS s WHERE ${keptStagingRowSql(layouts, geometry, reference)}`,
+        `FROM ${staging} AS s WHERE ${keptStagingRowSql(geometry, reference)}`,
         `AND NOT EXISTS (SELECT 1 FROM ${q("geo_losers")} AS l WHERE l.ref = ${reference})) AS raw`,
         "ORDER BY raw.ref, raw.idcalle, raw.nombre, raw.tipo, raw.fuente, raw.departamento, raw.localidad, ST_AsEWKB(raw.geom)",
       ].join(" ")
@@ -197,7 +197,7 @@ export function copyRawCte(layouts: EjesLayouts): string {
       `${trimmed(column(EJES_STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
       `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
       `${geometry} AS geom`,
-      `FROM ${table(layouts, "STAGING")} AS s WHERE ${keptStagingRowSql(layouts, geometry, reference)}) AS raw`,
+      `FROM ${table(layouts, "STAGING")} AS s WHERE ${keptStagingRowSql(geometry, reference)}) AS raw`,
       "ORDER BY raw.ref, raw.localidad, raw.departamento, raw.idcalle, raw.nombre, raw.tipo, raw.fuente, ST_AsEWKB(raw.geom)",
     ].join(" ")
   );
@@ -220,9 +220,16 @@ export const copyKeptCte = (): string =>
       `WHERE (NOT EXISTS (SELECT 1 FROM ${q(TWIN_PICKS_CTE)} AS p JOIN ${q("copy_raw")} AS x ON ${pickNamesCopySql("p", "x")} WHERE p.ref = r.ref)`,
       `AND ${departmentKeepsSql("r.departamento", "d.department")}`,
       "AND (w.ref IS NULL OR r.localidad IS NULL OR NOT (r.localidad = ANY (w.drop_localities)))",
-      `AND (r.localidad IS NOT NULL OR NOT EXISTS (SELECT 1 FROM ${q("copy_raw")} AS x WHERE x.ref = r.ref AND x.localidad IS NOT NULL AND ${departmentKeepsSql("x.departamento", "d.department")})))`,
+      `AND (r.localidad IS NOT NULL OR r.ref NOT IN (SELECT ref FROM ${q("copy_localized")})))`,
       `OR EXISTS (SELECT 1 FROM ${q(TWIN_PICKS_CTE)} AS p WHERE ${pickNamesCopySql("p", "r")})`,
     ].join(" ")
+  );
+
+/** The `reftramo`s with a copy that names a locality and whose department the chosen one keeps: a copy without locality is kept only without one. */
+export const copyLocalizedCte = (): string =>
+  cte(
+    "copy_localized",
+    `SELECT DISTINCT x.ref FROM ${q("copy_raw")} AS x LEFT JOIN ${q("twin_dept")} AS d ON d.ref = x.ref WHERE x.localidad IS NOT NULL AND ${departmentKeepsSql("x.departamento", "d.department")}`
   );
 
 /** Kept copies per `reftramo` after the geometric rule: a renumber onto a `reftramo` with one copy only. */
@@ -303,6 +310,10 @@ function splitCtes(): string[] {
       ].join(" ")
     ),
     cte(
+      "piece_claims",
+      `SELECT o.new_ref, min(o.id) AS first_id, max(o.id) AS last_id FROM ${q("piece_cover")} AS o WHERE ${isPieceSql("o.piece_covered", "o.len", "o.piece_len")} GROUP BY o.new_ref`
+    ),
+    cte(
       "removed_cover",
       [
         "SELECT p.id, p.ref, p.idcalle, p.len, count(p.new_ref) AS new_count,",
@@ -317,7 +328,8 @@ function splitCtes(): string[] {
     cte(
       "splits",
       [
-        `SELECT * FROM ${q("removed_cover")} AS s WHERE (s.new_count >= ${SPLIT_MIN_PIECES} OR ${replacementSql()})`,
+        `SELECT s.* FROM ${q("removed_cover")} AS s LEFT JOIN ${q("piece_claims")} AS pc ON pc.new_ref = s.new_refs[1]`,
+        `WHERE (s.new_count >= ${SPLIT_MIN_PIECES} OR ${replacementSql()})`,
         `AND ${coverageThresholdSql("s.covered", "s.len")}`,
       ].join(" ")
     ),
@@ -331,8 +343,7 @@ function splitCtes(): string[] {
 const replacementSql = (): string =>
   [
     `(s.new_count = ${REPLACEMENT_PIECES} AND s.ref IS NOT NULL AND s.new_refs[1] IN (SELECT x.ref FROM ${q("single_copy_refs")} AS x)`,
-    `AND NOT EXISTS (SELECT 1 FROM ${q("piece_cover")} AS o WHERE o.new_ref = s.new_refs[1] AND o.id <> s.id`,
-    `AND ${isPieceSql("o.piece_covered", "o.len", "o.piece_len")}))`,
+    "AND (pc.first_id IS NULL OR (pc.first_id = s.id AND pc.last_id = s.id)))",
   ].join(" ");
 
 function mergeCtes(): string[] {
@@ -375,11 +386,19 @@ function keptByDiscardedCtes(): string[] {
   const sameReference = `r.ref IN (SELECT ref FROM ${q("stg_all_keys")})`;
   return [
     cte(
+      "candidate_near",
+      [
+        "SELECT DISTINCT ON (r.id) r.id, c.ref FROM",
+        `${q("removed_rest")} AS r JOIN ${q("disc_candidates")} AS c ON c.idcalle = r.idcalle AND ST_DWithin(r.geometry, c.geom, ${tolerance})`,
+        "ORDER BY r.id, ST_Distance(r.geometry, c.geom), c.ref",
+      ].join(" ")
+    ),
+    cte(
       "kept_by_candidate",
       [
         `SELECT r.id, r.ref, r.idcalle, CASE WHEN ${sameReference} THEN r.ref ELSE d.ref END AS discarded_ref,`,
         `CASE WHEN ${sameReference} THEN '${EJES_KEPT_BY_DISCARDED_REASON.SAME_REFTRAMO}' ELSE '${EJES_KEPT_BY_DISCARDED_REASON.PLACE}' END AS reason`,
-        `FROM ${q("removed_rest")} AS r LEFT JOIN LATERAL (SELECT c.ref FROM ${q("disc_candidates")} AS c WHERE c.idcalle = r.idcalle AND ST_DWithin(r.geometry, c.geom, ${tolerance}) ORDER BY ST_Distance(r.geometry, c.geom), c.ref LIMIT 1) AS d ON true`,
+        `FROM ${q("removed_rest")} AS r LEFT JOIN ${q("candidate_near")} AS d ON d.id = r.id`,
         `WHERE r.id NOT IN (SELECT id FROM ${q("splits")}) AND r.id NOT IN (SELECT id FROM ${q("merged_ids")})`,
         `AND NOT EXISTS (SELECT 1 FROM ${q("new_sections")} AS n WHERE n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance}))`,
         `AND (${sameReference} OR d.ref IS NOT NULL)`,
@@ -473,7 +492,7 @@ function countColumns(): string[] {
     `${countOf("merges")} AS "merges"`,
     ...splitPointCountColumns(),
     `${countOf("plain")} AS "plain_removals"`,
-    `(SELECT count(*) FROM ${q("plain")} AS p WHERE EXISTS (SELECT 1 FROM ${q("ap")} AS ap WHERE ap.ref = p.ref AND ap.points > 0) OR EXISTS (SELECT 1 FROM ${q("ap")} AS apid WHERE apid.ref = p.id::text AND apid.points > 0)) AS "plain_held"`,
+    `(SELECT count(*) FROM ${q("plain")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = p.id::text WHERE COALESCE(ap.points, 0) + COALESCE(apid.points, 0) > 0) AS "plain_held"`,
     `${countOf("kept_by_candidate")} AS "kept_by_discarded_candidate"`,
     `${countOf("new_streets")} AS "new_streets"`,
     `${countOf("located", "cloc IS NOT NULL")} AS "with_locality"`,
@@ -495,6 +514,7 @@ function countColumns(): string[] {
  */
 export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks, twinPicks: readonly EjesTwinPick[] = []): string {
   const ctes = [
+    shortUnheldCte(layouts),
     tipoMapCte(),
     fuenteMapCte(),
     ...stagingKeyCtes(layouts),
@@ -505,6 +525,7 @@ export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks
     ...twinCtes(layouts),
     copyRawCte(layouts),
     twinPicksValuesCte(twinPicks),
+    copyLocalizedCte(),
     copyKeptCte(),
     ...geoTwinCtes(),
     ...stagedCtes(layouts),

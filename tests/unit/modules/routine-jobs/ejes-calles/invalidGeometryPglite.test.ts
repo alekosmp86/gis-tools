@@ -41,12 +41,14 @@ const NO_GEO_LOSERS_CTE = '"geo_losers" AS (SELECT NULL::text AS ref WHERE false
 
 const analysisCtes = (): { stgKeys: string; stg: string } => {
   const sql = buildEjesAnalysisSql(ejesLayouts());
+  const shortUnheldAt = sql.indexOf('"short_unheld" AS (');
+  const shortUnheld = sql.slice(shortUnheldAt, sql.indexOf(",\n", shortUnheldAt));
   const keysAt = sql.indexOf('"stg_keys" AS (');
   const stgAt = sql.indexOf('"stg" AS (');
   const stgEnd = sql.indexOf(",\n", stgAt);
   return {
-    stgKeys: sql.slice(keysAt, sql.indexOf(",\n", keysAt)),
-    stg: `${NO_GEO_LOSERS_CTE}, ${sql.slice(stgAt, stgEnd)}`,
+    stgKeys: `${shortUnheld}, ${sql.slice(keysAt, sql.indexOf(",\n", keysAt))}`,
+    stg: `${shortUnheld}, ${NO_GEO_LOSERS_CTE}, ${sql.slice(stgAt, stgEnd)}`,
   };
 };
 

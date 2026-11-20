@@ -1,11 +1,12 @@
 import { cte, q, withClause } from "../../shared/sqlFragments";
 import { EJES_SKIP_KIND, EJES_SRID, EJES_TABLE_ROLE, GEO_TWIN_ROLE } from "../constants";
 import type { EjesLayouts, EjesLoadContext } from "../types";
-import { accessPointRefMatchSql, circulationPairsCte, copyKeptCte, copyRawCte, currentCtes, geometriesDifferSql, pointsCte } from "./analysisSql";
+import { accessPointRefMatchSql, circulationPairsCte, copyKeptCte, copyLocalizedCte, copyRawCte, currentCtes, geometriesDifferSql, pointsCte } from "./analysisSql";
 import { copyFinalCte } from "./geoTwinSql";
 import { col, table } from "./layoutSql";
 import { nextvalSql } from "./loadContext";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
+import { shortUnheldCte } from "./stagingSql";
 import { distinctPairsCountSql } from "./renumberSql";
 import { twinCtes, twinGroupCtes } from "./twinSql";
 import { twinPicksTableCte } from "./twinPickSql";
@@ -59,12 +60,14 @@ const DROPPED_SQL = `(SELECT d.ref FROM ${tmp(LOAD_TEMP.DROPPED)} AS d)`;
 /** One row per kept copy: a copy is `reftramo + localidad + departamento`; the twin rules drop the copies of the localities they name, the picks keep one. */
 export function buildCopyTableSql(layouts: EjesLayouts): string {
   const ctes = [
+    shortUnheldCte(layouts),
     tipoMapCte(),
     fuenteMapCte(),
     ...twinGroupCtes(layouts),
     ...twinCtes(layouts),
     copyRawCte(layouts),
     twinPicksTableCte(tmp(LOAD_TEMP.ACC_TWIN_PICK)),
+    copyLocalizedCte(),
     copyKeptCte(),
     copyFinalCte(GEO_LOSERS_SQL, DROPPED_SQL),
   ];

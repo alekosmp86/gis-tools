@@ -3,6 +3,7 @@ import { GEO_TWIN_ROLE, INVALID_CHOICE_REFS_LIMIT, INVALID_TWIN_PICK_REFS_LIMIT,
 import type { EjesAccepted, EjesLayouts } from "../types";
 import { copyRawCte } from "./analysisSql";
 import { LOAD_TEMP, tmp } from "./loadSelectionSql";
+import { shortUnheldCte } from "./stagingSql";
 import { pickNamesCopySql } from "./twinPickSql";
 
 const createTableSql = (name: string, columns: string): string => `CREATE TEMP TABLE ${q(name)} (${columns}) ON COMMIT DROP`;
@@ -47,7 +48,7 @@ export const buildMissingAcceptedSql = (): string =>
 /** The old `reftramo`s of up to `INVALID_TWIN_PICK_REFS_LIMIT` picks that name no copy of the staging (ET-28, fail closed). */
 export const buildInvalidTwinPickRefsSql = (layouts: EjesLayouts): string =>
   [
-    withClause([copyRawCte(layouts)]),
+    withClause([shortUnheldCte(layouts), copyRawCte(layouts)]),
     `SELECT DISTINCT p.ref FROM ${tmp(LOAD_TEMP.ACC_TWIN_PICK)} AS p`,
     `WHERE NOT EXISTS (SELECT 1 FROM ${q("copy_raw")} AS r WHERE ${pickNamesCopySql("p", "r")})`,
     `ORDER BY p.ref LIMIT ${INVALID_TWIN_PICK_REFS_LIMIT}`,

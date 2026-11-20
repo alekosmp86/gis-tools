@@ -67,7 +67,7 @@ export function twinGroupCtes(layouts: EjesLayouts): string[] {
         `${trimmed(column(EJES_STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
         `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `ST_SetSRID(${geometry}, ${EJES_SRID}) AS geom`,
-        `FROM ${table(layouts, "STAGING")} AS s WHERE ${keptStagingRowSql(layouts, geometry, reference)}`,
+        `FROM ${table(layouts, "STAGING")} AS s WHERE ${keptStagingRowSql(geometry, reference)}`,
       ].join(" ")
     ),
     twinDeptCte(layouts),

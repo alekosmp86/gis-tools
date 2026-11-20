@@ -24,22 +24,44 @@ const textOf = (layouts: EjesLayouts, column: string): string =>
 export const accessPointRefSql = (layouts: EjesLayouts): string =>
   canonicalTextSql(`a.${col(layouts, "ACCESS_POINT", ACCESS_POINT_COLUMN.ROAD_SECTION)}`);
 
-const hasAccessPointsSql = (layouts: EjesLayouts, reference: string): string =>
-  `COALESCE(${reference} IN (SELECT ${accessPointRefSql(layouts)} FROM ${table(layouts, "ACCESS_POINT")} AS a WHERE a.${col(layouts, "ACCESS_POINT", ACCESS_POINT_COLUMN.ROAD_SECTION)} IS NOT NULL), false)`;
+export const SHORT_UNHELD_CTE_NAME = "short_unheld";
+
+/**
+ * The references of the short staging sections (below `MIN_SECTION_LENGTH_M`) that no access point holds. A hash join builds it once per
+ * statement, so a row tests membership in this small set instead of probing the access points.
+ */
+export const shortUnheldCte = (layouts: EjesLayouts): string => {
+  const staging = layouts[EJES_TABLE_ROLE.STAGING];
+  const geometry = `s.${physicalColumn(staging, EJES_STAGING_COLUMN.GEOM)}`;
+  const reference = canonicalTextSql(`s.${physicalColumn(staging, EJES_STAGING_COLUMN.REFTRAMO)}`);
+  return cte(
+    SHORT_UNHELD_CTE_NAME,
+    [
+      "SELECT x.ref FROM",
+      `(SELECT DISTINCT ${reference} AS ref FROM ${qualifiedName(staging)} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ST_Length(${geometry}) < ${MIN_SECTION_LENGTH_M}) AS x`,
+      `LEFT JOIN (SELECT DISTINCT ${accessPointRefSql(layouts)} AS ref FROM ${table(layouts, "ACCESS_POINT")} AS a WHERE a.${col(layouts, "ACCESS_POINT", ACCESS_POINT_COLUMN.ROAD_SECTION)} IS NOT NULL) AS p ON p.ref = x.ref`,
+      "WHERE x.ref IS NOT NULL AND p.ref IS NULL",
+    ].join(" ")
+  );
+};
+
+/** Needs `shortUnheldCte` in the same statement, before the first use. */
+const hasAccessPointsSql = (reference: string): string =>
+  `COALESCE(${reference} IS NOT NULL AND ${reference} NOT IN (SELECT ref FROM ${q(SHORT_UNHELD_CTE_NAME)}), false)`;
 
 /**
  * Valid for every rule: empty, or valid, not collapsed, and at least `MIN_SECTION_LENGTH_M` long unless its canonical `reference` holds access points.
  * The access points are read only for a short section (CASE), so long sections never touch them. Any other row is discarded from every rule.
  */
-export const validGeometrySql = (geometry: string, reference: string, layouts: EjesLayouts): string => {
+export const validGeometrySql = (geometry: string, reference: string): string => {
   const length = `ST_Length(${geometry})`;
-  const longEnoughOrHeld = `CASE WHEN ${length} >= ${MIN_SECTION_LENGTH_M} THEN true ELSE ${hasAccessPointsSql(layouts, reference)} END`;
+  const longEnoughOrHeld = `CASE WHEN ${length} >= ${MIN_SECTION_LENGTH_M} THEN true ELSE ${hasAccessPointsSql(reference)} END`;
   return `COALESCE(ST_IsEmpty(${geometry}) OR (ST_IsValid(${geometry}) AND ${length} >= ${GEOMETRY_TOLERANCE_M} AND (${longEnoughOrHeld})), true)`;
 };
 
 /** A staging row every rule reads: geometry present and valid (`validGeometrySql`), reference an integer. */
-export const keptStagingRowSql = (layouts: EjesLayouts, geometry: string, reference: string): string =>
-  `${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry, reference, layouts)} AND ${reference} ~ '${INTEGER_PATTERN}'`;
+export const keptStagingRowSql = (geometry: string, reference: string): string =>
+  `${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${validGeometrySql(geometry, reference)} AND ${reference} ~ '${INTEGER_PATTERN}'`;
 
 function stagingRowsCte(layouts: EjesLayouts): string {
   const staging = layouts[EJES_TABLE_ROLE.STAGING];
@@ -56,7 +78,7 @@ function stagingRowsCte(layouts: EjesLayouts): string {
       `${textOf(layouts, EJES_STAGING_COLUMN.LOCALIDAD)} AS localidad,`,
       `${textOf(layouts, EJES_STAGING_COLUMN.DEPARTAMENTO)} AS departamento,`,
       `(${geometry} IS NULL OR ST_IsEmpty(${geometry})) AS empty_geometry,`,
-      `(NOT ${validGeometrySql(geometry, reference, layouts)}) AS invalid_geometry,`,
+      `(NOT ${validGeometrySql(geometry, reference)}) AS invalid_geometry,`,
       `(${DAMAGED_COLUMNS.map((column) => `position(chr(65533) in COALESCE(s.${physicalColumn(staging, column)}::text, '')) > 0`).join(" OR ")}) AS damaged_text`,
       `FROM ${qualifiedName(staging)} AS s`,
     ].join(" ")
@@ -88,6 +110,7 @@ const unknownRowsSql = (column: string, mapName: string): string =>
 
 export function buildStagingChecksSql(layouts: EjesLayouts): string {
   const ctes = [
+    shortUnheldCte(layouts),
     stagingRowsCte(layouts),
     tipoMapCte(),
     fuenteMapCte(),

@@ -33,7 +33,7 @@ const POSTGIS_STUBS_SQL = `
   $$ LANGUAGE sql;
   CREATE FUNCTION GeometryType(geometry) RETURNS text AS $$ SELECT CASE WHEN position('|' in $1::text) > 0 THEN 'MULTILINESTRING' ELSE 'LINESTRING' END $$ LANGUAGE sql;
   CREATE FUNCTION ST_Length(geometry) RETURNS float8 AS $$
-    SELECT sum(split_part(p, ':', 2)::float8 - split_part(p, ':', 1)::float8) FROM unnest(string_to_array($1::text, '|')) AS p
+    SELECT CASE WHEN $1::text ~ '^[0-9.:|-]+$' THEN (SELECT sum(split_part(p, ':', 2)::float8 - split_part(p, ':', 1)::float8) FROM unnest(string_to_array($1::text, '|')) AS p) END
   $$ LANGUAGE sql;
   CREATE FUNCTION ST_AsEWKB(geometry) RETURNS bytea AS $$ SELECT convert_to($1::text, 'UTF8') $$ LANGUAGE sql;
   CREATE FUNCTION ST_SRID(geometry) RETURNS integer AS $$ SELECT 32721 $$ LANGUAGE sql STRICT;
