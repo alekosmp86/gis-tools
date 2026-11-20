@@ -13,7 +13,6 @@ import { EjesReportLists } from "./EjesReportLists";
 import { EjesSummaryStrip } from "./EjesSummaryStrip";
 import { TwinPicksPanel } from "./TwinPicksPanel";
 import { ManualSplitModal } from "./manualSplit/ManualSplitModal";
-import { ManualSplitsPanel } from "./manualSplit/ManualSplitsPanel";
 import { KpiCards, OutcomeBanners, SectionTitle, TimingsSection } from "../shared/ReportParts";
 import sharedStyles from "../shared/ReportShared.module.css";
 
@@ -75,21 +74,13 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
       <EjesSummaryStrip items={view.strip} openLists={openLists} onSelect={selectList} />
       <TextList title="Bloqueos para la carga" items={view.blockers} />
       <TextList title="Privilegios de escritura (información del análisis)" items={view.privilegeInfo} />
-      {accept !== undefined && (result.twinUndecided.length > 0 || accept.twinPicks.length > 0 || accept.manualSplits.length > 0) && (
+      {accept !== undefined && (result.twinUndecided.length > 0 || accept.twinPicks.length > 0) && (
         <TwinPicksPanel
           picks={accept.twinPicks}
           applied={result.counts.twinPicksApplied}
           canAnalyze={accept.canAnalyzeWithPicks}
           onAnalyze={accept.onAnalyzeWithPicks}
           onRemove={(ref) => accept.onTwinPickChange({ ref, copy: null })}
-        />
-      )}
-      {accept !== undefined && accept.manualSplits.length > 0 && (
-        <ManualSplitsPanel
-          splits={accept.manualSplits}
-          applied={result.counts.manualSplitsApplied}
-          ignored={result.manualSplitsIgnored}
-          onRemove={(oldRef) => accept.onManualSplitChange({ oldRef, newRefs: null })}
         />
       )}
       <EjesReportLists
