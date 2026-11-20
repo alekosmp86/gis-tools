@@ -1,7 +1,23 @@
 .mapFrame {
+  position: relative;
   flex: 1;
   min-height: 0;
   min-width: 0;
+}
+
+.loadingBadge {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  z-index: 1000;
+  margin: 0;
+  padding: 4px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-card-hover);
+  font-size: 12px;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .details {

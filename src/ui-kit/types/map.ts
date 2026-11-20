@@ -16,4 +16,6 @@ export interface MapInteractionOptions {
   clearOnBackgroundClick?: boolean;
   /** Fit the view to the data once; later changes of the collection (a selection repaint) keep the view where the user left it. */
   fitOnce?: boolean;
+  /** With `fitOnce`: a change of this key fits the view again on the next collection, without rebuilding the map. */
+  fitKey?: string;
 }

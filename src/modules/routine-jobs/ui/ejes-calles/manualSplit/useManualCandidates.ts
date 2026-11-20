@@ -25,6 +25,8 @@ export interface ManualCandidatesMap {
   status: MapLoadStatus;
   features: EjesMapFeature[];
   candidates: EjesMapCandidate[];
+  /** Names the request whose data is on screen; it changes only when new data arrives. While loading, the features and candidates are the previous ones. */
+  dataKey: string;
   message: string | null;
   retry: () => void;
 }
@@ -65,7 +67,10 @@ export function useManualCandidates(base: EjesGeometryMapBase, oldRef: number, r
   }, []);
 
   const current = settled !== null && settled.key === requestKey ? settled : null;
-  if (current === null) return { status: MapLoadStatus.LOADING, features: [], candidates: [], message: null, retry };
-  if (current.message !== null) return { status: MapLoadStatus.ERROR, features: [], candidates: [], message: current.message, retry };
-  return { status: MapLoadStatus.READY, features: current.features, candidates: current.candidates, message: null, retry };
+  const dataKey = settled?.key ?? "";
+  if (current === null) {
+    return { status: MapLoadStatus.LOADING, features: settled?.features ?? [], candidates: settled?.candidates ?? [], dataKey, message: null, retry };
+  }
+  if (current.message !== null) return { status: MapLoadStatus.ERROR, features: [], candidates: [], dataKey, message: current.message, retry };
+  return { status: MapLoadStatus.READY, features: current.features, candidates: current.candidates, dataKey, message: null, retry };
 }

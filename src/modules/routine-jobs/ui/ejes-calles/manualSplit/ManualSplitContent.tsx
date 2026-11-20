@@ -37,6 +37,13 @@ export function ManualSplitContent({ row, base, storedRefs, ignored, onApply, on
   const [selectedRefs, setSelectedRefs] = useState<string[]>([...storedRefs]);
   const [radius, setRadius] = useState<number>(MANUAL_CANDIDATE_RADIUS_M);
   const [otherStreets, setOtherStreets] = useState<boolean>(false);
+  const [shownRef, setShownRef] = useState<string>(row.ref);
+  if (shownRef !== row.ref) {
+    setShownRef(row.ref);
+    setSelectedRefs([...storedRefs]);
+    setRadius(MANUAL_CANDIDATE_RADIUS_M);
+    setOtherStreets(false);
+  }
   const map = useManualCandidates(base, Number(row.ref), radius, otherStreets);
   const chosen = chosenCandidatesOf(map.candidates, selectedRefs);
   const collection = useMemo(
@@ -52,7 +59,8 @@ export function ManualSplitContent({ row, base, storedRefs, ignored, onApply, on
     });
 
   const mapArea = (): React.ReactNode => {
-    if (map.status === MapLoadStatus.LOADING) {
+    const loading = map.status === MapLoadStatus.LOADING;
+    if (loading && map.features.length === 0) {
       return <p className={styles.status} role="status">{EJES_MANUAL_SPLIT_TEXT.LOADING}</p>;
     }
     if (map.status === MapLoadStatus.ERROR) {
@@ -66,7 +74,7 @@ export function ManualSplitContent({ row, base, storedRefs, ignored, onApply, on
         </div>
       );
     }
-    return <ManualSplitMap collection={collection} viewKey={`${row.ref}|${radius}|${otherStreets}|${map.candidates.length}`} onToggleCandidate={toggleRef} />;
+    return <ManualSplitMap collection={collection} viewKey={map.dataKey} loading={loading} onToggleCandidate={toggleRef} />;
   };
 
   const details = (

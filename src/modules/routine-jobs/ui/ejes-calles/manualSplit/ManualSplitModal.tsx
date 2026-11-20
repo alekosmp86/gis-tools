@@ -33,7 +33,7 @@ export interface ManualSplitModalProps {
 /**
  * The map where the user decides the new sections that replace a held removal. Applying stores the choice and moves to the next
  * held row, or closes after the last one. Ignoring marks the row as reviewed and moves to the next unresolved one. The arrows skip
- * resolved rows. Mounted only while open; each row starts from its own stored choice.
+ * resolved rows. Mounted only while open; each row starts from its own stored choice, and the map stays mounted from row to row.
  */
 export function ManualSplitModal({ review, base, manualSplits, ignoredRefs, onChange, onIgnoredChange, onNavigate, onClose }: ManualSplitModalProps) {
   if (review === null) return null;
@@ -64,7 +64,6 @@ export function ManualSplitModal({ review, base, manualSplits, ignoredRefs, onCh
         <p className={styles.notice}>{EJES_CONNECTION_NOTICE}</p>
       ) : (
         <ManualSplitContent
-          key={row.ref}
           row={row}
           base={base}
           storedRefs={manualSplitOf(manualSplits, row.ref)?.newRefs ?? []}

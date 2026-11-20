@@ -47,6 +47,8 @@ export interface SpatialMapPreviewProps {
   fillParent?: boolean;
   /** Fit the view once; a later change of the collection (a selection repaint) does not move the view. */
   fitOnce?: boolean;
+  /** With `fitOnce`: a change of this key fits the view again, keeping the map mounted. */
+  fitKey?: string;
 }
 
 export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
@@ -66,6 +68,7 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
   codedLabels = false,
   fillParent = false,
   fitOnce = false,
+  fitKey,
 }) => {
   const [mapContainerNode, setMapContainerNode] = useState<HTMLDivElement | null>(null);
   const [basemapKey, setBasemapKey] = useState<string>("osm");
@@ -80,8 +83,8 @@ export const SpatialMapPreview: React.FC<SpatialMapPreviewProps> = ({
 
   const maxRenderFeatures = neverCapViewportRender ? null : MAX_VIEWPORT_RENDER_FEATURES;
   const interaction = useMemo<MapInteractionOptions>(
-    () => ({ showPopups, labelProperty, codedLabels, clearOnBackgroundClick, fitOnce }),
-    [showPopups, labelProperty, codedLabels, clearOnBackgroundClick, fitOnce]
+    () => ({ showPopups, labelProperty, codedLabels, clearOnBackgroundClick, fitOnce, fitKey }),
+    [showPopups, labelProperty, codedLabels, clearOnBackgroundClick, fitOnce, fitKey]
   );
 
   const { renderedCount, isChunking, renderError, handleFitBounds } = useLeafletMap(

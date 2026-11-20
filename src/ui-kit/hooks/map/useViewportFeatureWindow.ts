@@ -46,9 +46,11 @@ export function useViewportFeatureWindow(
   isMapReady: boolean = false,
   maxRenderFeatures: number | null = MAX_VIEWPORT_RENDER_FEATURES,
   isVisible: boolean = true,
-  fitOnce: boolean = false
+  fitOnce: boolean = false,
+  fitKey?: string
 ): FeatureCollection {
   const hasFittedRef = useRef<boolean>(false);
+  const lastFitKeyRef = useRef<string | undefined>(fitKey);
   const indexRef = useRef<ViewportFeatureIndex | null>(null);
   const lastProcessedGeojsonRef = useRef<FeatureCollection | null>(null);
   const previousWindowBBoxRef = useRef<BBox | null>(null);
@@ -75,7 +77,9 @@ export function useViewportFeatureWindow(
       const newIndex = new ViewportFeatureIndex(features);
       indexRef.current = newIndex;
       previousWindowBBoxRef.current = null;
-      pendingFitBoundsRef.current = fitOnce && hasFittedRef.current ? null : collectionBoundsOf(newIndex.getCollectionBBox());
+      const sameFitKey = lastFitKeyRef.current === fitKey;
+      lastFitKeyRef.current = fitKey;
+      pendingFitBoundsRef.current = fitOnce && hasFittedRef.current && sameFitKey ? null : collectionBoundsOf(newIndex.getCollectionBBox());
     }
 
     // A fit on a container without size zooms out to the world, so the fit waits for the first resize with a size.
@@ -147,7 +151,7 @@ export function useViewportFeatureWindow(
       mapInstance.off("moveend", updateWindow);
       mapInstance.off("zoomend", updateWindow);
     };
-  }, [mapInstanceRef, geojson, isMapReady, maxRenderFeatures, isVisible]);
+  }, [mapInstanceRef, geojson, isMapReady, maxRenderFeatures, isVisible, fitOnce, fitKey]);
 
   return windowedCollection;
 }

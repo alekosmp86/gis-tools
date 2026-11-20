@@ -23,8 +23,10 @@ const mapRenderFailure = (error: Error) => (
 
 export interface ManualSplitMapProps {
   collection: FeatureCollection;
-  /** Changes when the set of candidates changes (another old section, radius or street switch): the map then fits its view again. */
+  /** Changes when new data arrives (another old section, radius or street switch): the map then fits its view again, without being rebuilt. */
   viewKey: string;
+  /** The data on the map is the previous one while the next is requested. */
+  loading: boolean;
   /** A click on a candidate section toggles it, as its row in the list does. */
   onToggleCandidate: (ref: string) => void;
 }
@@ -33,16 +35,17 @@ export interface ManualSplitMapProps {
  * The old section, its access points and the candidate sections on the shared map; a click on a candidate chooses it.
  * No labels, and the view is fitted once per `viewKey`: choosing a section only repaints it, it never moves the view.
  */
-export function ManualSplitMap({ collection, viewKey, onToggleCandidate }: ManualSplitMapProps) {
+export function ManualSplitMap({ collection, viewKey, loading, onToggleCandidate }: ManualSplitMapProps) {
   const handleSelect = (index: number | null) => {
     const ref = candidateRefAt(collection, index);
-    if (ref !== null) onToggleCandidate(ref);
+    if (ref !== null && !loading) onToggleCandidate(ref);
   };
   return (
     <div className={styles.mapFrame}>
+      {loading && <p className={styles.loadingBadge} role="status">{EJES_MANUAL_SPLIT_TEXT.LOADING}</p>}
       <RenderErrorBoundary label={BOUNDARY_LABEL} fallback={mapRenderFailure}>
         <SpatialMapPreview
-          key={viewKey}
+          fitKey={viewKey}
           geojson={collection}
           title={EJES_MANUAL_SPLIT_TEXT.MAP_TITLE}
           onSelectFeature={handleSelect}
