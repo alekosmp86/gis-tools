@@ -14,4 +14,6 @@ export interface MapInteractionOptions {
   codedLabels?: boolean;
   /** A click on empty map reports null through onSelectFeature. */
   clearOnBackgroundClick?: boolean;
+  /** Fit the view to the data once; later changes of the collection (a selection repaint) keep the view where the user left it. */
+  fitOnce?: boolean;
 }

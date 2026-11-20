@@ -38,7 +38,8 @@ export function useLeafletMap(
     geojson,
     isMapReady,
     maxRenderFeatures,
-    isVisible
+    isVisible,
+    interaction.fitOnce === true
   );
 
   // 4. Stream Vector GeoJSON Features via Micro-Batches (Visibility-Aware)
