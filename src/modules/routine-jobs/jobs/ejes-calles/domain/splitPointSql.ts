@@ -9,6 +9,7 @@ import {
   REPLACEMENT_MAX_GROWTH_RATIO,
   REPLACEMENT_MIN_OLD_LENGTH_M,
   REPLACEMENT_PIECES,
+  REPLACEMENT_POINT_MAX_EXTRA_DISTANCE_M,
   REVIEW_POINTS_STORE_LIMIT,
 } from "../constants";
 import type { EjesLayouts } from "../types";
@@ -30,7 +31,8 @@ const reasonLiteral = (reason: string): string => `'${reason}'`;
  * point. Other points are review points: the nearest piece is their
  * suggestion, and a point with no address geometry has none. The address geometry
  * is used only when it has the expected SRID; a point whose geometry does not is a point without geometry. Pieces are the pieces that
- * count under `isPieceSql`, the same set the split's `new_refs` holds.
+ * count under `isPieceSql`, the same set the split's `new_refs` holds. An automatic point is sent to review when its receiving piece is
+ * more than REPLACEMENT_POINT_MAX_EXTRA_DISTANCE_M farther than its old section (the old section geometry is read once per old section).
  */
 export function splitPointCtes(layouts: EjesLayouts): string[] {
   const access = (logical: string): string => `a.${col(layouts, "ACCESS_POINT", logical)}`;
@@ -75,9 +77,9 @@ export function splitPointCtes(layouts: EjesLayouts): string[] {
       `SELECT s.id AS old_id, s.new_refs[1] AS new_ref, (s.len >= ${REPLACEMENT_MIN_OLD_LENGTH_M} AND s.new_len <= ${REPLACEMENT_MAX_GROWTH_RATIO} * s.len) AS usual FROM ${q("splits")} AS s WHERE cardinality(s.new_refs) = ${REPLACEMENT_PIECES}`
     ),
     cte(
-      "split_point_decided",
+      "split_point_base",
       [
-        "SELECT k.old_id, k.old_ref, k.point_id, COALESCE(one.new_ref, k.near_ref) AS new_ref, CASE",
+        "SELECT k.old_id, k.old_ref, k.point_id, k.near_dist, COALESCE(one.new_ref, k.near_ref) AS new_ref, CASE",
         "WHEN one.new_ref IS NOT NULL AND one.usual THEN NULL",
         `WHEN one.new_ref IS NOT NULL THEN ${reasonLiteral(EJES_POINT_REASON.AMBIGUOUS)}`,
         `WHEN NOT k.has_geom OR k.near_ref IS NULL OR k.near_dist IS NULL THEN ${reasonLiteral(EJES_POINT_REASON.NO_GEOMETRY)}`,
@@ -85,6 +87,19 @@ export function splitPointCtes(layouts: EjesLayouts): string[] {
         "END AS reason,",
         `COALESCE(k.near_dist > ${FAR_POINT_REPORT_M}, false) AS far`,
         `FROM ${q("split_point_pick")} AS k LEFT JOIN ${q("split_one_piece")} AS one ON one.old_id = k.old_id`,
+      ].join(" ")
+    ),
+    cte(
+      "split_point_old_dist",
+      `SELECT b.old_id, b.point_id, ST_Distance(sp.geom, r.geometry) AS old_dist FROM ${q("split_point_base")} AS b JOIN ${q("split_points")} AS sp ON sp.old_id = b.old_id AND sp.point_id = b.point_id JOIN ${q("removed_rest")} AS r ON r.id = b.old_id WHERE b.reason IS NULL AND sp.geom IS NOT NULL`
+    ),
+    cte(
+      "split_point_decided",
+      [
+        "SELECT b.old_id, b.old_ref, b.point_id, b.new_ref, CASE",
+        `WHEN o.old_dist IS NOT NULL AND b.near_dist > o.old_dist + ${REPLACEMENT_POINT_MAX_EXTRA_DISTANCE_M} THEN ${reasonLiteral(EJES_POINT_REASON.AMBIGUOUS)}`,
+        "ELSE b.reason END AS reason, b.far",
+        `FROM ${q("split_point_base")} AS b LEFT JOIN ${q("split_point_old_dist")} AS o ON o.old_id = b.old_id AND o.point_id = b.point_id`,
       ].join(" ")
     ),
     cte(

@@ -22,9 +22,9 @@ describe("isPieceSql boundaries (EJ-10, SPLIT_PIECE_MIN_COVER_M, PIECE_OWN_FRACT
     return result.rows[0].piece;
   };
 
-  it("should use a 10 m minimum cover, a 50% own-length share and a 95% ratio", () => {
+  it("should use a 10 m minimum cover, a 35% own-length share and a 95% ratio", () => {
     expect(SPLIT_PIECE_MIN_COVER_M).toBe(10);
-    expect(PIECE_OWN_FRACTION).toBe(0.5);
+    expect(PIECE_OWN_FRACTION).toBe(0.35);
     expect(COVERAGE_RATIO).toBe(0.95);
   });
 
@@ -62,7 +62,7 @@ describe("isPieceSql boundaries (EJ-10, SPLIT_PIECE_MIN_COVER_M, PIECE_OWN_FRACT
     });
 
     it("should not count 94% of a 1000 m section as a piece, just below the ratio", async () => {
-      expect(await isPiece("940", "1000", "2000")).toBe(false);
+      expect(await isPiece("940", "1000", "10000")).toBe(false);
     });
   });
 
@@ -93,8 +93,20 @@ describe("isPieceSql boundaries (EJ-10, SPLIT_PIECE_MIN_COVER_M, PIECE_OWN_FRACT
       expect(await isPiece("10.01", "1000", "20")).toBe(true);
     });
 
-    it("should not count a neighbour that covers just over 10 m but under 50% of its own length as a piece", async () => {
+    it("should not count a neighbour that covers just over 10 m but under 35% of its own length as a piece", async () => {
       expect(await isPiece("10.01", "1000", "30")).toBe(false);
+    });
+
+    it("should not count a neighbour covering 34% of its own length as a piece, just below the 35% share", async () => {
+      expect(await isPiece("34", "1000", "100")).toBe(false);
+    });
+
+    it("should count a neighbour covering 36% of its own length as a piece, just above the 35% share", async () => {
+      expect(await isPiece("36", "1000", "100")).toBe(true);
+    });
+
+    it("should count a 38% overlap of a 100 m new section as a piece, the 38% share clears the 35% limit", async () => {
+      expect(await isPiece("38", "100", "100")).toBe(true);
     });
 
     it("should not count a neighbour with 4.0 m of overlap on a long old section as a piece (dev, new 707 m over old 7648 m)", async () => {

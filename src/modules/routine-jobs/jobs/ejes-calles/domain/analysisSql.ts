@@ -313,10 +313,6 @@ function splitCtes(): string[] {
       ].join(" ")
     ),
     cte(
-      "piece_claims",
-      `SELECT o.new_ref, min(o.id) AS first_id, max(o.id) AS last_id FROM ${q("piece_cover")} AS o WHERE ${isPieceSql("o.piece_covered", "o.len", "o.piece_len")} GROUP BY o.new_ref`
-    ),
-    cte(
       "removed_cover",
       [
         "SELECT p.id, p.ref, p.idcalle, p.len, count(p.new_ref) AS new_count,",
@@ -326,6 +322,15 @@ function splitCtes(): string[] {
         `ST_Length(ST_Difference(ST_Union(p.geom), ST_Buffer(p.geometry, ${tolerance}))) AS outside_len`,
         `FROM ${q("piece_cover")} AS p WHERE ${isPieceSql("p.piece_covered", "p.len", "p.piece_len")}`,
         "GROUP BY p.id, p.ref, p.idcalle, p.len, p.geometry",
+      ].join(" ")
+    ),
+    cte(
+      "piece_claims",
+      [
+        "SELECT o.new_ref, min(o.id) AS first_id, max(o.id) AS last_id",
+        `FROM ${q("piece_cover")} AS o JOIN ${q("removed_cover")} AS rc ON rc.id = o.id`,
+        `WHERE ${isPieceSql("o.piece_covered", "o.len", "o.piece_len")} AND (${coverageThresholdSql("o.piece_covered", "o.len")} OR (rc.new_count >= ${SPLIT_MIN_PIECES} AND ${coverageThresholdSql("rc.covered", "rc.len")}))`,
+        "GROUP BY o.new_ref",
       ].join(" ")
     ),
     cte(
@@ -341,7 +346,8 @@ function splitCtes(): string[] {
 
 /**
  * A one-piece replacement: its old section has a `reftramo`, its piece is a single copy, and no other removed section claims that piece
- * (`isPieceSql` against it). A piece claimed by two old sections is a merge, which keeps precedence.
+ * (`isPieceSql` against it). A piece claimed by two old sections is a merge, which keeps precedence. A claim counts only from an old section
+ * that covers the piece at COVERAGE_RATIO or is itself a split member (`piece_claims`): a partly covered neighbour does not claim.
  */
 const replacementSql = (): string =>
   [

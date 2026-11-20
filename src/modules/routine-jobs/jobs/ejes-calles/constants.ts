@@ -228,8 +228,8 @@ export const RENUMBER_HAUSDORFF_M = 0.5;
 export const RENUMBER_CANDIDATE_DISTANCE_M = COVERAGE_TOLERANCE_M;
 /** A new section of the same idcalle counts as a piece or a merge member of an old section only when it covers more than this many metres of it (EJ-10). Touching neighbours at a bend overlap 4-5 m on dev (old 1001462 / new 1030829, old 1001823 / new 1030832), so 2 m was too short. */
 export const SPLIT_PIECE_MIN_COVER_M = 10;
-/** A new section that counts as a piece must also lie mostly on the old section: at least this share of its own length (EJ-10). */
-export const PIECE_OWN_FRACTION = 0.5;
+/** A new section that counts as a piece must also lie on the old section for at least this share of its own length (EJ-10). At 0.5, old 971860 with new 1024018 (38% of its length on it) was one replacement and 3 points moved 60-168 m. */
+export const PIECE_OWN_FRACTION = 0.35;
 /** A split has at least this many pieces; a section with exactly REPLACEMENT_PIECES covering piece is a replacement (one-piece split). */
 export const SPLIT_MIN_PIECES = 2;
 export const REPLACEMENT_PIECES = 1;
@@ -237,6 +237,8 @@ export const REPLACEMENT_PIECES = 1;
 export const REPLACEMENT_MIN_OLD_LENGTH_M = 2 * COVERAGE_TOLERANCE_M;
 /** A one-piece replacement whose piece is longer than this many times its old section sends its points to review (EJS-17). */
 export const REPLACEMENT_MAX_GROWTH_RATIO = 3;
+/** An automatic replacement or split point whose receiving piece is more than this many metres farther than its old section goes to review (EJS-21). */
+export const REPLACEMENT_POINT_MAX_EXTRA_DISTANCE_M = 25;
 /** A split point goes to its nearest piece only when the second nearest is at least this much farther (EJS-5). */
 export const AMBIGUOUS_POINT_GAP_M = 5;
 /** Split points farther than this from every piece are counted in the report only (EJS-8, informational). */
