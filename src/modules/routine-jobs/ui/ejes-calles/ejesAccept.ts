@@ -22,6 +22,9 @@ export const pointReviewCountOf = (row: EjesSplitRow): number => row.reviewPoint
 /** A split with one new section replaces its old section: its points move to that section and the old one goes. */
 export const isReplacementSplit = (row: EjesSplitRow): boolean => row.newRefs.length === REPLACEMENT_PIECES;
 
+/** A replacement with review points is not automatic: its points need the user's choices, as a split's do (EJS-17). */
+export const isReplacementReview = (row: EjesSplitRow): boolean => isReplacementSplit(row) && pointReviewCountOf(row) > 0;
+
 /** A plain removal applies only without access points: the load holds one that still has any (`has_points`), so it is not offered. */
 export const isPlainRemovalAcceptable = (row: EjesRemovalRow): boolean => row.ref !== "" && row.points === 0;
 

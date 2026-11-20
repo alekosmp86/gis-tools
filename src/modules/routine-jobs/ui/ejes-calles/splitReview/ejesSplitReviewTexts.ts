@@ -61,7 +61,7 @@ export const EJES_SPLIT_REASON_TEXT: Record<EjesPointReason, string> = {
 };
 
 export const EJES_SPLIT_REASON_NOTE: Record<EjesPointReason, string> = {
-  [EJES_POINT_REASON.AMBIGUOUS]: "Dos tramos están casi a la misma distancia: el sugerido es el más cercano.",
+  [EJES_POINT_REASON.AMBIGUOUS]: "El destino del punto no es evidente (tramos casi a la misma distancia, o un tramo muy corto o muy distinto): el sugerido es el más cercano.",
   [EJES_POINT_REASON.NO_GEOMETRY]: "El punto no tiene coordenada: no tiene distancias ni sugerencia. Elija un tramo.",
 };
 

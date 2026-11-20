@@ -233,6 +233,10 @@ export const PIECE_OWN_FRACTION = 0.5;
 /** A split has at least this many pieces; a section with exactly REPLACEMENT_PIECES covering piece is a replacement (one-piece split). */
 export const SPLIT_MIN_PIECES = 2;
 export const REPLACEMENT_PIECES = 1;
+/** A one-piece replacement whose old section is shorter than this sends its points to review (EJS-17): its piece proves little. */
+export const REPLACEMENT_MIN_OLD_LENGTH_M = 2 * COVERAGE_TOLERANCE_M;
+/** A one-piece replacement whose piece is longer than this many times its old section sends its points to review (EJS-17). */
+export const REPLACEMENT_MAX_GROWTH_RATIO = 3;
 /** A split point goes to its nearest piece only when the second nearest is at least this much farther (EJS-5). */
 export const AMBIGUOUS_POINT_GAP_M = 5;
 /** Split points farther than this from every piece are counted in the report only (EJS-8, informational). */

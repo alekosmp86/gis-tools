@@ -10,6 +10,7 @@ export const EJES_ACCEPT_TEXT = {
   NEEDS_REVIEW: "Requiere revisión",
   SPLIT_NOTE: "Se acepta cuando todos sus puntos de acceso tienen destino.",
   REPLACEMENT_NOTE: "Acepta: los puntos pasan al nuevo tramo y se quita el anterior",
+  REPLACEMENT_REVIEW_HINT: "Tramo muy corto o mucho más largo: confirme el destino de sus puntos",
   NO_RECEIVING_SECTION: "Sus puntos de acceso no tienen un tramo que los reciba",
   CAP_NOTE: `Aceptar todos llega al límite de ${ACCEPTED_KEYS_LIMIT} tramos aceptados en esta lista: acepta hasta ese número.`,
 } as const;

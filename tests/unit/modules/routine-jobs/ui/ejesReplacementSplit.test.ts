@@ -1,9 +1,11 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { EjesRemovalRow, EjesResult, EjesSplitRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
+import { EJES_POINT_REASON } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
+import type { EjesRemovalRow, EjesResult, EjesSplitReviewPoint, EjesSplitRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import {
   isPlainRemovalAcceptable,
+  isReplacementReview,
   isReplacementSplit,
   plainRemovalNotAcceptableText,
   type EjesAcceptView,
@@ -12,6 +14,7 @@ import { EJES_ACCEPT_TEXT } from "@/modules/routine-jobs/ui/ejes-calles/ejesAcce
 import { EJES_COMPACT_TEXT } from "@/modules/routine-jobs/ui/ejes-calles/compact/ejesCompactTexts";
 import { splitColumnsOf } from "@/modules/routine-jobs/ui/ejes-calles/compact/ejesSplitColumns";
 import { EJES_SUBJECT_TITLE, subjectOfSplit } from "@/modules/routine-jobs/ui/ejes-calles/ejesMapSubject";
+import { suggestedChoicesOf } from "@/modules/routine-jobs/ui/ejes-calles/splitReview/ejesSplitReviewView";
 import { EjesResultStep, type EjesResultStepProps } from "@/modules/routine-jobs/ui/ejes-calles/steps/EjesResultStep";
 import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/shared/ejesCallesRunStore";
 import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
@@ -36,6 +39,20 @@ const splitOf = (newRefs: string[]): EjesSplitRow => ({
 
 const REPLACEMENT_ROW = splitOf(["6902"]);
 const TWO_PIECE_ROW = splitOf(["6902", "6903"]);
+const REPLACEMENT_REVIEW_ROW: EjesSplitRow = { ...REPLACEMENT_ROW, autoPoints: 0, reviewPoints: 1 };
+
+const suggestedPointOf = (overrides: Partial<EjesSplitReviewPoint> = {}): EjesSplitReviewPoint => ({
+  pointId: "11",
+  reason: EJES_POINT_REASON.AMBIGUOUS,
+  number: null,
+  letter: null,
+  km: null,
+  circulationWay: null,
+  geometry: null,
+  pointStreet: null,
+  candidates: [{ newRef: "6902", distance: 0, isSuggestion: true }],
+  ...overrides,
+});
 
 const cellText = (row: EjesSplitRow, column: number): string => {
   const cell = splitColumnsOf()[column].cell(row);
@@ -57,7 +74,7 @@ const acceptView = (): EjesAcceptView => ({
   onAnalyzeWithPicks: () => undefined,
 });
 
-const resultOf = (plainRemovals: EjesRemovalRow[]): EjesResult =>
+const resultOf = (plainRemovals: EjesRemovalRow[], splits: EjesSplitRow[] = []): EjesResult =>
   ({
     dryRun: true,
     targetModified: false,
@@ -82,7 +99,7 @@ const resultOf = (plainRemovals: EjesRemovalRow[]): EjesResult =>
     counts: { newSections: 0, unchanged: 0, attr: 0, geom: 0, both: 0, removed: plainRemovals.length, splits: 0, merges: 0, plainRemovals: plainRemovals.length, plainHeld: 0, newStreets: 0, twins: 0, twinsUrban: 0, twinsRural: 0, twinsBoth: 0, twinsNeither: 0, twinsCrossDepartment: 0, twinsDrop: 0, twinsKeep: 0, renumbered: 0, renumberedWithPoints: 0, renumberedPoints: 0, renumberSkipped: 0 },
     fingerprint: { rows: 1, digest: "0123456789abcdef0123456789abcdef" },
     cloc: { withLocality: 0, onlyDepartment: 0, withoutCode: 0 },
-    splits: [],
+    splits,
     merges: [],
     plainRemovals,
     newStreets: [],
@@ -143,6 +160,44 @@ describe("replacement label and map title (EJ-10)", () => {
 
   it("should title the map subject of a one-piece split as a replacement", () => {
     expect(subjectOfSplit(REPLACEMENT_ROW).title).toBe(EJES_SUBJECT_TITLE.REPLACEMENT);
+  });
+});
+
+describe("isReplacementReview (EJS-17 replacement guard)", () => {
+  it("should be true when the replacement has review points", () => {
+    expect(isReplacementReview(REPLACEMENT_REVIEW_ROW)).toBe(true);
+  });
+
+  it("should be false when the replacement has no review point", () => {
+    expect(isReplacementReview(REPLACEMENT_ROW)).toBe(false);
+  });
+
+  it("should be false when a two-piece split has review points", () => {
+    expect(isReplacementReview({ ...TWO_PIECE_ROW, reviewPoints: 1 })).toBe(false);
+  });
+});
+
+describe("replacement review hint render (EJS-17)", () => {
+  it("should show the review hint when a replacement has review points", () => {
+    const out = resultStepOf(resultOf([], [REPLACEMENT_REVIEW_ROW]), acceptView());
+
+    expect(out).toContain(EJES_ACCEPT_TEXT.REPLACEMENT_REVIEW_HINT);
+  });
+
+  it("should not show the review hint when every replacement is automatic", () => {
+    const out = resultStepOf(resultOf([], [REPLACEMENT_ROW]), acceptView());
+
+    expect(out).not.toContain(EJES_ACCEPT_TEXT.REPLACEMENT_REVIEW_HINT);
+  });
+});
+
+describe("Aceptar sugeridos on a replacement point (EJS-17)", () => {
+  it("should choose the single piece for an undecided ambiguous point with that piece as suggestion", () => {
+    expect(suggestedChoicesOf([suggestedPointOf()], new Map())).toEqual([{ pointId: "11", newRef: "6902" }]);
+  });
+
+  it("should leave a point the user already chose out of the suggested choices", () => {
+    expect(suggestedChoicesOf([suggestedPointOf()], new Map([["11", "6902"]]))).toEqual([]);
   });
 });
 

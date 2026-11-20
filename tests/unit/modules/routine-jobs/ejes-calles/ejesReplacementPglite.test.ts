@@ -294,4 +294,78 @@ describe("one-piece replacements on PGlite (EJS-3, EJS-10, EJS-11, EJS-16, EJ-10
       expect(analysis.renumbered.map((row) => [row.oldRef, row.newRef])).toEqual([[OLD_REF, NEW_REF]]);
     });
   });
+
+  describe("the replacement guard: a short old section or a piece over 3 times it sends its points to review (EJS-17)", () => {
+    const seedOldOfLength = async (length: number): Promise<void> => {
+      await insertWay(database, 30, "CALLE TREINTA");
+      await database.query("INSERT INTO carto.addresses_master (addresses_master_id, urn, latitud, longitud) VALUES (6001, 'seed', 0, 0)");
+      await insertSection(database, { ref: 6001, calle: 30, geom: `0:${length}`, distance: length.toFixed(2), master: 6001 });
+    };
+
+    it("should send both points of a 1 m old section to review, not accepted, when a 3 m new section covers it", async () => {
+      await seedOldOfLength(1);
+      await stageNew("0:3");
+      await pointAt(OLD_REF, "0.2:0.2");
+      await pointAt(OLD_REF, "0.8:0.8");
+      const before = await snapshotOf(database);
+
+      const row = (await analysisOf()).splits[0];
+      const outcome = await persist(replacementOf());
+
+      expect([row.newRefs, row.points, row.reviewPoints, row.heldReason]).toEqual([[NEW_REF], 2, 2, null]);
+      expect(await snapshotOf(database)).toEqual(before);
+      expect(outcome.load.skipped).toEqual([expect.objectContaining({ kind: EJES_SKIP_KIND.SPLIT, reason: EJES_SKIP_REASON.REVIEW_REQUIRED })]);
+    });
+
+    it("should move both points, delete the old row and keep the access point count when the user chooses the piece of each", async () => {
+      await seedOldOfLength(1);
+      await stageNew("0:3");
+      const first = await pointAt(OLD_REF, "0.2:0.2");
+      const second = await pointAt(OLD_REF, "0.8:0.8");
+      const pointsBefore = await accessPointsCount();
+
+      const outcome = await persist({
+        splits: [
+          {
+            oldRef: OLD_REF,
+            choices: [
+              { pointId: String(first), newRef: NEW_REF },
+              { pointId: String(second), newRef: NEW_REF },
+            ],
+          },
+        ],
+        plainRemovals: [],
+        merges: [],
+        twinRemovals: [],
+        twinPicks: [],
+      });
+
+      expect(await refOfPoint(first)).toBe(NEW_REF);
+      expect(await refOfPoint(second)).toBe(NEW_REF);
+      expect(await sectionsByRef(6001)).toEqual([]);
+      expect(await sectionsByRef(6002)).toHaveLength(1);
+      expect(await accessPointsCount()).toBe(pointsBefore);
+      expect(outcome.load.skipped).toEqual([]);
+    });
+
+    it.each([
+      { label: "a new section four times the old one", oldLength: 10, newLength: 40, review: true },
+      { label: "a new section 2.5 times the old one", oldLength: 10, newLength: 25, review: false },
+      { label: "a new section exactly three times the old one", oldLength: 10, newLength: 30, review: false },
+      { label: "an old section of exactly 2 m", oldLength: 2, newLength: 4, review: false },
+    ])("should send the point to review=$review for $label", async ({ oldLength, newLength, review }) => {
+      await seedOldOfLength(oldLength);
+      await stageNew(`0:${newLength}`);
+      const point = await pointAt(OLD_REF, "1:1");
+
+      const row = (await analysisOf()).splits[0];
+      const outcome = await persist(replacementOf());
+
+      expect(row.reviewPoints).toBe(review ? 1 : 0);
+      expect(await refOfPoint(point)).toBe(review ? OLD_REF : NEW_REF);
+      expect(outcome.load.skipped).toEqual(
+        review ? [expect.objectContaining({ kind: EJES_SKIP_KIND.SPLIT, reason: EJES_SKIP_REASON.REVIEW_REQUIRED })] : []
+      );
+    });
+  });
 });
