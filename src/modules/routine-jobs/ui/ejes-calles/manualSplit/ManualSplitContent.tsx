@@ -5,7 +5,7 @@ import { RotateCcw } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
-import { MANUAL_CANDIDATE_RADIUS_M } from "../../../jobs/ejes-calles/constants";
+import { MANUAL_CANDIDATE_RADIUS_M, MANUAL_SPLIT_PIECES_LIMIT } from "../../../jobs/ejes-calles/constants";
 import type { EjesRemovalRow } from "../../../jobs/ejes-calles/types";
 import type { EjesGeometryMapBase } from "../../shared/clientTypes";
 import { OutlineMapBody } from "../../shared/map/OutlineMapBody";
@@ -82,7 +82,9 @@ export function ManualSplitContent({ row, base, storedRefs, ignored, onApply, on
             oldLength={oldLength}
             ignored={ignored}
             onApply={() => onApply(chosen.map((candidate) => candidate.ref))}
+            allSelected={selectedRefs.length >= Math.min(map.candidates.length, MANUAL_SPLIT_PIECES_LIMIT)}
             onClear={() => setSelectedRefs([])}
+            onSelectAll={() => setSelectedRefs(sortedCandidatesOf(map.candidates).slice(0, MANUAL_SPLIT_PIECES_LIMIT).map((candidate) => candidate.ref))}
             onIgnore={onIgnore}
           />
         </>

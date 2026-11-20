@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Ban, Check, X } from "lucide-react";
+import { Ban, Check, ListChecks, X } from "lucide-react";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { ButtonVariant } from "@/ui-kit/types/ui";
 import type { EjesMapCandidate } from "../../../jobs/ejes-calles/types";
@@ -21,13 +21,16 @@ export interface ManualSplitFooterProps {
   oldLength: number | null;
   /** The old section is marked as reviewed with no choice. */
   ignored: boolean;
+  /** Every listed candidate is chosen already, or the piece limit is reached: nothing more to select. */
+  allSelected: boolean;
   onApply: () => void;
   onClear: () => void;
+  onSelectAll: () => void;
   onIgnore: () => void;
 }
 
 /** The live caption of the choice, the metres it covers near the old section, and the apply, clear and ignore buttons. */
-export function ManualSplitFooter({ chosen, selectedCount, oldLength, ignored, onApply, onClear, onIgnore }: ManualSplitFooterProps) {
+export function ManualSplitFooter({ chosen, selectedCount, oldLength, ignored, allSelected, onApply, onClear, onSelectAll, onIgnore }: ManualSplitFooterProps) {
   return (
     <div className={styles.footer}>
       <p className={styles.caption}>
@@ -37,6 +40,10 @@ export function ManualSplitFooter({ chosen, selectedCount, oldLength, ignored, o
         <p className={styles.hint}>{EJES_MANUAL_SPLIT_TEXT.NEAR_SUM(metersTextOf(nearLengthSumOf(chosen)), metersTextOf(oldLength))}</p>
       )}
       <div className={styles.actions}>
+        <Button variant={ButtonVariant.SECONDARY} onClick={onSelectAll} disabled={allSelected}>
+          <ListChecks size={ICON_SIZE} />
+          <span>{EJES_MANUAL_SPLIT_TEXT.SELECT_ALL}</span>
+        </Button>
         <Button variant={ButtonVariant.SECONDARY} onClick={onClear} disabled={selectedCount === 0}>
           <X size={ICON_SIZE} />
           <span>{EJES_MANUAL_SPLIT_TEXT.CLEAR_SELECTION}</span>

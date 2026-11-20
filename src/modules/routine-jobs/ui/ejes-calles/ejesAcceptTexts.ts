@@ -47,6 +47,7 @@ export const EJES_MANUAL_SPLIT_TEXT = {
   NEAR_SUM: (near: string, old: string): string => `Metros cerca del tramo anterior: ${near} de ${old} m.`,
   APPLY: "Aplicar",
   CLEAR_SELECTION: "Quitar selección",
+  SELECT_ALL: "Elegir todos",
   IGNORE: "Ignorar",
   UNIGNORE: "Quitar ignorado",
   RESOLVED_BADGE: (refs: string): string => `Resuelto: ${refs}`,

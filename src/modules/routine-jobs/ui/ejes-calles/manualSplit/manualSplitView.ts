@@ -53,7 +53,8 @@ const TYPE_OF_ROLE: Partial<Record<EjesMapFeature["role"], string>> = {
 
 /**
  * The map of one manual split: the old section in red, its access points as points, the candidates grey and the chosen ones in
- * their own colour, drawn last so they lie on top. The candidate features come in the order of the candidates, so they pair by index.
+ * their own colour. The order of the features never depends on the choice and the geometries are the same objects every time, so
+ * the map restyles the drawn layers on a choice instead of redrawing them.
  */
 export function manualSplitMapOf(
   features: readonly EjesMapFeature[],
@@ -66,9 +67,7 @@ export function manualSplitMapOf(
     return type === undefined ? [] : [featureOf(feature.geometry, type, feature.role === OUTLINE_ROLE.OLD ? feature.label : "")];
   });
   const pieces = candidates.map((candidate, index) => ({ candidate, geometry: newGeometries[index] }));
-  const unchosen = pieces.filter(({ candidate }) => !chosenRefs.includes(candidate.ref));
-  const chosen = pieces.filter(({ candidate }) => chosenRefs.includes(candidate.ref));
-  const candidateFeatures = [...unchosen, ...chosen]
+  const candidateFeatures = pieces
     .filter((piece): piece is { candidate: EjesMapCandidate; geometry: Geometry } => piece.geometry !== undefined)
     .map(({ candidate, geometry }) =>
       featureOf(

@@ -7,6 +7,7 @@ import { createStyleResolver } from "@/ui-kit/map/MapSymbologyStyler";
 import { bindGroupFeatureEvents } from "@/ui-kit/map/MapEventHandler";
 import { bindFeatureLabel } from "@/ui-kit/map/MapFeatureLabel";
 import type { MapInteractionOptions } from "@/ui-kit/types/map";
+import { restyleInPlace, sameGeometries } from "./restyleInPlace";
 
 export function useVectorChunkStream(
   mapInstanceRef: React.RefObject<L.Map | null>,
@@ -111,7 +112,21 @@ export function useVectorChunkStream(
       return;
     }
 
+    const previousWindow = lastProcessedWindowRef.current;
     lastProcessedWindowRef.current = windowedGeojson;
+
+    // Same geometries, only the properties changed (a selection repaint): restyle the drawn layers instead of redrawing them.
+    if (previousWindow !== null && interactionRef.current.labelProperty === undefined && sameGeometries(previousWindow, windowedGeojson) && pendingTeardownLayers.length > 0) {
+      const styleResolver = createStyleResolver(featureStyleRef.current, canvasRendererRef.current);
+      if (restyleInPlace(pendingTeardownLayers, windowedGeojson.features, (feature) => styleResolver.resolvePathStyle(feature))) {
+        renderedSubLayersRef.current = [...pendingTeardownLayers];
+        pendingTeardownLayers.length = 0;
+        return () => {
+          pendingTeardownLayers.push(...renderedSubLayersRef.current);
+          renderedSubLayersRef.current = [];
+        };
+      }
+    }
 
     // Queue currently rendered sublayers for frame-budgeted progressive teardown
     if (renderedSubLayersRef.current.length > 0) {
