@@ -223,9 +223,13 @@ export const GEOMETRY_TOLERANCE_M = 0.001;
 /** Staging sections shorter than this are discarded like invalid ones, unless their `reftramo` holds access points. */
 export const MIN_SECTION_LENGTH_M = 1;
 export const COVERAGE_RATIO = 0.95;
+/** Plain-removal protection and discarded-candidate place test: a new section of the same street within this distance keeps the place. */
 export const COVERAGE_TOLERANCE_M = 1;
+/** Distance within which new sections cover an old section for pieces, merges, replacements and the outside length. 3 m because a roundabout is redrawn 2-5 m off (old 986016 covers 84% at 1 m, 98% at 3 m on dev). */
+export const PIECE_COVER_TOLERANCE_M = 3;
 export const RENUMBER_HAUSDORFF_M = 0.5;
-export const RENUMBER_CANDIDATE_DISTANCE_M = COVERAGE_TOLERANCE_M;
+/** Renumber candidate distance: a new section of the same idcalle within this distance of a removed one; the Hausdorff test then decides. */
+export const RENUMBER_CANDIDATE_DISTANCE_M = 1;
 /** A new section of the same idcalle counts as a piece or a merge member of an old section only when it covers more than this many metres of it (EJ-10). Touching neighbours at a bend overlap 4-5 m on dev (old 1001462 / new 1030829, old 1001823 / new 1030832), so 2 m was too short. */
 export const SPLIT_PIECE_MIN_COVER_M = 10;
 /** A new section that counts as a piece must also lie on the old section for at least this share of its own length (EJ-10). At 0.5, old 971860 with new 1024018 (38% of its length on it) was one replacement and 3 points moved 60-168 m. */
@@ -234,7 +238,7 @@ export const PIECE_OWN_FRACTION = 0.35;
 export const SPLIT_MIN_PIECES = 2;
 export const REPLACEMENT_PIECES = 1;
 /** A one-piece replacement whose old section is shorter than this sends its points to review (EJS-17): its piece proves little. */
-export const REPLACEMENT_MIN_OLD_LENGTH_M = 2 * COVERAGE_TOLERANCE_M;
+export const REPLACEMENT_MIN_OLD_LENGTH_M = 2;
 /** A one-piece replacement whose piece is longer than this many times its old section sends its points to review (EJS-17). */
 export const REPLACEMENT_MAX_GROWTH_RATIO = 3;
 /** An automatic replacement or split point whose receiving piece is more than this many metres farther than its old section goes to review (EJS-21). */

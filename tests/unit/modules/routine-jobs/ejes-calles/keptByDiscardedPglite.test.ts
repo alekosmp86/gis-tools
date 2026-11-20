@@ -40,6 +40,16 @@ describe("old sections kept by a discarded file row on PGlite (ET-18, EJL-27)", 
     expect(analysis.keptByDiscarded).toEqual([{ ref: "2001", idcalle: "5", points: 0, discardedRef: "2002", reason: "place" }]);
   });
 
+  it("should not keep an old section when a discarded row of its street lies 2 m away, beyond the 1 m place distance", async () => {
+    await insertSection(database, { ref: 2101, calle: 5, geom: "0:10" });
+    await insertStaging(database, [{ ref: "2102", calle: "5", nombre: "CALLE UNO", geom: "12:12.5" }]);
+
+    const analysis = await analyse();
+
+    expect(analysis.counts).toMatchObject({ removed: 1, plainRemovals: 1, keptByDiscardedCandidate: 0 });
+    expect(analysis.keptByDiscarded).toEqual([]);
+  });
+
   it("should leave an old section to the normal rules and not keep it when a kept new section lies at its place", async () => {
     await insertSection(database, { ref: 2001, calle: 5, geom: "0:10" });
     await insertStaging(database, [

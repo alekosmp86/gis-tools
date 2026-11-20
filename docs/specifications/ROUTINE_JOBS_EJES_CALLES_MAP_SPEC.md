@@ -19,7 +19,7 @@ The analysis report of the ejes job lists SPLIT ("Divisiones") and MERGE ("Union
 - EM-8: The read is one read-only transaction that is rolled back, with a statement timeout of 20 s. It uses the shared table resolution helpers; the road section and the staging geometry are transformed from their resolved SRID to 4326 and simplified (2 m tolerance, as the padrones map), returned as GeoJSON with the item index, a role (old or new) and a label (`Tramo anterior <reftramo>` or `Tramo nuevo <reftramo>`).
 - EM-9: An old `reftramo` with no `road_section` row, or a new `reftramo` with no staging row, or one with an empty geometry, answers 404 with a message that names the `reftramo`. Several staging rows can share a `reftramo` (one per locality or department the section crosses) with the same geometry, `idcalle`, name, type and fuente (checked on dev: 27,206 groups, none differ); the read takes one of them.
 
-- EM-17: The "Divisiones" and "Uniones" tables show three lengths in metres per row: the old section(s), the new section(s) and the part of the new section(s) that lies outside the old one(s) (beyond 1 m), so the user can tell a plain split or merge from one where the new sections extend further.
+- EM-17: The "Divisiones" and "Uniones" tables show three lengths in metres per row: the old section(s), the new section(s) and the part of the new section(s) that lies outside the old one(s) (beyond 3 m), so the user can tell a plain split or merge from one where the new sections extend further.
 
 ## UI
 

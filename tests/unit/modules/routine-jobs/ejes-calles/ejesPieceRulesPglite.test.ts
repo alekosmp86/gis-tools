@@ -152,4 +152,74 @@ describe("piece rules of the analysis on PGlite (EJ-10, EJS-3, EJS-17, EJS-21)",
       expect(row.autoPoints).toBe(0);
     });
   });
+
+  describe("a new section covering an old one within 3 m is a piece, not within 1 m only (PIECE_COVER_TOLERANCE_M)", () => {
+    it("should replace old 6001 with the one piece 6002 when the piece covers 90% of it at 1 m and all of it at 3 m", async () => {
+      await insertWay(database, STREET, "CALLE TREINTA");
+      await insertSection(database, { ref: 6001, calle: STREET, geom: "0:10", distance: "10.00" });
+      await insertStaging(database, [{ ref: "6002", calle: "30", nombre: "CALLE TREINTA", geom: "2:10" }]);
+
+      const result = await analysis();
+
+      expect(result.splits.map((row) => [row.oldRef, row.newRefs])).toEqual([["6001", ["6002"]]]);
+      expect(result.plainRemovals).toEqual([]);
+      expect(result.merges).toEqual([]);
+    });
+
+    it("should split old 6001 into three pieces, each claimed at 3 m but none at 1 m, and assign its points to a piece", async () => {
+      await insertWay(database, STREET, "CALLE TREINTA");
+      await insertSection(database, { ref: 6001, calle: STREET, geom: "0:30", distance: "30.00" });
+      await insertStaging(database, [
+        { ref: "6002", calle: "30", nombre: "CALLE TREINTA", geom: "2:10" },
+        { ref: "6003", calle: "30", nombre: "CALLE TREINTA", geom: "12:20" },
+        { ref: "6004", calle: "30", nombre: "CALLE TREINTA", geom: "22:28" },
+      ]);
+      await pointAt("6001", "6:6");
+      await pointAt("6001", "16:16");
+      await pointAt("6001", "26:26");
+
+      const result = await analysis();
+      const row = result.splits[0];
+
+      expect(result.splits.map((split) => [split.oldRef, split.newRefs])).toEqual([["6001", ["6002", "6003", "6004"]]]);
+      expect(result.plainRemovals).toEqual([]);
+      expect(result.merges).toEqual([]);
+      expect(row.autoPoints).toBe(3);
+      expect(row.reviewPoints).toBe(0);
+    });
+
+    it("should cover old 6001 when the new piece starts exactly 3 m from its start", async () => {
+      await insertWay(database, STREET, "CALLE TREINTA");
+      await insertSection(database, { ref: 6001, calle: STREET, geom: "0:8", distance: "8.00" });
+      await insertStaging(database, [{ ref: "6002", calle: "30", nombre: "CALLE TREINTA", geom: "3:8" }]);
+
+      const result = await analysis();
+
+      expect(result.splits.map((row) => [row.oldRef, row.newRefs])).toEqual([["6001", ["6002"]]]);
+      expect(result.plainRemovals).toEqual([]);
+    });
+
+    it("should not cover old 6001 when the new piece starts 3.5 m from its start, leaving it a plain removal", async () => {
+      await insertWay(database, STREET, "CALLE TREINTA");
+      await insertSection(database, { ref: 6001, calle: STREET, geom: "0:8", distance: "8.00" });
+      await insertStaging(database, [{ ref: "6002", calle: "30", nombre: "CALLE TREINTA", geom: "3.5:8" }]);
+
+      const result = await analysis();
+
+      expect(result.splits).toEqual([]);
+      expect(result.plainRemovals.map((row) => row.ref)).toEqual(["6001"]);
+    });
+
+    it("should not renumber old 6001 to a new section of the same street that lies 2 m away (renumber candidate distance 1 m)", async () => {
+      await insertWay(database, STREET, "CALLE TREINTA");
+      await insertSection(database, { ref: 6001, calle: STREET, geom: "0:100", distance: "100.00" });
+      await insertStaging(database, [{ ref: "6002", calle: "30", nombre: "CALLE TREINTA", geom: "102:202" }]);
+
+      const result = await analysis();
+
+      expect(result.renumbered).toEqual([]);
+      expect(result.splits).toEqual([]);
+      expect(result.plainRemovals.map((row) => row.ref)).toEqual(["6001"]);
+    });
+  });
 });

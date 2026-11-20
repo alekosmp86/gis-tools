@@ -16,8 +16,7 @@ the `reftramo` of the section and, with it, the reference of its points; the sec
 ## Criteria
 
 - **ER-1** A *renumbered pair* is a current section with no key in the file (a removed section, length > 0) and a new section
-  (valid geometry, not in `carto`) with the same non-null `idcalle`, within `RENUMBER_CANDIDATE_DISTANCE_M` (the existing
-  `COVERAGE_TOLERANCE_M`, 1 m) of it and a Hausdorff distance under `RENUMBER_HAUSDORFF_M` (0.5 m, in `constants.ts`). Only
+  (valid geometry, not in `carto`) with the same non-null `idcalle`, within `RENUMBER_CANDIDATE_DISTANCE_M` (1 m, its own constant) of it and a Hausdorff distance under `RENUMBER_HAUSDORFF_M` (0.5 m, in `constants.ts`). Only
   one-to-one pairs count: the old section has exactly one such candidate and the new section exactly one such old section;
   ambiguous cases (about 10 old and 11 new on dev) keep their present category.
 - **ER-2** Renumbered olds are taken out of the removed set used by the split, merge and plain-removal logic, and renumbered news are

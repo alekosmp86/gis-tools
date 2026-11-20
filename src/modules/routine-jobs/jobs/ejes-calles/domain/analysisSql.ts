@@ -10,6 +10,7 @@ import {
   EJES_KEPT_BY_DISCARDED_REASON,
   GEOMETRY_TOLERANCE_M,
   LOCALITIES_COLUMN,
+  PIECE_COVER_TOLERANCE_M,
   REPLACEMENT_PIECES,
   ROAD_SECTION_COLUMN,
   EJES_STAGING_COLUMN,
@@ -299,7 +300,7 @@ function removalCtes(): string[] {
 }
 
 function splitCtes(): string[] {
-  const tolerance = COVERAGE_TOLERANCE_M;
+  const tolerance = PIECE_COVER_TOLERANCE_M;
   return [
     copyVariantCte(),
     singleCopyCte(),
@@ -356,7 +357,7 @@ const replacementSql = (): string =>
   ].join(" ");
 
 function mergeCtes(): string[] {
-  const tolerance = COVERAGE_TOLERANCE_M;
+  const tolerance = PIECE_COVER_TOLERANCE_M;
   return [
     cte(
       "merge_pairs",

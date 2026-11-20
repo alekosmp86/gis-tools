@@ -135,10 +135,14 @@ describe("buildEjesAnalysisSql", () => {
       expect(sql).toContain("sum(p.covered) >= 0.95 * sum(p.len)");
     });
 
-    it("should use a 1 m tolerance for buffer and ST_DWithin", () => {
-      expect(sql).toContain("ST_Buffer(ST_Collect(p.geom), 1)");
-      expect(sql).toContain("ST_DWithin(r.geometry, n.geom, 1)");
-      expect(sql).toContain("ST_Buffer(n.geom, 1)");
+    it("should use a 3 m piece cover tolerance for buffer and ST_DWithin in splits and merges", () => {
+      expect(sql).toContain("ST_Buffer(ST_Collect(p.geom), 3)");
+      expect(sql).toContain("ST_DWithin(r.geometry, n.geom, 3)");
+      expect(sql).toContain("ST_Buffer(n.geom, 3)");
+    });
+
+    it("should keep the 1 m distance for renumber candidates and kept_by_candidate protection", () => {
+      expect(sql).toContain("ST_DWithin(r.geometry, c.geom, 1)");
     });
 
     it("should require two or more NEW sections for a split", () => {
@@ -189,8 +193,8 @@ describe("buildEjesAnalysisSql", () => {
     it("should measure the cover of each neighbour piece in piece_cover, one row per (removed section, new section)", () => {
       const pieceCover = sql.slice(sql.indexOf('"piece_cover" AS ('), sql.indexOf('"removed_cover" AS ('));
 
-      expect(pieceCover).toContain("ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, 1))) AS piece_covered");
-      expect(pieceCover).toContain('FROM "removed_rest" AS r JOIN "new_rest" AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, 1)');
+      expect(pieceCover).toContain("ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, 3))) AS piece_covered");
+      expect(pieceCover).toContain('FROM "removed_rest" AS r JOIN "new_rest" AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, 3)');
       expect(pieceCover).not.toContain("GROUP BY");
     });
 
@@ -201,7 +205,7 @@ describe("buildEjesAnalysisSql", () => {
         'FROM "piece_cover" AS p WHERE (p.piece_covered >= 0.95 * p.len OR (p.piece_covered > 10 AND p.piece_covered >= 0.35 * p.piece_len))'
       );
       expect(removedCover).toContain("count(p.new_ref) AS new_count");
-      expect(removedCover).toContain("ST_Length(ST_Intersection(p.geometry, ST_Buffer(ST_Collect(p.geom), 1))) AS covered");
+      expect(removedCover).toContain("ST_Length(ST_Intersection(p.geometry, ST_Buffer(ST_Collect(p.geom), 3))) AS covered");
       expect(sql).not.toMatch(/piece_covered >= 2\b/);
     });
 
