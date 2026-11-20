@@ -4,7 +4,17 @@ import { countOf, listOf } from "./layoutSql";
 import { twinPicksAppliedSql } from "./twinPickSql";
 
 /** The `reftramo`s that keep more than one copy after the rules and the picks: the copies the load would write for them, not yet decided. */
-export const twinUndecidedCte = (): string => cte("undecided", `SELECT k.ref FROM ${q("copy_refs")} AS k WHERE k.copies > 1`);
+export const twinUndecidedCtes = (): string[] => [
+  cte("undecided", `SELECT k.ref FROM ${q("copy_refs")} AS k WHERE k.copies > 1`),
+  cte(
+    "undecided_copies",
+    [
+      "SELECT c.ref, min(c.idcalle) AS idcalle, min(c.nombre) AS name,",
+      "json_agg(json_build_object('department', c.departamento, 'locality', c.localidad) ORDER BY c.departamento NULLS FIRST, c.localidad NULLS FIRST) AS copies",
+      `FROM ${q("copy_final")} AS c JOIN ${q("undecided")} AS u ON u.ref = c.ref GROUP BY c.ref`,
+    ].join(" ")
+  ),
+];
 
 /** Held rows that wait for this `reftramo` to keep one copy: renumber pairs and splits whose hold is `not_single_copy` (exact). */
 const waitingSql = (): string =>
@@ -19,13 +29,10 @@ export const twinUndecidedListColumn = (alias: string): string =>
     alias,
     "twin_undecided_list",
     [
-      'SELECT u.ref AS "ref",',
-      `(SELECT min(c.idcalle) FROM ${q("copy_final")} AS c WHERE c.ref = u.ref) AS "idcalle",`,
-      `(SELECT min(c.nombre) FROM ${q("copy_final")} AS c WHERE c.ref = u.ref) AS "name",`,
-      `(SELECT json_agg(json_build_object('department', c.departamento, 'locality', c.localidad) ORDER BY c.departamento NULLS FIRST, c.localidad NULLS FIRST) FROM ${q("copy_final")} AS c WHERE c.ref = u.ref) AS "copies",`,
+      'SELECT u.ref AS "ref", uc.idcalle AS "idcalle", uc.name AS "name", uc.copies AS "copies",',
       'COALESCE(ap.points, 0) AS "points",',
       `${waitingSql()} AS "waiting"`,
-      `FROM ${q("undecided")} AS u LEFT JOIN ${q("ap")} AS ap ON ap.ref = u.ref ORDER BY COALESCE(ap.points, 0) DESC, u.ref`,
+      `FROM ${q("undecided")} AS u LEFT JOIN ${q("undecided_copies")} AS uc ON uc.ref = u.ref LEFT JOIN ${q("ap")} AS ap ON ap.ref = u.ref ORDER BY COALESCE(ap.points, 0) DESC, u.ref`,
     ].join(" ")
   );
 

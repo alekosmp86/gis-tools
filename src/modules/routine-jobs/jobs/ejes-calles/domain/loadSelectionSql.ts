@@ -191,7 +191,7 @@ export function buildNewWaysSql(layouts: EjesLayouts): string {
     `SELECT c.idcalle AS "idcalle", c.nombre AS "name", ${first("type_id")} AS "type_id", ${first("font_id")} AS "font_id"`,
     `FROM ${tmp(LOAD_TEMP.COPY)} AS c`,
     `WHERE ${WAY_SOURCE_CONDITION}`,
-    `AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle IS NOT DISTINCT FROM c.idcalle AND p.name IS NOT DISTINCT FROM c.nombre)`,
+    `AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE COALESCE(p.idcalle, '') = COALESCE(c.idcalle, '') AND COALESCE(p.name, '') = COALESCE(c.nombre, ''))`,
     "GROUP BY c.idcalle, c.nombre ORDER BY c.idcalle, c.nombre",
   ].join(" ");
 }

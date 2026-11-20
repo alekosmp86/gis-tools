@@ -29,28 +29,41 @@ const departmentOf = (layouts: EjesLayouts, logical: string): string => `dp.${co
  * The department whose polygon the section overlaps most (ET-2a): the upper-cased trimmed name with the longest overlap, name ASC on a tie.
  * NULL when no department polygon intersects the section. `geometry` names the section's geometry.
  */
-function departmentChoiceSql(layouts: EjesLayouts, geometry: string): string {
-  const polygon = departmentOf(layouts, DEPARTMENTS_COLUMN.GEOM);
-  const name = departmentOf(layouts, DEPARTMENTS_COLUMN.NAME);
+function departmentChoiceSql(geometry: string): string {
   return [
-    `(SELECT d.name FROM (SELECT upper(btrim(${name})) AS name, sum(ST_Length(ST_Intersection(${geometry}, ST_MakeValid(${polygon})))) AS len`,
-    `FROM ${table(layouts, "DEPARTMENTS")} AS dp WHERE ${name} IS NOT NULL AND ST_Intersects(${polygon}, ${geometry}) GROUP BY 1) AS d`,
+    `(SELECT d.name FROM (SELECT dp.name, sum(ST_Length(ST_Intersection(${geometry}, dp.valid))) AS len`,
+    `FROM ${q("dept_valid")} AS dp WHERE ST_Intersects(dp.geometry, ${geometry}) GROUP BY 1) AS d`,
     "ORDER BY d.len DESC, d.name LIMIT 1)",
   ].join(" ");
+}
+
+/**
+ * The department polygons, upper-cased name and made valid once (`dept_valid`), read by `twin_dept`.
+ */
+function deptValidCte(layouts: EjesLayouts): string {
+  const polygon = departmentOf(layouts, DEPARTMENTS_COLUMN.GEOM);
+  const name = departmentOf(layouts, DEPARTMENTS_COLUMN.NAME);
+  return cte(
+    "dept_valid",
+    `SELECT upper(btrim(${name})) AS name, ${polygon} AS geometry, ST_MakeValid(${polygon}) AS valid FROM ${table(layouts, "DEPARTMENTS")} AS dp WHERE ${name} IS NOT NULL`
+  );
 }
 
 /**
  * One row per multi-department `reftramo` (ET-2a): `department` is the chosen department (upper-cased, as `departmentChoiceSql`), NULL when no
  * department polygon intersects the section. Single-department `reftramo`s have no row.
  */
-function twinDeptCte(layouts: EjesLayouts): string {
-  return cte(
-    "twin_dept",
-    [
-      `SELECT m.ref, ${departmentChoiceSql(layouts, "m.geom")} AS department`,
-      `FROM (SELECT t.ref, (array_agg(t.geom))[1] AS geom FROM ${q("twin_raw")} AS t GROUP BY t.ref HAVING count(DISTINCT t.departamento) > 1) AS m`,
-    ].join(" ")
-  );
+function twinDeptCtes(layouts: EjesLayouts): string[] {
+  return [
+    deptValidCte(layouts),
+    cte(
+      "twin_dept",
+      [
+        `SELECT m.ref, ${departmentChoiceSql("m.geom")} AS department`,
+        `FROM (SELECT t.ref, (array_agg(t.geom))[1] AS geom FROM ${q("twin_raw")} AS t GROUP BY t.ref HAVING count(DISTINCT t.departamento) > 1) AS m`,
+      ].join(" ")
+    ),
+  ];
 }
 
 export function twinGroupCtes(layouts: EjesLayouts): string[] {
@@ -70,7 +83,7 @@ export function twinGroupCtes(layouts: EjesLayouts): string[] {
         `FROM ${table(layouts, "STAGING")} AS s WHERE ${keptStagingRowSql(geometry, reference)}`,
       ].join(" ")
     ),
-    twinDeptCte(layouts),
+    ...twinDeptCtes(layouts),
     cte(
       "twin_groups",
       [

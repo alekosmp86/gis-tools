@@ -1,5 +1,5 @@
 import { cte, q } from "../../shared/sqlFragments";
-import { GEO_TWIN_ROLE, GEO_TWIN_TOLERANCE_M } from "../constants";
+import { GEO_CELL_M, GEO_TWIN_ROLE, GEO_TWIN_TOLERANCE_M } from "../constants";
 import { countOf, listOf } from "./layoutSql";
 
 /**
@@ -20,6 +20,10 @@ export const buildCreateGeoTwinTableSql = (name: string): string => `CREATE TEMP
 
 const roleLiteral = (role: keyof typeof GEO_TWIN_ROLE): string => `'${GEO_TWIN_ROLE[role]}'`;
 
+/** The grid cell of a geometry's x minimum, and the cell and its two neighbours (a twin lies in one of them). */
+const cellOfSql = (geometry: string): string => `floor(ST_XMin(${geometry}) / ${GEO_CELL_M})::bigint`;
+const neighbourCellsSql = (cell: string): string => `unnest(ARRAY[${cell} - 1, ${cell}, ${cell} + 1])`;
+
 /** A loser the load removes: in carto, one current section, and no point by the `road_section.id` of that section. */
 const removableSql = (prefix: string): string =>
   `${prefix}role = ${roleLiteral("LOSER")} AND ${prefix}in_carto AND ${prefix}cur_rows = 1 AND ${prefix}id_points = 0`;
@@ -34,23 +38,27 @@ export function geoTwinCtes(): string[] {
   return [
     cte(
       "geo_keys",
-      `SELECT k.ref, k.idcalle, k.localidad, k.geom FROM ${q("copy_kept")} AS k`
+      `SELECT k.ref, k.idcalle, k.localidad, k.geom, ${cellOfSql("k.geom")} AS cx FROM ${q("copy_kept")} AS k`
     ),
     cte(
       "geo_refs",
       [
         "SELECT g.ref, count(*) AS copies, min(g.idcalle) AS idcalle, min(g.localidad) AS localidad, (array_agg(g.geom))[1] AS geom,",
-        "bool_and(g.idcalle IS NOT NULL) AS complete",
+        "(array_agg(g.cx))[1] AS cx, bool_and(g.idcalle IS NOT NULL) AS complete",
         `FROM ${q("geo_keys")} AS g GROUP BY g.ref`,
       ].join(" ")
     ),
     cte("geo_members", `SELECT r.* FROM ${q("geo_refs")} AS r WHERE r.copies = 1 AND r.complete`),
     cte(
+      "geo_member_cells",
+      `SELECT m.ref, m.idcalle, m.geom, ${neighbourCellsSql("m.cx")} AS cell FROM ${q("geo_members")} AS m`
+    ),
+    cte(
       "geo_pairs",
       [
         "SELECT a.ref, a.idcalle, a.localidad, b.ref AS other",
-        `FROM ${q("geo_members")} AS a JOIN ${q("geo_members")} AS b`,
-        "ON b.idcalle = a.idcalle",
+        `FROM ${q("geo_members")} AS a JOIN ${q("geo_member_cells")} AS b`,
+        "ON b.idcalle = a.idcalle AND b.cell = a.cx",
         `AND a.geom && ST_Expand(b.geom, ${GEO_TWIN_TOLERANCE_M}) AND ST_HausdorffDistance(a.geom, b.geom) < ${GEO_TWIN_TOLERANCE_M}`,
       ].join(" ")
     ),
@@ -115,6 +123,10 @@ export function geoTwinCtes(): string[] {
       ].join(" ")
     ),
     cte("geo_losers", `SELECT l.ref FROM ${q("geo_roles")} AS l WHERE l.role = ${roleLiteral("LOSER")}`),
+    cte(
+      "geo_key_cells",
+      `SELECT k.ref, COALESCE(k.idcalle, '') AS idkey, k.geom, ${neighbourCellsSql("k.cx")} AS cell FROM ${q("geo_keys")} AS k`
+    ),
   ];
 }
 
@@ -140,8 +152,8 @@ export const geoTwinCountColumns = (): string[] => [
   `${countOf("geo_roles", removableSql(""))} AS "geo_twin_losers_removable"`,
   // Reftramos with several kept copies are never grouped (conservative): counted when one of their kept copies is within the tolerance of a copy of another reftramo of the same idcalle.
   [
-    `(SELECT count(DISTINCT k.ref) FROM ${q("geo_keys")} AS k WHERE k.ref IN (SELECT r.ref FROM ${q("geo_refs")} AS r WHERE r.copies > 1)`,
-    `AND EXISTS (SELECT 1 FROM ${q("geo_keys")} AS o WHERE o.ref <> k.ref AND COALESCE(o.idcalle, '') = COALESCE(k.idcalle, '')`,
+    `(SELECT count(DISTINCT k.ref) FROM ${q("geo_keys")} AS k JOIN ${q("geo_refs")} AS r ON r.ref = k.ref AND r.copies > 1`,
+    `WHERE EXISTS (SELECT 1 FROM ${q("geo_key_cells")} AS o WHERE o.idkey = COALESCE(k.idcalle, '') AND o.cell = k.cx AND o.ref <> k.ref`,
     `AND k.geom && ST_Expand(o.geom, ${GEO_TWIN_TOLERANCE_M}) AND ST_HausdorffDistance(k.geom, o.geom) < ${GEO_TWIN_TOLERANCE_M})) AS "geo_twin_skipped_refs"`,
   ].join(" "),
 ];

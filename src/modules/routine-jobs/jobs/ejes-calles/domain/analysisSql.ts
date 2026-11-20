@@ -6,6 +6,7 @@ import {
   COVERAGE_RATIO,
   COVERAGE_TOLERANCE_M,
   DEPARTMENTS_COLUMN,
+  EJES_ANALYSIS_WORK_MEM,
   EJES_KEPT_BY_DISCARDED_REASON,
   GEOMETRY_TOLERANCE_M,
   LOCALITIES_COLUMN,
@@ -39,7 +40,7 @@ import { reviewPointCtes, reviewPointsColumn, splitPointCountColumns, splitPoint
 import { departmentKeepsSql, twinCountColumns, twinCtes, twinGroupCtes, twinListColumn } from "./twinSql";
 import { copyFinalCte, geoTwinCountColumns, geoTwinCtes, geoTwinListColumn, geoTwinSinkCtes, type GeoTwinSinks } from "./geoTwinSql";
 import { pickNamesCopySql, twinPicksValuesCte } from "./twinPickSql";
-import { twinUndecidedCountColumns, twinUndecidedCte, twinUndecidedListColumn } from "./twinUndecidedSql";
+import { twinUndecidedCountColumns, twinUndecidedCtes, twinUndecidedListColumn } from "./twinUndecidedSql";
 
 export type AnalysisSinks = RenumberSinks & RemovalSinks & GeoTwinSinks;
 
@@ -59,6 +60,8 @@ export const ANALYSIS_LIST_ALIAS = {
 } as const;
 
 export { comparableLineSql };
+
+export const buildAnalysisWorkMemSql = (): string => `SET LOCAL work_mem = '${EJES_ANALYSIS_WORK_MEM}'`;
 
 /** A coordinate that rounds to the other side of the snap grid is noise: the Hausdorff distance is read only for pairs the ordering test calls different. */
 export const geometriesDifferSql = (current: string, incoming: string): string =>
@@ -383,7 +386,7 @@ function mergeCtes(): string[] {
  */
 function keptByDiscardedCtes(): string[] {
   const tolerance = COVERAGE_TOLERANCE_M;
-  const sameReference = `r.ref IN (SELECT ref FROM ${q("stg_all_keys")})`;
+  const sameReference = "sk.ref IS NOT NULL";
   return [
     cte(
       "candidate_near",
@@ -398,7 +401,7 @@ function keptByDiscardedCtes(): string[] {
       [
         `SELECT r.id, r.ref, r.idcalle, CASE WHEN ${sameReference} THEN r.ref ELSE d.ref END AS discarded_ref,`,
         `CASE WHEN ${sameReference} THEN '${EJES_KEPT_BY_DISCARDED_REASON.SAME_REFTRAMO}' ELSE '${EJES_KEPT_BY_DISCARDED_REASON.PLACE}' END AS reason`,
-        `FROM ${q("removed_rest")} AS r LEFT JOIN ${q("candidate_near")} AS d ON d.id = r.id`,
+        `FROM ${q("removed_rest")} AS r LEFT JOIN ${q("candidate_near")} AS d ON d.id = r.id LEFT JOIN ${q("stg_all_keys")} AS sk ON sk.ref = r.ref`,
         `WHERE r.id NOT IN (SELECT id FROM ${q("splits")}) AND r.id NOT IN (SELECT id FROM ${q("merged_ids")})`,
         `AND NOT EXISTS (SELECT 1 FROM ${q("new_sections")} AS n WHERE n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance}))`,
         `AND (${sameReference} OR d.ref IS NOT NULL)`,
@@ -416,7 +419,7 @@ function remainderCtes(): string[] {
     ),
     cte(
       "new_streets",
-      `SELECT c.idcalle, c.nombre AS name, count(*) AS sections, string_agg(DISTINCT c.tipo, ', ') AS tipos, string_agg(DISTINCT c.departamento, ', ') AS departments, string_agg(DISTINCT c.localidad, ', ') AS localities FROM ${q("classified")} AS c WHERE c.is_new AND ${heldNewSql("c.ref")} AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle IS NOT DISTINCT FROM c.idcalle AND p.name IS NOT DISTINCT FROM c.nombre) GROUP BY c.idcalle, c.nombre`
+      `SELECT c.idcalle, c.nombre AS name, count(*) AS sections, string_agg(DISTINCT c.tipo, ', ') AS tipos, string_agg(DISTINCT c.departamento, ', ') AS departments, string_agg(DISTINCT c.localidad, ', ') AS localities FROM ${q("classified")} AS c WHERE c.is_new AND ${heldNewSql("c.ref")} AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE COALESCE(p.idcalle, '') = COALESCE(c.idcalle, '') AND COALESCE(p.name, '') = COALESCE(c.nombre, '')) GROUP BY c.idcalle, c.nombre`
     ),
   ];
 }
@@ -535,7 +538,7 @@ export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks
     ...renumberOutcomeCtes(),
     copyFinalCte(q("geo_losers"), q("renum_dropped")),
     copyCountCte(),
-    twinUndecidedCte(),
+    ...twinUndecidedCtes(),
     ...renumberCtes(),
     ...(sinks === undefined ? [] : renumberSinkCtes(sinks)),
     ...splitCtes(),

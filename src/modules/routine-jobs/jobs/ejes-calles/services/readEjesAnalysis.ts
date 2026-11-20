@@ -1,6 +1,6 @@
 import type { StepTimer } from "../../cargar-padrones/services/runSteps";
 import type { RunSession } from "../../cargar-padrones/types";
-import { buildEjesAnalysisSql } from "../domain/analysisSql";
+import { buildAnalysisWorkMemSql, buildEjesAnalysisSql } from "../domain/analysisSql";
 import { EJES_STEP } from "../domain/plannedSteps";
 import { buildCreateRenumberTableSql, LOAD_TEMP, tmp } from "../domain/loadSelectionSql";
 import { buildCreateMergeTableSql, buildCreatePlainTableSql, buildCreateSplitTableSql } from "../domain/removalSql";
@@ -32,6 +32,7 @@ export async function readStagingReport(session: RunSession, layouts: EjesLayout
 }
 
 export async function readAnalysis(session: RunSession, layouts: EjesLayouts, twinPicks: readonly EjesTwinPick[] = []): Promise<EjesAnalysis> {
+  await session.query(buildAnalysisWorkMemSql());
   return toEjesAnalysis((await session.query(buildEjesAnalysisSql(layouts, undefined, twinPicks))).rows[0] ?? {});
 }
 
@@ -52,6 +53,7 @@ export async function readAnalysisForLoad(session: RunSession, layouts: EjesLayo
     splitPoints: tmp(LOAD_TEMP.SPLIT_PTS),
     geoTwins: tmp(LOAD_TEMP.GEO_TWIN),
   };
+  await session.query(buildAnalysisWorkMemSql());
   return toEjesAnalysis((await session.query(buildEjesAnalysisSql(layouts, sinks, twinPicks))).rows[0] ?? {});
 }
 

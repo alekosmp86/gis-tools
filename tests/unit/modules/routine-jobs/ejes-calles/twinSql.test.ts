@@ -10,7 +10,7 @@ describe("twinSql module (ET-13)", () => {
   it("should build the group and class CTEs in the order the analysis needs them", () => {
     const names = [...twinGroupCtes(layouts), ...twinCtes(layouts)].map((cte) => /^"?(\w+)"? AS/.exec(cte)?.[1]);
 
-    expect(names).toEqual(["twin_raw", "twin_dept", "twin_groups", "twin_measured", "twin_classed", "twin_located", "twins"]);
+    expect(names).toEqual(["twin_raw", "dept_valid", "twin_dept", "twin_groups", "twin_measured", "twin_classed", "twin_located", "twins"]);
   });
 
   it("should put the whole twin SQL into the analysis, once", () => {

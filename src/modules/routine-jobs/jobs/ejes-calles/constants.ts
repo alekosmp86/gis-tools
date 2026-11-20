@@ -144,6 +144,8 @@ export const TWIN_POLYGON_MIN_COVER_RATIO = 0.5;
 export const TWIN_NEAREST_POLYGON_MAX_M = 500;
 /** Two copies of a geometric twin group have geometries equal within this Hausdorff distance (ET-20). */
 export const GEO_TWIN_TOLERANCE_M = 0.5;
+/** Width of the x-minimum grid cells that bound the geometric twin pairs: twins differ by less than the tolerance in x-minimum, so they share a cell or sit in a neighbouring one. Must be at least GEO_TWIN_TOLERANCE_M. */
+export const GEO_CELL_M = 2;
 
 export const EJES_REQUIRED_COLUMNS_BY_ROLE: Record<EjesTableRole, readonly string[]> = {
   [EJES_TABLE_ROLE.STAGING]: Object.values(EJES_STAGING_COLUMN),
@@ -268,6 +270,8 @@ export const EJES_REFRESH_VIEW_NAMES = ["mv_road_section", "mv_road_section2", "
 export const EJES_STAGING_REFRESH_VIEW = "bdj_ejes";
 
 export const TOPOLOGY_TOLERANCE_M = 0.1;
+
+export const EJES_ANALYSIS_WORK_MEM = "64MB";
 
 export const EJES_LOAD_ROLES = [
   EJES_TABLE_ROLE.ROAD_SECTION,

@@ -349,7 +349,8 @@ describe("buildEjesAnalysisSql", () => {
     });
 
     it("should pick the department whose polygon the section overlaps most, the lowest name on a tie, and none when no polygon intersects (ET-2a)", () => {
-      expect(sql).toContain('FROM "carto"."mv_country_province" AS dp WHERE dp."name_dpto" IS NOT NULL AND ST_Intersects(dp."geometry", m.geom) GROUP BY 1) AS d');
+      expect(sql).toContain('"dept_valid" AS (SELECT upper(btrim(dp."name_dpto")) AS name, dp."geometry" AS geometry, ST_MakeValid(dp."geometry") AS valid FROM "carto"."mv_country_province" AS dp WHERE dp."name_dpto" IS NOT NULL)');
+      expect(sql).toContain('FROM "dept_valid" AS dp WHERE ST_Intersects(dp.geometry, m.geom) GROUP BY 1) AS d');
       expect(sql).toContain("ORDER BY d.len DESC, d.name LIMIT 1) AS department");
     });
   });

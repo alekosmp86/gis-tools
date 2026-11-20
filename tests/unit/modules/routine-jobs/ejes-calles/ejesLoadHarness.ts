@@ -23,6 +23,7 @@ const POSTGIS_STUBS_SQL = `
   CREATE FUNCTION iv_b(geometry) RETURNS float8 AS $$ SELECT split_part(split_part($1::text, '|', 1), ':', 2)::float8 $$ LANGUAGE sql;
   CREATE FUNCTION ST_IsEmpty(geometry) RETURNS boolean AS $$ SELECT $1::text = '' $$ LANGUAGE sql;
   CREATE FUNCTION ST_IsValid(geometry) RETURNS boolean AS $$ SELECT $1::text NOT LIKE 'BAD%' $$ LANGUAGE sql;
+  CREATE FUNCTION ST_XMin(geometry) RETURNS float8 AS $$ SELECT iv_a($1) $$ LANGUAGE sql STRICT;
   CREATE FUNCTION ST_SetSRID(geometry, integer) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql;
   CREATE FUNCTION ST_LineMerge(geometry) RETURNS geometry AS $$
     SELECT CASE

@@ -533,4 +533,67 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
       expect(log.filter((sql) => WRITE_SQL.test(sql))).toEqual([]);
     });
   });
+
+  describe("grid cells of the pairs (ET-20, ET-21)", () => {
+    it("should group two geometries whose x minimums straddle a cell boundary and lie within the tolerance", async () => {
+      await insertStaging(database, [staged("7001", "1.9:50"), staged("7002", "2.3:50.3")]);
+
+      const analysis = await analysisOf();
+
+      expect(rolesOf(analysis)).toEqual([
+        ["7001", GEO_TWIN_ROLE.WINNER, false],
+        ["7002", GEO_TWIN_ROLE.LOSER, false],
+      ]);
+      expect(analysis.counts).toMatchObject({ geoTwinGroups: 1, geoTwinSections: 2 });
+    });
+
+    it("should group two geometries 0.3 m apart inside one cell away from its edges", async () => {
+      await insertStaging(database, [staged("7001", "0.5:50.5"), staged("7002", "0.8:50.8")]);
+
+      const analysis = await analysisOf();
+
+      expect(rolesOf(analysis)).toEqual([
+        ["7001", GEO_TWIN_ROLE.WINNER, false],
+        ["7002", GEO_TWIN_ROLE.LOSER, false],
+      ]);
+    });
+
+    it("should group only the two members within the tolerance when a third section of the same idcalle is outside it", async () => {
+      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0.3:50.3"), staged("7003", "0.9:50.9")]);
+
+      const analysis = await analysisOf();
+
+      expect(rolesOf(analysis)).toEqual([
+        ["7001", GEO_TWIN_ROLE.WINNER, false],
+        ["7002", GEO_TWIN_ROLE.LOSER, false],
+      ]);
+      expect(analysis.counts).toMatchObject({ geoTwinGroups: 1, geoTwinSections: 2 });
+    });
+
+    it("should list each partner of a member once in a group of three members", async () => {
+      await insertStaging(database, [staged("7001", "0:50"), staged("7002", "0.1:50.1"), staged("7003", "0.2:50.2")]);
+
+      const analysis = await analysisOf();
+
+      expect(Object.fromEntries(analysis.geoTwins.map((row) => [row.ref, row.partners]))).toEqual({
+        "7001": ["7002", "7003"],
+        "7002": ["7001", "7003"],
+        "7003": ["7001", "7002"],
+      });
+      expect(analysis.counts).toMatchObject({ geoTwinGroups: 1, geoTwinSections: 3 });
+    });
+
+    it("should count a reftramo with several kept copies once in geo_twin_skipped_refs when it matches a single-copy twin", async () => {
+      await insertStaging(database, [
+        { ...staged("7001", "0:50", "TRINIDAD"), departamento: "FLORES" },
+        { ...staged("7001", "0:50", "TRINIDAD"), departamento: "CANELONES" },
+        { ...staged("7002", "0:50", "TRINIDAD"), departamento: "FLORES" },
+      ]);
+
+      const analysis = await analysisOf();
+
+      expect(analysis.geoTwins).toEqual([]);
+      expect(analysis.counts).toMatchObject({ geoTwinGroups: 0, geoTwinSections: 0, geoTwinSkippedRefs: 1 });
+    });
+  });
 });
