@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import type { EjesRemovalRow, EjesResult } from "../../jobs/ejes-calles/types";
 import { CollapsibleSection } from "../shared/CollapsibleSection";
 import type { EjesGeometryMapBase, EjesSplitPointsBase } from "../shared/clientTypes";
-import type { EjesAcceptView } from "./ejesAccept";
+import { NO_IGNORED_CHANGE, NO_IGNORED_REFS, type EjesAcceptView } from "./ejesAccept";
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
 import { subjectOfMerge, subjectOfSplit, subjectOfUndecided } from "./ejesMapSubject";
 import { ejesListAnchorOf, type EjesListKey } from "./ejesCallesListMeta";
@@ -126,7 +126,9 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
           review={manualIndex === null ? null : { rows: resolvable, index: manualIndex }}
           base={mapBase}
           manualSplits={accept.manualSplits}
+          ignoredRefs={accept.ignoredRefs ?? NO_IGNORED_REFS}
           onChange={accept.onManualSplitChange}
+          onIgnoredChange={accept.onIgnoredRefChange ?? NO_IGNORED_CHANGE}
           onNavigate={setManualIndex}
           onClose={() => setManualIndex(null)}
         />

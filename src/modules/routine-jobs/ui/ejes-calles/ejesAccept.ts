@@ -92,6 +92,12 @@ export interface EjesManualSplitChange {
   newRefs: string[] | null;
 }
 
+/** An old section the user marked as reviewed with no new section to choose: UI only, never sent to the server. */
+export interface EjesIgnoredRefChange {
+  oldRef: string;
+  ignored: boolean;
+}
+
 /** What a report needs to show and change the accepted keys, the point choices, the twin picks and the manual splits; absent on a read-only report. */
 export interface EjesAcceptView {
   keys: EjesAcceptKeys;
@@ -102,6 +108,8 @@ export interface EjesAcceptView {
   onTwinPickChange: (change: EjesTwinPickChange) => void;
   manualSplits: readonly EjesManualSplit[];
   onManualSplitChange: (change: EjesManualSplitChange) => void;
+  ignoredRefs?: readonly string[];
+  onIgnoredRefChange?: (change: EjesIgnoredRefChange) => void;
   canAnalyzeWithPicks: boolean;
   onAnalyzeWithPicks: () => void;
 }
@@ -110,6 +118,8 @@ const NO_ACCEPT_KEYS: EjesAcceptKeys = { splits: [], plainRemovals: [], merges: 
 const NO_POINT_CHOICES: readonly EjesPointChoiceKey[] = [];
 const NO_TWIN_PICKS: readonly EjesTwinPick[] = [];
 const NO_MANUAL_SPLITS: readonly EjesManualSplit[] = [];
+export const NO_IGNORED_REFS: readonly string[] = [];
+export const NO_IGNORED_CHANGE = (): void => undefined;
 
 export function acceptKeysOf(acceptance: EjesAcceptance | null, analysisKey: string | undefined): EjesAcceptKeys {
   if (acceptance === null || analysisKey === undefined || acceptance.analysisKey !== analysisKey) return NO_ACCEPT_KEYS;
@@ -216,6 +226,12 @@ export const manualSplitOf = (splits: readonly EjesManualSplit[], oldRef: string
   splits.find((split) => split.oldRef === oldRef);
 
 export const manualSplitsCapReached = (splits: readonly EjesManualSplit[]): boolean => splits.length >= ACCEPTED_KEYS_LIMIT;
+
+/** The ignored old sections after one is marked or unmarked. Never mutates the list it is given. */
+export function ignoredRefsAfter(ignoredRefs: readonly string[], change: EjesIgnoredRefChange): string[] {
+  const others = ignoredRefs.filter((ref) => ref !== change.oldRef);
+  return change.ignored ? [...others, change.oldRef] : others;
+}
 
 const manualSplitRequestOf = ({ oldRef, newRefs }: EjesManualSplit): EjesManualSplitRequest => ({ oldRef, newRefs });
 

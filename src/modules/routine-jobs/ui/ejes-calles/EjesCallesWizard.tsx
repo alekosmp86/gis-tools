@@ -160,6 +160,8 @@ export const EjesCallesWizard: React.FC = () => {
               onTwinPickChange: (change) => dispatch({ type: "twinPickChanged", change }),
               manualSplits: state.manualSplits,
               onManualSplitChange: (change) => dispatch({ type: "manualSplitChanged", change }),
+              ignoredRefs: state.ignoredRefs,
+              onIgnoredRefChange: (change) => dispatch({ type: "manualSplitIgnoredChanged", change }),
               canAnalyzeWithPicks:
                 (state.twinPicks.length > 0 || state.manualSplits.length > 0) && !isRunActive && runBlockedReason(state) === null,
               onAnalyzeWithPicks: analyzeNow,

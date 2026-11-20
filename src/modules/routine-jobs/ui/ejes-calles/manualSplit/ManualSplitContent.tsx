@@ -27,11 +27,13 @@ export interface ManualSplitContentProps {
   base: EjesGeometryMapBase;
   /** The new sections already chosen for this old section; the choice starts from them. */
   storedRefs: readonly string[];
+  ignored: boolean;
   onApply: (newRefs: string[]) => void;
+  onIgnore: () => void;
 }
 
-/** The resolution of one held removal: the candidates on the map and in the checklist, the search controls and the apply. */
-export function ManualSplitContent({ row, base, storedRefs, onApply }: ManualSplitContentProps) {
+/** The resolution of one held removal: the candidates on the map and in the checklist, the search controls, the apply and the ignore. */
+export function ManualSplitContent({ row, base, storedRefs, ignored, onApply, onIgnore }: ManualSplitContentProps) {
   const [selectedRefs, setSelectedRefs] = useState<string[]>([...storedRefs]);
   const [radius, setRadius] = useState<number>(MANUAL_CANDIDATE_RADIUS_M);
   const [otherStreets, setOtherStreets] = useState<boolean>(false);
@@ -78,8 +80,10 @@ export function ManualSplitContent({ row, base, storedRefs, onApply }: ManualSpl
             chosen={chosen}
             selectedCount={selectedRefs.length}
             oldLength={oldLength}
+            ignored={ignored}
             onApply={() => onApply(chosen.map((candidate) => candidate.ref))}
             onClear={() => setSelectedRefs([])}
+            onIgnore={onIgnore}
           />
         </>
       )}

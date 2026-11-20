@@ -22,12 +22,18 @@ export const RENUMBER_DROPPED_COLUMNS: TableColumn<EjesRenumberDroppedRow>[] = [
   { header: "Puntos de acceso", cell: (row) => String(row.points) },
 ];
 
-export const REMOVAL_COLUMNS: TableColumn<EjesRemovalRow>[] = [
+export const REMOVAL_LEADING_COLUMNS: TableColumn<EjesRemovalRow>[] = [
   { header: "reftramo", cell: (row) => (row.ref === "" ? NO_REFTRAMO_TEXT : row.ref) },
   { header: "idcalle", cell: (row) => textOrNoData(row.idcalle) },
   { header: "Puntos de acceso", cell: (row) => String(row.points) },
-  { header: "Qué pasa", cell: (row) => (row.points > 0 ? "No se quita: tiene puntos de acceso" : "Se quita") },
 ];
+
+export const REMOVAL_STATE_COLUMN: TableColumn<EjesRemovalRow> = {
+  header: "Qué pasa",
+  cell: (row) => (row.points > 0 ? "No se quita: tiene puntos de acceso" : "Se quita"),
+};
+
+export const REMOVAL_COLUMNS: TableColumn<EjesRemovalRow>[] = [...REMOVAL_LEADING_COLUMNS, REMOVAL_STATE_COLUMN];
 
 export const KEPT_BY_DISCARDED_COLUMNS: TableColumn<EjesKeptByDiscardedRow>[] = [
   { header: "reftramo anterior", cell: (row) => (row.ref === "" ? NO_REFTRAMO_TEXT : row.ref) },

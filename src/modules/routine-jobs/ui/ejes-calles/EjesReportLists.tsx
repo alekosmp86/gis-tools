@@ -7,8 +7,9 @@ import { EjesAcceptableRows } from "./EjesAcceptableRows";
 import { EjesListSection } from "./EjesListSection";
 import { EjesSplitsSection } from "./EjesSplitsSection";
 import { TwinUndecidedSection } from "./TwinUndecidedSection";
-import { EjesAcceptList, isPlainRemovalAcceptable, plainRemovalNotAcceptableText, splitKeyOf, type EjesAcceptView } from "./ejesAccept";
-import { acceptedCountTextOf } from "./ejesAcceptTexts";
+import { EjesAcceptList, NO_IGNORED_REFS, isPlainRemovalAcceptable, plainRemovalNotAcceptableText, splitKeyOf, type EjesAcceptView } from "./ejesAccept";
+import { acceptedCountTextOf, EJES_MANUAL_SPLIT_TEXT } from "./ejesAcceptTexts";
+import { manualResolutionReaderOf, resolvedCountOf, resolvedPredicateOf } from "./manualSplit/manualResolutionView";
 import { mergeColumnsOf } from "./compact/ejesMergeColumns";
 import { splitColumnsOf } from "./compact/ejesSplitColumns";
 import { GEO_TWIN_COLUMNS, GEO_TWIN_TEXT, isGeoTwinRemovable } from "./compact/ejesGeoTwinColumns";
@@ -33,6 +34,17 @@ export interface EjesReportListsProps {
   /** Opens the map where a held removal's replacement is chosen; absent on a read-only report. */
   onResolveRemoval?: (row: EjesRemovalRow) => void;
 }
+
+const ignoredRefsOf = (accept: EjesAcceptView): readonly string[] => accept.ignoredRefs ?? NO_IGNORED_REFS;
+
+/** The "N de M resueltos" of the plain removals: N counts the listed rows the user resolved, M is every row the analysis holds. */
+const plainRemovalsBadgeOf = (rows: EjesRemovalRow[], plainHeld: number, accept: EjesAcceptView | undefined): string | undefined =>
+  accept === undefined
+    ? undefined
+    : EJES_MANUAL_SPLIT_TEXT.RESOLVED_COUNT(
+        resolvedCountOf(rows, resolvedPredicateOf(accept.manualSplits, ignoredRefsOf(accept))),
+        plainHeld
+      );
 
 export const EjesReportLists: React.FC<EjesReportListsProps> = ({
   result,
@@ -124,13 +136,14 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
             list={EjesAcceptList.PLAIN_REMOVALS}
             rows={view.plainRemovalRows}
             total={view.plainRemovalRows.length}
-            columns={removalColumnsOf(onResolveRemoval)}
+            columns={removalColumnsOf(onResolveRemoval, manualResolutionReaderOf(accept.manualSplits, ignoredRefsOf(accept)))}
             rowKey={(row) => row.ref}
             acceptable={isPlainRemovalAcceptable}
             notAcceptableText={plainRemovalNotAcceptableText}
             accept={accept}
           />
-        )
+        ),
+        plainRemovalsBadgeOf(view.plainRemovalRows, result.counts.plainHeld, accept)
       )}
       {section(
         EJES_LIST.KEPT_BY_DISCARDED,

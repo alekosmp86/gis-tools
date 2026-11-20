@@ -14,6 +14,8 @@ import {
   acceptanceAfter,
   acceptedRequestOf,
   acceptKeysOf,
+  ignoredRefsAfter,
+  manualSplitOf,
   manualSplitRequestsOf,
   manualSplitsAfter,
   pointChoicesAfter,
@@ -22,6 +24,7 @@ import {
   type EjesAcceptance,
   type EjesAcceptChange,
   type EjesAcceptKeys,
+  type EjesIgnoredRefChange,
   type EjesManualSplitChange,
   type EjesPointChoiceKey,
   type EjesPointChoicesChange,
@@ -61,6 +64,8 @@ export interface EjesWizardState {
   twinPicks: readonly EjesTwinPick[];
   /** The new sections the user chose on the map for old sections no rule resolved: inputs of every analysis, as the twin picks are. */
   manualSplits: readonly EjesManualSplit[];
+  /** The old sections the user marked as reviewed with no choice: UI only, never sent to the server. */
+  ignoredRefs: readonly string[];
 }
 
 export type EjesWizardAction =
@@ -72,6 +77,7 @@ export type EjesWizardAction =
   | { type: "pointChoicesChanged"; analysisKey: string; change: EjesPointChoicesChange }
   | { type: "twinPickChanged"; change: EjesTwinPickChange }
   | { type: "manualSplitChanged"; change: EjesManualSplitChange }
+  | { type: "manualSplitIgnoredChanged"; change: EjesIgnoredRefChange }
   | { type: "next" }
   | { type: "back" }
   | { type: "goTo"; step: EjesStep }
@@ -106,6 +112,7 @@ export function initialEjesWizardState(): EjesWizardState {
     acceptance: null,
     twinPicks: [],
     manualSplits: [],
+    ignoredRefs: [],
   };
 }
 
@@ -275,7 +282,22 @@ const withoutDependents = (state: EjesWizardState): EjesWizardState => ({
   acceptance: null,
   twinPicks: [],
   manualSplits: [],
+  ignoredRefs: [],
 });
+
+/** A manual choice clears the ignore mark of its old section, when the choice was stored (the request limit may refuse it). */
+function manualSplitChangedOf(state: EjesWizardState, change: EjesManualSplitChange): EjesWizardState {
+  const manualSplits = manualSplitsAfter(state.manualSplits, change);
+  const stored = change.newRefs !== null && manualSplitOf(manualSplits, change.oldRef) !== undefined;
+  const ignoredRefs = stored ? ignoredRefsAfter(state.ignoredRefs, { oldRef: change.oldRef, ignored: false }) : state.ignoredRefs;
+  return { ...state, manualSplits, ignoredRefs };
+}
+
+/** Ignoring an old section clears its manual choice: the two marks never coexist. */
+function manualSplitIgnoredChangedOf(state: EjesWizardState, change: EjesIgnoredRefChange): EjesWizardState {
+  const manualSplits = change.ignored ? manualSplitsAfter(state.manualSplits, { oldRef: change.oldRef, newRefs: null }) : state.manualSplits;
+  return { ...state, manualSplits, ignoredRefs: ignoredRefsAfter(state.ignoredRefs, change) };
+}
 
 function connectionReducer(state: EjesWizardState, field: ConnectionField, value: string): EjesWizardState {
   const connection = { ...state.connection, [field]: value };
@@ -294,6 +316,7 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
         acceptance: null,
         twinPicks: [],
         manualSplits: [],
+        ignoredRefs: [],
       };
     case "slotTableChosen":
       return {
@@ -302,6 +325,7 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
         acceptance: null,
         twinPicks: [],
         manualSplits: [],
+        ignoredRefs: [],
       };
     case "confirmationChanged":
       return { ...state, confirmation: { ...state.confirmation, ...action.patch } };
@@ -312,7 +336,9 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
     case "twinPickChanged":
       return { ...state, twinPicks: twinPicksAfter(state.twinPicks, action.change) };
     case "manualSplitChanged":
-      return { ...state, manualSplits: manualSplitsAfter(state.manualSplits, action.change) };
+      return manualSplitChangedOf(state, action.change);
+    case "manualSplitIgnoredChanged":
+      return manualSplitIgnoredChangedOf(state, action.change);
     case "next":
       return canContinue(state) ? moveTo(state, stepAfter(state.step, 1)) : state;
     case "back":

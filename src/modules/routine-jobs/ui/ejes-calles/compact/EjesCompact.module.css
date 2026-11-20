@@ -114,3 +114,24 @@
   letter-spacing: normal;
   text-transform: none;
 }
+
+.resolvedBadge,
+.ignoredBadge {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.resolvedBadge {
+  border-color: var(--accent-emerald);
+  color: var(--accent-emerald);
+}
+
+.ignoredBadge {
+  border-color: rgba(127, 127, 127, 0.4);
+  color: var(--text-muted);
+}

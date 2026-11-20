@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Check, X } from "lucide-react";
+import { Ban, Check, X } from "lucide-react";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { ButtonVariant } from "@/ui-kit/types/ui";
 import type { EjesMapCandidate } from "../../../jobs/ejes-calles/types";
@@ -19,12 +19,15 @@ export interface ManualSplitFooterProps {
   selectedCount: number;
   /** The length in metres of the old section; null when its outline is not in the response. */
   oldLength: number | null;
+  /** The old section is marked as reviewed with no choice. */
+  ignored: boolean;
   onApply: () => void;
   onClear: () => void;
+  onIgnore: () => void;
 }
 
-/** The live caption of the choice, the metres it covers near the old section, and the apply and clear buttons. */
-export function ManualSplitFooter({ chosen, selectedCount, oldLength, onApply, onClear }: ManualSplitFooterProps) {
+/** The live caption of the choice, the metres it covers near the old section, and the apply, clear and ignore buttons. */
+export function ManualSplitFooter({ chosen, selectedCount, oldLength, ignored, onApply, onClear, onIgnore }: ManualSplitFooterProps) {
   return (
     <div className={styles.footer}>
       <p className={styles.caption}>
@@ -37,6 +40,10 @@ export function ManualSplitFooter({ chosen, selectedCount, oldLength, onApply, o
         <Button variant={ButtonVariant.SECONDARY} onClick={onClear} disabled={selectedCount === 0}>
           <X size={ICON_SIZE} />
           <span>{EJES_MANUAL_SPLIT_TEXT.CLEAR_SELECTION}</span>
+        </Button>
+        <Button variant={ButtonVariant.SECONDARY} onClick={onIgnore}>
+          <Ban size={ICON_SIZE} />
+          <span>{ignored ? EJES_MANUAL_SPLIT_TEXT.UNIGNORE : EJES_MANUAL_SPLIT_TEXT.IGNORE}</span>
         </Button>
         <Button onClick={onApply} disabled={chosen.length === 0}>
           <Check size={ICON_SIZE} />
