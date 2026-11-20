@@ -19,6 +19,7 @@ const REVERT_TEMP = {
   RESTORED_SECTIONS: "ej_rev_restore",
   SECTIONS: "ej_rev_sections",
   POINTS: "ej_rev_points",
+  POINT_WAYS: "ej_rev_point_ways",
   INSERTS: "ej_rev_inserts",
   RESTORED_VERTICES: "ej_rev_vertices_del",
   CREATED_VERTICES: "ej_rev_vertices_new",
@@ -34,6 +35,7 @@ export const REVERT_ORDER: readonly string[] = [
   REVERT_TEMP.RESTORED_SECTIONS,
   REVERT_TEMP.SECTIONS,
   REVERT_TEMP.POINTS,
+  REVERT_TEMP.POINT_WAYS,
   REVERT_TEMP.INSERTS,
   REVERT_TEMP.CREATED_VERTICES,
 ];
@@ -113,6 +115,25 @@ export function buildRevertPointsSql(context: EjesLoadContext, layouts: EjesLayo
     [
       `SELECT (row_number() OVER (ORDER BY g.old_value))::bigint AS n, ${formatOf("UPDATE %s SET %s = %L WHERE %s IN (%s);", args)} AS line FROM (`,
       `SELECT x.old_value, string_agg(format('%L', x.point_id), ', ' ORDER BY x.point_id) AS ids FROM (${moved}) AS x GROUP BY x.old_value`,
+      ") AS g",
+    ].join(" ")
+  );
+}
+
+/** One UPDATE per old street with the ids of the split points that held it, so the revert puts the street of each point back too. */
+export function buildRevertPointWaysSql(context: EjesLoadContext): string {
+  const args = [
+    literal(qualifiedOf(context, EJES_TABLE_ROLE.ACCESS_POINT)),
+    literal(physicalOf(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.CIRCULATION_WAY)),
+    "g.old_way",
+    literal(physicalOf(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ID)),
+    "g.ids",
+  ];
+  return createTemp(
+    REVERT_TEMP.POINT_WAYS,
+    [
+      `SELECT (row_number() OVER (ORDER BY g.old_way))::bigint AS n, ${formatOf("UPDATE %s SET %s = %L WHERE %s IN (%s);", args)} AS line FROM (`,
+      `SELECT f.old_way, string_agg(format('%L', f.point_id), ', ' ORDER BY f.point_id) AS ids FROM ${tmp(LOAD_TEMP.SPLIT_FINAL)} AS f WHERE f.old_way IS NOT NULL GROUP BY f.old_way`,
       ") AS g",
     ].join(" ")
   );

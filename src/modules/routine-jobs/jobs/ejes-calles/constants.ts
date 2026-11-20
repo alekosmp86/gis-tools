@@ -77,6 +77,7 @@ export const VERTICES_COLUMN = {
 export const ACCESS_POINT_COLUMN = {
   ID: "id",
   ROAD_SECTION: "id_road_section",
+  CIRCULATION_WAY: "id_circulation_way",
 } as const;
 
 /** Door fields of an access point, read by name from the row when the table has them (a missing one reads as no data). */

@@ -1,6 +1,7 @@
-import { ACCESS_POINT_COLUMN, EJES_SKIP_REASON, EJES_TABLE_ROLE } from "../constants";
+import { ACCESS_POINT_COLUMN, EJES_SKIP_REASON, EJES_TABLE_ROLE, ROAD_SECTION_COLUMN } from "../constants";
 import type { EjesLoadContext } from "../types";
 import { accessPointRefMatchSql } from "./analysisSql";
+import { canonicalTextSql } from "./stagingSql";
 import { splitGroupsSql } from "./splitHoldSql";
 import { physicalOf, qualifiedOf, typedAs } from "./loadContext";
 import { createTemp, LOAD_TEMP, tmp } from "./loadSelectionSql";
@@ -41,23 +42,36 @@ export function buildSplitFinalSql(context: EjesLoadContext): string {
   const access = EJES_TABLE_ROLE.ACCESS_POINT;
   const reference = physicalOf(context, access, ACCESS_POINT_COLUMN.ROAD_SECTION);
   const id = physicalOf(context, access, ACCESS_POINT_COLUMN.ID);
-  const oldValue = `(SELECT a.${reference}::text FROM ${qualifiedOf(context, access)} AS a WHERE a.${id} = ${typedAs(context, access, ACCESS_POINT_COLUMN.ID, "p.point_id")})`;
+  const oldOf = (column: string): string =>
+    `(SELECT a.${column}::text FROM ${qualifiedOf(context, access)} AS a WHERE a.${id} = ${typedAs(context, access, ACCESS_POINT_COLUMN.ID, "p.point_id")})`;
+  const wayColumn = physicalOf(context, access, ACCESS_POINT_COLUMN.CIRCULATION_WAY);
   return createTemp(LOAD_TEMP.SPLIT_FINAL, [
-    `SELECT p.old_id, p.old_ref, p.point_id, COALESCE(c.new_ref, p.new_ref) AS new_ref, ${oldValue} AS old_value`,
+    `SELECT p.old_id, p.old_ref, p.point_id, COALESCE(c.new_ref, p.new_ref) AS new_ref, ${oldOf(reference)} AS old_value, ${oldOf(wayColumn)} AS old_way`,
     `FROM ${tmp(LOAD_TEMP.SPLIT_PTS)} AS p JOIN ${tmp(LOAD_TEMP.SPLIT_PLAN)} AS pl ON pl.old_id = p.old_id AND pl.reason IS NULL`,
     `LEFT JOIN ${tmp(LOAD_TEMP.ACC_CHOICE)} AS c ON c.old_ref = p.old_ref AND c.point_id = p.point_id::text`,
     "WHERE p.reason IS NULL OR c.new_ref IS NOT NULL",
   ].join(" "));
 }
 
-/** The only write of a split's points: each point of the table moves from its old `reftramo` to its piece, guarded by that old value. */
+/**
+ * The only write of a split's points: each point of the table moves from its old `reftramo` to its piece, guarded by that old value.
+ * The point takes the street of its piece too (`id_circulation_way`), so a piece on another street does not leave it on the old one;
+ * a piece with no street keeps the point's own.
+ */
 export function buildMoveSplitPointsSql(context: EjesLoadContext): string {
   const access = EJES_TABLE_ROLE.ACCESS_POINT;
+  const section = EJES_TABLE_ROLE.ROAD_SECTION;
   const reference = physicalOf(context, access, ACCESS_POINT_COLUMN.ROAD_SECTION);
+  const wayColumn = physicalOf(context, access, ACCESS_POINT_COLUMN.CIRCULATION_WAY);
   const id = physicalOf(context, access, ACCESS_POINT_COLUMN.ID);
+  const pieceWay = [
+    `SELECT r.${physicalOf(context, section, ROAD_SECTION_COLUMN.CIRCULATION_WAY)} FROM ${qualifiedOf(context, section)} AS r`,
+    `WHERE ${canonicalTextSql(`r.${physicalOf(context, section, ROAD_SECTION_COLUMN.REFTRAMO)}`)} = f.new_ref LIMIT 1`,
+  ].join(" ");
+  const way = `${wayColumn} = COALESCE((${pieceWay}), a.${wayColumn})`;
   return counted(
     [
-      `UPDATE ${qualifiedOf(context, access)} AS a SET ${reference} = ${typedAs(context, access, ACCESS_POINT_COLUMN.ROAD_SECTION, "f.new_ref")}`,
+      `UPDATE ${qualifiedOf(context, access)} AS a SET ${reference} = ${typedAs(context, access, ACCESS_POINT_COLUMN.ROAD_SECTION, "f.new_ref")}, ${way}`,
       `FROM ${tmp(LOAD_TEMP.SPLIT_FINAL)} AS f WHERE a.${id} = ${typedAs(context, access, ACCESS_POINT_COLUMN.ID, "f.point_id")}`,
       `AND ${accessPointRefMatchSql(context, "f.old_ref")}`,
     ].join(" ")

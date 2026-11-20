@@ -60,6 +60,7 @@ import {
   buildRevertInsertsSql,
   buildRevertMastersSql,
   buildRevertPointsSql,
+  buildRevertPointWaysSql,
   buildRevertRestoredSectionsSql,
   buildRevertRestoredVerticesSql,
   buildRevertSectionsSql,
@@ -166,6 +167,7 @@ async function prepareLoad(session: RunSession, context: EjesLoadContext): Promi
   await runInOrder(session, [
     buildRevertSectionsSql(context, context.layouts),
     buildRevertPointsSql(context, context.layouts),
+    buildRevertPointWaysSql(context),
     buildRevertInsertsSql(context),
     buildRevertMastersSql(context),
     buildRevertRestoredSectionsSql(context),
