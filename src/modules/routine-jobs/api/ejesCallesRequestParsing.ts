@@ -3,7 +3,7 @@ import { NO_ACCEPTED } from "../jobs/ejes-calles/domain/loadMapping";
 import { assertEjesRealRunEnabled } from "../jobs/ejes-calles/domain/realRunSwitch";
 import { assertDistinctEjesTables } from "../jobs/ejes-calles/domain/tableRoles";
 import type { EjesFingerprint, EjesParams, EjesSummary, EjesTableRef, EjesTables } from "../jobs/ejes-calles/types";
-import { readAnalysisTwinPicks, readEjesAccepted } from "./ejesAcceptedParsing";
+import { readAnalysisAccepted, readEjesAccepted } from "./ejesAcceptedParsing";
 import {
   assertTablesDistinct,
   invalid,
@@ -63,7 +63,7 @@ function realRunParams(body: JsonRecord, config: EjesParams["config"], tables: E
 }
 
 function analysisParams(body: JsonRecord, config: EjesParams["config"], tables: EjesTables): EjesParams {
-  return { config, tables, dryRun: true, accepted: { ...NO_ACCEPTED, twinPicks: readAnalysisTwinPicks(body) } };
+  return { config, tables, dryRun: true, accepted: { ...NO_ACCEPTED, ...readAnalysisAccepted(body) } };
 }
 
 export function parseEjesCallesStartRequest(body: JsonRecord): EjesParams {

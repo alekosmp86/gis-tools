@@ -39,6 +39,15 @@ Status markers: BUILT (slice A or C, as stated), PARTIAL (what is built and what
 
 EJS-1 to EJS-21 (21 criteria).
 
+## Divisiones manuales (EJS-22 to EJS-25)
+
+- EJS-22 (BUILT, manual split): On the map the user chooses the new sections (one or more) that replace an old section that no rule resolved. `accepted.manualSplits` = `[{ oldRef, newRefs[] }]`: canonical integer refs, 1 to `MANUAL_SPLIT_PIECES_LIMIT` (50) distinct new refs per entry, one entry per `oldRef`, at most `ACCEPTED_KEYS_LIMIT` entries. The Analizar re-run sends it too. A valid group forces the old section's pieces to exactly its listed new refs (one piece is a replacement, two or more a split, as the engine counts them). Its coverage is computed from the geometries and reported; the 95% threshold does not apply. Every other hold and point rule applies (EJS-6 to EJS-8, EJS-14 to EJS-21). The split row carries `manual: true`. The load accepts the group by its old `reftramo`, as an accepted split.
+- EJS-23 (BUILT): A group applies only when its old `reftramo` is removed by the file (not renumbered) and every listed new ref is an available piece (a kept, single-copy new section, not renumbered or dropped). Otherwise the whole group is ignored and reported (`manualSplitsIgnored` count and list, reason `not_removed` or `piece_unavailable`). An accepted group the analysis of the load ignores aborts the load before any write (`MANUAL_SPLIT_NOT_APPLICABLE_MESSAGE`).
+- EJS-24 (BUILT): A new ref listed in two manual groups, or claimed by an automatic split or merge, is held `shared_piece` like any shared piece. The old section of an applied group leaves the plain removals and the merges.
+- EJS-25 (BUILT, empty list): With no manual split the analysis results are identical to the analysis without the feature: `manual_splits` is an empty VALUES list, the forced rows and the piece geometries are empty unions. The manual data is a small VALUES CTE joined by `reftramo` only (no per-row subquery, no LATERAL).
+
+EJS-22 to EJS-25 (4 criteria).
+
 ## Decisions (orchestrator, slice A)
 
 - Held groups (Q1). A new section that belongs to a split (its pieces) or to a merge (its new `reftramo`) is inserted only when that group is accepted and applied. For every merge and split that is not applied, the new refs of the group are held: not inserted, no section, master or way created for them, and the old sections stay untouched. The group is reported once in the skipped list with its old and new refs and its reason (`not_accepted`, or the refusal reason). A merge whose new `reftramo` is also a split piece is refused with `shared_piece` (slice C; it was `split_pending` in slice A).

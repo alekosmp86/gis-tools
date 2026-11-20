@@ -1,6 +1,6 @@
 import { ACCEPTED_CHOICES_LIMIT, ACCEPTED_KEYS_LIMIT, REPLACEMENT_PIECES } from "../../jobs/ejes-calles/constants";
-import type { EjesRemovalRow, EjesSplitRow, EjesTwinPick } from "../../jobs/ejes-calles/types";
-import type { EjesAcceptedRequest, EjesPointChoiceRequest } from "../shared/clientTypes";
+import type { EjesCounts, EjesManualSplit, EjesRemovalRow, EjesSplitRow, EjesTwinPick } from "../../jobs/ejes-calles/types";
+import type { EjesAcceptedRequest, EjesManualSplitRequest, EjesPointChoiceRequest } from "../shared/clientTypes";
 import { EJES_ACCEPT_TEXT } from "./ejesAcceptTexts";
 import { EJES_SPLIT_REVIEW_TEXT } from "./splitReview/ejesSplitReviewTexts";
 
@@ -86,7 +86,13 @@ export interface EjesTwinPickChange {
   copy: EjesTwinPickCopy | null;
 }
 
-/** What a report needs to show and change the accepted keys, the point choices and the twin picks; absent on a read-only report. */
+/** The new sections the user chose for one old section; null clears the choice of that old section. */
+export interface EjesManualSplitChange {
+  oldRef: string;
+  newRefs: string[] | null;
+}
+
+/** What a report needs to show and change the accepted keys, the point choices, the twin picks and the manual splits; absent on a read-only report. */
 export interface EjesAcceptView {
   keys: EjesAcceptKeys;
   pointChoices: readonly EjesPointChoiceKey[];
@@ -94,6 +100,8 @@ export interface EjesAcceptView {
   onPointChoicesChange: (change: EjesPointChoicesChange) => void;
   twinPicks: readonly EjesTwinPick[];
   onTwinPickChange: (change: EjesTwinPickChange) => void;
+  manualSplits: readonly EjesManualSplit[];
+  onManualSplitChange: (change: EjesManualSplitChange) => void;
   canAnalyzeWithPicks: boolean;
   onAnalyzeWithPicks: () => void;
 }
@@ -101,6 +109,7 @@ export interface EjesAcceptView {
 const NO_ACCEPT_KEYS: EjesAcceptKeys = { splits: [], plainRemovals: [], merges: [], twinRemovals: [] };
 const NO_POINT_CHOICES: readonly EjesPointChoiceKey[] = [];
 const NO_TWIN_PICKS: readonly EjesTwinPick[] = [];
+const NO_MANUAL_SPLITS: readonly EjesManualSplit[] = [];
 
 export function acceptKeysOf(acceptance: EjesAcceptance | null, analysisKey: string | undefined): EjesAcceptKeys {
   if (acceptance === null || analysisKey === undefined || acceptance.analysisKey !== analysisKey) return NO_ACCEPT_KEYS;
@@ -195,11 +204,30 @@ export const twinPickOf = (picks: readonly EjesTwinPick[], ref: string): EjesTwi
 
 export const twinPicksCapReached = (picks: readonly EjesTwinPick[]): boolean => picks.length >= ACCEPTED_KEYS_LIMIT;
 
+/** The manual splits after one old section's choice is set (its pieces replaced) or cleared. A new one past the request limit is not added. */
+export function manualSplitsAfter(splits: readonly EjesManualSplit[], change: EjesManualSplitChange): EjesManualSplit[] {
+  const others = splits.filter((split) => split.oldRef !== change.oldRef);
+  if (change.newRefs === null) return others;
+  if (others.length >= ACCEPTED_KEYS_LIMIT) return [...splits];
+  return [...others, { oldRef: change.oldRef, newRefs: change.newRefs }];
+}
+
+export const manualSplitOf = (splits: readonly EjesManualSplit[], oldRef: string): EjesManualSplit | undefined =>
+  splits.find((split) => split.oldRef === oldRef);
+
+export const manualSplitsCapReached = (splits: readonly EjesManualSplit[]): boolean => splits.length >= ACCEPTED_KEYS_LIMIT;
+
+const manualSplitRequestOf = ({ oldRef, newRefs }: EjesManualSplit): EjesManualSplitRequest => ({ oldRef, newRefs });
+
+/** The manual splits as the Analizar re-run and the real run send them. */
+export const manualSplitRequestsOf = (splits: readonly EjesManualSplit[]): EjesManualSplitRequest[] => splits.map(manualSplitRequestOf);
+
 /** The request of the accepted splits: each with the user's choices only, never a point the user did not decide. */
 export const acceptedRequestOf = (
   keys: EjesAcceptKeys,
   pointChoices: readonly EjesPointChoiceKey[] = NO_POINT_CHOICES,
-  twinPicks: readonly EjesTwinPick[] = NO_TWIN_PICKS
+  twinPicks: readonly EjesTwinPick[] = NO_TWIN_PICKS,
+  manualSplits: readonly EjesManualSplit[] = NO_MANUAL_SPLITS
 ): EjesAcceptedRequest => {
   const choicesBySplit = new Map<string, EjesPointChoiceRequest[]>();
   for (const choice of pointChoices) {
@@ -213,5 +241,13 @@ export const acceptedRequestOf = (
     merges: keys.merges.map((newRef) => ({ newRef })),
     twinRemovals: keys.twinRemovals.map((ref) => ({ ref })),
     twinPicks: twinPicks.map(({ ref, department, locality }) => ({ ref, department, locality })),
+    manualSplits: manualSplitRequestsOf(manualSplits),
+    autoPlainRemovals: true,
   };
 };
+
+/** The plain removals the lists show: only the held ones (with access points); the load removes the others by itself. Ordered by points, most first. */
+export const heldPlainRemovalsOf = (rows: readonly EjesRemovalRow[]): EjesRemovalRow[] => rows.filter((row) => row.points > 0);
+
+/** The plain removals the load removes by itself: every one without access points, counted from the analysis (the listed rows are capped, the counts are not). */
+export const automaticPlainRemovalsOf = (counts: EjesCounts): number => counts.plainRemovals - counts.plainHeld;

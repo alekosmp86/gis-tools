@@ -255,6 +255,21 @@ export const INVALID_CHOICE_REFS_LIMIT = 5;
 export const INVALID_TWIN_PICK_REFS_LIMIT = 5;
 /** The CTE of the copies the user picked for a `reftramo` with several copies (`twin_picks(ref, department, locality)`). */
 export const TWIN_PICKS_CTE = "twin_picks";
+/** The CTE of the manual splits the user chose: one row per listed piece (`manual_splits(old_ref, new_ref)`). */
+export const MANUAL_SPLITS_CTE = "manual_splits";
+/** Pieces the user may list for one old section: one is a replacement, two or more a split. */
+export const MANUAL_SPLIT_PIECES_LIMIT = 50;
+/** The old `reftramo`s of up to this many manual splits that the load cannot apply, named in the abort message: the first ones, in order. */
+export const INVALID_MANUAL_SPLIT_REFS_LIMIT = 5;
+export const MANUAL_SPLIT_REASON = {
+  NOT_REMOVED: "not_removed",
+  PIECE_UNAVAILABLE: "piece_unavailable",
+} as const;
+export type ManualSplitReason = (typeof MANUAL_SPLIT_REASON)[keyof typeof MANUAL_SPLIT_REASON];
+/** Candidate new sections for a manual split: the default and the largest search radius in metres, and the most candidates one item returns. */
+export const MANUAL_CANDIDATE_RADIUS_M = 30;
+export const MANUAL_CANDIDATE_MAX_RADIUS_M = 100;
+export const MANUAL_CANDIDATES_LIMIT = 60;
 /** The review points one dry run keeps for the review screen; a split whose points would pass this is not stored and is flagged incomplete. */
 export const REVIEW_POINTS_STORE_LIMIT = 20000;
 /** The tables the review points read by primary key or small lookups: the access points, their addresses, the old sections, the new pieces and the circulation ways (street names). */
@@ -362,6 +377,7 @@ export const EJES_SUMMARY_COUNT_KEYS = [
   "geoTwinLosersRemovable",
   "geoTwinLosersOmitted",
   "twinPicksApplied",
+  "manualSplitsApplied",
   "twinsDefaulted",
   "renumberedByGeometry",
   "renumberDroppedCandidates",

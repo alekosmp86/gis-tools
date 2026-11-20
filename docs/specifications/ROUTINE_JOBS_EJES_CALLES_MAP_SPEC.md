@@ -21,6 +21,12 @@ The analysis report of the ejes job lists SPLIT ("Divisiones") and MERGE ("Union
 
 - EM-17: The "Divisiones" and "Uniones" tables show three lengths in metres per row: the old section(s), the new section(s) and the part of the new section(s) that lies outside the old one(s) (beyond 3 m), so the user can tell a plain split or merge from one where the new sections extend further.
 
+## Candidates of a manual split (EJS-22)
+
+- EM-18: An item `{ candidatesOf, radius?, otherStreets? }` (`candidatesOf` an old `reftramo`, `radius` in metres, default `MANUAL_CANDIDATE_RADIUS_M` 30, at most 100; `otherStreets` default false). It returns the kept staging sections within `radius` of the old section, one outline per `reftramo` that carto does not hold yet, nearest first, the same `idcalle` as the old section unless `otherStreets`. At most `MANUAL_CANDIDATES_LIMIT` (60) candidates. The response carries `candidates` next to `features`, one entry per candidate: `ref`, `idcalle`, street name, locality, length, metres within 3 m of the old section, covered metres and percent of the old section, and distance. "Ya tomado" (taken by an automatic split) is NOT BUILT: it needs the whole analysis.
+- EM-19: The same item returns the old outline and the access points of the old section as features of role `access` (point geometry in WGS84, from `carto.address` by the point's id). The access point and address tables are optional in the request (`ejes-accesos`, `ejes-address`); when absent the default `carto` tables are read.
+- EM-20: Cost controls: the candidates come from one staging read with a bounding-box filter (`&&`) and `ST_DWithin` on the staging geometry; the carto check is an anti-join by `reftramo`; the read keeps the 20 s statement timeout and the read-only transaction.
+
 ## UI
 
 - EM-10: Each row of the "Divisiones" and "Uniones" tables of the report has a "Ver en mapa" button (`ShowOnMapButton`). Plain removals, new streets and attribute changes have none.
@@ -44,4 +50,4 @@ The analysis report of the ejes job lists SPLIT ("Divisiones") and MERGE ("Union
 
 ## Acceptance criteria count
 
-EM-1 to EM-17 (17 criteria).
+EM-1 to EM-20 (20 criteria).

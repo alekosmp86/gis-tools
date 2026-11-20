@@ -9,7 +9,7 @@ import { buildCreateSplitPointTableSql } from "../domain/splitPointSql";
 import { buildCreateGeoTwinTableSql } from "../domain/geoTwinSql";
 import { toEjesAnalysis, toEjesStagingReport } from "../domain/reportMapping";
 import { buildStagingChecksSql } from "../domain/stagingSql";
-import type { EjesAnalysis, EjesLayouts, EjesStagingReport, EjesTwinPick } from "../types";
+import type { EjesAnalysis, EjesLayouts, EjesManualSplit, EjesStagingReport, EjesTwinPick } from "../types";
 
 export interface EjesAnalysisBody {
   staging: EjesStagingReport;
@@ -31,13 +31,23 @@ export async function readStagingReport(session: RunSession, layouts: EjesLayout
   return toEjesStagingReport((await session.query(buildStagingChecksSql(layouts))).rows[0] ?? {});
 }
 
-export async function readAnalysis(session: RunSession, layouts: EjesLayouts, twinPicks: readonly EjesTwinPick[] = []): Promise<EjesAnalysis> {
+export async function readAnalysis(
+  session: RunSession,
+  layouts: EjesLayouts,
+  twinPicks: readonly EjesTwinPick[] = [],
+  manualSplits: readonly EjesManualSplit[] = []
+): Promise<EjesAnalysis> {
   await session.query(buildAnalysisWorkMemSql());
-  return toEjesAnalysis((await session.query(buildEjesAnalysisSql(layouts, undefined, twinPicks))).rows[0] ?? {});
+  return toEjesAnalysis((await session.query(buildEjesAnalysisSql(layouts, undefined, twinPicks, manualSplits))).rows[0] ?? {});
 }
 
 /** The real run's analysis: the renumbered, held, merged and plain pairs are kept in the temp tables the load reads, so the load never classifies again. */
-export async function readAnalysisForLoad(session: RunSession, layouts: EjesLayouts, twinPicks: readonly EjesTwinPick[]): Promise<EjesAnalysis> {
+export async function readAnalysisForLoad(
+  session: RunSession,
+  layouts: EjesLayouts,
+  twinPicks: readonly EjesTwinPick[],
+  manualSplits: readonly EjesManualSplit[]
+): Promise<EjesAnalysis> {
   for (const statement of LOAD_SINK_TABLE_SQL) {
     // One pg client: each sink table is created before the analysis writes into it.
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
@@ -54,7 +64,7 @@ export async function readAnalysisForLoad(session: RunSession, layouts: EjesLayo
     geoTwins: tmp(LOAD_TEMP.GEO_TWIN),
   };
   await session.query(buildAnalysisWorkMemSql());
-  return toEjesAnalysis((await session.query(buildEjesAnalysisSql(layouts, sinks, twinPicks))).rows[0] ?? {});
+  return toEjesAnalysis((await session.query(buildEjesAnalysisSql(layouts, sinks, twinPicks, manualSplits))).rows[0] ?? {});
 }
 
 /** The staging checks and the classification, on the transaction's own snapshot. */
@@ -62,11 +72,12 @@ export async function readStagingAndAnalysis(
   session: RunSession,
   layouts: EjesLayouts,
   timer: StepTimer,
-  twinPicks: readonly EjesTwinPick[]
+  twinPicks: readonly EjesTwinPick[],
+  manualSplits: readonly EjesManualSplit[]
 ): Promise<EjesAnalysisBody> {
   const staging = await timer.run(EJES_STEP.STAGING, () => readStagingReport(session, layouts));
   // One pg client: the classification reads follow the staging checks.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const analysis = await timer.run(EJES_STEP.ANALYZE, () => readAnalysis(session, layouts, twinPicks));
+  const analysis = await timer.run(EJES_STEP.ANALYZE, () => readAnalysis(session, layouts, twinPicks, manualSplits));
   return { staging, analysis };
 }

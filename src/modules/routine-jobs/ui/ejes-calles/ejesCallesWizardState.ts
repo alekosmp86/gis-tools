@@ -1,6 +1,6 @@
 import { EJES_DEFAULT_TABLES, EJES_ROLES, EJES_TABLE_ROLE, type EjesTableRole } from "../../jobs/ejes-calles/constants";
 import { summaryOf } from "../../jobs/ejes-calles/domain/loadMapping";
-import type { EjesTwinPick } from "../../jobs/ejes-calles/types";
+import type { EjesManualSplit, EjesTwinPick } from "../../jobs/ejes-calles/types";
 import { connectionBlockingReason, type ConnectionField } from "../shared/wizardConnection";
 import type {
   ClientConnection,
@@ -14,12 +14,15 @@ import {
   acceptanceAfter,
   acceptedRequestOf,
   acceptKeysOf,
+  manualSplitRequestsOf,
+  manualSplitsAfter,
   pointChoicesAfter,
   pointChoicesOf,
   twinPicksAfter,
   type EjesAcceptance,
   type EjesAcceptChange,
   type EjesAcceptKeys,
+  type EjesManualSplitChange,
   type EjesPointChoiceKey,
   type EjesPointChoicesChange,
   type EjesTwinPickChange,
@@ -56,6 +59,8 @@ export interface EjesWizardState {
   acceptance: EjesAcceptance | null;
   /** The copies the user keeps for `reftramo`s with several copies: inputs of every analysis, so they survive a re-analysis. */
   twinPicks: readonly EjesTwinPick[];
+  /** The new sections the user chose on the map for old sections no rule resolved: inputs of every analysis, as the twin picks are. */
+  manualSplits: readonly EjesManualSplit[];
 }
 
 export type EjesWizardAction =
@@ -66,6 +71,7 @@ export type EjesWizardAction =
   | { type: "acceptChanged"; analysisKey: string; change: EjesAcceptChange }
   | { type: "pointChoicesChanged"; analysisKey: string; change: EjesPointChoicesChange }
   | { type: "twinPickChanged"; change: EjesTwinPickChange }
+  | { type: "manualSplitChanged"; change: EjesManualSplitChange }
   | { type: "next" }
   | { type: "back" }
   | { type: "goTo"; step: EjesStep }
@@ -99,6 +105,7 @@ export function initialEjesWizardState(): EjesWizardState {
     confirmation: emptyConfirmation(),
     acceptance: null,
     twinPicks: [],
+    manualSplits: [],
   };
 }
 
@@ -144,10 +151,13 @@ export function blockingReason(state: EjesWizardState): string | null {
 export const runBlockedReason = (state: EjesWizardState): string | null =>
   connectionBlockingReason(state.connection) ?? tablesBlockingReason(state);
 
-/** The dry run (Analizar) with the twin picks: the analysis sees the picks the load will. */
+/** The dry run (Analizar) with the twin picks and manual splits: the analysis sees the choices the load will. */
 export const ejesAnalysisRequestOf = (state: EjesWizardState): EjesStartRequest => ({
   ...toEjesStartRequest(state, { dryRun: true }),
-  accepted: { twinPicks: state.twinPicks.map(({ ref, department, locality }) => ({ ref, department, locality })) },
+  accepted: {
+    twinPicks: state.twinPicks.map(({ ref, department, locality }) => ({ ref, department, locality })),
+    manualSplits: manualSplitRequestsOf(state.manualSplits),
+  },
 });
 
 export function canContinue(state: EjesWizardState): boolean {
@@ -204,7 +214,7 @@ export function ejesSplitPointsBaseOf(state: EjesWizardState, jobId: string | un
 export function canLoadNow(state: EjesWizardState, snapshot: EjesRunSnapshot): boolean {
   const result = snapshot.job?.result;
   if (snapshot.phase !== RunPhase.DONE || result === undefined || snapshot.plan?.dryRun !== true) return false;
-  if (result.blockers.length > 0 || !isPasswordTyped(state)) return false;
+  if (result.blockers.length > 0 || result.counts.manualSplitsIgnored > 0 || !isPasswordTyped(state)) return false;
   return snapshot.plan.analysisKey === ejesAnalysisKeyOf(toEjesStartRequest(state, { dryRun: true }));
 }
 
@@ -225,7 +235,12 @@ export function ejesLoadRequestOf(state: EjesWizardState, snapshot: EjesRunSnaps
   return {
     ...toEjesStartRequest(state, { dryRun: false }),
     dryRun: false,
-    accepted: acceptedRequestOf(acceptKeysOfState(state, snapshot), pointChoicesOfState(state, snapshot), state.twinPicks),
+    accepted: acceptedRequestOf(
+      acceptKeysOfState(state, snapshot),
+      pointChoicesOfState(state, snapshot),
+      state.twinPicks,
+      state.manualSplits
+    ),
     summary: summaryOf(result),
   };
 }
@@ -259,6 +274,7 @@ const withoutDependents = (state: EjesWizardState): EjesWizardState => ({
   confirmation: emptyConfirmation(),
   acceptance: null,
   twinPicks: [],
+  manualSplits: [],
 });
 
 function connectionReducer(state: EjesWizardState, field: ConnectionField, value: string): EjesWizardState {
@@ -277,6 +293,7 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
         slots: { ...state.slots, [action.key]: { schema: action.schema, table: "", valid: false } },
         acceptance: null,
         twinPicks: [],
+        manualSplits: [],
       };
     case "slotTableChosen":
       return {
@@ -284,6 +301,7 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
         slots: { ...state.slots, [action.key]: { ...state.slots[action.key], table: action.table, valid: action.valid } },
         acceptance: null,
         twinPicks: [],
+        manualSplits: [],
       };
     case "confirmationChanged":
       return { ...state, confirmation: { ...state.confirmation, ...action.patch } };
@@ -293,6 +311,8 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
       return { ...state, acceptance: pointChoicesAfter(state.acceptance, action.analysisKey, action.change) };
     case "twinPickChanged":
       return { ...state, twinPicks: twinPicksAfter(state.twinPicks, action.change) };
+    case "manualSplitChanged":
+      return { ...state, manualSplits: manualSplitsAfter(state.manualSplits, action.change) };
     case "next":
       return canContinue(state) ? moveTo(state, stepAfter(state.step, 1)) : state;
     case "back":

@@ -1,6 +1,6 @@
 import type { FeatureCollection } from "geojson";
-import { MAP_ROLE_TYPE } from "@/core/constants/mapConstants";
-import { OUTLINE_ROLE, type OutlineFeature, type OutlineLabel } from "./outlineTypes";
+import { MAP_ROLE_TYPE, MAP_SECTION_TYPE } from "@/core/constants/mapConstants";
+import { OUTLINE_ROLE, type OutlineFeature, type OutlineLabel, type OutlineRole } from "./outlineTypes";
 
 /** The feature property that the map draws as the permanent label of each outline. */
 export const OUTLINE_LABEL_PROPERTY = "label";
@@ -13,7 +13,12 @@ const labelOf = (feature: OutlineFeature, outline: OutlineLabel | undefined, lab
   return outline.featureLabels === true ? feature.label : outline.label;
 };
 
-const roleTypeOf = (feature: OutlineFeature): string => (feature.role === OUTLINE_ROLE.OLD ? MAP_ROLE_TYPE.OLD : MAP_ROLE_TYPE.NEW);
+const ROLE_TYPE: Partial<Record<OutlineRole, string>> = {
+  [OUTLINE_ROLE.OLD]: MAP_ROLE_TYPE.OLD,
+  [OUTLINE_ROLE.ACCESS]: MAP_SECTION_TYPE.ACCESS_POINT,
+};
+
+const roleTypeOf = (feature: OutlineFeature): string => ROLE_TYPE[feature.role] ?? MAP_ROLE_TYPE.NEW;
 
 /** Each outline is coloured by its role (or its own colour type) and labelled by its minimal label; a feature's `itemIndex` names its outline. */
 export function toMapCollection(features: readonly OutlineFeature[], outlines: readonly OutlineLabel[], showLabels = true): FeatureCollection {

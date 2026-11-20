@@ -1,8 +1,10 @@
 import { AMBIGUOUS_POINT_GAP_M, FAR_POINT_REPORT_M, TWIN_CLASS, type TwinClass } from "../../jobs/ejes-calles/constants";
 import { ejesAttrChangesOf } from "../../jobs/ejes-calles/domain/attrChanges";
-import type { EjesAttrRow, EjesResult, EjesSplitRow, EjesTwinRow, EjesUnknownValue } from "../../jobs/ejes-calles/types";
+import type { EjesAttrRow, EjesRemovalRow, EjesResult, EjesSplitRow, EjesTwinRow, EjesUnknownValue } from "../../jobs/ejes-calles/types";
 import { plural } from "../../jobs/shared/text";
 import type { ReportBannerView, ReportKpiView, TimingItemView } from "../shared/ReportParts";
+import { automaticPlainRemovalsOf, heldPlainRemovalsOf } from "./ejesAccept";
+import { EJES_ACCEPT_TEXT } from "./ejesAcceptTexts";
 import { defaultOpenListOf, stripOf, type EjesListKey, type EjesStripItem } from "./ejesCallesListMeta";
 import { heldRenumberViewsOf, type EjesHeldRenumberView } from "./ejesRenumberHeldView";
 import { listSummaryOf, timingsViewOf } from "../shared/reportViewParts";
@@ -45,6 +47,7 @@ export interface EjesReportView {
   summaries: EjesListSummaries;
   attrRows: EjesAttrRowView[];
   heldRenumbers: EjesHeldRenumberView[];
+  plainRemovalRows: EjesRemovalRow[];
   strip: EjesStripItem[];
   defaultOpenList: EjesListKey | null;
   timings: TimingItemView[];
@@ -115,7 +118,7 @@ export const twinDecisionTextOf = (row: TwinTextRow): string => {
 
 const kpi = (label: string, value: number): ReportKpiView => ({ label, value });
 
-function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
+function kpiGroupsOf(result: EjesResult, automatic: number): EjesKpiGroup[] {
   const { staging, counts, cloc } = result;
   const problems = [
     kpi("reftramo que no es un número", staging.nonIntegerRefs),
@@ -158,8 +161,8 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
         kpi("Divididos en varios nuevos", counts.splits - counts.replacements),
         kpi("Reemplazados por un nuevo tramo", counts.replacements),
         kpi("Unidos en uno nuevo", counts.merges),
-        kpi("Sin reemplazo, se quitarían", counts.plainRemovals - counts.plainHeld),
-        kpi("Sin reemplazo, con puntos de acceso: no se quitan", counts.plainHeld),
+        { label: "Se quitan automáticamente", value: automatic, caption: EJES_ACCEPT_TEXT.AUTO_REMOVAL_CAPTION },
+        kpi("Con puntos de acceso, sin resolver", counts.plainHeld),
         kpi("Se conservan por candidato descartado", counts.keptByDiscardedCandidate),
       ],
     },
@@ -209,10 +212,10 @@ function kpiGroupsOf(result: EjesResult): EjesKpiGroup[] {
   ];
 }
 
-const summariesOf = (result: EjesResult): EjesListSummaries => ({
+const summariesOf = (result: EjesResult, plainListed: number): EjesListSummaries => ({
   splits: listSummaryOf("Tramos divididos", result.splits.length, result.counts.splits),
   merges: listSummaryOf("Tramos unidos", result.merges.length, result.counts.merges),
-  plainRemovals: listSummaryOf("Tramos sin reemplazo (primero los que tienen puntos de acceso)", result.plainRemovals.length, result.counts.plainRemovals),
+  plainRemovals: listSummaryOf("Tramos sin reemplazo con puntos de acceso", plainListed, plainListed),
   keptByDiscarded: listSummaryOf("Tramos que se conservan por candidato descartado", result.keptByDiscarded.length, result.counts.keptByDiscardedCandidate),
   newStreets: listSummaryOf("Calles nuevas", result.newStreets.length, result.counts.newStreets),
   attrChanges: listSummaryOf("Tramos con cambios de nombre, calle, tipo o fuente", result.attrChanges.length, result.counts.attr),
@@ -225,18 +228,21 @@ const summariesOf = (result: EjesResult): EjesListSummaries => ({
 
 export function buildEjesReportView(result: EjesResult): EjesReportView {
   const { timings, totalSeconds } = timingsViewOf(result.stepTimings);
+  const plainRemovalRows = heldPlainRemovalsOf(result.plainRemovals);
+  const automatic = automaticPlainRemovalsOf(result.counts);
   return {
     banners: result.dryRun ? [{ kind: "dryRun", text: EJES_DRY_RUN_BANNER }] : [],
-    kpiGroups: kpiGroupsOf(result),
+    kpiGroups: kpiGroupsOf(result, automatic),
     blockers: result.blockers,
     privilegeInfo: result.privilegeInfo,
     unknownTipos: result.staging.unknownTipos.map(unknownTextOf),
     unknownFuentes: result.staging.unknownFuentes.map(unknownTextOf),
-    summaries: summariesOf(result),
+    summaries: summariesOf(result, plainRemovalRows.length),
     attrRows: result.attrChanges.map((row) => ({ ...row, changes: ejesAttrChangesOf(row).join(", ") })),
     heldRenumbers: heldRenumberViewsOf(result.renumberSkipped),
-    strip: stripOf(result),
-    defaultOpenList: defaultOpenListOf(result),
+    plainRemovalRows,
+    strip: stripOf(result, plainRemovalRows.length, automatic),
+    defaultOpenList: defaultOpenListOf(result, plainRemovalRows.length),
     timings,
     totalSeconds,
   };

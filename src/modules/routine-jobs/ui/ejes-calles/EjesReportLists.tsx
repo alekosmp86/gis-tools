@@ -1,5 +1,5 @@
 import React from "react";
-import type { EjesGeoTwinRow, EjesMergeRow, EjesResult, EjesSplitRow, EjesTwinUndecidedRow } from "../../jobs/ejes-calles/types";
+import type { EjesGeoTwinRow, EjesMergeRow, EjesRemovalRow, EjesResult, EjesSplitRow, EjesTwinUndecidedRow } from "../../jobs/ejes-calles/types";
 import type { EjesSplitPointsBase } from "../shared/clientTypes";
 import { EJES_LIST, type EjesListKey } from "./ejesCallesListMeta";
 import type { EjesReportView } from "./ejesCallesReportView";
@@ -13,6 +13,7 @@ import { mergeColumnsOf } from "./compact/ejesMergeColumns";
 import { splitColumnsOf } from "./compact/ejesSplitColumns";
 import { GEO_TWIN_COLUMNS, GEO_TWIN_TEXT, isGeoTwinRemovable } from "./compact/ejesGeoTwinColumns";
 import { ATTR_COLUMNS, HELD_RENUMBER_COLUMNS, INVALID_GEOMETRY_COLUMNS, KEPT_BY_DISCARDED_COLUMNS, REMOVAL_COLUMNS, RENUMBER_DROPPED_COLUMNS, STREET_COLUMNS } from "./ejesReportColumns";
+import { removalColumnsOf } from "./compact/ejesRemovalColumns";
 import { heldRenumberKeyOf, type EjesHeldRenumberView } from "./ejesRenumberHeldView";
 import { subjectOfGeoTwin, subjectOfHeldCandidates, type EjesMapSubject } from "./ejesMapSubject";
 import { RowsTable } from "../shared/ReportParts";
@@ -29,6 +30,8 @@ export interface EjesReportListsProps {
   accept?: EjesAcceptView;
   /** The connection and tables of the wizard for the split review; null while the wizard holds no password. */
   splitBase?: EjesSplitPointsBase | null;
+  /** Opens the map where a held removal's replacement is chosen; absent on a read-only report. */
+  onResolveRemoval?: (row: EjesRemovalRow) => void;
 }
 
 export const EjesReportLists: React.FC<EjesReportListsProps> = ({
@@ -40,6 +43,7 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
   subjects,
   accept,
   splitBase = null,
+  onResolveRemoval,
 }) => {
   const section = (key: EjesListKey, rowCount: number, body: React.ReactNode, badge?: string) =>
     rowCount > 0 && (
@@ -112,22 +116,21 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
         )}
       {section(
         EJES_LIST.PLAIN_REMOVALS,
-        result.plainRemovals.length,
+        view.plainRemovalRows.length,
         accept === undefined ? (
-          <RowsTable columns={REMOVAL_COLUMNS} rows={result.plainRemovals} rowKey={(row) => row.ref} />
+          <RowsTable columns={REMOVAL_COLUMNS} rows={view.plainRemovalRows} rowKey={(row) => row.ref} />
         ) : (
           <EjesAcceptableRows
             list={EjesAcceptList.PLAIN_REMOVALS}
-            rows={result.plainRemovals}
-            total={result.counts.plainRemovals}
-            columns={REMOVAL_COLUMNS}
+            rows={view.plainRemovalRows}
+            total={view.plainRemovalRows.length}
+            columns={removalColumnsOf(onResolveRemoval)}
             rowKey={(row) => row.ref}
             acceptable={isPlainRemovalAcceptable}
             notAcceptableText={plainRemovalNotAcceptableText}
             accept={accept}
           />
-        ),
-        badgeOf(EjesAcceptList.PLAIN_REMOVALS, result.counts.plainRemovals)
+        )
       )}
       {section(
         EJES_LIST.KEPT_BY_DISCARDED,

@@ -1,11 +1,12 @@
 import { listOf, nullableNumber, numberOf, textOf, type Row } from "../../shared/rowMapping";
 import { shortNameOf } from "./shortName";
-import { EJES_POINT_REASON, TWIN_CLASS, type EjesKeptByDiscardedReason, type EjesSkipReason, type GeoTwinRole, type RenumberSkipReason, type TwinClass } from "../constants";
+import { EJES_POINT_REASON, TWIN_CLASS, type EjesKeptByDiscardedReason, type EjesSkipReason, type GeoTwinRole, type ManualSplitReason, type RenumberSkipReason, type TwinClass } from "../constants";
 import { ANALYSIS_LIST_ALIAS } from "./analysisSql";
 import type {
   EjesStoredCandidate,
   EjesStoredReviewPoint,
   EjesAnalysis,
+  EjesManualSplitIgnored,
   EjesAttrRow,
   EjesInvalidGeometryRow,
   EjesMergeRow,
@@ -38,6 +39,11 @@ const reviewPointOf = (row: Row): EjesStoredReviewPoint => ({
   candidates: listOf(row.candidates).map(candidateOf),
 });
 
+const manualIgnoredOf = (row: Row): EjesManualSplitIgnored => ({
+  oldRef: textOf(row.old_ref) ?? "",
+  reason: String(row.reason) as ManualSplitReason,
+});
+
 const splitOf = (row: Row): EjesSplitRow => ({
   oldRef: textOf(row.old_ref) ?? "",
   idcalle: textOf(row.idcalle),
@@ -49,6 +55,7 @@ const splitOf = (row: Row): EjesSplitRow => ({
   noGeometryPoints: numberOf(row.no_geometry_points),
   farPoints: numberOf(row.far_points),
   heldReason: (textOf(row.held_reason) as EjesSkipReason | null) ?? null,
+  manual: row.manual === true,
   incompleteReview: row.review_incomplete === true,
   coverage: nullableNumber(row.coverage),
   oldLength: nullableNumber(row.old_length),
@@ -235,6 +242,8 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       twinsKeep: numberOf(row.twins_keep),
       twinsUndecided: numberOf(row.twins_undecided),
       twinPicksApplied: numberOf(row.twin_picks_applied),
+      manualSplitsApplied: numberOf(row.manual_splits_applied),
+      manualSplitsIgnored: numberOf(row.manual_splits_ignored),
       twinsDefaulted: numberOf(row.twins_defaulted),
       renumbered: numberOf(row.renumbered),
       renumberedWithPoints: numberOf(row.renumbered_with_points),
@@ -266,6 +275,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
     renumbered: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBERED]).map(renumberedOf),
     renumberSkipped: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED]).map(renumberSkippedOf),
     renumberDropped: listOf(row[ANALYSIS_LIST_ALIAS.RENUMBER_DROPPED]).map(renumberDroppedOf),
+    manualSplitsIgnored: listOf(row[ANALYSIS_LIST_ALIAS.MANUAL_IGNORED]).map(manualIgnoredOf),
     fingerprint: { rows: numberOf(row.staging_rows), digest: textOf(row.staging_digest) ?? "" },
   };
 }

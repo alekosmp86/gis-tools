@@ -13,11 +13,13 @@ import {
   buildSkippedTableSql,
 } from "../domain/removalPlanSql";
 import { buildSplitFinalSql, buildSplitPlanSql } from "../domain/splitPlanSql";
-import type { EjesAccepted, EjesLayouts, EjesLoadContext } from "../types";
+import { INVALID_MANUAL_SPLIT_REFS_LIMIT } from "../constants";
+import type { EjesAccepted, EjesAnalysis, EjesLayouts, EjesLoadContext } from "../types";
 import {
   ANALYSIS_CHANGED_MESSAGE,
   assertWritten,
   choiceNotApplicableOf,
+  manualSplitNotApplicableOf,
   moveTargetMissingOf,
   runInOrder,
   twinPickNotApplicableOf,
@@ -35,6 +37,12 @@ export async function prepareAccepted(session: RunSession, accepted: EjesAccepte
 export async function assertTwinPicksExist(session: RunSession, layouts: EjesLayouts): Promise<void> {
   const invalidRefs = (await session.query(buildInvalidTwinPickRefsSql(layouts))).rows.map((row) => String(row.ref));
   if (invalidRefs.length > 0) throw new Error(twinPickNotApplicableOf(invalidRefs));
+}
+
+/** Fail closed (EJS-22): a manual split the analysis of this transaction ignores aborts the load before any write. Runs after the summary check. */
+export function assertManualSplitsApply(analysis: EjesAnalysis): void {
+  const refs = analysis.manualSplitsIgnored.slice(0, INVALID_MANUAL_SPLIT_REFS_LIMIT).map((split) => split.oldRef);
+  if (refs.length > 0) throw new Error(manualSplitNotApplicableOf(refs));
 }
 
 /**

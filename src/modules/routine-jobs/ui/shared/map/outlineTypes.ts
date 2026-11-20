@@ -6,6 +6,7 @@ export const OUTLINE_ROLE = {
   ZONE: "zone",
   LOCALITY: "locality",
   DEPARTMENT: "department",
+  ACCESS: "access",
 } as const;
 
 export type OutlineRole = (typeof OUTLINE_ROLE)[keyof typeof OUTLINE_ROLE];

@@ -142,9 +142,16 @@ export interface EjesTwinPickRequest {
   locality: string;
 }
 
-/** The picks the Analizar re-run sends: the analysis then sees the picks the load will. */
+/** A manual split: the new sections (one or more) the user chose to replace one old section that no rule resolved. */
+export interface EjesManualSplitRequest {
+  oldRef: string;
+  newRefs: string[];
+}
+
+/** The choices the Analizar re-run sends: the analysis then sees the picks and manual splits the load will. */
 export interface EjesAnalysisAcceptedRequest {
   twinPicks: EjesTwinPickRequest[];
+  manualSplits: EjesManualSplitRequest[];
 }
 
 export interface EjesStartRequest {
@@ -166,6 +173,7 @@ export interface EjesAcceptedRequest extends EjesAnalysisAcceptedRequest {
   plainRemovals: { ref: string }[];
   merges: { newRef: string }[];
   twinRemovals: { ref: string }[];
+  autoPlainRemovals: boolean;
 }
 
 /** The real run: the counts and fingerprint of the finished dry-run, and the rows the user accepted on it. */
@@ -180,7 +188,8 @@ export type EjesJobStatusView = JobStatusBase<EjesResult>;
 /** The connection and the tables the ejes map reads: the wizard's, with no option and no plan. */
 export interface EjesGeometryMapBase {
   connection: ClientConnection;
-  tables: Pick<Record<EjesTableRole, EjesTableRef>, "ejes-origen" | "ejes-tramos" | "ejes-padrones" | "ejes-localidades" | "ejes-departamentos">;
+  tables: Pick<Record<EjesTableRole, EjesTableRef>, "ejes-origen" | "ejes-tramos" | "ejes-padrones" | "ejes-localidades" | "ejes-departamentos"> &
+    Partial<Pick<Record<EjesTableRole, EjesTableRef>, "ejes-accesos" | "ejes-address">>;
 }
 
 export interface EjesGeometryMapRequest extends EjesGeometryMapBase {

@@ -19,6 +19,7 @@ export interface ReportBannerView {
 export interface ReportKpiView {
   label: string;
   value: number;
+  caption?: string;
 }
 
 export interface SkipReasonView {
@@ -63,6 +64,7 @@ export function KpiCards({ kpis }: { kpis: ReportKpiView[] }) {
         <div key={kpi.label} className={styles.kpi}>
           <span className={styles.kpiLabel}>{kpi.label}</span>
           <strong className={styles.kpiValue}>{kpi.value}</strong>
+          {kpi.caption !== undefined && <span className={styles.kpiCaption}>{kpi.caption}</span>}
         </div>
       ))}
     </section>

@@ -18,7 +18,7 @@ import {
   SPLIT_MIN_PIECES,
   TWIN_PICKS_CTE,
 } from "../constants";
-import type { EjesLayouts, EjesLoadContext, EjesTwinPick } from "../types";
+import type { EjesLayouts, EjesLoadContext, EjesManualSplit, EjesTwinPick } from "../types";
 import { integerColumnOf, physicalOf } from "./loadContext";
 import { col, countOf, listOf, table, trimmed } from "./layoutSql";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
@@ -42,6 +42,7 @@ import { departmentKeepsSql, twinCountColumns, twinCtes, twinGroupCtes, twinList
 import { copyFinalCte, geoTwinCountColumns, geoTwinCtes, geoTwinListColumn, geoTwinSinkCtes, type GeoTwinSinks } from "./geoTwinSql";
 import { pickNamesCopySql, twinPicksValuesCte } from "./twinPickSql";
 import { twinUndecidedCountColumns, twinUndecidedCtes, twinUndecidedListColumn } from "./twinUndecidedSql";
+import { MANUAL_CTE, manualCountColumns, manualIgnoredListColumn, manualSplitCtes, manualSplitsValuesCte } from "./manualSplitSql";
 
 export type AnalysisSinks = RenumberSinks & RemovalSinks & GeoTwinSinks;
 
@@ -58,6 +59,7 @@ export const ANALYSIS_LIST_ALIAS = {
   RENUMBERED: "renumbered_json",
   RENUMBER_SKIPPED: "renumber_skipped_json",
   RENUMBER_DROPPED: "renumber_dropped_json",
+  MANUAL_IGNORED: "manual_splits_ignored_json",
 } as const;
 
 export { comparableLineSql };
@@ -325,6 +327,7 @@ function splitCtes(): string[] {
         "GROUP BY p.id, p.ref, p.idcalle, p.len, p.geometry",
       ].join(" ")
     ),
+    ...manualSplitCtes(),
     cte(
       "piece_claims",
       [
@@ -337,9 +340,11 @@ function splitCtes(): string[] {
     cte(
       "splits",
       [
-        `SELECT s.* FROM ${q("removed_cover")} AS s LEFT JOIN ${q("piece_claims")} AS pc ON pc.new_ref = s.new_refs[1]`,
+        `SELECT s.*, false AS manual FROM ${q("removed_cover")} AS s LEFT JOIN ${q("piece_claims")} AS pc ON pc.new_ref = s.new_refs[1]`,
         `WHERE (s.new_count >= ${SPLIT_MIN_PIECES} OR ${replacementSql()})`,
-        `AND ${coverageThresholdSql("s.covered", "s.len")}`,
+        `AND ${coverageThresholdSql("s.covered", "s.len")} AND s.id NOT IN (SELECT m.id FROM ${q(MANUAL_CTE.COVER)} AS m)`,
+        "UNION ALL",
+        `SELECT m.id, m.ref, m.idcalle, m.len, m.new_count, m.covered, m.new_refs, m.new_len, m.outside_len, true AS manual FROM ${q(MANUAL_CTE.COVER)} AS m`,
       ].join(" ")
     ),
   ];
@@ -458,7 +463,7 @@ function listColumns(): string[] {
   const splitSelect = [
     'SELECT s.ref AS "old_ref", s.idcalle AS "idcalle", s.new_refs AS "new_refs", COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS "points",',
     'COALESCE(st.ref_points, 0) AS "ref_points", COALESCE(st.auto_points, 0) AS "auto_points", COALESCE(st.review_points, 0) AS "review_points", COALESCE(st.no_geometry_points, 0) AS "no_geometry_points", COALESCE(st.far_points, 0) AS "far_points",',
-    'hg.hold_reason AS "held_reason", COALESCE(NOT rf.fits, false) AS "review_incomplete",',
+    'hg.hold_reason AS "held_reason", COALESCE(NOT rf.fits, false) AS "review_incomplete", s.manual AS "manual",',
     's.covered / NULLIF(s.len, 0) AS "coverage", s.len AS "old_length", s.new_len AS "new_length", s.outside_len AS "outside_length"',
     `FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = s.id::text LEFT JOIN ${q("split_stats")} AS st ON st.old_id = s.id`,
     `LEFT JOIN ${q("split_groups")} AS hg ON hg.old_id = s.id LEFT JOIN ${q("review_fit")} AS rf ON rf.old_id = s.id ORDER BY s.ref`,
@@ -474,6 +479,7 @@ function listColumns(): string[] {
   ].join(" ");
   return [
     listOf(ANALYSIS_LIST_ALIAS.SPLITS, "split_list", splitSelect),
+    manualIgnoredListColumn(ANALYSIS_LIST_ALIAS.MANUAL_IGNORED),
     reviewPointsColumn(),
     listOf(ANALYSIS_LIST_ALIAS.MERGES, "merge_list", mergeSelect),
     listOf(ANALYSIS_LIST_ALIAS.PLAIN, "plain_list", plainSelect),
@@ -510,6 +516,7 @@ function countColumns(): string[] {
     `${countOf("located", "cloc IS NULL AND dept_code IS NULL")} AS "without_code"`,
     ...twinCountColumns(),
     ...twinUndecidedCountColumns(),
+    ...manualCountColumns(),
     ...geoTwinCountColumns(),
     ...renumberCountColumns(),
     `(SELECT row_count FROM ${q("staging_fp")}) AS "staging_rows"`,
@@ -520,9 +527,14 @@ function countColumns(): string[] {
 /**
  * The analysis as one statement. With `sinks` (temp tables the caller created) the renumbered and the skipped renumber pairs are also
  * written there by data-modifying CTEs, which PostgreSQL runs once whether or not the result reads them: the load reuses them.
- * `twinPicks` are the copies the user picked (ET-28); none by default.
+ * `twinPicks` are the copies the user picked (ET-28); `manualSplits` the pieces the user chose for old sections (EJS-22). None by default.
  */
-export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks, twinPicks: readonly EjesTwinPick[] = []): string {
+export function buildEjesAnalysisSql(
+  layouts: EjesLayouts,
+  sinks?: AnalysisSinks,
+  twinPicks: readonly EjesTwinPick[] = [],
+  manualSplits: readonly EjesManualSplit[] = []
+): string {
   const ctes = [
     shortUnheldCte(layouts),
     tipoMapCte(),
@@ -535,6 +547,7 @@ export function buildEjesAnalysisSql(layouts: EjesLayouts, sinks?: AnalysisSinks
     ...twinCtes(layouts),
     copyRawCte(layouts),
     twinPicksValuesCte(twinPicks),
+    manualSplitsValuesCte(manualSplits),
     copyLocalizedCte(),
     copyKeptCte(),
     ...geoTwinCtes(),

@@ -17,6 +17,17 @@ function insertRowsSql(name: string, rows: readonly (readonly string[])[]): stri
   return statements;
 }
 
+/** The old `reftramo`s accepted as splits, each once: the split rows and the manual splits (a manual split is accepted by its old `reftramo`). */
+const acceptedSplitRefsOf = (accepted: EjesAccepted): string[] => [
+  ...new Set([...accepted.splits.map((split) => split.oldRef), ...accepted.manualSplits.map((split) => split.oldRef)]),
+];
+
+/** With `autoPlainRemovals`, every plain removal of the analysis with no access point (by `reftramo` and by id) is accepted. Runs after `readAnalysisForLoad` fills `ej_plain`. */
+const autoPlainStatementsOf = (accepted: EjesAccepted): string[] =>
+  accepted.autoPlainRemovals
+    ? [`INSERT INTO ${q(LOAD_TEMP.ACC_PLAIN)} SELECT p.ref FROM ${tmp(LOAD_TEMP.PLAIN)} AS p WHERE p.points = 0 AND p.ref IS NOT NULL`]
+    : [];
+
 /** The accepted keys and split choices as temp tables; the keys are canonical integer text (the request parser canonicalises them). */
 export function buildAcceptedTablesSql(accepted: EjesAccepted): string[] {
   const choices = accepted.splits.flatMap((split) => split.choices.map((choice) => [split.oldRef, choice.pointId, choice.newRef]));
@@ -25,12 +36,13 @@ export function buildAcceptedTablesSql(accepted: EjesAccepted): string[] {
     ...insertRowsSql(LOAD_TEMP.ACC_MERGE, accepted.merges.map((ref) => [ref])),
     createTableSql(LOAD_TEMP.ACC_PLAIN, "ref text"),
     ...insertRowsSql(LOAD_TEMP.ACC_PLAIN, accepted.plainRemovals.map((ref) => [ref])),
+    ...autoPlainStatementsOf(accepted),
     createTableSql(LOAD_TEMP.ACC_TWIN, "ref text"),
     ...insertRowsSql(LOAD_TEMP.ACC_TWIN, accepted.twinRemovals.map((ref) => [ref])),
     createTableSql(LOAD_TEMP.ACC_TWIN_PICK, "ref text, department text, locality text"),
     ...insertRowsSql(LOAD_TEMP.ACC_TWIN_PICK, accepted.twinPicks.map((pick) => [pick.ref, pick.department, pick.locality])),
     createTableSql(LOAD_TEMP.ACC_SPLIT, "ref text"),
-    ...insertRowsSql(LOAD_TEMP.ACC_SPLIT, accepted.splits.map((split) => [split.oldRef])),
+    ...insertRowsSql(LOAD_TEMP.ACC_SPLIT, acceptedSplitRefsOf(accepted).map((ref) => [ref])),
     createTableSql(LOAD_TEMP.ACC_CHOICE, "old_ref text, point_id text, new_ref text"),
     ...insertRowsSql(LOAD_TEMP.ACC_CHOICE, choices),
   ];

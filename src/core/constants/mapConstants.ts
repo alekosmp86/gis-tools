@@ -70,6 +70,9 @@ export const MAP_SECTION_TYPE = {
   COPY_KEPT: "TRAMO_SE_QUEDA",
   COPY_DROPPED: "TRAMO_SE_QUITA",
   ACCESS_POINT: "PUNTO_ACCESO",
+  MANUAL_OLD: "TRAMO_A_REEMPLAZAR",
+  MANUAL_CANDIDATE: "TRAMO_CANDIDATO_MANUAL",
+  MANUAL_CHOSEN: "TRAMO_ELEGIDO",
 } as const;
 
 /** Outline types drawn as the underlay of a comparison: thicker, so the outline over them stays visible. */
@@ -105,6 +108,9 @@ export const MAP_POINT_TYPES: readonly string[] = [MAP_SECTION_TYPE.ACCESS_POINT
 export const MAP_TYPE_LINE_STYLE: Record<string, MapTypeLineStyle | undefined> = {
   [MAP_SECTION_TYPE.LOCALITY]: { fillOpacity: 0.2 },
   [MAP_SECTION_TYPE.DEPARTMENT]: { weight: 1.5, dashArray: "6, 6", fillOpacity: 0 },
+  [MAP_SECTION_TYPE.MANUAL_OLD]: { weight: 7 },
+  [MAP_SECTION_TYPE.MANUAL_CANDIDATE]: { weight: 2 },
+  [MAP_SECTION_TYPE.MANUAL_CHOSEN]: { weight: 6 },
 };
 
 const CANDIDATE_COLORS = ["#f59e0b", "#a855f7", "#facc15", "#f97316", "#e879f9"] as const;
@@ -130,6 +136,9 @@ const DISCREPANCY_COLORS: Record<string, string> = {
   [MAP_SECTION_TYPE.COPY_KEPT]: "#2563eb",
   [MAP_SECTION_TYPE.COPY_DROPPED]: "#dc2626",
   [MAP_SECTION_TYPE.ACCESS_POINT]: "#111827",
+  [MAP_SECTION_TYPE.MANUAL_OLD]: "#ef4444",
+  [MAP_SECTION_TYPE.MANUAL_CANDIDATE]: "#94a3b8",
+  [MAP_SECTION_TYPE.MANUAL_CHOSEN]: "#22c55e",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "#ff0055",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#f59e0b",
   [DiscrepancyType.ONLY_IN_SHP]: "#a855f7",
@@ -159,7 +168,10 @@ const DISCREPANCY_LABELS: Record<string, string> = {
   [MAP_SECTION_TYPE.DEPARTMENT]: "Departamento",
   ...recordOf(MAP_CANDIDATE_TYPES, (index) => `Candidato ${index + 1}`),
   ...recordOf(MAP_SPLIT_PIECE_TYPES, (index) => `Tramo candidato ${index + 1}`),
-  [MAP_SECTION_TYPE.ACCESS_POINT]: "Punto de acceso",
+  [MAP_SECTION_TYPE.ACCESS_POINT]: "Puntos de acceso",
+  [MAP_SECTION_TYPE.MANUAL_OLD]: "Tramo a reemplazar",
+  [MAP_SECTION_TYPE.MANUAL_CANDIDATE]: "Tramo candidato",
+  [MAP_SECTION_TYPE.MANUAL_CHOSEN]: "Tramo elegido",
   [MAP_SECTION_TYPE.COPY_KEPT]: "Se queda",
   [MAP_SECTION_TYPE.COPY_DROPPED]: "Se quitaría",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "Discrepancia Geométrica",

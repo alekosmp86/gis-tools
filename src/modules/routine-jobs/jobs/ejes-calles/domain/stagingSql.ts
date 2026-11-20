@@ -1,4 +1,4 @@
-import { physicalColumn, qualifiedName } from "../../actualizar-padron/domain/layouts";
+import { physicalColumn, qualifiedName, type TableLayout } from "../../actualizar-padron/domain/layouts";
 import { cte, jsonArrayOf, q, withClause } from "../../shared/sqlFragments";
 import { DETAIL_LIST_LIMIT } from "../../shared/limits";
 import { ACCESS_POINT_COLUMN, EJES_TABLE_ROLE, EJES_STAGING_COLUMN, GEOMETRY_TOLERANCE_M, MIN_SECTION_LENGTH_M } from "../constants";
@@ -30,20 +30,23 @@ export const SHORT_UNHELD_CTE_NAME = "short_unheld";
  * The references of the short staging sections (below `MIN_SECTION_LENGTH_M`) that no access point holds. A hash join builds it once per
  * statement, so a row tests membership in this small set instead of probing the access points.
  */
-export const shortUnheldCte = (layouts: EjesLayouts): string => {
-  const staging = layouts[EJES_TABLE_ROLE.STAGING];
+export const shortUnheldCteOf = (staging: TableLayout, accessPoints: TableLayout): string => {
   const geometry = `s.${physicalColumn(staging, EJES_STAGING_COLUMN.GEOM)}`;
   const reference = canonicalTextSql(`s.${physicalColumn(staging, EJES_STAGING_COLUMN.REFTRAMO)}`);
+  const pointColumn = `a.${physicalColumn(accessPoints, ACCESS_POINT_COLUMN.ROAD_SECTION)}`;
   return cte(
     SHORT_UNHELD_CTE_NAME,
     [
       "SELECT x.ref FROM",
       `(SELECT DISTINCT ${reference} AS ref FROM ${qualifiedName(staging)} AS s WHERE ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ST_Length(${geometry}) < ${MIN_SECTION_LENGTH_M}) AS x`,
-      `LEFT JOIN (SELECT DISTINCT ${accessPointRefSql(layouts)} AS ref FROM ${table(layouts, "ACCESS_POINT")} AS a WHERE a.${col(layouts, "ACCESS_POINT", ACCESS_POINT_COLUMN.ROAD_SECTION)} IS NOT NULL) AS p ON p.ref = x.ref`,
+      `LEFT JOIN (SELECT DISTINCT ${canonicalTextSql(pointColumn)} AS ref FROM ${qualifiedName(accessPoints)} AS a WHERE ${pointColumn} IS NOT NULL) AS p ON p.ref = x.ref`,
       "WHERE x.ref IS NOT NULL AND p.ref IS NULL",
     ].join(" ")
   );
 };
+
+export const shortUnheldCte = (layouts: EjesLayouts): string =>
+  shortUnheldCteOf(layouts[EJES_TABLE_ROLE.STAGING], layouts[EJES_TABLE_ROLE.ACCESS_POINT]);
 
 /** Needs `shortUnheldCte` in the same statement, before the first use. */
 const hasAccessPointsSql = (reference: string): string =>

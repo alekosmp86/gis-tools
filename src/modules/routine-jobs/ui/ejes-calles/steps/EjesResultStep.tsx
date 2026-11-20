@@ -8,7 +8,9 @@ import { AlertType } from "@/ui-kit/types/ui";
 import { EjesCallesReport } from "../EjesCallesReport";
 import { EjesLoadResult } from "../EjesLoadResult";
 import type { EjesGeometryMapBase, EjesSplitPointsBase } from "../../shared/clientTypes";
-import type { EjesAcceptView } from "../ejesAccept";
+import { automaticPlainRemovalsOf, type EjesAcceptView } from "../ejesAccept";
+import { autoRemovalLineOf, manualLoadLineOf } from "../ejesAcceptTexts";
+import type { EjesResult } from "../../../jobs/ejes-calles/types";
 import type { EjesRunSnapshot } from "../../shared/ejesCallesRunStore";
 import { RunPhase } from "../../shared/jobRunStore";
 import { RunProgressStatus, RunResultActions } from "../../shared/steps/RunResultParts";
@@ -40,6 +42,11 @@ export interface EjesResultStepProps {
 
 const textOr = (value: string | undefined, fallback: string): string =>
   value !== undefined && value.trim() !== "" ? value : fallback;
+
+const automaticRemovalsOf = (result: EjesResult | undefined): number =>
+  result === undefined ? 0 : automaticPlainRemovalsOf(result.counts);
+
+const manualDivisionsOf = (result: EjesResult | undefined): number => result?.counts.manualSplitsApplied ?? 0;
 
 function Checklist({ snapshot }: { snapshot: EjesRunSnapshot }) {
   return (
@@ -96,12 +103,16 @@ export const EjesResultStep: React.FC<EjesResultStepProps> = ({
             <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />
           )}
           {canLoad && (
-            <div className={styles.actions}>
-              <Button onClick={onLoad}>
-                <DatabaseZap size={ICON_SIZE} />
-                <span>Cargar ahora</span>
-              </Button>
-            </div>
+            <>
+              <p className={styles.hint}>{autoRemovalLineOf(automaticRemovalsOf(result))}</p>
+              {manualDivisionsOf(result) > 0 && <p className={styles.hint}>{manualLoadLineOf(manualDivisionsOf(result))}</p>}
+              <div className={styles.actions}>
+                <Button onClick={onLoad}>
+                  <DatabaseZap size={ICON_SIZE} />
+                  <span>Cargar ahora</span>
+                </Button>
+              </div>
+            </>
           )}
           {actions}
         </div>

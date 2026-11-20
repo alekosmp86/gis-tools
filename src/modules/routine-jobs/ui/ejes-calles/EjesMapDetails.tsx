@@ -19,6 +19,7 @@ const ROLE_TEXT = {
   [OUTLINE_ROLE.ZONE]: "Padrones cerca del tramo",
   [OUTLINE_ROLE.LOCALITY]: "Localidad que cruza el tramo",
   [OUTLINE_ROLE.DEPARTMENT]: "Departamento del tramo",
+  [OUTLINE_ROLE.ACCESS]: "Punto de acceso",
 } as const;
 
 type DetailRow = [string, string];

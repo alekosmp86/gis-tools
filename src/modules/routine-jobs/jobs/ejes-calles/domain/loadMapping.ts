@@ -12,7 +12,15 @@ import type {
   EjesSurplusRow,
 } from "../types";
 
-export const NO_ACCEPTED: EjesAccepted = { splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [] };
+export const NO_ACCEPTED: EjesAccepted = {
+  splits: [],
+  plainRemovals: [],
+  merges: [],
+  twinRemovals: [],
+  twinPicks: [],
+  manualSplits: [],
+  autoPlainRemovals: false,
+};
 
 export interface EjesLoadPlan {
   counts: EjesLoadCounts;

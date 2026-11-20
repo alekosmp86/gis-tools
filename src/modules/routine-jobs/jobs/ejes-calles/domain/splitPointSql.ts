@@ -15,6 +15,7 @@ import {
 import type { EjesLayouts } from "../types";
 import { isPieceSql } from "./pieceSql";
 import { col, countOf, table } from "./layoutSql";
+import { MANUAL_CTE } from "./manualSplitSql";
 import { canonicalTextSql } from "./stagingSql";
 
 /** One row per point of a split: the old section, the point, its decision (`reason` null is automatic) and whether it is far. */
@@ -53,7 +54,11 @@ export function splitPointCtes(layouts: EjesLayouts): string[] {
     ),
     cte(
       "split_piece_geo",
-      `SELECT DISTINCT ON (p.id, p.new_ref) p.id AS old_id, p.new_ref, p.geom FROM ${q("piece_cover")} AS p WHERE ${isPieceSql("p.piece_covered", "p.len", "p.piece_len")} ORDER BY p.id, p.new_ref`
+      [
+        "SELECT DISTINCT ON (p.old_id, p.new_ref) p.old_id, p.new_ref, p.geom FROM (SELECT p.id AS old_id, p.new_ref, p.geom",
+        `FROM ${q("piece_cover")} AS p WHERE ${isPieceSql("p.piece_covered", "p.len", "p.piece_len")} AND p.id NOT IN (SELECT m.id FROM ${q(MANUAL_CTE.COVER)} AS m)`,
+        `UNION ALL SELECT m.id AS old_id, m.new_ref, m.geom FROM ${q(MANUAL_CTE.PIECES_ON_OLD)} AS m) AS p ORDER BY p.old_id, p.new_ref`,
+      ].join(" ")
     ),
     cte(
       "split_point_dist",

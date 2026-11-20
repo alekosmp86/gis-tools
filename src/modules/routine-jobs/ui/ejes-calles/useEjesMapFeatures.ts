@@ -28,6 +28,9 @@ const scopeOf = (base: EjesGeometryMapBase): string =>
 
 /** The outlines of one split or merge: the shared hook with the ejes geometry map request. */
 export function useEjesMapFeatures(subject: EjesMapSubject, base: EjesGeometryMapBase): OutlineMapFeatures {
-  const fetchOutlines = useCallback((items: EjesMapItem[]) => client.fetchEjesGeometryMap({ ...base, items }), [base]);
+  const fetchOutlines = useCallback(
+    async (items: EjesMapItem[]) => (await client.fetchEjesGeometryMap({ ...base, items })).features,
+    [base]
+  );
   return useOutlineMapFeatures(subject.items, scopeOf(base), fetchOutlines);
 }

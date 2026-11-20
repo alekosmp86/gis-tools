@@ -34,7 +34,7 @@ export const EjesSummaryStrip: React.FC<EjesSummaryStripProps> = ({ items, openL
           key={item.key}
           type="button"
           className={active ? `${styles.stripItem} ${styles.stripItemActive}` : styles.stripItem}
-          disabled={item.value === 0}
+          disabled={item.disabled ?? item.value === 0}
           aria-expanded={active}
           onClick={() => onSelect(list)}
         >

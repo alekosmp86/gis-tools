@@ -12,6 +12,7 @@ import {
   EJES_REQUIRED_COLUMNS_BY_ROLE,
   EJES_TABLE_ROLE,
   LOCALITIES_COLUMN,
+  MANUAL_CANDIDATE_RADIUS_M,
   PADRON_TYPE,
   ROAD_SECTION_COLUMN,
   EJES_STAGING_COLUMN,
@@ -19,6 +20,8 @@ import {
   type PadronType,
 } from "../constants";
 import {
+  accessPointOutlinesSql,
+  candidateSectionsSql,
   departmentOutlineSql,
   EJES_MAP_ROLE,
   EJES_MAP_STATEMENT_TIMEOUT,
@@ -27,8 +30,16 @@ import {
   oldSectionOutlineSql,
   zoneOutlineSql,
 } from "../domain/geometryMap";
-import type { EjesGeometryMapParams, EjesMapFeature, EjesMapItem, EjesTableRef } from "../types";
+import type {
+  EjesGeometryMapParams,
+  EjesGeometryMapResult,
+  EjesMapCandidate,
+  EjesMapFeature,
+  EjesMapItem,
+  EjesTableRef,
+} from "../types";
 import { padronSridIssuesOf, sridIssuesOf } from "./resolveLayouts";
+import { textOf, type Row } from "../../shared/rowMapping";
 
 const MAP_JOB_LABEL = "lectura de geometrías de ejes";
 const MAP_UNTOUCHED = "No se modificó ninguna tabla.";
@@ -36,7 +47,7 @@ const MAP_UNVERIFIED = "No se pudo confirmar que la sesión terminara limpia.";
 const LOCALITY_LABEL_SEPARATOR = " · ";
 const PERCENT = 100;
 
-type MapItemKey = "zoneOf" | "localitiesOf" | "departmentOf";
+type MapItemKey = "zoneOf" | "localitiesOf" | "departmentOf" | "candidatesOf";
 
 const specOf = (ref: EjesTableRef, role: EjesTableRole): TableSpec => ({
   label: buildQualifiedTableLabel(ref.schema, ref.table),
@@ -116,12 +127,14 @@ interface MapTables {
   padrones: ResolvedTable | null;
   localities: ResolvedTable | null;
   departments: ResolvedTable | null;
+  accessPoints: ResolvedTable | null;
+  addresses: ResolvedTable | null;
 }
 
 const optionalIssuesOf = (resolved: ResolvedTable | null, sridIssues: (table: ResolvedTable) => string[]): string[] =>
   resolved === null ? [] : [...resolved.issues, ...sridIssues(resolved)];
 
-/** Split and merge maps never touch the padrones, localities or departments tables: each is resolved only when an item asks for it. */
+/** Split and merge maps never touch the padrones, localities, departments, access points or addresses: each is resolved only when an item asks for it. */
 async function resolveMapTables(session: RunSession, params: EjesGeometryMapParams): Promise<MapTables> {
   // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
   const staging = await resolveTable(session, specOf(params.staging, EJES_TABLE_ROLE.STAGING));
@@ -133,6 +146,10 @@ async function resolveMapTables(session: RunSession, params: EjesGeometryMapPara
   const localities = await resolveIf(session, usesItem(params, "localitiesOf"), params.localities, EJES_TABLE_ROLE.LOCALITIES);
   // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
   const departments = await resolveIf(session, usesItem(params, "departmentOf"), params.departments, EJES_TABLE_ROLE.DEPARTMENTS);
+  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+  const accessPoints = await resolveIf(session, usesItem(params, "candidatesOf"), params.accessPoints, EJES_TABLE_ROLE.ACCESS_POINT);
+  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+  const addresses = await resolveIf(session, usesItem(params, "candidatesOf"), params.addresses, EJES_TABLE_ROLE.ADDRESS);
   throwIfIssues([
     ...staging.issues,
     ...sridIssuesOf(staging, EJES_STAGING_COLUMN.GEOM),
@@ -141,8 +158,10 @@ async function resolveMapTables(session: RunSession, params: EjesGeometryMapPara
     ...optionalIssuesOf(padrones, padronSridIssuesOf),
     ...optionalIssuesOf(localities, (table) => sridIssuesOf(table, LOCALITIES_COLUMN.GEOM, false)),
     ...optionalIssuesOf(departments, (table) => sridIssuesOf(table, DEPARTMENTS_COLUMN.GEOM, false)),
+    ...optionalIssuesOf(accessPoints, () => []),
+    ...optionalIssuesOf(addresses, () => []),
   ]);
-  return { staging, roadSection, padrones, localities, departments };
+  return { staging, roadSection, padrones, localities, departments, accessPoints, addresses };
 }
 
 /** The SQL of each kind of item; a kind whose table was not resolved has none. */
@@ -153,9 +172,11 @@ interface MapSql {
   zone: string | null;
   locality: string | null;
   department: string | null;
+  candidates: { sameStreet: string; otherStreets: string } | null;
+  accessPoints: string | null;
 }
 
-function mapSqlOf({ staging, roadSection, padrones, localities, departments }: MapTables): MapSql {
+function mapSqlOf({ staging, roadSection, padrones, localities, departments, accessPoints, addresses }: MapTables): MapSql {
   return {
     old: oldSectionOutlineSql(roadSection.layout),
     newRef: newSectionOutlineSql(staging.layout),
@@ -163,6 +184,14 @@ function mapSqlOf({ staging, roadSection, padrones, localities, departments }: M
     zone: padrones === null ? null : zoneOutlineSql(staging.layout, padrones.layout),
     locality: localities === null ? null : localityOverlapSql(staging.layout, localities.layout),
     department: departments === null ? null : departmentOutlineSql(staging.layout, departments.layout),
+    candidates:
+      accessPoints === null
+        ? null
+        : {
+            sameStreet: candidateSectionsSql(staging.layout, roadSection.layout, accessPoints.layout, false),
+            otherStreets: candidateSectionsSql(staging.layout, roadSection.layout, accessPoints.layout, true),
+          },
+    accessPoints: accessPoints === null || addresses === null ? null : accessPointOutlinesSql(accessPoints.layout, addresses.layout),
   };
 }
 
@@ -193,19 +222,68 @@ async function itemFeaturesOf(session: RunSession, sql: MapSql, entry: EjesMapIt
   return features;
 }
 
+const candidateOf = (oldRef: string, row: Row): EjesMapCandidate => ({
+  oldRef,
+  ref: String(row.ref),
+  idcalle: textOf(row.idcalle),
+  name: textOf(row.name),
+  localities: textOf(row.localities),
+  length: Number(row.length),
+  nearLength: Number(row.near_length),
+  coveredLength: Number(row.covered_length),
+  coveredPercent: Number(row.covered_percent),
+  distance: Number(row.distance),
+});
+
+/**
+ * The candidate new sections of a manual split (EJS-22): the old section's outline, its access points as points, and one outline per
+ * candidate with its figures. The old section must exist (not found otherwise); the radius is the item's or the default.
+ */
+async function candidateItemOf(session: RunSession, sql: MapSql, entry: EjesMapItem, itemIndex: number): Promise<EjesGeometryMapResult> {
+  const oldRef = entry.candidatesOf;
+  if (oldRef === undefined || sql.candidates === null) return { features: [], candidates: [] };
+  // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
+  const oldFeature = await featureOf(session, sql.old, oldRef, itemIndex, EJES_MAP_ROLE.OLD, `Tramo anterior ${oldRef}`);
+  const candidateSql = entry.otherStreets === true ? sql.candidates.otherStreets : sql.candidates.sameStreet;
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const candidateRows = (await session.query(candidateSql, [oldRef, entry.radius ?? MANUAL_CANDIDATE_RADIUS_M])).rows;
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const pointRows = sql.accessPoints === null ? [] : (await session.query(sql.accessPoints, [oldRef])).rows;
+  const pointFeatures: EjesMapFeature[] = pointRows.map((row) => ({
+    itemIndex,
+    role: EJES_MAP_ROLE.ACCESS,
+    label: `Punto de acceso ${String(row.id)}`,
+    geometry: row.geojson as Geometry,
+  }));
+  const candidateFeatures: EjesMapFeature[] = candidateRows.map((row) => ({
+    itemIndex,
+    role: EJES_MAP_ROLE.NEW,
+    label: `Tramo nuevo ${String(row.ref)}`,
+    geometry: row.geojson as Geometry,
+  }));
+  return {
+    features: [oldFeature, ...pointFeatures, ...candidateFeatures],
+    candidates: candidateRows.map((row) => candidateOf(String(oldRef), row)),
+  };
+}
+
 /**
  * Reads the outlines of the requested items. The catalog checks run first; every read is in one read-only transaction.
  * One pg client must never run two queries at once, so every read is awaited in turn and the features keep the item order.
  */
-async function readFeatures(session: RunSession, params: EjesGeometryMapParams): Promise<EjesMapFeature[]> {
+async function readFeatures(session: RunSession, params: EjesGeometryMapParams): Promise<EjesGeometryMapResult> {
   await session.query(`SET LOCAL statement_timeout = '${EJES_MAP_STATEMENT_TIMEOUT}'`);
   const sql = mapSqlOf(await resolveMapTables(session, params));
-  const features: EjesMapFeature[] = [];
+  const result: EjesGeometryMapResult = { features: [], candidates: [] };
   for (const [itemIndex, entry] of params.items.entries()) {
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
-    features.push(...(await itemFeaturesOf(session, sql, entry, itemIndex)));
+    result.features.push(...(await itemFeaturesOf(session, sql, entry, itemIndex)));
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
+    const candidates = await candidateItemOf(session, sql, entry, itemIndex);
+    result.features.push(...candidates.features);
+    result.candidates.push(...candidates.candidates);
   }
-  return features;
+  return result;
 }
 
 interface CapturedNotFound {
@@ -217,18 +295,18 @@ async function readFeaturesCapturingNotFound(
   session: RunSession,
   params: EjesGeometryMapParams,
   captured: CapturedNotFound
-): Promise<EjesMapFeature[]> {
+): Promise<EjesGeometryMapResult> {
   try {
     return await readFeatures(session, params);
   } catch (error: unknown) {
     if (!(error instanceof MapFeatureNotFoundError)) throw error;
     captured.error = error;
-    return [];
+    return { features: [], candidates: [] };
   }
 }
 
 /** Read-only: the transaction is rolled back, nothing is written, and the statement timeout bounds every read. */
-export async function readEjesGeometryMap(params: EjesGeometryMapParams, deps: RunDeps): Promise<EjesMapFeature[]> {
+export async function readEjesGeometryMap(params: EjesGeometryMapParams, deps: RunDeps): Promise<EjesGeometryMapResult> {
   const captured: CapturedNotFound = {};
   const outcome = await withRunSession(params.config, deps, (session) =>
     runTransaction(

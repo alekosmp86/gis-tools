@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import type { EjesResult } from "../../jobs/ejes-calles/types";
+import type { EjesRemovalRow, EjesResult } from "../../jobs/ejes-calles/types";
 import { CollapsibleSection } from "../shared/CollapsibleSection";
 import type { EjesGeometryMapBase, EjesSplitPointsBase } from "../shared/clientTypes";
 import type { EjesAcceptView } from "./ejesAccept";
@@ -12,6 +12,8 @@ import { buildEjesReportView } from "./ejesCallesReportView";
 import { EjesReportLists } from "./EjesReportLists";
 import { EjesSummaryStrip } from "./EjesSummaryStrip";
 import { TwinPicksPanel } from "./TwinPicksPanel";
+import { ManualSplitModal } from "./manualSplit/ManualSplitModal";
+import { ManualSplitsPanel } from "./manualSplit/ManualSplitsPanel";
 import { KpiCards, OutcomeBanners, SectionTitle, TimingsSection } from "../shared/ReportParts";
 import sharedStyles from "../shared/ReportShared.module.css";
 
@@ -51,6 +53,9 @@ export interface EjesCallesReportProps {
 export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapBase, splitBase = null, accept }) => {
   const view = buildEjesReportView(result);
   const [review, setReview] = useState<EjesMapReview | null>(null);
+  const [manualIndex, setManualIndex] = useState<number | null>(null);
+  const resolvable = view.plainRemovalRows.filter((row) => row.ref !== "");
+  const openManual = (row: EjesRemovalRow) => setManualIndex(resolvable.indexOf(row));
   const [openLists, setOpenLists] = useState<ReadonlySet<EjesListKey>>(
     () => new Set(view.defaultOpenList === null ? [] : [view.defaultOpenList])
   );
@@ -70,13 +75,21 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
       <EjesSummaryStrip items={view.strip} openLists={openLists} onSelect={selectList} />
       <TextList title="Bloqueos para la carga" items={view.blockers} />
       <TextList title="Privilegios de escritura (información del análisis)" items={view.privilegeInfo} />
-      {accept !== undefined && (result.twinUndecided.length > 0 || accept.twinPicks.length > 0) && (
+      {accept !== undefined && (result.twinUndecided.length > 0 || accept.twinPicks.length > 0 || accept.manualSplits.length > 0) && (
         <TwinPicksPanel
           picks={accept.twinPicks}
           applied={result.counts.twinPicksApplied}
           canAnalyze={accept.canAnalyzeWithPicks}
           onAnalyze={accept.onAnalyzeWithPicks}
           onRemove={(ref) => accept.onTwinPickChange({ ref, copy: null })}
+        />
+      )}
+      {accept !== undefined && accept.manualSplits.length > 0 && (
+        <ManualSplitsPanel
+          splits={accept.manualSplits}
+          applied={result.counts.manualSplitsApplied}
+          ignored={result.manualSplitsIgnored}
+          onRemove={(oldRef) => accept.onManualSplitChange({ oldRef, newRefs: null })}
         />
       )}
       <EjesReportLists
@@ -88,6 +101,7 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
         subjects={subjects}
         accept={accept}
         splitBase={splitBase}
+        onResolveRemoval={accept === undefined ? undefined : openManual}
       />
       <TextList title="Tipos de vialidad fuera de la tabla" items={view.unknownTipos} />
       <TextList title="Fuentes fuera de la tabla" items={view.unknownFuentes} />
@@ -107,6 +121,16 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
         onNavigate={(index) => setReview((current) => (current === null ? null : { ...current, index }))}
         onClose={() => setReview(null)}
       />
+      {accept !== undefined && (
+        <ManualSplitModal
+          review={manualIndex === null ? null : { rows: resolvable, index: manualIndex }}
+          base={mapBase}
+          manualSplits={accept.manualSplits}
+          onChange={accept.onManualSplitChange}
+          onNavigate={setManualIndex}
+          onClose={() => setManualIndex(null)}
+        />
+      )}
     </div>
   );
 };

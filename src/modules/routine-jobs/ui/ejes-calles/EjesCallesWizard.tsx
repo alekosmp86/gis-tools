@@ -158,7 +158,10 @@ export const EjesCallesWizard: React.FC = () => {
                 dispatch({ type: "pointChoicesChanged", analysisKey: resultKeyOf(snapshot), change }),
               twinPicks: state.twinPicks,
               onTwinPickChange: (change) => dispatch({ type: "twinPickChanged", change }),
-              canAnalyzeWithPicks: state.twinPicks.length > 0 && !isRunActive && runBlockedReason(state) === null,
+              manualSplits: state.manualSplits,
+              onManualSplitChange: (change) => dispatch({ type: "manualSplitChanged", change }),
+              canAnalyzeWithPicks:
+                (state.twinPicks.length > 0 || state.manualSplits.length > 0) && !isRunActive && runBlockedReason(state) === null,
               onAnalyzeWithPicks: analyzeNow,
             }}
             onLoad={loadNow}

@@ -2,7 +2,7 @@ import type { ResolvedColumn, TableListing } from "@/core/types/tableCatalog";
 import type { TableRole } from "../../jobs/cargar-padrones/constants";
 import type { ActualizarTableRole } from "../../jobs/actualizar-padron/constants";
 import type { GeometryMapFeature } from "../../jobs/actualizar-padron/types";
-import type { EjesMapFeature, EjesSplitPointsPage } from "../../jobs/ejes-calles/types";
+import type { EjesGeometryMapResult, EjesSplitPointsPage } from "../../jobs/ejes-calles/types";
 import type { LocalidadesTableRole } from "../../jobs/cargar-localidades/constants";
 import type { UnitTableRole } from "../../jobs/unidad-territorial/constants";
 import type { EjesTableRole } from "../../jobs/ejes-calles/constants";
@@ -87,7 +87,7 @@ export interface RoutineJobsClient {
   fetchActualizarBackup(token: string): Promise<Blob>;
   fetchPendingGeometryCsv(planId: string): Promise<Blob>;
   fetchGeometryMap(request: GeometryMapRequest): Promise<GeometryMapFeature[]>;
-  fetchEjesGeometryMap(request: EjesGeometryMapRequest): Promise<EjesMapFeature[]>;
+  fetchEjesGeometryMap(request: EjesGeometryMapRequest): Promise<EjesGeometryMapResult>;
   fetchEjesSplitPoints(request: EjesSplitPointsRequest): Promise<EjesSplitPointsPage>;
 }
 
@@ -265,8 +265,8 @@ export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): Routi
 
     async fetchEjesGeometryMap(request) {
       const payload = await postJson(fetchImpl, EJES_GEOMETRY_MAP_ROUTE, request);
-      if (!Array.isArray(payload.features)) throw invalidResponse();
-      return payload.features as EjesMapFeature[];
+      if (!Array.isArray(payload.features) || !Array.isArray(payload.candidates)) throw invalidResponse();
+      return payload as unknown as EjesGeometryMapResult;
     },
 
     async fetchEjesSplitPoints(request) {

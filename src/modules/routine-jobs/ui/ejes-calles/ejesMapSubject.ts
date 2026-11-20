@@ -148,6 +148,7 @@ const DRAW_ORDER: Record<EjesMapOutline["role"], number> = {
   [OUTLINE_ROLE.ZONE]: 2,
   [OUTLINE_ROLE.OLD]: 3,
   [OUTLINE_ROLE.NEW]: 4,
+  [OUTLINE_ROLE.ACCESS]: 5,
 };
 
 type SubjectExtras = Pick<EjesMapSubject, "twin" | "renumbered" | "geoTwin" | "held" | "undecided">;

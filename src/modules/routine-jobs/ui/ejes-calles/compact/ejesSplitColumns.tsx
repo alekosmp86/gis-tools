@@ -8,6 +8,7 @@ import { EjesPointsCell } from "./EjesPointsCell";
 import { EjesRefCell } from "./EjesRefCell";
 import { EjesRefsCell } from "./EjesRefsCell";
 import { isReplacementSplit } from "../ejesAccept";
+import { EJES_MANUAL_SPLIT_TEXT } from "../ejesAcceptTexts";
 import { EJES_COMPACT_TEXT } from "./ejesCompactTexts";
 import { geometryFactsOf } from "./ejesDetailFacts";
 
@@ -29,6 +30,7 @@ export const splitColumnsOf = (
           primary={oldRefTextOf(row)}
           secondary={EJES_COMPACT_TEXT.STREET(textOrNoData(row.idcalle))}
           onShowOnMap={onShowOnMap === undefined ? undefined : () => onShowOnMap(row)}
+          badge={row.manual ? EJES_MANUAL_SPLIT_TEXT.BADGE : undefined}
         />
       ),
     },

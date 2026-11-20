@@ -13,6 +13,7 @@ import type {
   EjesSkipReason,
   EjesTableRole,
   GeoTwinRole,
+  ManualSplitReason,
   PadronType,
   RenumberSkipReason,
   TwinClass,
@@ -44,6 +45,12 @@ export interface EjesTwinPick {
   locality: string;
 }
 
+/** A split the user chose for an old section no rule resolved: the new sections that replace it (one is a replacement, several a split). */
+export interface EjesManualSplit {
+  oldRef: string;
+  newRefs: string[];
+}
+
 /** The review rows the user accepted: splits by old `reftramo` (with choices), plain removals by `reftramo`, merges by the new `reftramo` (the old ones are derived server-side). */
 export interface EjesAccepted {
   splits: EjesAcceptedSplit[];
@@ -53,6 +60,10 @@ export interface EjesAccepted {
   twinRemovals: string[];
   /** One copy kept per `reftramo` with several copies (ET-28): the locality rule does not apply to that `reftramo`. */
   twinPicks: EjesTwinPick[];
+  /** Manual splits (EJS-22): each forces the pieces of its old section; a group the analysis cannot apply is ignored and reported. */
+  manualSplits: EjesManualSplit[];
+  /** Every plain removal of the analysis with no access point (by `reftramo` and by id) is accepted too; the rows with points never are. */
+  autoPlainRemovals: boolean;
 }
 
 export interface EjesParams {
@@ -126,6 +137,10 @@ export interface EjesCounts {
   twinsKeep: number;
   twinsUndecided: number;
   twinPicksApplied: number;
+  /** Manual splits the analysis applies (every piece available, the old section removed). */
+  manualSplitsApplied: number;
+  /** Manual splits the analysis ignores: the old section is not removed, or a listed piece is not available. */
+  manualSplitsIgnored: number;
   /** Twin rows decided by the default (ET-36) after every other rule and the picks. */
   twinsDefaulted: number;
   renumbered: number;
@@ -163,6 +178,8 @@ export interface EjesSplitRow {
   farPoints: number;
   /** The reason the load holds this split whatever the user chooses (the rules of `splitGroupsSql`); null when none holds it. */
   heldReason: EjesSkipReason | null;
+  /** True when the pieces are the user's manual choice (EJS-22), not the rules'. */
+  manual: boolean;
   /** True when the review points of this split did not fit the stored review rows: its choices cannot be checked, so it is not acceptable. */
   incompleteReview: boolean;
   coverage: number | null;
@@ -297,6 +314,12 @@ export interface EjesRenumberDroppedRow {
   points: number;
 }
 
+/** A manual split the analysis ignores (EJS-23): its old `reftramo` and why (`not_removed` or `piece_unavailable`). */
+export interface EjesManualSplitIgnored {
+  oldRef: string;
+  reason: ManualSplitReason;
+}
+
 /** The staging as the analysis reads it: its row count and an md5 over its rows (see `fingerprintCtes`). */
 export interface EjesFingerprint {
   rows: number;
@@ -339,6 +362,7 @@ export interface EjesAnalysis {
   renumbered: EjesRenumberedRow[];
   renumberSkipped: EjesRenumberSkippedRow[];
   renumberDropped: EjesRenumberDroppedRow[];
+  manualSplitsIgnored: EjesManualSplitIgnored[];
   fingerprint: EjesFingerprint;
   /** The review points of a dry run, stored server side and stripped from the job result (see `withReviewRetention`). */
   reviewPoints?: EjesStoredReviewPoint[];
@@ -374,13 +398,36 @@ export interface EjesMapItem {
   localitiesOf?: string;
   departmentOf?: string;
   type?: PadronType;
+  /** The old section whose candidate new sections and access points the map shows (EJS-22). */
+  candidatesOf?: number;
+  radius?: number;
+  otherStreets?: boolean;
 }
 
 export interface EjesMapFeature {
   itemIndex: number;
-  role: "old" | "new" | "zone" | "locality" | "department";
+  role: "old" | "new" | "zone" | "locality" | "department" | "access";
   label: string;
   geometry: Geometry;
+}
+
+/** A candidate new section of a manual split, with the figures of the side panel (metres; percentages of the old section). */
+export interface EjesMapCandidate {
+  oldRef: string;
+  ref: string;
+  idcalle: string | null;
+  name: string | null;
+  localities: string | null;
+  length: number;
+  nearLength: number;
+  coveredLength: number;
+  coveredPercent: number;
+  distance: number;
+}
+
+export interface EjesGeometryMapResult {
+  features: EjesMapFeature[];
+  candidates: EjesMapCandidate[];
 }
 
 export interface EjesGeometryMapParams {
@@ -390,6 +437,8 @@ export interface EjesGeometryMapParams {
   padrones: EjesTableRef;
   localities: EjesTableRef;
   departments: EjesTableRef;
+  accessPoints: EjesTableRef;
+  addresses: EjesTableRef;
   items: EjesMapItem[];
 }
 
