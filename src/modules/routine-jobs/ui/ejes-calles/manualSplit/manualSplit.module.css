@@ -76,3 +76,85 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.candidateList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.candidateRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.candidateRow:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-cyan-glow);
+}
+
+.candidateRow:focus-within {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 1px;
+}
+
+.candidateRow.candidateRowChosen {
+  background: var(--accent-cyan-glow);
+  border-color: var(--accent-cyan);
+}
+
+.candidateMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.candidateHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.candidateRef {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.candidateName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidateMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.candidateChip {
+  padding: 0 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  white-space: nowrap;
+}
