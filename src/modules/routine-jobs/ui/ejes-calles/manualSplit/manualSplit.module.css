@@ -91,9 +91,15 @@
 }
 
 .actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 8px;
+}
+
+.actions > * {
+  min-width: 0;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .candidateList {
