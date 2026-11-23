@@ -17,6 +17,7 @@ interface CandidateRequestKey {
 
 interface SettledCandidates {
   key: string;
+  baseKey: string;
   features: EjesMapFeature[];
   candidates: EjesMapCandidate[];
   neighbours: EjesMapNeighbour[];
@@ -47,6 +48,7 @@ export function useManualCandidates(
   otherStreets: boolean,
   coveredBy: readonly string[]
 ): ManualCandidatesMap {
+  const baseKey = JSON.stringify({ base, oldRef, radius, otherStreets });
   const requestKey = JSON.stringify({ base, oldRef, radius, otherStreets, coveredBy: [...coveredBy].sort() });
   const [settled, setSettled] = useState<SettledCandidates | null>(null);
   const [attempt, setAttempt] = useState<number>(0);
@@ -60,15 +62,15 @@ export function useManualCandidates(
         items: [{ candidatesOf: request.oldRef, radius: request.radius, otherStreets: request.otherStreets, coveredBy: request.coveredBy }],
       })
       .then((result) => {
-        if (active) setSettled({ key: requestKey, ...result, message: null });
+        if (active) setSettled({ key: requestKey, baseKey, ...result, message: null });
       })
       .catch((error: unknown) => {
-        if (active) setSettled({ key: requestKey, features: [], candidates: [], neighbours: [], message: messageOf(error) });
+        if (active) setSettled({ key: requestKey, baseKey, features: [], candidates: [], neighbours: [], message: messageOf(error) });
       });
     return () => {
       active = false;
     };
-  }, [requestKey, attempt]);
+  }, [requestKey, baseKey, attempt]);
 
   const retry = useCallback(() => {
     setSettled(null);
@@ -76,7 +78,11 @@ export function useManualCandidates(
   }, []);
 
   const current = settled !== null && settled.key === requestKey ? settled : null;
-  const dataKey = settled?.key ?? "";
+  const dataKey = settled?.baseKey ?? "";
+  const onlyCoveredByChanged = current === null && settled !== null && settled.baseKey === baseKey && settled.message === null;
+  if (onlyCoveredByChanged && settled !== null) {
+    return { status: MapLoadStatus.READY, features: settled.features, candidates: settled.candidates, neighbours: settled.neighbours, dataKey, message: null, retry };
+  }
   if (current === null) {
     return {
       status: MapLoadStatus.LOADING,

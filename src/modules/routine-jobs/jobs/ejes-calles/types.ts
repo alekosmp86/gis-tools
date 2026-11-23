@@ -436,6 +436,8 @@ export interface EjesMapNeighbour {
   length: number;
   points: number;
   distance: number;
+  /** The chosen new sections cover it: the one "Marcar todos" ticks. */
+  covered?: boolean;
 }
 
 export interface EjesGeometryMapResult {

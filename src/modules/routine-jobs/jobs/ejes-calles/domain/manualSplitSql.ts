@@ -91,7 +91,7 @@ export const MANUAL_MERGE_CTE = {
 export const manualMergeMembersCte = (): string =>
   cte(
     MANUAL_MERGE_CTE.MEMBERS,
-    `SELECT m.id, m.new_refs[1] AS new_ref FROM ${q(MANUAL_CTE.COVER)} AS m WHERE m.new_count = 1 AND m.new_refs[1] IN (SELECT c.new_refs[1] FROM ${q(MANUAL_CTE.COVER)} AS c WHERE c.new_count = 1 GROUP BY c.new_refs[1] HAVING count(*) >= 2)`
+    `SELECT m.id, m.new_refs[1] AS new_ref FROM ${q(MANUAL_CTE.COVER)} AS m WHERE m.new_count = 1 AND m.new_refs[1] IN (SELECT c.new_refs[1] FROM ${q(MANUAL_CTE.COVER)} AS c WHERE c.new_count = 1 GROUP BY c.new_refs[1] HAVING count(DISTINCT c.ref) >= 2)`
   );
 
 /** The pair and merge rows of the manual merges; they read `ap`, so they come with the merges. */

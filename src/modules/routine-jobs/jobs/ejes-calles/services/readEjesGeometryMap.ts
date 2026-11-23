@@ -255,6 +255,7 @@ const neighbourOf = (row: Row): EjesMapNeighbour => ({
   length: Number(row.length),
   points: Number(row.points),
   distance: Number(row.distance),
+  covered: row.covered === true,
 });
 
 const rowFeaturesOf = (rows: readonly Row[], itemIndex: number, role: EjesMapFeature["role"], labelOf: (row: Row) => string): EjesMapFeature[] =>

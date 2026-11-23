@@ -40,6 +40,7 @@ export interface ManualSplitContentProps {
 export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ignored, onApply, onApplyMerge, onIgnore }: ManualSplitContentProps) {
   const [selectedRefs, setSelectedRefs] = useState<string[]>([...storedRefs]);
   const [mergeRefs, setMergeRefs] = useState<string[]>([...storedMergeRefs]);
+  const [unticked, setUnticked] = useState<string[]>([]);
   const [radius, setRadius] = useState<number>(MANUAL_CANDIDATE_RADIUS_M);
   const [otherStreets, setOtherStreets] = useState<boolean>(false);
   const [shownRef, setShownRef] = useState<string>(row.ref);
@@ -47,6 +48,7 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
     setShownRef(row.ref);
     setSelectedRefs([...storedRefs]);
     setMergeRefs([...storedMergeRefs]);
+    setUnticked([]);
     setRadius(MANUAL_CANDIDATE_RADIUS_M);
     setOtherStreets(false);
   }
@@ -74,18 +76,22 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
       return canChooseMore(current.length) ? [...current, ref] : current;
     });
 
-  const toggleNeighbour = (ref: string) =>
+  const toggleNeighbour = (ref: string) => {
+    const ticking = !mergeRefs.includes(ref);
     setMergeRefs((current) => (current.includes(ref) ? current.filter((ticked) => ticked !== ref) : [...current, ref]));
+    setUnticked((current) => (ticking ? current.filter((released) => released !== ref) : [...current, ref]));
+  };
 
-  const tickAllNeighbours = () => setMergeRefs(map.neighbours.map((neighbour) => neighbour.ref));
+  const tickAllNeighbours = () => setMergeRefs(map.neighbours.filter((neighbour) => neighbour.covered === true).map((neighbour) => neighbour.ref));
 
   const clearSelection = () => {
     setSelectedRefs([]);
     setMergeRefs([]);
+    setUnticked([...storedMergeRefs]);
   };
 
   const applyChoice = () => {
-    const released = storedMergeRefs.filter((ref) => !tickedRefs.includes(ref));
+    const released = unticked.filter((ref) => storedMergeRefs.includes(ref) && !tickedRefs.includes(ref));
     if (mergedOldCount === 0) {
       onApply(chosen.map((candidate) => candidate.ref), released);
       return;

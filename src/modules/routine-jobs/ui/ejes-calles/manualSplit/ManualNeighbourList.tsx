@@ -10,7 +10,7 @@ import { EJES_MANUAL_SPLIT_TEXT } from "../ejesAcceptTexts";
 import styles from "./manualSplit.module.css";
 
 const ICON_SIZE = 15;
-const TICK_ALL_MIN_NEIGHBOURS = 2;
+const TICK_ALL_MIN_NEIGHBOURS = 1;
 
 export interface ManualNeighbourListProps {
   /** The neighbour old sections, nearest first; the block is hidden when there are none. */
@@ -67,7 +67,7 @@ export function ManualNeighbourList({ neighbours, mergeRefs, onToggle, onTickAll
     <section className={styles.neighbourBlock}>
       <h3 className={styles.neighbourTitle}>{EJES_MANUAL_SPLIT_TEXT.NEIGHBOURS_TITLE}</h3>
       <p className={styles.hint}>{EJES_MANUAL_SPLIT_TEXT.NEIGHBOURS_HINT}</p>
-      {neighbours.length >= TICK_ALL_MIN_NEIGHBOURS && (
+      {neighbours.filter((neighbour) => neighbour.covered === true).length >= TICK_ALL_MIN_NEIGHBOURS && (
         <div className={styles.neighbourActions}>
           <Button variant={ButtonVariant.SECONDARY} onClick={onTickAll}>
             <CheckCheck size={ICON_SIZE} />
