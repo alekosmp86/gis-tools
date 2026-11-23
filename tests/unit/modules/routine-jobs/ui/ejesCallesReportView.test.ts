@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TWIN_CLASS } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
-import type { EjesResult, EjesTwinRow } from "@/modules/routine-jobs/jobs/ejes-calles/types";
+import type { EjesResult } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import {
   buildEjesReportView,
   coverageTextOf,
@@ -56,18 +56,6 @@ const COUNTS = {
   geoTwinSkippedRefs: 0,
 };
 
-const TWIN: EjesTwinRow = {
-  ref: "1035386",
-  idcalle: "72006",
-  department: "FLORES",
-  localities: ["FLORES RURAL", "TRINIDAD"],
-  class: TWIN_CLASS.BOTH,
-  length: 250.25,
-  urbanLength: 120.5,
-  ruralLength: 30,
-  dropLocalities: [],
-  insideLocalities: [],
-};
 
 const resultOf = (overrides: Partial<EjesResult> = {}): EjesResult =>
   ({
@@ -262,7 +250,6 @@ describe("buildEjesReportView (EJ-12)", () => {
   });
 
   describe("renumbered sections (ER-4)", () => {
-    const row = { oldRef: "10", newRef: "11", idcalle: "5", points: 3, oldLength: 100, newLength: 100.2, hausdorff: 0.2 };
     const kpisOf = (result: EjesResult): Record<string, number> =>
       Object.fromEntries(buildEjesReportView(result).kpiGroups.flatMap((group) => group.kpis).map((kpi) => [kpi.label, kpi.value]));
 

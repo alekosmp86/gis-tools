@@ -146,7 +146,7 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
             oldLength={oldLength}
             pointSummary={pointSummary}
             mergedOldCount={mergedOldCount}
-            canApply={canApplyOf(chosen.length, mergedOldCount)}
+            canApply={canApplyOf(chosen.length)}
             ignored={ignored}
             onApply={applyChoice}
             allSelected={selectedRefs.length >= Math.min(map.candidates.length, MANUAL_SPLIT_PIECES_LIMIT)}

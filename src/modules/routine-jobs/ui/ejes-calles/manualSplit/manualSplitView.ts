@@ -30,7 +30,7 @@ export const chosenCandidatesOf = (candidates: readonly EjesMapCandidate[], chos
 export const canChooseMore = (chosenCount: number): boolean => chosenCount < MANUAL_SPLIT_PIECES_LIMIT;
 
 /** A split, a replacement or a group needs at least one new section. */
-export const canApplyOf = (chosenCount: number, _mergedOldCount: number): boolean => chosenCount > 0;
+export const canApplyOf = (chosenCount: number): boolean => chosenCount > 0;
 
 /** One piece makes a replacement, two or more a split; with other old sections ticked, the caption names the group. */
 export const chosenSummaryOf = (chosenCount: number, mergedOldCount = 0): string => {
