@@ -270,7 +270,7 @@ export const buildSurplusListSql = (limit: number): string =>
   ].join(" ");
 
 /**
- * The streets of the loaded copies whose `idcalle` already has a `circulation_way` but not under the file's name: the name changed, so the
+ * The streets of the loaded copies whose `idcalle` has a `circulation_way` row under another name than the file's: every such row is renamed, so the
  * rows of that street id are renamed in place instead of a second way being created. One name per `idcalle` (the lowest, if the file has several).
  */
 export function buildRenamedWaysSql(layouts: EjesLayouts): string {
@@ -279,8 +279,7 @@ export function buildRenamedWaysSql(layouts: EjesLayouts): string {
     'SELECT n.idcalle AS "idcalle", n.name AS "name" FROM (',
     `SELECT c.idcalle AS idcalle, min(c.nombre) AS name FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE c.idcalle IS NOT NULL AND c.nombre IS NOT NULL GROUP BY c.idcalle`,
     ") AS n",
-    `WHERE EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle = n.idcalle)`,
-    `AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle = n.idcalle AND p.name = n.name)`,
+    `WHERE EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle = n.idcalle AND p.name IS DISTINCT FROM n.name)`,
     "ORDER BY n.idcalle",
   ].join(" ");
 }
