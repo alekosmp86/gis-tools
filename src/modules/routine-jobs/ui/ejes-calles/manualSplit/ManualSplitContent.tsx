@@ -51,6 +51,11 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
     setOtherStreets(false);
   }
   const map = useManualCandidates(base, Number(row.ref), radius, otherStreets);
+  const [widenedRef, setWidenedRef] = useState<string | null>(null);
+  if (map.status === MapLoadStatus.READY && map.candidates.length === 0 && !otherStreets && widenedRef !== row.ref) {
+    setWidenedRef(row.ref);
+    setOtherStreets(true);
+  }
   const chosen = chosenCandidatesOf(map.candidates, selectedRefs);
   const tickedRefs = useMemo(
     () => mergeRefs.filter((ref) => map.neighbours.some((neighbour) => neighbour.ref === ref)),
