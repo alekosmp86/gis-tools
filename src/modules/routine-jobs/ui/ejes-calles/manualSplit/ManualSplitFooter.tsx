@@ -15,10 +15,14 @@ const ICON_SIZE = 15;
 export interface ManualSplitFooterProps {
   /** The chosen candidates that the list shows, nearest first. */
   chosen: EjesMapCandidate[];
-  /** Every chosen reftramo, shown or not: the clear button needs it. */
+  /** Every chosen reftramo, new sections and ticked neighbours alike, shown or not: the clear button needs it. */
   selectedCount: number;
   /** The length in metres of the old section; null when its outline is not in the response. */
   oldLength: number | null;
+  /** The old sections joined into the one new section, the old section included; 0 when nothing is merged. */
+  mergedOldCount: number;
+  /** The apply is possible with the current choice (see `canApplyOf`). */
+  canApply: boolean;
   /** The old section is marked as reviewed with no choice. */
   ignored: boolean;
   /** Every listed candidate is chosen already, or the piece limit is reached: nothing more to select. */
@@ -30,11 +34,23 @@ export interface ManualSplitFooterProps {
 }
 
 /** The live caption of the choice, the metres it covers near the old section, and the apply, clear and ignore buttons. */
-export function ManualSplitFooter({ chosen, selectedCount, oldLength, ignored, allSelected, onApply, onClear, onSelectAll, onIgnore }: ManualSplitFooterProps) {
+export function ManualSplitFooter({
+  chosen,
+  selectedCount,
+  oldLength,
+  mergedOldCount,
+  canApply,
+  ignored,
+  allSelected,
+  onApply,
+  onClear,
+  onSelectAll,
+  onIgnore,
+}: ManualSplitFooterProps) {
   return (
     <div className={styles.footer}>
       <p className={styles.caption}>
-        <span>{EJES_MANUAL_SPLIT_TEXT.CHOSEN_COUNT(chosen.length)}</span> <span>{chosenSummaryOf(chosen.length)}</span>
+        <span>{EJES_MANUAL_SPLIT_TEXT.CHOSEN_COUNT(chosen.length)}</span> <span>{chosenSummaryOf(chosen.length, mergedOldCount)}</span>
       </p>
       {oldLength !== null && (
         <p className={styles.hint}>{EJES_MANUAL_SPLIT_TEXT.NEAR_SUM(metersTextOf(nearLengthSumOf(chosen)), metersTextOf(oldLength))}</p>
@@ -52,7 +68,7 @@ export function ManualSplitFooter({ chosen, selectedCount, oldLength, ignored, a
           <Ban size={ICON_SIZE} />
           <span>{ignored ? EJES_MANUAL_SPLIT_TEXT.UNIGNORE : EJES_MANUAL_SPLIT_TEXT.IGNORE}</span>
         </Button>
-        <Button onClick={onApply} disabled={chosen.length === 0}>
+        <Button onClick={onApply} disabled={!canApply}>
           <Check size={ICON_SIZE} />
           <span>{EJES_MANUAL_SPLIT_TEXT.APPLY}</span>
         </Button>

@@ -26,6 +26,7 @@ import {
   EJES_MAP_ROLE,
   EJES_MAP_STATEMENT_TIMEOUT,
   localityOverlapSql,
+  neighbourSectionsSql,
   newSectionOutlineSql,
   oldSectionOutlineSql,
   zoneOutlineSql,
@@ -36,6 +37,7 @@ import type {
   EjesMapCandidate,
   EjesMapFeature,
   EjesMapItem,
+  EjesMapNeighbour,
   EjesTableRef,
 } from "../types";
 import { padronSridIssuesOf, sridIssuesOf } from "./resolveLayouts";
@@ -164,6 +166,12 @@ async function resolveMapTables(session: RunSession, params: EjesGeometryMapPara
   return { staging, roadSection, padrones, localities, departments, accessPoints, addresses };
 }
 
+/** The SQL of one manual-split read in its two street variants: the same street only, or the other streets too. */
+interface StreetSql {
+  sameStreet: string;
+  otherStreets: string;
+}
+
 /** The SQL of each kind of item; a kind whose table was not resolved has none. */
 interface MapSql {
   old: string;
@@ -172,9 +180,14 @@ interface MapSql {
   zone: string | null;
   locality: string | null;
   department: string | null;
-  candidates: { sameStreet: string; otherStreets: string } | null;
+  candidates: StreetSql | null;
+  neighbours: StreetSql | null;
   accessPoints: string | null;
 }
+
+const streetVariantsOf = (build: (otherStreets: boolean) => string): StreetSql => ({ sameStreet: build(false), otherStreets: build(true) });
+
+const streetSqlOf = (variants: StreetSql, entry: EjesMapItem): string => (entry.otherStreets === true ? variants.otherStreets : variants.sameStreet);
 
 function mapSqlOf({ staging, roadSection, padrones, localities, departments, accessPoints, addresses }: MapTables): MapSql {
   return {
@@ -187,10 +200,11 @@ function mapSqlOf({ staging, roadSection, padrones, localities, departments, acc
     candidates:
       accessPoints === null
         ? null
-        : {
-            sameStreet: candidateSectionsSql(staging.layout, roadSection.layout, accessPoints.layout, false),
-            otherStreets: candidateSectionsSql(staging.layout, roadSection.layout, accessPoints.layout, true),
-          },
+        : streetVariantsOf((otherStreets) => candidateSectionsSql(staging.layout, roadSection.layout, accessPoints.layout, otherStreets)),
+    neighbours:
+      accessPoints === null
+        ? null
+        : streetVariantsOf((otherStreets) => neighbourSectionsSql(staging.layout, roadSection.layout, accessPoints.layout, otherStreets)),
     accessPoints: accessPoints === null || addresses === null ? null : accessPointOutlinesSql(accessPoints.layout, addresses.layout),
   };
 }
@@ -235,35 +249,45 @@ const candidateOf = (oldRef: string, row: Row): EjesMapCandidate => ({
   distance: Number(row.distance),
 });
 
+const neighbourOf = (row: Row): EjesMapNeighbour => ({
+  ref: String(row.ref),
+  idcalle: textOf(row.idcalle),
+  length: Number(row.length),
+  points: Number(row.points),
+  distance: Number(row.distance),
+});
+
+const rowFeaturesOf = (rows: readonly Row[], itemIndex: number, role: EjesMapFeature["role"], labelOf: (row: Row) => string): EjesMapFeature[] =>
+  rows.map((row) => ({ itemIndex, role, label: labelOf(row), geometry: row.geojson as Geometry }));
+
+const emptyResult = (): EjesGeometryMapResult => ({ features: [], candidates: [], neighbours: [] });
+
 /**
- * The candidate new sections of a manual split (EJS-22): the old section's outline, its access points as points, and one outline per
- * candidate with its figures. The old section must exist (not found otherwise); the radius is the item's or the default.
+ * The candidate new sections and the neighbour old sections of a manual split (EJS-22): the old section's outline, its access points as
+ * points, one outline per candidate with its figures, then one outline per neighbour in the neighbours' order. The old section must exist
+ * (not found otherwise); the radius is the item's or the default.
  */
 async function candidateItemOf(session: RunSession, sql: MapSql, entry: EjesMapItem, itemIndex: number): Promise<EjesGeometryMapResult> {
   const oldRef = entry.candidatesOf;
-  if (oldRef === undefined || sql.candidates === null) return { features: [], candidates: [] };
+  if (oldRef === undefined || sql.candidates === null || sql.neighbours === null) return emptyResult();
   // react-doctor-disable-next-line react-doctor/async-parallel, react-doctor/server-sequential-independent-await
   const oldFeature = await featureOf(session, sql.old, oldRef, itemIndex, EJES_MAP_ROLE.OLD, `Tramo anterior ${oldRef}`);
-  const candidateSql = entry.otherStreets === true ? sql.candidates.otherStreets : sql.candidates.sameStreet;
+  const radius = entry.radius ?? MANUAL_CANDIDATE_RADIUS_M;
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const candidateRows = (await session.query(candidateSql, [oldRef, entry.radius ?? MANUAL_CANDIDATE_RADIUS_M])).rows;
+  const candidateRows = (await session.query(streetSqlOf(sql.candidates, entry), [oldRef, radius])).rows;
+  // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+  const neighbourRows = (await session.query(streetSqlOf(sql.neighbours, entry), [oldRef, radius])).rows;
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const pointRows = sql.accessPoints === null ? [] : (await session.query(sql.accessPoints, [oldRef])).rows;
-  const pointFeatures: EjesMapFeature[] = pointRows.map((row) => ({
-    itemIndex,
-    role: EJES_MAP_ROLE.ACCESS,
-    label: `Punto de acceso ${String(row.id)}`,
-    geometry: row.geojson as Geometry,
-  }));
-  const candidateFeatures: EjesMapFeature[] = candidateRows.map((row) => ({
-    itemIndex,
-    role: EJES_MAP_ROLE.NEW,
-    label: `Tramo nuevo ${String(row.ref)}`,
-    geometry: row.geojson as Geometry,
-  }));
   return {
-    features: [oldFeature, ...pointFeatures, ...candidateFeatures],
+    features: [
+      oldFeature,
+      ...rowFeaturesOf(pointRows, itemIndex, EJES_MAP_ROLE.ACCESS, (row) => `Punto de acceso ${String(row.id)}`),
+      ...rowFeaturesOf(candidateRows, itemIndex, EJES_MAP_ROLE.NEW, (row) => `Tramo nuevo ${String(row.ref)}`),
+      ...rowFeaturesOf(neighbourRows, itemIndex, EJES_MAP_ROLE.NEIGHBOUR, (row) => `Tramo viejo vecino ${String(row.ref)}`),
+    ],
     candidates: candidateRows.map((row) => candidateOf(String(oldRef), row)),
+    neighbours: neighbourRows.map(neighbourOf),
   };
 }
 
@@ -274,14 +298,15 @@ async function candidateItemOf(session: RunSession, sql: MapSql, entry: EjesMapI
 async function readFeatures(session: RunSession, params: EjesGeometryMapParams): Promise<EjesGeometryMapResult> {
   await session.query(`SET LOCAL statement_timeout = '${EJES_MAP_STATEMENT_TIMEOUT}'`);
   const sql = mapSqlOf(await resolveMapTables(session, params));
-  const result: EjesGeometryMapResult = { features: [], candidates: [] };
+  const result = emptyResult();
   for (const [itemIndex, entry] of params.items.entries()) {
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     result.features.push(...(await itemFeaturesOf(session, sql, entry, itemIndex)));
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
-    const candidates = await candidateItemOf(session, sql, entry, itemIndex);
-    result.features.push(...candidates.features);
-    result.candidates.push(...candidates.candidates);
+    const manual = await candidateItemOf(session, sql, entry, itemIndex);
+    result.features.push(...manual.features);
+    result.candidates.push(...manual.candidates);
+    result.neighbours.push(...manual.neighbours);
   }
   return result;
 }
@@ -301,7 +326,7 @@ async function readFeaturesCapturingNotFound(
   } catch (error: unknown) {
     if (!(error instanceof MapFeatureNotFoundError)) throw error;
     captured.error = error;
-    return { features: [], candidates: [] };
+    return emptyResult();
   }
 }
 

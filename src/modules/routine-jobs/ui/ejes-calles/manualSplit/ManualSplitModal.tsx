@@ -9,6 +9,7 @@ import { EJES_MANUAL_SPLIT_TEXT } from "../ejesAcceptTexts";
 import { manualSplitOf, type EjesIgnoredRefChange, type EjesManualSplitChange } from "../ejesAccept";
 import { ManualSplitContent } from "./ManualSplitContent";
 import { afterIgnoreIndexOf, navigationTargetOf, resolvedPredicateOf } from "./manualResolutionView";
+import { storedMergeRefsOf } from "./manualSplitView";
 import styles from "./manualSplit.module.css";
 
 /** The held removals the modal walks through, in list order, and the one on screen. */
@@ -41,10 +42,17 @@ export function ManualSplitModal({ review, base, manualSplits, ignoredRefs, onCh
   if (row === undefined) return null;
   const isResolved = resolvedPredicateOf(manualSplits, ignoredRefs);
   const isIgnored = ignoredRefs.includes(row.ref);
-  const apply = (newRefs: string[]) => {
-    onChange({ oldRef: row.ref, newRefs });
+  const afterApply = () => {
     if (review.index + 1 < review.rows.length) onNavigate(review.index + 1);
     else onClose();
+  };
+  const apply = (newRefs: string[]) => {
+    onChange({ oldRef: row.ref, newRefs });
+    afterApply();
+  };
+  const applyMerge = (newRef: string, oldRefs: string[]) => {
+    oldRefs.forEach((oldRef) => onChange({ oldRef, newRefs: [newRef] }));
+    afterApply();
   };
   const ignore = () => {
     onIgnoredChange({ oldRef: row.ref, ignored: !isIgnored });
@@ -67,8 +75,10 @@ export function ManualSplitModal({ review, base, manualSplits, ignoredRefs, onCh
           row={row}
           base={base}
           storedRefs={manualSplitOf(manualSplits, row.ref)?.newRefs ?? []}
+          storedMergeRefs={storedMergeRefsOf(manualSplits, row.ref)}
           ignored={isIgnored}
           onApply={apply}
+          onApplyMerge={applyMerge}
           onIgnore={ignore}
         />
       )}

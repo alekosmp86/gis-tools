@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { EjesMapCandidate, EjesMapFeature } from "../../../jobs/ejes-calles/types";
+import type { EjesMapCandidate, EjesMapFeature, EjesMapNeighbour } from "../../../jobs/ejes-calles/types";
 import type { EjesGeometryMapBase } from "../../shared/clientTypes";
 import { MapLoadStatus } from "../../shared/map/useOutlineMapFeatures";
 import { createRoutineJobsClient } from "../../shared/routineJobsClient";
@@ -18,6 +18,7 @@ interface SettledCandidates {
   key: string;
   features: EjesMapFeature[];
   candidates: EjesMapCandidate[];
+  neighbours: EjesMapNeighbour[];
   message: string | null;
 }
 
@@ -25,6 +26,7 @@ export interface ManualCandidatesMap {
   status: MapLoadStatus;
   features: EjesMapFeature[];
   candidates: EjesMapCandidate[];
+  neighbours: EjesMapNeighbour[];
   /** Names the request whose data is on screen; it changes only when new data arrives. While loading, the features and candidates are the previous ones. */
   dataKey: string;
   message: string | null;
@@ -51,10 +53,10 @@ export function useManualCandidates(base: EjesGeometryMapBase, oldRef: number, r
         items: [{ candidatesOf: request.oldRef, radius: request.radius, otherStreets: request.otherStreets }],
       })
       .then((result) => {
-        if (active) setSettled({ key: requestKey, features: result.features, candidates: result.candidates, message: null });
+        if (active) setSettled({ key: requestKey, ...result, message: null });
       })
       .catch((error: unknown) => {
-        if (active) setSettled({ key: requestKey, features: [], candidates: [], message: messageOf(error) });
+        if (active) setSettled({ key: requestKey, features: [], candidates: [], neighbours: [], message: messageOf(error) });
       });
     return () => {
       active = false;
@@ -69,8 +71,26 @@ export function useManualCandidates(base: EjesGeometryMapBase, oldRef: number, r
   const current = settled !== null && settled.key === requestKey ? settled : null;
   const dataKey = settled?.key ?? "";
   if (current === null) {
-    return { status: MapLoadStatus.LOADING, features: settled?.features ?? [], candidates: settled?.candidates ?? [], dataKey, message: null, retry };
+    return {
+      status: MapLoadStatus.LOADING,
+      features: settled?.features ?? [],
+      candidates: settled?.candidates ?? [],
+      neighbours: settled?.neighbours ?? [],
+      dataKey,
+      message: null,
+      retry,
+    };
   }
-  if (current.message !== null) return { status: MapLoadStatus.ERROR, features: [], candidates: [], dataKey, message: current.message, retry };
-  return { status: MapLoadStatus.READY, features: current.features, candidates: current.candidates, dataKey, message: null, retry };
+  if (current.message !== null) {
+    return { status: MapLoadStatus.ERROR, features: [], candidates: [], neighbours: [], dataKey, message: current.message, retry };
+  }
+  return {
+    status: MapLoadStatus.READY,
+    features: current.features,
+    candidates: current.candidates,
+    neighbours: current.neighbours,
+    dataKey,
+    message: null,
+    retry,
+  };
 }

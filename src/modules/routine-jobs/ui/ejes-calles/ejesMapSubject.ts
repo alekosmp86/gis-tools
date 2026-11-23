@@ -147,6 +147,7 @@ const DRAW_ORDER: Record<EjesMapOutline["role"], number> = {
   [OUTLINE_ROLE.LOCALITY]: 1,
   [OUTLINE_ROLE.ZONE]: 2,
   [OUTLINE_ROLE.OLD]: 3,
+  [OUTLINE_ROLE.NEIGHBOUR]: 3,
   [OUTLINE_ROLE.NEW]: 4,
   [OUTLINE_ROLE.ACCESS]: 5,
 };

@@ -42,7 +42,16 @@ import { departmentKeepsSql, twinCountColumns, twinCtes, twinGroupCtes, twinList
 import { copyFinalCte, geoTwinCountColumns, geoTwinCtes, geoTwinListColumn, geoTwinSinkCtes, type GeoTwinSinks } from "./geoTwinSql";
 import { pickNamesCopySql, twinPicksValuesCte } from "./twinPickSql";
 import { twinUndecidedCountColumns, twinUndecidedCtes, twinUndecidedListColumn } from "./twinUndecidedSql";
-import { MANUAL_CTE, manualCountColumns, manualIgnoredListColumn, manualSplitCtes, manualSplitsValuesCte } from "./manualSplitSql";
+import {
+  MANUAL_CTE,
+  MANUAL_MERGE_CTE,
+  manualCountColumns,
+  manualIgnoredListColumn,
+  manualMergeMembersCte,
+  manualMergeRowCtes,
+  manualSplitCtes,
+  manualSplitsValuesCte,
+} from "./manualSplitSql";
 
 export type AnalysisSinks = RenumberSinks & RemovalSinks & GeoTwinSinks;
 
@@ -328,6 +337,7 @@ function splitCtes(): string[] {
       ].join(" ")
     ),
     ...manualSplitCtes(),
+    manualMergeMembersCte(),
     cte(
       "piece_claims",
       [
@@ -344,7 +354,7 @@ function splitCtes(): string[] {
         `WHERE (s.new_count >= ${SPLIT_MIN_PIECES} OR ${replacementSql()})`,
         `AND ${coverageThresholdSql("s.covered", "s.len")} AND s.id NOT IN (SELECT m.id FROM ${q(MANUAL_CTE.COVER)} AS m)`,
         "UNION ALL",
-        `SELECT m.id, m.ref, m.idcalle, m.len, m.new_count, m.covered, m.new_refs, m.new_len, m.outside_len, true AS manual FROM ${q(MANUAL_CTE.COVER)} AS m`,
+        `SELECT m.id, m.ref, m.idcalle, m.len, m.new_count, m.covered, m.new_refs, m.new_len, m.outside_len, true AS manual FROM ${q(MANUAL_CTE.COVER)} AS m WHERE m.id NOT IN (SELECT x.id FROM ${q(MANUAL_MERGE_CTE.MEMBERS)} AS x)`,
       ].join(" ")
     ),
   ];
@@ -370,23 +380,25 @@ function mergeCtes(): string[] {
         "SELECT n.ref AS new_ref, n.idcalle AS idcalle, r.id, r.ref AS old_ref, r.len, n.geom AS new_geom, ST_Length(n.geom) AS piece_len, r.geometry AS old_geom,",
         `ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, ${tolerance}))) AS covered`,
         `FROM ${q("new_rest")} AS n JOIN ${q("removed_rest")} AS r ON r.idcalle = n.idcalle AND ST_DWithin(r.geometry, n.geom, ${tolerance})`,
-        `WHERE r.len > 0 AND r.id NOT IN (SELECT id FROM ${q("splits")})`,
+        `WHERE r.len > 0 AND r.id NOT IN (SELECT id FROM ${q("splits")}) AND r.id NOT IN (SELECT x.id FROM ${q(MANUAL_MERGE_CTE.MEMBERS)} AS x)`,
       ].join(" ")
     ),
+    ...manualMergeRowCtes(),
     cte(
-      "merges",
+      "auto_merges",
       [
         "SELECT p.new_ref, min(p.idcalle) AS idcalle, array_agg(p.old_ref ORDER BY p.old_ref) AS old_refs,",
         "sum(p.covered) / NULLIF(sum(p.len), 0) AS coverage, sum(p.len) AS old_len, ST_Length((array_agg(p.new_geom))[1]) AS new_len,",
         `ST_Length(ST_Difference((array_agg(p.new_geom))[1], ST_Buffer(ST_Collect(p.old_geom), ${tolerance}))) AS outside_len,`,
         `COALESCE(sum(ap.points), 0) + COALESCE(sum(apid.points), 0) AS points FROM ${q("merge_pairs")} AS p`,
         `LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.old_ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = p.id::text`,
-        `WHERE ${isPieceSql("p.covered", "p.len", "p.piece_len")} GROUP BY p.new_ref HAVING count(*) >= 2 AND ${coverageThresholdSql("sum(p.covered)", "sum(p.len)")}`,
+        `WHERE ${isPieceSql("p.covered", "p.len", "p.piece_len")} AND p.new_ref NOT IN (SELECT x.new_ref FROM ${q(MANUAL_MERGE_CTE.MEMBERS)} AS x) GROUP BY p.new_ref HAVING count(*) >= 2 AND ${coverageThresholdSql("sum(p.covered)", "sum(p.len)")}`,
       ].join(" ")
     ),
+    cte("merges", `SELECT * FROM ${q("auto_merges")} UNION ALL SELECT * FROM ${q(MANUAL_MERGE_CTE.MERGES)}`),
     cte(
       "merged_ids",
-      `SELECT DISTINCT p.id FROM ${q("merge_pairs")} AS p JOIN ${q("merges")} AS m ON m.new_ref = p.new_ref WHERE ${isPieceSql("p.covered", "p.len", "p.piece_len")}`
+      `SELECT DISTINCT p.id FROM ${q("merge_pairs")} AS p JOIN ${q("auto_merges")} AS m ON m.new_ref = p.new_ref WHERE ${isPieceSql("p.covered", "p.len", "p.piece_len")} UNION SELECT x.id FROM ${q(MANUAL_MERGE_CTE.MEMBERS)} AS x`
     ),
   ];
 }

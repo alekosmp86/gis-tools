@@ -27,7 +27,7 @@ export async function readEjesCallesGeometryMap(request: Request, deps: RunDeps 
     const params = parseEjesGeometryMapRequest(await readJsonRecord(request));
     secret = params.config.password ?? "";
     const result = await readEjesGeometryMap(params, deps);
-    return jsonResponse({ success: true, features: result.features, candidates: result.candidates });
+    return jsonResponse({ success: true, features: result.features, candidates: result.candidates, neighbours: result.neighbours });
   } catch (error: unknown) {
     return geometryMapFailure(error, secret);
   }

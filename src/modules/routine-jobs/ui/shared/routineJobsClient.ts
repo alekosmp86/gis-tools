@@ -265,7 +265,7 @@ export function createRoutineJobsClient(deps: RoutineJobsClientDeps = {}): Routi
 
     async fetchEjesGeometryMap(request) {
       const payload = await postJson(fetchImpl, EJES_GEOMETRY_MAP_ROUTE, request);
-      if (!Array.isArray(payload.features) || !Array.isArray(payload.candidates)) throw invalidResponse();
+      if (!Array.isArray(payload.features) || !Array.isArray(payload.candidates) || !Array.isArray(payload.neighbours)) throw invalidResponse();
       return payload as unknown as EjesGeometryMapResult;
     },
 

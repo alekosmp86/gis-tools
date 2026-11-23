@@ -24,6 +24,7 @@ export const EJES_MAP_ROLE = {
   LOCALITY: "locality",
   DEPARTMENT: "department",
   ACCESS: "access",
+  NEIGHBOUR: "neighbour",
 } as const;
 const WGS84_SRID = 4326;
 const SIMPLIFY_TOLERANCE_M = 2;
@@ -156,6 +157,45 @@ export function candidateSectionsSql(staging: TableLayout, roadSection: TableLay
   ]
     .filter((part) => part !== "")
     .join(" ");
+}
+
+/**
+ * The neighbours of a manual split's old section (`$1`, its `reftramo`; `$2` the radius in metres): the old sections of the road section
+ * table within `$2` metres of it that the staging file does not hold, the same street only unless `otherStreets`, nearest first, at most
+ * MANUAL_CANDIDATES_LIMIT. The access points are counted once, for the returned references only.
+ */
+export function neighbourSectionsSql(staging: TableLayout, roadSection: TableLayout, accessPoints: TableLayout, otherStreets: boolean): string {
+  const roadColumn = (logical: string): string => `r.${physicalColumn(roadSection, logical)}`;
+  const roadReference = canonicalTextSql(roadColumn(ROAD_SECTION_COLUMN.REFTRAMO));
+  const street = canonicalTextSql(roadColumn(ROAD_SECTION_COLUMN.CIRCULATION_WAY));
+  const geometry = roadColumn(ROAD_SECTION_COLUMN.GEOMETRY);
+  const stagingReference = canonicalTextSql(`${STAGING_ALIAS}.${physicalColumn(staging, EJES_STAGING_COLUMN.REFTRAMO)}`);
+  const pointReference = canonicalTextSql(`a.${physicalColumn(accessPoints, ACCESS_POINT_COLUMN.ROAD_SECTION)}`);
+  return [
+    `WITH old AS (SELECT ${roadReference} AS ref, ${street} AS idcalle, ${geometry} AS geom`,
+    `FROM ${qualifiedName(roadSection)} AS r WHERE ${roadColumn(ROAD_SECTION_COLUMN.REFTRAMO)} = $1`,
+    `AND ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) LIMIT 1),`,
+    "near AS (SELECT",
+    `${roadReference} AS ref, ${street} AS idcalle, ${geometry} AS geom, ST_Distance(${geometry}, o.geom) AS distance`,
+    `FROM ${qualifiedName(roadSection)} AS r, old AS o`,
+    `WHERE ${roadReference} IS NOT NULL AND ${roadReference} <> o.ref`,
+    `AND ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry})`,
+    `AND ${geometry} && ST_Expand(o.geom, $2::float8) AND ST_DWithin(${geometry}, o.geom, $2::float8)`,
+    otherStreets ? "" : `AND ${street} = o.idcalle`,
+    "),",
+    "free AS (SELECT n.ref, min(n.idcalle) AS idcalle, min(n.distance) AS distance, (array_agg(n.geom))[1] AS geom",
+    `FROM near AS n LEFT JOIN (SELECT DISTINCT ${stagingReference} AS ref FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
+    `WHERE ${stagingReference} IN (SELECT ref FROM near)) AS st ON st.ref = n.ref`,
+    `WHERE st.ref IS NULL GROUP BY n.ref ORDER BY min(n.distance), n.ref LIMIT ${MANUAL_CANDIDATES_LIMIT})`,
+    "SELECT f.ref, f.idcalle,",
+    "ROUND(ST_Length(f.geom)::numeric, 1)::float8 AS length,",
+    "ROUND(f.distance::numeric, 1)::float8 AS distance,",
+    "COALESCE(p.points, 0)::int AS points,",
+    `${outlineGeoJsonSql("f.geom")} AS geojson`,
+    `FROM free AS f LEFT JOIN (SELECT ${pointReference} AS ref, count(*) AS points FROM ${qualifiedName(accessPoints)} AS a`,
+    `WHERE ${pointReference} IN (SELECT ref FROM free) GROUP BY 1) AS p ON p.ref = f.ref`,
+    "ORDER BY f.distance, f.ref",
+  ].join(" ");
 }
 
 /** The access points of an old section (`$1`, its `reftramo`) with the WGS84 geometry of their address (`carto.address` by the point's id). */

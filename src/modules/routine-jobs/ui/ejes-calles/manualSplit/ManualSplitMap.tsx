@@ -7,7 +7,7 @@ import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { RenderErrorBoundary } from "@/ui-kit/components/RenderErrorBoundary";
 import { AlertType } from "@/ui-kit/types/ui";
 import { EJES_MANUAL_SPLIT_TEXT } from "../ejesAcceptTexts";
-import { candidateRefAt } from "./manualSplitView";
+import { candidateRefAt, neighbourRefAt } from "./manualSplitView";
 import styles from "./manualSplit.module.css";
 
 const SpatialMapPreview = dynamic(
@@ -29,16 +29,22 @@ export interface ManualSplitMapProps {
   loading: boolean;
   /** A click on a candidate section toggles it, as its row in the list does. */
   onToggleCandidate: (ref: string) => void;
+  /** A click on a neighbour old section toggles its merge, as its row in the list does. */
+  onToggleNeighbour: (ref: string) => void;
 }
 
 /**
- * The old section, its access points and the candidate sections on the shared map; a click on a candidate chooses it.
- * No labels, and the view is fitted once per `viewKey`: choosing a section only repaints it, it never moves the view.
+ * The old section, its access points, the candidate sections and the neighbour old sections on the shared map; a click on a candidate
+ * chooses it, a click on a neighbour ticks it for the merge. No labels, and the view is fitted once per `viewKey`: choosing a section
+ * only repaints it, it never moves the view.
  */
-export function ManualSplitMap({ collection, viewKey, loading, onToggleCandidate }: ManualSplitMapProps) {
+export function ManualSplitMap({ collection, viewKey, loading, onToggleCandidate, onToggleNeighbour }: ManualSplitMapProps) {
   const handleSelect = (index: number | null) => {
-    const ref = candidateRefAt(collection, index);
-    if (ref !== null && !loading) onToggleCandidate(ref);
+    if (loading) return;
+    const candidateRef = candidateRefAt(collection, index);
+    if (candidateRef !== null) return onToggleCandidate(candidateRef);
+    const neighbourRef = neighbourRefAt(collection, index);
+    if (neighbourRef !== null) onToggleNeighbour(neighbourRef);
   };
   return (
     <div className={styles.mapFrame}>

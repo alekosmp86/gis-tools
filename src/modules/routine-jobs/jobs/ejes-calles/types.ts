@@ -406,7 +406,7 @@ export interface EjesMapItem {
 
 export interface EjesMapFeature {
   itemIndex: number;
-  role: "old" | "new" | "zone" | "locality" | "department" | "access";
+  role: "old" | "new" | "zone" | "locality" | "department" | "access" | "neighbour";
   label: string;
   geometry: Geometry;
 }
@@ -425,9 +425,19 @@ export interface EjesMapCandidate {
   distance: number;
 }
 
+/** An old section near a manual split's old section that may be merged with it (metres; `points` are its access points). */
+export interface EjesMapNeighbour {
+  ref: string;
+  idcalle: string | null;
+  length: number;
+  points: number;
+  distance: number;
+}
+
 export interface EjesGeometryMapResult {
   features: EjesMapFeature[];
   candidates: EjesMapCandidate[];
+  neighbours: EjesMapNeighbour[];
 }
 
 export interface EjesGeometryMapParams {

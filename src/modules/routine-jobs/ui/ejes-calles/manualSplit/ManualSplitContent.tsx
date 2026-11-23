@@ -13,11 +13,12 @@ import { MapLoadStatus } from "../../shared/map/useOutlineMapFeatures";
 import { textOrNoData } from "../../shared/reportFormat";
 import { EJES_MANUAL_SPLIT_TEXT } from "../ejesAcceptTexts";
 import { ManualCandidateList } from "./ManualCandidateList";
+import { ManualNeighbourList } from "./ManualNeighbourList";
 import { ManualSplitControls } from "./ManualSplitControls";
 import { ManualSplitFooter } from "./ManualSplitFooter";
 import { ManualSplitMap } from "./ManualSplitMap";
 import { useManualCandidates } from "./useManualCandidates";
-import { canChooseMore, chosenCandidatesOf, manualSplitMapOf, oldLengthOf, sortedCandidatesOf } from "./manualSplitView";
+import { canApplyOf, canChooseMore, chosenCandidatesOf, manualSplitMapOf, oldLengthOf, sortedCandidatesOf } from "./manualSplitView";
 import styles from "./manualSplit.module.css";
 
 const ICON_SIZE = 15;
@@ -27,28 +28,38 @@ export interface ManualSplitContentProps {
   base: EjesGeometryMapBase;
   /** The new sections already chosen for this old section; the choice starts from them. */
   storedRefs: readonly string[];
+  /** The old sections already merged with this one into its stored new section; the merge starts from them. */
+  storedMergeRefs: readonly string[];
   ignored: boolean;
   onApply: (newRefs: string[]) => void;
+  onApplyMerge: (newRef: string, oldRefs: string[]) => void;
   onIgnore: () => void;
 }
 
-/** The resolution of one held removal: the candidates on the map and in the checklist, the search controls, the apply and the ignore. */
-export function ManualSplitContent({ row, base, storedRefs, ignored, onApply, onIgnore }: ManualSplitContentProps) {
+/** The resolution of one held removal: the candidates and the neighbours on the map and in the checklists, the search controls, the apply and the ignore. */
+export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ignored, onApply, onApplyMerge, onIgnore }: ManualSplitContentProps) {
   const [selectedRefs, setSelectedRefs] = useState<string[]>([...storedRefs]);
+  const [mergeRefs, setMergeRefs] = useState<string[]>([...storedMergeRefs]);
   const [radius, setRadius] = useState<number>(MANUAL_CANDIDATE_RADIUS_M);
   const [otherStreets, setOtherStreets] = useState<boolean>(false);
   const [shownRef, setShownRef] = useState<string>(row.ref);
   if (shownRef !== row.ref) {
     setShownRef(row.ref);
     setSelectedRefs([...storedRefs]);
+    setMergeRefs([...storedMergeRefs]);
     setRadius(MANUAL_CANDIDATE_RADIUS_M);
     setOtherStreets(false);
   }
   const map = useManualCandidates(base, Number(row.ref), radius, otherStreets);
   const chosen = chosenCandidatesOf(map.candidates, selectedRefs);
+  const tickedRefs = useMemo(
+    () => mergeRefs.filter((ref) => map.neighbours.some((neighbour) => neighbour.ref === ref)),
+    [mergeRefs, map.neighbours]
+  );
+  const mergedOldCount = tickedRefs.length === 0 ? 0 : tickedRefs.length + 1;
   const collection = useMemo(
-    () => manualSplitMapOf(map.features, map.candidates, selectedRefs),
-    [map.features, map.candidates, selectedRefs]
+    () => manualSplitMapOf(map.features, map.candidates, selectedRefs, map.neighbours, tickedRefs),
+    [map.features, map.candidates, map.neighbours, selectedRefs, tickedRefs]
   );
   const oldLength = oldLengthOf(map.features);
 
@@ -57,6 +68,23 @@ export function ManualSplitContent({ row, base, storedRefs, ignored, onApply, on
       if (current.includes(ref)) return current.filter((selected) => selected !== ref);
       return canChooseMore(current.length) ? [...current, ref] : current;
     });
+
+  const toggleNeighbour = (ref: string) =>
+    setMergeRefs((current) => (current.includes(ref) ? current.filter((ticked) => ticked !== ref) : [...current, ref]));
+
+  const clearSelection = () => {
+    setSelectedRefs([]);
+    setMergeRefs([]);
+  };
+
+  const applyChoice = () => {
+    if (mergedOldCount === 0) {
+      onApply(chosen.map((candidate) => candidate.ref));
+      return;
+    }
+    const [newCandidate] = chosen;
+    if (newCandidate !== undefined) onApplyMerge(newCandidate.ref, [row.ref, ...tickedRefs]);
+  };
 
   const mapArea = (): React.ReactNode => {
     const loading = map.status === MapLoadStatus.LOADING;
@@ -74,7 +102,15 @@ export function ManualSplitContent({ row, base, storedRefs, ignored, onApply, on
         </div>
       );
     }
-    return <ManualSplitMap collection={collection} viewKey={map.dataKey} loading={loading} onToggleCandidate={toggleRef} />;
+    return (
+      <ManualSplitMap
+        collection={collection}
+        viewKey={map.dataKey}
+        loading={loading}
+        onToggleCandidate={toggleRef}
+        onToggleNeighbour={toggleNeighbour}
+      />
+    );
   };
 
   const details = (
@@ -84,14 +120,17 @@ export function ManualSplitContent({ row, base, storedRefs, ignored, onApply, on
       {map.status === MapLoadStatus.READY && (
         <>
           <ManualCandidateList candidates={sortedCandidatesOf(map.candidates)} chosenRefs={selectedRefs} onToggle={toggleRef} />
+          <ManualNeighbourList neighbours={map.neighbours} mergeRefs={tickedRefs} onToggle={toggleNeighbour} />
           <ManualSplitFooter
             chosen={chosen}
-            selectedCount={selectedRefs.length}
+            selectedCount={selectedRefs.length + mergeRefs.length}
             oldLength={oldLength}
+            mergedOldCount={mergedOldCount}
+            canApply={canApplyOf(chosen.length, mergedOldCount)}
             ignored={ignored}
-            onApply={() => onApply(chosen.map((candidate) => candidate.ref))}
+            onApply={applyChoice}
             allSelected={selectedRefs.length >= Math.min(map.candidates.length, MANUAL_SPLIT_PIECES_LIMIT)}
-            onClear={() => setSelectedRefs([])}
+            onClear={clearSelection}
             onSelectAll={() => setSelectedRefs(sortedCandidatesOf(map.candidates).slice(0, MANUAL_SPLIT_PIECES_LIMIT).map((candidate) => candidate.ref))}
             onIgnore={onIgnore}
           />

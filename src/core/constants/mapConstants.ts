@@ -73,6 +73,8 @@ export const MAP_SECTION_TYPE = {
   MANUAL_OLD: "TRAMO_A_REEMPLAZAR",
   MANUAL_CANDIDATE: "TRAMO_CANDIDATO_MANUAL",
   MANUAL_CHOSEN: "TRAMO_ELEGIDO",
+  MANUAL_NEIGHBOUR: "TRAMO_VIEJO_VECINO",
+  MANUAL_NEIGHBOUR_CHOSEN: "TRAMO_VIEJO_A_UNIR",
 } as const;
 
 /** Outline types drawn as the underlay of a comparison: thicker, so the outline over them stays visible. */
@@ -111,6 +113,8 @@ export const MAP_TYPE_LINE_STYLE: Record<string, MapTypeLineStyle | undefined> =
   [MAP_SECTION_TYPE.MANUAL_OLD]: { weight: 7 },
   [MAP_SECTION_TYPE.MANUAL_CANDIDATE]: { weight: 2 },
   [MAP_SECTION_TYPE.MANUAL_CHOSEN]: { weight: 6 },
+  [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR]: { weight: 3, dashArray: "6, 4" },
+  [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR_CHOSEN]: { weight: 6, dashArray: "10, 4" },
 };
 
 const CANDIDATE_COLORS = ["#f59e0b", "#a855f7", "#facc15", "#f97316", "#e879f9"] as const;
@@ -139,6 +143,8 @@ const DISCREPANCY_COLORS: Record<string, string> = {
   [MAP_SECTION_TYPE.MANUAL_OLD]: "#ef4444",
   [MAP_SECTION_TYPE.MANUAL_CANDIDATE]: "#94a3b8",
   [MAP_SECTION_TYPE.MANUAL_CHOSEN]: "#22c55e",
+  [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR]: "#f59e0b",
+  [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR_CHOSEN]: "#ef4444",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "#ff0055",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#f59e0b",
   [DiscrepancyType.ONLY_IN_SHP]: "#a855f7",
@@ -172,6 +178,8 @@ const DISCREPANCY_LABELS: Record<string, string> = {
   [MAP_SECTION_TYPE.MANUAL_OLD]: "Tramo a reemplazar",
   [MAP_SECTION_TYPE.MANUAL_CANDIDATE]: "Tramo candidato",
   [MAP_SECTION_TYPE.MANUAL_CHOSEN]: "Tramo elegido",
+  [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR]: "Tramo viejo vecino",
+  [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR_CHOSEN]: "Tramo viejo a unir",
   [MAP_SECTION_TYPE.COPY_KEPT]: "Se queda",
   [MAP_SECTION_TYPE.COPY_DROPPED]: "Se quitaría",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "Discrepancia Geométrica",
