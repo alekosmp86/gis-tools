@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { parseEjesCallesStartRequest } from "@/modules/routine-jobs/api/ejesCallesRequestParsing";
-import { EJES_ROLES, EJES_SUMMARY_COUNT_KEYS, REAL_RUN_ENV_VAR } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
+import { EJES_ROLES, EJES_SUMMARY_COUNT_KEYS } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { EjesResult } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import { ejesAnalysisKeyOf } from "@/modules/routine-jobs/ui/shared/ejesCallesAnalysisKey";
 import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/shared/ejesCallesRunStore";
@@ -48,14 +48,6 @@ const doneSnapshot = (state: EjesWizardState, overrides: Partial<EjesRunSnapshot
 });
 
 describe("ejesLoadRequestOf (EJL-22)", () => {
-  beforeEach(() => {
-    vi.stubEnv(REAL_RUN_ENV_VAR, "true");
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   describe("real-run request", () => {
     it("should be the real-run request with the summary and an empty accepted object when Cargar ahora is allowed", () => {
       const state = validState();
@@ -151,14 +143,5 @@ describe("ejesLoadRequestOf (EJL-22)", () => {
       expect(Object.keys(params.tables)).toHaveLength(10);
     });
 
-    it("should be refused by the server with the unavailable message when the switch is off", () => {
-      vi.stubEnv(REAL_RUN_ENV_VAR, "false");
-      const state = validState();
-      const request = ejesLoadRequestOf(state, doneSnapshot(state));
-
-      expect(() => parseEjesCallesStartRequest(request as unknown as Record<string, unknown>)).toThrow(
-        "La carga real de ejes de calles todavía no está disponible."
-      );
-    });
   });
 });

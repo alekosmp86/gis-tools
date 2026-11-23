@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { parseEjesCallesStartRequest } from "@/modules/routine-jobs/api/ejesCallesRequestParsing";
 import { RequestInvalidError } from "@/modules/routine-jobs/api/requestParsing";
-import { ACCEPTED_KEYS_LIMIT, REAL_RUN_UNAVAILABLE_MESSAGE } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
+import { ACCEPTED_KEYS_LIMIT } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import { ejesTablesBody } from "../ejes-calles/ejesFixtures";
 
 type Body = Record<string, unknown>;
@@ -57,14 +57,6 @@ const distinctRefs = (count: number, offset = 1): Array<{ ref: string }> =>
   Array.from({ length: count }, (_, index) => ({ ref: String(offset + index) }));
 
 describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => {
-  beforeEach(() => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it("should accept an empty accepted object as valid, with no plain removals and no merges", () => {
     const params = parse(realBody({}));
 
@@ -206,11 +198,6 @@ describe("parseEjesCallesStartRequest accepted rows (EJS-16, EJ-13, Q3)", () => 
     expect(() => parse(realBody({ plainRemovals: [{ ref: "1" }, { ref: "x" }] }))).toThrow(RequestInvalidError);
   });
 
-  it("should refuse a real run with the switch off before reading accepted, even when accepted is malformed", () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "false");
-
-    expect(messageOf(realBody({ merges: "broken", removals: [] }))).toBe(REAL_RUN_UNAVAILABLE_MESSAGE);
-  });
 
   describe("twin picks (ET-28)", () => {
     const pick = (ref: string, department = "FLORES", locality = "TRINIDAD") => ({ ref, department, locality });

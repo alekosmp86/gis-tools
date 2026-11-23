@@ -1,6 +1,5 @@
 import { EJES_DEPARTMENTS, EJES_ROLES, EJES_SUMMARY_COUNT_KEYS, type EjesTableRole } from "../jobs/ejes-calles/constants";
 import { NO_ACCEPTED } from "../jobs/ejes-calles/domain/loadMapping";
-import { assertEjesRealRunEnabled } from "../jobs/ejes-calles/domain/realRunSwitch";
 import { assertDistinctEjesTables } from "../jobs/ejes-calles/domain/tableRoles";
 import type { EjesFingerprint, EjesParams, EjesSummary, EjesTableRef, EjesTables } from "../jobs/ejes-calles/types";
 import { readAnalysisAccepted, readEjesAccepted } from "./ejesAcceptedParsing";
@@ -56,7 +55,6 @@ function readSummary(body: JsonRecord): EjesSummary {
 }
 
 function realRunParams(body: JsonRecord, config: EjesParams["config"], tables: EjesTables): EjesParams {
-  assertEjesRealRunEnabled(invalid);
   if (config.password === "") throw invalid(PASSWORD_REQUIRED_MESSAGE);
   const accepted = readEjesAccepted(body);
   return { config, tables, dryRun: false, accepted, summary: readSummary(body) };

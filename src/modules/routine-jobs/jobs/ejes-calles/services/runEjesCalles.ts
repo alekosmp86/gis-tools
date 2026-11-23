@@ -7,7 +7,6 @@ import { ejesBlockersOf } from "../domain/blockers";
 import { ejesLoadContextOf } from "../domain/loadContext";
 import { buildEjesNextStep } from "../domain/nextStep";
 import { EJES_STEP, plannedEjesStepLabels } from "../domain/plannedSteps";
-import { assertEjesRealRunEnabled } from "../domain/realRunSwitch";
 import { assertDistinctEjesTables } from "../domain/tableRoles";
 import type { EjesParams, EjesResolvedLayouts, EjesResult } from "../types";
 import {
@@ -126,7 +125,6 @@ export async function runEjesCalles(
   onProgress?: (progress: RunProgress) => void
 ): Promise<EjesResult> {
   assertDistinctEjesTables(params);
-  if (!params.dryRun) assertEjesRealRunEnabled();
   const timer = createStepTimer({ now: deps.now, total: plannedEjesStepLabels(params.dryRun).length, onProgress });
   return withRunSession(params.config, deps, (session) =>
     params.dryRun ? runAnalysisOnSession(session, params, timer) : runPersistOnSession(session, params, timer)

@@ -53,7 +53,6 @@ import {
 } from "../domain/loadWriteSql";
 import { buildInsertWayInputSql, newWayOf } from "../domain/loadWays";
 import { buildSkippedListSql, buildSkippedReasonCountsSql } from "../domain/removalPlanSql";
-import { assertEjesRealRunEnabled } from "../domain/realRunSwitch";
 import { EJES_STEP } from "../domain/plannedSteps";
 import {
   buildRevertCreatedVerticesSql,
@@ -321,7 +320,6 @@ export async function runEjesPersistTransaction(
   context: EjesLoadContext,
   timer: StepTimer
 ): Promise<EjesPersistOutcome> {
-  assertEjesRealRunEnabled();
   const accepted = params.accepted ?? NO_ACCEPTED;
   const outcome = await runTransaction(
     session,

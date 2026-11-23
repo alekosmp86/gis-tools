@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { parseEjesCallesStartRequest } from "@/modules/routine-jobs/api/ejesCallesRequestParsing";
 import { RequestInvalidError } from "@/modules/routine-jobs/api/requestParsing";
-import { REAL_RUN_UNAVAILABLE_MESSAGE } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import { ejesTablesBody } from "../ejes-calles/ejesFixtures";
 
 const PASSWORD = "Ej-es!pw";
@@ -78,41 +77,6 @@ describe("parseEjesCallesStartRequest", () => {
       connection: { host: "db.local", port: "5432", db_name: "gis", user: "gis_user", password: "" },
     });
 
-    beforeEach(() => {
-      vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
-    });
-
-    afterEach(() => {
-      vi.unstubAllEnvs();
-    });
-
-    describe("switch off (EJL-16)", () => {
-      beforeEach(() => {
-        vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "false");
-      });
-
-      it("should refuse dryRun false with a 400 and the unavailable message", () => {
-        expect(() => parse(realBody())).toThrow(RequestInvalidError);
-        expect(messageOf(realBody())).toBe(REAL_RUN_UNAVAILABLE_MESSAGE);
-      });
-
-      it("should refuse before the password and summary checks", () => {
-        const body = realBody(withoutPassword());
-        delete body.summary;
-
-        expect(messageOf(body)).toBe(REAL_RUN_UNAVAILABLE_MESSAGE);
-      });
-
-      it("should refuse when the env var is unset", () => {
-        vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", undefined);
-
-        expect(messageOf(realBody())).toBe(REAL_RUN_UNAVAILABLE_MESSAGE);
-      });
-
-      it("should still accept a dry run", () => {
-        expect(parse(startBody()).dryRun).toBe(true);
-      });
-    });
 
     it("should accept dryRun false with password, summary and an empty accepted object", () => {
       const params = parse(realBody());
@@ -266,9 +230,6 @@ describe("parseEjesCallesStartRequest", () => {
       expect(() => parse(realBody({ accepted: { splits: "all" } }))).toThrow(RequestInvalidError);
     });
 
-    it("should keep the exact EJ-3 text for REAL_RUN_UNAVAILABLE_MESSAGE", () => {
-      expect(REAL_RUN_UNAVAILABLE_MESSAGE).toBe("La carga real de ejes de calles todavía no está disponible.");
-    });
 
     it("should never leak the password in a real-run error message", () => {
       const messages = [

@@ -308,8 +308,6 @@ export const EJES_SPLIT_POINTS_ROLES = [
 /** The answer of the review read when its dry run is no longer kept (evicted, or never stored because it was a real run). */
 export const SPLIT_REVIEW_GONE_MESSAGE = "El análisis ya no está disponible. Vuelva a analizar.";
 
-export const REAL_RUN_ENV_VAR = "EJES_CALLES_REAL_RUN_ENABLED";
-export const REAL_RUN_UNAVAILABLE_MESSAGE = "La carga real de ejes de calles todavía no está disponible.";
 
 export const LOAD_LOCK_TIMEOUT_MS = 15000;
 export const LOAD_CHUNK_SIZE = 500;
