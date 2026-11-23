@@ -49,6 +49,7 @@ export const EJES_MANUAL_SPLIT_TEXT = {
   NEIGHBOURS_TITLE: "Unir con otros tramos viejos",
   NEIGHBOURS_HINT: "Marque los tramos viejos que se resuelven junto con este: todos pasan a los tramos nuevos que elija (uno los une, varios los reparten)",
   CHOOSE_NEIGHBOUR_ARIA: (ref: string): string => `Unir el tramo viejo ${ref}`,
+  TICK_ALL_NEIGHBOURS: "Marcar todos",
   CHIP_POINTS: (count: number): string => `Puntos ${count}`,
   NEAR_SUM: (near: string, old: string): string => `Metros cerca del tramo anterior: ${near} de ${old} m.`,
   APPLY: "Aplicar",

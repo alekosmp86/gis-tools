@@ -2,6 +2,7 @@ import {
   EJES_DEFAULT_TABLES,
   EJES_TABLE_ROLE,
   MANUAL_CANDIDATE_MAX_RADIUS_M,
+  MANUAL_SPLIT_PIECES_LIMIT,
   PADRON_TYPE,
   type EjesTableRole,
   type PadronType,
@@ -47,7 +48,10 @@ function readLocality(value: unknown): string {
 
 const CANDIDATE_RADIUS_MESSAGE = `El campo items.radius debe ser un número mayor que 0 y como máximo ${MANUAL_CANDIDATE_MAX_RADIUS_M}.`;
 const OTHER_STREETS_MESSAGE = "El campo items.otherStreets debe ser true o false.";
-const CANDIDATE_OPTIONS_MESSAGE = "Los campos items.radius y items.otherStreets solo se admiten junto a candidatesOf.";
+const CANDIDATE_OPTIONS_MESSAGE = "Los campos items.radius, items.otherStreets y items.coveredBy solo se admiten junto a candidatesOf.";
+const COVERED_BY_MESSAGE = `El campo items.coveredBy debe ser una lista de 0 a ${MANUAL_SPLIT_PIECES_LIMIT} tramos.`;
+const COVERED_REF_MESSAGE = "El campo items.coveredBy debe contener enteros sin ceros a la izquierda, cada uno una vez.";
+const CANONICAL_REF_PATTERN = /^(0|-?[1-9]\d*)$/;
 
 function readCandidateRadius(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > MANUAL_CANDIDATE_MAX_RADIUS_M) {
@@ -61,14 +65,26 @@ function readOtherStreets(value: unknown): boolean {
   return value;
 }
 
+function readCoveredBy(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > MANUAL_SPLIT_PIECES_LIMIT) throw invalid(COVERED_BY_MESSAGE);
+  const refs = value.map((entry) => {
+    if (typeof entry !== "string" || !CANONICAL_REF_PATTERN.test(entry)) throw invalid(COVERED_REF_MESSAGE);
+    return entry;
+  });
+  if (new Set(refs).size !== refs.length) throw invalid(COVERED_REF_MESSAGE);
+  return refs;
+}
+
 /** The candidate options of an item: only with `candidatesOf`; each one is checked when present. */
-function readCandidateOptions(entry: JsonRecord, hasCandidates: boolean): Pick<EjesMapItem, "radius" | "otherStreets"> {
+function readCandidateOptions(entry: JsonRecord, hasCandidates: boolean): Pick<EjesMapItem, "radius" | "otherStreets" | "coveredBy"> {
   const hasRadius = isPresent(entry.radius);
   const hasOtherStreets = isPresent(entry.otherStreets);
-  if ((hasRadius || hasOtherStreets) && !hasCandidates) throw invalid(CANDIDATE_OPTIONS_MESSAGE);
+  const hasCoveredBy = isPresent(entry.coveredBy);
+  if ((hasRadius || hasOtherStreets || hasCoveredBy) && !hasCandidates) throw invalid(CANDIDATE_OPTIONS_MESSAGE);
   return {
     ...(hasRadius ? { radius: readCandidateRadius(entry.radius) } : {}),
     ...(hasOtherStreets ? { otherStreets: readOtherStreets(entry.otherStreets) } : {}),
+    ...(hasCoveredBy ? { coveredBy: readCoveredBy(entry.coveredBy) } : {}),
   };
 }
 

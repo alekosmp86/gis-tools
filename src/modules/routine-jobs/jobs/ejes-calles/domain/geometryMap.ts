@@ -159,41 +159,84 @@ export function candidateSectionsSql(staging: TableLayout, roadSection: TableLay
     .join(" ");
 }
 
+const COVERED_SHARE = 0.5;
+const COVERED_NEIGHBOURS_LIMIT = 3 * MANUAL_CANDIDATES_LIMIT;
+
+const roadGeometryOf = (roadSection: TableLayout): string => `r.${physicalColumn(roadSection, ROAD_SECTION_COLUMN.GEOMETRY)}`;
+
+/** The chosen new sections (`$3`, their canonical references) as one collection and as its buffer: the zone a covered old section lies in. */
+function chosenZoneSql(staging: TableLayout): string {
+  const geometry = `${STAGING_ALIAS}.${physicalColumn(staging, EJES_STAGING_COLUMN.GEOM)}`;
+  const reference = canonicalTextSql(`${STAGING_ALIAS}.${physicalColumn(staging, EJES_STAGING_COLUMN.REFTRAMO)}`);
+  return [
+    `chosen AS (SELECT ST_Collect(${geometry}) AS geom FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
+    `WHERE ${reference} = ANY($3::text[]) AND ${keptStagingRowSql(geometry, reference)}),`,
+    `zone AS (SELECT geom, ST_Buffer(geom, ${PIECE_COVER_TOLERANCE_M}) AS area FROM chosen WHERE geom IS NOT NULL),`,
+  ].join(" ");
+}
+
+/** The road sections of the neighbour search: one row each with its distance to the old section `o`, filtered by `condition`. */
+function neighbourNearSql(name: string, roadSection: TableLayout, otherStreets: boolean, sources: string, condition: string): string {
+  const roadReference = canonicalTextSql(`r.${physicalColumn(roadSection, ROAD_SECTION_COLUMN.REFTRAMO)}`);
+  const street = canonicalTextSql(`r.${physicalColumn(roadSection, ROAD_SECTION_COLUMN.CIRCULATION_WAY)}`);
+  const geometry = roadGeometryOf(roadSection);
+  return [
+    `${name} AS (SELECT ${roadReference} AS ref, ${street} AS idcalle, ${geometry} AS geom, ST_Distance(${geometry}, o.geom) AS distance`,
+    `FROM ${qualifiedName(roadSection)} AS r, ${sources}`,
+    `WHERE ${roadReference} IS NOT NULL AND ${roadReference} <> o.ref`,
+    `AND ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ${condition}`,
+    otherStreets ? "" : `AND ${street} = o.idcalle`,
+    "),",
+  ]
+    .filter((part) => part !== "")
+    .join(" ");
+}
+
+/** One row per reference of `nearName` that the staging file does not hold, with its nearest distance and an outline; `tail` closes the grouping. */
+function freeNeighbourSql(name: string, nearName: string, staging: TableLayout, tail = ""): string {
+  const stagingReference = canonicalTextSql(`${STAGING_ALIAS}.${physicalColumn(staging, EJES_STAGING_COLUMN.REFTRAMO)}`);
+  return [
+    `${name} AS (SELECT n.ref, min(n.idcalle) AS idcalle, min(n.distance) AS distance, (array_agg(n.geom))[1] AS geom`,
+    `FROM ${nearName} AS n LEFT JOIN (SELECT DISTINCT ${stagingReference} AS ref FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
+    `WHERE ${stagingReference} IN (SELECT ref FROM ${nearName})) AS st ON st.ref = n.ref`,
+    `WHERE st.ref IS NULL GROUP BY n.ref${tail})`,
+  ].join(" ");
+}
+
 /**
- * The neighbours of a manual split's old section (`$1`, its `reftramo`; `$2` the radius in metres): the old sections of the road section
- * table within `$2` metres of it that the staging file does not hold, the same street only unless `otherStreets`, nearest first, at most
- * MANUAL_CANDIDATES_LIMIT. The access points are counted once, for the returned references only.
+ * The neighbours of a manual split's old section (`$1`, its `reftramo`; `$2` the radius in metres; `$3` the chosen new `reftramo`s): the
+ * old sections of the road section table within `$2` metres of it, nearest first, at most MANUAL_CANDIDATES_LIMIT, plus every old section
+ * at least COVERED_SHARE of whose length lies within PIECE_COVER_TOLERANCE_M of a chosen new section. Both sets exclude the references
+ * the staging file holds, and the same street only unless `otherStreets`. The access points are counted once, for the returned references only.
  */
 export function neighbourSectionsSql(staging: TableLayout, roadSection: TableLayout, accessPoints: TableLayout, otherStreets: boolean): string {
   const roadColumn = (logical: string): string => `r.${physicalColumn(roadSection, logical)}`;
   const roadReference = canonicalTextSql(roadColumn(ROAD_SECTION_COLUMN.REFTRAMO));
   const street = canonicalTextSql(roadColumn(ROAD_SECTION_COLUMN.CIRCULATION_WAY));
-  const geometry = roadColumn(ROAD_SECTION_COLUMN.GEOMETRY);
-  const stagingReference = canonicalTextSql(`${STAGING_ALIAS}.${physicalColumn(staging, EJES_STAGING_COLUMN.REFTRAMO)}`);
+  const geometry = roadGeometryOf(roadSection);
   const pointReference = canonicalTextSql(`a.${physicalColumn(accessPoints, ACCESS_POINT_COLUMN.ROAD_SECTION)}`);
+  const radiusCondition = `${geometry} && ST_Expand(o.geom, $2::float8) AND ST_DWithin(${geometry}, o.geom, $2::float8)`;
+  const coveredCondition = `ST_DWithin(${geometry}, z.geom, ${PIECE_COVER_TOLERANCE_M}) AND ST_Length(ST_Intersection(${geometry}, z.area)) >= ${COVERED_SHARE} * ST_Length(${geometry})`;
   return [
     `WITH old AS (SELECT ${roadReference} AS ref, ${street} AS idcalle, ${geometry} AS geom`,
     `FROM ${qualifiedName(roadSection)} AS r WHERE ${roadColumn(ROAD_SECTION_COLUMN.REFTRAMO)} = $1`,
     `AND ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) LIMIT 1),`,
-    "near AS (SELECT",
-    `${roadReference} AS ref, ${street} AS idcalle, ${geometry} AS geom, ST_Distance(${geometry}, o.geom) AS distance`,
-    `FROM ${qualifiedName(roadSection)} AS r, old AS o`,
-    `WHERE ${roadReference} IS NOT NULL AND ${roadReference} <> o.ref`,
-    `AND ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry})`,
-    `AND ${geometry} && ST_Expand(o.geom, $2::float8) AND ST_DWithin(${geometry}, o.geom, $2::float8)`,
-    otherStreets ? "" : `AND ${street} = o.idcalle`,
-    "),",
-    "free AS (SELECT n.ref, min(n.idcalle) AS idcalle, min(n.distance) AS distance, (array_agg(n.geom))[1] AS geom",
-    `FROM near AS n LEFT JOIN (SELECT DISTINCT ${stagingReference} AS ref FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
-    `WHERE ${stagingReference} IN (SELECT ref FROM near)) AS st ON st.ref = n.ref`,
-    `WHERE st.ref IS NULL GROUP BY n.ref ORDER BY min(n.distance), n.ref LIMIT ${MANUAL_CANDIDATES_LIMIT})`,
+    chosenZoneSql(staging),
+    neighbourNearSql("near", roadSection, otherStreets, "old AS o", radiusCondition),
+    freeNeighbourSql("free", "near", staging, ` ORDER BY min(n.distance), n.ref LIMIT ${MANUAL_CANDIDATES_LIMIT}`) + ",",
+    neighbourNearSql("covered_near", roadSection, otherStreets, "old AS o, zone AS z", coveredCondition),
+    freeNeighbourSql("covered", "covered_near", staging) + ",",
+    "picked AS (SELECT u.ref, u.idcalle, u.distance, u.geom FROM (",
+    "SELECT f.ref, f.idcalle, f.distance, f.geom FROM free AS f",
+    "UNION ALL SELECT c.ref, c.idcalle, c.distance, c.geom FROM covered AS c WHERE c.ref NOT IN (SELECT ref FROM free)",
+    `) AS u ORDER BY u.distance, u.ref LIMIT ${COVERED_NEIGHBOURS_LIMIT})`,
     "SELECT f.ref, f.idcalle,",
     "ROUND(ST_Length(f.geom)::numeric, 1)::float8 AS length,",
     "ROUND(f.distance::numeric, 1)::float8 AS distance,",
     "COALESCE(p.points, 0)::int AS points,",
     `${outlineGeoJsonSql("f.geom")} AS geojson`,
-    `FROM free AS f LEFT JOIN (SELECT ${pointReference} AS ref, count(*) AS points FROM ${qualifiedName(accessPoints)} AS a`,
-    `WHERE ${pointReference} IN (SELECT ref FROM free) GROUP BY 1) AS p ON p.ref = f.ref`,
+    `FROM picked AS f LEFT JOIN (SELECT ${pointReference} AS ref, count(*) AS points FROM ${qualifiedName(accessPoints)} AS a`,
+    `WHERE ${pointReference} IN (SELECT ref FROM picked) GROUP BY 1) AS p ON p.ref = f.ref`,
     "ORDER BY f.distance, f.ref",
   ].join(" ");
 }

@@ -404,6 +404,8 @@ export interface EjesMapItem {
   candidatesOf?: number;
   radius?: number;
   otherStreets?: boolean;
+  /** The chosen new sections of the manual split: their covered old sections are listed as neighbours too. */
+  coveredBy?: string[];
 }
 
 export interface EjesMapFeature {

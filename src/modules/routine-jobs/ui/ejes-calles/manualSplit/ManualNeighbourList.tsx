@@ -1,10 +1,16 @@
 "use client";
 
 import React from "react";
+import { CheckCheck } from "lucide-react";
+import { Button } from "@/ui-kit/components/ui/Button";
+import { ButtonVariant } from "@/ui-kit/types/ui";
 import type { EjesMapNeighbour } from "../../../jobs/ejes-calles/types";
 import { metersTextOf } from "../ejesCallesReportView";
 import { EJES_MANUAL_SPLIT_TEXT } from "../ejesAcceptTexts";
 import styles from "./manualSplit.module.css";
+
+const ICON_SIZE = 15;
+const TICK_ALL_MIN_NEIGHBOURS = 2;
 
 export interface ManualNeighbourListProps {
   /** The neighbour old sections, nearest first; the block is hidden when there are none. */
@@ -12,6 +18,7 @@ export interface ManualNeighbourListProps {
   /** The ticked neighbours: each one merges into the one new section chosen for this row. */
   mergeRefs: readonly string[];
   onToggle: (ref: string) => void;
+  onTickAll: () => void;
 }
 
 interface ManualNeighbourRowProps {
@@ -54,12 +61,20 @@ function ManualNeighbourRow({ neighbour, merged, onToggle }: ManualNeighbourRowP
 }
 
 /** The old sections near this one that may merge with it into one new section: a checklist, hidden when there are none. */
-export function ManualNeighbourList({ neighbours, mergeRefs, onToggle }: ManualNeighbourListProps) {
+export function ManualNeighbourList({ neighbours, mergeRefs, onToggle, onTickAll }: ManualNeighbourListProps) {
   if (neighbours.length === 0) return null;
   return (
     <section className={styles.neighbourBlock}>
       <h3 className={styles.neighbourTitle}>{EJES_MANUAL_SPLIT_TEXT.NEIGHBOURS_TITLE}</h3>
       <p className={styles.hint}>{EJES_MANUAL_SPLIT_TEXT.NEIGHBOURS_HINT}</p>
+      {neighbours.length >= TICK_ALL_MIN_NEIGHBOURS && (
+        <div className={styles.neighbourActions}>
+          <Button variant={ButtonVariant.SECONDARY} onClick={onTickAll}>
+            <CheckCheck size={ICON_SIZE} />
+            <span>{EJES_MANUAL_SPLIT_TEXT.TICK_ALL_NEIGHBOURS}</span>
+          </Button>
+        </div>
+      )}
       <ul className={styles.neighbourList}>
         {neighbours.map((neighbour) => (
           <li key={neighbour.ref}>

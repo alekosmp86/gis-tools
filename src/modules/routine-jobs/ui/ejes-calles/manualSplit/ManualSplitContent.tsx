@@ -50,7 +50,7 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
     setRadius(MANUAL_CANDIDATE_RADIUS_M);
     setOtherStreets(false);
   }
-  const map = useManualCandidates(base, Number(row.ref), radius, otherStreets);
+  const map = useManualCandidates(base, Number(row.ref), radius, otherStreets, selectedRefs);
   const [widenedRef, setWidenedRef] = useState<string | null>(null);
   if (map.status === MapLoadStatus.READY && map.candidates.length === 0 && !otherStreets && widenedRef !== row.ref) {
     setWidenedRef(row.ref);
@@ -76,6 +76,8 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
 
   const toggleNeighbour = (ref: string) =>
     setMergeRefs((current) => (current.includes(ref) ? current.filter((ticked) => ticked !== ref) : [...current, ref]));
+
+  const tickAllNeighbours = () => setMergeRefs(map.neighbours.map((neighbour) => neighbour.ref));
 
   const clearSelection = () => {
     setSelectedRefs([]);
@@ -125,7 +127,12 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
       {map.status === MapLoadStatus.READY && (
         <>
           <ManualCandidateList candidates={sortedCandidatesOf(map.candidates)} chosenRefs={selectedRefs} onToggle={toggleRef} />
-          <ManualNeighbourList neighbours={map.neighbours} mergeRefs={tickedRefs} onToggle={toggleNeighbour} />
+          <ManualNeighbourList
+            neighbours={map.neighbours}
+            mergeRefs={tickedRefs}
+            onToggle={toggleNeighbour}
+            onTickAll={tickAllNeighbours}
+          />
           <ManualSplitFooter
             chosen={chosen}
             selectedCount={selectedRefs.length + tickedRefs.length}

@@ -133,6 +133,10 @@
   font-weight: 600;
 }
 
+.neighbourActions {
+  display: flex;
+}
+
 .neighbourList {
   display: flex;
   flex-direction: column;

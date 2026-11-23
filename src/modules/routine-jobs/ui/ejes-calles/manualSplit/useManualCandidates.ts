@@ -12,6 +12,7 @@ interface CandidateRequestKey {
   oldRef: number;
   radius: number;
   otherStreets: boolean;
+  coveredBy: string[];
 }
 
 interface SettledCandidates {
@@ -37,10 +38,16 @@ const messageOf = (error: unknown): string => (error instanceof Error && error.m
 
 /**
  * The candidate new sections of one old section within the radius, with the old section's outline and its access points. Every
- * change of the request (radius, other streets, section) is a new request; the result of an earlier one is never shown.
+ * change of the request (radius, other streets, section, chosen new sections) is a new request; the result of an earlier one is never shown.
  */
-export function useManualCandidates(base: EjesGeometryMapBase, oldRef: number, radius: number, otherStreets: boolean): ManualCandidatesMap {
-  const requestKey = JSON.stringify({ base, oldRef, radius, otherStreets });
+export function useManualCandidates(
+  base: EjesGeometryMapBase,
+  oldRef: number,
+  radius: number,
+  otherStreets: boolean,
+  coveredBy: readonly string[]
+): ManualCandidatesMap {
+  const requestKey = JSON.stringify({ base, oldRef, radius, otherStreets, coveredBy: [...coveredBy].sort() });
   const [settled, setSettled] = useState<SettledCandidates | null>(null);
   const [attempt, setAttempt] = useState<number>(0);
 
@@ -50,7 +57,7 @@ export function useManualCandidates(base: EjesGeometryMapBase, oldRef: number, r
     client
       .fetchEjesGeometryMap({
         ...request.base,
-        items: [{ candidatesOf: request.oldRef, radius: request.radius, otherStreets: request.otherStreets }],
+        items: [{ candidatesOf: request.oldRef, radius: request.radius, otherStreets: request.otherStreets, coveredBy: request.coveredBy }],
       })
       .then((result) => {
         if (active) setSettled({ key: requestKey, ...result, message: null });

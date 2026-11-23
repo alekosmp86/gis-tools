@@ -276,7 +276,7 @@ async function candidateItemOf(session: RunSession, sql: MapSql, entry: EjesMapI
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const candidateRows = (await session.query(streetSqlOf(sql.candidates, entry), [oldRef, radius])).rows;
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const neighbourRows = (await session.query(streetSqlOf(sql.neighbours, entry), [oldRef, radius])).rows;
+  const neighbourRows = (await session.query(streetSqlOf(sql.neighbours, entry), [oldRef, radius, entry.coveredBy ?? []])).rows;
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const pointRows = sql.accessPoints === null ? [] : (await session.query(sql.accessPoints, [oldRef])).rows;
   return {
