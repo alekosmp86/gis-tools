@@ -103,14 +103,18 @@ const EJES_PERSIST_TRANSACTION: TransactionMessages = {
 const multiPartMessage = (count: number): string =>
   `${count} ${count === 1 ? "tramo tiene" : "tramos tienen"} una geometría que sigue en varias partes después de ST_LineMerge.`;
 
+function summaryDifferencesOf(summary: EjesSummary, analysis: EjesAnalysis): string[] {
+  const counts = changedSummaryKeys(summary, analysis.counts).map((name) => {
+    const key = name as keyof EjesSummary["counts"];
+    return `${key}: ${summary.counts[key]} -> ${analysis.counts[key]}`;
+  });
+  return fingerprintChanged(summary, analysis.fingerprint) ? [...counts, "huella del archivo de ejes"] : counts;
+}
+
 function assertSummaryMatches(summary: EjesSummary | undefined, analysis: EjesAnalysis): void {
-  if (
-    summary === undefined ||
-    changedSummaryKeys(summary, analysis.counts).length > 0 ||
-    fingerprintChanged(summary, analysis.fingerprint)
-  ) {
-    throw new Error(ANALYSIS_CHANGED_MESSAGE);
-  }
+  if (summary === undefined) throw new Error(ANALYSIS_CHANGED_MESSAGE);
+  const differences = summaryDifferencesOf(summary, analysis);
+  if (differences.length > 0) throw new Error(`${ANALYSIS_CHANGED_MESSAGE} Cambió: ${differences.join("; ")}.`);
 }
 
 async function repairSequences(session: RunSession, context: EjesLoadContext): Promise<void> {
