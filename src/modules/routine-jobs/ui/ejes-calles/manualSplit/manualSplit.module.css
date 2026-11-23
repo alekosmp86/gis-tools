@@ -96,6 +96,10 @@
   gap: 8px;
 }
 
+.actions svg {
+  flex-shrink: 0;
+}
+
 .actions > * {
   min-width: 0;
   justify-content: center;
