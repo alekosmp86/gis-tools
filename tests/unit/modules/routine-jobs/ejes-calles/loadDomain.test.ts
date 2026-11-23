@@ -69,27 +69,27 @@ describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
 });
 
 describe("buildEjesNextStep (EJL-13, EJ-22)", () => {
-  const step = buildEjesNextStep({ schema: "carto", table: "road_section" }, { schema: "bdj_carto", table: "ide_ejesviacirculacion" });
+  const step = buildEjesNextStep({ schema: "carto", table: "road_section" });
 
   it("should explain that an administrator refreshes the materialized views", () => {
     expect(step.text).toContain("Las vistas materializadas de ejes no se actualizan solas");
-    expect(step.text).toContain("bdj_ejes");
+    expect(step.text).not.toContain("bdj_ejes");
   });
 
-  it("should list the refresh statements in order: staging view first, then the three carto views", () => {
-    expect(step.statement.split("\n")).toEqual([
-      'REFRESH MATERIALIZED VIEW "bdj_carto"."bdj_ejes";',
+  it("should list the refresh statements in order: the road section view, then the two views that read it", () => {
+    expect(step.statement.split("
+")).toEqual([
       'REFRESH MATERIALIZED VIEW "carto"."mv_road_section";',
-      'REFRESH MATERIALIZED VIEW "carto"."mv_road_section2";',
       'REFRESH MATERIALIZED VIEW "carto"."mv_addresses_2_0";',
+      'REFRESH MATERIALIZED VIEW "carto"."mv_direcciones_tlk_full_v2";',
     ]);
   });
 
-  it("should follow the schemas of the chosen tables", () => {
-    const other = buildEjesNextStep({ schema: "otro", table: "road_section" }, { schema: "staging", table: "x" });
+  it("should follow the schema of the chosen road section table", () => {
+    const other = buildEjesNextStep({ schema: "otro", table: "road_section" });
 
-    expect(other.statement).toContain('"staging"."bdj_ejes"');
     expect(other.statement).toContain('"otro"."mv_road_section"');
+    expect(other.statement).not.toContain("bdj_ejes");
   });
 });
 

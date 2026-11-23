@@ -114,7 +114,7 @@ async function runPersistOnSession(session: RunSession, params: EjesParams, time
     stepTimings: timer.timings,
     load,
     ...(targetModified || outcomeUnknown
-      ? { nextStep: buildEjesNextStep(params.tables[EJES_TABLE_ROLE.ROAD_SECTION], params.tables[EJES_TABLE_ROLE.STAGING]) }
+      ? { nextStep: buildEjesNextStep(params.tables[EJES_TABLE_ROLE.ROAD_SECTION]) }
       : {}),
   };
 }

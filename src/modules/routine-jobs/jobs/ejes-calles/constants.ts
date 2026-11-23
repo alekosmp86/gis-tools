@@ -314,8 +314,7 @@ export const LOAD_CHUNK_SIZE = 500;
 export const REVERT_PAGE_SIZE = 500;
 export const DISTANCE_DECIMALS = 2;
 export const MASTER_URN_PREFIX = "cgeo:road_section:id:";
-export const EJES_REFRESH_VIEW_NAMES = ["mv_road_section", "mv_road_section2", "mv_addresses_2_0"] as const;
-export const EJES_STAGING_REFRESH_VIEW = "bdj_ejes";
+export const EJES_REFRESH_VIEW_NAMES = ["mv_road_section", "mv_addresses_2_0", "mv_direcciones_tlk_full_v2"] as const;
 
 export const TOPOLOGY_TOLERANCE_M = 0.1;
 
