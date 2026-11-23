@@ -28,14 +28,13 @@ export const chosenCandidatesOf = (candidates: readonly EjesMapCandidate[], chos
 
 export const canChooseMore = (chosenCount: number): boolean => chosenCount < MANUAL_SPLIT_PIECES_LIMIT;
 
-/** A merge needs exactly one new section; a split or a replacement needs one or more. `mergedOldCount` is 0 when nothing is merged. */
-export const canApplyOf = (chosenCount: number, mergedOldCount: number): boolean =>
-  mergedOldCount === 0 ? chosenCount > 0 : chosenCount === REPLACEMENT_PIECES;
+/** A split, a replacement or a group needs at least one new section. */
+export const canApplyOf = (chosenCount: number, _mergedOldCount: number): boolean => chosenCount > 0;
 
-/** One piece makes a replacement, two or more a split; with a merge, the caption names the old sections joined into the one new section. */
+/** One piece makes a replacement, two or more a split; with other old sections ticked, the caption names the group. */
 export const chosenSummaryOf = (chosenCount: number, mergedOldCount = 0): string => {
   if (mergedOldCount > 0) {
-    return chosenCount === REPLACEMENT_PIECES ? EJES_MANUAL_SPLIT_TEXT.MERGE_CAPTION(mergedOldCount) : EJES_MANUAL_SPLIT_TEXT.MERGE_NEEDS_ONE;
+    return chosenCount === 0 ? EJES_MANUAL_SPLIT_TEXT.MERGE_NEEDS_ONE : EJES_MANUAL_SPLIT_TEXT.MERGE_CAPTION(mergedOldCount, chosenCount);
   }
   if (chosenCount === 0) return EJES_MANUAL_SPLIT_TEXT.CHOSEN_NONE;
   if (chosenCount === REPLACEMENT_PIECES) return EJES_MANUAL_SPLIT_TEXT.CHOSEN_REPLACEMENT;

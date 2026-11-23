@@ -32,7 +32,7 @@ export interface ManualSplitContentProps {
   storedMergeRefs: readonly string[];
   ignored: boolean;
   onApply: (newRefs: string[]) => void;
-  onApplyMerge: (newRef: string, oldRefs: string[]) => void;
+  onApplyMerge: (newRefs: string[], oldRefs: string[]) => void;
   onIgnore: () => void;
 }
 
@@ -82,8 +82,7 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
       onApply(chosen.map((candidate) => candidate.ref));
       return;
     }
-    const [newCandidate] = chosen;
-    if (newCandidate !== undefined) onApplyMerge(newCandidate.ref, [row.ref, ...tickedRefs]);
+    if (chosen.length > 0) onApplyMerge(chosen.map((candidate) => candidate.ref), [row.ref, ...tickedRefs]);
   };
 
   const mapArea = (): React.ReactNode => {

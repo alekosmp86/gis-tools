@@ -50,8 +50,8 @@ export function ManualSplitModal({ review, base, manualSplits, ignoredRefs, onCh
     onChange({ oldRef: row.ref, newRefs });
     afterApply();
   };
-  const applyMerge = (newRef: string, oldRefs: string[]) => {
-    oldRefs.forEach((oldRef) => onChange({ oldRef, newRefs: [newRef] }));
+  const applyMerge = (newRefs: string[], oldRefs: string[]) => {
+    oldRefs.forEach((oldRef) => onChange({ oldRef, newRefs }));
     afterApply();
   };
   const ignore = () => {
