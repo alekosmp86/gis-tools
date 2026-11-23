@@ -226,8 +226,8 @@ export const MIN_SECTION_LENGTH_M = 1;
 export const COVERAGE_RATIO = 0.95;
 /** Plain-removal protection and discarded-candidate place test: a new section of the same street within this distance keeps the place. */
 export const COVERAGE_TOLERANCE_M = 1;
-/** Distance within which new sections cover an old section for pieces, merges, replacements and the outside length. 3 m because a roundabout is redrawn 2-5 m off (old 986016 covers 84% at 1 m, 98% at 3 m on dev). */
-export const PIECE_COVER_TOLERANCE_M = 3;
+/** Distance within which new sections cover an old section for pieces, merges, replacements and the outside length. 3.5 m because a roundabout is redrawn 2-5 m off (old 986016 covers 84% at 1 m, 98% at 3 m on dev) and a dual carriageway drawn as one axis sits 3.0-3.4 m off (old 966431-966433 cover 100% of new 1030577 at 3.5 m, 0-11% at 3 m). */
+export const PIECE_COVER_TOLERANCE_M = 3.5;
 export const RENUMBER_HAUSDORFF_M = 0.5;
 /** Renumber candidate distance: a new section of the same idcalle within this distance of a removed one; the Hausdorff test then decides. */
 export const RENUMBER_CANDIDATE_DISTANCE_M = 1;
