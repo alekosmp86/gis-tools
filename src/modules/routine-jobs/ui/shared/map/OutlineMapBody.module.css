@@ -23,6 +23,7 @@
   min-height: 0;
   max-height: var(--outline-map-height);
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .passwordNotice {

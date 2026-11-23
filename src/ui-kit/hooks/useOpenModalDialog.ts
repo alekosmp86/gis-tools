@@ -10,10 +10,13 @@ export function useOpenModalDialog(dialogRef: React.RefObject<HTMLDialogElement 
     const dialog = dialogRef.current;
     if (dialog === null) return;
     const previousOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
     if (!dialog.open) dialog.showModal();
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
     };
   }, [dialogRef]);
 }
