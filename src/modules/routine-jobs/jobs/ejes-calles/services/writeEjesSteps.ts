@@ -167,7 +167,7 @@ async function prepareLoad(session: RunSession, context: EjesLoadContext): Promi
   await runInOrder(session, [
     buildRevertSectionsSql(context, context.layouts),
     buildRevertPointsSql(context, context.layouts),
-    buildRevertPointWaysSql(context),
+    buildRevertPointWaysSql(context, context.layouts),
     buildRevertInsertsSql(context),
     buildRevertMastersSql(context),
     buildRevertRestoredSectionsSql(context),

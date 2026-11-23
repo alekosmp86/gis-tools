@@ -120,8 +120,9 @@ export function buildRevertPointsSql(context: EjesLoadContext, layouts: EjesLayo
   );
 }
 
-/** One UPDATE per old street with the ids of the split points that held it, so the revert puts the street of each point back too. */
-export function buildRevertPointWaysSql(context: EjesLoadContext): string {
+/** One UPDATE per old street with the ids of the points whose street the load may change (moved with their section, or split), so the revert puts it back too. */
+export function buildRevertPointWaysSql(context: EjesLoadContext, layouts: EjesLayouts): string {
+  const point = (logical: string): string => `a.${col(layouts, "ACCESS_POINT", logical)}`;
   const args = [
     literal(qualifiedOf(context, EJES_TABLE_ROLE.ACCESS_POINT)),
     literal(physicalOf(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.CIRCULATION_WAY)),
@@ -129,11 +130,17 @@ export function buildRevertPointWaysSql(context: EjesLoadContext): string {
     literal(physicalOf(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ID)),
     "g.ids",
   ];
+  const moved = [
+    `SELECT ${point(ACCESS_POINT_COLUMN.CIRCULATION_WAY)}::text AS old_way, ${point(ACCESS_POINT_COLUMN.ID)} AS point_id`,
+    `FROM ${table(layouts, "ACCESS_POINT")} AS a JOIN ${tmp(LOAD_TEMP.MOVE)} AS n ON ${accessPointRefMatchSql(context, "n.old_ref")}`,
+    "UNION",
+    `SELECT f.old_way, f.point_id FROM ${tmp(LOAD_TEMP.SPLIT_FINAL)} AS f`,
+  ].join(" ");
   return createTemp(
     REVERT_TEMP.POINT_WAYS,
     [
       `SELECT (row_number() OVER (ORDER BY g.old_way))::bigint AS n, ${formatOf("UPDATE %s SET %s = %L WHERE %s IN (%s);", args)} AS line FROM (`,
-      `SELECT f.old_way, string_agg(format('%L', f.point_id), ', ' ORDER BY f.point_id) AS ids FROM ${tmp(LOAD_TEMP.SPLIT_FINAL)} AS f GROUP BY f.old_way`,
+      `SELECT x.old_way, string_agg(format('%L', x.point_id), ', ' ORDER BY x.point_id) AS ids FROM (${moved}) AS x GROUP BY x.old_way`,
       ") AS g",
     ].join(" ")
   );

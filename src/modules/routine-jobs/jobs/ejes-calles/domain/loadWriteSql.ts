@@ -132,10 +132,13 @@ export const buildRenumberSectionsSql = (context: EjesLoadContext): string =>
 
 /** The only write on `access_point`: the points of an old `reftramo` follow their section to the new one. */
 export function buildMovePointsSql(context: EjesLoadContext): string {
-  const reference = physicalOf(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ROAD_SECTION);
+  const access = EJES_TABLE_ROLE.ACCESS_POINT;
+  const reference = physicalOf(context, access, ACCESS_POINT_COLUMN.ROAD_SECTION);
+  const wayColumn = physicalOf(context, access, ACCESS_POINT_COLUMN.CIRCULATION_WAY);
+  const newWay = typedAs(context, access, ACCESS_POINT_COLUMN.CIRCULATION_WAY, `SELECT min(c.idcalle) FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE c.ref = n.new_ref`);
   return counted(
     [
-      `UPDATE ${qualifiedOf(context, EJES_TABLE_ROLE.ACCESS_POINT)} AS a SET ${reference} = ${typedAs(context, EJES_TABLE_ROLE.ACCESS_POINT, ACCESS_POINT_COLUMN.ROAD_SECTION, "n.new_ref")}`,
+      `UPDATE ${qualifiedOf(context, access)} AS a SET ${reference} = ${typedAs(context, access, ACCESS_POINT_COLUMN.ROAD_SECTION, "n.new_ref")}, ${wayColumn} = COALESCE(${newWay}, a.${wayColumn})`,
       `FROM ${tmp(LOAD_TEMP.MOVE)} AS n WHERE ${accessPointRefMatchSql(context, "n.old_ref")}`,
     ].join(" ")
   );
