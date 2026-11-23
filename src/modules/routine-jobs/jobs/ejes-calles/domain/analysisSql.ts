@@ -443,7 +443,7 @@ function remainderCtes(): string[] {
     ),
     cte(
       "new_streets",
-      `SELECT c.idcalle, c.nombre AS name, count(*) AS sections, string_agg(DISTINCT c.tipo, ', ') AS tipos, string_agg(DISTINCT c.departamento, ', ') AS departments, string_agg(DISTINCT c.localidad, ', ') AS localities FROM ${q("classified")} AS c WHERE c.is_new AND ${heldNewSql("c.ref")} AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE COALESCE(p.idcalle, '') = COALESCE(c.idcalle, '') AND COALESCE(p.name, '') = COALESCE(c.nombre, '')) GROUP BY c.idcalle, c.nombre`
+      `SELECT c.idcalle, c.nombre AS name, count(*) AS sections, string_agg(DISTINCT c.tipo, ', ') AS tipos, string_agg(DISTINCT c.departamento, ', ') AS departments, string_agg(DISTINCT c.localidad, ', ') AS localities FROM ${q("classified")} AS c WHERE c.is_new AND ${heldNewSql("c.ref")} AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE COALESCE(p.idcalle, '') = COALESCE(c.idcalle, '')) GROUP BY c.idcalle, c.nombre`
     ),
   ];
 }

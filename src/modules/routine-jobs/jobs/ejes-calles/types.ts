@@ -542,6 +542,8 @@ export interface EjesLoadCounts {
   splitsApplied: number;
   deleted: number;
   waysCreated: number;
+  /** Streets renamed in place: their id already existed under another name. */
+  waysRenamed: number;
   /** Every access point the load moved: renumbered, merged and split points. */
   pointsMoved: number;
   /** Sections of the topology set that hold a source and a target after pgr_createTopology. */

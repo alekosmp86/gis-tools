@@ -23,11 +23,13 @@ import {
   buildAnalyzeTempSql,
   buildCopyTableSql,
   buildCreateWayInputSql,
+  buildCreateWayRenameInputSql,
   buildExistTableSql,
   buildLoadCountsSql,
   buildMultiPartCountSql,
   buildNewTableSql,
   buildNewWaysSql,
+  buildRenamedWaysSql,
   buildPairTableSql,
   buildHeldCopiesSql,
   buildRenumberedListSql,
@@ -35,6 +37,7 @@ import {
   buildSurplusListSql,
   buildSurplusTableSql,
   buildWayTableSql,
+  buildWayRenameOldSql,
   LOAD_TEMP,
 } from "../domain/loadSelectionSql";
 import {
@@ -42,6 +45,7 @@ import {
   buildInsertMastersSql,
   buildInsertSectionsSql,
   buildInsertWaysSql,
+  buildRenameWaysSql,
   buildLockSql,
   buildLockTimeoutSql,
   buildMovePointsSql,
@@ -51,7 +55,7 @@ import {
   buildUpdateIdcalleSql,
   buildUpdateTypeSql,
 } from "../domain/loadWriteSql";
-import { buildInsertWayInputSql, newWayOf } from "../domain/loadWays";
+import { buildInsertWayInputSql, buildInsertWayRenameInputSql, newWayOf } from "../domain/loadWays";
 import { buildSkippedListSql, buildSkippedReasonCountsSql } from "../domain/removalPlanSql";
 import { EJES_STEP } from "../domain/plannedSteps";
 import {
@@ -60,6 +64,7 @@ import {
   buildRevertMastersSql,
   buildRevertPointsSql,
   buildRevertPointWaysSql,
+  buildRevertWayRenamesSql,
   buildRevertRestoredSectionsSql,
   buildRevertRestoredVerticesSql,
   buildRevertSectionsSql,
@@ -155,6 +160,13 @@ async function createWays(session: RunSession, context: EjesLoadContext): Promis
     await session.query(statement);
   }
   await session.query(buildWayTableSql(context));
+  const renamed = (await session.query(buildRenamedWaysSql(context.layouts))).rows.map(newWayOf);
+  await session.query(buildCreateWayRenameInputSql());
+  for (const statement of buildInsertWayRenameInputSql(renamed)) {
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
+    await session.query(statement);
+  }
+  await session.query(buildWayRenameOldSql(context));
 }
 
 /** Everything the writes and the revert file need is built first, from the tables as locked: ids are taken here, nothing is written yet. */
@@ -171,6 +183,7 @@ async function prepareLoad(session: RunSession, context: EjesLoadContext): Promi
     buildRevertSectionsSql(context, context.layouts),
     buildRevertPointsSql(context, context.layouts),
     buildRevertPointWaysSql(context, context.layouts),
+    buildRevertWayRenamesSql(context),
     buildRevertInsertsSql(context),
     buildRevertMastersSql(context),
     buildRevertRestoredSectionsSql(context),
@@ -181,8 +194,14 @@ async function prepareLoad(session: RunSession, context: EjesLoadContext): Promi
 }
 
 async function writeWays(session: RunSession, context: EjesLoadContext, plan: EjesLoadPlan): Promise<void> {
-  if (plan.counts.waysCreated === 0) return;
-  assertWritten("las vías de circulación", await writtenBy(session, buildInsertWaysSql(context)), plan.counts.waysCreated);
+  if (plan.counts.waysCreated > 0) {
+    assertWritten("las vías de circulación", await writtenBy(session, buildInsertWaysSql(context)), plan.counts.waysCreated);
+  }
+  if (plan.counts.waysRenamed > 0) {
+    // Ordered: the renames follow the inserts inside the same transaction.
+    // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
+    assertWritten("los nombres de las vías de circulación", await writtenBy(session, buildRenameWaysSql(context)), plan.counts.waysRenamed);
+  }
 }
 
 async function writeSections(session: RunSession, context: EjesLoadContext, plan: EjesLoadPlan): Promise<void> {
@@ -222,7 +241,7 @@ async function analyzeChanged(session: RunSession, context: EjesLoadContext, pla
   const { counts } = plan;
   const changed = [
     counts.inserted + counts.updated + counts.renumbered + counts.deleted > 0 ? EJES_TABLE_ROLE.ROAD_SECTION : undefined,
-    counts.waysCreated > 0 ? EJES_TABLE_ROLE.CIRCULATION_WAY : undefined,
+    counts.waysCreated + counts.waysRenamed > 0 ? EJES_TABLE_ROLE.CIRCULATION_WAY : undefined,
     counts.inserted + plan.deletedMasters > 0 ? EJES_TABLE_ROLE.ADDRESS_MASTER : undefined,
     counts.pointsMoved > 0 ? EJES_TABLE_ROLE.ACCESS_POINT : undefined,
     counts.verticesCreated + counts.verticesDeleted > 0 ? EJES_TABLE_ROLE.VERTICES : undefined,

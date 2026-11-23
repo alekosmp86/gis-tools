@@ -38,3 +38,15 @@ export function buildInsertWayInputSql(ways: readonly NewWayRow[]): string[] {
   }
   return statements;
 }
+
+/** The renamed streets as `(idcalle, name, short_name)`, the short name made by the same rules as a new way. */
+export function buildInsertWayRenameInputSql(ways: readonly NewWayRow[]): string[] {
+  const statements: string[] = [];
+  for (let start = 0; start < ways.length; start += LOAD_CHUNK_SIZE) {
+    const values = ways
+      .slice(start, start + LOAD_CHUNK_SIZE)
+      .map((way) => `(${[literal(way.idcalle), nullableLiteral(way.name), nullableLiteral(way.shortName)].join(", ")})`);
+    statements.push(`INSERT INTO ${q(LOAD_TEMP.WAY_RENAME_IN)} (idcalle, name, short_name) VALUES ${values.join(", ")}`);
+  }
+  return statements;
+}

@@ -47,6 +47,7 @@ export const toEjesLoadPlan = (row: Row): EjesLoadPlan => {
       splitsApplied: numberOf(row.splits),
       deleted: numberOf(row.deleted),
       waysCreated: numberOf(row.ways),
+      waysRenamed: numberOf(row.ways_renamed),
       pointsMoved: movedPoints + splitPoints,
       topologyAssigned: 0,
       verticesCreated: 0,

@@ -50,6 +50,7 @@ const countRowsOf = (load: EjesLoadReport): ReportRowListRow[] => [
   { label: "Gemelos quitados", value: load.counts.twinsRemoved },
   { label: "Tramos borrados (divididos o reemplazados, unidos, gemelos y quitados)", value: load.counts.deleted },
   { label: "Vías de circulación creadas", value: load.counts.waysCreated },
+  { label: "Vías de circulación renombradas", value: load.counts.waysRenamed },
   { label: "Puntos de acceso movidos", value: load.counts.pointsMoved },
   { label: EJES_LOAD_COUNT_TEXT.TOPOLOGY_ASSIGNED, value: load.counts.topologyAssigned },
   { label: EJES_LOAD_COUNT_TEXT.VERTICES_CREATED, value: load.counts.verticesCreated },

@@ -20,6 +20,7 @@ const REVERT_TEMP = {
   SECTIONS: "ej_rev_sections",
   POINTS: "ej_rev_points",
   POINT_WAYS: "ej_rev_point_ways",
+  WAY_RENAMES: "ej_rev_way_renames",
   INSERTS: "ej_rev_inserts",
   RESTORED_VERTICES: "ej_rev_vertices_del",
   CREATED_VERTICES: "ej_rev_vertices_new",
@@ -36,6 +37,7 @@ export const REVERT_ORDER: readonly string[] = [
   REVERT_TEMP.SECTIONS,
   REVERT_TEMP.POINTS,
   REVERT_TEMP.POINT_WAYS,
+  REVERT_TEMP.WAY_RENAMES,
   REVERT_TEMP.INSERTS,
   REVERT_TEMP.CREATED_VERTICES,
 ];
@@ -273,4 +275,25 @@ export function buildRevertPageSql(name: string, pageSize: number, afterCursor: 
   ]
     .filter((part) => part !== "")
     .join(" ");
+}
+
+/** One UPDATE per renamed street row, with the name and short name it held before the load. */
+export function buildRevertWayRenamesSql(context: EjesLoadContext): string {
+  const way = EJES_TABLE_ROLE.CIRCULATION_WAY;
+  const args = [
+    literal(qualifiedOf(context, way)),
+    literal(physicalOf(context, way, CIRCULATION_WAY_COLUMN.NAME)),
+    "o.name",
+    literal(physicalOf(context, way, CIRCULATION_WAY_COLUMN.SHORT_NAME)),
+    "o.short_name",
+    literal(physicalOf(context, way, CIRCULATION_WAY_COLUMN.ID)),
+    "o.way_id",
+  ];
+  return createTemp(
+    REVERT_TEMP.WAY_RENAMES,
+    [
+      `SELECT (row_number() OVER (ORDER BY o.way_id))::bigint AS n, ${formatOf("UPDATE %s SET %s = %L, %s = %L WHERE %s = %L;", args)} AS line`,
+      `FROM ${tmp(LOAD_TEMP.WAY_RENAME_OLD)} AS o`,
+    ].join(" ")
+  );
 }

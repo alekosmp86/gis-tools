@@ -59,6 +59,7 @@ const LOAD_COUNTS = {
   merged: 0,
   deleted: 0,
   waysCreated: 4,
+  waysRenamed: 0,
   pointsMoved: 9,
   topologyAssigned: 0,
   verticesCreated: 0,

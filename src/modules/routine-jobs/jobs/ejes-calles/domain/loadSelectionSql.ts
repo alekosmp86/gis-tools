@@ -1,10 +1,10 @@
 import { cte, q, withClause } from "../../shared/sqlFragments";
-import { EJES_SKIP_KIND, EJES_SRID, EJES_TABLE_ROLE, GEO_TWIN_ROLE } from "../constants";
+import { CIRCULATION_WAY_COLUMN, EJES_SKIP_KIND, EJES_SRID, EJES_TABLE_ROLE, GEO_TWIN_ROLE } from "../constants";
 import type { EjesLayouts, EjesLoadContext } from "../types";
 import { accessPointRefMatchSql, circulationPairsCte, copyKeptCte, copyLocalizedCte, copyRawCte, currentCtes, geometriesDifferSql, pointsCte } from "./analysisSql";
 import { copyFinalCte } from "./geoTwinSql";
 import { col, table } from "./layoutSql";
-import { nextvalSql } from "./loadContext";
+import { nextvalSql, physicalOf, qualifiedOf } from "./loadContext";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
 import { shortUnheldCte } from "./stagingSql";
 import { distinctPairsCountSql } from "./renumberSql";
@@ -39,6 +39,8 @@ export const LOAD_TEMP = {
   STATE: "ej_state",
   NEW: "ej_new",
   WAY_IN: "ej_way_in",
+  WAY_RENAME_IN: "ej_way_rename_in",
+  WAY_RENAME_OLD: "ej_way_rename_old",
   WAY: "ej_way",
   SURPLUS: "ej_surplus",
   TOPO: "ej_topo_ids",
@@ -191,7 +193,7 @@ export function buildNewWaysSql(layouts: EjesLayouts): string {
     `SELECT c.idcalle AS "idcalle", c.nombre AS "name", ${first("type_id")} AS "type_id", ${first("font_id")} AS "font_id"`,
     `FROM ${tmp(LOAD_TEMP.COPY)} AS c`,
     `WHERE ${WAY_SOURCE_CONDITION}`,
-    `AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE COALESCE(p.idcalle, '') = COALESCE(c.idcalle, '') AND COALESCE(p.name, '') = COALESCE(c.nombre, ''))`,
+    `AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE COALESCE(p.idcalle, '') = COALESCE(c.idcalle, ''))`,
     "GROUP BY c.idcalle, c.nombre ORDER BY c.idcalle, c.nombre",
   ].join(" ");
 }
@@ -251,6 +253,7 @@ export const buildLoadCountsSql = (): string =>
     `(SELECT count(DISTINCT d.master_id) FROM ${tmp(LOAD_TEMP.DEL)} AS d WHERE d.master_deleted) AS "masters_deleted",`,
     `(SELECT COALESCE(sum(points), 0) FROM ${tmp(LOAD_TEMP.MOVE)}) AS "points_moved",`,
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.WAY)}) AS "ways",`,
+    `(SELECT count(*) FROM ${tmp(LOAD_TEMP.WAY_RENAME_OLD)}) AS "ways_renamed",`,
     `(SELECT count(*) FROM ${tmp(LOAD_TEMP.SURPLUS)}) AS "surplus"`,
   ].join(" ");
 
@@ -265,3 +268,36 @@ export const buildSurplusListSql = (limit: number): string =>
     'SELECT s.ref AS "ref", s.id AS "id", s.points AS "points"',
     `FROM ${tmp(LOAD_TEMP.SURPLUS)} AS s ORDER BY s.points DESC, s.ref, s.id LIMIT ${limit}`,
   ].join(" ");
+
+/**
+ * The streets of the loaded copies whose `idcalle` already has a `circulation_way` but not under the file's name: the name changed, so the
+ * rows of that street id are renamed in place instead of a second way being created. One name per `idcalle` (the lowest, if the file has several).
+ */
+export function buildRenamedWaysSql(layouts: EjesLayouts): string {
+  return [
+    withClause([circulationPairsCte(layouts)]),
+    'SELECT n.idcalle AS "idcalle", n.name AS "name" FROM (',
+    `SELECT c.idcalle AS idcalle, min(c.nombre) AS name FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE c.idcalle IS NOT NULL AND c.nombre IS NOT NULL GROUP BY c.idcalle`,
+    ") AS n",
+    `WHERE EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle = n.idcalle)`,
+    `AND NOT EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle = n.idcalle AND p.name = n.name)`,
+    "ORDER BY n.idcalle",
+  ].join(" ");
+}
+
+export const buildCreateWayRenameInputSql = (): string =>
+  `CREATE TEMP TABLE ${q(LOAD_TEMP.WAY_RENAME_IN)} (idcalle text, name text, short_name text) ON COMMIT DROP`;
+
+/** The rows the rename will touch with the name they hold now, read before the first write: the revert puts them back. */
+export function buildWayRenameOldSql(context: EjesLoadContext): string {
+  const way = EJES_TABLE_ROLE.CIRCULATION_WAY;
+  const column = (logical: string): string => `w.${physicalOf(context, way, logical)}`;
+  return createTemp(
+    LOAD_TEMP.WAY_RENAME_OLD,
+    [
+      `SELECT ${column(CIRCULATION_WAY_COLUMN.ID)} AS way_id, ${column(CIRCULATION_WAY_COLUMN.NAME)} AS name, ${column(CIRCULATION_WAY_COLUMN.SHORT_NAME)} AS short_name`,
+      `FROM ${qualifiedOf(context, way)} AS w JOIN ${tmp(LOAD_TEMP.WAY_RENAME_IN)} AS r ON ${column(CIRCULATION_WAY_COLUMN.CALLE)}::text = r.idcalle`,
+      `WHERE ${column(CIRCULATION_WAY_COLUMN.NAME)} IS DISTINCT FROM r.name`,
+    ].join(" ")
+  );
+}
