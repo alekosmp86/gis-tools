@@ -170,7 +170,7 @@ function chosenZoneSql(staging: TableLayout): string {
   const reference = canonicalTextSql(`${STAGING_ALIAS}.${physicalColumn(staging, EJES_STAGING_COLUMN.REFTRAMO)}`);
   return [
     `chosen AS (SELECT ST_Collect(${geometry}) AS geom FROM ${qualifiedName(staging)} AS ${STAGING_ALIAS}`,
-    `WHERE ${reference} = ANY($3::text[]) AND ${keptStagingRowSql(geometry, reference)}),`,
+    `WHERE ${reference} = ANY($3::text[]) AND ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry})),`,
     `zone AS (SELECT geom, ST_Buffer(geom, ${PIECE_COVER_TOLERANCE_M}) AS area FROM chosen WHERE geom IS NOT NULL),`,
   ].join(" ");
 }
