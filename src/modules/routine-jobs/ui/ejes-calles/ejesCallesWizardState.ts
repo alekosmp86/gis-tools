@@ -175,8 +175,7 @@ export function canContinue(state: EjesWizardState): boolean {
   return (state.step === EjesStep.CONNECTION || state.step === EjesStep.TABLES) && blockingReason(state) === null;
 }
 
-const isPasswordTyped = (state: EjesWizardState): boolean =>
-  state.confirmation.password !== "" && state.confirmation.password === state.connection.password;
+const isPasswordTyped = (state: EjesWizardState): boolean => state.connection.password !== "";
 
 export const canAnalyzeNow = (state: EjesWizardState): boolean =>
   runBlockedReason(state) === null && isPasswordTyped(state);

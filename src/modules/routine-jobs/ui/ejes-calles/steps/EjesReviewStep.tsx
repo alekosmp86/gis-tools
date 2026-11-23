@@ -4,13 +4,11 @@ import React from "react";
 import { DatabaseZap, Search } from "lucide-react";
 import { AlertMessage } from "@/ui-kit/components/AlertMessage";
 import { Button } from "@/ui-kit/components/ui/Button";
-import { FormField } from "@/ui-kit/components/ui/FormField";
 import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
 import { EJES_ROLES } from "../../../jobs/ejes-calles/constants";
 import type { EjesStartRequest } from "../../shared/clientTypes";
 import { EJES_ROLE_TITLES } from "../ejesCallesTexts";
 import type { EjesConfirmation } from "../ejesCallesWizardState";
-import { PASSWORD_LABEL } from "../../shared/steps/reviewParts";
 import styles from "../../shared/steps/WizardSteps.module.css";
 
 const BUSY_NOTE = "Hay un trabajo de ejes de calles en curso. Espere a que termine para iniciar otro.";
@@ -25,7 +23,7 @@ export interface EjesReviewStepProps {
   canLoad: boolean;
   busy: boolean;
   runBlockedReason: string | null;
-  onConfirmationChange: (patch: Partial<EjesConfirmation>) => void;
+  onConfirmationChange?: (patch: Partial<EjesConfirmation>) => void;
   onAnalyze: () => void;
   onLoad: () => void;
 }
@@ -36,7 +34,6 @@ export const EjesReviewStep: React.FC<EjesReviewStepProps> = ({
   canLoad,
   busy,
   runBlockedReason,
-  onConfirmationChange,
   onAnalyze,
   onLoad,
 }) => {
@@ -59,10 +56,6 @@ export const EjesReviewStep: React.FC<EjesReviewStepProps> = ({
           </React.Fragment>
         ))}
       </dl>
-
-      <div className={styles.gridAligned}>
-        <FormField label={PASSWORD_LABEL} type="password" onChange={(password) => onConfirmationChange({ password })} />
-      </div>
 
       <p className={styles.hint}>{ANALYSIS_HINT}</p>
       <p className={styles.hint}>{LOAD_HINT}</p>
