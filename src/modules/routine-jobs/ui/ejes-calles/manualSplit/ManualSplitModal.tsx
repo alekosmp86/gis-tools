@@ -46,11 +46,14 @@ export function ManualSplitModal({ review, base, manualSplits, ignoredRefs, onCh
     if (review.index + 1 < review.rows.length) onNavigate(review.index + 1);
     else onClose();
   };
-  const apply = (newRefs: string[]) => {
+  const release = (released: string[]) => released.forEach((oldRef) => onChange({ oldRef, newRefs: null }));
+  const apply = (newRefs: string[], released: string[] = []) => {
+    release(released);
     onChange({ oldRef: row.ref, newRefs });
     afterApply();
   };
-  const applyMerge = (newRefs: string[], oldRefs: string[]) => {
+  const applyMerge = (newRefs: string[], oldRefs: string[], released: string[] = []) => {
+    release(released);
     oldRefs.forEach((oldRef) => onChange({ oldRef, newRefs }));
     afterApply();
   };

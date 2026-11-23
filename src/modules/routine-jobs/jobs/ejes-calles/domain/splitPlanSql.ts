@@ -1,7 +1,6 @@
-import { ACCESS_POINT_COLUMN, EJES_SKIP_REASON, EJES_TABLE_ROLE, ROAD_SECTION_COLUMN } from "../constants";
+import { ACCESS_POINT_COLUMN, EJES_SKIP_REASON, EJES_TABLE_ROLE } from "../constants";
 import type { EjesLoadContext } from "../types";
 import { accessPointRefMatchSql } from "./analysisSql";
-import { canonicalTextSql } from "./stagingSql";
 import { splitGroupsSql } from "./splitHoldSql";
 import { physicalOf, qualifiedOf, typedAs } from "./loadContext";
 import { createTemp, LOAD_TEMP, tmp } from "./loadSelectionSql";
@@ -60,15 +59,11 @@ export function buildSplitFinalSql(context: EjesLoadContext): string {
  */
 export function buildMoveSplitPointsSql(context: EjesLoadContext): string {
   const access = EJES_TABLE_ROLE.ACCESS_POINT;
-  const section = EJES_TABLE_ROLE.ROAD_SECTION;
   const reference = physicalOf(context, access, ACCESS_POINT_COLUMN.ROAD_SECTION);
   const wayColumn = physicalOf(context, access, ACCESS_POINT_COLUMN.CIRCULATION_WAY);
   const id = physicalOf(context, access, ACCESS_POINT_COLUMN.ID);
-  const pieceWay = [
-    `SELECT r.${physicalOf(context, section, ROAD_SECTION_COLUMN.CIRCULATION_WAY)} FROM ${qualifiedOf(context, section)} AS r`,
-    `WHERE ${canonicalTextSql(`r.${physicalOf(context, section, ROAD_SECTION_COLUMN.REFTRAMO)}`)} = f.new_ref LIMIT 1`,
-  ].join(" ");
-  const way = `${wayColumn} = COALESCE((${pieceWay}), a.${wayColumn})`;
+  const pieceWay = typedAs(context, access, ACCESS_POINT_COLUMN.CIRCULATION_WAY, `SELECT min(c.idcalle) FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE c.ref = f.new_ref`);
+  const way = `${wayColumn} = COALESCE(${pieceWay}, a.${wayColumn})`;
   return counted(
     [
       `UPDATE ${qualifiedOf(context, access)} AS a SET ${reference} = ${typedAs(context, access, ACCESS_POINT_COLUMN.ROAD_SECTION, "f.new_ref")}, ${way}`,

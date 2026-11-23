@@ -35,6 +35,7 @@ class MapEventHandler {
     onSelectFeature?: (index: number | null) => void,
     showPopups: boolean = true
   ): void {
+    featureGroup.off("click");
     featureGroup.on("click", (event: L.LeafletEvent) => {
       const originLayer: L.Layer | undefined = event.sourceTarget ?? event.propagatedFrom;
       if (!originLayer) return;

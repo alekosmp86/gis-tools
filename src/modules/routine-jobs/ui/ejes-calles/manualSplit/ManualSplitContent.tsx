@@ -31,8 +31,8 @@ export interface ManualSplitContentProps {
   /** The old sections already merged with this one into its stored new section; the merge starts from them. */
   storedMergeRefs: readonly string[];
   ignored: boolean;
-  onApply: (newRefs: string[]) => void;
-  onApplyMerge: (newRefs: string[], oldRefs: string[]) => void;
+  onApply: (newRefs: string[], released: string[]) => void;
+  onApplyMerge: (newRefs: string[], oldRefs: string[], released: string[]) => void;
   onIgnore: () => void;
 }
 
@@ -78,11 +78,12 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
   };
 
   const applyChoice = () => {
+    const released = storedMergeRefs.filter((ref) => !tickedRefs.includes(ref));
     if (mergedOldCount === 0) {
-      onApply(chosen.map((candidate) => candidate.ref));
+      onApply(chosen.map((candidate) => candidate.ref), released);
       return;
     }
-    if (chosen.length > 0) onApplyMerge(chosen.map((candidate) => candidate.ref), [row.ref, ...tickedRefs]);
+    if (chosen.length > 0) onApplyMerge(chosen.map((candidate) => candidate.ref), [row.ref, ...tickedRefs], released);
   };
 
   const mapArea = (): React.ReactNode => {
@@ -122,7 +123,7 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
           <ManualNeighbourList neighbours={map.neighbours} mergeRefs={tickedRefs} onToggle={toggleNeighbour} />
           <ManualSplitFooter
             chosen={chosen}
-            selectedCount={selectedRefs.length + mergeRefs.length}
+            selectedCount={selectedRefs.length + tickedRefs.length}
             oldLength={oldLength}
             mergedOldCount={mergedOldCount}
             canApply={canApplyOf(chosen.length, mergedOldCount)}

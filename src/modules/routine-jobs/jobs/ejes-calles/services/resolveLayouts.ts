@@ -2,9 +2,11 @@ import { buildQualifiedTableLabel } from "@/core/services/sqlStatements";
 import type { CatalogQuerySession } from "@/core/services/server/tableCatalog/tableCatalog";
 import { GENERIC_SRID } from "../../actualizar-padron/constants";
 import { parseGeometryType } from "../../actualizar-padron/domain/geometryType";
-import { physicalColumn, qualifiedName } from "../../actualizar-padron/domain/layouts";
+import { physicalColumn, qualifiedName, type TableLayout } from "../../actualizar-padron/domain/layouts";
 import { throwIfIssues } from "../../shared/preflightAsserts";
 import { literal } from "../../shared/sqlFragments";
+import { scopedTable } from "../domain/layoutSql";
+import { canonicalTextSql } from "../domain/stagingSql";
 import { readIdSequence } from "../../shared/tableFacts";
 import { resolveTable, type ResolvedTable, type WritableTargetLayout } from "../../shared/tableResolution";
 import {
@@ -97,6 +99,7 @@ export async function resolveEjesLayouts(session: CatalogQuerySession, params: E
   const addressIssues = entries.flatMap(([role, resolved]) => (isDeferredGeometry(role) ? geometryIssuesOf(role, resolved) : []));
   const resolvedLayouts = Object.fromEntries(entries.map(([role, resolved]) => [role, resolved.layout])) as EjesLayouts;
   const layouts = params.department ? scopedLayoutsOf(resolvedLayouts, params.department) : resolvedLayouts;
+  if (params.department) await assertDepartmentScope(session, layouts, params.department);
   const writeTargets: WritableTargetLayout[] = [];
   for (const [role, resolved] of entries) {
     if (!EJES_WRITE_ROLES.includes(role)) continue;
@@ -108,23 +111,46 @@ export async function resolveEjesLayouts(session: CatalogQuerySession, params: E
 
 const centreOf = (geometry: string): string => `ST_SetSRID(ST_Centroid(ST_Envelope(${geometry})), ${EJES_SRID})`;
 
-/**
- * The department scope of a run: the rows of the staging and of the road sections whose geometry has its centre inside the polygon of the
- * department. A row without a usable geometry stays in the scope, so a discarded row never loses the protection it gives. The same test
- * on both sides keeps a border section from being read as removed on one side only.
- */
-function scopedLayoutsOf(layouts: EjesLayouts, department: string): EjesLayouts {
-  const departments = layouts[EJES_TABLE_ROLE.DEPARTMENTS];
-  const polygon = [
-    `(SELECT ST_SetSRID(ST_Union(d.${physicalColumn(departments, DEPARTMENTS_COLUMN.GEOM)}), ${EJES_SRID}) FROM ${qualifiedName(departments)} AS d`,
+const departmentPolygonSql = (departments: TableLayout, department: string): string =>
+  [
+    `(SELECT ST_SetSRID(ST_Union(ST_MakeValid(d.${physicalColumn(departments, DEPARTMENTS_COLUMN.GEOM)})), ${EJES_SRID}) FROM ${qualifiedName(departments)} AS d`,
     `WHERE upper(btrim(d.${physicalColumn(departments, DEPARTMENTS_COLUMN.NAME)}::text)) = ${literal(department.toUpperCase())})`,
   ].join(" ");
-  const whereOf = (geometry: string): string => `(${geometry} IS NULL OR ST_IsEmpty(${geometry}) OR ST_Intersects(${polygon}, ${centreOf(geometry)}))`;
+
+/**
+ * The department scope of a run, by reference: a `reftramo` is in scope when its staging row or its road section has its geometry centre
+ * inside the polygon of the department. Both tables are then read for the in-scope references only, so a section and its staging row are
+ * always on the same side, a duplicated `reftramo` is read whole, and a row without a geometry follows its reference.
+ */
+function scopedLayoutsOf(layouts: EjesLayouts, department: string): EjesLayouts {
+  const polygon = departmentPolygonSql(layouts[EJES_TABLE_ROLE.DEPARTMENTS], department);
   const staging = layouts[EJES_TABLE_ROLE.STAGING];
   const section = layouts[EJES_TABLE_ROLE.ROAD_SECTION];
+  const stagingRef = canonicalTextSql(`ss.${physicalColumn(staging, EJES_STAGING_COLUMN.REFTRAMO)}`);
+  const sectionRef = canonicalTextSql(`rr.${physicalColumn(section, ROAD_SECTION_COLUMN.REFTRAMO)}`);
+  const stagingGeometry = `ss.${physicalColumn(staging, EJES_STAGING_COLUMN.GEOM)}`;
+  const sectionGeometry = `rr.${physicalColumn(section, ROAD_SECTION_COLUMN.GEOMETRY)}`;
+  const inside = (geometry: string): string => `${geometry} && ${polygon} AND ST_Intersects(${polygon}, ${centreOf(geometry)})`;
+  const scopeRefs = [
+    `(SELECT ${stagingRef} FROM ${qualifiedName(staging)} AS ss WHERE ${inside(stagingGeometry)}`,
+    `UNION SELECT ${sectionRef} FROM ${qualifiedName(section)} AS rr WHERE ${inside(sectionGeometry)})`,
+  ].join(" ");
+  const scopeOf = (layout: TableLayout, logical: string): TableLayout => ({
+    ...layout,
+    scopeWhere: `${canonicalTextSql(physicalColumn(layout, logical))} IN ${scopeRefs}`,
+  });
   return {
     ...layouts,
-    [EJES_TABLE_ROLE.STAGING]: { ...staging, scopeWhere: whereOf(physicalColumn(staging, EJES_STAGING_COLUMN.GEOM)) },
-    [EJES_TABLE_ROLE.ROAD_SECTION]: { ...section, scopeWhere: whereOf(physicalColumn(section, ROAD_SECTION_COLUMN.GEOMETRY)) },
+    [EJES_TABLE_ROLE.STAGING]: scopeOf(staging, EJES_STAGING_COLUMN.REFTRAMO),
+    [EJES_TABLE_ROLE.ROAD_SECTION]: scopeOf(section, ROAD_SECTION_COLUMN.REFTRAMO),
   };
+}
+
+/** A department that names no polygon, or whose scope holds no staging row, would turn every section of it into a removal: the run stops. */
+async function assertDepartmentScope(session: CatalogQuerySession, layouts: EjesLayouts, department: string): Promise<void> {
+  const departments = layouts[EJES_TABLE_ROLE.DEPARTMENTS];
+  const polygon = await session.query(`SELECT count(*) AS n FROM ${qualifiedName(departments)} AS d WHERE upper(btrim(d.${physicalColumn(departments, DEPARTMENTS_COLUMN.NAME)}::text)) = ${literal(department.toUpperCase())} AND d.${physicalColumn(departments, DEPARTMENTS_COLUMN.GEOM)} IS NOT NULL`);
+  if (Number(polygon.rows[0]?.n ?? 0) === 0) throw new Error(`El departamento ${department} no está en la tabla de departamentos.`);
+  const rows = await session.query(`SELECT count(*) AS n FROM ${scopedTable(layouts, "STAGING")} AS s`);
+  if (Number(rows.rows[0]?.n ?? 0) === 0) throw new Error(`El archivo de ejes no tiene tramos del departamento ${department}.`);
 }

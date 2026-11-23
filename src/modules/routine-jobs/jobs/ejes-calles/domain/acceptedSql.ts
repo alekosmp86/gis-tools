@@ -22,6 +22,16 @@ const acceptedSplitRefsOf = (accepted: EjesAccepted): string[] => [
   ...new Set([...accepted.splits.map((split) => split.oldRef), ...accepted.manualSplits.map((split) => split.oldRef)]),
 ];
 
+/** The new sections that two or more manual splits list as their only piece: the analysis reads them as manual merges, which the manual choice accepts. */
+const manualMergeRefsOf = (accepted: EjesAccepted): string[] => {
+  const olds = new Map<string, Set<string>>();
+  for (const split of accepted.manualSplits) {
+    if (split.newRefs.length !== 1) continue;
+    olds.set(split.newRefs[0], (olds.get(split.newRefs[0]) ?? new Set<string>()).add(split.oldRef));
+  }
+  return [...olds].filter(([, oldRefs]) => oldRefs.size >= 2).map(([newRef]) => newRef);
+};
+
 /** With `autoPlainRemovals`, every plain removal of the analysis with no access point (by `reftramo` and by id) is accepted. Runs after `readAnalysisForLoad` fills `ej_plain`. */
 const autoPlainStatementsOf = (accepted: EjesAccepted): string[] =>
   accepted.autoPlainRemovals
@@ -33,7 +43,7 @@ export function buildAcceptedTablesSql(accepted: EjesAccepted): string[] {
   const choices = accepted.splits.flatMap((split) => split.choices.map((choice) => [split.oldRef, choice.pointId, choice.newRef]));
   return [
     createTableSql(LOAD_TEMP.ACC_MERGE, "ref text"),
-    ...insertRowsSql(LOAD_TEMP.ACC_MERGE, accepted.merges.map((ref) => [ref])),
+    ...insertRowsSql(LOAD_TEMP.ACC_MERGE, [...new Set([...accepted.merges, ...manualMergeRefsOf(accepted)])].map((ref) => [ref])),
     createTableSql(LOAD_TEMP.ACC_PLAIN, "ref text"),
     ...insertRowsSql(LOAD_TEMP.ACC_PLAIN, accepted.plainRemovals.map((ref) => [ref])),
     ...autoPlainStatementsOf(accepted),
@@ -54,7 +64,7 @@ export const buildMissingAcceptedSql = (): string =>
     `SELECT (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_MERGE)} AS a WHERE a.ref NOT IN (SELECT m.new_ref FROM ${tmp(LOAD_TEMP.MERGE)} AS m))`,
     `+ (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_PLAIN)} AS a WHERE a.ref NOT IN (SELECT p.ref FROM ${tmp(LOAD_TEMP.PLAIN)} AS p WHERE p.ref IS NOT NULL))`,
     `+ (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_TWIN)} AS a WHERE a.ref NOT IN (SELECT t.ref FROM ${tmp(LOAD_TEMP.GEO_TWIN)} AS t WHERE t.role = '${GEO_TWIN_ROLE.LOSER}' AND t.in_carto))`,
-    `+ (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_SPLIT)} AS a WHERE a.ref NOT IN (SELECT s.old_ref FROM ${tmp(LOAD_TEMP.SPLIT)} AS s WHERE s.old_ref IS NOT NULL)) AS "missing"`,
+    `+ (SELECT count(*) FROM ${tmp(LOAD_TEMP.ACC_SPLIT)} AS a WHERE a.ref NOT IN (SELECT s.old_ref FROM ${tmp(LOAD_TEMP.SPLIT)} AS s WHERE s.old_ref IS NOT NULL) AND a.ref NOT IN (SELECT g.old_ref FROM ${tmp(LOAD_TEMP.MERGE)} AS g WHERE g.old_ref IS NOT NULL)) AS "missing"`,
   ].join(" ");
 
 /** The old `reftramo`s of up to `INVALID_TWIN_PICK_REFS_LIMIT` picks that name no copy of the staging (ET-28, fail closed). */

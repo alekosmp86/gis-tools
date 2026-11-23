@@ -48,8 +48,11 @@ export const removalSinkCtes = (sinks: RemovalSinks): string[] => [
     "merge_members",
     [
       "SELECT p.new_ref, p.idcalle, p.id AS old_id, p.old_ref, COALESCE(ap.points, 0) AS points, COALESCE(apid.points, 0) AS id_points, COALESCE(k.rows, 0) AS old_rows",
-      `FROM ${q("merge_pairs")} AS p JOIN ${q("merges")} AS m ON m.new_ref = p.new_ref`,
+      `FROM ${q("merge_pairs")} AS p JOIN ${q("auto_merges")} AS m ON m.new_ref = p.new_ref`,
       `LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.old_ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = p.id::text LEFT JOIN ${q("cur_rows")} AS k ON k.ref = p.old_ref WHERE ${isPieceSql("p.covered", "p.len", "p.piece_len")}`,
+      "UNION ALL",
+      "SELECT p.new_ref, p.idcalle, p.id AS old_id, p.old_ref, COALESCE(ap.points, 0) AS points, COALESCE(apid.points, 0) AS id_points, COALESCE(k.rows, 0) AS old_rows",
+      `FROM ${q("manual_merge_pairs")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.old_ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = p.id::text LEFT JOIN ${q("cur_rows")} AS k ON k.ref = p.old_ref`,
     ].join(" ")
   ),
   cte(

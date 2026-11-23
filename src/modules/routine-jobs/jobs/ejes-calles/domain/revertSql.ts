@@ -133,7 +133,7 @@ export function buildRevertPointWaysSql(context: EjesLoadContext): string {
     REVERT_TEMP.POINT_WAYS,
     [
       `SELECT (row_number() OVER (ORDER BY g.old_way))::bigint AS n, ${formatOf("UPDATE %s SET %s = %L WHERE %s IN (%s);", args)} AS line FROM (`,
-      `SELECT f.old_way, string_agg(format('%L', f.point_id), ', ' ORDER BY f.point_id) AS ids FROM ${tmp(LOAD_TEMP.SPLIT_FINAL)} AS f WHERE f.old_way IS NOT NULL GROUP BY f.old_way`,
+      `SELECT f.old_way, string_agg(format('%L', f.point_id), ', ' ORDER BY f.point_id) AS ids FROM ${tmp(LOAD_TEMP.SPLIT_FINAL)} AS f GROUP BY f.old_way`,
       ") AS g",
     ].join(" ")
   );
