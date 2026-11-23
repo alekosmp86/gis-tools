@@ -77,8 +77,7 @@ describe("buildEjesNextStep (EJL-13, EJ-22)", () => {
   });
 
   it("should list the refresh statements in order: the road section view, then the two views that read it", () => {
-    expect(step.statement.split("
-")).toEqual([
+    expect(step.statement.split("\n")).toEqual([
       'REFRESH MATERIALIZED VIEW "carto"."mv_road_section";',
       'REFRESH MATERIALIZED VIEW "carto"."mv_addresses_2_0";',
       'REFRESH MATERIALIZED VIEW "carto"."mv_direcciones_tlk_full_v2";',
