@@ -225,7 +225,7 @@ export function canLoadNow(state: EjesWizardState, snapshot: EjesRunSnapshot): b
   const result = snapshot.job?.result;
   if (snapshot.phase !== RunPhase.DONE || result === undefined || snapshot.plan?.dryRun !== true) return false;
   if (result.blockers.length > 0 || result.counts.manualSplitsIgnored > 0 || !isPasswordTyped(state)) return false;
-  return snapshot.plan.analysisKey === ejesAnalysisKeyOf(ejesAnalysisRequestOf(state));
+  return snapshot.plan.analysisKey === ejesAnalysisKeyOf(toEjesStartRequest(state, { dryRun: true }));
 }
 
 /** The accepted keys of the analysis on screen: none when the acceptance was made for another analysis. */

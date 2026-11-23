@@ -380,6 +380,9 @@ export const EJES_KEPT_BY_DISCARDED_REASON = {
 
 export type EjesKeptByDiscardedReason = (typeof EJES_KEPT_BY_DISCARDED_REASON)[keyof typeof EJES_KEPT_BY_DISCARDED_REASON];
 
+/** The counts that tell the data moved since the analysis: they do not depend on the choices (twin picks, manual splits), which the load applies itself. */
+export const EJES_STALE_GUARD_KEYS = ["unchanged", "attr", "geom", "both", "removed"] as const;
+
 export const EJES_SUMMARY_COUNT_KEYS = [
   "newSections",
   "unchanged",

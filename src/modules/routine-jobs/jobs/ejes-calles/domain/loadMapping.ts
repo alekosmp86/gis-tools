@@ -1,5 +1,5 @@
 import { numberOf, textOf, type Row } from "../../shared/rowMapping";
-import { EJES_SUMMARY_COUNT_KEYS, type EjesSkipKind, type EjesSkipReason } from "../constants";
+import { EJES_STALE_GUARD_KEYS, EJES_SUMMARY_COUNT_KEYS, type EjesSkipKind, type EjesSkipReason } from "../constants";
 import type {
   EjesAccepted,
   EjesAnalysis,
@@ -101,7 +101,7 @@ export const summaryOf = (analysis: EjesAnalysis): EjesSummary => ({
 });
 
 export function changedSummaryKeys(summary: EjesSummary, counts: EjesAnalysis["counts"]): string[] {
-  return EJES_SUMMARY_COUNT_KEYS.filter((key) => summary.counts[key] !== counts[key]);
+  return EJES_STALE_GUARD_KEYS.filter((key) => summary.counts[key] !== counts[key]);
 }
 
 export const fingerprintChanged = (summary: EjesSummary, fingerprint: EjesFingerprint): boolean =>
