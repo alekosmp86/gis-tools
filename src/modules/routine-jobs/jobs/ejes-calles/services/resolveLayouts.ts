@@ -2,7 +2,9 @@ import { buildQualifiedTableLabel } from "@/core/services/sqlStatements";
 import type { CatalogQuerySession } from "@/core/services/server/tableCatalog/tableCatalog";
 import { GENERIC_SRID } from "../../actualizar-padron/constants";
 import { parseGeometryType } from "../../actualizar-padron/domain/geometryType";
+import { physicalColumn, qualifiedName } from "../../actualizar-padron/domain/layouts";
 import { throwIfIssues } from "../../shared/preflightAsserts";
+import { literal } from "../../shared/sqlFragments";
 import { readIdSequence } from "../../shared/tableFacts";
 import { resolveTable, type ResolvedTable, type WritableTargetLayout } from "../../shared/tableResolution";
 import {
@@ -93,7 +95,8 @@ export async function resolveEjesLayouts(session: CatalogQuerySession, params: E
   const entries = await resolveAllRoles(session, params);
   throwIfIssues(entries.flatMap(([role, resolved]) => [...resolved.issues, ...(isDeferredGeometry(role) ? [] : geometryIssuesOf(role, resolved))]));
   const addressIssues = entries.flatMap(([role, resolved]) => (isDeferredGeometry(role) ? geometryIssuesOf(role, resolved) : []));
-  const layouts = Object.fromEntries(entries.map(([role, resolved]) => [role, resolved.layout])) as EjesLayouts;
+  const resolvedLayouts = Object.fromEntries(entries.map(([role, resolved]) => [role, resolved.layout])) as EjesLayouts;
+  const layouts = params.department ? scopedLayoutsOf(resolvedLayouts, params.department) : resolvedLayouts;
   const writeTargets: WritableTargetLayout[] = [];
   for (const [role, resolved] of entries) {
     if (!EJES_WRITE_ROLES.includes(role)) continue;
@@ -101,4 +104,27 @@ export async function resolveEjesLayouts(session: CatalogQuerySession, params: E
     writeTargets.push(await writeTargetOf(session, role, resolved));
   }
   return { layouts, writeTargets, addressIssues };
+}
+
+const centreOf = (geometry: string): string => `ST_SetSRID(ST_Centroid(ST_Envelope(${geometry})), ${EJES_SRID})`;
+
+/**
+ * The department scope of a run: the rows of the staging and of the road sections whose geometry has its centre inside the polygon of the
+ * department. A row without a usable geometry stays in the scope, so a discarded row never loses the protection it gives. The same test
+ * on both sides keeps a border section from being read as removed on one side only.
+ */
+function scopedLayoutsOf(layouts: EjesLayouts, department: string): EjesLayouts {
+  const departments = layouts[EJES_TABLE_ROLE.DEPARTMENTS];
+  const polygon = [
+    `(SELECT ST_SetSRID(ST_Union(d.${physicalColumn(departments, DEPARTMENTS_COLUMN.GEOM)}), ${EJES_SRID}) FROM ${qualifiedName(departments)} AS d`,
+    `WHERE upper(btrim(d.${physicalColumn(departments, DEPARTMENTS_COLUMN.NAME)}::text)) = ${literal(department.toUpperCase())})`,
+  ].join(" ");
+  const whereOf = (geometry: string): string => `(${geometry} IS NULL OR ST_IsEmpty(${geometry}) OR ST_Intersects(${polygon}, ${centreOf(geometry)}))`;
+  const staging = layouts[EJES_TABLE_ROLE.STAGING];
+  const section = layouts[EJES_TABLE_ROLE.ROAD_SECTION];
+  return {
+    ...layouts,
+    [EJES_TABLE_ROLE.STAGING]: { ...staging, scopeWhere: whereOf(physicalColumn(staging, EJES_STAGING_COLUMN.GEOM)) },
+    [EJES_TABLE_ROLE.ROAD_SECTION]: { ...section, scopeWhere: whereOf(physicalColumn(section, ROAD_SECTION_COLUMN.GEOMETRY)) },
+  };
 }

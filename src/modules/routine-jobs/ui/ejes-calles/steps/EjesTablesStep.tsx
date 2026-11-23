@@ -4,6 +4,7 @@ import React from "react";
 import { EJES_ROLES, EJES_TABLE_ROLE, type EjesTableRole } from "../../../jobs/ejes-calles/constants";
 import { EJES_ROLE_TITLES } from "../ejesCallesTexts";
 import { SlotTablesStep, type SlotCopy, type SlotTablesStepProps } from "../../shared/steps/SlotTablesStep";
+import { EjesDepartmentField, type EjesDepartmentFieldProps } from "./EjesDepartmentField";
 
 const COPY_BY_ROLE: Record<EjesTableRole, Omit<SlotCopy<EjesTableRole, EjesTableRole>, "key" | "role" | "title">> = {
   [EJES_TABLE_ROLE.STAGING]: {
@@ -55,6 +56,13 @@ const COPIES: readonly SlotCopy<EjesTableRole, EjesTableRole>[] = EJES_ROLES.map
   ...COPY_BY_ROLE[role],
 }));
 
-export type EjesTablesStepProps = Omit<SlotTablesStepProps<EjesTableRole, EjesTableRole>, "copies" | "footer">;
+export type EjesTablesStepProps = Omit<SlotTablesStepProps<EjesTableRole, EjesTableRole>, "copies" | "footer"> &
+  Partial<EjesDepartmentFieldProps>;
 
-export const EjesTablesStep: React.FC<EjesTablesStepProps> = (props) => <SlotTablesStep {...props} copies={COPIES} />;
+export const EjesTablesStep: React.FC<EjesTablesStepProps> = ({ department = null, onChange, ...slotProps }) => (
+  <SlotTablesStep
+    {...slotProps}
+    copies={COPIES}
+    footer={onChange === undefined ? undefined : <EjesDepartmentField department={department} onChange={onChange} />}
+  />
+);

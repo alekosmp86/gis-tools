@@ -72,6 +72,8 @@ export interface EjesParams {
   dryRun: boolean;
   summary?: EjesSummary;
   accepted?: EjesAccepted;
+  /** The department the run is limited to (its name as in the file); absent or null for the whole country. */
+  department?: string | null;
 }
 
 export type EjesLayouts = Record<EjesTableRole, TableLayout>;

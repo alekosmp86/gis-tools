@@ -27,6 +27,8 @@ const UNKNOWN_ADVICE = "Hay que verificar las tablas de ejes de calles antes de 
 export interface EjesResultStepProps {
   snapshot: EjesRunSnapshot;
   nowMs: number;
+  /** The department the shown run was limited to; null for the whole country. */
+  department?: string | null;
   /** The connection of the wizard for the map; null when the wizard holds no password. */
   mapBase: EjesGeometryMapBase | null;
   /** The connection and tables the review points of a split read; null when the wizard holds no password. */
@@ -62,6 +64,7 @@ function Checklist({ snapshot }: { snapshot: EjesRunSnapshot }) {
 export const EjesResultStep: React.FC<EjesResultStepProps> = ({
   snapshot,
   nowMs,
+  department = null,
   mapBase,
   splitBase = null,
   canLoad,
@@ -95,6 +98,7 @@ export const EjesResultStep: React.FC<EjesResultStepProps> = ({
           {result ? (
             <EjesCallesReport
               result={result}
+              department={department}
               mapBase={mapBase}
               splitBase={splitBase}
               accept={result.dryRun ? accept : undefined}

@@ -22,7 +22,8 @@
   color: #f87171;
 }
 
-.bannerDryRun {
+.bannerDryRun,
+.bannerInfo {
   background: rgba(56, 189, 248, 0.12);
   border-color: rgba(56, 189, 248, 0.4);
   color: #38bdf8;

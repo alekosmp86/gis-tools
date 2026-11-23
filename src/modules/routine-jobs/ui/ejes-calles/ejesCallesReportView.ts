@@ -8,8 +8,12 @@ import { EJES_ACCEPT_TEXT } from "./ejesAcceptTexts";
 import { defaultOpenListOf, stripOf, type EjesListKey, type EjesStripItem } from "./ejesCallesListMeta";
 import { heldRenumberViewsOf, type EjesHeldRenumberView } from "./ejesRenumberHeldView";
 import { listSummaryOf, timingsViewOf } from "../shared/reportViewParts";
+import { EJES_DEPARTMENT_TEXT } from "./ejesCallesTexts";
 
 export const EJES_DRY_RUN_BANNER = "Análisis: no se modificó ninguna tabla.";
+
+export const scopeBannersOf = (department: string | null): ReportBannerView[] =>
+  department === null ? [] : [{ kind: "info", text: `${EJES_DEPARTMENT_TEXT.SCOPE_PREFIX} ${department}` }];
 
 const PERCENT_SCALE = 100;
 

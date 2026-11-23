@@ -121,6 +121,8 @@ export const EjesCallesWizard: React.FC = () => {
             excluded={excludedEjesTablesOf(state)}
             onSchemaChange={(key, schema) => dispatch({ type: "slotSchemaChanged", key, schema })}
             onTableChange={(key, table, valid) => dispatch({ type: "slotTableChosen", key, table, valid })}
+            department={state.department}
+            onChange={(department) => dispatch({ type: "departmentChanged", department })}
             loadTables={loadTables}
             checkColumns={checkColumns}
             blockingReason={blockingReason(state)}
@@ -147,6 +149,7 @@ export const EjesCallesWizard: React.FC = () => {
           <EjesResultStep
             snapshot={snapshot}
             nowMs={nowMs}
+            department={snapshot.plan?.department ?? null}
             mapBase={ejesGeometryMapBaseOf(state)}
             splitBase={ejesSplitPointsBaseOf(state, snapshot.jobId)}
             canLoad={canLoadNow(state, snapshot)}

@@ -1,4 +1,4 @@
-import { EJES_DEFAULT_TABLES, EJES_ROLES, EJES_TABLE_ROLE, type EjesTableRole } from "../../jobs/ejes-calles/constants";
+import { EJES_DEFAULT_TABLES, EJES_ROLES, EJES_TABLE_ROLE, type EjesDepartment, type EjesTableRole } from "../../jobs/ejes-calles/constants";
 import { summaryOf } from "../../jobs/ejes-calles/domain/loadMapping";
 import type { EjesManualSplit, EjesTwinPick } from "../../jobs/ejes-calles/types";
 import { connectionBlockingReason, type ConnectionField } from "../shared/wizardConnection";
@@ -57,6 +57,8 @@ export interface EjesWizardState {
   step: EjesStep;
   connection: ClientConnection;
   slots: Record<EjesTableRole, EjesSlotDraft>;
+  /** The department the run is limited to; null for the whole country. Changing it drops the analysis inputs, as a table change does. */
+  department: EjesDepartment | null;
   confirmation: EjesConfirmation;
   /** The rows accepted on the review lists; cleared when the connection or a table changes. */
   acceptance: EjesAcceptance | null;
@@ -72,6 +74,7 @@ export type EjesWizardAction =
   | { type: "connectionChanged"; field: ConnectionField; value: string }
   | { type: "slotSchemaChanged"; key: EjesTableRole; schema: string }
   | { type: "slotTableChosen"; key: EjesTableRole; table: string; valid: boolean }
+  | { type: "departmentChanged"; department: EjesDepartment | null }
   | { type: "confirmationChanged"; patch: Partial<EjesConfirmation> }
   | { type: "acceptChanged"; analysisKey: string; change: EjesAcceptChange }
   | { type: "pointChoicesChanged"; analysisKey: string; change: EjesPointChoicesChange }
@@ -108,6 +111,7 @@ export function initialEjesWizardState(): EjesWizardState {
     step: EjesStep.CONNECTION,
     connection: { host: "", port: DEFAULT_PORT, db_name: "", user: "", password: "" },
     slots: mapSlots((role) => ({ ...EJES_DEFAULT_TABLES[role], valid: false })),
+    department: null,
     confirmation: emptyConfirmation(),
     acceptance: null,
     twinPicks: [],
@@ -181,7 +185,7 @@ export function toEjesStartRequest(state: EjesWizardState, flags: { dryRun: bool
   const tables = Object.fromEntries(
     EJES_ROLES.map((role) => [role, { schema: state.slots[role].schema.trim(), table: state.slots[role].table.trim() }])
   ) as EjesStartRequest["tables"];
-  return { connection: trimConnection(state.connection), tables, dryRun: flags.dryRun };
+  return { connection: trimConnection(state.connection), tables, dryRun: flags.dryRun, department: state.department };
 }
 
 /** The connection and the tables the map reads; null while the wizard holds no password. */
@@ -275,15 +279,20 @@ function moveTo(state: EjesWizardState, step: EjesStep): EjesWizardState {
 
 const stepAfter = (step: EjesStep, delta: number): EjesStep => STEP_ORDER[indexOfStep(step) + delta] ?? step;
 
-const withoutDependents = (state: EjesWizardState): EjesWizardState => ({
+const withoutAnalysisInputs = (state: EjesWizardState): EjesWizardState => ({
   ...state,
-  slots: mapSlots((role) => ({ ...state.slots[role], valid: false })),
-  confirmation: emptyConfirmation(),
   acceptance: null,
   twinPicks: [],
   manualSplits: [],
   ignoredRefs: [],
 });
+
+const withoutDependents = (state: EjesWizardState): EjesWizardState =>
+  withoutAnalysisInputs({
+    ...state,
+    slots: mapSlots((role) => ({ ...state.slots[role], valid: false })),
+    confirmation: emptyConfirmation(),
+  });
 
 /** A manual choice clears the ignore mark of its old section, when the choice was stored (the request limit may refuse it). */
 function manualSplitChangedOf(state: EjesWizardState, change: EjesManualSplitChange): EjesWizardState {
@@ -310,23 +319,17 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
     case "connectionChanged":
       return connectionReducer(state, action.field, action.value);
     case "slotSchemaChanged":
-      return {
+      return withoutAnalysisInputs({
         ...state,
         slots: { ...state.slots, [action.key]: { schema: action.schema, table: "", valid: false } },
-        acceptance: null,
-        twinPicks: [],
-        manualSplits: [],
-        ignoredRefs: [],
-      };
+      });
     case "slotTableChosen":
-      return {
+      return withoutAnalysisInputs({
         ...state,
         slots: { ...state.slots, [action.key]: { ...state.slots[action.key], table: action.table, valid: action.valid } },
-        acceptance: null,
-        twinPicks: [],
-        manualSplits: [],
-        ignoredRefs: [],
-      };
+      });
+    case "departmentChanged":
+      return withoutAnalysisInputs({ ...state, department: action.department });
     case "confirmationChanged":
       return { ...state, confirmation: { ...state.confirmation, ...action.patch } };
     case "acceptChanged":

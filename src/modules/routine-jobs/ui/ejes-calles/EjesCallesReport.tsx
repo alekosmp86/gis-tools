@@ -8,7 +8,7 @@ import { NO_IGNORED_CHANGE, NO_IGNORED_REFS, type EjesAcceptView } from "./ejesA
 import { EjesMapModal, type EjesMapReview } from "./EjesMapModal";
 import { subjectOfMerge, subjectOfSplit, subjectOfUndecided } from "./ejesMapSubject";
 import { ejesListAnchorOf, type EjesListKey } from "./ejesCallesListMeta";
-import { buildEjesReportView } from "./ejesCallesReportView";
+import { buildEjesReportView, scopeBannersOf } from "./ejesCallesReportView";
 import { EjesReportLists } from "./EjesReportLists";
 import { EjesSummaryStrip } from "./EjesSummaryStrip";
 import { TwinPicksPanel } from "./TwinPicksPanel";
@@ -41,6 +41,8 @@ function withListState(current: ReadonlySet<EjesListKey>, list: EjesListKey, ope
 
 export interface EjesCallesReportProps {
   result: EjesResult;
+  /** The department the run was limited to; null or absent for the whole country. */
+  department?: string | null;
   /** The connection of the wizard for the map; null when the wizard holds no password. */
   mapBase: EjesGeometryMapBase | null;
   /** The connection and tables of the wizard for the split review; null when the wizard holds no password. */
@@ -49,7 +51,7 @@ export interface EjesCallesReportProps {
   accept?: EjesAcceptView;
 }
 
-export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapBase, splitBase = null, accept }) => {
+export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, department = null, mapBase, splitBase = null, accept }) => {
   const view = buildEjesReportView(result);
   const [review, setReview] = useState<EjesMapReview | null>(null);
   const [manualIndex, setManualIndex] = useState<number | null>(null);
@@ -70,7 +72,7 @@ export const EjesCallesReport: React.FC<EjesCallesReportProps> = ({ result, mapB
   };
   return (
     <div className={sharedStyles.report}>
-      <OutcomeBanners banners={view.banners} />
+      <OutcomeBanners banners={[...scopeBannersOf(department), ...view.banners]} />
       <EjesSummaryStrip items={view.strip} openLists={openLists} onSelect={selectList} />
       <TextList title="Bloqueos para la carga" items={view.blockers} />
       <TextList title="Privilegios de escritura (información del análisis)" items={view.privilegeInfo} />

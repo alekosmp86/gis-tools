@@ -15,7 +15,7 @@ import {
   TWIN_POLYGON_MIN_COVER_RATIO,
 } from "../constants";
 import type { EjesLayouts } from "../types";
-import { col, countOf, listOf, table, trimmed } from "./layoutSql";
+import { col, countOf, listOf, scopedTable, table, trimmed } from "./layoutSql";
 import { pickNamesCopySql } from "./twinPickSql";
 import { canonicalTextSql, keptStagingRowSql } from "./stagingSql";
 
@@ -80,7 +80,7 @@ export function twinGroupCtes(layouts: EjesLayouts): string[] {
         `${trimmed(column(EJES_STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
         `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
         `ST_SetSRID(${geometry}, ${EJES_SRID}) AS geom`,
-        `FROM ${table(layouts, "STAGING")} AS s WHERE ${keptStagingRowSql(geometry, reference)}`,
+        `FROM ${scopedTable(layouts, "STAGING")} AS s WHERE ${keptStagingRowSql(geometry, reference)}`,
       ].join(" ")
     ),
     ...twinDeptCtes(layouts),

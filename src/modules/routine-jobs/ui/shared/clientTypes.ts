@@ -159,6 +159,7 @@ export interface EjesStartRequest {
   tables: Record<EjesTableRole, EjesTableRef>;
   dryRun: boolean;
   accepted?: EjesAnalysisAcceptedRequest;
+  department?: string | null;
 }
 
 /** One review point's destination the user chose: the point and one piece of its split. */

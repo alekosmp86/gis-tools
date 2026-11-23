@@ -9,7 +9,7 @@ import { ShowOnMapButton } from "./map/ShowOnMapButton";
 import sharedStyles from "./ReportShared.module.css";
 import styles from "./ActualizarPadronReport.module.css";
 
-export type ReportBannerKind = "unknown" | "dryRun" | "done";
+export type ReportBannerKind = "unknown" | "dryRun" | "done" | "info";
 
 export interface ReportBannerView {
   kind: ReportBannerKind;
@@ -39,6 +39,7 @@ const BANNER_CLASS: Record<ReportBannerKind, string> = {
   unknown: sharedStyles.bannerUnknown,
   dryRun: sharedStyles.bannerDryRun,
   done: sharedStyles.bannerDone,
+  info: sharedStyles.bannerInfo,
 };
 
 export function SectionTitle({ children }: { children: string }) {

@@ -4,6 +4,8 @@ export interface TableLayout {
   schema: string;
   table: string;
   columns: Record<string, string>;
+  /** A condition on the table's own columns: a reader that wants only these rows takes the table through it. */
+  scopeWhere?: string;
 }
 
 export const qualifiedName = (layout: TableLayout): string =>

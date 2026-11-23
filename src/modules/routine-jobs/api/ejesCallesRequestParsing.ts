@@ -1,4 +1,4 @@
-import { EJES_ROLES, EJES_SUMMARY_COUNT_KEYS, type EjesTableRole } from "../jobs/ejes-calles/constants";
+import { EJES_DEPARTMENTS, EJES_ROLES, EJES_SUMMARY_COUNT_KEYS, type EjesTableRole } from "../jobs/ejes-calles/constants";
 import { NO_ACCEPTED } from "../jobs/ejes-calles/domain/loadMapping";
 import { assertEjesRealRunEnabled } from "../jobs/ejes-calles/domain/realRunSwitch";
 import { assertDistinctEjesTables } from "../jobs/ejes-calles/domain/tableRoles";
@@ -66,11 +66,24 @@ function analysisParams(body: JsonRecord, config: EjesParams["config"], tables: 
   return { config, tables, dryRun: true, accepted: { ...NO_ACCEPTED, ...readAnalysisAccepted(body) } };
 }
 
+const DEPARTMENT_NAMES: readonly string[] = EJES_DEPARTMENTS;
+
+function readDepartment(body: JsonRecord): string | null {
+  const value = body.department;
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  if (text === "") return null;
+  const name = text.toUpperCase();
+  if (!DEPARTMENT_NAMES.includes(name)) throw invalid(`Departamento desconocido: ${text}`);
+  return name;
+}
+
 export function parseEjesCallesStartRequest(body: JsonRecord): EjesParams {
   const config = toDbConfig(parseConnection(body));
   const tables = readTables(body);
+  const department = readDepartment(body);
   const dryRun = readBoolean(body, "dryRun");
   const params: EjesParams = dryRun ? analysisParams(body, config, tables) : realRunParams(body, config, tables);
   assertTablesDistinct(params, assertDistinctEjesTables);
-  return params;
+  return { ...params, department };
 }

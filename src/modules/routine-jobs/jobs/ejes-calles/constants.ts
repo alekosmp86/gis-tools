@@ -183,6 +183,30 @@ export const EJES_DEFAULT_TABLES: Record<EjesTableRole, { schema: string; table:
 
 export const EJES_SRID = 32721;
 
+export const EJES_DEPARTMENTS = [
+  "ARTIGAS",
+  "CANELONES",
+  "CERRO LARGO",
+  "COLONIA",
+  "DURAZNO",
+  "FLORES",
+  "FLORIDA",
+  "LAVALLEJA",
+  "MALDONADO",
+  "MONTEVIDEO",
+  "PAYSANDU",
+  "RIO NEGRO",
+  "RIVERA",
+  "ROCHA",
+  "SALTO",
+  "SAN JOSE",
+  "SORIANO",
+  "TACUAREMBO",
+  "TREINTA Y TRES",
+] as const;
+
+export type EjesDepartment = (typeof EJES_DEPARTMENTS)[number];
+
 export const TIPO_VIALIDAD_IDS: Readonly<Record<string, number>> = {
   CALLE: 4,
   "CALLE INTERNA": 20,

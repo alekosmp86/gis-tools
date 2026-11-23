@@ -15,6 +15,7 @@ export interface EjesRunPlan {
   dryRun: boolean;
   ejesStaging: string;
   analysisKey: string;
+  department?: string | null;
 }
 
 export type EjesRunSnapshot = RunSnapshot<EjesJobStatusView, EjesRunPlan>;
@@ -36,6 +37,7 @@ const planOf = (request: EjesStartRequest): EjesRunPlan => ({
   dryRun: request.dryRun,
   ejesStaging: `${request.tables[EJES_TABLE_ROLE.STAGING].schema}.${request.tables[EJES_TABLE_ROLE.STAGING].table}`,
   analysisKey: ejesAnalysisKeyOf(request),
+  department: request.department ?? null,
 });
 
 function createEjesRunStore(deps: EjesRunStoreDeps): EjesRunStore {

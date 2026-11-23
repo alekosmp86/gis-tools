@@ -20,7 +20,7 @@ import {
 } from "../constants";
 import type { EjesLayouts, EjesLoadContext, EjesManualSplit, EjesTwinPick } from "../types";
 import { integerColumnOf, physicalOf } from "./loadContext";
-import { col, countOf, listOf, table, trimmed } from "./layoutSql";
+import { col, countOf, listOf, scopedTable, table, trimmed } from "./layoutSql";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
 import { accessPointRefSql, canonicalTextSql, INTEGER_PATTERN, keptStagingRowSql, shortUnheldCte } from "./stagingSql";
 import {
@@ -98,7 +98,7 @@ export function accessPointRefMatchSql(context: EjesLoadContext, value: string):
 
 /** The references the staging holds through its kept rows: a discarded row counts for nothing, a geometric twin loser stays here (it is present). */
 function stagingKeyCtes(layouts: EjesLayouts): string[] {
-  const staging = table(layouts, "STAGING");
+  const staging = scopedTable(layouts, "STAGING");
   const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
   const reference = canonicalTextSql(column(EJES_STAGING_COLUMN.REFTRAMO));
   const geometry = column(EJES_STAGING_COLUMN.GEOM);
@@ -118,7 +118,7 @@ function discardedCandidateCtes(layouts: EjesLayouts): string[] {
     cte(
       "disc_candidates",
       [
-        `SELECT ${reference} AS ref, ${street} AS idcalle, ${geometry} AS geom FROM ${table(layouts, "STAGING")} AS s`,
+        `SELECT ${reference} AS ref, ${street} AS idcalle, ${geometry} AS geom FROM ${scopedTable(layouts, "STAGING")} AS s`,
         `WHERE ${reference} ~ '${INTEGER_PATTERN}' AND ${geometry} IS NOT NULL AND NOT ST_IsEmpty(${geometry}) AND ST_IsValid(${geometry})`,
         `AND NOT (${keptStagingRowSql(geometry, reference)})`,
       ].join(" ")
@@ -128,7 +128,7 @@ function discardedCandidateCtes(layouts: EjesLayouts): string[] {
 
 /** The staging rows the classification reads: kept ones, minus the geometric twin losers (they are neither new nor changed nor split). */
 function stagedCtes(layouts: EjesLayouts): string[] {
-  const staging = table(layouts, "STAGING");
+  const staging = scopedTable(layouts, "STAGING");
   const column = (logical: string): string => `s.${col(layouts, "STAGING", logical)}`;
   const reference = canonicalTextSql(column(EJES_STAGING_COLUMN.REFTRAMO));
   const street = canonicalTextSql(column(EJES_STAGING_COLUMN.IDCALLE));
@@ -212,7 +212,7 @@ export function copyRawCte(layouts: EjesLayouts): string {
       `${trimmed(column(EJES_STAGING_COLUMN.DEPARTAMENTO))} AS departamento,`,
       `${trimmed(column(EJES_STAGING_COLUMN.LOCALIDAD))} AS localidad,`,
       `${geometry} AS geom`,
-      `FROM ${table(layouts, "STAGING")} AS s WHERE ${keptStagingRowSql(geometry, reference)}) AS raw`,
+      `FROM ${scopedTable(layouts, "STAGING")} AS s WHERE ${keptStagingRowSql(geometry, reference)}) AS raw`,
       "ORDER BY raw.ref, raw.localidad, raw.departamento, raw.idcalle, raw.nombre, raw.tipo, raw.fuente, ST_AsEWKB(raw.geom)",
     ].join(" ")
   );
@@ -265,7 +265,7 @@ export function currentCtes(layouts: EjesLayouts): string[] {
         `${section(ROAD_SECTION_COLUMN.TYPE)}::text AS type_id,`,
         `${section(ROAD_SECTION_COLUMN.FONT)}::text AS font_id,`,
         `${section(ROAD_SECTION_COLUMN.GEOMETRY)} AS geometry`,
-        `FROM ${table(layouts, "ROAD_SECTION")} AS r`,
+        `FROM ${scopedTable(layouts, "ROAD_SECTION")} AS r`,
       ].join(" ")
     ),
     pointsCte(layouts),

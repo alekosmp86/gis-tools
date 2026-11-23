@@ -11,6 +11,12 @@ export const col = (layouts: EjesLayouts, role: RoleName, logical: string): stri
 
 export const table = (layouts: EjesLayouts, role: RoleName): string => qualifiedName(layouts[EJES_TABLE_ROLE[role]]);
 
+/** The table of a role as the analysis reads it: only the rows of the department scope when the run has one, the whole table otherwise. Use it as `FROM ${...} AS alias`. */
+export const scopedTable = (layouts: EjesLayouts, role: RoleName): string => {
+  const layout = layouts[EJES_TABLE_ROLE[role]];
+  return layout.scopeWhere === undefined ? qualifiedName(layout) : `(SELECT * FROM ${qualifiedName(layout)} WHERE ${layout.scopeWhere})`;
+};
+
 export const trimmed = (expression: string): string => `NULLIF(btrim(${expression}::text), '')`;
 
 const limited = (select: string): string => `${select} LIMIT ${DETAIL_LIST_LIMIT}`;

@@ -1,5 +1,12 @@
 import { EJES_TABLE_ROLE, type EjesTableRole } from "../../jobs/ejes-calles/constants";
 
+export const EJES_DEPARTMENT_TEXT = {
+  LABEL: "Departamento",
+  ALL: "Todos",
+  HINT: "Limita el análisis y la carga a un departamento; sin elegir se procesa todo el país.",
+  SCOPE_PREFIX: "Alcance:",
+} as const;
+
 export const EJES_ROLE_TITLES: Record<EjesTableRole, string> = {
   [EJES_TABLE_ROLE.STAGING]: "Ejes de vía de circulación (origen)",
   [EJES_TABLE_ROLE.ROAD_SECTION]: "Tramos de calle",
