@@ -20,7 +20,7 @@ export const buildCreatePlainTableSql = (name: string): string =>
 
 /** One row per (split, new piece): the old section, its points (by `reftramo` and by id), its old `reftramo` count and one piece. */
 export const buildCreateSplitTableSql = (name: string): string =>
-  `CREATE TEMP TABLE ${q(name)} (old_id bigint, old_ref text, idcalle text, points bigint, id_points bigint, old_rows bigint, new_ref text, geom_variant boolean) ON COMMIT DROP`;
+  `CREATE TEMP TABLE ${q(name)} (old_id bigint, old_ref text, idcalle text, points bigint, id_points bigint, old_rows bigint, new_ref text, geom_variant boolean, manual boolean) ON COMMIT DROP`;
 
 /**
  * The new pieces of the splits, and the new `reftramo`s that belong to a split or a merge. Such a new section is inserted only when
@@ -30,7 +30,7 @@ export const groupPieceCtes = (): string[] => [
   cte(
     "split_members",
     [
-      "SELECT s.id AS old_id, s.ref AS old_ref, s.idcalle, COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS points, COALESCE(apid.points, 0) AS id_points, COALESCE(k.rows, 0) AS old_rows, u.new_ref, COALESCE(gv.variant, false) AS geom_variant",
+      "SELECT s.id AS old_id, s.ref AS old_ref, s.idcalle, COALESCE(ap.points, 0) + COALESCE(apid.points, 0) AS points, COALESCE(apid.points, 0) AS id_points, COALESCE(k.rows, 0) AS old_rows, u.new_ref, COALESCE(gv.variant, false) AS geom_variant, s.manual",
       `FROM ${q("splits")} AS s LEFT JOIN ${q("ap")} AS ap ON ap.ref = s.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = s.id::text LEFT JOIN ${q("cur_rows")} AS k ON k.ref = s.ref CROSS JOIN LATERAL unnest(s.new_refs) AS u(new_ref)`,
       `LEFT JOIN ${q("copy_variant")} AS gv ON gv.ref = u.new_ref`,
     ].join(" ")
@@ -69,6 +69,6 @@ export const removalSinkCtes = (sinks: RemovalSinks): string[] => [
   ),
   cte(
     "split_sink",
-    `INSERT INTO ${sinks.split} (old_id, old_ref, idcalle, points, id_points, old_rows, new_ref, geom_variant) SELECT m.old_id, m.old_ref, m.idcalle, m.points, m.id_points, m.old_rows, m.new_ref, m.geom_variant FROM ${q("split_members")} AS m RETURNING 1`
+    `INSERT INTO ${sinks.split} (old_id, old_ref, idcalle, points, id_points, old_rows, new_ref, geom_variant, manual) SELECT m.old_id, m.old_ref, m.idcalle, m.points, m.id_points, m.old_rows, m.new_ref, m.geom_variant, m.manual FROM ${q("split_members")} AS m RETURNING 1`
   ),
 ];

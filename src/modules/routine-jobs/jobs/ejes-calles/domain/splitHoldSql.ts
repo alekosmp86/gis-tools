@@ -12,10 +12,11 @@ export const singleCopyCte = (): string =>
 /**
  * The hold measures of every split: its old `reftramo`, its points, its pieces that are shared with another split or a merge, and
  * the pieces whose copies are not exactly one. `pieces` holds one row per (split, piece); `merges` names the merged new `reftramo`s;
- * `copyCounts` counts the kept copies per `reftramo`. The analysis and the load plan both read the holds from here, so they agree.
+ * `copyCounts` counts the kept copies per `reftramo`. A piece shared by several splits is not held when every one of them is a manual
+ * choice (`manual`): a manual decision is final, and each old section sends its points to the nearest piece. The analysis and the load plan both read the holds from here, so they agree.
  */
 export const splitGroupsSql = (pieces: string, merges: string, copyCounts: string): string => {
-  const shared = `SELECT s.new_ref FROM ${pieces} AS s GROUP BY s.new_ref HAVING count(DISTINCT s.old_id) > 1 UNION SELECT m.new_ref FROM ${merges} AS m`;
+  const shared = `SELECT s.new_ref FROM ${pieces} AS s GROUP BY s.new_ref HAVING count(DISTINCT s.old_id) > 1 AND NOT bool_and(COALESCE(s.manual, false)) UNION SELECT m.new_ref FROM ${merges} AS m`;
   const groups = [
     "SELECT m.old_id, min(m.old_ref) AS old_ref, min(m.idcalle) AS idcalle, max(m.points) AS points, max(m.id_points) AS id_points, max(m.old_rows) AS old_rows,",
     "bool_or(sh.new_ref IS NOT NULL) AS shared, bool_or(COALESCE(k.copies, 0) <> 1 OR m.geom_variant) AS bad_copy",
