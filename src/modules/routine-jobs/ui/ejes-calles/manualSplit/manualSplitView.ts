@@ -1,5 +1,5 @@
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { MAP_SECTION_TYPE } from "@/core/constants/mapConstants";
+import { MAP_MANUAL_PIECE_TYPES, MAP_MANUAL_POINT_REVIEW_TYPE, MAP_MANUAL_POINT_TYPES, MAP_SECTION_TYPE } from "@/core/constants/mapConstants";
 import { MANUAL_CANDIDATE_MAX_RADIUS_M, MANUAL_CANDIDATE_RADIUS_M, MANUAL_SPLIT_PIECES_LIMIT, REPLACEMENT_PIECES } from "../../../jobs/ejes-calles/constants";
 import type { EjesMapCandidate, EjesMapFeature, EjesMapNeighbour, EjesManualSplit } from "../../../jobs/ejes-calles/types";
 import { OUTLINE_LABEL_PROPERTY } from "../../shared/map/outlineMapCollection";
@@ -7,6 +7,7 @@ import { OUTLINE_ROLE } from "../../shared/map/outlineTypes";
 import { manualSplitOf } from "../ejesAccept";
 import { EJES_MANUAL_SPLIT_TEXT } from "../ejesAcceptTexts";
 import { geodesicLengthM } from "./geodesicLength";
+import { pointAssignmentsOf } from "./pointAssignment";
 
 export const MANUAL_RADIUS_OPTIONS_M: readonly number[] = [MANUAL_CANDIDATE_RADIUS_M, 50, MANUAL_CANDIDATE_MAX_RADIUS_M];
 
@@ -74,18 +75,52 @@ const TYPE_OF_ROLE: Partial<Record<EjesMapFeature["role"], string>> = {
 const geometriesOf = (features: readonly EjesMapFeature[], role: EjesMapFeature["role"]): Geometry[] =>
   features.filter((feature) => feature.role === role).map((feature) => feature.geometry);
 
-const fixedFeaturesOf = (features: readonly EjesMapFeature[]): Feature[] =>
-  features.flatMap((feature) => {
+/** The palette slot of a candidate: its position among the candidates, so a section keeps its colour while the choice changes. */
+const slotOf = (index: number): number => index % MAP_MANUAL_PIECE_TYPES.length;
+
+/**
+ * The candidate (index in `candidates`) each access point of the old section would go to with the chosen sections, null for a point that
+ * would go to review; null as a whole when nothing is chosen. The analysis rules, computed on the map geometries.
+ */
+export function pointTargetsOf(features: readonly EjesMapFeature[], candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): Array<number | null> | null {
+  const newGeometries = geometriesOf(features, OUTLINE_ROLE.NEW);
+  const chosenIndexes = candidates.flatMap((candidate, index) => (chosenRefs.includes(candidate.ref) && newGeometries[index] !== undefined ? [index] : []));
+  if (chosenIndexes.length === 0) return null;
+  const points = geometriesOf(features, OUTLINE_ROLE.ACCESS).flatMap((geometry) => (geometry.type === "Point" ? [geometry.coordinates] : [[Number.NaN, Number.NaN]]));
+  const oldGeometry = features.find((feature) => feature.role === OUTLINE_ROLE.OLD)?.geometry ?? null;
+  const assigned = pointAssignmentsOf(points, oldGeometry, chosenIndexes.map((index) => newGeometries[index]));
+  return assigned.map((position) => (position === null ? null : (chosenIndexes[position] ?? null)));
+}
+
+/** How many access points go to a chosen section and how many to review; null while nothing is chosen. */
+export function pointSummaryOf(features: readonly EjesMapFeature[], candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): { assigned: number; review: number } | null {
+  const targets = pointTargetsOf(features, candidates, chosenRefs);
+  if (targets === null) return null;
+  const review = targets.filter((target) => target === null).length;
+  return { assigned: targets.length - review, review };
+}
+
+const pointTypeOf = (target: number | null | undefined): string =>
+  target === undefined ? MAP_SECTION_TYPE.ACCESS_POINT : target === null ? MAP_MANUAL_POINT_REVIEW_TYPE : MAP_MANUAL_POINT_TYPES[slotOf(target)];
+
+const fixedFeaturesOf = (features: readonly EjesMapFeature[], targets: Array<number | null> | null): Feature[] => {
+  let pointIndex = 0;
+  return features.flatMap((feature) => {
     const type = TYPE_OF_ROLE[feature.role];
-    return type === undefined ? [] : [featureOf(feature.geometry, type, feature.role === OUTLINE_ROLE.OLD ? feature.label : "")];
+    if (type === undefined) return [];
+    if (feature.role !== OUTLINE_ROLE.ACCESS) return [featureOf(feature.geometry, type, feature.role === OUTLINE_ROLE.OLD ? feature.label : "")];
+    const target = targets === null ? undefined : targets[pointIndex];
+    pointIndex += 1;
+    return [featureOf(feature.geometry, targets === null ? type : pointTypeOf(target), "")];
   });
+};
 
 const candidateFeaturesOf = (features: readonly EjesMapFeature[], candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): Feature[] => {
   const geometries = geometriesOf(features, OUTLINE_ROLE.NEW);
   return candidates.flatMap((candidate, index) => {
     const geometry = geometries[index];
     if (geometry === undefined) return [];
-    const type = chosenRefs.includes(candidate.ref) ? MAP_SECTION_TYPE.MANUAL_CHOSEN : MAP_SECTION_TYPE.MANUAL_CANDIDATE;
+    const type = chosenRefs.includes(candidate.ref) ? MAP_MANUAL_PIECE_TYPES[slotOf(index)] : MAP_SECTION_TYPE.MANUAL_CANDIDATE;
     return [featureOf(geometry, type, candidate.ref, { [CANDIDATE_REF_PROPERTY]: candidate.ref })];
   });
 };
@@ -113,7 +148,7 @@ export function manualSplitMapOf(
   mergeRefs: readonly string[] = []
 ): FeatureCollection {
   const drawn = [
-    ...fixedFeaturesOf(features),
+    ...fixedFeaturesOf(features, pointTargetsOf(features, candidates, chosenRefs)),
     ...candidateFeaturesOf(features, candidates, chosenRefs),
     ...neighbourFeaturesOf(features, neighbours, mergeRefs),
   ];

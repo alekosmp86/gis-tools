@@ -19,6 +19,8 @@ export interface ManualSplitFooterProps {
   selectedCount: number;
   /** The length in metres of the old section; null when its outline is not in the response. */
   oldLength: number | null;
+  /** The access points that go to a chosen section and those that go to review; null while nothing is chosen. */
+  pointSummary: { assigned: number; review: number } | null;
   /** The old sections joined into the one new section, the old section included; 0 when nothing is merged. */
   mergedOldCount: number;
   /** The apply is possible with the current choice (see `canApplyOf`). */
@@ -38,6 +40,7 @@ export function ManualSplitFooter({
   chosen,
   selectedCount,
   oldLength,
+  pointSummary,
   mergedOldCount,
   canApply,
   ignored,
@@ -52,6 +55,7 @@ export function ManualSplitFooter({
       <p className={styles.caption}>
         <span>{EJES_MANUAL_SPLIT_TEXT.CHOSEN_COUNT(chosen.length)}</span> <span>{chosenSummaryOf(chosen.length, mergedOldCount)}</span>
       </p>
+      {pointSummary !== null && <p className={styles.hint}>{EJES_MANUAL_SPLIT_TEXT.POINTS_SUMMARY(pointSummary.assigned, pointSummary.review)}</p>}
       {oldLength !== null && (
         <p className={styles.hint}>{EJES_MANUAL_SPLIT_TEXT.NEAR_SUM(metersTextOf(nearLengthSumOf(chosen)), metersTextOf(oldLength))}</p>
       )}

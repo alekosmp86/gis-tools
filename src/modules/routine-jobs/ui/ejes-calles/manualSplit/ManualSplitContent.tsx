@@ -18,7 +18,7 @@ import { ManualSplitControls } from "./ManualSplitControls";
 import { ManualSplitFooter } from "./ManualSplitFooter";
 import { ManualSplitMap } from "./ManualSplitMap";
 import { useManualCandidates } from "./useManualCandidates";
-import { canApplyOf, canChooseMore, chosenCandidatesOf, manualSplitMapOf, oldLengthOf, sortedCandidatesOf } from "./manualSplitView";
+import { canApplyOf, canChooseMore, chosenCandidatesOf, manualSplitMapOf, oldLengthOf, pointSummaryOf, sortedCandidatesOf } from "./manualSplitView";
 import styles from "./manualSplit.module.css";
 
 const ICON_SIZE = 15;
@@ -69,6 +69,7 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
     [map.features, map.candidates, map.neighbours, selectedRefs, tickedRefs]
   );
   const oldLength = oldLengthOf(map.features);
+  const pointSummary = useMemo(() => pointSummaryOf(map.features, map.candidates, selectedRefs), [map.features, map.candidates, selectedRefs]);
 
   const toggleRef = (ref: string) =>
     setSelectedRefs((current) => {
@@ -143,6 +144,7 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
             chosen={chosen}
             selectedCount={selectedRefs.length + tickedRefs.length}
             oldLength={oldLength}
+            pointSummary={pointSummary}
             mergedOldCount={mergedOldCount}
             canApply={canApplyOf(chosen.length, mergedOldCount)}
             ignored={ignored}

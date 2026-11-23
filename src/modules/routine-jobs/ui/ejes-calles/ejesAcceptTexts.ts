@@ -55,6 +55,7 @@ export const EJES_MANUAL_SPLIT_TEXT = {
   APPLY: "Aplicar",
   CLEAR_SELECTION: "Limpiar",
   SELECT_ALL: "Todos",
+  POINTS_SUMMARY: (assigned: number, review: number): string => `Puntos de acceso: ${assigned} a los tramos elegidos, ${review} a revisión`,
   IGNORE: "Ignorar",
   UNIGNORE: "Reabrir",
   RESOLVED_BADGE: (refs: string): string => `Resuelto: ${refs}`,

@@ -103,8 +103,14 @@ export const MAP_SPLIT_PIECE_TYPES = [
   "TRAMO_CANDIDATO_8",
 ] as const;
 
+/** The sections a manual choice picks, each in its own colour, and the access points that would go to each (same colour); a point sent to review is yellow. */
+export const MAP_MANUAL_PIECE_TYPES = ["TRAMO_ELEGIDO_1", "TRAMO_ELEGIDO_2", "TRAMO_ELEGIDO_3", "TRAMO_ELEGIDO_4", "TRAMO_ELEGIDO_5", "TRAMO_ELEGIDO_6", "TRAMO_ELEGIDO_7", "TRAMO_ELEGIDO_8"] as const;
+export const MAP_MANUAL_POINT_TYPES = ["PUNTO_A_TRAMO_1", "PUNTO_A_TRAMO_2", "PUNTO_A_TRAMO_3", "PUNTO_A_TRAMO_4", "PUNTO_A_TRAMO_5", "PUNTO_A_TRAMO_6", "PUNTO_A_TRAMO_7", "PUNTO_A_TRAMO_8"] as const;
+export const MAP_MANUAL_POINT_REVIEW_TYPE = "PUNTO_A_REVISAR";
+const MANUAL_PIECE_COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#06b6d4", "#f97316", "#ec4899", "#84cc16", "#14b8a6"] as const;
+
 /** Types drawn as points (a circle marker, not a line): the legend rings them in white like the marker. */
-export const MAP_POINT_TYPES: readonly string[] = [MAP_SECTION_TYPE.ACCESS_POINT];
+export const MAP_POINT_TYPES: readonly string[] = [MAP_SECTION_TYPE.ACCESS_POINT, ...MAP_MANUAL_POINT_TYPES, MAP_MANUAL_POINT_REVIEW_TYPE];
 
 /** Outline types with their own stroke or fill: a department is a thin dashed outline without fill, a locality a translucent area. */
 export const MAP_TYPE_LINE_STYLE: Record<string, MapTypeLineStyle | undefined> = {
@@ -115,6 +121,7 @@ export const MAP_TYPE_LINE_STYLE: Record<string, MapTypeLineStyle | undefined> =
   [MAP_SECTION_TYPE.MANUAL_CHOSEN]: { weight: 6 },
   [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR]: { weight: 3, dashArray: "6, 4" },
   [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR_CHOSEN]: { weight: 6, dashArray: "10, 4" },
+  ...Object.fromEntries(MAP_MANUAL_PIECE_TYPES.map((type) => [type, { weight: 6 }])),
 };
 
 const CANDIDATE_COLORS = ["#f59e0b", "#a855f7", "#facc15", "#f97316", "#e879f9"] as const;
@@ -145,6 +152,9 @@ const DISCREPANCY_COLORS: Record<string, string> = {
   [MAP_SECTION_TYPE.MANUAL_CHOSEN]: "#22c55e",
   [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR]: "#f59e0b",
   [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR_CHOSEN]: "#ef4444",
+  ...recordOf(MAP_MANUAL_PIECE_TYPES, (index) => MANUAL_PIECE_COLORS[index]),
+  ...recordOf(MAP_MANUAL_POINT_TYPES, (index) => MANUAL_PIECE_COLORS[index]),
+  [MAP_MANUAL_POINT_REVIEW_TYPE]: "#facc15",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "#ff0055",
   [DiscrepancyType.ATTRIBUTE_MISMATCH]: "#f59e0b",
   [DiscrepancyType.ONLY_IN_SHP]: "#a855f7",
@@ -180,6 +190,9 @@ const DISCREPANCY_LABELS: Record<string, string> = {
   [MAP_SECTION_TYPE.MANUAL_CHOSEN]: "Tramo elegido",
   [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR]: "Tramo viejo vecino",
   [MAP_SECTION_TYPE.MANUAL_NEIGHBOUR_CHOSEN]: "Tramo viejo a unir",
+  ...recordOf(MAP_MANUAL_PIECE_TYPES, (index) => `Tramo elegido ${index + 1}`),
+  ...recordOf(MAP_MANUAL_POINT_TYPES, (index) => `Puntos que irían al tramo ${index + 1}`),
+  [MAP_MANUAL_POINT_REVIEW_TYPE]: "Puntos a revisar",
   [MAP_SECTION_TYPE.COPY_KEPT]: "Se queda",
   [MAP_SECTION_TYPE.COPY_DROPPED]: "Se quitaría",
   [DiscrepancyType.GEOMETRY_MISMATCH]: "Discrepancia Geométrica",
