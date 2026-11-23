@@ -3,7 +3,7 @@ import { cte, jsonArrayOf, q, withClause } from "../../shared/sqlFragments";
 import { DETAIL_LIST_LIMIT } from "../../shared/limits";
 import { ACCESS_POINT_COLUMN, EJES_TABLE_ROLE, EJES_STAGING_COLUMN, GEOMETRY_TOLERANCE_M, MIN_SECTION_LENGTH_M } from "../constants";
 import type { EjesLayouts } from "../types";
-import { col, table } from "./layoutSql";
+import { col, scopedTable, table } from "./layoutSql";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
 
 export const INTEGER_PATTERN = "^[0-9]+$";
@@ -83,7 +83,7 @@ function stagingRowsCte(layouts: EjesLayouts): string {
       `(${geometry} IS NULL OR ST_IsEmpty(${geometry})) AS empty_geometry,`,
       `(NOT ${validGeometrySql(geometry, reference)}) AS invalid_geometry,`,
       `(${DAMAGED_COLUMNS.map((column) => `position(chr(65533) in COALESCE(s.${physicalColumn(staging, column)}::text, '')) > 0`).join(" OR ")}) AS damaged_text`,
-      `FROM ${qualifiedName(staging)} AS s`,
+      `FROM ${scopedTable(layouts, "STAGING")} AS s`,
     ].join(" ")
   );
 }
