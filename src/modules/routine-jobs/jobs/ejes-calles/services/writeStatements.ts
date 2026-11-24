@@ -6,10 +6,10 @@ export const ANALYSIS_CHANGED_MESSAGE = "Los ejes de origen o los tramos de dest
 export const CHOICE_NOT_APPLICABLE_MESSAGE =
   "Se eligió un destino para un punto que no requiere revisión o para una división que no se puede aplicar. Vuelva a analizar.";
 
-export const TWIN_PICK_NOT_APPLICABLE_MESSAGE =
+const TWIN_PICK_NOT_APPLICABLE_MESSAGE =
   "Se eligió una copia para un tramo que no existe en el origen con esa localidad y departamento. Vuelva a analizar.";
 
-export const MANUAL_SPLIT_NOT_APPLICABLE_MESSAGE =
+const MANUAL_SPLIT_NOT_APPLICABLE_MESSAGE =
   "Una división manual no se puede aplicar: su tramo anterior ya no falta en el origen o alguna pieza elegida ya no está disponible. Vuelva a analizar.";
 
 export const MOVE_TARGET_MISSING_MESSAGE =

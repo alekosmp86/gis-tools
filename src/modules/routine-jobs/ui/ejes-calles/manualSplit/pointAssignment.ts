@@ -31,7 +31,7 @@ const linesOf = (geometry: Geometry): Position[][] => {
 };
 
 /** The distance in metres from a WGS84 point to a WGS84 line, on a plane centred on the point; null when the geometry is not a line. */
-export function distanceToLineM(point: Position, geometry: Geometry): number | null {
+function distanceToLineM(point: Position, geometry: Geometry): number | null {
   const lines = linesOf(geometry).filter((line) => line.length > 1);
   if (lines.length === 0) return null;
   const distances = lines.flatMap((line) => line.slice(1).map((next, index) => segmentDistanceM(planarOf(line[index], point), planarOf(next, point))));

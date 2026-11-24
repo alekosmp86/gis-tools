@@ -82,7 +82,7 @@ const slotOf = (index: number): number => index % MAP_MANUAL_PIECE_TYPES.length;
  * The candidate (index in `candidates`) each access point of the old section would go to with the chosen sections, null for a point that
  * would go to review; null as a whole when nothing is chosen. The analysis rules, computed on the map geometries.
  */
-export function pointTargetsOf(features: readonly EjesMapFeature[], candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): Array<number | null> | null {
+function pointTargetsOf(features: readonly EjesMapFeature[], candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): Array<number | null> | null {
   const newGeometries = geometriesOf(features, OUTLINE_ROLE.NEW);
   const chosenIndexes = candidates.flatMap((candidate, index) => (chosenRefs.includes(candidate.ref) && newGeometries[index] !== undefined ? [index] : []));
   if (chosenIndexes.length === 0) return null;

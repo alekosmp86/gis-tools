@@ -225,8 +225,6 @@ export function manualSplitsAfter(splits: readonly EjesManualSplit[], change: Ej
 export const manualSplitOf = (splits: readonly EjesManualSplit[], oldRef: string): EjesManualSplit | undefined =>
   splits.find((split) => split.oldRef === oldRef);
 
-export const manualSplitsCapReached = (splits: readonly EjesManualSplit[]): boolean => splits.length >= ACCEPTED_KEYS_LIMIT;
-
 /** The ignored old sections after one is marked or unmarked. Never mutates the list it is given. */
 export function ignoredRefsAfter(ignoredRefs: readonly string[], change: EjesIgnoredRefChange): string[] {
   const others = ignoredRefs.filter((ref) => ref !== change.oldRef);

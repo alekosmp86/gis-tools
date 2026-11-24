@@ -1,4 +1,4 @@
-import { ACCEPTED_KEYS_LIMIT, MANUAL_SPLIT_REASON, type ManualSplitReason } from "../../jobs/ejes-calles/constants";
+import { ACCEPTED_KEYS_LIMIT } from "../../jobs/ejes-calles/constants";
 import { plural } from "../../jobs/shared/text";
 
 export const EJES_ACCEPT_TEXT = {
@@ -77,13 +77,6 @@ export const EJES_MANUAL_SPLIT_TEXT = {
   FACTS: (idcalle: string, points: number): string => `idcalle ${idcalle}, puntos de acceso: ${points}`,
 } as const;
 
-export const manualAppliedTextOf = (applied: number): string => `Divisiones manuales aplicadas: ${applied}`;
-
 export const manualLoadLineOf = (count: number): string =>
   `Cargar ahora aplicará ${plural(count, "división manual", "divisiones manuales")}.`;
 
-export const MANUAL_SPLIT_IGNORED_TEXT: Record<ManualSplitReason, string> = {
-  [MANUAL_SPLIT_REASON.NOT_REMOVED]: "No aplicada: el tramo anterior ya no se quita",
-  [MANUAL_SPLIT_REASON.PIECE_UNAVAILABLE]:
-    "No aplicada: un tramo nuevo ya no está disponible (varias copias, existe en carto o ya tiene destino)",
-};

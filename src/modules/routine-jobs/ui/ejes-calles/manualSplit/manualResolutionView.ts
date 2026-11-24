@@ -7,7 +7,7 @@ export const ManualResolutionKind = {
   IGNORED: "ignored",
 } as const;
 
-export type ManualResolutionKind = (typeof ManualResolutionKind)[keyof typeof ManualResolutionKind];
+type ManualResolutionKind = (typeof ManualResolutionKind)[keyof typeof ManualResolutionKind];
 
 export type ManualResolution =
   | { kind: typeof ManualResolutionKind.MANUAL; newRefs: readonly string[] }
@@ -16,7 +16,7 @@ export type ManualResolution =
 export type IsResolved = (oldRef: string) => boolean;
 
 /** How an old section is resolved by the user: its chosen new sections, or ignored; null while it is open. */
-export const manualResolutionOf = (
+const manualResolutionOf = (
   oldRef: string,
   manualSplits: readonly EjesManualSplit[],
   ignoredRefs: readonly string[]

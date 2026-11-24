@@ -24,7 +24,7 @@ const textOf = (layouts: EjesLayouts, column: string): string =>
 export const accessPointRefSql = (layouts: EjesLayouts): string =>
   canonicalTextSql(`a.${col(layouts, "ACCESS_POINT", ACCESS_POINT_COLUMN.ROAD_SECTION)}`);
 
-export const SHORT_UNHELD_CTE_NAME = "short_unheld";
+const SHORT_UNHELD_CTE_NAME = "short_unheld";
 
 /**
  * The references of the short staging sections (below `MIN_SECTION_LENGTH_M`) that no access point holds. A hash join builds it once per
