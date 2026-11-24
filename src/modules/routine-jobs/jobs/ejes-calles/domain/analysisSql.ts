@@ -35,6 +35,7 @@ import {
   type RenumberSinks,
 } from "./renumberSql";
 import { isPieceSql } from "./pieceSql";
+import { renamedStreetsCountColumns, renamedStreetsCtes, renamedStreetsListColumn } from "./renameStreetSql";
 import { groupPieceCtes, removalSinkCtes, type RemovalSinks } from "./removalSql";
 import { copyVariantCte, singleCopyCte } from "./splitHoldSql";
 import { reviewPointCtes, reviewPointsColumn, splitPointCountColumns, splitPointCtes, splitPointSinkCtes } from "./splitPointSql";
@@ -69,6 +70,7 @@ export const ANALYSIS_LIST_ALIAS = {
   RENUMBER_SKIPPED: "renumber_skipped_json",
   RENUMBER_DROPPED: "renumber_dropped_json",
   MANUAL_IGNORED: "manual_splits_ignored_json",
+  RENAMED: "renamed_streets_json",
 } as const;
 
 export { comparableLineSql };
@@ -504,6 +506,7 @@ function listColumns(): string[] {
     renumberListColumn(ANALYSIS_LIST_ALIAS.RENUMBERED),
     renumberSkippedListColumn(ANALYSIS_LIST_ALIAS.RENUMBER_SKIPPED),
     renumberDroppedListColumn(ANALYSIS_LIST_ALIAS.RENUMBER_DROPPED),
+    renamedStreetsListColumn(ANALYSIS_LIST_ALIAS.RENAMED),
   ];
 }
 
@@ -523,6 +526,7 @@ function countColumns(): string[] {
     `(SELECT count(*) FROM ${q("plain")} AS p LEFT JOIN ${q("ap")} AS ap ON ap.ref = p.ref LEFT JOIN ${q("ap")} AS apid ON apid.ref = p.id::text WHERE COALESCE(ap.points, 0) + COALESCE(apid.points, 0) > 0) AS "plain_held"`,
     `${countOf("kept_by_candidate")} AS "kept_by_discarded_candidate"`,
     `${countOf("new_streets")} AS "new_streets"`,
+    ...renamedStreetsCountColumns(),
     `${countOf("located", "cloc IS NOT NULL")} AS "with_locality"`,
     `${countOf("located", "cloc IS NULL AND dept_code IS NOT NULL")} AS "only_department"`,
     `${countOf("located", "cloc IS NULL AND dept_code IS NULL")} AS "without_code"`,
@@ -583,6 +587,7 @@ export function buildEjesAnalysisSql(
     ...(sinks === undefined ? [] : splitPointSinkCtes(sinks.splitPoints)),
     ...reviewPointCtes(),
     ...clocCtes(layouts),
+    ...renamedStreetsCtes(layouts),
   ];
   return `${withClause(ctes)}\nSELECT\n${[...countColumns(), ...listColumns()].join(",\n")}`;
 }

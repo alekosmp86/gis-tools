@@ -13,6 +13,7 @@ const ACCEPTED_KEY = {
   TWIN_PICKS: "twinPicks",
   MANUAL_SPLITS: "manualSplits",
   AUTO_PLAIN_REMOVALS: "autoPlainRemovals",
+  RENAMED_STREETS: "renamedStreets",
 } as const;
 
 const SPLIT_KEY = { OLD_REF: "oldRef", CHOICES: "choices" } as const;
@@ -41,20 +42,28 @@ function canonicalRef(path: string, value: unknown): string {
   return String(BigInt(value));
 }
 
-/** Absent means none. The list is refused above the limit, never truncated; a repeated reftramo is sent once. */
-function readRefs(accepted: JsonRecord, key: string, field: string): string[] {
+/** Every entry of an accepted list, canonical, in request order. Absent means none; the list is refused above the limit, never truncated. */
+function readRefEntries(accepted: JsonRecord, key: string, field: string): string[] {
   const list = accepted[key];
   if (list === undefined) return [];
   if (!Array.isArray(list)) throw invalid(`El campo accepted.${key} debe ser una lista.`);
   if (list.length > ACCEPTED_KEYS_LIMIT) throw invalid(`El campo accepted.${key} admite como máximo ${ACCEPTED_KEYS_LIMIT} elementos.`);
-  return [
-    ...new Set(
-      list.map((entry) => {
-        if (!isRecord(entry)) throw invalid(`Cada elemento de accepted.${key} debe ser un objeto.`);
-        return canonicalRef(`accepted.${key}.${field}`, entry[field]);
-      })
-    ),
-  ];
+  return list.map((entry) => {
+    if (!isRecord(entry)) throw invalid(`Cada elemento de accepted.${key} debe ser un objeto.`);
+    return canonicalRef(`accepted.${key}.${field}`, entry[field]);
+  });
+}
+
+/** A repeated reftramo is sent once. */
+function readRefs(accepted: JsonRecord, key: string, field: string): string[] {
+  return [...new Set(readRefEntries(accepted, key, field))];
+}
+
+/** One rename per canonical `idcalle`: a repeated one is refused, never merged. */
+function readRenamedStreets(accepted: JsonRecord): string[] {
+  const idcalles = readRefEntries(accepted, ACCEPTED_KEY.RENAMED_STREETS, "idcalle");
+  if (new Set(idcalles).size !== idcalles.length) throw invalid(`El campo accepted.${ACCEPTED_KEY.RENAMED_STREETS} repite un idcalle.`);
+  return idcalles;
 }
 
 function readChoice(entry: unknown): EjesPointChoice {
@@ -211,6 +220,7 @@ export function readEjesAccepted(body: JsonRecord): EjesAccepted {
     twinPicks: readTwinPicks(accepted),
     manualSplits: readManualSplits(accepted),
     autoPlainRemovals: readAutoPlainRemovals(accepted),
+    renamedStreets: readRenamedStreets(accepted),
   };
 }
 

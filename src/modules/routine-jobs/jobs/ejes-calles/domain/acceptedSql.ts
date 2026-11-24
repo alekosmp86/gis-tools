@@ -47,6 +47,8 @@ export function buildAcceptedTablesSql(accepted: EjesAccepted): string[] {
     createTableSql(LOAD_TEMP.ACC_PLAIN, "ref text"),
     ...insertRowsSql(LOAD_TEMP.ACC_PLAIN, accepted.plainRemovals.map((ref) => [ref])),
     ...autoPlainStatementsOf(accepted),
+    createTableSql(LOAD_TEMP.ACC_WAY, "idcalle text"),
+    ...insertRowsSql(LOAD_TEMP.ACC_WAY, (accepted.renamedStreets ?? []).map((idcalle) => [idcalle])),
     createTableSql(LOAD_TEMP.ACC_TWIN, "ref text"),
     ...insertRowsSql(LOAD_TEMP.ACC_TWIN, accepted.twinRemovals.map((ref) => [ref])),
     createTableSql(LOAD_TEMP.ACC_TWIN_PICK, "ref text, department text, locality text"),

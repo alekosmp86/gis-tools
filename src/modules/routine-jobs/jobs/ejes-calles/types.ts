@@ -64,6 +64,8 @@ export interface EjesAccepted {
   manualSplits: EjesManualSplit[];
   /** Every plain removal of the analysis with no access point (by `reftramo` and by id) is accepted too; the rows with points never are. */
   autoPlainRemovals: boolean;
+  /** Street renames accepted by canonical `idcalle` (EJL-31): only the streets of the analysis' `renamedStreets` that are not `multiName`. Absent means none. */
+  renamedStreets?: string[];
 }
 
 export interface EjesParams {
@@ -123,6 +125,10 @@ export interface EjesCounts {
   /** Old sections of the plain removals kept because a discarded file row of their place is the only candidate. */
   keptByDiscardedCandidate: number;
   newStreets: number;
+  /** Streets whose carto name differs from the file's after normalisation (EJL-31): accepted per street, renamed only then. */
+  renamedStreets?: number;
+  /** Renamed streets the file names in more than one way: listed, never renamed. */
+  renamedStreetsHeld?: number;
   twins: number;
   /** Geometric twins (ET-20 to ET-27): groups, members, losers not in carto (omitted), losers in carto (removable), reftramos skipped by the conservative rule. */
   geoTwinGroups: number;
@@ -224,6 +230,16 @@ export interface EjesNewStreetRow {
   tipos: string | null;
   departments: string | null;
   localities: string | null;
+}
+
+/** A street whose carto name differs from the file's (EJL-31): `currentNames` as carto holds them, `ways` the rows a rename changes. */
+export interface EjesRenamedStreetRow {
+  idcalle: string;
+  currentNames: string | null;
+  newName: string | null;
+  sections: number;
+  ways: number;
+  multiName: boolean;
 }
 
 export interface EjesAttrRow {
@@ -357,6 +373,7 @@ export interface EjesAnalysis {
   plainRemovals: EjesRemovalRow[];
   keptByDiscarded: EjesKeptByDiscardedRow[];
   newStreets: EjesNewStreetRow[];
+  renamedStreets: EjesRenamedStreetRow[];
   attrChanges: EjesAttrRow[];
   twins: EjesTwinRow[];
   twinUndecided: EjesTwinUndecidedRow[];

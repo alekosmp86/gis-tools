@@ -11,6 +11,7 @@ import type {
   EjesInvalidGeometryRow,
   EjesMergeRow,
   EjesNewStreetRow,
+  EjesRenamedStreetRow,
   EjesKeptByDiscardedRow,
   EjesRemovalRow,
   EjesRenumberedRow,
@@ -37,6 +38,15 @@ const reviewPointOf = (row: Row): EjesStoredReviewPoint => ({
   reason: row.reason === EJES_POINT_REASON.AMBIGUOUS ? EJES_POINT_REASON.AMBIGUOUS : EJES_POINT_REASON.NO_GEOMETRY,
   suggestedRef: textOf(row.suggestedRef),
   candidates: listOf(row.candidates).map(candidateOf),
+});
+
+const renamedStreetOf = (row: Row): EjesRenamedStreetRow => ({
+  idcalle: String(row.idcalle),
+  currentNames: textOf(row.currentNames),
+  newName: textOf(row.newName),
+  sections: numberOf(row.sections),
+  ways: numberOf(row.ways),
+  multiName: row.multiName === true,
 });
 
 const manualIgnoredOf = (row: Row): EjesManualSplitIgnored => ({
@@ -227,6 +237,8 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
       plainHeld: numberOf(row.plain_held),
       keptByDiscardedCandidate: numberOf(row.kept_by_discarded_candidate),
       newStreets: numberOf(row.new_streets),
+      renamedStreets: numberOf(row.renamed_streets),
+      renamedStreetsHeld: numberOf(row.renamed_streets_held),
       twins: numberOf(row.twins),
       geoTwinGroups: numberOf(row.geo_twin_groups),
       geoTwinSections: numberOf(row.geo_twin_sections),
@@ -268,6 +280,7 @@ export function toEjesAnalysis(row: Row): EjesAnalysis {
     plainRemovals: listOf(row[ANALYSIS_LIST_ALIAS.PLAIN]).map(removalOf),
     keptByDiscarded: listOf(row[ANALYSIS_LIST_ALIAS.KEPT_BY_DISCARDED]).map(keptByDiscardedOf),
     newStreets: listOf(row[ANALYSIS_LIST_ALIAS.STREETS]).map(streetOf),
+    renamedStreets: listOf(row[ANALYSIS_LIST_ALIAS.RENAMED]).map(renamedStreetOf),
     attrChanges: listOf(row[ANALYSIS_LIST_ALIAS.ATTRS]).map(attrOf),
     twins: listOf(row[ANALYSIS_LIST_ALIAS.TWINS]).map(twinOf),
     twinUndecided: listOf(row[ANALYSIS_LIST_ALIAS.TWIN_UNDECIDED]).map(twinUndecidedOf),

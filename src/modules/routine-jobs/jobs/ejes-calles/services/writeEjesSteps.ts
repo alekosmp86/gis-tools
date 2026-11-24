@@ -6,7 +6,7 @@ import { numberOf } from "../../shared/rowMapping";
 import { buildSequenceRepairSql, runTransaction, type TransactionMessages } from "../../shared/transaction";
 import { EJES_TABLE_ROLE } from "../constants";
 import { assertManualSplitsApply, assertMoveTargetsExist, assertTwinPicksExist, prepareAccepted, createRemovalPlans, writeRemovals } from "./removalLoad";
-import { ANALYSIS_CHANGED_MESSAGE, assertWritten, runInOrder, writtenBy } from "./writeStatements";
+import { ANALYSIS_CHANGED_MESSAGE, assertRenamesAccepted, assertWritten, runInOrder, writtenBy } from "./writeStatements";
 import { ejesBlockersOf } from "../domain/blockers";
 import {
   changedSummaryKeys,
@@ -55,7 +55,7 @@ import {
   buildUpdateIdcalleSql,
   buildUpdateTypeSql,
 } from "../domain/loadWriteSql";
-import { buildInsertWayInputSql, buildInsertWayRenameInputSql, newWayOf } from "../domain/loadWays";
+import { acceptedRenamesOf, buildInsertWayInputSql, buildInsertWayRenameInputSql, newWayOf } from "../domain/loadWays";
 import { buildSkippedListSql, buildSkippedReasonCountsSql } from "../domain/removalPlanSql";
 import { EJES_STEP } from "../domain/plannedSteps";
 import {
@@ -152,7 +152,7 @@ async function assertSingleParts(session: RunSession): Promise<void> {
   if (multiPart > 0) throwIfIssues([multiPartMessage(multiPart)]);
 }
 
-async function createWays(session: RunSession, context: EjesLoadContext): Promise<void> {
+async function createWays(session: RunSession, context: EjesLoadContext, accepted: EjesAccepted): Promise<void> {
   const ways = (await session.query(buildNewWaysSql(context.layouts))).rows.map(newWayOf);
   await session.query(buildCreateWayInputSql());
   for (const statement of buildInsertWayInputSql(ways)) {
@@ -160,9 +160,10 @@ async function createWays(session: RunSession, context: EjesLoadContext): Promis
     await session.query(statement);
   }
   await session.query(buildWayTableSql(context));
-  const renamed = (await session.query(buildRenamedWaysSql(context.layouts))).rows.map(newWayOf);
+  const candidates = (await session.query(buildRenamedWaysSql(context.layouts))).rows;
+  assertRenamesAccepted(candidates, accepted.renamedStreets ?? []);
   await session.query(buildCreateWayRenameInputSql());
-  for (const statement of buildInsertWayRenameInputSql(renamed)) {
+  for (const statement of buildInsertWayRenameInputSql(acceptedRenamesOf(candidates))) {
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await session.query(statement);
   }
@@ -170,14 +171,14 @@ async function createWays(session: RunSession, context: EjesLoadContext): Promis
 }
 
 /** Everything the writes and the revert file need is built first, from the tables as locked: ids are taken here, nothing is written yet. */
-async function prepareLoad(session: RunSession, context: EjesLoadContext): Promise<EjesLoadPlan> {
+async function prepareLoad(session: RunSession, context: EjesLoadContext, accepted: EjesAccepted): Promise<EjesLoadPlan> {
   await createSelection(session, context);
   await createRemovalPlans(session, context);
   await assertMoveTargetsExist(session, context.layouts);
   await assertSingleParts(session);
   await session.query(buildNewTableSql(context));
   await createTopologyInputs(session, context);
-  await createWays(session, context);
+  await createWays(session, context, accepted);
   await session.query(buildSurplusTableSql(context));
   await runInOrder(session, [
     buildRevertSectionsSql(context, context.layouts),
@@ -305,7 +306,7 @@ async function persistBody(
   await timer.run(EJES_STEP.SEQUENCES, () => repairSequences(session, context));
   // Ordered: the ids come from the repaired sequences.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
-  const plan = await timer.run(EJES_STEP.SELECT, () => prepareLoad(session, context));
+  const plan = await timer.run(EJES_STEP.SELECT, () => prepareLoad(session, context, accepted));
   // One transaction on one pg client: the lists are read before the backup, never alongside it.
   // react-doctor-disable-next-line react-doctor/server-sequential-independent-await
   const lists = await readLoadLists(session);

@@ -7,6 +7,7 @@ import { col, table } from "./layoutSql";
 import { nextvalSql, physicalOf, qualifiedOf } from "./loadContext";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
 import { shortUnheldCte } from "./stagingSql";
+import { renameCandidateCtes } from "./renameStreetSql";
 import { distinctPairsCountSql } from "./renumberSql";
 import { twinCtes, twinGroupCtes } from "./twinSql";
 import { twinPicksTableCte } from "./twinPickSql";
@@ -30,6 +31,7 @@ export const LOAD_TEMP = {
   ACC_CHOICE: "ej_acc_choice",
   ACC_MERGE: "ej_acc_merge",
   ACC_PLAIN: "ej_acc_plain",
+  ACC_WAY: "ej_acc_way",
   MERGE_PLAN: "ej_merge_plan",
   PLAIN_PLAN: "ej_plain_plan",
   MOVE: "ej_move",
@@ -149,7 +151,7 @@ export function buildPairTableSql(): string {
   );
 }
 
-/** ATTR and GEOM flags per pair, computed once while the tables are locked. A name change alone writes nothing: `circulation_way` rows are never changed. */
+/** ATTR and GEOM flags per pair, computed once while the tables are locked. A name change alone sets no flag: the renames of `circulation_way` come from `buildRenamedWaysSql`. */
 export function buildStateTableSql(layouts: EjesLayouts): string {
   const section = (logical: string): string => `r.${col(layouts, "ROAD_SECTION", logical)}`;
   return createTemp(
@@ -270,17 +272,15 @@ export const buildSurplusListSql = (limit: number): string =>
   ].join(" ");
 
 /**
- * The streets of the loaded copies whose `idcalle` has a `circulation_way` row under another name than the file's: every such row is renamed, so the
- * rows of that street id are renamed in place instead of a second way being created. One name per `idcalle` (the lowest, if the file has several).
+ * The rename candidates of the loaded copies (the same rule as the analysis' `renamed_streets`): `(idcalle, name, multi_name, accepted)`.
+ * `accepted` is set for the streets of `ej_acc_way`; the load renames only those that are accepted and not `multi_name`.
  */
 export function buildRenamedWaysSql(layouts: EjesLayouts): string {
   return [
-    withClause([circulationPairsCte(layouts)]),
-    'SELECT n.idcalle AS "idcalle", n.name AS "name" FROM (',
-    `SELECT c.idcalle AS idcalle, min(c.nombre) AS name FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE c.idcalle IS NOT NULL AND c.nombre IS NOT NULL GROUP BY c.idcalle`,
-    ") AS n",
-    `WHERE EXISTS (SELECT 1 FROM ${q("cw_pairs")} AS p WHERE p.idcalle = n.idcalle AND p.name IS DISTINCT FROM n.name)`,
-    "ORDER BY n.idcalle",
+    withClause([circulationPairsCte(layouts), ...renameCandidateCtes(tmp(LOAD_TEMP.COPY))]),
+    'SELECT s.idcalle AS "idcalle", s.new_name AS "name", s.multi_name AS "multi_name",',
+    `EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.ACC_WAY)} AS a WHERE a.idcalle = s.idcalle) AS "accepted"`,
+    `FROM ${q("renamed_streets")} AS s ORDER BY s.idcalle`,
   ].join(" ");
 }
 

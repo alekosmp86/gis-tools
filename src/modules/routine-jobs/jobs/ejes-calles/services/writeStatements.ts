@@ -1,5 +1,5 @@
 import type { RunSession } from "../../cargar-padrones/types";
-import { numberOf } from "../../shared/rowMapping";
+import { numberOf, type Row } from "../../shared/rowMapping";
 import { WRITTEN_ALIAS } from "../domain/loadWriteSql";
 
 export const ANALYSIS_CHANGED_MESSAGE = "Los ejes de origen o los tramos de destino cambiaron desde el análisis; vuelva a analizar.";
@@ -35,6 +35,12 @@ export function assertWritten(label: string, written: number, expected: number):
   if (written !== expected) {
     throw new Error(`Las filas escritas en ${label} (${written}) no coinciden con las esperadas (${expected}).`);
   }
+}
+
+/** Fail closed (EJL-31): every accepted street must be a rename candidate that is not `multi_name`; otherwise the analysis is stale. */
+export function assertRenamesAccepted(candidates: readonly Row[], acceptedIdcalles: readonly string[]): void {
+  const renamable = new Set(candidates.filter((row) => row.multi_name !== true).map((row) => String(row.idcalle)));
+  if (acceptedIdcalles.some((idcalle) => !renamable.has(idcalle))) throw new Error(ANALYSIS_CHANGED_MESSAGE);
 }
 
 export async function writtenBy(session: RunSession, sql: string): Promise<number> {

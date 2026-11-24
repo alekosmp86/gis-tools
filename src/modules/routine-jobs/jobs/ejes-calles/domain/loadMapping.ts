@@ -20,6 +20,7 @@ export const NO_ACCEPTED: EjesAccepted = {
   twinPicks: [],
   manualSplits: [],
   autoPlainRemovals: false,
+  renamedStreets: [],
 };
 
 export interface EjesLoadPlan {
