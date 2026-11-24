@@ -178,13 +178,17 @@ export const buildAnalyzeLoadedSql = (context: EjesLoadContext, role: EjesLoadRo
 };
 
 /** A street id that already exists under another name is renamed in every row of that id (name and short name), not duplicated. */
+/** A file value that is NULL keeps the way's current value. */
 export function buildRenameWaysSql(context: EjesLoadContext): string {
   const way = EJES_TABLE_ROLE.CIRCULATION_WAY;
   const physical = (logical: string): string => physicalOf(context, way, logical);
+  const assigned = (logical: string, fileColumn: string): string => `${physical(logical)} = ${typedAs(context, way, logical, `r.${fileColumn}`)}`;
+  const kept = (logical: string, fileColumn: string): string =>
+    `${physical(logical)} = COALESCE(${typedAs(context, way, logical, `r.${fileColumn}`)}, w.${physical(logical)})`;
   return counted(
     [
-      `UPDATE ${qualifiedOf(context, way)} AS w SET ${physical(CIRCULATION_WAY_COLUMN.NAME)} = ${typedAs(context, way, CIRCULATION_WAY_COLUMN.NAME, "r.name")},`,
-      `${physical(CIRCULATION_WAY_COLUMN.SHORT_NAME)} = ${typedAs(context, way, CIRCULATION_WAY_COLUMN.SHORT_NAME, "r.short_name")}`,
+      `UPDATE ${qualifiedOf(context, way)} AS w SET ${assigned(CIRCULATION_WAY_COLUMN.NAME, "name")}, ${assigned(CIRCULATION_WAY_COLUMN.SHORT_NAME, "short_name")},`,
+      `${kept(CIRCULATION_WAY_COLUMN.ROAD_TYPE, "type_id")}, ${kept(CIRCULATION_WAY_COLUMN.FONT, "font_id")}`,
       `FROM ${tmp(LOAD_TEMP.WAY_RENAME_IN)} AS r WHERE w.${physical(CIRCULATION_WAY_COLUMN.CALLE)}::text = r.idcalle`,
       `AND w.${physical(CIRCULATION_WAY_COLUMN.NAME)} IS DISTINCT FROM r.name`,
     ].join(" ")

@@ -5,7 +5,7 @@ import { col, countOf, listOf, table } from "./layoutSql";
 import { canonicalTextSql } from "./stagingSql";
 
 /** A name as the rename compares it: upper case, no accents, one space between words, no edge spaces. */
-const normalizedNameSql = (expression: string): string =>
+export const normalizedNameSql = (expression: string): string =>
   `upper(btrim(regexp_replace(translate(${expression}, 'ÁÉÍÓÚÜÑáéíóúüñ', 'AEIOUUNaeiouun'), '\\s+', ' ', 'g')))`;
 
 /** The file's copies of each `idcalle` with their trimmed names and normalised names; `copies` is the source of the copies (the analysis' kept copies or `ej_copy`). */

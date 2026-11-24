@@ -70,6 +70,9 @@ describe("renamed streets on PGlite (EJL-31)", () => {
 
   const waysOf = async (): Promise<Row[]> => rowsOf(database, "SELECT id, id_calle, name, short_name FROM carto.circulation_way ORDER BY id");
 
+  const waysWithTypesOf = async (): Promise<Row[]> =>
+    rowsOf(database, "SELECT id, id_calle, name, short_name, id_road_type, id_font FROM carto.circulation_way ORDER BY id");
+
   const readBackup = async (outcome: EjesPersistOutcome): Promise<string> => {
     const entry = getRevertBackup(outcome.load.backup?.token ?? "");
     expect(entry).toBeDefined();
@@ -119,6 +122,23 @@ describe("renamed streets on PGlite (EJL-31)", () => {
       await database.exec(await readBackup(outcome));
 
       expect(await waysOf()).toEqual(before);
+    });
+
+    it("should set the road type and font of the file to the renamed way, and the revert restore all four values", async () => {
+      const way = await insertWay(database, STREET, "NOMBRE VIEJO", 4, 1);
+      await insertStaging(database, [{ ref: "1001", calle: "77", nombre: ITALIA, tipo: "PASAJE", fuente: "INE", geom: "0:10" }]);
+      const before = await waysWithTypesOf();
+
+      const outcome = await persist([{ idcalle: String(STREET) }]);
+
+      expect(outcome.load.counts).toMatchObject({ waysRenamed: 1 });
+      expect(await waysWithTypesOf()).toEqual([
+        { id: way, id_calle: STREET, name: ITALIA, short_name: "AV ITALIA", id_road_type: 10, id_font: 3 },
+      ]);
+
+      await database.exec(await readBackup(outcome));
+
+      expect(await waysWithTypesOf()).toEqual(before);
     });
   });
 

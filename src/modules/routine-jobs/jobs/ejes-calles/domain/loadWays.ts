@@ -47,16 +47,21 @@ const renamedNameOf = (row: Row): string => textOf(row.accepted_name) ?? namesOf
 
 /** The accepted renames (EJL-31) as ways to rename, with the short name of the name written. */
 export const acceptedRenamesOf = (candidates: readonly Row[]): NewWayRow[] =>
-  candidates.filter((row) => row.accepted === true).map((row) => newWayOf({ idcalle: row.idcalle, name: renamedNameOf(row) }));
+  candidates
+    .filter((row) => row.accepted === true)
+    .map((row) => newWayOf({ idcalle: row.idcalle, name: renamedNameOf(row), type_id: row.type_id, font_id: row.font_id }));
 
-/** The renamed streets as `(idcalle, name, short_name)`, the short name made by the same rules as a new way. */
+/** The renamed streets as `(idcalle, name, short_name, type_id, font_id)`, the short name made by the same rules as a new way. */
 export function buildInsertWayRenameInputSql(ways: readonly NewWayRow[]): string[] {
   const statements: string[] = [];
   for (let start = 0; start < ways.length; start += LOAD_CHUNK_SIZE) {
     const values = ways
       .slice(start, start + LOAD_CHUNK_SIZE)
-      .map((way) => `(${[literal(way.idcalle), nullableLiteral(way.name), nullableLiteral(way.shortName)].join(", ")})`);
-    statements.push(`INSERT INTO ${q(LOAD_TEMP.WAY_RENAME_IN)} (idcalle, name, short_name) VALUES ${values.join(", ")}`);
+      .map(
+        (way) =>
+          `(${[literal(way.idcalle), nullableLiteral(way.name), nullableLiteral(way.shortName), nullableLiteral(way.typeId), nullableLiteral(way.fontId)].join(", ")})`
+      );
+    statements.push(`INSERT INTO ${q(LOAD_TEMP.WAY_RENAME_IN)} (idcalle, name, short_name, type_id, font_id) VALUES ${values.join(", ")}`);
   }
   return statements;
 }

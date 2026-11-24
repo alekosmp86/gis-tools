@@ -277,22 +277,26 @@ export function buildRevertPageSql(name: string, pageSize: number, afterCursor: 
     .join(" ");
 }
 
-/** One UPDATE per renamed street row, with the name and short name it held before the load. */
+/** One UPDATE per renamed way row, with the name, short name, road type and font it held before the load. */
 export function buildRevertWayRenamesSql(context: EjesLoadContext): string {
   const way = EJES_TABLE_ROLE.CIRCULATION_WAY;
+  const restored = [
+    [CIRCULATION_WAY_COLUMN.NAME, "o.name"],
+    [CIRCULATION_WAY_COLUMN.SHORT_NAME, "o.short_name"],
+    [CIRCULATION_WAY_COLUMN.ROAD_TYPE, "o.road_type"],
+    [CIRCULATION_WAY_COLUMN.FONT, "o.font"],
+  ];
+  const assignments = restored.map(() => "%s = %L").join(", ");
   const args = [
     literal(qualifiedOf(context, way)),
-    literal(physicalOf(context, way, CIRCULATION_WAY_COLUMN.NAME)),
-    "o.name",
-    literal(physicalOf(context, way, CIRCULATION_WAY_COLUMN.SHORT_NAME)),
-    "o.short_name",
+    ...restored.flatMap(([logical, value]) => [literal(physicalOf(context, way, logical)), value]),
     literal(physicalOf(context, way, CIRCULATION_WAY_COLUMN.ID)),
     "o.way_id",
   ];
   return createTemp(
     REVERT_TEMP.WAY_RENAMES,
     [
-      `SELECT (row_number() OVER (ORDER BY o.way_id))::bigint AS n, ${formatOf("UPDATE %s SET %s = %L, %s = %L WHERE %s = %L;", args)} AS line`,
+      `SELECT (row_number() OVER (ORDER BY o.way_id))::bigint AS n, ${formatOf(`UPDATE %s SET ${assignments} WHERE %s = %L;`, args)} AS line`,
       `FROM ${tmp(LOAD_TEMP.WAY_RENAME_OLD)} AS o`,
     ].join(" ")
   );

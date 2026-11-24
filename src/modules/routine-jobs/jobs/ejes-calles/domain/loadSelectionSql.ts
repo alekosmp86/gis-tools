@@ -7,7 +7,7 @@ import { col, table } from "./layoutSql";
 import { nextvalSql, physicalOf, qualifiedOf } from "./loadContext";
 import { FUENTE_MAP_CTE_NAME, fuenteMapCte, TIPO_MAP_CTE_NAME, tipoMapCte } from "./mappings";
 import { shortUnheldCte } from "./stagingSql";
-import { renameCandidateCtes } from "./renameStreetSql";
+import { normalizedNameSql, renameCandidateCtes } from "./renameStreetSql";
 import { distinctPairsCountSql } from "./renumberSql";
 import { twinCtes, twinGroupCtes } from "./twinSql";
 import { twinPicksTableCte } from "./twinPickSql";
@@ -275,27 +275,35 @@ export const buildSurplusListSql = (limit: number): string =>
  * The rename candidates of the loaded copies (the same rule as the analysis' `renamed_streets`): `(idcalle, names, accepted, accepted_name)`.
  * `accepted` is set for the streets of `ej_acc_way`, with the name the user chose there (null when none was sent).
  */
+const chosenNameSql = (): string => `COALESCE((SELECT a.name FROM ${tmp(LOAD_TEMP.ACC_WAY)} AS a WHERE a.idcalle = s.idcalle), s.names[1])`;
+
+/** The type or font of the copies of the street named as the rename writes it, the same first copy a new way gets. */
+const renamedCopyValueSql = (column: string): string =>
+  `(SELECT (array_agg(c.${column} ORDER BY length(c.ref), c.ref))[1] FROM ${tmp(LOAD_TEMP.COPY)} AS c WHERE c.idcalle = s.idcalle AND ${normalizedNameSql("c.nombre")} = ${normalizedNameSql(chosenNameSql())})`;
+
 export function buildRenamedWaysSql(layouts: EjesLayouts): string {
   return [
     withClause([circulationPairsCte(layouts), ...renameCandidateCtes(tmp(LOAD_TEMP.COPY))]),
     'SELECT s.idcalle AS "idcalle", s.names AS "names",',
     `EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.ACC_WAY)} AS a WHERE a.idcalle = s.idcalle) AS "accepted",`,
-    `(SELECT a.name FROM ${tmp(LOAD_TEMP.ACC_WAY)} AS a WHERE a.idcalle = s.idcalle) AS "accepted_name"`,
+    `(SELECT a.name FROM ${tmp(LOAD_TEMP.ACC_WAY)} AS a WHERE a.idcalle = s.idcalle) AS "accepted_name",`,
+    `${renamedCopyValueSql("type_id")} AS "type_id", ${renamedCopyValueSql("font_id")} AS "font_id"`,
     `FROM ${q("renamed_streets")} AS s ORDER BY s.idcalle`,
   ].join(" ");
 }
 
 export const buildCreateWayRenameInputSql = (): string =>
-  `CREATE TEMP TABLE ${q(LOAD_TEMP.WAY_RENAME_IN)} (idcalle text, name text, short_name text) ON COMMIT DROP`;
+  `CREATE TEMP TABLE ${q(LOAD_TEMP.WAY_RENAME_IN)} (idcalle text, name text, short_name text, type_id text, font_id text) ON COMMIT DROP`;
 
-/** The rows the rename will touch with the name they hold now, read before the first write: the revert puts them back. */
+/** The rows the rename will touch with the name, type and font they hold now, read before the first write: the revert puts them back. */
 export function buildWayRenameOldSql(context: EjesLoadContext): string {
   const way = EJES_TABLE_ROLE.CIRCULATION_WAY;
   const column = (logical: string): string => `w.${physicalOf(context, way, logical)}`;
   return createTemp(
     LOAD_TEMP.WAY_RENAME_OLD,
     [
-      `SELECT ${column(CIRCULATION_WAY_COLUMN.ID)} AS way_id, ${column(CIRCULATION_WAY_COLUMN.NAME)} AS name, ${column(CIRCULATION_WAY_COLUMN.SHORT_NAME)} AS short_name`,
+      `SELECT ${column(CIRCULATION_WAY_COLUMN.ID)} AS way_id, ${column(CIRCULATION_WAY_COLUMN.NAME)} AS name, ${column(CIRCULATION_WAY_COLUMN.SHORT_NAME)} AS short_name,`,
+      `${column(CIRCULATION_WAY_COLUMN.ROAD_TYPE)} AS road_type, ${column(CIRCULATION_WAY_COLUMN.FONT)} AS font`,
       `FROM ${qualifiedOf(context, way)} AS w JOIN ${tmp(LOAD_TEMP.WAY_RENAME_IN)} AS r ON ${column(CIRCULATION_WAY_COLUMN.CALLE)}::text = r.idcalle`,
       `WHERE ${column(CIRCULATION_WAY_COLUMN.NAME)} IS DISTINCT FROM r.name`,
     ].join(" ")

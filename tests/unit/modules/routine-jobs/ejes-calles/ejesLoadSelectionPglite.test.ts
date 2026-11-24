@@ -352,7 +352,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       await select();
 
       expect(await rowsOf(database, buildRenamedWaysSql(ejesLayouts()))).toEqual([
-        { idcalle: "77", names: ["AVENIDA ITALIA"], accepted: false, accepted_name: null },
+        { idcalle: "77", names: ["AVENIDA ITALIA"], accepted: false, accepted_name: null, type_id: "4", font_id: "1" },
       ]);
     });
 
@@ -363,7 +363,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       await select([], [], [{ idcalle: "77" }]);
 
       expect(await rowsOf(database, buildRenamedWaysSql(ejesLayouts()))).toEqual([
-        { idcalle: "77", names: ["AVENIDA ITALIA"], accepted: true, accepted_name: null },
+        { idcalle: "77", names: ["AVENIDA ITALIA"], accepted: true, accepted_name: null, type_id: "4", font_id: "1" },
       ]);
     });
 
