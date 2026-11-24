@@ -7,7 +7,7 @@ import { OUTLINE_ROLE } from "../../shared/map/outlineTypes";
 import { manualSplitOf } from "../ejesAccept";
 import { EJES_MANUAL_SPLIT_TEXT } from "../ejesAcceptTexts";
 import { geodesicLengthM } from "./geodesicLength";
-import { pointAssignmentsOf } from "./pointAssignment";
+import { nearestPiecesOf, pointAssignmentsOf } from "./pointAssignment";
 
 export const MANUAL_RADIUS_OPTIONS_M: readonly number[] = [MANUAL_CANDIDATE_RADIUS_M, 50, MANUAL_CANDIDATE_MAX_RADIUS_M];
 
@@ -82,22 +82,34 @@ const slotOf = (index: number): number => index % MAP_MANUAL_PIECE_TYPES.length;
 
 /**
  * The candidate (index in `candidates`) each access point of the old section would go to with the chosen sections, null for a point that
- * would go to review; null as a whole when nothing is chosen. The analysis rules, computed on the map geometries.
+ * would go to review; null as a whole when nothing is chosen. The analysis rules, computed on the map geometries. In merge mode every
+ * merged old section moves to the chosen sections without review, so each point goes to its nearest chosen section.
  */
-function pointTargetsOf(features: readonly EjesMapFeature[], candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): Array<number | null> | null {
+function pointTargetsOf(
+  features: readonly EjesMapFeature[],
+  candidates: readonly EjesMapCandidate[],
+  chosenRefs: readonly string[],
+  mergeMode = false
+): Array<number | null> | null {
   const newGeometries = geometriesOf(features, OUTLINE_ROLE.NEW);
   const chosen = new Set(chosenRefs);
   const chosenIndexes = candidates.flatMap((candidate, index) => (chosen.has(candidate.ref) && newGeometries[index] !== undefined ? [index] : []));
   if (chosenIndexes.length === 0) return null;
   const points = geometriesOf(features, OUTLINE_ROLE.ACCESS).flatMap((geometry) => (geometry.type === "Point" ? [geometry.coordinates] : [[Number.NaN, Number.NaN]]));
   const oldGeometry = features.find((feature) => feature.role === OUTLINE_ROLE.OLD)?.geometry ?? null;
-  const assigned = pointAssignmentsOf(points, oldGeometry, chosenIndexes.map((index) => newGeometries[index]));
-  return assigned.map((position) => (position === null ? null : (chosenIndexes[position] ?? null)));
+  const pieces = chosenIndexes.map((index) => newGeometries[index]);
+  const positions: Array<number | null> = mergeMode ? nearestPiecesOf(points, pieces) : pointAssignmentsOf(points, oldGeometry, pieces);
+  return positions.map((position) => (position === null ? null : (chosenIndexes[position] ?? null)));
 }
 
 /** How many access points go to a chosen section and how many to review; null while nothing is chosen. */
-export function pointSummaryOf(features: readonly EjesMapFeature[], candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): { assigned: number; review: number } | null {
-  const targets = pointTargetsOf(features, candidates, chosenRefs);
+export function pointSummaryOf(
+  features: readonly EjesMapFeature[],
+  candidates: readonly EjesMapCandidate[],
+  chosenRefs: readonly string[],
+  mergeMode = false
+): { assigned: number; review: number } | null {
+  const targets = pointTargetsOf(features, candidates, chosenRefs, mergeMode);
   if (targets === null) return null;
   const review = targets.filter((target) => target === null).length;
   return { assigned: targets.length - review, review };
@@ -150,10 +162,11 @@ export function manualSplitMapOf(
   candidates: readonly EjesMapCandidate[],
   chosenRefs: readonly string[],
   neighbours: readonly EjesMapNeighbour[] = [],
-  mergeRefs: readonly string[] = []
+  mergeRefs: readonly string[] = [],
+  mergeMode = false
 ): FeatureCollection {
   const drawn = [
-    ...fixedFeaturesOf(features, pointTargetsOf(features, candidates, chosenRefs)),
+    ...fixedFeaturesOf(features, pointTargetsOf(features, candidates, chosenRefs, mergeMode)),
     ...candidateFeaturesOf(features, candidates, chosenRefs),
     ...neighbourFeaturesOf(features, neighbours, mergeRefs),
   ];

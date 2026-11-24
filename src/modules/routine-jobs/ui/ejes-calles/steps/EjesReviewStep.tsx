@@ -8,13 +8,12 @@ import { AlertType, ButtonVariant } from "@/ui-kit/types/ui";
 import { EJES_ROLES } from "../../../jobs/ejes-calles/constants";
 import type { EjesStartRequest } from "../../shared/clientTypes";
 import { EJES_ROLE_TITLES } from "../ejesCallesTexts";
-import type { EjesConfirmation } from "../ejesCallesWizardState";
 import styles from "../../shared/steps/WizardSteps.module.css";
 
 const BUSY_NOTE = "Hay un trabajo de ejes de calles en curso. Espere a que termine para iniciar otro.";
 const ANALYSIS_HINT = "El análisis no modifica la base de datos: corre en una transacción de solo lectura.";
 const LOAD_HINT =
-  "Cargar ahora se habilita después de analizar estas mismas tablas, sin bloqueos, y con la contraseña escrita de nuevo. También aparece en Resultado junto al informe.";
+  "Cargar ahora se habilita después de analizar estas mismas tablas, sin bloqueos, y con la contraseña de la conexión. También aparece en Resultado junto al informe.";
 const ICON_SIZE = 15;
 
 export interface EjesReviewStepProps {
@@ -23,7 +22,6 @@ export interface EjesReviewStepProps {
   canLoad: boolean;
   busy: boolean;
   runBlockedReason: string | null;
-  onConfirmationChange?: (patch: Partial<EjesConfirmation>) => void;
   onAnalyze: () => void;
   onLoad: () => void;
 }

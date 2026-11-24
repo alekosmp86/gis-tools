@@ -137,7 +137,6 @@ export const EjesCallesWizard: React.FC = () => {
             canLoad={canLoadNow(state, snapshot)}
             busy={isRunActive}
             runBlockedReason={runBlockedReason(state)}
-            onConfirmationChange={(patch) => dispatch({ type: "confirmationChanged", patch })}
             onAnalyze={() => {
               if (canAnalyzeNow(state)) analyzeNow();
             }}

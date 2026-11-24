@@ -23,6 +23,13 @@ import styles from "./manualSplit.module.css";
 
 const ICON_SIZE = 15;
 
+/** The stored partners that leave the ticked ones when "Marcar cubiertos" replaces them: they are released on apply, as an untick releases them. */
+const releasedOnTickAllOf = (mergeRefs: readonly string[], coveredRefs: readonly string[], storedMergeRefs: readonly string[]): string[] => {
+  const covered = new Set(coveredRefs);
+  const stored = new Set(storedMergeRefs);
+  return mergeRefs.filter((ref) => !covered.has(ref) && stored.has(ref));
+};
+
 export interface ManualSplitContentProps {
   row: EjesRemovalRow;
   base: EjesGeometryMapBase;
@@ -63,13 +70,17 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
     const neighbourRefs = new Set(map.neighbours.map((neighbour) => neighbour.ref));
     return mergeRefs.filter((ref) => neighbourRefs.has(ref));
   }, [mergeRefs, map.neighbours]);
-  const mergedOldCount = tickedRefs.length === 0 ? 0 : tickedRefs.length + 1;
+  const mergeMode = tickedRefs.length > 0;
+  const mergedOldCount = mergeMode ? tickedRefs.length + 1 : 0;
   const collection = useMemo(
-    () => manualSplitMapOf(map.features, map.candidates, selectedRefs, map.neighbours, tickedRefs),
-    [map.features, map.candidates, map.neighbours, selectedRefs, tickedRefs]
+    () => manualSplitMapOf(map.features, map.candidates, selectedRefs, map.neighbours, tickedRefs, mergeMode),
+    [map.features, map.candidates, map.neighbours, selectedRefs, tickedRefs, mergeMode]
   );
   const oldLength = oldLengthOf(map.features);
-  const pointSummary = useMemo(() => pointSummaryOf(map.features, map.candidates, selectedRefs), [map.features, map.candidates, selectedRefs]);
+  const pointSummary = useMemo(
+    () => pointSummaryOf(map.features, map.candidates, selectedRefs, mergeMode),
+    [map.features, map.candidates, selectedRefs, mergeMode]
+  );
 
   const toggleRef = (ref: string) =>
     setSelectedRefs((current) => {
@@ -83,7 +94,11 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
     setUnticked((current) => (ticking ? current.filter((released) => released !== ref) : [...current, ref]));
   };
 
-  const tickAllNeighbours = () => setMergeRefs(map.neighbours.filter((neighbour) => neighbour.covered === true).map((neighbour) => neighbour.ref));
+  const tickAllNeighbours = () => {
+    const coveredRefs = map.neighbours.filter((neighbour) => neighbour.covered === true).map((neighbour) => neighbour.ref);
+    setUnticked((current) => [...current, ...releasedOnTickAllOf(mergeRefs, coveredRefs, storedMergeRefs)]);
+    setMergeRefs(coveredRefs);
+  };
 
   const clearSelection = () => {
     setSelectedRefs([]);
@@ -141,6 +156,7 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
             mergeRefs={tickedRefs}
             onToggle={toggleNeighbour}
             onTickAll={tickAllNeighbours}
+            refreshing={map.refreshing}
           />
           <ManualSplitFooter
             chosen={chosen}

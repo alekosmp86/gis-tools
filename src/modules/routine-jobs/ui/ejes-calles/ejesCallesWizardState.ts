@@ -49,17 +49,13 @@ export interface EjesSlotDraft {
   valid: boolean;
 }
 
-export interface EjesConfirmation {
-  password: string;
-}
-
 export interface EjesWizardState {
   step: EjesStep;
   connection: ClientConnection;
   slots: Record<EjesTableRole, EjesSlotDraft>;
   /** The department the run is limited to; null for the whole country. Changing it drops the analysis inputs, as a table change does. */
   department: EjesDepartment | null;
-  confirmation: EjesConfirmation;
+  confirmation: { password: string };
   /** The rows accepted on the review lists; cleared when the connection or a table changes. */
   acceptance: EjesAcceptance | null;
   /** The copies the user keeps for `reftramo`s with several copies: inputs of every analysis, so they survive a re-analysis. */
@@ -75,7 +71,7 @@ export type EjesWizardAction =
   | { type: "slotSchemaChanged"; key: EjesTableRole; schema: string }
   | { type: "slotTableChosen"; key: EjesTableRole; table: string; valid: boolean }
   | { type: "departmentChanged"; department: EjesDepartment | null }
-  | { type: "confirmationChanged"; patch: Partial<EjesConfirmation> }
+  | { type: "confirmationChanged"; patch: Partial<EjesWizardState["confirmation"]> }
   | { type: "acceptChanged"; analysisKey: string; change: EjesAcceptChange }
   | { type: "pointChoicesChanged"; analysisKey: string; change: EjesPointChoicesChange }
   | { type: "twinPickChanged"; change: EjesTwinPickChange }
@@ -96,12 +92,9 @@ const MESSAGES = {
   table: "Elija una tabla para cada rol.",
   distinct: "Las tablas elegidas deben ser distintas: no repita el mismo esquema y nombre.",
   invalid: "Alguna tabla tiene columnas faltantes o ambiguas.",
-  password: "Escriba de nuevo la contraseña de la base de datos.",
 } as const;
 
 const isBlank = (value: string): boolean => value.trim() === "";
-
-const emptyConfirmation = (): EjesConfirmation => ({ password: "" });
 
 const mapSlots = (build: (role: EjesTableRole) => EjesSlotDraft): Record<EjesTableRole, EjesSlotDraft> =>
   Object.fromEntries(EJES_ROLES.map((role) => [role, build(role)])) as Record<EjesTableRole, EjesSlotDraft>;
@@ -112,7 +105,7 @@ export function initialEjesWizardState(): EjesWizardState {
     connection: { host: "", port: DEFAULT_PORT, db_name: "", user: "", password: "" },
     slots: mapSlots((role) => ({ ...EJES_DEFAULT_TABLES[role], valid: false })),
     department: null,
-    confirmation: emptyConfirmation(),
+    confirmation: { password: "" },
     acceptance: null,
     twinPicks: [],
     manualSplits: [],
@@ -175,10 +168,8 @@ export function canContinue(state: EjesWizardState): boolean {
   return (state.step === EjesStep.CONNECTION || state.step === EjesStep.TABLES) && blockingReason(state) === null;
 }
 
-const isPasswordTyped = (state: EjesWizardState): boolean => state.connection.password !== "";
-
 export const canAnalyzeNow = (state: EjesWizardState): boolean =>
-  runBlockedReason(state) === null && isPasswordTyped(state);
+  runBlockedReason(state) === null && state.connection.password !== "";
 
 export function toEjesStartRequest(state: EjesWizardState, flags: { dryRun: boolean }): EjesStartRequest {
   const tables = Object.fromEntries(
@@ -224,7 +215,7 @@ export function ejesSplitPointsBaseOf(state: EjesWizardState, jobId: string | un
 export function canLoadNow(state: EjesWizardState, snapshot: EjesRunSnapshot): boolean {
   const result = snapshot.job?.result;
   if (snapshot.phase !== RunPhase.DONE || result === undefined || snapshot.plan?.dryRun !== true) return false;
-  if (result.blockers.length > 0 || result.counts.manualSplitsIgnored > 0 || !isPasswordTyped(state)) return false;
+  if (result.blockers.length > 0 || result.counts.manualSplitsIgnored > 0 || state.connection.password === "") return false;
   return snapshot.plan.analysisKey === ejesAnalysisKeyOf(toEjesStartRequest(state, { dryRun: true }));
 }
 
@@ -269,11 +260,8 @@ function landingStepOf(state: EjesWizardState, target: EjesStep): EjesStep {
   return target;
 }
 
-/** The typed confirmation lives while the review, or the result of a dry-run, is on screen; leaving the review clears it, and so does starting a real run. */
 function moveTo(state: EjesWizardState, step: EjesStep): EjesWizardState {
-  const landing = landingStepOf(state, step);
-  const leavesReview = state.step === EjesStep.REVIEW && landing !== EjesStep.REVIEW;
-  return { ...state, step: landing, confirmation: leavesReview ? emptyConfirmation() : state.confirmation };
+  return { ...state, step: landingStepOf(state, step) };
 }
 
 const stepAfter = (step: EjesStep, delta: number): EjesStep => STEP_ORDER[indexOfStep(step) + delta] ?? step;
@@ -290,7 +278,6 @@ const withoutDependents = (state: EjesWizardState): EjesWizardState =>
   withoutAnalysisInputs({
     ...state,
     slots: mapSlots((role) => ({ ...state.slots[role], valid: false })),
-    confirmation: emptyConfirmation(),
   });
 
 /** A manual choice clears the ignore mark of its old section, when the choice was stored (the request limit may refuse it). */
@@ -309,7 +296,7 @@ function manualSplitIgnoredChangedOf(state: EjesWizardState, change: EjesIgnored
 
 function connectionReducer(state: EjesWizardState, field: ConnectionField, value: string): EjesWizardState {
   const connection = { ...state.connection, [field]: value };
-  if (field === "password") return { ...state, connection, confirmation: emptyConfirmation() };
+  if (field === "password") return { ...state, connection };
   return withoutDependents({ ...state, connection });
 }
 
@@ -348,12 +335,7 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
     case "goTo":
       return moveTo(state, action.step);
     case "runStarted":
-      return {
-        ...state,
-        step: EjesStep.RESULT,
-        confirmation: action.dryRun ? state.confirmation : emptyConfirmation(),
-        acceptance: action.dryRun ? null : state.acceptance,
-      };
+      return { ...state, step: EjesStep.RESULT, acceptance: action.dryRun ? null : state.acceptance };
     case "reset":
       return initialEjesWizardState();
   }

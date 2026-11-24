@@ -19,6 +19,8 @@ export interface ManualNeighbourListProps {
   mergeRefs: readonly string[];
   onToggle: (ref: string) => void;
   onTickAll: () => void;
+  /** The covered flags are the previous request's: "Marcar cubiertos" waits for the new ones. */
+  refreshing: boolean;
 }
 
 interface ManualNeighbourRowProps {
@@ -61,7 +63,7 @@ function ManualNeighbourRow({ neighbour, merged, onToggle }: ManualNeighbourRowP
 }
 
 /** The old sections near this one that may merge with it into one new section: a checklist, hidden when there are none. */
-export function ManualNeighbourList({ neighbours, mergeRefs, onToggle, onTickAll }: ManualNeighbourListProps) {
+export function ManualNeighbourList({ neighbours, mergeRefs, onToggle, onTickAll, refreshing }: ManualNeighbourListProps) {
   const merged = useMemo(() => new Set(mergeRefs), [mergeRefs]);
   if (neighbours.length === 0) return null;
   return (
@@ -70,7 +72,7 @@ export function ManualNeighbourList({ neighbours, mergeRefs, onToggle, onTickAll
       <p className={styles.hint}>{EJES_MANUAL_SPLIT_TEXT.NEIGHBOURS_HINT}</p>
       {neighbours.filter((neighbour) => neighbour.covered === true).length >= TICK_ALL_MIN_NEIGHBOURS && (
         <div className={styles.neighbourActions}>
-          <Button variant={ButtonVariant.SECONDARY} onClick={onTickAll}>
+          <Button variant={ButtonVariant.SECONDARY} onClick={onTickAll} disabled={refreshing}>
             <CheckCheck size={ICON_SIZE} />
             <span>{EJES_MANUAL_SPLIT_TEXT.TICK_ALL_NEIGHBOURS}</span>
           </Button>

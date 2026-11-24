@@ -31,6 +31,8 @@ export interface ManualCandidatesMap {
   neighbours: EjesMapNeighbour[];
   /** Names the request whose data is on screen; it changes only when new data arrives. While loading, the features and candidates are the previous ones. */
   dataKey: string;
+  /** True while the features, candidates and neighbours are the previous ones, and only the covered flags wait for a new request. */
+  refreshing: boolean;
   message: string | null;
   retry: () => void;
 }
@@ -81,7 +83,16 @@ export function useManualCandidates(
   const dataKey = settled?.baseKey ?? "";
   const onlyCoveredByChanged = current === null && settled !== null && settled.baseKey === baseKey && settled.message === null;
   if (onlyCoveredByChanged && settled !== null) {
-    return { status: MapLoadStatus.READY, features: settled.features, candidates: settled.candidates, neighbours: settled.neighbours, dataKey, message: null, retry };
+    return {
+      status: MapLoadStatus.READY,
+      features: settled.features,
+      candidates: settled.candidates,
+      neighbours: settled.neighbours,
+      dataKey,
+      refreshing: true,
+      message: null,
+      retry,
+    };
   }
   if (current === null) {
     return {
@@ -90,12 +101,13 @@ export function useManualCandidates(
       candidates: settled?.candidates ?? [],
       neighbours: settled?.neighbours ?? [],
       dataKey,
+      refreshing: false,
       message: null,
       retry,
     };
   }
   if (current.message !== null) {
-    return { status: MapLoadStatus.ERROR, features: [], candidates: [], neighbours: [], dataKey, message: current.message, retry };
+    return { status: MapLoadStatus.ERROR, features: [], candidates: [], neighbours: [], dataKey, refreshing: false, message: current.message, retry };
   }
   return {
     status: MapLoadStatus.READY,
@@ -103,6 +115,7 @@ export function useManualCandidates(
     candidates: current.candidates,
     neighbours: current.neighbours,
     dataKey,
+    refreshing: false,
     message: null,
     retry,
   };

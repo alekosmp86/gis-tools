@@ -38,6 +38,14 @@ function distanceToLineM(point: Position, geometry: Geometry): number | null {
   return Math.min(...distances);
 }
 
+const nearestIndexOf = (distances: ReadonlyArray<number | null>): number | null =>
+  distances.reduce<number | null>((best, distance, index) => (distance !== null && (best === null || distance < (distances[best] ?? Infinity)) ? index : best), null);
+
+/** The piece (index into `pieces`) nearest each point, whatever the distance: the colour of a point when no review applies. */
+export function nearestPiecesOf(points: readonly Position[], pieces: readonly Geometry[]): number[] {
+  return points.map((point) => nearestIndexOf(pieces.map((piece) => distanceToLineM(point, piece))) ?? 0);
+}
+
 /**
  * The piece (index into `pieces`) each access point of the old section would go to, or null when it would go to review. The same rules as
  * the analysis: the nearest piece; two pieces less than AMBIGUOUS_POINT_GAP_M apart in distance make it ambiguous; a piece more than
@@ -52,7 +60,7 @@ export function pointAssignmentsOf(points: readonly Position[], oldGeometry: Geo
   return points.map((point) => {
     if (unusualReplacement) return null;
     const distances = pieces.map((piece) => distanceToLineM(point, piece));
-    const nearest = distances.reduce<number | null>((best, distance, index) => (distance !== null && (best === null || distance < (distances[best] ?? Infinity)) ? index : best), null);
+    const nearest = nearestIndexOf(distances);
     if (nearest === null) return null;
     const nearestDistance = distances[nearest] ?? 0;
     const others = distances.filter((distance, index): distance is number => index !== nearest && distance !== null);

@@ -12,6 +12,11 @@ import styles from "./manualSplit.module.css";
 
 const ICON_SIZE = 15;
 
+const pointSummaryTextOf = (pointSummary: { assigned: number; review: number }, mergedOldCount: number): string =>
+  mergedOldCount > 0
+    ? EJES_MANUAL_SPLIT_TEXT.POINTS_SUMMARY_MERGE(pointSummary.assigned)
+    : EJES_MANUAL_SPLIT_TEXT.POINTS_SUMMARY(pointSummary.assigned, pointSummary.review);
+
 export interface ManualSplitFooterProps {
   /** The chosen candidates that the list shows, nearest first. */
   chosen: EjesMapCandidate[];
@@ -55,7 +60,7 @@ export function ManualSplitFooter({
       <p className={styles.caption}>
         <span>{EJES_MANUAL_SPLIT_TEXT.CHOSEN_COUNT(chosen.length)}</span> <span>{chosenSummaryOf(chosen.length, mergedOldCount)}</span>
       </p>
-      {pointSummary !== null && <p className={styles.hint}>{EJES_MANUAL_SPLIT_TEXT.POINTS_SUMMARY(pointSummary.assigned, pointSummary.review)}</p>}
+      {pointSummary !== null && <p className={styles.hint}>{pointSummaryTextOf(pointSummary, mergedOldCount)}</p>}
       {oldLength !== null && (
         <p className={styles.hint}>{EJES_MANUAL_SPLIT_TEXT.NEAR_SUM(metersTextOf(nearLengthSumOf(chosen)), metersTextOf(oldLength))}</p>
       )}
