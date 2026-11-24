@@ -35,6 +35,15 @@ function comparePages(first: WikiPage, second: WikiPage): number {
   return first.order - second.order || first.title.localeCompare(second.title);
 }
 
+function assertParentsExist(pages: ReadonlyArray<WikiPage>, toolSlug: string): void {
+  const slugs = new Set(pages.map((page) => page.slug));
+  for (const page of pages) {
+    if (page.parent !== null && !slugs.has(page.parent)) {
+      throw new Error(`Wiki page "${page.slug}" in tool "${toolSlug}" names an unknown parent "${page.parent}".`);
+    }
+  }
+}
+
 async function loadPages(source: WikiSource, fileSystem: WikiFileSystem): Promise<ReadonlyArray<WikiPage>> {
   let fileNames: ReadonlyArray<string>;
   try {
@@ -66,10 +75,13 @@ async function loadPages(source: WikiSource, fileSystem: WikiFileSystem): Promis
       slug,
       title: metadata.title ?? slug,
       order: metadata.order ?? Number.MAX_SAFE_INTEGER,
+      group: metadata.group ?? null,
+      parent: metadata.parent ?? null,
       body,
     });
   }
 
+  assertParentsExist(pages, source.toolSlug);
   return pages.sort(comparePages);
 }
 

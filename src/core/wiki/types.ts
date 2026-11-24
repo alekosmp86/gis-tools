@@ -13,6 +13,10 @@ export interface WikiPage {
   readonly slug: string;
   readonly title: string;
   readonly order: number;
+  /** Sidebar section heading, or null when the page is not grouped. */
+  readonly group: string | null;
+  /** Slug of the parent page, or null for a top-level page. */
+  readonly parent: string | null;
   readonly body: string;
 }
 

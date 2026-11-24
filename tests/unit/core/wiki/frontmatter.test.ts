@@ -69,3 +69,19 @@ describe("parseWikiFrontmatter", () => {
     expect(() => parseWikiFrontmatter(`---\norder: ${value}\n---\nb`, FILE)).toThrow(FILE);
   });
 });
+
+describe("parseWikiFrontmatter group and parent", () => {
+  it("should read the group (unquoted) and the parent slug", () => {
+    const { metadata } = parseWikiFrontmatter('---\ngroup: "Otros trabajos"\nparent: index\n---\nb', FILE);
+
+    expect(metadata.group).toBe("Otros trabajos");
+    expect(metadata.parent).toBe("index");
+  });
+
+  it("should leave group and parent undefined when empty or absent", () => {
+    const { metadata } = parseWikiFrontmatter("---\ngroup:\nparent:\n---\nb", FILE);
+
+    expect(metadata.group).toBeUndefined();
+    expect(metadata.parent).toBeUndefined();
+  });
+});

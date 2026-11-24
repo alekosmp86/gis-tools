@@ -33,6 +33,29 @@
   transition: color 0.2s ease, background 0.2s ease;
 }
 
+.group {
+  margin-top: 12px;
+  padding: 0 12px 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.group:first-child {
+  margin-top: 0;
+}
+
+.child {
+  margin-left: 14px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0 8px 8px 0;
+}
+
 .item:hover {
   color: var(--text-main);
   background: rgba(255, 255, 255, 0.05);

@@ -2,6 +2,10 @@
 export interface WikiFrontmatter {
   readonly title?: string;
   readonly order?: number;
+  /** Section heading the page is listed under in the sidebar. */
+  readonly group?: string;
+  /** Slug of the page this one is a sub-page of. */
+  readonly parent?: string;
 }
 
 /** A document split into its metadata and the Markdown that follows the block. */
@@ -17,6 +21,8 @@ const QUOTE_CHARACTERS: ReadonlySet<string> = new Set(['"', "'"]);
 const FrontmatterKey = {
   TITLE: "title",
   ORDER: "order",
+  GROUP: "group",
+  PARENT: "parent",
 } as const;
 
 function stripSurroundingQuotes(value: string): string {
@@ -54,6 +60,8 @@ export function parseWikiFrontmatter(source: string, fileName: string): ParsedWi
 
   let title: string | undefined;
   let order: number | undefined;
+  let group: string | undefined;
+  let parent: string | undefined;
 
   for (const line of lines.slice(1, closingIndex)) {
     const separatorIndex = line.indexOf(":");
@@ -67,11 +75,16 @@ export function parseWikiFrontmatter(source: string, fileName: string): ParsedWi
       title = unquoted.length > 0 ? unquoted : undefined;
     } else if (key === FrontmatterKey.ORDER) {
       order = parseOrder(value, fileName);
+    } else if (key === FrontmatterKey.GROUP) {
+      const unquoted = stripSurroundingQuotes(value);
+      group = unquoted.length > 0 ? unquoted : undefined;
+    } else if (key === FrontmatterKey.PARENT) {
+      parent = value.length > 0 ? value : undefined;
     }
   }
 
   return {
-    metadata: { title, order },
+    metadata: { title, order, group, parent },
     body: lines.slice(closingIndex + 1).join("\n"),
   };
 }

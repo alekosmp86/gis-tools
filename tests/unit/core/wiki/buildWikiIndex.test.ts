@@ -124,3 +124,30 @@ describe("buildWikiIndex", () => {
     }
   );
 });
+
+describe("buildWikiIndex group and parent", () => {
+  it("should carry the group and parent of each page, null when absent", async () => {
+    const fs = fakeFs(
+      { "c/a": ["main.md", "child.md", "plain.md"] },
+      {
+        "c/a/main.md": "---\norder: 1\ngroup: G\n---\nm",
+        "c/a/child.md": "---\norder: 2\ngroup: G\nparent: main\n---\nc",
+        "c/a/plain.md": "---\norder: 3\n---\np",
+      }
+    );
+
+    const pages = (await buildWikiIndex([source("a")], fs)).findTool("a")?.pages ?? [];
+
+    expect(pages.map((p) => [p.slug, p.group, p.parent])).toEqual([
+      ["main", "G", null],
+      ["child", "G", "main"],
+      ["plain", null, null],
+    ]);
+  });
+
+  it("should throw naming the page when its parent does not exist", async () => {
+    const fs = fakeFs({ "c/a": ["child.md"] }, { "c/a/child.md": "---\nparent: nope\n---\nc" });
+
+    await expect(buildWikiIndex([source("a")], fs)).rejects.toThrow('"child" in tool "a" names an unknown parent "nope"');
+  });
+});

@@ -158,6 +158,8 @@ describe("findWikiContentProblems", () => {
       slug: page.slug,
       title: page.title ?? page.slug,
       order,
+      group: null,
+      parent: null,
       body: page.body,
     }));
     const tool = { toolSlug: "t", title: "T", pages: built };
