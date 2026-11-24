@@ -210,6 +210,28 @@ describe("piece rules of the analysis on PGlite (EJ-10, EJS-3, EJS-17, EJS-21)",
       expect(result.plainRemovals.map((row) => row.ref)).toEqual(["6001"]);
     });
 
+    it(`should cover old 6001 of 1.5 m when the new piece starts exactly ${PIECE_COVER_TOLERANCE_M} m from its start, the tolerance boundary inclusive`, async () => {
+      await insertWay(database, STREET, "CALLE TREINTA");
+      await insertSection(database, { ref: 6001, calle: STREET, geom: "0:1.5", distance: "1.50" });
+      await insertStaging(database, [{ ref: "6002", calle: "30", nombre: "CALLE TREINTA", geom: "3.5:10" }]);
+
+      const result = await analysis();
+
+      expect(result.splits.map((row) => [row.oldRef, row.newRefs])).toEqual([["6001", ["6002"]]]);
+      expect(result.plainRemovals).toEqual([]);
+    });
+
+    it(`should not cover old 6001 of 1.5 m when the new piece starts 3.6 m from its start, just beyond the ${PIECE_COVER_TOLERANCE_M} m tolerance`, async () => {
+      await insertWay(database, STREET, "CALLE TREINTA");
+      await insertSection(database, { ref: 6001, calle: STREET, geom: "0:1.5", distance: "1.50" });
+      await insertStaging(database, [{ ref: "6002", calle: "30", nombre: "CALLE TREINTA", geom: "3.6:10" }]);
+
+      const result = await analysis();
+
+      expect(result.splits).toEqual([]);
+      expect(result.plainRemovals.map((row) => row.ref)).toEqual(["6001"]);
+    });
+
     it("should not renumber old 6001 to a new section of the same street that lies 2 m away (renumber candidate distance 1 m)", async () => {
       await insertWay(database, STREET, "CALLE TREINTA");
       await insertSection(database, { ref: 6001, calle: STREET, geom: "0:100", distance: "100.00" });

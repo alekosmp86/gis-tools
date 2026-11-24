@@ -12,6 +12,7 @@ import { type AccessPointRefType, createEjesDatabase, insertPoints, loadContextO
 const HOOK_TIMEOUT_MS = 60_000;
 const CANONICAL_COLUMN = 'a."id_road_section"';
 const NEW_REF = "777";
+const INTEGER_MATCH_SQL = `${CANONICAL_COLUMN} = CASE WHEN v.old_ref ~ '^(0|-?[1-9][0-9]*)$' THEN (CASE WHEN v.old_ref::numeric BETWEEN -2147483648 AND 2147483647 THEN v.old_ref::integer END) END`;
 const TEXT_MATCH_SQL = `${canonicalTextSql(CANONICAL_COLUMN)} = v.old_ref`;
 const RENUM_ROW_SQL = `INSERT INTO pg_temp."${LOAD_TEMP.RENUM}" (old_id, old_ref, new_ref, points) VALUES (1, $1, $2, 0)`;
 const CREATE_MOVE_SQL = `CREATE TEMP TABLE pg_temp."${LOAD_TEMP.MOVE}" (old_ref text, new_ref text, points bigint)`;
@@ -81,6 +82,11 @@ describe.each<AccessPointRefType>(["integer", "varchar"])(
         expect(branch).toHaveLength(EXPECTED_POINTS[refType][oldRef]);
       });
 
+      it("should emit the bare integer compare for an integer column and the canonical text compare for a text column", () => {
+        const expected = refType === "integer" ? INTEGER_MATCH_SQL : TEXT_MATCH_SQL;
+
+        expect(accessPointRefMatchSql(context, "v.old_ref")).toBe(expected);
+      });
     });
 
     describe("move of the points (EJL-10)", () => {
@@ -232,5 +238,40 @@ describe("street of the moved points on PGlite (EJL-10, EJL-4)", () => {
 
     expect(moved.slice(0, 2).map((point) => point.way)).toEqual([Number(NEW_STREET_ID), Number(NEW_STREET_ID)]);
     expect(restored).toEqual(before);
+  });
+});
+
+describe("integer id_road_section SQL shape (EJL-10, EJL-11)", () => {
+  let database: PGlite;
+  let context: EjesLoadContext;
+
+  beforeEach(async () => {
+    database = await createEjesDatabase(PGlite, "integer");
+    await seedPoints(database, "integer");
+    context = await loadContextOn(database);
+  }, HOOK_TIMEOUT_MS);
+
+  afterEach(async () => {
+    await database.close();
+  }, HOOK_TIMEOUT_MS);
+
+  it("should compare the column as stored, with the regex and the casts applied to the value only", () => {
+    const sql = accessPointRefMatchSql(context, "v.old_ref");
+
+    expect(sql).toBe(INTEGER_MATCH_SQL);
+    expect(sql.startsWith(`${CANONICAL_COLUMN} = `)).toBe(true);
+    expect(sql).not.toMatch(/btrim|NULLIF|::text/);
+  });
+
+  it("should keep the bare integer compare in the move, the revert and the surplus of an integer column", () => {
+    const move = buildMovePointsSql(context);
+    const revert = buildRevertPointsSql(context, ejesLayouts());
+    const surplus = buildSurplusTableSql(context);
+
+    expect(move).toContain('SET "id_road_section" = (n.new_ref)::integer');
+    expect(move).toContain(`WHERE a."id_road_section" = CASE WHEN n.old_ref ~ '^(0|-?[1-9][0-9]*)$' THEN`);
+    expect(move).not.toMatch(/btrim|NULLIF/);
+    expect(revert).toContain(`ON a."id_road_section" = CASE WHEN n.old_ref ~ '^(0|-?[1-9][0-9]*)$' THEN`);
+    expect(surplus).toContain(`a."id_road_section" = CASE WHEN e.ref ~ '^(0|-?[1-9][0-9]*)$' THEN`);
   });
 });

@@ -37,7 +37,8 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
   /** The analysis sinks fill the two tables before the selection; `renumbered` and `held` are rows of (old_id, old_ref, new_ref, points). */
   const select = async (
     renumbered: Array<{ oldId: number; oldRef: string; newRef: string }> = [],
-    held: Array<{ oldId: number; oldRef: string; newRef: string }> = []
+    held: Array<{ oldId: number; oldRef: string; newRef: string }> = [],
+    renamedStreets: string[] = []
   ): Promise<void> => {
     const layouts = ejesLayouts();
     await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.RENUM));
@@ -51,7 +52,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       await database.query(`INSERT INTO pg_temp."${LOAD_TEMP.HELD}" (old_id, old_ref, new_ref, points) VALUES ($1, $2, $3, 0)`, [row.oldId, row.oldRef, row.newRef]);
     }
     for (const sql of [
-      ...buildAcceptedTablesSql(NO_ACCEPTED),
+      ...buildAcceptedTablesSql({ ...NO_ACCEPTED, renamedStreets }),
       buildCopyTableSql(layouts),
       buildHeldCopiesSql(),
       buildExistTableSql(layouts),
@@ -340,16 +341,29 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
   });
 
   describe("way renames selected from the copies", () => {
-    it("should list a street id whose way holds another name, with the lowest name of its copies", async () => {
+    it("should list a street id whose way holds another name, not accepted, with the name of its copies", async () => {
       await insertWay(database, 77, "NOMBRE VIEJO");
       await insertStaging(database, [
-        { ref: "1001", calle: "77", nombre: "NOMBRE NUEVO", geom: "0:10" },
+        { ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" },
         { ref: "1002", calle: "77", nombre: "AVENIDA ITALIA", geom: "20:30" },
       ]);
 
       await select();
 
-      expect(await rowsOf(database, buildRenamedWaysSql(ejesLayouts()))).toEqual([{ idcalle: "77", name: "AVENIDA ITALIA" }]);
+      expect(await rowsOf(database, buildRenamedWaysSql(ejesLayouts()))).toEqual([
+        { idcalle: "77", name: "AVENIDA ITALIA", multi_name: false, accepted: false },
+      ]);
+    });
+
+    it("should flag the listed street as accepted when its idcalle is among the accepted renames", async () => {
+      await insertWay(database, 77, "NOMBRE VIEJO");
+      await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" }]);
+
+      await select([], [], ["77"]);
+
+      expect(await rowsOf(database, buildRenamedWaysSql(ejesLayouts()))).toEqual([
+        { idcalle: "77", name: "AVENIDA ITALIA", multi_name: false, accepted: true },
+      ]);
     });
 
     it("should list no street id whose way already holds the name of the copies", async () => {

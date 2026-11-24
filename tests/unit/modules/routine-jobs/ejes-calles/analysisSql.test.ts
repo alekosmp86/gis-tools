@@ -7,9 +7,12 @@ import {
   geometriesDifferSql,
 } from "@/modules/routine-jobs/jobs/ejes-calles/domain/analysisSql";
 import {
+  COVERAGE_TOLERANCE_M,
   GEOMETRY_TOLERANCE_M,
   PIECE_COVER_TOLERANCE_M,
+  PIECE_OWN_FRACTION,
   RURAL_LOCALITY_SUFFIX,
+  SPLIT_PIECE_MIN_COVER_M,
   TWIN_NEAR_MIN_LENGTH_M,
   TWIN_PADRON_DISTANCE_M,
 } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
@@ -74,6 +77,7 @@ describe("buildEjesAnalysisSql", () => {
     });
 
     it("should take the geometry tolerance from the constant, 0.001 m", () => {
+      expect(GEOMETRY_TOLERANCE_M).toBe(0.001);
       expect(geometriesDifferSql("a", "b")).toContain(`ST_HausdorffDistance(a, b) < ${GEOMETRY_TOLERANCE_M}`);
     });
 
@@ -181,6 +185,16 @@ describe("buildEjesAnalysisSql", () => {
   });
 
   describe("EJ-10 touching neighbours and id-linked points (SPLIT_PIECE_MIN_COVER_M, PIECE_OWN_FRACTION, EJ-21)", () => {
+    it("should set the minimum cover of a split piece or a merge member to 10 m, and its own-length share to 35%", () => {
+      expect(COVERAGE_TOLERANCE_M).toBe(1);
+      expect(SPLIT_PIECE_MIN_COVER_M).toBe(10);
+      expect(PIECE_OWN_FRACTION).toBe(0.35);
+    });
+
+    it("should pin the piece cover tolerance to the literal 3.5 m", () => {
+      expect(PIECE_COVER_TOLERANCE_M).toBe(3.5);
+    });
+
     it("should measure the cover of each neighbour piece in piece_cover, one row per (removed section, new section)", () => {
       const pieceCover = sql.slice(sql.indexOf('"piece_cover" AS ('), sql.indexOf('"removed_cover" AS ('));
 

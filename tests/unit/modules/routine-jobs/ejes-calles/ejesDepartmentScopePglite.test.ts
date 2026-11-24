@@ -1,7 +1,8 @@
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resolveEjesLayouts } from "@/modules/routine-jobs/jobs/ejes-calles/services/resolveLayouts";
-import { readAnalysis } from "@/modules/routine-jobs/jobs/ejes-calles/services/readEjesAnalysis";
+import { readAnalysis, readStagingReport } from "@/modules/routine-jobs/jobs/ejes-calles/services/readEjesAnalysis";
+import { ejesBlockersOf } from "@/modules/routine-jobs/jobs/ejes-calles/domain/blockers";
 import type { CatalogQuerySession } from "@/core/services/server/tableCatalog/tableCatalog";
 import { ejesLayouts } from "./ejesFixtures";
 import { createEjesDatabase, insertDepartment, insertSection, insertStaging, insertWay, paramsWith, sessionOn } from "./ejesLoadHarness";
@@ -81,6 +82,70 @@ describe("department scope by reference on PGlite (EJ-scope, scopedLayoutsOf, as
 
       expect(analysis.plainRemovals).toEqual([]);
       expect(analysis.counts.geom).toBe(1);
+    });
+  });
+
+  describe("the staging report of one department (61c6697)", () => {
+    const DAMAGED_NAME = "CALLE � UNO";
+    const COLLAPSED = "10:10";
+
+    it("should block the load with the damaged-text message when a row with damaged text lies inside the department", async () => {
+      await insertStaging(database, [{ ref: "1001", calle: "77", nombre: DAMAGED_NAME, geom: "10:20" }]);
+
+      const { layouts } = await resolveEjesLayouts(catalogOf(database), scopedParams(FLORES));
+      const report = await readStagingReport(sessionOn(database), layouts);
+
+      expect(report.damagedTextRows).toBe(1);
+      expect(ejesBlockersOf(report).some((blocker) => /caracteres dañados/.test(blocker))).toBe(true);
+    });
+
+    it("should not block the load with damaged text when the row with damaged text lies outside the department", async () => {
+      await insertStaging(database, [
+        { ref: "1001", calle: "77", nombre: "CALLE UNO", geom: "10:20" },
+        { ref: "3001", calle: "77", nombre: DAMAGED_NAME, geom: "250:260" },
+      ]);
+
+      const { layouts } = await resolveEjesLayouts(catalogOf(database), scopedParams(FLORES));
+      const report = await readStagingReport(sessionOn(database), layouts);
+
+      expect(report.damagedTextRows).toBe(0);
+      expect(ejesBlockersOf(report)).toEqual([]);
+    });
+
+    it("should count the damaged-text row outside the department only when the report is not scoped", async () => {
+      await insertStaging(database, [
+        { ref: "1001", calle: "77", nombre: "CALLE UNO", geom: "10:20" },
+        { ref: "3001", calle: "77", nombre: DAMAGED_NAME, geom: "250:260" },
+      ]);
+
+      const report = await readStagingReport(sessionOn(database), ejesLayouts());
+
+      expect(report.damagedTextRows).toBe(1);
+    });
+
+    it("should count an invalid geometry inside the department and not one outside it", async () => {
+      await insertStaging(database, [
+        { ref: "1001", calle: "77", nombre: "CALLE UNO", geom: COLLAPSED },
+        { ref: "3001", calle: "77", nombre: "CALLE UNO", geom: "250:250" },
+      ]);
+
+      const { layouts } = await resolveEjesLayouts(catalogOf(database), scopedParams(FLORES));
+      const report = await readStagingReport(sessionOn(database), layouts);
+
+      expect(report.invalidGeometryRows).toBe(1);
+      expect(report.invalidGeometryRefs).toBe(1);
+    });
+
+    it("should not count an invalid geometry outside the department", async () => {
+      await insertStaging(database, [
+        { ref: "1001", calle: "77", nombre: "CALLE UNO", geom: "10:20" },
+        { ref: "3001", calle: "77", nombre: "CALLE UNO", geom: "250:250" },
+      ]);
+
+      const { layouts } = await resolveEjesLayouts(catalogOf(database), scopedParams(FLORES));
+      const report = await readStagingReport(sessionOn(database), layouts);
+
+      expect(report.invalidGeometryRows).toBe(0);
     });
   });
 
