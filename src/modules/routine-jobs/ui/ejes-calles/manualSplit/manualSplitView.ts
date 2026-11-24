@@ -24,8 +24,10 @@ const byDistance = (first: EjesMapCandidate, second: EjesMapCandidate): number =
 /** The candidates nearest the old section first. */
 export const sortedCandidatesOf = (candidates: readonly EjesMapCandidate[]): EjesMapCandidate[] => [...candidates].sort(byDistance);
 
-export const chosenCandidatesOf = (candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): EjesMapCandidate[] =>
-  sortedCandidatesOf(candidates).filter((candidate) => chosenRefs.includes(candidate.ref));
+export const chosenCandidatesOf = (candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): EjesMapCandidate[] => {
+  const chosen = new Set(chosenRefs);
+  return sortedCandidatesOf(candidates).filter((candidate) => chosen.has(candidate.ref));
+};
 
 export const canChooseMore = (chosenCount: number): boolean => chosenCount < MANUAL_SPLIT_PIECES_LIMIT;
 
@@ -84,7 +86,8 @@ const slotOf = (index: number): number => index % MAP_MANUAL_PIECE_TYPES.length;
  */
 function pointTargetsOf(features: readonly EjesMapFeature[], candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): Array<number | null> | null {
   const newGeometries = geometriesOf(features, OUTLINE_ROLE.NEW);
-  const chosenIndexes = candidates.flatMap((candidate, index) => (chosenRefs.includes(candidate.ref) && newGeometries[index] !== undefined ? [index] : []));
+  const chosen = new Set(chosenRefs);
+  const chosenIndexes = candidates.flatMap((candidate, index) => (chosen.has(candidate.ref) && newGeometries[index] !== undefined ? [index] : []));
   if (chosenIndexes.length === 0) return null;
   const points = geometriesOf(features, OUTLINE_ROLE.ACCESS).flatMap((geometry) => (geometry.type === "Point" ? [geometry.coordinates] : [[Number.NaN, Number.NaN]]));
   const oldGeometry = features.find((feature) => feature.role === OUTLINE_ROLE.OLD)?.geometry ?? null;
@@ -117,20 +120,22 @@ const fixedFeaturesOf = (features: readonly EjesMapFeature[], targets: Array<num
 
 const candidateFeaturesOf = (features: readonly EjesMapFeature[], candidates: readonly EjesMapCandidate[], chosenRefs: readonly string[]): Feature[] => {
   const geometries = geometriesOf(features, OUTLINE_ROLE.NEW);
+  const chosen = new Set(chosenRefs);
   return candidates.flatMap((candidate, index) => {
     const geometry = geometries[index];
     if (geometry === undefined) return [];
-    const type = chosenRefs.includes(candidate.ref) ? MAP_MANUAL_PIECE_TYPES[slotOf(index)] : MAP_SECTION_TYPE.MANUAL_CANDIDATE;
+    const type = chosen.has(candidate.ref) ? MAP_MANUAL_PIECE_TYPES[slotOf(index)] : MAP_SECTION_TYPE.MANUAL_CANDIDATE;
     return [featureOf(geometry, type, candidate.ref, { [CANDIDATE_REF_PROPERTY]: candidate.ref })];
   });
 };
 
 const neighbourFeaturesOf = (features: readonly EjesMapFeature[], neighbours: readonly EjesMapNeighbour[], mergeRefs: readonly string[]): Feature[] => {
   const geometries = geometriesOf(features, OUTLINE_ROLE.NEIGHBOUR);
+  const merged = new Set(mergeRefs);
   return neighbours.flatMap((neighbour, index) => {
     const geometry = geometries[index];
     if (geometry === undefined) return [];
-    const type = mergeRefs.includes(neighbour.ref) ? MAP_SECTION_TYPE.MANUAL_NEIGHBOUR_CHOSEN : MAP_SECTION_TYPE.MANUAL_NEIGHBOUR;
+    const type = merged.has(neighbour.ref) ? MAP_SECTION_TYPE.MANUAL_NEIGHBOUR_CHOSEN : MAP_SECTION_TYPE.MANUAL_NEIGHBOUR;
     return [featureOf(geometry, type, neighbour.ref, { [NEIGHBOUR_REF_PROPERTY]: neighbour.ref })];
   });
 };

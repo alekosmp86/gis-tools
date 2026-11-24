@@ -59,10 +59,10 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
     setOtherStreets(true);
   }
   const chosen = chosenCandidatesOf(map.candidates, selectedRefs);
-  const tickedRefs = useMemo(
-    () => mergeRefs.filter((ref) => map.neighbours.some((neighbour) => neighbour.ref === ref)),
-    [mergeRefs, map.neighbours]
-  );
+  const tickedRefs = useMemo(() => {
+    const neighbourRefs = new Set(map.neighbours.map((neighbour) => neighbour.ref));
+    return mergeRefs.filter((ref) => neighbourRefs.has(ref));
+  }, [mergeRefs, map.neighbours]);
   const mergedOldCount = tickedRefs.length === 0 ? 0 : tickedRefs.length + 1;
   const collection = useMemo(
     () => manualSplitMapOf(map.features, map.candidates, selectedRefs, map.neighbours, tickedRefs),
@@ -92,7 +92,9 @@ export function ManualSplitContent({ row, base, storedRefs, storedMergeRefs, ign
   };
 
   const applyChoice = () => {
-    const released = unticked.filter((ref) => storedMergeRefs.includes(ref) && !tickedRefs.includes(ref));
+    const storedMerged = new Set(storedMergeRefs);
+    const ticked = new Set(tickedRefs);
+    const released = unticked.filter((ref) => storedMerged.has(ref) && !ticked.has(ref));
     if (mergedOldCount === 0) {
       onApply(chosen.map((candidate) => candidate.ref), released);
       return;

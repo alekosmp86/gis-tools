@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { CheckCheck } from "lucide-react";
 import { Button } from "@/ui-kit/components/ui/Button";
 import { ButtonVariant } from "@/ui-kit/types/ui";
@@ -62,6 +62,7 @@ function ManualNeighbourRow({ neighbour, merged, onToggle }: ManualNeighbourRowP
 
 /** The old sections near this one that may merge with it into one new section: a checklist, hidden when there are none. */
 export function ManualNeighbourList({ neighbours, mergeRefs, onToggle, onTickAll }: ManualNeighbourListProps) {
+  const merged = useMemo(() => new Set(mergeRefs), [mergeRefs]);
   if (neighbours.length === 0) return null;
   return (
     <section className={styles.neighbourBlock}>
@@ -78,7 +79,7 @@ export function ManualNeighbourList({ neighbours, mergeRefs, onToggle, onTickAll
       <ul className={styles.neighbourList}>
         {neighbours.map((neighbour) => (
           <li key={neighbour.ref}>
-            <ManualNeighbourRow neighbour={neighbour} merged={mergeRefs.includes(neighbour.ref)} onToggle={onToggle} />
+            <ManualNeighbourRow neighbour={neighbour} merged={merged.has(neighbour.ref)} onToggle={onToggle} />
           </li>
         ))}
       </ul>

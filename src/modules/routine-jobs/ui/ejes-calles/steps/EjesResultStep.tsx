@@ -42,6 +42,18 @@ export interface EjesResultStepProps {
   onBackToReview: () => void;
 }
 
+interface DoneBodyProps {
+  result: EjesResult | undefined;
+  department: string | null;
+  mapBase: EjesGeometryMapBase | null;
+  splitBase: EjesSplitPointsBase | null;
+  accept?: EjesAcceptView;
+}
+
+interface LoadHintsProps {
+  result: EjesResult | undefined;
+}
+
 const textOr = (value: string | undefined, fallback: string): string =>
   value !== undefined && value.trim() !== "" ? value : fallback;
 
@@ -58,6 +70,36 @@ function Checklist({ snapshot }: { snapshot: EjesRunSnapshot }) {
       currentLabel={snapshot.job?.step || null}
       phase={snapshot.phase}
     />
+  );
+}
+
+function LoadHints({ result }: LoadHintsProps) {
+  const manualDivisions = manualDivisionsOf(result);
+  return (
+    <>
+      <p className={styles.hint}>{autoRemovalLineOf(automaticRemovalsOf(result))}</p>
+      {manualDivisions > 0 && <p className={styles.hint}>{manualLoadLineOf(manualDivisions)}</p>}
+    </>
+  );
+}
+
+function DoneBody({ result, department, mapBase, splitBase, accept }: DoneBodyProps) {
+  const load = result?.load;
+  return (
+    <>
+      {result && load && <EjesLoadResult result={result} load={load} />}
+      {result ? (
+        <EjesCallesReport
+          result={result}
+          department={department}
+          mapBase={mapBase}
+          splitBase={splitBase}
+          accept={result.dryRun ? accept : undefined}
+        />
+      ) : (
+        <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />
+      )}
+    </>
   );
 }
 
@@ -91,25 +133,12 @@ export const EjesResultStep: React.FC<EjesResultStepProps> = ({
       );
     case RunPhase.DONE: {
       const result = snapshot.job?.result;
-      const load = result?.load;
       return (
         <div className={styles.stack}>
-          {result && load && <EjesLoadResult result={result} load={load} />}
-          {result ? (
-            <EjesCallesReport
-              result={result}
-              department={department}
-              mapBase={mapBase}
-              splitBase={splitBase}
-              accept={result.dryRun ? accept : undefined}
-            />
-          ) : (
-            <AlertMessage type={AlertType.WARNING} text={NO_REPORT_MESSAGE} />
-          )}
+          <DoneBody result={result} department={department} mapBase={mapBase} splitBase={splitBase} accept={accept} />
           {canLoad && (
             <>
-              <p className={styles.hint}>{autoRemovalLineOf(automaticRemovalsOf(result))}</p>
-              {manualDivisionsOf(result) > 0 && <p className={styles.hint}>{manualLoadLineOf(manualDivisionsOf(result))}</p>}
+              <LoadHints result={result} />
               <div className={styles.actions}>
                 <Button onClick={onLoad}>
                   <DatabaseZap size={ICON_SIZE} />
