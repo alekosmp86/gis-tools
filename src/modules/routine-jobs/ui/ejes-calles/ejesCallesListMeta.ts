@@ -1,4 +1,5 @@
 import type { EjesResult } from "../../jobs/ejes-calles/types";
+import { renamedStreetRowsOf } from "./ejesRenamedStreetsView";
 
 export const EJES_LIST = {
   TWIN_UNDECIDED: "twinUndecided",
@@ -9,6 +10,7 @@ export const EJES_LIST = {
   PLAIN_REMOVALS: "plainRemovals",
   KEPT_BY_DISCARDED: "keptByDiscarded",
   GEO_TWINS: "geoTwins",
+  RENAMED_STREETS: "renamedStreets",
   INVALID_GEOMETRIES: "invalidGeometries",
   NEW_STREETS: "newStreets",
   ATTR_CHANGES: "attrChanges",
@@ -24,6 +26,7 @@ const EJES_LIST_ORDER: readonly EjesListKey[] = [
   EJES_LIST.TWIN_UNDECIDED,
   EJES_LIST.PLAIN_REMOVALS,
   EJES_LIST.GEO_TWINS,
+  EJES_LIST.RENAMED_STREETS,
   EJES_LIST.INVALID_GEOMETRIES,
   EJES_LIST.NEW_STREETS,
   EJES_LIST.ATTR_CHANGES,
@@ -40,6 +43,7 @@ export const EJES_LIST_INTROS: Record<EjesListKey, string> = {
   [EJES_LIST.PLAIN_REMOVALS]: "Tramos actuales sin reemplazo que tienen puntos de acceso: no se quitan. Los que no tienen puntos se quitan automáticamente al cargar.",
   [EJES_LIST.KEPT_BY_DISCARDED]: "Tramos actuales sin equivalente en el archivo que se conservan: el archivo trae una fila descartada con su mismo reftramo o en su mismo lugar, y ningún tramo nuevo lo reemplaza. La fila descartada no se carga.",
   [EJES_LIST.GEO_TWINS]: "Mismo idcalle y trazado con reftramo distinto: se queda el que tiene más puntos de acceso; los demás no se cargan y, al aceptarlos, sus puntos pasan al que se queda.",
+  [EJES_LIST.RENAMED_STREETS]: "Calles cuyo nombre en la base cambia al del archivo: se actualiza el nombre de todas las filas de esa calle en circulation_way (la reversión lo restaura).",
   [EJES_LIST.INVALID_GEOMETRIES]: "Filas del archivo con geometría inválida o colapsada, o menor de 1 m sin puntos de acceso: se omiten.",
   [EJES_LIST.NEW_STREETS]: "Calles que no existen hoy y entrarían con los tramos nuevos.",
   [EJES_LIST.ATTR_CHANGES]: "Tramos con el mismo trazado pero distinto nombre, calle, tipo o fuente.",
@@ -54,6 +58,7 @@ const listSizeOf = (result: EjesResult, plainListed: number): Record<EjesListKey
   [EJES_LIST.PLAIN_REMOVALS]: plainListed,
   [EJES_LIST.KEPT_BY_DISCARDED]: result.keptByDiscarded.length,
   [EJES_LIST.GEO_TWINS]: result.geoTwins.length,
+  [EJES_LIST.RENAMED_STREETS]: renamedStreetRowsOf(result).length,
   [EJES_LIST.INVALID_GEOMETRIES]: result.staging.invalidGeometries.length,
   [EJES_LIST.NEW_STREETS]: result.newStreets.length,
   [EJES_LIST.ATTR_CHANGES]: result.attrChanges.length,
@@ -67,11 +72,17 @@ export interface EjesStripItem {
   disabled?: boolean;
 }
 
+const renamedStripItemsOf = (renamedStreets: number): EjesStripItem[] =>
+  renamedStreets === 0
+    ? []
+    : [{ key: EJES_LIST.RENAMED_STREETS, label: "Calles renombradas", value: renamedStreets, list: EJES_LIST.RENAMED_STREETS }];
+
 export function stripOf(result: EjesResult, plainListed: number, automatic: number): EjesStripItem[] {
   const { counts, staging } = result;
   return [
     { key: "rows", label: "Filas del archivo", value: staging.rows, list: null },
     { key: EJES_LIST.NEW_STREETS, label: "Calles nuevas", value: result.newStreets.length, list: EJES_LIST.NEW_STREETS },
+    ...renamedStripItemsOf(renamedStreetRowsOf(result).length),
     { key: EJES_LIST.ATTR_CHANGES, label: "Cambios de atributos", value: counts.attr, list: EJES_LIST.ATTR_CHANGES },
     { key: "renumbered", label: "Renumerados", value: counts.renumbered, list: null },
     { key: "renumberedByGeometry", label: "de ellos, eligiendo por geometría", value: counts.renumberedByGeometry, list: null },

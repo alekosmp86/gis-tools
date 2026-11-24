@@ -13,6 +13,7 @@ export const EJES_ACCEPT_TEXT = {
   REPLACEMENT_NOTE: "Acepta: los puntos pasan al nuevo tramo y se quita el anterior",
   REPLACEMENT_REVIEW_HINT: "Tramo muy corto o mucho más largo: confirme el destino de sus puntos",
   NO_RECEIVING_SECTION: "Sus puntos de acceso no tienen un tramo que los reciba",
+  RENAME_MULTI_NAME: "El archivo trae varios nombres para esta calle: no se renombra",
   CAP_NOTE: `Aceptar todos llega al límite de ${ACCEPTED_KEYS_LIMIT} tramos aceptados en esta lista: acepta hasta ese número.`,
   AUTO_REMOVAL_CAPTION: "tramos sin puntos de acceso ni reemplazo; el archivo es la fuente de verdad",
 } as const;

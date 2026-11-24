@@ -3,7 +3,7 @@
 import React from "react";
 import { EjesAcceptButton } from "./EjesAcceptButton";
 import { EjesAcceptToolbar } from "./EjesAcceptToolbar";
-import { acceptCapReachedBy, type EjesAcceptChange, type EjesAcceptList, type EjesAcceptView } from "./ejesAccept";
+import { acceptCapReachedBy, acceptedKeysOfList, type EjesAcceptChange, type EjesAcceptList, type EjesAcceptView } from "./ejesAccept";
 import { EJES_ACCEPT_TEXT } from "./ejesAcceptTexts";
 import { RowsTable, type TableColumn } from "../shared/ReportParts";
 
@@ -49,7 +49,7 @@ export function EjesAcceptableRows<Row>({
   counterText,
   onShowOnMap,
 }: EjesAcceptableRowsProps<Row>) {
-  const current = accept.keys[list];
+  const current = acceptedKeysOfList(accept.keys, list);
   const accepted = new Set(current);
   const acceptableRows = rows.filter(acceptable);
   const listedKeys = acceptableRows.map(rowKey);

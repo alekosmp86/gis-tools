@@ -7,13 +7,14 @@ import { EjesAcceptableRows } from "./EjesAcceptableRows";
 import { EjesListSection } from "./EjesListSection";
 import { EjesSplitsSection } from "./EjesSplitsSection";
 import { TwinUndecidedSection } from "./TwinUndecidedSection";
-import { EjesAcceptList, NO_IGNORED_REFS, isPlainRemovalAcceptable, plainRemovalNotAcceptableText, splitKeyOf, type EjesAcceptView } from "./ejesAccept";
-import { acceptedCountTextOf, EJES_MANUAL_SPLIT_TEXT } from "./ejesAcceptTexts";
+import { EjesAcceptList, NO_IGNORED_REFS, acceptedKeysOfList, isPlainRemovalAcceptable, plainRemovalNotAcceptableText, splitKeyOf, type EjesAcceptView } from "./ejesAccept";
+import { acceptedCountTextOf, EJES_ACCEPT_TEXT, EJES_MANUAL_SPLIT_TEXT } from "./ejesAcceptTexts";
+import { isRenamedStreetAcceptable, renamedStreetKeyOf, renamedStreetRowsOf } from "./ejesRenamedStreetsView";
 import { manualResolutionReaderOf, resolvedCountOf, resolvedPredicateOf } from "./manualSplit/manualResolutionView";
 import { mergeColumnsOf } from "./compact/ejesMergeColumns";
 import { splitColumnsOf } from "./compact/ejesSplitColumns";
 import { GEO_TWIN_COLUMNS, GEO_TWIN_TEXT, isGeoTwinRemovable } from "./compact/ejesGeoTwinColumns";
-import { ATTR_COLUMNS, HELD_RENUMBER_COLUMNS, INVALID_GEOMETRY_COLUMNS, KEPT_BY_DISCARDED_COLUMNS, REMOVAL_COLUMNS, RENUMBER_DROPPED_COLUMNS, STREET_COLUMNS } from "./ejesReportColumns";
+import { ATTR_COLUMNS, HELD_RENUMBER_COLUMNS, INVALID_GEOMETRY_COLUMNS, KEPT_BY_DISCARDED_COLUMNS, REMOVAL_COLUMNS, RENAMED_STREET_COLUMNS, RENUMBER_DROPPED_COLUMNS, STREET_COLUMNS } from "./ejesReportColumns";
 import { removalColumnsOf } from "./compact/ejesRemovalColumns";
 import { heldRenumberKeyOf, type EjesHeldRenumberView } from "./ejesRenumberHeldView";
 import { subjectOfGeoTwin, subjectOfHeldCandidates, type EjesMapSubject } from "./ejesMapSubject";
@@ -70,7 +71,9 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
       </EjesListSection>
     );
   const badgeOf = (list: EjesAcceptList, total: number): string | undefined =>
-    accept === undefined ? undefined : acceptedCountTextOf(accept.keys[list].length, total);
+    accept === undefined ? undefined : acceptedCountTextOf(acceptedKeysOfList(accept.keys, list).length, total);
+  const renamedStreets = renamedStreetRowsOf(result);
+  const renamedAcceptable = renamedStreets.filter(isRenamedStreetAcceptable);
   const showSplit = (row: EjesSplitRow): void => onShowOnMap(subjects.splits, result.splits.indexOf(row));
   const showMerge = (row: EjesMergeRow): void => onShowOnMap(subjects.merges, result.merges.indexOf(row));
   const showHeld = (held: EjesHeldRenumberView): void =>
@@ -170,6 +173,25 @@ export const EjesReportLists: React.FC<EjesReportListsProps> = ({
           />
         ),
         badgeOf(EjesAcceptList.TWIN_REMOVALS, result.counts.geoTwinLosersRemovable)
+      )}
+      {section(
+        EJES_LIST.RENAMED_STREETS,
+        renamedStreets.length,
+        accept === undefined ? (
+          <RowsTable columns={RENAMED_STREET_COLUMNS} rows={renamedStreets} rowKey={renamedStreetKeyOf} />
+        ) : (
+          <EjesAcceptableRows
+            list={EjesAcceptList.RENAMED_STREETS}
+            rows={renamedStreets}
+            total={result.counts.renamedStreets ?? renamedStreets.length}
+            columns={RENAMED_STREET_COLUMNS}
+            rowKey={renamedStreetKeyOf}
+            acceptable={isRenamedStreetAcceptable}
+            notAcceptableText={EJES_ACCEPT_TEXT.RENAME_MULTI_NAME}
+            accept={accept}
+          />
+        ),
+        badgeOf(EjesAcceptList.RENAMED_STREETS, renamedAcceptable.length)
       )}
       {section(
         EJES_LIST.INVALID_GEOMETRIES,

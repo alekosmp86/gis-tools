@@ -7,6 +7,7 @@ import { automaticPlainRemovalsOf, heldPlainRemovalsOf } from "./ejesAccept";
 import { EJES_ACCEPT_TEXT } from "./ejesAcceptTexts";
 import { defaultOpenListOf, stripOf, type EjesListKey, type EjesStripItem } from "./ejesCallesListMeta";
 import { heldRenumberViewsOf, type EjesHeldRenumberView } from "./ejesRenumberHeldView";
+import { renamedStreetRowsOf } from "./ejesRenamedStreetsView";
 import { listSummaryOf, timingsViewOf } from "../shared/reportViewParts";
 import { EJES_DEPARTMENT_TEXT } from "./ejesCallesTexts";
 
@@ -26,6 +27,7 @@ export interface EjesListSummaries {
   attrChanges: string;
   twinUndecided: string;
   geoTwins: string;
+  renamedStreets: string;
   invalidGeometries: string;
   renumberHeld: string;
   renumberDropped: string;
@@ -208,6 +210,7 @@ function kpiGroupsOf(result: EjesResult, automatic: number): EjesKpiGroup[] {
       title: "Calles y localidades de los tramos nuevos o con trazado distinto",
       kpis: [
         kpi("Calles nuevas", counts.newStreets),
+        kpi("Calles renombradas", counts.renamedStreets ?? 0),
         kpi("Con localidad", cloc.withLocality),
         kpi("Solo con departamento", cloc.onlyDepartment),
         kpi("Sin código", cloc.withoutCode),
@@ -228,6 +231,7 @@ const summariesOf = (result: EjesResult, plainListed: number): EjesListSummaries
   renumberDropped: listSummaryOf("Candidatos descartados (el tramo se renumera a otro reftramo)", result.renumberDropped.length, result.counts.renumberDroppedCandidates),
   twinUndecided: listSummaryOf("Tramos con varias copias sin decidir", result.twinUndecided.length, result.counts.twinsUndecided),
   geoTwins: listSummaryOf("Tramos gemelos por geometría (complemento de las localidades)", result.geoTwins.length, result.counts.geoTwinSections),
+  renamedStreets: listSummaryOf("Calles renombradas", renamedStreetRowsOf(result).length, result.counts.renamedStreets ?? renamedStreetRowsOf(result).length),
 });
 
 export function buildEjesReportView(result: EjesResult): EjesReportView {

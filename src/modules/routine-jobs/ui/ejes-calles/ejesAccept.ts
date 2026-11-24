@@ -9,6 +9,7 @@ export const EjesAcceptList = {
   PLAIN_REMOVALS: "plainRemovals",
   MERGES: "merges",
   TWIN_REMOVALS: "twinRemovals",
+  RENAMED_STREETS: "renamedStreets",
 } as const;
 
 export type EjesAcceptList = (typeof EjesAcceptList)[keyof typeof EjesAcceptList];
@@ -48,12 +49,13 @@ export interface EjesPointChoiceKey extends EjesPointChoiceRequest {
   oldRef: string;
 }
 
-/** The accepted keys of one analysis: splits by their old `reftramo`, plain removals by `reftramo`, merges by their new `reftramo`. */
+/** The accepted keys of one analysis: splits by their old `reftramo`, plain removals by `reftramo`, merges by their new `reftramo`, renamed streets by `idcalle`. */
 export interface EjesAcceptKeys {
   splits: readonly string[];
   plainRemovals: readonly string[];
   merges: readonly string[];
   twinRemovals: readonly string[];
+  renamedStreets?: readonly string[];
 }
 
 /** The accepted keys, the point choices, and the analysis they were accepted on: a different analysis key means none of them apply. */
@@ -123,8 +125,17 @@ export const NO_IGNORED_CHANGE = (): void => undefined;
 
 export function acceptKeysOf(acceptance: EjesAcceptance | null, analysisKey: string | undefined): EjesAcceptKeys {
   if (acceptance === null || analysisKey === undefined || acceptance.analysisKey !== analysisKey) return NO_ACCEPT_KEYS;
-  return { splits: acceptance.splits, plainRemovals: acceptance.plainRemovals, merges: acceptance.merges, twinRemovals: acceptance.twinRemovals };
+  return {
+    splits: acceptance.splits,
+    plainRemovals: acceptance.plainRemovals,
+    merges: acceptance.merges,
+    twinRemovals: acceptance.twinRemovals,
+    renamedStreets: acceptance.renamedStreets,
+  };
 }
+
+/** The keys one list holds; a list absent from an older acceptance holds none. */
+export const acceptedKeysOfList = (keys: EjesAcceptKeys, list: EjesAcceptList): readonly string[] => keys[list] ?? [];
 
 export function pointChoicesOf(acceptance: EjesAcceptance | null, analysisKey: string | undefined): readonly EjesPointChoiceKey[] {
   if (acceptance === null || analysisKey === undefined || acceptance.analysisKey !== analysisKey) return NO_POINT_CHOICES;
@@ -175,7 +186,7 @@ function currentOf(acceptance: EjesAcceptance | null, analysisKey: string): Ejes
 
 export function acceptanceAfter(acceptance: EjesAcceptance | null, analysisKey: string, change: EjesAcceptChange): EjesAcceptance {
   const current = currentOf(acceptance, analysisKey);
-  const next = keysAfter(current[change.list], change.keys, change.accepted).keys;
+  const next = keysAfter(acceptedKeysOfList(current, change.list), change.keys, change.accepted).keys;
   return { ...current, [change.list]: next };
 }
 
@@ -236,6 +247,10 @@ const manualSplitRequestOf = ({ oldRef, newRefs }: EjesManualSplit): EjesManualS
 /** The manual splits as the Analizar re-run and the real run send them. */
 export const manualSplitRequestsOf = (splits: readonly EjesManualSplit[]): EjesManualSplitRequest[] => splits.map(manualSplitRequestOf);
 
+/** The renamed streets of the request; absent when none is accepted, so older request shapes stay unchanged. */
+const renamedStreetsRequestOf = (idcalles: readonly string[] | undefined): Pick<EjesAcceptedRequest, "renamedStreets"> =>
+  idcalles === undefined || idcalles.length === 0 ? {} : { renamedStreets: idcalles.map((idcalle) => ({ idcalle })) };
+
 /** The request of the accepted splits: each with the user's choices only, never a point the user did not decide. */
 export const acceptedRequestOf = (
   keys: EjesAcceptKeys,
@@ -257,6 +272,7 @@ export const acceptedRequestOf = (
     twinPicks: twinPicks.map(({ ref, department, locality }) => ({ ref, department, locality })),
     manualSplits: manualSplitRequestsOf(manualSplits),
     autoPlainRemovals: true,
+    ...renamedStreetsRequestOf(keys.renamedStreets),
   };
 };
 

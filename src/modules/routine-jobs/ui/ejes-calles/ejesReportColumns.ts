@@ -1,5 +1,5 @@
 import { DISTANCE_DECIMALS } from "../../jobs/ejes-calles/constants";
-import type { EjesInvalidGeometryRow, EjesKeptByDiscardedRow, EjesNewStreetRow, EjesRemovalRow, EjesRenumberDroppedRow } from "../../jobs/ejes-calles/types";
+import type { EjesInvalidGeometryRow, EjesKeptByDiscardedRow, EjesNewStreetRow, EjesRemovalRow, EjesRenamedStreetRow, EjesRenumberDroppedRow } from "../../jobs/ejes-calles/types";
 import type { EjesAttrRowView } from "./ejesCallesReportView";
 import type { EjesHeldRenumberView } from "./ejesRenumberHeldView";
 import { KEPT_BY_DISCARDED_REASON_TEXT, NO_REFTRAMO_TEXT, RENUMBER_SKIP_TEXT } from "./ejesLoadTexts";
@@ -51,6 +51,14 @@ export const STREET_COLUMNS: TableColumn<EjesNewStreetRow>[] = [
   { header: "Localidad", cell: (row) => textOrNoData(row.localities) },
   { header: "Tipo de vía", cell: (row) => textOrNoData(row.tipos) },
   { header: "Tramos nuevos", cell: (row) => String(row.sections) },
+];
+
+export const RENAMED_STREET_COLUMNS: TableColumn<EjesRenamedStreetRow>[] = [
+  { header: "Idcalle", cell: (row) => row.idcalle },
+  { header: "Nombre actual", cell: (row) => textOrNoData(row.currentNames) },
+  { header: "Nombre nuevo", cell: (row) => textOrNoData(row.newName) },
+  { header: "Tramos", cell: (row) => String(row.sections) },
+  { header: "Filas de vía", cell: (row) => String(row.ways) },
 ];
 
 export const INVALID_GEOMETRY_COLUMNS: TableColumn<EjesInvalidGeometryRow>[] = [
