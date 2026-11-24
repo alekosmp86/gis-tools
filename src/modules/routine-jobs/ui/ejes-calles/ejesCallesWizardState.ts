@@ -20,6 +20,8 @@ import {
   manualSplitsAfter,
   pointChoicesAfter,
   pointChoicesOf,
+  renameChoiceAfter,
+  renameChoicesOf,
   twinPicksAfter,
   type EjesAcceptance,
   type EjesAcceptChange,
@@ -30,6 +32,7 @@ import {
   type EjesPointChoicesChange,
   type EjesTwinPickChange,
 } from "./ejesAccept";
+import { renamedStreetRowsOf, type EjesRenamedNameChoice } from "./ejesRenamedStreetsView";
 import { ejesAnalysisKeyOf } from "../shared/ejesCallesAnalysisKey";
 import type { EjesRunSnapshot } from "../shared/ejesCallesRunStore";
 import { RunPhase } from "../shared/jobRunStore";
@@ -74,6 +77,7 @@ export type EjesWizardAction =
   | { type: "confirmationChanged"; patch: Partial<EjesWizardState["confirmation"]> }
   | { type: "acceptChanged"; analysisKey: string; change: EjesAcceptChange }
   | { type: "pointChoicesChanged"; analysisKey: string; change: EjesPointChoicesChange }
+  | { type: "renameChoiceChanged"; analysisKey: string; idcalle: string; name: string | null }
   | { type: "twinPickChanged"; change: EjesTwinPickChange }
   | { type: "manualSplitChanged"; change: EjesManualSplitChange }
   | { type: "manualSplitIgnoredChanged"; change: EjesIgnoredRefChange }
@@ -229,6 +233,9 @@ export const acceptKeysOfState = (state: EjesWizardState, snapshot: EjesRunSnaps
 export const pointChoicesOfState = (state: EjesWizardState, snapshot: EjesRunSnapshot): readonly EjesPointChoiceKey[] =>
   pointChoicesOf(state.acceptance, resultKeyOf(snapshot));
 
+export const renameChoicesOfState = (state: EjesWizardState, snapshot: EjesRunSnapshot): readonly EjesRenamedNameChoice[] =>
+  renameChoicesOf(state.acceptance, resultKeyOf(snapshot));
+
 /** The real-run request, its summary taken from the finished dry-run and its accepted rows; null while "Cargar ahora" is not allowed. */
 export function ejesLoadRequestOf(state: EjesWizardState, snapshot: EjesRunSnapshot): EjesLoadRequest | null {
   const result = snapshot.job?.result;
@@ -240,7 +247,8 @@ export function ejesLoadRequestOf(state: EjesWizardState, snapshot: EjesRunSnaps
       acceptKeysOfState(state, snapshot),
       pointChoicesOfState(state, snapshot),
       state.twinPicks,
-      state.manualSplits
+      state.manualSplits,
+      { rows: renamedStreetRowsOf(result), choices: renameChoicesOfState(state, snapshot) }
     ),
     summary: summaryOf(result),
   };
@@ -322,6 +330,11 @@ export function ejesWizardReducer(state: EjesWizardState, action: EjesWizardActi
       return { ...state, acceptance: acceptanceAfter(state.acceptance, action.analysisKey, action.change) };
     case "pointChoicesChanged":
       return { ...state, acceptance: pointChoicesAfter(state.acceptance, action.analysisKey, action.change) };
+    case "renameChoiceChanged":
+      return {
+        ...state,
+        acceptance: renameChoiceAfter(state.acceptance, action.analysisKey, { idcalle: action.idcalle, name: action.name }),
+      };
     case "twinPickChanged":
       return { ...state, twinPicks: twinPicksAfter(state.twinPicks, action.change) };
     case "manualSplitChanged":

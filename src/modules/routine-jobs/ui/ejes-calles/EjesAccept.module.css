@@ -20,6 +20,10 @@
   opacity: 0.75;
 }
 
+.nameCell {
+  min-width: 200px;
+}
+
 .badge {
   font-size: 12px;
   opacity: 0.85;

@@ -53,12 +53,22 @@ export const STREET_COLUMNS: TableColumn<EjesNewStreetRow>[] = [
   { header: "Tramos nuevos", cell: (row) => String(row.sections) },
 ];
 
-export const RENAMED_STREET_COLUMNS: TableColumn<EjesRenamedStreetRow>[] = [
+export const RENAMED_NEW_NAME_HEADER = "Nombre nuevo";
+
+export const RENAMED_STREET_LEADING_COLUMNS: TableColumn<EjesRenamedStreetRow>[] = [
   { header: "Idcalle", cell: (row) => row.idcalle },
   { header: "Nombre actual", cell: (row) => textOrNoData(row.currentNames) },
-  { header: "Nombre nuevo", cell: (row) => textOrNoData(row.newName) },
+];
+
+export const RENAMED_STREET_TRAILING_COLUMNS: TableColumn<EjesRenamedStreetRow>[] = [
   { header: "Tramos", cell: (row) => String(row.sections) },
   { header: "Filas de vía", cell: (row) => String(row.ways) },
+];
+
+export const RENAMED_STREET_COLUMNS: TableColumn<EjesRenamedStreetRow>[] = [
+  ...RENAMED_STREET_LEADING_COLUMNS,
+  { header: RENAMED_NEW_NAME_HEADER, cell: (row) => textOrNoData(row.newName) },
+  ...RENAMED_STREET_TRAILING_COLUMNS,
 ];
 
 export const INVALID_GEOMETRY_COLUMNS: TableColumn<EjesInvalidGeometryRow>[] = [

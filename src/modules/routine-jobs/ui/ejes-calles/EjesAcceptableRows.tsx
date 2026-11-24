@@ -18,6 +18,8 @@ export interface EjesAcceptableRowsProps<Row> {
   acceptable?: (row: Row) => boolean;
   /** The text a row shows instead of its button when it is not acceptable: one text, or one per row. */
   notAcceptableText?: string | ((row: Row) => string);
+  /** A row whose button waits for the user (a name to choose): shown disabled while not accepted, and left out of the bulk actions. */
+  toggleDisabled?: (row: Row) => boolean;
   /** Takes over a row's toggle (a split is accepted through its own rule); absent, the change goes straight to the accept state. */
   onToggleRow?: (row: Row, accepted: boolean) => void;
   accept: EjesAcceptView;
@@ -30,6 +32,7 @@ export interface EjesAcceptableRowsProps<Row> {
 }
 
 const ALWAYS_ACCEPTABLE = (): boolean => true;
+const NEVER_DISABLED = (): boolean => false;
 
 const notAcceptableTextOf = <Row,>(text: string | ((row: Row) => string), row: Row): string =>
   typeof text === "string" ? text : text(row);
@@ -43,6 +46,7 @@ export function EjesAcceptableRows<Row>({
   rowKey,
   acceptable = ALWAYS_ACCEPTABLE,
   notAcceptableText = EJES_ACCEPT_TEXT.NOT_ACCEPTABLE,
+  toggleDisabled = NEVER_DISABLED,
   onToggleRow,
   accept,
   filters,
@@ -51,8 +55,8 @@ export function EjesAcceptableRows<Row>({
 }: EjesAcceptableRowsProps<Row>) {
   const current = acceptedKeysOfList(accept.keys, list);
   const accepted = new Set(current);
-  const acceptableRows = rows.filter(acceptable);
-  const listedKeys = acceptableRows.map(rowKey);
+  const bulkRows = rows.filter((row) => acceptable(row) && !toggleDisabled(row));
+  const listedKeys = bulkRows.map(rowKey);
   const pendingKeys = listedKeys.filter((key) => !accepted.has(key));
   const acceptedKeys = listedKeys.filter((key) => accepted.has(key));
   const change = (keys: string[], isAccepted: boolean): EjesAcceptChange => ({ list, keys, accepted: isAccepted });
@@ -65,7 +69,7 @@ export function EjesAcceptableRows<Row>({
         const key = rowKey(row);
         const isAccepted = accepted.has(key);
         const toggle = () => (onToggleRow === undefined ? accept.onChange(change([key], !isAccepted)) : onToggleRow(row, isAccepted));
-        return <EjesAcceptButton accepted={isAccepted} onToggle={toggle} />;
+        return <EjesAcceptButton accepted={isAccepted} disabled={!isAccepted && toggleDisabled(row)} onToggle={toggle} />;
       },
     },
   ];

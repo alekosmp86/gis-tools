@@ -1,7 +1,8 @@
 import { ACCEPTED_CHOICES_LIMIT, ACCEPTED_KEYS_LIMIT, REPLACEMENT_PIECES } from "../../jobs/ejes-calles/constants";
-import type { EjesCounts, EjesManualSplit, EjesRemovalRow, EjesSplitRow, EjesTwinPick } from "../../jobs/ejes-calles/types";
+import type { EjesCounts, EjesManualSplit, EjesRemovalRow, EjesRenamedStreetRow, EjesSplitRow, EjesTwinPick } from "../../jobs/ejes-calles/types";
 import type { EjesAcceptedRequest, EjesManualSplitRequest, EjesPointChoiceRequest } from "../shared/clientTypes";
 import { EJES_ACCEPT_TEXT } from "./ejesAcceptTexts";
+import { renameChoiceOf, renamedStreetNeedsChoice, type EjesRenamedNameChoice } from "./ejesRenamedStreetsView";
 import { EJES_SPLIT_REVIEW_TEXT } from "./splitReview/ejesSplitReviewTexts";
 
 export const EjesAcceptList = {
@@ -62,12 +63,19 @@ export interface EjesAcceptKeys {
 export interface EjesAcceptance extends EjesAcceptKeys {
   analysisKey: string;
   pointChoices: readonly EjesPointChoiceKey[];
+  renamedNames?: readonly EjesRenamedNameChoice[];
 }
 
 export interface EjesAcceptChange {
   list: EjesAcceptList;
   keys: readonly string[];
   accepted: boolean;
+}
+
+/** The name the user chose for a renamed street with several names; a null name clears the choice. */
+export interface EjesRenameChoiceChange {
+  idcalle: string;
+  name: string | null;
 }
 
 /** The choices of one split's review points: the points set to a piece, the points whose choice is cleared. */
@@ -112,6 +120,8 @@ export interface EjesAcceptView {
   onManualSplitChange: (change: EjesManualSplitChange) => void;
   ignoredRefs?: readonly string[];
   onIgnoredRefChange?: (change: EjesIgnoredRefChange) => void;
+  renameChoices?: readonly EjesRenamedNameChoice[];
+  onRenameChoiceChange?: (change: EjesRenameChoiceChange) => void;
   canAnalyzeWithPicks: boolean;
   onAnalyzeWithPicks: () => void;
 }
@@ -122,6 +132,8 @@ const NO_TWIN_PICKS: readonly EjesTwinPick[] = [];
 const NO_MANUAL_SPLITS: readonly EjesManualSplit[] = [];
 export const NO_IGNORED_REFS: readonly string[] = [];
 export const NO_IGNORED_CHANGE = (): void => undefined;
+const NO_RENAME_CHOICES: readonly EjesRenamedNameChoice[] = [];
+export const NO_RENAME_CHANGE = (): void => undefined;
 
 export function acceptKeysOf(acceptance: EjesAcceptance | null, analysisKey: string | undefined): EjesAcceptKeys {
   if (acceptance === null || analysisKey === undefined || acceptance.analysisKey !== analysisKey) return NO_ACCEPT_KEYS;
@@ -141,6 +153,13 @@ export function pointChoicesOf(acceptance: EjesAcceptance | null, analysisKey: s
   if (acceptance === null || analysisKey === undefined || acceptance.analysisKey !== analysisKey) return NO_POINT_CHOICES;
   return acceptance.pointChoices;
 }
+
+export function renameChoicesOf(acceptance: EjesAcceptance | null, analysisKey: string | undefined): readonly EjesRenamedNameChoice[] {
+  if (acceptance === null || analysisKey === undefined || acceptance.analysisKey !== analysisKey) return NO_RENAME_CHOICES;
+  return acceptance.renamedNames ?? NO_RENAME_CHOICES;
+}
+
+export const renameChoicesOfAccept = (accept: EjesAcceptView): readonly EjesRenamedNameChoice[] => accept.renameChoices ?? NO_RENAME_CHOICES;
 
 /** The chosen destinations per split, the number of choices each split holds. */
 export const chosenCountsOf = (pointChoices: readonly EjesPointChoiceKey[]): Map<string, number> => {
@@ -188,6 +207,20 @@ export function acceptanceAfter(acceptance: EjesAcceptance | null, analysisKey: 
   const current = currentOf(acceptance, analysisKey);
   const next = keysAfter(acceptedKeysOfList(current, change.list), change.keys, change.accepted).keys;
   return { ...current, [change.list]: next };
+}
+
+/** Sets or clears the name of one renamed street. Clearing it also unaccepts the street: it is never sent without a name. */
+export function renameChoiceAfter(acceptance: EjesAcceptance | null, analysisKey: string, change: EjesRenameChoiceChange): EjesAcceptance {
+  const current = currentOf(acceptance, analysisKey);
+  const others = (current.renamedNames ?? []).filter((choice) => choice.idcalle !== change.idcalle);
+  if (change.name === null) {
+    return acceptanceAfter({ ...current, renamedNames: others }, analysisKey, {
+      list: EjesAcceptList.RENAMED_STREETS,
+      keys: [change.idcalle],
+      accepted: false,
+    });
+  }
+  return { ...current, renamedNames: [...others, { idcalle: change.idcalle, name: change.name }] };
 }
 
 /** Sets and clears the choices of one split. A split accepted before, that no longer holds every choice it needs, is taken out of the accepted splits. */
@@ -247,16 +280,38 @@ const manualSplitRequestOf = ({ oldRef, newRefs }: EjesManualSplit): EjesManualS
 /** The manual splits as the Analizar re-run and the real run send them. */
 export const manualSplitRequestsOf = (splits: readonly EjesManualSplit[]): EjesManualSplitRequest[] => splits.map(manualSplitRequestOf);
 
-/** The renamed streets of the request; absent when none is accepted, so older request shapes stay unchanged. */
-const renamedStreetsRequestOf = (idcalles: readonly string[] | undefined): Pick<EjesAcceptedRequest, "renamedStreets"> =>
-  idcalles === undefined || idcalles.length === 0 ? {} : { renamedStreets: idcalles.map((idcalle) => ({ idcalle })) };
+/** The analysis rows and the user's names the renamed streets of a request read. */
+export interface EjesRenamedRequestInput {
+  rows: readonly EjesRenamedStreetRow[];
+  choices: readonly EjesRenamedNameChoice[];
+}
+
+const NO_RENAMED_INPUT: EjesRenamedRequestInput = { rows: [], choices: [] };
+
+/** A street with several names is left out until its name is chosen: the server refuses it without one. */
+const renamedStreetEntryOf = (idcalle: string, renamed: EjesRenamedRequestInput): { idcalle: string; name?: string }[] => {
+  const choice = renameChoiceOf(renamed.choices, idcalle);
+  const row = renamed.rows.find((candidate) => candidate.idcalle === idcalle);
+  if (row !== undefined && renamedStreetNeedsChoice(row) && choice === undefined) return [];
+  return [choice === undefined ? { idcalle } : { idcalle, name: choice.name }];
+};
+
+/** The renamed streets of the request; absent when none is sent, so older request shapes stay unchanged. */
+const renamedStreetsRequestOf = (
+  idcalles: readonly string[] | undefined,
+  renamed: EjesRenamedRequestInput
+): Pick<EjesAcceptedRequest, "renamedStreets"> => {
+  const entries = (idcalles ?? []).flatMap((idcalle) => renamedStreetEntryOf(idcalle, renamed));
+  return entries.length === 0 ? {} : { renamedStreets: entries };
+};
 
 /** The request of the accepted splits: each with the user's choices only, never a point the user did not decide. */
 export const acceptedRequestOf = (
   keys: EjesAcceptKeys,
   pointChoices: readonly EjesPointChoiceKey[] = NO_POINT_CHOICES,
   twinPicks: readonly EjesTwinPick[] = NO_TWIN_PICKS,
-  manualSplits: readonly EjesManualSplit[] = NO_MANUAL_SPLITS
+  manualSplits: readonly EjesManualSplit[] = NO_MANUAL_SPLITS,
+  renamed: EjesRenamedRequestInput = NO_RENAMED_INPUT
 ): EjesAcceptedRequest => {
   const choicesBySplit = new Map<string, EjesPointChoiceRequest[]>();
   for (const choice of pointChoices) {
@@ -272,7 +327,7 @@ export const acceptedRequestOf = (
     twinPicks: twinPicks.map(({ ref, department, locality }) => ({ ref, department, locality })),
     manualSplits: manualSplitRequestsOf(manualSplits),
     autoPlainRemovals: true,
-    ...renamedStreetsRequestOf(keys.renamedStreets),
+    ...renamedStreetsRequestOf(keys.renamedStreets, renamed),
   };
 };
 

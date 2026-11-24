@@ -174,7 +174,7 @@ export interface EjesAcceptedRequest extends EjesAnalysisAcceptedRequest {
   plainRemovals: { ref: string }[];
   merges: { newRef: string }[];
   twinRemovals: { ref: string }[];
-  renamedStreets?: Array<{ idcalle: string }>;
+  renamedStreets?: Array<{ idcalle: string; name?: string }>;
   autoPlainRemovals: boolean;
 }
 

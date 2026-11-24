@@ -11,11 +11,12 @@ const ICON_SIZE = 15;
 export interface EjesAcceptButtonProps {
   accepted: boolean;
   onToggle: () => void;
+  disabled?: boolean;
 }
 
 /** The row's "Aceptar" toggle: pressing it again takes the acceptance back. */
-export const EjesAcceptButton: React.FC<EjesAcceptButtonProps> = ({ accepted, onToggle }) => (
-  <Button variant={ButtonVariant.SECONDARY} onClick={onToggle}>
+export const EjesAcceptButton: React.FC<EjesAcceptButtonProps> = ({ accepted, onToggle, disabled = false }) => (
+  <Button variant={ButtonVariant.SECONDARY} onClick={onToggle} disabled={disabled}>
     {accepted ? <X size={ICON_SIZE} /> : <Check size={ICON_SIZE} />}
     <span>{accepted ? EJES_ACCEPT_TEXT.REJECT : EJES_ACCEPT_TEXT.ACCEPT}</span>
   </Button>

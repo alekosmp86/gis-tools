@@ -16,6 +16,7 @@ import {
   canLoadNow,
   acceptKeysOfState,
   pointChoicesOfState,
+  renameChoicesOfState,
   resultKeyOf,
   ejesAnalysisRequestOf,
   ejesGeometryMapBaseOf,
@@ -155,6 +156,9 @@ export const EjesCallesWizard: React.FC = () => {
             accept={{
               keys: acceptKeysOfState(state, snapshot),
               pointChoices: pointChoicesOfState(state, snapshot),
+              renameChoices: renameChoicesOfState(state, snapshot),
+              onRenameChoiceChange: (change) =>
+                dispatch({ type: "renameChoiceChanged", analysisKey: resultKeyOf(snapshot), idcalle: change.idcalle, name: change.name }),
               onChange: (change) => dispatch({ type: "acceptChanged", analysisKey: resultKeyOf(snapshot), change }),
               onPointChoicesChange: (change) =>
                 dispatch({ type: "pointChoicesChanged", analysisKey: resultKeyOf(snapshot), change }),
