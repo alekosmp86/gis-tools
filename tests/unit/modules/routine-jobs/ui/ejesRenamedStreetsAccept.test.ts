@@ -17,7 +17,8 @@ import { EJES_LIST } from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesListM
 import { buildEjesReportView } from "@/modules/routine-jobs/ui/ejes-calles/ejesCallesReportView";
 import { EjesReportLists, type EjesReportListsProps } from "@/modules/routine-jobs/ui/ejes-calles/EjesReportLists";
 import { RENAMED_STREET_COLUMNS } from "@/modules/routine-jobs/ui/ejes-calles/ejesReportColumns";
-import { isRenamedStreetAcceptable, renamedStreetKeyOf, renamedStreetRowsOf } from "@/modules/routine-jobs/ui/ejes-calles/ejesRenamedStreetsView";
+import { renamedStreetKeyOf, renamedStreetRowsOf } from "@/modules/routine-jobs/ui/ejes-calles/ejesRenamedStreetsView";
+import { renamedToggleDisabledOf } from "@/modules/routine-jobs/ui/ejes-calles/renamedStreetColumns";
 import type { TableColumn } from "@/modules/routine-jobs/ui/shared/ReportParts";
 
 const renamed = (overrides: Partial<EjesRenamedStreetRow> = {}): EjesRenamedStreetRow => ({
@@ -133,8 +134,7 @@ const listPropsOf = (rows: EjesRenamedStreetRow[], accept: EjesAcceptView) => ({
   total: rows.length,
   columns: RENAMED_STREET_COLUMNS,
   rowKey: renamedStreetKeyOf,
-  acceptable: isRenamedStreetAcceptable,
-  notAcceptableText: EJES_ACCEPT_TEXT.RENAME_MULTI_NAME,
+  toggleDisabled: renamedToggleDisabledOf(accept),
   accept,
 });
 

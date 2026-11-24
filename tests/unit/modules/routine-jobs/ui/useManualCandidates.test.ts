@@ -129,12 +129,17 @@ const flush = async (): Promise<void> => {
   for (let turn = 0; turn < 5; turn++) await Promise.resolve();
 };
 
+/** The hook host: a component-named function, so the hook runs in a component as it does in the app. */
+function ManualCandidatesHost(args: HookArgs): ManualCandidatesMap {
+  return useManualCandidates(BASE, args.oldRef, args.radius, args.otherStreets, args.coveredBy);
+}
+
 /** Renders the hook with the given arguments until no state changes and no effect is left to run. */
 function renderWith(args: HookArgs): ManualCandidatesMap {
   let result!: ManualCandidatesMap;
   for (let pass = 0; pass < 25; pass++) {
     runtime.begin();
-    result = useManualCandidates(BASE, args.oldRef, args.radius, args.otherStreets, args.coveredBy);
+    result = ManualCandidatesHost(args);
     const effects = runtime.takeEffects();
     runtime.runEffects(effects);
     if (!runtime.takeDirty() && effects.length === 0) break;

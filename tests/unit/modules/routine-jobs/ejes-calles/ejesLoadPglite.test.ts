@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getRevertBackup } from "@/modules/routine-jobs/jobs/actualizar-padron/services/revertBackupStore";
 import { createStepTimer } from "@/modules/routine-jobs/jobs/cargar-padrones/services/runSteps";
 import { NO_ACCEPTED } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadMapping";
+import type { EjesAcceptedRename } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import { runEjesPersistTransaction, type EjesPersistOutcome } from "@/modules/routine-jobs/jobs/ejes-calles/services/writeEjesSteps";
 import {
   createEjesDatabase,
@@ -58,7 +59,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
     await rm(directory, { recursive: true, force: true });
   }, HOOK_TIMEOUT_MS);
 
-  const persist = async (log: SqlLog = [], failOn?: FailRule, renamedStreets: string[] = []): Promise<EjesPersistOutcome> => {
+  const persist = async (log: SqlLog = [], failOn?: FailRule, renamedStreets: EjesAcceptedRename[] = []): Promise<EjesPersistOutcome> => {
     const summary = await summaryOn(database);
     const context = await loadContextOn(database);
     return runEjesPersistTransaction(
@@ -152,7 +153,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       await insertWay(database, 77, "NOMBRE VIEJO");
       await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" }]);
 
-      const outcome = await persist([], undefined, ["77"]);
+      const outcome = await persist([], undefined, [{ idcalle: "77" }]);
 
       expect(outcome.load.counts).toMatchObject({ waysCreated: 0, waysRenamed: 1, inserted: 1 });
       expect(await rowsOf(database, "SELECT id_calle, name, short_name FROM carto.circulation_way ORDER BY id")).toEqual([
@@ -165,7 +166,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       await insertWay(database, 77, "NOMBRE VIEJO B");
       await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" }]);
 
-      const outcome = await persist([], undefined, ["77"]);
+      const outcome = await persist([], undefined, [{ idcalle: "77" }]);
 
       expect(outcome.load.counts).toMatchObject({ waysCreated: 0, waysRenamed: 2 });
       expect((await rowsOf(database, "SELECT name FROM carto.circulation_way ORDER BY id")).map((row) => row.name)).toEqual([
@@ -195,7 +196,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" }]);
       const before = await snapshotOf(database);
 
-      await expect(persist([], undefined, ["77"])).rejects.toThrow(/vuelva a analizar/);
+      await expect(persist([], undefined, [{ idcalle: "77" }])).rejects.toThrow(/vuelva a analizar/);
 
       expect(await snapshotOf(database)).toEqual(before);
     });
@@ -354,7 +355,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       ]);
       const before = await snapshotOf(database);
 
-      const outcome = await persist([], undefined, ["10"]);
+      const outcome = await persist([], undefined, [{ idcalle: "10" }]);
 
       const after = await snapshotOf(database);
       for (const table of Object.keys(before).filter((name) => name !== "carto.circulation_way")) {
@@ -908,7 +909,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       await insertWay(database, 77, "NOMBRE VIEJO B");
       await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" }]);
       const before = await snapshotOf(database);
-      const outcome = await persist([], undefined, ["77"]);
+      const outcome = await persist([], undefined, [{ idcalle: "77" }]);
       expect(outcome.load.counts.waysRenamed).toBe(2);
 
       await database.exec(await readBackup(outcome));

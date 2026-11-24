@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildAcceptedTablesSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/acceptedSql";
 import { buildCreateGeoTwinTableSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/geoTwinSql";
 import { NO_ACCEPTED } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadMapping";
+import type { EjesAcceptedRename } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import { buildCreateDroppedTableSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/renumberSql";
 import {
   buildCopyTableSql,
@@ -38,7 +39,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
   const select = async (
     renumbered: Array<{ oldId: number; oldRef: string; newRef: string }> = [],
     held: Array<{ oldId: number; oldRef: string; newRef: string }> = [],
-    renamedStreets: string[] = []
+    renamedStreets: EjesAcceptedRename[] = []
   ): Promise<void> => {
     const layouts = ejesLayouts();
     await database.exec(buildCreateRenumberTableSql(LOAD_TEMP.RENUM));
@@ -351,7 +352,7 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       await select();
 
       expect(await rowsOf(database, buildRenamedWaysSql(ejesLayouts()))).toEqual([
-        { idcalle: "77", name: "AVENIDA ITALIA", multi_name: false, accepted: false },
+        { idcalle: "77", names: ["AVENIDA ITALIA"], accepted: false, accepted_name: null },
       ]);
     });
 
@@ -359,10 +360,10 @@ describe("ejes load selection SQL on PGlite (EJL-6, EJL-7, EJL-12, EJL-23)", () 
       await insertWay(database, 77, "NOMBRE VIEJO");
       await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" }]);
 
-      await select([], [], ["77"]);
+      await select([], [], [{ idcalle: "77" }]);
 
       expect(await rowsOf(database, buildRenamedWaysSql(ejesLayouts()))).toEqual([
-        { idcalle: "77", name: "AVENIDA ITALIA", multi_name: false, accepted: true },
+        { idcalle: "77", names: ["AVENIDA ITALIA"], accepted: true, accepted_name: null },
       ]);
     });
 
