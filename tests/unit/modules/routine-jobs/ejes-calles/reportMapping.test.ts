@@ -174,6 +174,8 @@ describe("toEjesAnalysis", () => {
       plainHeld: 1,
       keptByDiscardedCandidate: 1,
       newStreets: 1,
+      renamedStreets: 0,
+      renamedStreetsHeld: 0,
       twins: 6,
       twinsUrban: 1,
       twinsRural: 2,
