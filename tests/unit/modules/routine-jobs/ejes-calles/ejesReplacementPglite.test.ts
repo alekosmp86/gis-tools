@@ -55,7 +55,6 @@ describe("one-piece replacements on PGlite (EJS-3, EJS-10, EJS-11, EJS-16, EJ-10
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-replacement-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);
@@ -207,10 +206,10 @@ describe("one-piece replacements on PGlite (EJS-3, EJS-10, EJS-11, EJS-16, EJ-10
 
     it("should hold a replacement whose new piece is also a merge member (shared_piece) and keep the piece out of the merges", async () => {
       await database.exec(`
-        CREATE TABLE t_pieces (old_id int, old_ref text, idcalle text, points bigint, id_points bigint, old_rows bigint, new_ref text, geom_variant boolean);
+        CREATE TABLE t_pieces (old_id int, old_ref text, idcalle text, points bigint, id_points bigint, old_rows bigint, new_ref text, geom_variant boolean, manual boolean);
         CREATE TABLE t_merges (new_ref text);
         CREATE TABLE t_copy_refs (ref text, copies bigint);
-        INSERT INTO t_pieces VALUES (1, '6001', '30', 3, 0, 1, '6002', false);
+        INSERT INTO t_pieces VALUES (1, '6001', '30', 3, 0, 1, '6002', false, false);
         INSERT INTO t_copy_refs VALUES ('6002', 1);
         INSERT INTO t_merges VALUES ('6002');
       `);
@@ -225,10 +224,10 @@ describe("one-piece replacements on PGlite (EJS-3, EJS-10, EJS-11, EJS-16, EJ-10
 
     it("should leave a replacement with no hold reason when its piece is no merge member and no other split uses it", async () => {
       await database.exec(`
-        CREATE TABLE t_pieces (old_id int, old_ref text, idcalle text, points bigint, id_points bigint, old_rows bigint, new_ref text, geom_variant boolean);
+        CREATE TABLE t_pieces (old_id int, old_ref text, idcalle text, points bigint, id_points bigint, old_rows bigint, new_ref text, geom_variant boolean, manual boolean);
         CREATE TABLE t_merges (new_ref text);
         CREATE TABLE t_copy_refs (ref text, copies bigint);
-        INSERT INTO t_pieces VALUES (1, '6001', '30', 3, 0, 1, '6002', false);
+        INSERT INTO t_pieces VALUES (1, '6001', '30', 3, 0, 1, '6002', false, false);
         INSERT INTO t_copy_refs VALUES ('6002', 1);
       `);
 

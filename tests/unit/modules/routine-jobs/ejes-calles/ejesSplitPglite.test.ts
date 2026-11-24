@@ -50,7 +50,6 @@ describe("accepted splits on PGlite (EJS-3, EJS-5, EJS-6, EJS-7, EJS-8, EJS-10, 
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-split-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);

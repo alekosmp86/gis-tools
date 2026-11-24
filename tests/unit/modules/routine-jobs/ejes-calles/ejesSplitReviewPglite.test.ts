@@ -42,7 +42,6 @@ describe("split review points of the analysis on PGlite (EJS-6, EJS-7, EJS-8, EJ
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-review-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);

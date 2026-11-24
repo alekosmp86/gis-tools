@@ -56,7 +56,7 @@ describe("ejesLoadRequestOf (EJL-22)", () => {
 
       expect(request).not.toBeNull();
       expect(request).toMatchObject({ dryRun: false, accepted: {} });
-      expect(Object.keys(request ?? {}).sort()).toEqual(["accepted", "connection", "dryRun", "summary", "tables"]);
+      expect(Object.keys(request ?? {}).sort()).toEqual(["accepted", "connection", "department", "dryRun", "summary", "tables"]);
     });
 
     it("should carry exactly the Revisar summary counts and the staging fingerprint of the finished dry run", () => {
@@ -81,12 +81,6 @@ describe("ejesLoadRequestOf (EJL-22)", () => {
   });
 
   describe("null while Cargar ahora is not allowed", () => {
-    it("should be null when the password is not retyped", () => {
-      const state = validState({ confirmation: { password: "" } });
-
-      expect(ejesLoadRequestOf(state, doneSnapshot(state))).toBeNull();
-    });
-
     it("should be null when the analysis has a blocker", () => {
       const state = validState();
       const snapshot = doneSnapshot(state, { job: { state: "DONE", result: finishedResult({ blockers: ["bloqueo"] }) } as unknown as EjesRunSnapshot["job"] });
@@ -120,13 +114,14 @@ describe("ejesLoadRequestOf (EJL-22)", () => {
   });
 
   describe("dry-run request", () => {
-    it("should stay {connection, tables, dryRun: true}, with no summary and no accepted", () => {
+    it("should carry the connection, the tables, dryRun and a null department, with no summary and no accepted", () => {
       const state = validState();
 
       const request = toEjesStartRequest(state, { dryRun: true });
 
-      expect(Object.keys(request).sort()).toEqual(["connection", "dryRun", "tables"]);
+      expect(Object.keys(request).sort()).toEqual(["connection", "department", "dryRun", "tables"]);
       expect(request.dryRun).toBe(true);
+      expect(request.department).toBeNull();
     });
   });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseEjesGeometryMapRequest } from "@/modules/routine-jobs/api/ejesGeometryMapRequestParsing";
 import { RequestInvalidError } from "@/modules/routine-jobs/api/requestParsing";
+import { MANUAL_SPLIT_PIECES_LIMIT } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import { EJES_MAP_ITEMS_LIMIT } from "@/modules/routine-jobs/jobs/ejes-calles/domain/geometryMap";
 
 const PASSWORD = "Mapa!secreto-2026";
@@ -251,6 +252,48 @@ describe("parseEjesGeometryMapRequest", () => {
       expect(parseEjesGeometryMapRequest(mapBody({ items: [{ newRef: "1", locality: hostile }] })).items).toEqual([
         { newRef: "1", locality: hostile },
       ]);
+    });
+  });
+
+  describe("coveredBy of a candidates item (manual split)", () => {
+    const candidatesItem = (coveredBy: unknown): Body => ({ candidatesOf: 6001, coveredBy });
+    const refsOf = (count: number): string[] => Array.from({ length: count }, (_, index) => String(index + 1));
+
+    it("should read the chosen new reftramos as canonical integer text, negatives and zero included", () => {
+      const params = parseEjesGeometryMapRequest(mapBody({ items: [candidatesItem(["6101", "-5", "0"])] }));
+
+      expect(params.items).toEqual([{ candidatesOf: 6001, coveredBy: ["6101", "-5", "0"] }]);
+    });
+
+    it("should accept an empty coveredBy list", () => {
+      expect(parseEjesGeometryMapRequest(mapBody({ items: [candidatesItem([])] })).items).toEqual([{ candidatesOf: 6001, coveredBy: [] }]);
+    });
+
+    it.each([["0012"], ["+3"], ["1.5"], [" 12"], [""], [12]])("should refuse a coveredBy entry that is not canonical integer text: %j", (entry) => {
+      expectRejected(mapBody({ items: [candidatesItem([entry])] }), /coveredBy debe contener enteros sin ceros/);
+    });
+
+    it("should refuse a coveredBy list that names the same reftramo twice", () => {
+      expectRejected(mapBody({ items: [candidatesItem(["6101", "6101"])] }), /coveredBy debe contener enteros sin ceros/);
+    });
+
+    it(`should accept ${MANUAL_SPLIT_PIECES_LIMIT} chosen new reftramos and refuse one more`, () => {
+      expect(parseEjesGeometryMapRequest(mapBody({ items: [candidatesItem(refsOf(MANUAL_SPLIT_PIECES_LIMIT))] })).items[0].coveredBy).toHaveLength(
+        MANUAL_SPLIT_PIECES_LIMIT
+      );
+      expectRejected(mapBody({ items: [candidatesItem(refsOf(MANUAL_SPLIT_PIECES_LIMIT + 1))] }), /de 0 a 50 tramos/);
+    });
+
+    it("should refuse a coveredBy that is not a list", () => {
+      expectRejected(mapBody({ items: [candidatesItem("6101")] }), /de 0 a 50 tramos/);
+    });
+
+    it("should refuse coveredBy on an item without candidatesOf, which only the candidates take", () => {
+      expectRejected(mapBody({ items: [{ newRef: "6101", coveredBy: ["6102"] }] }), /solo se admiten junto a candidatesOf/);
+    });
+
+    it("should ignore a coveredBy that is null, as an absent option", () => {
+      expect(parseEjesGeometryMapRequest(mapBody({ items: [{ candidatesOf: 6001, coveredBy: null }] })).items).toEqual([{ candidatesOf: 6001 }]);
     });
   });
 

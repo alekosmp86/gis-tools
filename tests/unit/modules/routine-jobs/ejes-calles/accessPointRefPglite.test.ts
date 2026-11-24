@@ -3,20 +3,21 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { accessPointRefMatchSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/analysisSql";
 import { buildCreateRenumberTableSql, buildSurplusTableSql, LOAD_TEMP } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadSelectionSql";
 import { buildMovePointsSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadWriteSql";
-import { buildRevertPointsSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/revertSql";
+import { buildRevertPointsSql, buildRevertPointWaysSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/revertSql";
 import { canonicalTextSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/stagingSql";
 import type { EjesLoadContext } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import { ejesLayouts } from "./ejesFixtures";
-import { type AccessPointRefType, createEjesDatabase, loadContextOn, type Row, rowsOf } from "./ejesLoadHarness";
+import { type AccessPointRefType, createEjesDatabase, insertPoints, loadContextOn, type Row, rowsOf } from "./ejesLoadHarness";
 
 const HOOK_TIMEOUT_MS = 60_000;
 const CANONICAL_COLUMN = 'a."id_road_section"';
 const NEW_REF = "777";
-const INTEGER_MATCH_SQL = `${CANONICAL_COLUMN} = CASE WHEN v.old_ref ~ '^(0|-?[1-9][0-9]*)$' THEN (CASE WHEN v.old_ref::numeric BETWEEN -2147483648 AND 2147483647 THEN v.old_ref::integer END) END`;
 const TEXT_MATCH_SQL = `${canonicalTextSql(CANONICAL_COLUMN)} = v.old_ref`;
 const RENUM_ROW_SQL = `INSERT INTO pg_temp."${LOAD_TEMP.RENUM}" (old_id, old_ref, new_ref, points) VALUES (1, $1, $2, 0)`;
 const CREATE_MOVE_SQL = `CREATE TEMP TABLE pg_temp."${LOAD_TEMP.MOVE}" (old_ref text, new_ref text, points bigint)`;
 const MOVE_ROW_SQL = `INSERT INTO pg_temp."${LOAD_TEMP.MOVE}" (old_ref, new_ref, points) VALUES ($1, $2, 0)`;
+/** The copies the move reads for the street of the new section: none here, so the street of a moved point stays as it is. */
+const CREATE_COPY_SQL = `CREATE TEMP TABLE pg_temp."${LOAD_TEMP.COPY}" (copy_id bigint, ref text, idcalle text)`;
 
 const OLD_REFS = ["12", "0", "-5", "0012", "abc", "99999999999", "-2147483648", "2147483647", "-2147483649", "2147483648"];
 
@@ -80,11 +81,6 @@ describe.each<AccessPointRefType>(["integer", "varchar"])(
         expect(branch).toHaveLength(EXPECTED_POINTS[refType][oldRef]);
       });
 
-      it("should emit the bare integer compare for an integer column and the canonical text compare for a text column", () => {
-        const expected = refType === "integer" ? INTEGER_MATCH_SQL : TEXT_MATCH_SQL;
-
-        expect(accessPointRefMatchSql(context, "v.old_ref")).toBe(expected);
-      });
     });
 
     describe("move of the points (EJL-10)", () => {
@@ -95,6 +91,7 @@ describe.each<AccessPointRefType>(["integer", "varchar"])(
         await database.query(RENUM_ROW_SQL, [oldRef, NEW_REF]);
         await database.exec(CREATE_MOVE_SQL);
         await database.query(MOVE_ROW_SQL, [oldRef, NEW_REF]);
+        await database.exec(CREATE_COPY_SQL);
 
         const written = await database.query<{ written: number | string }>(buildMovePointsSql(context));
         const moved = await matchingIds(database, TEXT_MATCH_SQL, NEW_REF);
@@ -114,6 +111,7 @@ describe.each<AccessPointRefType>(["integer", "varchar"])(
         await database.query(RENUM_ROW_SQL, [oldRef, NEW_REF]);
         await database.exec(CREATE_MOVE_SQL);
         await database.query(MOVE_ROW_SQL, [oldRef, NEW_REF]);
+        await database.exec(CREATE_COPY_SQL);
         await database.exec(`CREATE TEMP TABLE pg_temp."${LOAD_TEMP.SPLIT_FINAL}" (old_id bigint, old_ref text, point_id bigint, new_ref text, old_value text)`);
         await database.exec(buildRevertPointsSql(context, ejesLayouts()));
         await database.query(buildMovePointsSql(context));
@@ -152,13 +150,33 @@ describe.each<AccessPointRefType>(["integer", "varchar"])(
   }
 );
 
-describe("integer id_road_section SQL shape (EJL-10, EJL-11)", () => {
+describe("street of the moved points on PGlite (EJL-10, EJL-4)", () => {
+  const MOVED_REF = "12";
+  const OTHER_REF = "13";
+  const NEW_STREET_REF = "777";
+  const NEW_STREET_ID = "501";
+  const OLD_STREET_ID = 10;
+
   let database: PGlite;
   let context: EjesLoadContext;
 
+  const pointsByRef = async (): Promise<Row[]> =>
+    rowsOf(database, "SELECT id, id_road_section::text AS section, id_circulation_way AS way FROM carto.access_point ORDER BY id");
+
+  /** One move row and the copies of the new sections, inside the transaction the caller opened. */
+  const stageMove = async (newRef: string, copies: Array<{ ref: string; idcalle: string }>): Promise<void> => {
+    await database.exec(CREATE_MOVE_SQL);
+    await database.query(MOVE_ROW_SQL, [MOVED_REF, newRef]);
+    await database.exec(`CREATE TEMP TABLE pg_temp."${LOAD_TEMP.COPY}" (copy_id bigint, ref text, idcalle text)`);
+    for (const [index, copy] of copies.entries()) {
+      await database.query(`INSERT INTO pg_temp."${LOAD_TEMP.COPY}" (copy_id, ref, idcalle) VALUES ($1, $2, $3)`, [index + 1, copy.ref, copy.idcalle]);
+    }
+  };
+
   beforeEach(async () => {
-    database = await createEjesDatabase(PGlite, "integer");
-    await seedPoints(database, "integer");
+    database = await createEjesDatabase(PGlite, "varchar");
+    await insertPoints(database, MOVED_REF, 2, OLD_STREET_ID);
+    await insertPoints(database, OTHER_REF, 1, OLD_STREET_ID);
     context = await loadContextOn(database);
   }, HOOK_TIMEOUT_MS);
 
@@ -166,23 +184,53 @@ describe("integer id_road_section SQL shape (EJL-10, EJL-11)", () => {
     await database.close();
   }, HOOK_TIMEOUT_MS);
 
-  it("should compare the column as stored, with the regex and the casts applied to the value only", () => {
-    const sql = accessPointRefMatchSql(context, "v.old_ref");
+  it("should give a moved point the street of its new section when the copy of that section has another idcalle", async () => {
+    await database.exec("BEGIN");
+    await stageMove(NEW_STREET_REF, [{ ref: NEW_STREET_REF, idcalle: NEW_STREET_ID }]);
 
-    expect(sql).toBe(INTEGER_MATCH_SQL);
-    expect(sql.startsWith(`${CANONICAL_COLUMN} = `)).toBe(true);
-    expect(sql).not.toMatch(/btrim|NULLIF|::text/);
+    await database.query(buildMovePointsSql(context));
+    const after = await pointsByRef();
+    await database.exec("ROLLBACK");
+
+    expect(after).toEqual([
+      { id: 1, section: NEW_STREET_REF, way: Number(NEW_STREET_ID) },
+      { id: 2, section: NEW_STREET_REF, way: Number(NEW_STREET_ID) },
+      { id: 3, section: OTHER_REF, way: OLD_STREET_ID },
+    ]);
   });
 
-  it("should keep the bare integer compare in the move, the revert and the surplus of an integer column", () => {
-    const move = buildMovePointsSql(context);
-    const revert = buildRevertPointsSql(context, ejesLayouts());
-    const surplus = buildSurplusTableSql(context);
+  it("should keep the street of a moved point when no copy of its new section exists", async () => {
+    await database.exec("BEGIN");
+    await stageMove("888", [{ ref: "999", idcalle: NEW_STREET_ID }]);
 
-    expect(move).toContain('SET "id_road_section" = (n.new_ref)::integer');
-    expect(move).toContain(`WHERE a."id_road_section" = CASE WHEN n.old_ref ~ '^(0|-?[1-9][0-9]*)$' THEN`);
-    expect(move).not.toMatch(/btrim|NULLIF/);
-    expect(revert).toContain(`ON a."id_road_section" = CASE WHEN n.old_ref ~ '^(0|-?[1-9][0-9]*)$' THEN`);
-    expect(surplus).toContain(`a."id_road_section" = CASE WHEN e.ref ~ '^(0|-?[1-9][0-9]*)$' THEN`);
+    await database.query(buildMovePointsSql(context));
+    const after = await pointsByRef();
+    await database.exec("ROLLBACK");
+
+    expect(after.slice(0, 2)).toEqual([
+      { id: 1, section: "888", way: OLD_STREET_ID },
+      { id: 2, section: "888", way: OLD_STREET_ID },
+    ]);
+  });
+
+  it("should restore the section and the street of the moved points from the revert SQL written before the move", async () => {
+    const before = await pointsByRef();
+    await database.exec("BEGIN");
+    await stageMove(NEW_STREET_REF, [{ ref: NEW_STREET_REF, idcalle: NEW_STREET_ID }]);
+    await database.exec(`CREATE TEMP TABLE pg_temp."${LOAD_TEMP.SPLIT_FINAL}" (old_id bigint, old_ref text, point_id bigint, new_ref text, old_value text, old_way text)`);
+    await database.exec(buildRevertPointsSql(context, ejesLayouts()));
+    await database.exec(buildRevertPointWaysSql(context, ejesLayouts()));
+    await database.query(buildMovePointsSql(context));
+    const moved = await pointsByRef();
+    for (const name of ["ej_rev_points", "ej_rev_point_ways"]) {
+      for (const row of await rowsOf<{ line: string }>(database, `SELECT line FROM pg_temp."${name}" ORDER BY n`)) {
+        await database.exec(row.line);
+      }
+    }
+    const restored = await pointsByRef();
+    await database.exec("ROLLBACK");
+
+    expect(moved.slice(0, 2).map((point) => point.way)).toEqual([Number(NEW_STREET_ID), Number(NEW_STREET_ID)]);
+    expect(restored).toEqual(before);
   });
 });

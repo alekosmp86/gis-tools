@@ -45,7 +45,6 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);
@@ -140,20 +139,46 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       const outcome = await persist();
 
       expect(await rowsOf(database, "SELECT * FROM carto.circulation_way ORDER BY id")).toEqual(waysBefore);
-      expect(outcome.load.counts.waysCreated).toBe(0);
-      expect(outcome.load.counts.inserted).toBe(1);
+      expect(outcome.load.counts).toMatchObject({ waysCreated: 0, waysRenamed: 0, inserted: 1 });
     });
 
-    it("should create a way for a new name of an idcalle that already has another name", async () => {
+    it("should rename the existing way of a street id to the file's name and short name instead of creating a second way", async () => {
       await insertWay(database, 77, "NOMBRE VIEJO");
-      await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "NOMBRE NUEVO", geom: "0:10" }]);
+      await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" }]);
 
       const outcome = await persist();
 
-      expect(outcome.load.counts.waysCreated).toBe(1);
+      expect(outcome.load.counts).toMatchObject({ waysCreated: 0, waysRenamed: 1, inserted: 1 });
+      expect(await rowsOf(database, "SELECT id_calle, name, short_name FROM carto.circulation_way ORDER BY id")).toEqual([
+        { id_calle: 77, name: "AVENIDA ITALIA", short_name: "AV ITALIA" },
+      ]);
+    });
+
+    it("should rename both rows of a street id that holds two other names, and create no way", async () => {
+      await insertWay(database, 77, "NOMBRE VIEJO A");
+      await insertWay(database, 77, "NOMBRE VIEJO B");
+      await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" }]);
+
+      const outcome = await persist();
+
+      expect(outcome.load.counts).toMatchObject({ waysCreated: 0, waysRenamed: 2 });
       expect((await rowsOf(database, "SELECT name FROM carto.circulation_way ORDER BY id")).map((row) => row.name)).toEqual([
-        "NOMBRE VIEJO",
-        "NOMBRE NUEVO",
+        "AVENIDA ITALIA",
+        "AVENIDA ITALIA",
+      ]);
+    });
+
+    it("should rename only the row of a street id whose name differs from the file's, and keep the row that already matches", async () => {
+      const matching = await insertWay(database, 77, "AVENIDA ITALIA", 4, 1);
+      const differing = await insertWay(database, 77, "NOMBRE VIEJO");
+      await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" }]);
+
+      const outcome = await persist();
+
+      expect(outcome.load.counts).toMatchObject({ waysCreated: 0, waysRenamed: 1 });
+      expect(await rowsOf(database, `SELECT id, name, short_name FROM carto.circulation_way WHERE id IN (${matching}, ${differing}) ORDER BY id`)).toEqual([
+        { id: matching, name: "AVENIDA ITALIA", short_name: "AVENIDA ITALIA (seed)" },
+        { id: differing, name: "AVENIDA ITALIA", short_name: "AV ITALIA" },
       ]);
     });
 
@@ -303,7 +328,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
       expect((await sectionByRef(2002))[0].id).toBe(other);
     });
 
-    it("should write nothing for a name change alone and never change circulation_way rows", async () => {
+    it("should leave every section unchanged on a name change alone, and rename the way of the street id (waysRenamed)", async () => {
       await seedPair();
       await insertStaging(database, [
         { ref: "2001", calle: "10", nombre: "OTRO NOMBRE", geom: "0:50" },
@@ -313,8 +338,10 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
 
       const outcome = await persist();
 
-      expect(await snapshotOf(database)).toEqual(before);
-      expect(outcome.load.counts).toMatchObject({ updated: 0, inserted: 0, waysCreated: 0 });
+      const after = await snapshotOf(database);
+      expect(after["carto.road_section"]).toEqual(before["carto.road_section"]);
+      expect(after["carto.circulation_way"]).not.toEqual(before["carto.circulation_way"]);
+      expect(outcome.load.counts).toMatchObject({ updated: 0, inserted: 0, waysCreated: 0, waysRenamed: 1 });
     });
 
     it("should not treat a geometry that differs by float noise under 1 mm as a change", async () => {
@@ -807,10 +834,20 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
 
       const text = await readBackup(await persist());
 
-      const pointLines = text.split("\n").filter((line) => line.startsWith('UPDATE "carto"."access_point"'));
+      const pointLines = text.split("\n").filter((line) => line.startsWith('UPDATE "carto"."access_point" SET "id_road_section"'));
       expect(pointLines).toHaveLength(1);
       expect(pointLines[0]).toContain("'3001'");
       expect(pointLines[0]).toMatch(/WHERE "id" IN \('\d+', '\d+'\);$/);
+    });
+
+    it("should restore the street of the moved points by id, to the value they held before the move", async () => {
+      await seedChanges();
+
+      const text = await readBackup(await persist());
+
+      const wayLines = text.split("\n").filter((line) => line.startsWith('UPDATE "carto"."access_point" SET "id_circulation_way"'));
+      expect(wayLines).toHaveLength(1);
+      expect(wayLines[0]).toMatch(/ = NULL WHERE "id" IN \('\d+', '\d+'\);$/);
     });
 
     it("should delete the inserted ids: sections first, then masters, then ways", async () => {
@@ -844,6 +881,19 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
           "",
         ].join("\n")
       );
+    });
+
+    it("should restore the old names of the renamed street rows when the revert SQL is applied", async () => {
+      await insertWay(database, 77, "NOMBRE VIEJO A");
+      await insertWay(database, 77, "NOMBRE VIEJO B");
+      await insertStaging(database, [{ ref: "1001", calle: "77", nombre: "AVENIDA ITALIA", geom: "0:10" }]);
+      const before = await snapshotOf(database);
+      const outcome = await persist();
+      expect(outcome.load.counts.waysRenamed).toBe(2);
+
+      await database.exec(await readBackup(outcome));
+
+      expect((await snapshotOf(database))["carto.circulation_way"]).toEqual(before["carto.circulation_way"]);
     });
 
     it("should restore the exact pre-state of every table when the revert SQL is applied", async () => {
@@ -1002,6 +1052,7 @@ describe("ejes load slice 1 on PGlite (EJL-1 to EJL-14)", () => {
           "verticesCreated",
           "verticesDeleted",
           "waysCreated",
+          "waysRenamed",
         ]
       );
       expect(outcome.load.skipped).toEqual([]);

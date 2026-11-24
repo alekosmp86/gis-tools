@@ -49,7 +49,6 @@ describe("ejes load rules on PGlite (EJL-12, EJL-14, EJL-17, EJL-18, EJL-19, EJL
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-rules-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);

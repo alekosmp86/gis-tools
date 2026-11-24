@@ -11,7 +11,7 @@ import {
 } from "@/modules/routine-jobs/jobs/ejes-calles/domain/loadMapping";
 import { buildEjesNextStep } from "@/modules/routine-jobs/jobs/ejes-calles/domain/nextStep";
 import { EJES_STEP, plannedEjesStepLabels } from "@/modules/routine-jobs/jobs/ejes-calles/domain/plannedSteps";
-import { EJES_SUMMARY_COUNT_KEYS, RENUMBER_SKIP_REASON } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
+import { EJES_STALE_GUARD_KEYS, EJES_SUMMARY_COUNT_KEYS, RENUMBER_SKIP_REASON } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { EjesAnalysis, EjesFingerprint, EjesSummary } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 
 describe("plannedEjesStepLabels (EJL-2, EJL-4)", () => {
@@ -104,6 +104,7 @@ describe("load mapping (EJL-12, EJL-13)", () => {
       merged: "1",
       splits: "2",
       deleted: "4",
+      ways_renamed: "3",
       masters_deleted: "3",
       ways: "2",
       points_moved: "9",
@@ -125,6 +126,7 @@ describe("load mapping (EJL-12, EJL-13)", () => {
       splitsApplied: 2,
       deleted: 4,
       waysCreated: 2,
+      waysRenamed: 3,
       pointsMoved: 9,
       topologyAssigned: 0,
       verticesCreated: 0,
@@ -154,6 +156,7 @@ describe("load mapping (EJL-12, EJL-13)", () => {
       deleted: 0,
       splitsApplied: 0,
       waysCreated: 0,
+      waysRenamed: 0,
       pointsMoved: 0,
       topologyAssigned: 0,
       verticesCreated: 0,
@@ -239,17 +242,16 @@ describe("load mapping (EJL-12, EJL-13)", () => {
       expect(changedSummaryKeys(summary(), counts as unknown as EjesAnalysis["counts"])).toEqual([]);
     });
 
-    it("should report the keys that differ", () => {
-      expect(changedSummaryKeys(summary({ geom: 99, renumbered: 99 }), counts as unknown as EjesAnalysis["counts"])).toEqual([
-        "geom",
-        "renumbered",
-      ]);
+    it.each(EJES_STALE_GUARD_KEYS)("should report the guard key %s when only it differs", (key) => {
+      expect(changedSummaryKeys(summary({ [key]: 99 }), counts as unknown as EjesAnalysis["counts"])).toEqual([key]);
     });
 
-    it("should report a renumberSkipped count that differs, with identical other counts (EJL-20)", () => {
-      expect(changedSummaryKeys(summary({ renumberSkipped: 42 }), counts as unknown as EjesAnalysis["counts"])).toEqual([
-        "renumberSkipped",
-      ]);
+    it("should report only the guard keys that differ, and not a renumbered count the choices can change", () => {
+      expect(changedSummaryKeys(summary({ geom: 99, renumbered: 99 }), counts as unknown as EjesAnalysis["counts"])).toEqual(["geom"]);
+    });
+
+    it("should not report a renumberSkipped count that differs, since it is not a stale-guard key (EJL-20)", () => {
+      expect(changedSummaryKeys(summary({ renumberSkipped: 42 }), counts as unknown as EjesAnalysis["counts"])).toEqual([]);
     });
 
     it("should ignore analysis counts that are not part of the summary", () => {

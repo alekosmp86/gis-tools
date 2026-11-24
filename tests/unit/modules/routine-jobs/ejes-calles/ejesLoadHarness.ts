@@ -59,6 +59,10 @@ const POSTGIS_STUBS_SQL = `
   CREATE FUNCTION geometry_overlaps(geometry, geometry) RETURNS boolean AS $$ SELECT ST_Intersects($1, $2) $$ LANGUAGE sql STRICT;
   CREATE OPERATOR && (LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overlaps);
   CREATE FUNCTION ST_Difference(geometry, geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql STRICT;
+  CREATE FUNCTION ST_Envelope(geometry) RETURNS geometry AS $$ SELECT $1 $$ LANGUAGE sql STRICT;
+  CREATE FUNCTION ST_Centroid(geometry) RETURNS geometry AS $$
+    SELECT (((iv_a($1) + iv_b($1)) / 2)::text || ':' || ((iv_a($1) + iv_b($1)) / 2)::text)::geometry
+  $$ LANGUAGE sql STRICT;
   CREATE FUNCTION hull_step(geometry, geometry) RETURNS geometry AS $$
     SELECT CASE WHEN $1 IS NULL THEN $2 WHEN $2 IS NULL THEN $1
       ELSE (least(iv_a($1), iv_a($2))::text || ':' || greatest(iv_b($1), iv_b($2))::text)::geometry END
@@ -137,7 +141,7 @@ const schemaSqlOf = (accessPointRefType: AccessPointRefType): string => `
   );
   CREATE TABLE carto.addresses_master (addresses_master_id serial PRIMARY KEY, urn text, latitud double precision, longitud double precision);
   CREATE TABLE carto.road_section_vertices_pgr (id bigserial PRIMARY KEY, cnt integer, chk integer, ein integer, eout integer, the_geom geometry);
-  CREATE TABLE carto.access_point (id serial PRIMARY KEY, id_road_section ${accessPointRefType});
+  CREATE TABLE carto.access_point (id serial PRIMARY KEY, id_road_section ${accessPointRefType}, id_circulation_way integer);
   CREATE TABLE bdj_carto.ine_localidades_pg (cloc_iso text, nomloc text, geom geometry);
   CREATE TABLE carto.mv_country_province (iso_code_dpto text, name_dpto text, geometry geometry);
   CREATE TABLE carto.padron (type_padron text, geometry geometry, id_address_master integer);
@@ -320,10 +324,13 @@ export async function insertWay(database: PGlite, calle: number, name: string, t
   return result.rows[0].id;
 }
 
-export async function insertPoints(database: PGlite, ref: string | null, count: number): Promise<number[]> {
+export async function insertPoints(database: PGlite, ref: string | null, count: number, way: number | null = null): Promise<number[]> {
   const ids: number[] = [];
   for (let index = 0; index < count; index += 1) {
-    const result = await database.query<{ id: number }>("INSERT INTO carto.access_point (id_road_section) VALUES ($1) RETURNING id", [ref]);
+    const result = await database.query<{ id: number }>(
+      "INSERT INTO carto.access_point (id_road_section, id_circulation_way) VALUES ($1, $2) RETURNING id",
+      [ref, way]
+    );
     ids.push(result.rows[0].id);
   }
   return ids;
@@ -357,6 +364,7 @@ export const zeroLoadCounts = (overrides: Partial<Record<string, number>> = {}):
   merged: 0,
   deleted: 0,
   waysCreated: 0,
+  waysRenamed: 0,
   pointsMoved: 0,
   topologyAssigned: 0,
   verticesCreated: 0,

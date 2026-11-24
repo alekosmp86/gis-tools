@@ -49,7 +49,6 @@ describe("ejes shared address masters, stub merges and touching neighbours on PG
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-shared-master-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);

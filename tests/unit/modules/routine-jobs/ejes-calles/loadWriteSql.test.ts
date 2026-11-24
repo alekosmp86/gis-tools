@@ -281,10 +281,11 @@ describe("ejes load write SQL (EJL-2, EJL-5, EJL-8, EJL-9, EJL-10, EJL-11)", () 
   });
 
   describe("access_point (EJL-10, EJL-11)", () => {
-    it("should move the points of the old reftramo to the new one by updating id_road_section only", () => {
+    it("should move the points of the old reftramo to the new one by updating id_road_section and id_circulation_way", () => {
       const sql = buildMovePointsSql(contextOf());
 
-      expect(sql).toMatch(/UPDATE "carto"\."access_point" AS a SET "id_road_section" = \(n\.new_ref\)::character varying/);
+      expect(sql).toMatch(/UPDATE "carto"\."access_point" AS a SET "id_road_section" = \(n\.new_ref\)::character varying, "id_circulation_way" = COALESCE\(/);
+      expect(sql).toContain('FROM pg_temp."ej_copy" AS c WHERE c.ref = n.new_ref');
       expect(sql).toContain("FROM pg_temp.\"ej_move\" AS n WHERE CASE WHEN NULLIF(btrim(a.\"id_road_section\"::text), '') ~ '^[0-9]+$' THEN (NULLIF(btrim(a.\"id_road_section\"::text), ''))::numeric::text ELSE NULLIF(btrim(a.\"id_road_section\"::text), '') END = n.old_ref");
       expect(sql).not.toMatch(/\bDELETE\b|\bINSERT\b/i);
       expect(sql.match(/SET /g)).toHaveLength(1);
@@ -344,6 +345,8 @@ describe("ejes load write SQL (EJL-2, EJL-5, EJL-8, EJL-9, EJL-10, EJL-11)", () 
         "ej_rev_restore",
         "ej_rev_sections",
         "ej_rev_points",
+        "ej_rev_point_ways",
+        "ej_rev_way_renames",
         "ej_rev_inserts",
         "ej_rev_vertices_new",
       ]);

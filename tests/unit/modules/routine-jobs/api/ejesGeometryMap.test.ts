@@ -288,6 +288,7 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
       expect(await bodyOf(response)).toEqual({
         success: true,
         candidates: [],
+        neighbours: [],
         features: [
           { itemIndex: 0, role: "locality", label: "TRINIDAD · 120 m (60%)", geometry: LOCALITY_OUTLINE },
           { itemIndex: 0, role: "locality", label: "FLORES RURAL · 80 m (40%)", geometry: ZONE_OUTLINE },
@@ -301,7 +302,7 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
       const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([{ localitiesOf: "1035386" }])), depsOf(fake));
 
       expect(response.status).toBe(200);
-      expect(await bodyOf(response)).toEqual({ success: true, features: [], candidates: [] });
+      expect(await bodyOf(response)).toEqual({ success: true, features: [], candidates: [], neighbours: [] });
     });
 
     it("should answer one feature per department the section crosses, labelled with its name", async () => {
@@ -313,6 +314,7 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
       expect(await bodyOf(response)).toEqual({
         success: true,
         candidates: [],
+        neighbours: [],
         features: [{ itemIndex: 0, role: "department", label: "FLORES", geometry: DEPARTMENT_OUTLINE }],
       });
     });
@@ -375,11 +377,13 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
       expect(await bodyOf(urbanResponse)).toEqual({
         success: true,
         candidates: [],
+        neighbours: [],
         features: [{ itemIndex: 0, role: "zone", label: "Padrones urbanos cercanos", geometry: ZONE_OUTLINE }],
       });
       expect(await bodyOf(ruralResponse)).toEqual({
         success: true,
         candidates: [],
+        neighbours: [],
         features: [
           { itemIndex: 0, role: "new", label: "Tramo nuevo 1", geometry: NEW_OUTLINE },
           { itemIndex: 1, role: "zone", label: "Padrones rurales cercanos", geometry: ZONE_OUTLINE },
@@ -393,7 +397,7 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
       const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("URBANO")])), depsOf(fake));
 
       expect(response.status).toBe(200);
-      expect(await bodyOf(response)).toEqual({ success: true, features: [], candidates: [] });
+      expect(await bodyOf(response)).toEqual({ success: true, features: [], candidates: [], neighbours: [] });
     });
 
     it("should answer 200 with no feature when the union comes back as a null outline", async () => {
@@ -402,7 +406,7 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
       const response = await readEjesCallesGeometryMap(mapRequestOf(validBody([zoneItem("RURAL")])), depsOf(fake));
 
       expect(response.status).toBe(200);
-      expect(await bodyOf(response)).toEqual({ success: true, features: [], candidates: [] });
+      expect(await bodyOf(response)).toEqual({ success: true, features: [], candidates: [], neighbours: [] });
     });
 
     it("should keep the other features of the row when one zone has no padron near", async () => {
@@ -573,6 +577,7 @@ describe("readEjesCallesGeometryMap (EM-6 to EM-9)", () => {
       expect(await bodyOf(response)).toEqual({
         success: true,
         candidates: [],
+        neighbours: [],
         features: [
           { itemIndex: 0, role: "old", label: "Tramo anterior 1001634", geometry: OLD_OUTLINE },
           { itemIndex: 1, role: "new", label: "Tramo nuevo 1035386", geometry: NEW_OUTLINE },

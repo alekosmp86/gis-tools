@@ -32,7 +32,6 @@ const distinctRefs = (count: number): Array<{ ref: string }> => Array.from({ len
 
 describe("parseEjesCallesStartRequest accepted.twinRemovals (ET-24, EJS-16)", () => {
   beforeEach(() => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
   });
 
   afterEach(() => {

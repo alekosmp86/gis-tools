@@ -54,7 +54,6 @@ describe("manual twin copy picks on PGlite (ET-28 to ET-33)", () => {
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-twin-picks-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);

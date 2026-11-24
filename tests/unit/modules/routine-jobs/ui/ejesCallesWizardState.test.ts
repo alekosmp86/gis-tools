@@ -119,13 +119,8 @@ describe("ejes wizard state", () => {
   });
 
   describe("canAnalyzeNow", () => {
-    it("should be true when valid and the password is retyped", () => {
-      expect(canAnalyzeNow(validState())).toBe(true);
-    });
-
-    it("should be false when the retyped password is empty or different", () => {
-      expect(canAnalyzeNow(validState({ confirmation: { password: "" } }))).toBe(false);
-      expect(canAnalyzeNow(validState({ confirmation: { password: "other" } }))).toBe(false);
+    it("should be true when valid, with no password retyped on the review step", () => {
+      expect(canAnalyzeNow(validState({ confirmation: { password: "" } }))).toBe(true);
     });
 
     it("should be false when both passwords are empty", () => {
@@ -213,8 +208,8 @@ describe("ejes wizard state", () => {
   });
 
   describe("canLoadNow (EJ-24)", () => {
-    it("should be true after a finished dry run of the same data with no blocker and the password retyped", () => {
-      const state = validState();
+    it("should be true after a finished dry run of the same data with no blocker, with no password retyped", () => {
+      const state = validState({ confirmation: { password: "" } });
 
       expect(canLoadNow(state, doneSnapshot(state))).toBe(true);
     });
@@ -251,12 +246,6 @@ describe("ejes wizard state", () => {
       const snapshot = doneSnapshot(state);
 
       expect(canLoadNow(state, { ...snapshot, plan: { ...snapshot.plan!, dryRun: false } })).toBe(false);
-    });
-
-    it("should be false when the password is not retyped", () => {
-      const state = validState();
-
-      expect(canLoadNow({ ...state, confirmation: { password: "" } }, doneSnapshot(state))).toBe(false);
     });
 
     it("should be false when the staging table changed after the analysis", () => {
@@ -373,16 +362,6 @@ describe("ejes wizard state", () => {
       );
 
       expect(next.confirmation.password).toBe("");
-    });
-
-    it("should not allow loading after a dry run when the confirmation does not match the password", () => {
-      const next = reduce(
-        validState(),
-        { type: "runStarted", dryRun: true },
-        { type: "confirmationChanged", patch: { password: "wrong" } }
-      );
-
-      expect(canLoadNow(next, doneSnapshot(next))).toBe(false);
     });
 
     it("should reset to the initial state", () => {

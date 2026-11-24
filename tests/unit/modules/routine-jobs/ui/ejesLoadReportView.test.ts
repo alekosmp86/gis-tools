@@ -104,7 +104,7 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
     it("should list inserted, updated, renumbered, renumbers held back, splits applied, merges applied, sections removed, sections deleted, ways created, points moved and the topology counts, in this order", () => {
       const view = buildEjesLoadView(
         resultOf(),
-        loadOf({ counts: { ...loadOf().counts, merged: 2, removed: 5, deleted: 7, topologyAssigned: 4, verticesCreated: 6, verticesDeleted: 1 } })
+        loadOf({ counts: { ...loadOf().counts, merged: 2, removed: 5, deleted: 7, waysRenamed: 3, topologyAssigned: 4, verticesCreated: 6, verticesDeleted: 1 } })
       );
 
       expect(view.counts).toEqual([
@@ -118,6 +118,7 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
         { label: "Gemelos quitados", value: 0 },
         { label: "Tramos borrados (divididos o reemplazados, unidos, gemelos y quitados)", value: 7 },
         { label: "Vías de circulación creadas", value: 4 },
+        { label: "Vías de circulación renombradas", value: 3 },
         { label: "Puntos de acceso movidos", value: 9 },
         { label: EJES_LOAD_COUNT_TEXT.TOPOLOGY_ASSIGNED, value: 4 },
         { label: EJES_LOAD_COUNT_TEXT.VERTICES_CREATED, value: 6 },
@@ -176,7 +177,14 @@ describe("buildEjesLoadView (EJL-13, EJ-24)", () => {
         })
       );
 
-      expect(view.counts.map((row) => row.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+      expect(view.counts.map((row) => row.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    });
+
+    it("should show the street ids renamed by the load as the waysRenamed count (renamed, not created)", () => {
+      const view = buildEjesLoadView(resultOf(), loadOf({ counts: { ...loadOf().counts, waysCreated: 0, waysRenamed: 2 } }));
+
+      expect(countOf(view, "Vías de circulación renombradas")).toBe(2);
+      expect(countOf(view, "Vías de circulación creadas")).toBe(0);
     });
 
     it("should show the sections deleted by the load (removed and merged) from counts.deleted", () => {

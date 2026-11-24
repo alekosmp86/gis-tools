@@ -64,7 +64,6 @@ describe("geometric twins on PGlite (ET-20 to ET-27)", () => {
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-geo-twins-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);

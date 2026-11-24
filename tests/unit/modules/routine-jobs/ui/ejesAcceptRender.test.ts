@@ -6,7 +6,7 @@ import type { EjesResult } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import { EjesAcceptableRows } from "@/modules/routine-jobs/ui/ejes-calles/EjesAcceptableRows";
 import { EjesAcceptToolbar } from "@/modules/routine-jobs/ui/ejes-calles/EjesAcceptToolbar";
 import { EjesAcceptList, type EjesAcceptView } from "@/modules/routine-jobs/ui/ejes-calles/ejesAccept";
-import { EJES_ACCEPT_TEXT, acceptedCountTextOf, incompleteListTextOf } from "@/modules/routine-jobs/ui/ejes-calles/ejesAcceptTexts";
+import { EJES_ACCEPT_TEXT, EJES_MANUAL_SPLIT_TEXT, acceptedCountTextOf, incompleteListTextOf } from "@/modules/routine-jobs/ui/ejes-calles/ejesAcceptTexts";
 import type { EjesRunSnapshot } from "@/modules/routine-jobs/ui/shared/ejesCallesRunStore";
 import { RunPhase } from "@/modules/routine-jobs/ui/shared/jobRunStore";
 import { EjesResultStep, type EjesResultStepProps } from "@/modules/routine-jobs/ui/ejes-calles/steps/EjesResultStep";
@@ -20,6 +20,7 @@ const COUNTS = {
   both: 0,
   removed: 2,
   splits: 1,
+  replacements: 0,
   merges: 1,
   plainRemovals: 1,
   plainHeld: 1,
@@ -226,7 +227,8 @@ describe("accept controls on the Resultado step (EJ-24)", () => {
 
     expect(out).toContain(EJES_ACCEPT_TEXT.ACCEPT_ALL);
     expect(out).toContain(EJES_ACCEPT_TEXT.REJECT_ALL);
-    expect(out).toContain(acceptedCountTextOf(1, 1));
+    expect(out).toContain(EJES_MANUAL_SPLIT_TEXT.RESOLVED_COUNT(0, COUNTS.plainHeld));
+    expect(out).not.toContain("NaN");
     expect(out).toContain(acceptedCountTextOf(0, 1));
     expect(out).toContain(EJES_ACCEPT_TEXT.SPLIT_NOTE);
   });

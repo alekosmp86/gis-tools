@@ -42,7 +42,6 @@ describe("ejes topology and vertex cleanup on PGlite (EJ-20, EJ-27, EJ-28)", () 
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-topo-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);

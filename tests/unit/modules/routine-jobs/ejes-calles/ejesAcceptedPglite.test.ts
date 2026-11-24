@@ -50,7 +50,6 @@ describe("ejes accepted removals, merges and held groups on PGlite (EJS-4, EJS-9
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-accepted-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);

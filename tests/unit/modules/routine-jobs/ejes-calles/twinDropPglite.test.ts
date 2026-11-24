@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TWIN_CLASS } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
-import { copyKeptCte } from "@/modules/routine-jobs/jobs/ejes-calles/domain/analysisSql";
+import { copyKeptCte, copyLocalizedCte } from "@/modules/routine-jobs/jobs/ejes-calles/domain/analysisSql";
 import { localityKeySql, twinDefaultedSql, twinDropCaseSql } from "@/modules/routine-jobs/jobs/ejes-calles/domain/twinSql";
 
 const SETUP_TIMEOUT_MS = 30000;
@@ -400,7 +400,7 @@ describe("locality name key and the NULL-locality copy against PostgreSQL (ET-10
 
   it("should drop a NULL-locality copy next to a named copy of its department, and keep it when no named copy of the department remains", async () => {
     const result = await database.query<{ ref: string; localidad: string | null }>(
-      `WITH "copy_raw" AS (SELECT * FROM t_raw), "twins" AS (SELECT * FROM t_twins), "twin_dept" AS (SELECT * FROM t_dept), "twin_picks" AS (SELECT * FROM t_picks), ${copyKeptCte()} SELECT ref, localidad FROM "copy_kept" ORDER BY ref, localidad`
+      `WITH "copy_raw" AS (SELECT * FROM t_raw), "twins" AS (SELECT * FROM t_twins), "twin_dept" AS (SELECT * FROM t_dept), "twin_picks" AS (SELECT * FROM t_picks), ${copyLocalizedCte()}, ${copyKeptCte()} SELECT ref, localidad FROM "copy_kept" ORDER BY ref, localidad`
     );
 
     expect(result.rows.map((row) => `${row.ref}|${row.localidad ?? "NULL"}`)).toEqual(["1|TRINIDAD", "2|NULL", "3|NULL"]);

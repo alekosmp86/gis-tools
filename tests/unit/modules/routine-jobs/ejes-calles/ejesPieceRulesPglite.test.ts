@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PIECE_COVER_TOLERANCE_M } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
 import type { EjesAnalysis, EjesStoredReviewPoint } from "@/modules/routine-jobs/jobs/ejes-calles/types";
 import { readAnalysis } from "@/modules/routine-jobs/jobs/ejes-calles/services/readEjesAnalysis";
 import { ejesLayouts } from "./ejesFixtures";
@@ -35,7 +36,6 @@ describe("piece rules of the analysis on PGlite (EJ-10, EJS-3, EJS-17, EJS-21)",
   let directory: string;
 
   beforeEach(async () => {
-    vi.stubEnv("EJES_CALLES_REAL_RUN_ENABLED", "true");
     directory = await mkdtemp(path.join(tmpdir(), "gis-ejes-pieces-"));
     tempRoot.directory = directory;
     database = await createEjesDatabase(PGlite);
@@ -153,7 +153,7 @@ describe("piece rules of the analysis on PGlite (EJ-10, EJS-3, EJS-17, EJS-21)",
     });
   });
 
-  describe("a new section covering an old one within 3 m is a piece, not within 1 m only (PIECE_COVER_TOLERANCE_M)", () => {
+  describe(`a new section covering an old one within ${PIECE_COVER_TOLERANCE_M} m is a piece, not within 1 m only (PIECE_COVER_TOLERANCE_M)`, () => {
     it("should replace old 6001 with the one piece 6002 when the piece covers 90% of it at 1 m and all of it at 3 m", async () => {
       await insertWay(database, STREET, "CALLE TREINTA");
       await insertSection(database, { ref: 6001, calle: STREET, geom: "0:10", distance: "10.00" });
@@ -188,7 +188,7 @@ describe("piece rules of the analysis on PGlite (EJ-10, EJS-3, EJS-17, EJS-21)",
       expect(row.reviewPoints).toBe(0);
     });
 
-    it("should cover old 6001 when the new piece starts exactly 3 m from its start", async () => {
+    it(`should cover old 6001 when the new piece starts 3 m from its start, inside the ${PIECE_COVER_TOLERANCE_M} m tolerance`, async () => {
       await insertWay(database, STREET, "CALLE TREINTA");
       await insertSection(database, { ref: 6001, calle: STREET, geom: "0:8", distance: "8.00" });
       await insertStaging(database, [{ ref: "6002", calle: "30", nombre: "CALLE TREINTA", geom: "3:8" }]);
@@ -199,10 +199,10 @@ describe("piece rules of the analysis on PGlite (EJ-10, EJS-3, EJS-17, EJS-21)",
       expect(result.plainRemovals).toEqual([]);
     });
 
-    it("should not cover old 6001 when the new piece starts 3.5 m from its start, leaving it a plain removal", async () => {
+    it(`should not cover old 6001 when the new piece starts 4 m from its start, beyond ${PIECE_COVER_TOLERANCE_M} m, leaving it a plain removal`, async () => {
       await insertWay(database, STREET, "CALLE TREINTA");
       await insertSection(database, { ref: 6001, calle: STREET, geom: "0:8", distance: "8.00" });
-      await insertStaging(database, [{ ref: "6002", calle: "30", nombre: "CALLE TREINTA", geom: "3.5:8" }]);
+      await insertStaging(database, [{ ref: "6002", calle: "30", nombre: "CALLE TREINTA", geom: "4:8" }]);
 
       const result = await analysis();
 

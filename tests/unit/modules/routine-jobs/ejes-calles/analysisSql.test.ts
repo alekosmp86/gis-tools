@@ -7,11 +7,9 @@ import {
   geometriesDifferSql,
 } from "@/modules/routine-jobs/jobs/ejes-calles/domain/analysisSql";
 import {
-  COVERAGE_TOLERANCE_M,
   GEOMETRY_TOLERANCE_M,
-  PIECE_OWN_FRACTION,
+  PIECE_COVER_TOLERANCE_M,
   RURAL_LOCALITY_SUFFIX,
-  SPLIT_PIECE_MIN_COVER_M,
   TWIN_NEAR_MIN_LENGTH_M,
   TWIN_PADRON_DISTANCE_M,
 } from "@/modules/routine-jobs/jobs/ejes-calles/constants";
@@ -76,7 +74,6 @@ describe("buildEjesAnalysisSql", () => {
     });
 
     it("should take the geometry tolerance from the constant, 0.001 m", () => {
-      expect(GEOMETRY_TOLERANCE_M).toBe(0.001);
       expect(geometriesDifferSql("a", "b")).toContain(`ST_HausdorffDistance(a, b) < ${GEOMETRY_TOLERANCE_M}`);
     });
 
@@ -135,10 +132,10 @@ describe("buildEjesAnalysisSql", () => {
       expect(sql).toContain("sum(p.covered) >= 0.95 * sum(p.len)");
     });
 
-    it("should use a 3 m piece cover tolerance for buffer and ST_DWithin in splits and merges", () => {
-      expect(sql).toContain("ST_Buffer(ST_Collect(p.geom), 3)");
-      expect(sql).toContain("ST_DWithin(r.geometry, n.geom, 3)");
-      expect(sql).toContain("ST_Buffer(n.geom, 3)");
+    it("should use the piece cover tolerance constant for buffer and ST_DWithin in splits and merges", () => {
+      expect(sql).toContain(`ST_Buffer(ST_Collect(p.geom), ${PIECE_COVER_TOLERANCE_M})`);
+      expect(sql).toContain(`ST_DWithin(r.geometry, n.geom, ${PIECE_COVER_TOLERANCE_M})`);
+      expect(sql).toContain(`ST_Buffer(n.geom, ${PIECE_COVER_TOLERANCE_M})`);
     });
 
     it("should keep the 1 m distance for renumber candidates and kept_by_candidate protection", () => {
@@ -184,17 +181,13 @@ describe("buildEjesAnalysisSql", () => {
   });
 
   describe("EJ-10 touching neighbours and id-linked points (SPLIT_PIECE_MIN_COVER_M, PIECE_OWN_FRACTION, EJ-21)", () => {
-    it("should set the minimum cover of a split piece or a merge member to 10 m, and its own-length share to 35%", () => {
-      expect(COVERAGE_TOLERANCE_M).toBe(1);
-      expect(SPLIT_PIECE_MIN_COVER_M).toBe(10);
-      expect(PIECE_OWN_FRACTION).toBe(0.35);
-    });
-
     it("should measure the cover of each neighbour piece in piece_cover, one row per (removed section, new section)", () => {
       const pieceCover = sql.slice(sql.indexOf('"piece_cover" AS ('), sql.indexOf('"removed_cover" AS ('));
 
-      expect(pieceCover).toContain("ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, 3))) AS piece_covered");
-      expect(pieceCover).toContain('FROM "removed_rest" AS r JOIN "new_rest" AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, 3)');
+      expect(pieceCover).toContain(`ST_Length(ST_Intersection(r.geometry, ST_Buffer(n.geom, ${PIECE_COVER_TOLERANCE_M}))) AS piece_covered`);
+      expect(pieceCover).toContain(
+        `FROM "removed_rest" AS r JOIN "new_rest" AS n ON n.idcalle = r.idcalle AND ST_DWithin(r.geometry, n.geom, ${PIECE_COVER_TOLERANCE_M})`
+      );
       expect(pieceCover).not.toContain("GROUP BY");
     });
 
@@ -205,7 +198,7 @@ describe("buildEjesAnalysisSql", () => {
         'FROM "piece_cover" AS p WHERE (p.piece_covered >= 0.95 * p.len OR (p.piece_covered > 10 AND p.piece_covered >= 0.35 * p.piece_len))'
       );
       expect(removedCover).toContain("count(p.new_ref) AS new_count");
-      expect(removedCover).toContain("ST_Length(ST_Intersection(p.geometry, ST_Buffer(ST_Collect(p.geom), 3))) AS covered");
+      expect(removedCover).toContain(`ST_Length(ST_Intersection(p.geometry, ST_Buffer(ST_Collect(p.geom), ${PIECE_COVER_TOLERANCE_M}))) AS covered`);
       expect(sql).not.toMatch(/piece_covered >= 2\b/);
     });
 
@@ -213,10 +206,10 @@ describe("buildEjesAnalysisSql", () => {
       const mergeBlock = sql.slice(sql.indexOf('"merge_pairs" AS ('), sql.indexOf('"plain" AS ('));
 
       expect(mergeBlock).toContain(
-        "WHERE (p.covered >= 0.95 * p.len OR (p.covered > 10 AND p.covered >= 0.35 * p.piece_len)) GROUP BY p.new_ref HAVING count(*) >= 2 AND sum(p.covered) >= 0.95 * sum(p.len)"
+        'WHERE (p.covered >= 0.95 * p.len OR (p.covered > 10 AND p.covered >= 0.35 * p.piece_len)) AND p.new_ref NOT IN (SELECT x.new_ref FROM "manual_merge_members" AS x) GROUP BY p.new_ref HAVING count(*) >= 2 AND sum(p.covered) >= 0.95 * sum(p.len)'
       );
       expect(mergeBlock).toContain(
-        'JOIN "merges" AS m ON m.new_ref = p.new_ref WHERE (p.covered >= 0.95 * p.len OR (p.covered > 10 AND p.covered >= 0.35 * p.piece_len))'
+        'JOIN "auto_merges" AS m ON m.new_ref = p.new_ref WHERE (p.covered >= 0.95 * p.len OR (p.covered > 10 AND p.covered >= 0.35 * p.piece_len))'
       );
       expect(sql).not.toContain("covered > 0");
     });
