@@ -96,7 +96,7 @@ describe("throwIfIssues and assertConfirmedOrDryRun", () => {
   });
 
   it("should join several issues into one message in their order", () => {
-    expect(() => throwIfIssues(["primera.", "segunda."])).toThrow("primera. segunda.");
+    expect(() => throwIfIssues(["primera.", "segunda."])).toThrow("primera.\nsegunda.");
   });
 
   it("should refuse a real run without confirm with the given message", () => {
@@ -128,8 +128,8 @@ describe("assertSourceTablesReady", () => {
     const { session } = sessionOf({ empty: ["carto.tabla_a", "carto.tabla_b"], unsupported: 2 });
 
     expect(await messageOf(assertSourceTablesReady(session, sourceSpec()))).toBe(
-      "La tabla carto.tabla_a no tiene filas: no hay direcciones de origen. " +
-        "La tabla carto.tabla_b no tiene filas: no hay localidades de origen. " +
+      "La tabla carto.tabla_a no tiene filas: no hay direcciones de origen.\n" +
+        "La tabla carto.tabla_b no tiene filas: no hay localidades de origen.\n" +
         "La tabla carto.origen tiene 2 geometrías con SRID 0 o desconocido: no se pueden transformar al SRID de destino.",
     );
   });
@@ -168,8 +168,8 @@ describe("assertWriteTargetsReady issue order", () => {
     expect(
       await messageOf(assertWriteTargetsReady(session, writeSpec([writableOf("target_a"), writableOf("target_b")], [layoutOf("origen")]))),
     ).toBe(
-      "La tabla de destino carto.target_a es una vista: debe ser una tabla regular o particionada. " +
-        "No tiene privilegio UPDATE sobre la tabla carto.target_b. " +
+      "La tabla de destino carto.target_a es una vista: debe ser una tabla regular o particionada.\n" +
+        "No tiene privilegio UPDATE sobre la tabla carto.target_b.\n" +
         "No tiene privilegio SELECT sobre la tabla carto.origen.",
     );
   });

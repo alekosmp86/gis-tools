@@ -26,7 +26,7 @@ export interface SourceTablesSpec {
 
 export function throwIfIssues(issues: readonly string[]): void {
   if (issues.length > 0) {
-    throw new Error(issues.join(" "));
+    throw new Error(issues.join("\n"));
   }
 }
 

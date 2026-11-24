@@ -5,6 +5,7 @@ import { throwIfIssues } from "../../shared/preflightAsserts";
 import { numberOf } from "../../shared/rowMapping";
 import { buildSequenceRepairSql, runTransaction, type TransactionMessages } from "../../shared/transaction";
 import { EJES_TABLE_ROLE } from "../constants";
+import { qualifiedSequenceOf } from "../domain/loadContext";
 import { assertManualSplitsApply, assertMoveTargetsExist, assertTwinPicksExist, prepareAccepted, createRemovalPlans, writeRemovals } from "./removalLoad";
 import { ANALYSIS_CHANGED_MESSAGE, assertRenamesAccepted, assertWritten, runInOrder, writtenBy } from "./writeStatements";
 import { ejesBlockersOf } from "../domain/blockers";
@@ -105,6 +106,8 @@ const EJES_PERSIST_TRANSACTION: TransactionMessages = {
 };
 
 
+const SEQUENCE_UPDATE_SQL = "SELECT has_sequence_privilege(current_user, $1::text, 'UPDATE') AS has_privilege";
+
 const multiPartMessage = (count: number): string =>
   `${count} ${count === 1 ? "tramo tiene" : "tramos tienen"} una geometría que sigue en varias partes después de ST_LineMerge.`;
 
@@ -122,6 +125,12 @@ function assertSummaryMatches(summary: EjesSummary | undefined, analysis: EjesAn
   if (differences.length > 0) throw new Error(`${ANALYSIS_CHANGED_MESSAGE} Cambió: ${differences.join("; ")}.`);
 }
 
+async function holdsSequenceUpdate(session: RunSession, sequence: string): Promise<boolean> {
+  const result = await session.query(SEQUENCE_UPDATE_SQL, [sequence]);
+  return Boolean(result.rows[0]?.has_privilege);
+}
+
+/** Without UPDATE the repair (setval) cannot run: the preflight already checked that these sequences are ahead of the ids. */
 async function repairSequences(session: RunSession, context: EjesLoadContext): Promise<void> {
   for (const role of [
     EJES_TABLE_ROLE.ROAD_SECTION,
@@ -130,6 +139,8 @@ async function repairSequences(session: RunSession, context: EjesLoadContext): P
     EJES_TABLE_ROLE.VERTICES,
   ] as const) {
     // One pg client: each repair runs before the next.
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
+    if (!(await holdsSequenceUpdate(session, qualifiedSequenceOf(context, role)))) continue;
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await session.query(buildSequenceRepairSql(context.targets[role]));
   }

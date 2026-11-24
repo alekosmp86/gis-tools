@@ -2,6 +2,7 @@ import { buildQualifiedTableLabel, resolveSchemaName } from "@/core/services/sql
 import type { CatalogQuerySession } from "@/core/services/server/tableCatalog/tableCatalog";
 import { assertSourceTablesReady, throwIfIssues } from "../../shared/preflightAsserts";
 import {
+  ejesSequenceIssuesOf,
   READ_PRIVILEGES,
   sequenceIssuesOf,
   tableAnyPrivilegeIssues,
@@ -159,7 +160,7 @@ export async function assertEjesLoadReady(
     const inserted = INSERTED_COLUMNS[role];
     if (inserted === undefined) continue;
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
-    issues.push(...(await sequenceIssuesOf(session, target, true)));
+    issues.push(...(await ejesSequenceIssuesOf(session, target)));
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     issues.push(...(await targetStructureIssuesOf(session, target, inserted, TITLE_BY_ROLE[role])));
   }

@@ -15,6 +15,9 @@ const SEQUENCE_STATE_SQL =
 const SEQUENCE_LOCATION_SQL =
   "SELECT n.nspname AS schema_name, c.relname AS sequence_name, has_sequence_privilege(current_user, c.oid, 'SELECT') AS can_select FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.oid = $1::text::regclass";
 const REPAIR_OPTION =`"Ajustar secuencias de destino"`;
+const SEQUENCE_READ_SQL = "SELECT has_sequence_privilege(current_user, $1::text, 'USAGE,SELECT') AS has_privilege";
+const SEQUENCE_AHEAD_HINT = `: active ${REPAIR_OPTION} para ajustarla antes de escribir.`;
+const EJES_SEQUENCE_AHEAD_HINT = ", y no hay privilegio UPDATE para ajustarla: pida el permiso o que un administrador la ajuste.";
 
 const WRITE_PRIVILEGES: readonly string[] = ["INSERT", "UPDATE", "SELECT"];
 export const READ_PRIVILEGES: readonly string[] = ["SELECT"];
@@ -106,7 +109,8 @@ async function nextValueOfUncalled(session: CatalogQuerySession, idSequence: str
 async function sequenceAheadIssues(
   session: CatalogQuerySession,
   target: WritableTargetLayout,
-  idSequence: string
+  idSequence: string,
+  fixHint: string
 ): Promise<string[]> {
   const name = sequenceNameOf(target, idSequence);
   const label = labelOf(target);
@@ -123,9 +127,7 @@ async function sequenceAheadIssues(
     const maxima = await session.query(`SELECT max(${quoteIdentifier(target.idColumn)}) AS max_id FROM ${qualifiedName(target)}`);
     const maxId = maxima.rows[0]?.max_id;
     if (maxId === null || maxId === undefined || next > Number(maxId)) return [];
-    return [
-      `La secuencia ${name} está en ${next} y la tabla ${label} ya tiene ids hasta ${Number(maxId)}: active ${REPAIR_OPTION} para ajustarla antes de escribir.`,
-    ];
+    return [`La secuencia ${name} está en ${next} y la tabla ${label} ya tiene ids hasta ${Number(maxId)}${fixHint}`];
   } catch (error: unknown) {
     const reason = error instanceof Error ? error.message : String(error);
     return [`No se pudo leer la secuencia ${name} para comprobar los ids de ${label}: ${reason}`];
@@ -152,6 +154,19 @@ export async function sequenceIssuesOf(
   return [];
 }
 
+/** The ejes load repairs with setval (UPDATE) only when held: without it the sequence must already be ahead, checked here. */
+export async function ejesSequenceIssuesOf(session: CatalogQuerySession, target: WritableTargetLayout): Promise<string[]> {
+  if (target.idSequence === null) return [];
+  if (await hasSequencePrivilege(session, SEQUENCE_UPDATE_SQL, target.idSequence)) return [];
+  const name = sequenceNameOf(target, target.idSequence);
+  if (!(await hasSequencePrivilege(session, SEQUENCE_READ_SQL, target.idSequence))) {
+    return [
+      `No tiene privilegio UPDATE sobre la secuencia ${name} ni USAGE y SELECT para comprobarla: pida el permiso o que un administrador la ajuste.`,
+    ];
+  }
+  return sequenceAheadIssues(session, target, target.idSequence, EJES_SEQUENCE_AHEAD_HINT);
+}
+
 export interface SequenceGuardInput {
   target: WritableTargetLayout;
   inserts: number;
@@ -163,7 +178,7 @@ export interface SequenceGuardInput {
 export async function sequenceStateWarnings(session: CatalogQuerySession, input: SequenceGuardInput): Promise<string[]> {
   const { target, inserts, repairSequences, dryRun } = input;
   if (repairSequences || inserts <= 0 || target.idSequence === null) return [];
-  const issues = await sequenceAheadIssues(session, target, target.idSequence);
+  const issues = await sequenceAheadIssues(session, target, target.idSequence, SEQUENCE_AHEAD_HINT);
   if (issues.length > 0 && !dryRun) throw new Error(issues.join(" "));
   return issues;
 }

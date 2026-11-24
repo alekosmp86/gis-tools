@@ -80,10 +80,13 @@ export const qualifiedOf = (context: EjesLoadContext, role: EjesLoadRole): strin
   return `${quoteIdentifier(resolveSchemaName(target.schema))}.${quoteIdentifier(target.table)}`;
 };
 
-export function nextvalSql(context: EjesLoadContext, role: EjesLoadRole): string {
+export function qualifiedSequenceOf(context: EjesLoadContext, role: EjesLoadRole): string {
   const target = context.targets[role];
   const sequence = parseSequenceName(target.idSequence);
   if (sequence === undefined) throw new Error(`La tabla ${target.schema}.${target.table} no tiene secuencia para asignar ids.`);
-  const name = `${quoteIdentifier(sequence.schema ?? resolveSchemaName(target.schema))}.${quoteIdentifier(sequence.name)}`;
-  return `nextval('${name.replace(/'/g, "''")}'::regclass)`;
+  return `${quoteIdentifier(sequence.schema ?? resolveSchemaName(target.schema))}.${quoteIdentifier(sequence.name)}`;
+}
+
+export function nextvalSql(context: EjesLoadContext, role: EjesLoadRole): string {
+  return `nextval('${qualifiedSequenceOf(context, role).replace(/'/g, "''")}'::regclass)`;
 }
