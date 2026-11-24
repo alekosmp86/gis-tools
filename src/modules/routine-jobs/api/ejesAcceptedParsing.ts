@@ -1,5 +1,5 @@
-import { ACCEPTED_CHOICES_LIMIT, ACCEPTED_KEYS_LIMIT, MANUAL_SPLIT_PIECES_LIMIT } from "../jobs/ejes-calles/constants";
-import type { EjesAccepted, EjesAcceptedSplit, EjesManualSplit, EjesPointChoice, EjesTwinPick } from "../jobs/ejes-calles/types";
+import { ACCEPTED_CHOICES_LIMIT, ACCEPTED_KEYS_LIMIT, MANUAL_SPLIT_PIECES_LIMIT, RENAMED_STREET_NAME_LIMIT } from "../jobs/ejes-calles/constants";
+import type { EjesAccepted, EjesAcceptedRename, EjesAcceptedSplit, EjesManualSplit, EjesPointChoice, EjesTwinPick } from "../jobs/ejes-calles/types";
 import { invalid, isRecord, readRecord, type JsonRecord } from "./requestParsing";
 
 const ACCEPTED_REQUIRED_MESSAGE = "El campo accepted es obligatorio y debe ser un objeto.";
@@ -20,10 +20,13 @@ const SPLIT_KEY = { OLD_REF: "oldRef", CHOICES: "choices" } as const;
 const CHOICE_KEY = { POINT_ID: "pointId", NEW_REF: "newRef" } as const;
 const TWIN_PICK_KEY = { REF: "ref", DEPARTMENT: "department", LOCALITY: "locality" } as const;
 const MANUAL_SPLIT_KEY = { OLD_REF: "oldRef", NEW_REFS: "newRefs" } as const;
+const RENAMED_STREET_KEY = { IDCALLE: "idcalle", NAME: "name" } as const;
 
 const ACCEPTED_KEYS: readonly string[] = Object.values(ACCEPTED_KEY);
 const TWIN_PICK_FIELDS: readonly string[] = Object.values(TWIN_PICK_KEY);
 const MANUAL_SPLIT_FIELDS: readonly string[] = Object.values(MANUAL_SPLIT_KEY);
+const RENAMED_STREET_FIELDS: readonly string[] = Object.values(RENAMED_STREET_KEY);
+const CONTROL_CHARACTER_PATTERN = /\p{Cc}/u;
 
 function readAcceptedRecord(body: JsonRecord): JsonRecord {
   if (body.accepted === undefined || body.accepted === null) throw invalid(ACCEPTED_REQUIRED_MESSAGE);
@@ -42,16 +45,21 @@ function canonicalRef(path: string, value: unknown): string {
   return String(BigInt(value));
 }
 
-/** Every entry of an accepted list, canonical, in request order. Absent means none; the list is refused above the limit, never truncated. */
-function readRefEntries(accepted: JsonRecord, key: string, field: string): string[] {
+/** Every object of an accepted list, in request order. Absent means none; the list is refused above the limit, never truncated. */
+function readEntries(accepted: JsonRecord, key: string): JsonRecord[] {
   const list = accepted[key];
   if (list === undefined) return [];
   if (!Array.isArray(list)) throw invalid(`El campo accepted.${key} debe ser una lista.`);
   if (list.length > ACCEPTED_KEYS_LIMIT) throw invalid(`El campo accepted.${key} admite como máximo ${ACCEPTED_KEYS_LIMIT} elementos.`);
   return list.map((entry) => {
     if (!isRecord(entry)) throw invalid(`Cada elemento de accepted.${key} debe ser un objeto.`);
-    return canonicalRef(`accepted.${key}.${field}`, entry[field]);
+    return entry;
   });
+}
+
+/** Every entry of an accepted list, canonical, in request order. */
+function readRefEntries(accepted: JsonRecord, key: string, field: string): string[] {
+  return readEntries(accepted, key).map((entry) => canonicalRef(`accepted.${key}.${field}`, entry[field]));
 }
 
 /** A repeated reftramo is sent once. */
@@ -59,11 +67,28 @@ function readRefs(accepted: JsonRecord, key: string, field: string): string[] {
   return [...new Set(readRefEntries(accepted, key, field))];
 }
 
+/** A rename's name: required text, trimmed, 1 to RENAMED_STREET_NAME_LIMIT characters, no control characters. */
+function readRenameName(value: unknown): string {
+  const name = typeof value === "string" ? value.trim() : "";
+  if (name === "" || name.length > RENAMED_STREET_NAME_LIMIT || CONTROL_CHARACTER_PATTERN.test(name)) {
+    throw invalid(`El campo accepted.${ACCEPTED_KEY.RENAMED_STREETS}.${RENAMED_STREET_KEY.NAME} debe ser un texto de 1 a ${RENAMED_STREET_NAME_LIMIT} caracteres sin caracteres de control.`);
+  }
+  return name;
+}
+
+/** The street of one rename by its canonical `idcalle`; `name` is optional (the one file name is applied when it is absent). */
+function readRenamedStreet(entry: JsonRecord): EjesAcceptedRename {
+  assertOnlyKeys(entry, RENAMED_STREET_FIELDS, `accepted.${ACCEPTED_KEY.RENAMED_STREETS}`);
+  const idcalle = canonicalRef(`accepted.${ACCEPTED_KEY.RENAMED_STREETS}.${RENAMED_STREET_KEY.IDCALLE}`, entry[RENAMED_STREET_KEY.IDCALLE]);
+  return entry[RENAMED_STREET_KEY.NAME] === undefined ? { idcalle } : { idcalle, name: readRenameName(entry[RENAMED_STREET_KEY.NAME]) };
+}
+
 /** One rename per canonical `idcalle`: a repeated one is refused, never merged. */
-function readRenamedStreets(accepted: JsonRecord): string[] {
-  const idcalles = readRefEntries(accepted, ACCEPTED_KEY.RENAMED_STREETS, "idcalle");
+function readRenamedStreets(accepted: JsonRecord): EjesAcceptedRename[] {
+  const renames = readEntries(accepted, ACCEPTED_KEY.RENAMED_STREETS).map(readRenamedStreet);
+  const idcalles = renames.map((rename) => rename.idcalle);
   if (new Set(idcalles).size !== idcalles.length) throw invalid(`El campo accepted.${ACCEPTED_KEY.RENAMED_STREETS} repite un idcalle.`);
-  return idcalles;
+  return renames;
 }
 
 function readChoice(entry: unknown): EjesPointChoice {

@@ -371,6 +371,7 @@ export type EjesSkipKind = (typeof EJES_SKIP_KIND)[keyof typeof EJES_SKIP_KIND];
 
 export const ACCEPTED_KEYS_LIMIT = 5000;
 export const ACCEPTED_CHOICES_LIMIT = 20000;
+export const RENAMED_STREET_NAME_LIMIT = 150;
 
 export const EJES_KEPT_BY_DISCARDED_REASON = {
   SAME_REFTRAMO: "same_reftramo",

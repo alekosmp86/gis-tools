@@ -272,14 +272,15 @@ export const buildSurplusListSql = (limit: number): string =>
   ].join(" ");
 
 /**
- * The rename candidates of the loaded copies (the same rule as the analysis' `renamed_streets`): `(idcalle, name, multi_name, accepted)`.
- * `accepted` is set for the streets of `ej_acc_way`; the load renames only those that are accepted and not `multi_name`.
+ * The rename candidates of the loaded copies (the same rule as the analysis' `renamed_streets`): `(idcalle, names, accepted, accepted_name)`.
+ * `accepted` is set for the streets of `ej_acc_way`, with the name the user chose there (null when none was sent).
  */
 export function buildRenamedWaysSql(layouts: EjesLayouts): string {
   return [
     withClause([circulationPairsCte(layouts), ...renameCandidateCtes(tmp(LOAD_TEMP.COPY))]),
-    'SELECT s.idcalle AS "idcalle", s.new_name AS "name", s.multi_name AS "multi_name",',
-    `EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.ACC_WAY)} AS a WHERE a.idcalle = s.idcalle) AS "accepted"`,
+    'SELECT s.idcalle AS "idcalle", s.names AS "names",',
+    `EXISTS (SELECT 1 FROM ${tmp(LOAD_TEMP.ACC_WAY)} AS a WHERE a.idcalle = s.idcalle) AS "accepted",`,
+    `(SELECT a.name FROM ${tmp(LOAD_TEMP.ACC_WAY)} AS a WHERE a.idcalle = s.idcalle) AS "accepted_name"`,
     `FROM ${q("renamed_streets")} AS s ORDER BY s.idcalle`,
   ].join(" ");
 }

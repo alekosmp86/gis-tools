@@ -161,7 +161,7 @@ async function createWays(session: RunSession, context: EjesLoadContext, accepte
   }
   await session.query(buildWayTableSql(context));
   const candidates = (await session.query(buildRenamedWaysSql(context.layouts))).rows;
-  assertRenamesAccepted(candidates, accepted.renamedStreets ?? []);
+  assertRenamesAccepted(candidates, (accepted.renamedStreets ?? []).length);
   await session.query(buildCreateWayRenameInputSql());
   for (const statement of buildInsertWayRenameInputSql(acceptedRenamesOf(candidates))) {
     // react-doctor-disable-next-line react-doctor/async-await-in-loop

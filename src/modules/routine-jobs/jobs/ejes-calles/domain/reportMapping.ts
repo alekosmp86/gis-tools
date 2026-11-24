@@ -44,6 +44,7 @@ const renamedStreetOf = (row: Row): EjesRenamedStreetRow => ({
   idcalle: String(row.idcalle),
   currentNames: textOf(row.currentNames),
   newName: textOf(row.newName),
+  names: textsOf(row.names),
   sections: numberOf(row.sections),
   ways: numberOf(row.ways),
   multiName: row.multiName === true,

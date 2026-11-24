@@ -64,8 +64,13 @@ export interface EjesAccepted {
   manualSplits: EjesManualSplit[];
   /** Every plain removal of the analysis with no access point (by `reftramo` and by id) is accepted too; the rows with points never are. */
   autoPlainRemovals: boolean;
-  /** Street renames accepted by canonical `idcalle` (EJL-31): only the streets of the analysis' `renamedStreets` that are not `multiName`. Absent means none. */
-  renamedStreets?: string[];
+  /** Street renames accepted by canonical `idcalle` (EJL-31); `name` is the file name the user chose, required when the street has several. Absent means none. */
+  renamedStreets?: EjesAcceptedRename[];
+}
+
+export interface EjesAcceptedRename {
+  idcalle: string;
+  name?: string;
 }
 
 export interface EjesParams {
@@ -127,7 +132,7 @@ export interface EjesCounts {
   newStreets: number;
   /** Streets whose carto name differs from the file's after normalisation (EJL-31): accepted per street, renamed only then. */
   renamedStreets?: number;
-  /** Renamed streets the file names in more than one way: listed, never renamed. */
+  /** Renamed streets the file names in more than one way: the user chooses one of the names. */
   renamedStreetsHeld?: number;
   twins: number;
   /** Geometric twins (ET-20 to ET-27): groups, members, losers not in carto (omitted), losers in carto (removable), reftramos skipped by the conservative rule. */
@@ -232,11 +237,12 @@ export interface EjesNewStreetRow {
   localities: string | null;
 }
 
-/** A street whose carto name differs from the file's (EJL-31): `currentNames` as carto holds them, `ways` the rows a rename changes. */
+/** A street whose carto name differs from the file's (EJL-31): `currentNames` as carto holds them, `ways` the rows a rename changes; `names` are the file's names, one per normalised name; `multiName` when there are several. */
 export interface EjesRenamedStreetRow {
   idcalle: string;
   currentNames: string | null;
   newName: string | null;
+  names?: string[];
   sections: number;
   ways: number;
   multiName: boolean;

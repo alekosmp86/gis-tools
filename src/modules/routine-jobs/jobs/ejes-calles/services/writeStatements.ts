@@ -1,5 +1,6 @@
 import type { RunSession } from "../../cargar-padrones/types";
-import { numberOf, type Row } from "../../shared/rowMapping";
+import { numberOf, textOf, type Row } from "../../shared/rowMapping";
+import { namesOf } from "../domain/loadWays";
 import { WRITTEN_ALIAS } from "../domain/loadWriteSql";
 
 export const ANALYSIS_CHANGED_MESSAGE = "Los ejes de origen o los tramos de destino cambiaron desde el análisis; vuelva a analizar.";
@@ -37,10 +38,20 @@ export function assertWritten(label: string, written: number, expected: number):
   }
 }
 
-/** Fail closed (EJL-31): every accepted street must be a rename candidate that is not `multi_name`; otherwise the analysis is stale. */
-export function assertRenamesAccepted(candidates: readonly Row[], acceptedIdcalles: readonly string[]): void {
-  const renamable = new Set(candidates.filter((row) => row.multi_name !== true).map((row) => String(row.idcalle)));
-  if (acceptedIdcalles.some((idcalle) => !renamable.has(idcalle))) throw new Error(ANALYSIS_CHANGED_MESSAGE);
+const renameChoiceRequiredOf = (idcalle: string): string => `Elija el nombre de la calle ${idcalle} entre los del archivo.`;
+
+/** Fail closed (EJL-31): every accepted street must be a rename candidate, its chosen name one of its file names (the only one when it has one); otherwise the analysis is stale. */
+export function assertRenamesAccepted(candidates: readonly Row[], acceptedCount: number): void {
+  const accepted = candidates.filter((row) => row.accepted === true);
+  if (accepted.length !== acceptedCount) throw new Error(ANALYSIS_CHANGED_MESSAGE);
+  accepted.forEach(assertRenameNameOf);
+}
+
+function assertRenameNameOf(candidate: Row): void {
+  const names = namesOf(candidate);
+  const chosen = textOf(candidate.accepted_name);
+  if (chosen === null && names.length > 1) throw new Error(renameChoiceRequiredOf(String(candidate.idcalle)));
+  if (chosen === null ? names.length !== 1 : !names.includes(chosen)) throw new Error(ANALYSIS_CHANGED_MESSAGE);
 }
 
 export async function writtenBy(session: RunSession, sql: string): Promise<number> {

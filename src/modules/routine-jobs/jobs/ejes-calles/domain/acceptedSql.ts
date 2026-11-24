@@ -8,10 +8,12 @@ import { pickNamesCopySql } from "./twinPickSql";
 
 const createTableSql = (name: string, columns: string): string => `CREATE TEMP TABLE ${q(name)} (${columns}) ON COMMIT DROP`;
 
-function insertRowsSql(name: string, rows: readonly (readonly string[])[]): string[] {
+const valueLiteral = (value: string | null): string => (value === null ? "NULL" : literal(value));
+
+function insertRowsSql(name: string, rows: readonly (readonly (string | null)[])[]): string[] {
   const statements: string[] = [];
   for (let start = 0; start < rows.length; start += LOAD_CHUNK_SIZE) {
-    const values = rows.slice(start, start + LOAD_CHUNK_SIZE).map((row) => `(${row.map(literal).join(", ")})`);
+    const values = rows.slice(start, start + LOAD_CHUNK_SIZE).map((row) => `(${row.map(valueLiteral).join(", ")})`);
     statements.push(`INSERT INTO ${q(name)} VALUES ${values.join(", ")}`);
   }
   return statements;
@@ -47,8 +49,8 @@ export function buildAcceptedTablesSql(accepted: EjesAccepted): string[] {
     createTableSql(LOAD_TEMP.ACC_PLAIN, "ref text"),
     ...insertRowsSql(LOAD_TEMP.ACC_PLAIN, accepted.plainRemovals.map((ref) => [ref])),
     ...autoPlainStatementsOf(accepted),
-    createTableSql(LOAD_TEMP.ACC_WAY, "idcalle text"),
-    ...insertRowsSql(LOAD_TEMP.ACC_WAY, (accepted.renamedStreets ?? []).map((idcalle) => [idcalle])),
+    createTableSql(LOAD_TEMP.ACC_WAY, "idcalle text, name text NULL"),
+    ...insertRowsSql(LOAD_TEMP.ACC_WAY, (accepted.renamedStreets ?? []).map((rename) => [rename.idcalle, rename.name ?? null])),
     createTableSql(LOAD_TEMP.ACC_TWIN, "ref text"),
     ...insertRowsSql(LOAD_TEMP.ACC_TWIN, accepted.twinRemovals.map((ref) => [ref])),
     createTableSql(LOAD_TEMP.ACC_TWIN_PICK, "ref text, department text, locality text"),
