@@ -28,10 +28,8 @@ const tablesDone = (): EjesWizardState => {
   return state;
 };
 
-const typedPassword = (state: EjesWizardState): EjesWizardState => {
-  const withPassword = ejesWizardReducer(state, { type: "connectionChanged", field: "password", value: PASSWORD });
-  return ejesWizardReducer(withPassword, { type: "confirmationChanged", patch: { password: PASSWORD } });
-};
+const typedPassword = (state: EjesWizardState): EjesWizardState =>
+  ejesWizardReducer(state, { type: "connectionChanged", field: "password", value: PASSWORD });
 
 const accept = (state: EjesWizardState, analysisKey: string, change: EjesAcceptChange): EjesWizardState =>
   ejesWizardReducer(state, { type: "acceptChanged", analysisKey, change });
@@ -75,12 +73,11 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
       expect(state.acceptance).toEqual({ analysisKey: "key-1", splits: [], plainRemovals: ["5001"], merges: ["6103"], twinRemovals: [], pointChoices: [] });
     });
 
-    it("should leave the wizard step and the typed confirmation as they were", () => {
+    it("should leave the wizard step as it was", () => {
       const typed = typedPassword(tablesDone());
       const next = accept(typed, "key-1", { list: EjesAcceptList.MERGES, keys: ["6103"], accepted: true });
 
       expect(next.step).toBe(typed.step);
-      expect(next.confirmation).toEqual(typed.confirmation);
     });
   });
 
@@ -182,10 +179,9 @@ describe("ejes wizard accepted rows (EJ-24)", () => {
       const snapshot = doneSnapshotFor(state);
       const accepted = acceptedOn(state, snapshot);
       const retyped = ejesWizardReducer(accepted, { type: "connectionChanged", field: "password", value: `${PASSWORD}x` });
-      const retypedAgain = ejesWizardReducer(retyped, { type: "confirmationChanged", patch: { password: `${PASSWORD}x` } });
 
       expect(retyped.acceptance).toEqual(accepted.acceptance);
-      expect(acceptKeysOfState(retypedAgain, snapshot)).toEqual({ splits: [], plainRemovals: ["5001"], merges: ["6103"], twinRemovals: [] });
+      expect(acceptKeysOfState(retyped, snapshot)).toEqual({ splits: [], plainRemovals: ["5001"], merges: ["6103"], twinRemovals: [] });
     });
 
     it("should send an empty accepted object when the acceptance was made for another analysis", () => {

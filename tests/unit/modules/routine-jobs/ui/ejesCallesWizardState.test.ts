@@ -35,7 +35,6 @@ const validState = (overrides: Partial<EjesWizardState> = {}): EjesWizardState =
     slots: Object.fromEntries(
       EJES_ROLES.map((role) => [role, { ...initial.slots[role], valid: true }])
     ) as EjesWizardState["slots"],
-    confirmation: { password: PASSWORD },
     ...overrides,
   };
 };
@@ -62,7 +61,6 @@ describe("ejes wizard state", () => {
       expect(state.step).toBe(EjesStep.CONNECTION);
       expect(state.connection.port).toBe("5432");
       expect(state.slots["ejes-origen"]).toEqual({ schema: "bdj_carto", table: "ide_ejesviacirculacion", valid: false });
-      expect(state.confirmation.password).toBe("");
     });
 
     it("should open on the result step when a run exists and on connection when idle", () => {
@@ -119,15 +117,15 @@ describe("ejes wizard state", () => {
   });
 
   describe("canAnalyzeNow", () => {
-    it("should be true when valid, with no password retyped on the review step", () => {
-      expect(canAnalyzeNow(validState({ confirmation: { password: "" } }))).toBe(true);
+    it("should be true when valid, with the password entered once in the connection step", () => {
+      expect(canAnalyzeNow(validState())).toBe(true);
     });
 
-    it("should be false when both passwords are empty", () => {
+    it("should be false when the connection password is empty", () => {
       const state = validState();
       state.connection = { ...state.connection, password: "" };
 
-      expect(canAnalyzeNow({ ...state, confirmation: { password: "" } })).toBe(false);
+      expect(canAnalyzeNow(state)).toBe(false);
     });
   });
 
@@ -208,8 +206,8 @@ describe("ejes wizard state", () => {
   });
 
   describe("canLoadNow (EJ-24)", () => {
-    it("should be true after a finished dry run of the same data with no blocker, with no password retyped", () => {
-      const state = validState({ confirmation: { password: "" } });
+    it("should be true after a finished dry run of the same data with no blocker", () => {
+      const state = validState();
 
       expect(canLoadNow(state, doneSnapshot(state))).toBe(true);
     });
@@ -270,18 +268,17 @@ describe("ejes wizard state", () => {
   });
 
   describe("reducer", () => {
-    it("should clear slot validity and confirmation when a connection field changes", () => {
+    it("should clear slot validity when a connection field changes", () => {
       const next = reduce(validState(), { type: "connectionChanged", field: "host", value: "nuevo" });
 
       expect(next.connection.host).toBe("nuevo");
       expect(Object.values(next.slots).every((slot) => !slot.valid)).toBe(true);
-      expect(next.confirmation.password).toBe("");
     });
 
-    it("should only clear the confirmation when the password changes", () => {
+    it("should keep slot validity when only the password changes", () => {
       const next = reduce(validState(), { type: "connectionChanged", field: "password", value: "x" });
 
-      expect(next.confirmation.password).toBe("");
+      expect(next.connection.password).toBe("x");
       expect(Object.values(next.slots).every((slot) => slot.valid)).toBe(true);
     });
 
@@ -291,16 +288,16 @@ describe("ejes wizard state", () => {
       expect(next.slots["ejes-vias"]).toEqual({ schema: "otro", table: "", valid: false });
     });
 
+    it("should keep the password as typed when the password changes", () => {
+      const next = reduce(validState(), { type: "connectionChanged", field: "password", value: "nueva" });
+
+      expect(next.connection.password).toBe("nueva");
+    });
+
     it("should store the table and validity when a slot table is chosen", () => {
       const next = reduce(validState(), { type: "slotTableChosen", key: "ejes-vias", table: "cw", valid: false });
 
       expect(next.slots["ejes-vias"]).toMatchObject({ table: "cw", valid: false });
-    });
-
-    it("should patch the confirmation", () => {
-      const next = reduce(initialEjesWizardState(), { type: "confirmationChanged", patch: { password: "abc" } });
-
-      expect(next.confirmation.password).toBe("abc");
     });
 
     it("should not advance when blocked and advance when valid", () => {
@@ -310,11 +307,10 @@ describe("ejes wizard state", () => {
       expect(reduce(validState({ step: EjesStep.CONNECTION }), { type: "next" }).step).toBe(EjesStep.TABLES);
     });
 
-    it("should go back one step and clear the confirmation when leaving review", () => {
+    it("should go back one step when leaving review", () => {
       const next = reduce(validState(), { type: "back" });
 
       expect(next.step).toBe(EjesStep.TABLES);
-      expect(next.confirmation.password).toBe("");
     });
 
     it("should stay on the first step when going back from it", () => {
@@ -328,40 +324,22 @@ describe("ejes wizard state", () => {
       );
     });
 
-    it("should move to result and clear the confirmation on runStarted with dryRun false", () => {
+    it("should move to result on runStarted with dryRun false", () => {
       const next = reduce(validState(), { type: "runStarted", dryRun: false });
 
       expect(next.step).toBe(EjesStep.RESULT);
-      expect(next.confirmation.password).toBe("");
     });
 
-    it("should move to result and keep the confirmation on runStarted with dryRun true", () => {
+    it("should move to result on runStarted with dryRun true", () => {
       const next = reduce(validState(), { type: "runStarted", dryRun: true });
 
       expect(next.step).toBe(EjesStep.RESULT);
-      expect(next.confirmation.password).toBe(PASSWORD);
     });
 
     it("should allow loading on the result step after a dry run finished for the same data", () => {
       const next = reduce(validState(), { type: "runStarted", dryRun: true });
 
       expect(canLoadNow(next, doneSnapshot(next))).toBe(true);
-    });
-
-    it("should clear the kept confirmation when resetting after a dry run", () => {
-      const next = reduce(validState(), { type: "runStarted", dryRun: true }, { type: "reset" });
-
-      expect(next.confirmation.password).toBe("");
-    });
-
-    it("should clear the kept confirmation when the password changes after a dry run", () => {
-      const next = reduce(
-        validState(),
-        { type: "runStarted", dryRun: true },
-        { type: "connectionChanged", field: "password", value: "x" }
-      );
-
-      expect(next.confirmation.password).toBe("");
     });
 
     it("should reset to the initial state", () => {

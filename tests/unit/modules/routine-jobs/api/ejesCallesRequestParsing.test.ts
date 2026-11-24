@@ -96,7 +96,7 @@ describe("parseEjesCallesStartRequest", () => {
       const params = parse(realBody({ accepted: { splits: [], merges: [], twinRemovals: [], plainRemovals: [] } }));
 
       expect(params.dryRun).toBe(false);
-      expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false });
+      expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false, renamedStreets: [] });
     });
 
     it("should refuse dryRun false without the password, with a Spanish message", () => {
@@ -223,7 +223,7 @@ describe("parseEjesCallesStartRequest", () => {
     it("should accept a non-empty merges and plainRemovals list when every entry is shaped", () => {
       const params = parse(realBody({ accepted: { merges: [{ newRef: "4" }], plainRemovals: [{ ref: "7" }] } }));
 
-      expect(params.accepted).toEqual({ splits: [], merges: ["4"], twinRemovals: [], plainRemovals: ["7"], twinPicks: [], manualSplits: [], autoPlainRemovals: false });
+      expect(params.accepted).toEqual({ splits: [], merges: ["4"], twinRemovals: [], plainRemovals: ["7"], twinPicks: [], manualSplits: [], autoPlainRemovals: false, renamedStreets: [] });
     });
 
     it("should refuse an accepted list that is not a list", () => {
@@ -308,7 +308,7 @@ describe("parseEjesCallesStartRequest", () => {
     it("should read a dry run without accepted as no picks, with the other accepted lists empty", () => {
       const params = parse(startBody());
 
-      expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false });
+      expect(params.accepted).toEqual({ splits: [], plainRemovals: [], merges: [], twinRemovals: [], twinPicks: [], manualSplits: [], autoPlainRemovals: false, renamedStreets: [] });
       expect(params.summary).toBeUndefined();
     });
 
@@ -327,6 +327,7 @@ describe("parseEjesCallesStartRequest", () => {
         twinPicks: [{ ref: "12", department: "FLORES", locality: "TRINIDAD" }],
         manualSplits: [],
         autoPlainRemovals: false,
+        renamedStreets: [],
       });
     });
 

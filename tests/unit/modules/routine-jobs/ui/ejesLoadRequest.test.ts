@@ -22,7 +22,6 @@ const validState = (overrides: Partial<EjesWizardState> = {}): EjesWizardState =
     step: EjesStep.REVIEW,
     connection: { host: "db.local", port: "5432", db_name: "gis", user: "gis_user", password: PASSWORD },
     slots: Object.fromEntries(EJES_ROLES.map((role) => [role, { ...initial.slots[role], valid: true }])) as EjesWizardState["slots"],
-    confirmation: { password: PASSWORD },
     ...overrides,
   };
 };
