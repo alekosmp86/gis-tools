@@ -1,6 +1,8 @@
 ---
 title: "Etapa 4: Actualizar padrones"
 order: 5
+group: "Carga mensual de padrones"
+parent: index
 ---
 
 # Etapa 4: Actualizar padrones

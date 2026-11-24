@@ -1,6 +1,7 @@
 ---
 title: "Carga de centros ANEP"
 order: 6
+group: "Otros trabajos"
 ---
 
 # Carga de centros ANEP

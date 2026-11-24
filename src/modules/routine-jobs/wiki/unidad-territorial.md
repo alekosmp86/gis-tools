@@ -1,6 +1,8 @@
 ---
 title: "Etapa 3: Unidades territoriales"
 order: 4
+group: "Carga mensual de padrones"
+parent: index
 ---
 
 # Etapa 3: Actualizar unidades territoriales

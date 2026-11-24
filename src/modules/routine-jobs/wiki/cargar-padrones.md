@@ -1,6 +1,8 @@
 ---
 title: "Etapa 1: Cargar padrones"
 order: 2
+group: "Carga mensual de padrones"
+parent: index
 ---
 
 # Etapa 1: Cargar padrones

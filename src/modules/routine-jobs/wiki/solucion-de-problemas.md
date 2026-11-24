@@ -1,6 +1,7 @@
 ---
 title: "Solución de problemas"
-order: 8
+order: 9
+group: "Ayuda"
 ---
 
 # Solución de problemas

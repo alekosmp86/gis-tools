@@ -1,6 +1,7 @@
 ---
 title: "Carga de padrones"
 order: 1
+group: "Carga mensual de padrones"
 ---
 
 # Carga de padrones

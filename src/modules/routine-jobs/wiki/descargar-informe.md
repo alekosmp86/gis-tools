@@ -1,6 +1,7 @@
 ---
 title: "Descargar el informe"
-order: 7
+order: 8
+group: "Ayuda"
 ---
 
 # Descargar el informe

@@ -1,6 +1,8 @@
 ---
 title: "Etapa 2: Cargar localidades"
 order: 3
+group: "Carga mensual de padrones"
+parent: index
 ---
 
 # Etapa 2: Cargar localidades
