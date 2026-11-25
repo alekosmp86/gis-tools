@@ -66,6 +66,7 @@ export interface ShpReplaceRunParams {
   processing?: GeometryProcessingOptions;
   dryRun?: boolean;
   uploadId?: string;
+  layer?: string;
   pollIntervalMs?: number;
   pollFailureGraceMs?: number;
   client?: ShpReplaceRunClient;

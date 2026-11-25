@@ -1,0 +1,17 @@
+.container {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.progressArea {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 48px 0;
+}

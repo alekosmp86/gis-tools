@@ -61,9 +61,21 @@ export const ignoreIdleClientError = (): void => undefined;
 
 const asError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
 
+const closeIterator = (iterator: Iterator<string>): void => {
+  try {
+    iterator.return?.();
+  } catch {
+    return;
+  }
+};
+
 function pumpLines(stream: CopyStream, lines: Iterable<string>): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const iterator = lines[Symbol.iterator]();
+    const fail = (failure: Error): void => {
+      closeIterator(iterator);
+      reject(failure);
+    };
     const pump = (): void => {
       try {
         for (let next = iterator.next(); !next.done; next = iterator.next()) {
@@ -76,10 +88,10 @@ function pumpLines(stream: CopyStream, lines: Iterable<string>): Promise<void> {
       } catch (error) {
         const failure = asError(error);
         stream.destroy(failure);
-        reject(failure);
+        fail(failure);
       }
     };
-    stream.on("error", reject);
+    stream.on("error", fail);
     stream.once("finish", () => resolve());
     pump();
   });

@@ -82,6 +82,9 @@ function buildRunContext(params: ShpReplaceRunParams): ShpReplaceRunContext {
   };
 }
 
+const layerFieldOf = (layer: string | undefined): Pick<ShpStartBody, "layer"> =>
+  layer === undefined ? {} : { layer };
+
 function buildStartBody(params: ShpReplaceRunParams, uploadId: string): ShpStartBody {
   const { connection } = params;
   return {
@@ -98,6 +101,7 @@ function buildStartBody(params: ShpReplaceRunParams, uploadId: string): ShpStart
     resetSequences: params.resetSequences,
     geometryProcessing: params.processing ?? DEFAULT_GEOMETRY_PROCESSING,
     dryRun: params.dryRun ?? false,
+    ...layerFieldOf(params.layer),
     confirm: true,
   };
 }

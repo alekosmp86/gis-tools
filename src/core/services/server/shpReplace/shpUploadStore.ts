@@ -45,6 +45,13 @@ export const CSV_UPLOAD_PROFILE: UploadProfile = {
   nameError: "Solo se admiten archivos .csv o .txt.",
 };
 
+export const GPKG_UPLOAD_PROFILE: UploadProfile = {
+  dir: path.join(os.tmpdir(), "gis-tools-gpkg-replace"),
+  extension: ".gpkg",
+  namePattern: /\.gpkg$/i,
+  nameError: "Solo se admiten archivos .gpkg.",
+};
+
 export interface UploadStoreOptions {
   profile?: UploadProfile;
   dir?: string;
