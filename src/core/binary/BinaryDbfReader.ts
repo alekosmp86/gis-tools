@@ -145,6 +145,7 @@ export class BinaryDbfReader {
         return lowerChar === "y" || lowerChar === "t" || lowerChar === "1";
       }
       case "D": {
+        if (/^0+$/.test(rawText)) return null;
         if (rawText.length === 8) {
           const year = rawText.substring(0, 4);
           const month = rawText.substring(4, 6);
