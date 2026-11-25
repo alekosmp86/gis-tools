@@ -9,8 +9,11 @@ import { readActualizarGeometryMap } from "./api/actualizarGeometryMap";
 import { createCargarLocalidadesHandlers } from "./api/cargarLocalidadesHandlers";
 import { createUnidadTerritorialHandlers } from "./api/unidadTerritorialHandlers";
 import { createEjesCallesHandlers } from "./api/ejesCallesHandlers";
+import { createEjesIdeHandlers } from "./api/ejes-ide/ejesIdeHandlers";
 import { readEjesCallesGeometryMap } from "./api/ejesGeometryMap";
+import { readEjesIdeGeometryMap } from "./api/ejes-ide/ejesGeometryMap";
 import { readEjesCallesSplitPoints } from "./api/ejesSplitPoints";
+import { readEjesIdeSplitPoints } from "./api/ejes-ide/ejesSplitPoints";
 import { createCentrosAnepHandlers } from "./api/centrosAnepHandlers";
 import { RoutineJobsDashboard } from "./ui/dashboard/RoutineJobsDashboard";
 import { RoutineJobsHomeCard } from "./ui/dashboard/RoutineJobsHomeCard";
@@ -26,6 +29,7 @@ const actualizarHandlers = createActualizarPadronHandlers();
 const localidadesHandlers = createCargarLocalidadesHandlers();
 const unidadHandlers = createUnidadTerritorialHandlers();
 const ejesHandlers = createEjesCallesHandlers();
+const ejesIdeHandlers = createEjesIdeHandlers();
 const centrosHandlers = createCentrosAnepHandlers();
 
 export const routineJobsModule: AppModuleManifest = {
@@ -50,6 +54,10 @@ export const routineJobsModule: AppModuleManifest = {
     "GET unidad-territorial/status": unidadHandlers.readUnidadTerritorialStatus,
     "POST ejes-calles/start": ejesHandlers.startEjesCalles,
     "GET ejes-calles/status": ejesHandlers.readEjesCallesStatus,
+    "POST ejes-ide/start": ejesIdeHandlers.startEjesIde,
+    "GET ejes-ide/status": ejesIdeHandlers.readEjesIdeStatus,
+    "POST ejes-ide/geometry-map": readEjesIdeGeometryMap,
+    "POST ejes-ide/split-points": readEjesIdeSplitPoints,
     "POST ejes-calles/geometry-map": readEjesCallesGeometryMap,
     "POST ejes-calles/split-points": readEjesCallesSplitPoints,
     "POST centros-anep/start": centrosHandlers.startCentrosAnep,

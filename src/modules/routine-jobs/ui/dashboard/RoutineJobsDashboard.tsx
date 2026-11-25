@@ -10,8 +10,9 @@ import { ModuleErrorBoundary } from "@/ui-kit/modules/ModuleErrorBoundary";
 import { UiSlot } from "@/ui-kit/modules/contracts";
 import { MonthlyCartoUpdate } from "../monthly-carto/MonthlyCartoUpdate";
 import { EjesCallesWizard } from "../ejes-calles/EjesCallesWizard";
+import { EjesIdeWizard } from "../ejes-ide/EjesIdeWizard";
 import { CentrosAnepWizard } from "../centros-anep/CentrosAnepWizard";
-import { CENTROS_ANEP_JOB_ID, EJES_CALLES_JOB_ID, MONTHLY_CARTO_JOB_ID, ROUTINE_JOBS, type RoutineJob } from "./jobs";
+import { CENTROS_ANEP_JOB_ID, EJES_CALLES_JOB_ID, EJES_IDE_JOB_ID, MONTHLY_CARTO_JOB_ID, ROUTINE_JOBS, type RoutineJob } from "./jobs";
 import styles from "./RoutineJobsDashboard.module.css";
 
 const PAGE_TITLE = "Trabajos de rutina";
@@ -25,6 +26,7 @@ const NO_JOB = "";
 const JOB_VIEWS: Partial<Record<string, React.FC>> = {
   [MONTHLY_CARTO_JOB_ID]: MonthlyCartoUpdate,
   [EJES_CALLES_JOB_ID]: EjesCallesWizard,
+  [EJES_IDE_JOB_ID]: EjesIdeWizard,
   [CENTROS_ANEP_JOB_ID]: CentrosAnepWizard,
 };
 

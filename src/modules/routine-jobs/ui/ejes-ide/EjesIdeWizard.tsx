@@ -1,0 +1,200 @@
+"use client";
+
+import React, { useReducer, useState, useSyncExternalStore } from "react";
+import type { ResolvedColumn } from "@/core/types/tableCatalog";
+import type { SafeDbConfig } from "@/core/types/db";
+import { WizardOrchestrator } from "@/ui-kit/components/WizardOrchestrator";
+import type { WizardStepDef } from "@/ui-kit/types/ui";
+import { EJES_ROLES, type EjesTableRole } from "../../jobs/ejes-ide/constants";
+import { connectionFieldInvalidatesCatalog, type ConnectionField } from "../shared/wizardConnection";
+import type { EjesStartRequest } from "./shared/ejesIdeClientTypes";
+import { changedConnectionFields, trimConnection } from "../shared/connectionProfiles";
+import { getEjesRunStore, type EjesRunSnapshot, type EjesRunStore } from "./shared/ejesIdeRunStore";
+import {
+  blockingReason,
+  canAnalyzeNow,
+  canLoadNow,
+  acceptKeysOfState,
+  pointChoicesOfState,
+  renameChoicesOfState,
+  resultKeyOf,
+  ejesAnalysisRequestOf,
+  ejesGeometryMapBaseOf,
+  ejesSplitPointsBaseOf,
+  ejesLoadRequestOf,
+  ejesWizardReducer,
+  EjesStep,
+  excludedEjesTablesOf,
+  initialEjesWizardStateFor,
+  runBlockedReason,
+  toEjesStartRequest,
+} from "./ejesIdeWizardState";
+import { buildEjesWizardSteps, ejesStepIdOf, ejesStepOfId } from "./ejesIdeWizardSteps";
+import { RunPhase } from "../shared/jobRunStore";
+import { createEjesIdeClient } from "./shared/ejesIdeClient";
+import { useCatalogLoader } from "../shared/useCatalogLoader";
+import { useConnectionProfiles } from "../shared/useConnectionProfiles";
+import { useElapsedTick } from "../shared/useElapsedTick";
+import { ConnectionStep } from "../shared/steps/ConnectionStep";
+import { EjesResultStep } from "./steps/EjesResultStep";
+import { EjesReviewStep } from "./steps/EjesReviewStep";
+import { EjesTablesStep } from "./steps/EjesTablesStep";
+
+const IDLE_SNAPSHOT: EjesRunSnapshot = { phase: RunPhase.IDLE };
+const FIRST_STEP_ID = ejesStepIdOf(EjesStep.CONNECTION);
+const REVIEW_STEP_ID = ejesStepIdOf(EjesStep.REVIEW);
+const ANALYZE = { dryRun: true };
+const client = createEjesIdeClient();
+const getIdleSnapshot = (): EjesRunSnapshot => IDLE_SNAPSHOT;
+
+export const EjesIdeWizard: React.FC = () => {
+  const [runStore] = useState<EjesRunStore>(getEjesRunStore);
+  const [state, dispatch] = useReducer(ejesWizardReducer, runStore, (store: EjesRunStore) =>
+    initialEjesWizardStateFor(store.getSnapshot())
+  );
+  const snapshot = useSyncExternalStore(runStore.subscribe, runStore.getSnapshot, getIdleSnapshot);
+  const {
+    profiles,
+    activeProfileId,
+    selectProfile: pickProfile,
+    saveProfile: saveConnectionProfile,
+    deleteProfile,
+  } = useConnectionProfiles();
+
+  const isRunActive = snapshot.phase === RunPhase.STARTING || snapshot.phase === RunPhase.RUNNING;
+  const nowMs = useElapsedTick(isRunActive);
+  const { connection } = state;
+  const { loadTables, reset: resetCatalog, catalogErrorFor } = useCatalogLoader(client, connection);
+
+  const checkColumns = (role: EjesTableRole, schema: string, table: string): Promise<ResolvedColumn[]> =>
+    client.listColumns(trimConnection(connection), schema, table, role);
+
+  const catalogError = catalogErrorFor(EJES_ROLES.map((role) => state.slots[role].schema));
+
+  const changeConnectionField = (field: ConnectionField, value: string) => {
+    dispatch({ type: "connectionChanged", field, value });
+    if (connectionFieldInvalidatesCatalog(field)) resetCatalog();
+  };
+
+  const selectProfile = (profileId: string) => {
+    const config: SafeDbConfig | null = pickProfile(profileId);
+    if (config === null) return;
+    for (const field of changedConnectionFields(connection, config)) changeConnectionField(field, config[field]);
+  };
+
+  const startRun = (request: EjesStartRequest) => {
+    void runStore.start(request);
+    dispatch({ type: "runStarted", dryRun: request.dryRun });
+  };
+
+  const analyzeNow = () => startRun(ejesAnalysisRequestOf(state));
+
+  const loadNow = () => {
+    const request = ejesLoadRequestOf(state, snapshot);
+    if (request !== null) startRun(request);
+  };
+
+  const newRun = () => {
+    runStore.reset();
+    resetCatalog();
+    dispatch({ type: "reset" });
+  };
+
+  const renderCurrentStep = (): React.ReactNode => {
+    switch (state.step) {
+      case EjesStep.CONNECTION:
+        return (
+          <ConnectionStep
+            connection={state.connection}
+            profiles={profiles}
+            activeProfileId={activeProfileId}
+            onFieldChange={changeConnectionField}
+            onSelectProfile={selectProfile}
+            onSaveProfile={(name) => saveConnectionProfile(name, connection)}
+            onDeleteProfile={deleteProfile}
+            blockingReason={blockingReason(state)}
+          />
+        );
+      case EjesStep.TABLES:
+        return (
+          <EjesTablesStep
+            slots={state.slots}
+            excluded={excludedEjesTablesOf(state)}
+            onSchemaChange={(key, schema) => dispatch({ type: "slotSchemaChanged", key, schema })}
+            onTableChange={(key, table, valid) => dispatch({ type: "slotTableChosen", key, table, valid })}
+            department={state.department}
+            onChange={(department) => dispatch({ type: "departmentChanged", department })}
+            loadTables={loadTables}
+            checkColumns={checkColumns}
+            blockingReason={blockingReason(state)}
+            catalogError={catalogError}
+          />
+        );
+      case EjesStep.REVIEW:
+        return (
+          <EjesReviewStep
+            request={toEjesStartRequest(state, ANALYZE)}
+            canAnalyze={canAnalyzeNow(state)}
+            canLoad={canLoadNow(state, snapshot)}
+            busy={isRunActive}
+            runBlockedReason={runBlockedReason(state)}
+            onAnalyze={() => {
+              if (canAnalyzeNow(state)) analyzeNow();
+            }}
+            onLoad={loadNow}
+          />
+        );
+      case EjesStep.RESULT:
+        return (
+          <EjesResultStep
+            snapshot={snapshot}
+            nowMs={nowMs}
+            department={snapshot.plan?.department ?? null}
+            mapBase={ejesGeometryMapBaseOf(state)}
+            splitBase={ejesSplitPointsBaseOf(state, snapshot.jobId)}
+            canLoad={canLoadNow(state, snapshot)}
+            accept={{
+              keys: acceptKeysOfState(state, snapshot),
+              pointChoices: pointChoicesOfState(state, snapshot),
+              renameChoices: renameChoicesOfState(state, snapshot),
+              onRenameChoiceChange: (change) =>
+                dispatch({ type: "renameChoiceChanged", analysisKey: resultKeyOf(snapshot), idcalle: change.idcalle, name: change.name }),
+              onChange: (change) => dispatch({ type: "acceptChanged", analysisKey: resultKeyOf(snapshot), change }),
+              onPointChoicesChange: (change) =>
+                dispatch({ type: "pointChoicesChanged", analysisKey: resultKeyOf(snapshot), change }),
+              twinPicks: state.twinPicks,
+              onTwinPickChange: (change) => dispatch({ type: "twinPickChanged", change }),
+              manualSplits: state.manualSplits,
+              onManualSplitChange: (change) => dispatch({ type: "manualSplitChanged", change }),
+              ignoredRefs: state.ignoredRefs,
+              onIgnoredRefChange: (change) => dispatch({ type: "manualSplitIgnoredChanged", change }),
+              canAnalyzeWithPicks:
+                (state.twinPicks.length > 0 || state.manualSplits.length > 0) && !isRunActive && runBlockedReason(state) === null,
+              onAnalyzeWithPicks: analyzeNow,
+            }}
+            onLoad={loadNow}
+            onNewRun={newRun}
+            onBackToReview={() => dispatch({ type: "goTo", step: EjesStep.REVIEW })}
+          />
+        );
+    }
+  };
+
+  const currentId = ejesStepIdOf(state.step);
+  const content = renderCurrentStep();
+
+  const steps: WizardStepDef[] = buildEjesWizardSteps(state).map((def) => ({
+    ...def,
+    content: def.id === currentId ? content : null,
+    onNext: def.id >= FIRST_STEP_ID && def.id < REVIEW_STEP_ID ? () => dispatch({ type: "next" }) : undefined,
+    onBack: def.id > FIRST_STEP_ID && def.id <= REVIEW_STEP_ID ? () => dispatch({ type: "back" }) : undefined,
+  }));
+
+  return (
+    <WizardOrchestrator
+      steps={steps}
+      currentStep={currentId}
+      onStepClick={(id) => dispatch({ type: "goTo", step: ejesStepOfId(id) })}
+    />
+  );
+};

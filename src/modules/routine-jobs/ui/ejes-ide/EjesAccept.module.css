@@ -1,0 +1,31 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.nameCell {
+  min-width: 200px;
+}
+
+.badge {
+  font-size: 12px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
