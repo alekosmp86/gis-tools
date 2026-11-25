@@ -15,7 +15,7 @@ const countOf = (html: string, needle: string): number => html.split(needle).len
 
 describe("ROUTINE_JOBS", () => {
   it("AP-35: should list Carga de padrones first, then ejes de calles and centros ANEP", () => {
-    expect(ROUTINE_JOBS).toHaveLength(3);
+    expect(ROUTINE_JOBS).toHaveLength(4);
     expect(ROUTINE_JOBS[0].id).toBe("actualizacion-mensual-carto");
     expect(ROUTINE_JOBS[0].title).toBe("Carga de padrones");
     expect(ROUTINE_JOBS[2].id).toBe("centros-anep");
