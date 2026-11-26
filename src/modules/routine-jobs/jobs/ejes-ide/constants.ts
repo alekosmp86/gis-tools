@@ -1,3 +1,4 @@
+// fallow-ignore-file duplicate-export
 export const EJES_TABLE_ROLE = {
   STAGING: "ejes-ide-origen",
   ROAD_SECTION: "ejes-tramos",

@@ -11,7 +11,7 @@ import { renamedStreetRowsOf } from "./ejesRenamedStreetsView";
 import { listSummaryOf, timingsViewOf } from "../shared/reportViewParts";
 import { EJES_DEPARTMENT_TEXT } from "./ejesIdeTexts";
 
-export const EJES_DRY_RUN_BANNER = "Análisis: no se modificó ninguna tabla.";
+const EJES_DRY_RUN_BANNER = "Análisis: no se modificó ninguna tabla.";
 
 export const scopeBannersOf = (department: string | null): ReportBannerView[] =>
   department === null ? [] : [{ kind: "info", text: `${EJES_DEPARTMENT_TEXT.SCOPE_PREFIX} ${department}` }];
@@ -75,8 +75,6 @@ const TWIN_CASE_TEXT: Record<TwinClass, string> = {
   [TWIN_CLASS.BOTH]: "Cerca de ambos: se mantiene una",
   [TWIN_CLASS.NEITHER]: "Lejos de padrones: sin regla",
 };
-
-export const twinCaseTextOf = (twinClass: TwinClass): string => TWIN_CASE_TEXT[twinClass];
 
 export type TwinTextRow = Pick<EjesTwinRow, "class" | "dropLocalities"> & Partial<Pick<EjesTwinRow, "localities" | "insideLocalities">>;
 

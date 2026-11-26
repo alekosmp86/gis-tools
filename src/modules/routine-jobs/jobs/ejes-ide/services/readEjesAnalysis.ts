@@ -31,7 +31,7 @@ export async function readStagingReport(session: RunSession, layouts: EjesLayout
   return toEjesStagingReport((await session.query(buildStagingChecksSql(layouts))).rows[0] ?? {});
 }
 
-export async function readAnalysis(
+async function readAnalysis(
   session: RunSession,
   layouts: EjesLayouts,
   twinPicks: readonly EjesTwinPick[] = [],

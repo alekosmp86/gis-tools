@@ -1,3 +1,4 @@
+// fallow-ignore-file duplicate-export
 import type { EJES_SPLIT_POINTS_ROLES, EjesTableRole } from "../../../jobs/ejes-ide/constants";
 import type { EjesMapItem, EjesResult, EjesSummary, EjesTableRef } from "../../../jobs/ejes-ide/types";
 import type { ClientConnection, JobStatusBase } from "../../shared/clientTypes";

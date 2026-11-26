@@ -103,7 +103,7 @@ const isBlank = (value: string): boolean => value.trim() === "";
 const mapSlots = (build: (role: EjesTableRole) => EjesSlotDraft): Record<EjesTableRole, EjesSlotDraft> =>
   Object.fromEntries(EJES_ROLES.map((role) => [role, build(role)])) as Record<EjesTableRole, EjesSlotDraft>;
 
-export function initialEjesWizardState(): EjesWizardState {
+function initialEjesWizardState(): EjesWizardState {
   return {
     step: EjesStep.CONNECTION,
     connection: { host: "", port: DEFAULT_PORT, db_name: "", user: "", password: "" },

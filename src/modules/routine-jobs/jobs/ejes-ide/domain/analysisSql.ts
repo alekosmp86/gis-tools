@@ -73,15 +73,13 @@ export const ANALYSIS_LIST_ALIAS = {
   RENAMED: "renamed_streets_json",
 } as const;
 
-export { comparableLineSql };
-
 export const buildAnalysisWorkMemSql = (): string => `SET LOCAL work_mem = '${EJES_ANALYSIS_WORK_MEM}'`;
 
 /** A coordinate that rounds to the other side of the snap grid is noise: the Hausdorff distance is read only for pairs the ordering test calls different. */
 export const geometriesDifferSql = (current: string, incoming: string): string =>
   `NOT CASE WHEN COALESCE(ST_OrderingEquals(${comparableLineSql(current)}, ${comparableLineSql(incoming)}), false) THEN true ELSE COALESCE(ST_HausdorffDistance(${current}, ${incoming}) < ${GEOMETRY_TOLERANCE_M}, false) END`;
 
-export const coverageThresholdSql = (covered: string, length: string): string =>
+const coverageThresholdSql =(covered: string, length: string): string =>
   `${covered} >= ${COVERAGE_RATIO} * ${length}`;
 
 const CANONICAL_INTEGER_TEXT = "^(0|-?[1-9][0-9]*)$";

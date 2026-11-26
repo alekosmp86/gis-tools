@@ -5,7 +5,6 @@ import type {
   EjesGeoTwinRow,
   EjesMapItem,
   EjesMergeRow,
-  EjesRenumberedRow,
   EjesSplitRow,
   EjesTwinCopy,
   EjesTwinRow,
@@ -15,7 +14,7 @@ import { isReplacementSplit } from "./ejesAccept";
 import { OUTLINE_ROLE, type OutlineLabel, type OutlineMapSubject, type OutlineRole } from "../shared/map/outlineTypes";
 import { textOrNoData } from "../shared/reportFormat";
 
-export const EJES_SUBJECT_TITLE = {
+const EJES_SUBJECT_TITLE = {
   SPLIT: "División de tramo",
   REPLACEMENT: "Reemplazo de tramo",
   MERGE: "Unión de tramos",
@@ -191,32 +190,6 @@ export const subjectOfMerge = (row: EjesMergeRow): EjesMapSubject =>
 const COPY_STAYS = "se queda";
 const COPY_DROPPED = "se quitaría";
 
-const copyDecisionTextOf = (dropped: boolean): string => (dropped ? COPY_DROPPED : COPY_STAYS);
-
-const copyEntry = (row: EjesTwinRow, locality: string): OutlineEntry => {
-  const dropped = row.dropLocalities.includes(locality);
-  return {
-    item: { newRef: row.ref, locality },
-    outline: {
-      ref: row.ref,
-      role: OUTLINE_ROLE.NEW,
-      label: `${row.ref} · ${locality} (${copyDecisionTextOf(dropped)})`,
-      mapType: dropped ? MAP_SECTION_TYPE.COPY_DROPPED : MAP_SECTION_TYPE.COPY_KEPT,
-      locality,
-      dropped,
-    },
-  };
-};
-
-/** A renumbered pair: the old section, then the new one on top. */
-export const subjectOfRenumbered = (row: EjesRenumberedRow): EjesMapSubject =>
-  subjectOf(
-    EJES_SUBJECT_TITLE.RENUMBERED,
-    [oldEntry(row.oldRef), newEntry(row.newRef)],
-    { idcalle: row.idcalle, points: row.points, coverage: null, oldLength: row.oldLength, newLength: row.newLength, outsideLength: null },
-    { renumbered: { hausdorff: row.hausdorff } }
-  );
-
 /** A held renumber: the old section first, then every candidate new section it could have become. */
 export const subjectOfHeldCandidates = (oldRef: string, newRefs: string[], idcalle: string | null, points: number): EjesMapSubject =>
   subjectOf(
@@ -244,33 +217,6 @@ export const subjectOfGeoTwin = (row: EjesGeoTwinRow): EjesMapSubject => {
   const facts: EjesMapFacts = { idcalle: row.idcalle, points: row.points, coverage: null, oldLength: null, newLength: row.winnerLength, outsideLength: null };
   return subjectOf(EJES_SUBJECT_TITLE.GEO_TWIN, entries, facts, { geoTwin: row });
 };
-
-/** The dropped copies first and the kept ones after, so the kept ones are drawn on top; each group by locality name. */
-const copyEntriesOf = (row: EjesTwinRow): OutlineEntry[] => {
-  const entries = [...row.localities].sort().map((locality) => copyEntry(row, locality));
-  const droppedFirst = (entry: OutlineEntry): number => (entry.outline.dropped === true ? 0 : 1);
-  return entries.sort((first, second) => droppedFirst(first) - droppedFirst(second));
-};
-
-/** A twin row: the zones with padrones near, below, then one outline per copy, in locality order. A zone with no length near is not listed. */
-export function subjectOfTwin(row: EjesTwinRow): EjesMapSubject {
-  const zones = [
-    (row.urbanLength ?? 0) > 0 ? zoneEntry(row.ref, PADRON_TYPE.URBAN) : null,
-    (row.ruralLength ?? 0) > 0 ? zoneEntry(row.ref, PADRON_TYPE.RURAL) : null,
-  ].filter((entry): entry is OutlineEntry => entry !== null);
-  const facts: EjesMapFacts = { idcalle: row.idcalle, points: 0, coverage: null, oldLength: null, newLength: row.length, outsideLength: null };
-  const twin: EjesTwinFacts = {
-    department: row.department,
-    localities: row.localities,
-    twinClass: row.class,
-    length: row.length,
-    urbanLength: row.urbanLength,
-    ruralLength: row.ruralLength,
-    dropLocalities: row.dropLocalities,
-    insideLocalities: row.insideLocalities,
-  };
-  return subjectOf(EJES_SUBJECT_TITLE.TWIN, [...zones, ...copyEntriesOf(row)], facts, { twin });
-}
 
 /** A twin `reftramo` with no copy picked: the department and the localities its section crosses, the padrones near it, then the section once, since its copies share it. */
 export const subjectOfUndecided = (row: EjesTwinUndecidedRow): EjesMapSubject =>

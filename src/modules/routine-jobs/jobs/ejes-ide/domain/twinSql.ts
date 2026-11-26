@@ -109,7 +109,7 @@ const nearLengthSql = (layouts: EjesLayouts, padronType: string): string => {
 };
 
 /** The name key of a locality (ET-10): upper-cased, the ' - KM 110' style suffix and every character but A-Z, 0-9 and space dropped, so accents and mojibake do not split one name. */
-export const localityKeySql = (expression: string): string =>
+const localityKeySql =(expression: string): string =>
   `regexp_replace(upper(btrim(split_part(${expression}, ' - ', 1))), '[^A-Z0-9 ]', '', 'g')`;
 
 const ruralNamed = (locality: string): string => `${localityKeySql(locality)} LIKE '%${RURAL_LOCALITY_SUFFIX}'`;
@@ -171,7 +171,7 @@ function twinClassDropSql(alias: string): string {
  * else the polygon winner when one remaining copy is in `inside_localities`, else the default winner (ET-36). Otherwise the base is the
  * drop. It never drops all the localities.
  */
-export function twinDropCaseSql(alias: string): string {
+function twinDropCaseSql(alias: string): string {
   const field = (name: string): string => `${alias}.${name}`;
   const localities = field("localities");
   const inside = field("inside_localities");
@@ -190,7 +190,7 @@ export function twinDropCaseSql(alias: string): string {
 }
 
 /** True when the default decision (ET-36) decides the twin row: more than one copy remains and no polygon or rural rule decided it. */
-export function twinDefaultedSql(alias: string): string {
+function twinDefaultedSql(alias: string): string {
   const field = (name: string): string => `${alias}.${name}`;
   const rest = "twin_drop_rest.remaining";
   return `(SELECT cardinality(${rest}) > 1 AND NOT (${restInsideSql(rest, field("inside_localities"))} OR ${restOutsideSql(alias, rest)}) ${twinRemainingSql(alias)})`;

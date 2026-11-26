@@ -56,7 +56,7 @@ const hasAccessPointsSql = (reference: string): string =>
  * Valid for every rule: empty, or valid, not collapsed, and at least `MIN_SECTION_LENGTH_M` long unless its canonical `reference` holds access points.
  * The access points are read only for a short section (CASE), so long sections never touch them. Any other row is discarded from every rule.
  */
-export const validGeometrySql = (geometry: string, reference: string): string => {
+const validGeometrySql =(geometry: string, reference: string): string => {
   const length = `ST_Length(${geometry})`;
   const longEnoughOrHeld = `CASE WHEN ${length} >= ${MIN_SECTION_LENGTH_M} THEN true ELSE ${hasAccessPointsSql(reference)} END`;
   return `COALESCE(ST_IsEmpty(${geometry}) OR (ST_IsValid(${geometry}) AND ${length} >= ${GEOMETRY_TOLERANCE_M} AND (${longEnoughOrHeld})), true)`;

@@ -67,7 +67,7 @@ export function buildInsertMastersSql(context: EjesLoadContext): string {
   );
 }
 
-export const distanceSql = (geometry: string): string => `round(ST_Length(${geometry})::numeric, ${DISTANCE_DECIMALS})::text`;
+const distanceSql =(geometry: string): string => `round(ST_Length(${geometry})::numeric, ${DISTANCE_DECIMALS})::text`;
 
 export function buildInsertSectionsSql(context: EjesLoadContext): string {
   const section = EJES_TABLE_ROLE.ROAD_SECTION;

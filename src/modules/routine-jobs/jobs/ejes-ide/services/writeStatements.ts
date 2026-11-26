@@ -4,7 +4,7 @@ import { namesOf } from "../domain/loadWays";
 import { WRITTEN_ALIAS } from "../domain/loadWriteSql";
 
 export const ANALYSIS_CHANGED_MESSAGE = "Los ejes de origen o los tramos de destino cambiaron desde el análisis; vuelva a analizar.";
-export const CHOICE_NOT_APPLICABLE_MESSAGE =
+const CHOICE_NOT_APPLICABLE_MESSAGE =
   "Se eligió un destino para un punto que no requiere revisión o para una división que no se puede aplicar. Vuelva a analizar.";
 
 const TWIN_PICK_NOT_APPLICABLE_MESSAGE =
@@ -13,7 +13,7 @@ const TWIN_PICK_NOT_APPLICABLE_MESSAGE =
 const MANUAL_SPLIT_NOT_APPLICABLE_MESSAGE =
   "Una división manual no se puede aplicar: su tramo anterior ya no falta en el origen o alguna pieza elegida ya no está disponible. Vuelva a analizar.";
 
-export const MOVE_TARGET_MISSING_MESSAGE =
+const MOVE_TARGET_MISSING_MESSAGE =
   "Los puntos de acceso se moverían a un reftramo que no existirá después de la carga. Vuelva a analizar.";
 
 const withRefsNote = (message: string, refs: readonly string[]): string =>
