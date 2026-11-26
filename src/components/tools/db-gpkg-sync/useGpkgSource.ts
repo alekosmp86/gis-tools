@@ -12,8 +12,20 @@ const NO_FIELDS: string[] = [];
 
 const toPercent = (loaded: number, total: number): number => (total > 0 ? Math.round((loaded / total) * 100) : 0);
 
+const firstLayerNameOf = (result: GpkgUploadResult): string | null => result.layers[0]?.name ?? null;
+
 const describeUploadError = (error: unknown): string =>
   error instanceof Error && error.message.trim() !== "" ? error.message : UPLOAD_ERROR_MESSAGE;
+
+type UploadOutcome = { result: GpkgUploadResult } | { error: string };
+
+async function attemptUpload(file: File, onProgress: (loaded: number, total: number) => void): Promise<UploadOutcome> {
+  try {
+    return { result: await uploadGpkgFile(file, onProgress) };
+  } catch (error: unknown) {
+    return { error: describeUploadError(error) };
+  }
+}
 
 export function useGpkgSource() {
   const [loadedFile, setLoadedFile] = useState<File | null>(null);
@@ -39,16 +51,16 @@ export function useGpkgSource() {
       return;
     }
     setIsUploading(true);
-    try {
-      const result = await uploadGpkgFile(candidate, (loaded, total) => setUploadPct(toPercent(loaded, total)));
-      setUpload(result);
-      setSelectedLayerName(result.layers[0]?.name ?? null);
-      setLoadedFile(candidate);
-    } catch (error: unknown) {
-      setErrorMessage(describeUploadError(error));
-    } finally {
-      setIsUploading(false);
+    const outcome = await attemptUpload(candidate, (loaded, total) => setUploadPct(toPercent(loaded, total))).finally(() =>
+      setIsUploading(false)
+    );
+    if ("error" in outcome) {
+      setErrorMessage(outcome.error);
+      return;
     }
+    setUpload(outcome.result);
+    setSelectedLayerName(firstLayerNameOf(outcome.result));
+    setLoadedFile(candidate);
   };
 
   const layers = upload?.layers ?? NO_LAYERS;
