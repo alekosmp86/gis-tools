@@ -1,4 +1,4 @@
-import { GitCompare, FileSpreadsheet, Eye, Database } from "lucide-react";
+import { GitCompare, FileSpreadsheet, Eye, Database, Layers } from "lucide-react";
 import { ToolCategory, type ToolCardData } from "@/ui-kit/types/ui";
 import { BadgeVariant } from "@/ui-kit/types/ui";
 
@@ -48,6 +48,19 @@ export const toolsList: ToolCardData[] = [
     enabled: true,
     route: "/tools/db-db-sync",
     wikiSlug: "db-db-sync",
+  },
+  {
+    id: "db-gpkg-sync",
+    title: "Carga completa desde GeoPackage",
+    category: [ToolCategory.SYNC],
+    badge: { label: "Activa", type: BadgeVariant.ACTIVE },
+    icon: Layers,
+    description:
+      "Reemplace por completo una tabla PostGIS con una capa de un archivo GeoPackage (.gpkg). Mapee columnas y confirme la carga destructiva.",
+    tags: ["GeoPackage", "PostGIS", "Reemplazo"],
+    enabled: true,
+    route: "/tools/db-gpkg-sync",
+    wikiSlug: "db-gpkg-sync",
   },
   {
     id: "file-viewer",

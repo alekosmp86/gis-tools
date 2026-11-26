@@ -13,6 +13,7 @@ export interface ShpStartRequest {
   resetSequences: boolean;
   geometryProcessing: unknown;
   dryRun: boolean;
+  layer?: string;
 }
 
 export class ShpRequestInvalidError extends Error {
@@ -85,6 +86,10 @@ function readSourceSrid(body: JsonRecord): number {
   }
 }
 
+function readOptionalLayer(body: JsonRecord): { layer?: string } {
+  return isBlank(body.layer) ? {} : { layer: readOptionalText(body, "layer", "") };
+}
+
 function readSourceByTarget(value: unknown): Record<string, string | null> {
   if (!isRecord(value)) throw invalid("El campo mapping.sourceByTarget debe ser un objeto.");
   const entries = Object.entries(value);
@@ -143,6 +148,7 @@ export function parseStartRequest(raw: unknown): ShpStartRequest {
     resetSequences: readBoolean(body, "resetSequences"),
     geometryProcessing: body.geometryProcessing,
     dryRun: readOptionalFlag(body, "dryRun"),
+    ...readOptionalLayer(body),
   };
 }
 

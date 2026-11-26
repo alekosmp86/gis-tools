@@ -40,6 +40,7 @@ export interface ShpStartBody {
   resetSequences: boolean;
   geometryProcessing: GeometryProcessingOptions;
   dryRun: boolean;
+  layer?: string;
   confirm: true;
 }
 
@@ -77,7 +78,10 @@ function describeServerError(payload: JsonRecord | null, status: number, fallbac
     : `${fallback} (código HTTP ${status}).`;
 }
 
-function readUploadResult(xhr: XMLHttpRequest): ShpUploadResult {
+const withoutSuccessFlag = (payload: JsonRecord): JsonRecord =>
+  Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "success"));
+
+function readUploadResult<Result extends ShpUploadResult>(xhr: XMLHttpRequest): Result {
   const payload = parseJsonRecord(xhr.responseText);
   const isSuccess =
     xhr.status >= 200 &&
@@ -88,7 +92,11 @@ function readUploadResult(xhr: XMLHttpRequest): ShpUploadResult {
   if (!isSuccess || !payload) {
     throw new Error(describeServerError(payload, xhr.status, UPLOAD_FALLBACK_MESSAGE));
   }
-  return { uploadId: String(payload.uploadId), size: Number(payload.size) };
+  return {
+    ...withoutSuccessFlag(payload),
+    uploadId: String(payload.uploadId),
+    size: Number(payload.size),
+  } as unknown as Result;
 }
 
 export interface ReplaceUploadTarget {
@@ -96,13 +104,13 @@ export interface ReplaceUploadTarget {
   fileName: string;
 }
 
-export function uploadReplaceFile(
+export function uploadReplaceFile<Result extends ShpUploadResult = ShpUploadResult>(
   target: ReplaceUploadTarget,
   file: Blob,
   onProgress?: ShpUploadProgress,
   deps: ShpUploadDeps = {}
-): Promise<ShpUploadResult> {
-  return new Promise<ShpUploadResult>((resolve, reject) => {
+): Promise<Result> {
+  return new Promise<Result>((resolve, reject) => {
     const xhr = (deps.createXhr ?? createDefaultXhr)();
     xhr.open("POST", target.route);
     xhr.setRequestHeader(FILE_NAME_HEADER, target.fileName);
@@ -111,7 +119,7 @@ export function uploadReplaceFile(
     };
     xhr.onload = () => {
       try {
-        resolve(readUploadResult(xhr));
+        resolve(readUploadResult<Result>(xhr));
       } catch (uploadError) {
         reject(uploadError);
       }

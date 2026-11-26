@@ -1,0 +1,43 @@
+.loadedCard {
+  composes: loadedCard from "../db-sync-common/LoadedFileCard.module.css";
+  background: rgba(9, 13, 22, 0.6);
+}
+
+.metaRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+}
+
+.metaItem {
+  composes: metaItem from "../db-sync-common/LoadedFileCard.module.css";
+}
+
+.metaLabel {
+  composes: metaLabel from "../db-sync-common/LoadedFileCard.module.css";
+}
+
+.metaValue {
+  composes: metaValue from "../db-sync-common/LoadedFileCard.module.css";
+  color: var(--text-main);
+}
+
+.layerRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.select {
+  max-width: 420px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.8);
+  color: var(--text-main);
+  font: inherit;
+}

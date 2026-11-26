@@ -3,11 +3,12 @@ import { Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/ui-kit/components/ui/Button";
 import styles from "./LoadedFileHeader.module.css";
 
-export type LoadedFileHeaderVariant = "csv" | "shapefile";
+export type LoadedFileHeaderVariant = "csv" | "shapefile" | "geopackage";
 
 const VARIANT_CLASS: Record<LoadedFileHeaderVariant, string> = {
   csv: styles.csv,
   shapefile: styles.shapefile,
+  geopackage: styles.geopackage,
 };
 
 export interface LoadedFileHeaderProps {
